@@ -14,9 +14,23 @@ use WP_Error;
  *
  * @package stride\services\invoicing
  */
-class ExactOnlineExporter
+class ExactOnlineExporter implements \NTDST_Service_Meta
 {
     private ?QuoteService $quoteService;
+
+    /**
+     * Service metadata for NTDST Bootstrap
+     */
+    public static function metadata(): array
+    {
+        return [
+            'name' => 'Exact Online Exporter',
+            'description' => 'Exports quotes to CSV format for Exact Online import',
+            'admin_only' => true,
+            'enabled' => true,
+            'priority' => 10,
+        ];
+    }
 
     /**
      * Constructor

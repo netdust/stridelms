@@ -16,11 +16,25 @@ use WP_Error;
  *
  * @package stride\services\invoicing
  */
-class QuotePDFGenerator
+class QuotePDFGenerator implements \NTDST_Service_Meta
 {
     private string $uploadDir;
     private string $uploadUrl;
     private ?QuoteService $quoteService;
+
+    /**
+     * Service metadata for NTDST Bootstrap
+     */
+    public static function metadata(): array
+    {
+        return [
+            'name' => 'Quote PDF Generator',
+            'description' => 'Generates PDF documents for quotes using DOMPDF',
+            'admin_only' => false,
+            'enabled' => true,
+            'priority' => 10,
+        ];
+    }
 
     /**
      * Constructor

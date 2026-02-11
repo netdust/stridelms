@@ -15,12 +15,26 @@ defined('ABSPATH') || exit;
  *
  * @package stride\services\invoicing
  */
-class VATValidator
+class VATValidator implements \NTDST_Service_Meta
 {
     private const VIES_WSDL = 'https://ec.europa.eu/taxation_customs/vies/checkVatService.wsdl';
     private const CACHE_GROUP = 'stride_vat';
     private const CACHE_TTL = DAY_IN_SECONDS;
     private const TRANSIENT_PREFIX = 'stride_vat_';
+
+    /**
+     * Service metadata for NTDST Bootstrap
+     */
+    public static function metadata(): array
+    {
+        return [
+            'name' => 'VAT Validator',
+            'description' => 'EU VAT number validation via VIES API',
+            'admin_only' => false,
+            'enabled' => true,
+            'priority' => 10,
+        ];
+    }
 
     /**
      * Constructor - register Action Scheduler hook
