@@ -499,18 +499,9 @@ class QuoteUpdateHandler implements \NTDST_Service_Meta
             return null;
         }
 
-        $quotes = get_posts([
-            'post_type' => QuoteService::POST_TYPE,
-            'meta_query' => [
-                ['key' => QuoteService::META_USER_ID, 'value' => $userId],
-                ['key' => QuoteService::META_STATUS, 'value' => QuoteService::STATUS_DRAFT],
-            ],
-            'posts_per_page' => 1,
-            'orderby' => 'date',
-            'order' => 'DESC',
-            'fields' => 'ids',
-        ]);
+        // Use QuoteService to get user's draft quotes
+        $quotes = $this->quoteService->getUserQuotes($userId, QuoteService::STATUS_DRAFT);
 
-        return $quotes[0] ?? null;
+        return !empty($quotes) ? $quotes[0]['id'] : null;
     }
 }

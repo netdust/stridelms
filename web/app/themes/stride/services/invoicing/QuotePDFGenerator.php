@@ -125,7 +125,7 @@ class QuotePDFGenerator implements \NTDST_Service_Meta
         }
 
         // Check if PDF already exists and is up to date
-        $existingPath = get_post_meta($quoteId, QuoteService::META_PDF_PATH, true);
+        $existingPath = $quote['pdf_path'] ?? '';
         if (!$force && $existingPath && file_exists($existingPath)) {
             return $existingPath;
         }
@@ -155,8 +155,8 @@ class QuotePDFGenerator implements \NTDST_Service_Meta
             // Save PDF
             file_put_contents($filepath, $dompdf->output());
 
-            // Store path in post meta
-            update_post_meta($quoteId, QuoteService::META_PDF_PATH, $filepath);
+            // Store path via QuoteService (uses DataManager)
+            $this->quoteService->setPdfPath($quoteId, $filepath);
 
             return $filepath;
 
@@ -194,7 +194,7 @@ class QuotePDFGenerator implements \NTDST_Service_Meta
         }
 
         // Get or generate PDF
-        $filepath = get_post_meta($quoteId, QuoteService::META_PDF_PATH, true);
+        $filepath = $quote['pdf_path'] ?? '';
         if (!$filepath || !file_exists($filepath)) {
             $result = $this->generate($quoteId);
             if (is_wp_error($result)) {
@@ -631,11 +631,13 @@ class QuotePDFGenerator implements \NTDST_Service_Meta
      */
     public function deletePdf(int $quoteId): bool
     {
-        $filepath = get_post_meta($quoteId, QuoteService::META_PDF_PATH, true);
+        $quote = $this->quoteService->getQuote($quoteId);
+        $filepath = $quote['pdf_path'] ?? '';
 
         if ($filepath && file_exists($filepath)) {
             unlink($filepath);
-            delete_post_meta($quoteId, QuoteService::META_PDF_PATH);
+            // Clear path via QuoteService (uses DataManager)
+            $this->quoteService->setPdfPath($quoteId, '');
             return true;
         }
 

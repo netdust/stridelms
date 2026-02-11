@@ -6,21 +6,24 @@ defined('ABSPATH') || exit;
 
 use stride\services\core\CourseService;
 use stride\services\core\SubscriberService;
-use stride\services\FieldRegistry;
 use WP_Error;
-use WP_Post;
 
 /**
  * Quote Service
  *
  * Main orchestrator for quote creation and management.
- * Registers vad_quote CPT and handles quote lifecycle.
+ * Uses NTDST Data Manager for all database operations.
  *
  * Available hooks:
  * - stride/quote/created (action) - After quote creation
  * - stride/quote/updated (action) - After quote update
  * - stride/quote/sent (action) - After quote marked as sent
  * - stride/quote/exported (action) - After quote marked as exported
+ *
+ * API Endpoints (via ntdst/api_data):
+ * - stride_quote_get - Get quote by ID
+ * - stride_quote_update - Update quote billing/order data
+ * - stride_quote_list - List user's quotes
  *
  * @package stride\services\invoicing
  */
@@ -33,32 +36,27 @@ class QuoteService implements \NTDST_Service_Meta
     public const STATUS_SENT = 'sent';
     public const STATUS_EXPORTED = 'exported';
 
-    // Meta keys
-    public const META_USER_ID = '_stride_user_id';
-    public const META_COURSE_ID = '_stride_course_id';
-    public const META_STATUS = '_stride_status';
-    public const META_QUOTE_NUMBER = '_stride_quote_number';
-    public const META_ITEMS = '_stride_items';
-    public const META_SUBTOTAL = '_stride_subtotal';
-    public const META_TAX = '_stride_tax';
-    public const META_TOTAL = '_stride_total';
-    public const META_VALID_UNTIL = '_stride_valid_until';
-    public const META_BILLING = '_stride_billing';
-    public const META_ORDER_NUMBER = '_stride_order_number';
-    public const META_VOUCHER_CODE = '_stride_voucher_code';
-    public const META_PDF_PATH = '_stride_pdf_path';
-    public const META_CREATED_AT = '_stride_created_at';
-    public const META_SENT_AT = '_stride_sent_at';
-    public const META_EXPORTED_AT = '_stride_exported_at';
+    // Field names (used in DataManager schema)
+    public const FIELD_USER_ID = 'user_id';
+    public const FIELD_COURSE_ID = 'course_id';
+    public const FIELD_STATUS = 'status';
+    public const FIELD_QUOTE_NUMBER = 'quote_number';
+    public const FIELD_ITEMS = 'items';
+    public const FIELD_SUBTOTAL = 'subtotal';
+    public const FIELD_TAX = 'tax';
+    public const FIELD_TOTAL = 'total';
+    public const FIELD_VALID_UNTIL = 'valid_until';
+    public const FIELD_BILLING = 'billing';
+    public const FIELD_ORDER_NUMBER = 'order_number';
+    public const FIELD_VOUCHER_CODE = 'voucher_code';
+    public const FIELD_PDF_PATH = 'pdf_path';
+    public const FIELD_CREATED_AT = 'created_at';
+    public const FIELD_SENT_AT = 'sent_at';
+    public const FIELD_EXPORTED_AT = 'exported_at';
 
     private ?CourseService $courseService;
     private ?SubscriberService $subscriberService;
     private ?VATValidator $vatValidator;
-
-    /**
-     * Request-level cache for quotes to prevent duplicate fetches
-     */
-    private static array $quoteCache = [];
 
     /**
      * Service metadata for NTDST Bootstrap
@@ -67,7 +65,7 @@ class QuoteService implements \NTDST_Service_Meta
     {
         return [
             'name' => 'Quote Service',
-            'description' => 'Quote CPT, CRUD, and status management',
+            'description' => 'Quote CPT, CRUD, and status management via NTDST DataManager',
             'admin_only' => false,
             'enabled' => true,
             'priority' => 10,
@@ -86,51 +84,14 @@ class QuoteService implements \NTDST_Service_Meta
         $this->subscriberService = $subscriberService ?? $this->resolveService(SubscriberService::class);
         $this->vatValidator = $vatValidator ?? new VATValidator();
 
-        // Register CPT
-        add_action('init', [$this, 'registerPostType']);
+        // Register CPT via DataManager
+        add_action('init', [$this, 'registerModel'], 5);
+
+        // Register API endpoints
+        add_action('init', [$this, 'registerApiEndpoints'], 10);
 
         // Hook into enrollment completion
         add_action('stride/enrollment/completed', [$this, 'handleEnrollmentCompleted'], 10, 3);
-
-        // Ensure database indexes exist (runs once)
-        add_action('admin_init', [$this, 'ensureDatabaseIndexes']);
-    }
-
-    /**
-     * Ensure database indexes exist for quote meta queries
-     *
-     * Creates composite indexes on postmeta for frequently queried meta keys.
-     * Uses transient to only run once per day.
-     */
-    public function ensureDatabaseIndexes(): void
-    {
-        // Only run once per day
-        $transientKey = 'stride_quote_indexes_checked';
-        if (get_transient($transientKey)) {
-            return;
-        }
-
-        global $wpdb;
-
-        // Check if our custom index exists
-        $indexExists = $wpdb->get_var(
-            "SELECT COUNT(1) FROM information_schema.STATISTICS
-             WHERE table_schema = DATABASE()
-             AND table_name = '{$wpdb->postmeta}'
-             AND index_name = 'idx_stride_quote_meta'"
-        );
-
-        if (!$indexExists) {
-            // Create composite index for quote queries
-            // Suppressing errors as index may already exist in some form
-            $wpdb->suppress_errors(true);
-            $wpdb->query(
-                "CREATE INDEX idx_stride_quote_meta ON {$wpdb->postmeta} (meta_key(32), meta_value(32))"
-            );
-            $wpdb->suppress_errors(false);
-        }
-
-        set_transient($transientKey, 1, DAY_IN_SECONDS);
     }
 
     /**
@@ -152,11 +113,18 @@ class QuoteService implements \NTDST_Service_Meta
     }
 
     /**
-     * Register vad_quote custom post type
+     * Register vad_quote model via NTDST DataManager
      */
-    public function registerPostType(): void
+    public function registerModel(): void
     {
-        register_post_type(self::POST_TYPE, [
+        if (!function_exists('ntdst_data')) {
+            // Fallback to raw CPT registration if DataManager not available
+            $this->registerPostTypeFallback();
+            return;
+        }
+
+        ntdst_data()->register(self::POST_TYPE, [
+            'label' => __('Offertes', 'stride'),
             'labels' => [
                 'name' => __('Offertes', 'stride'),
                 'singular_name' => __('Offerte', 'stride'),
@@ -177,8 +145,264 @@ class QuoteService implements \NTDST_Service_Meta
             'capability_type' => 'post',
             'map_meta_cap' => true,
             'has_archive' => false,
-            'rewrite' => false,
+            'menu_icon' => 'dashicons-media-text',
+
+            // Field schema with types and validation
+            'fields' => [
+                self::FIELD_USER_ID => [
+                    'type' => 'integer',
+                    'required' => true,
+                    'label' => __('Gebruiker ID', 'stride'),
+                ],
+                self::FIELD_COURSE_ID => [
+                    'type' => 'integer',
+                    'required' => true,
+                    'label' => __('Cursus ID', 'stride'),
+                ],
+                self::FIELD_STATUS => [
+                    'type' => 'select',
+                    'options' => [
+                        self::STATUS_DRAFT => __('Concept', 'stride'),
+                        self::STATUS_SENT => __('Verzonden', 'stride'),
+                        self::STATUS_EXPORTED => __('Geëxporteerd', 'stride'),
+                    ],
+                    'default' => self::STATUS_DRAFT,
+                    'label' => __('Status', 'stride'),
+                ],
+                self::FIELD_QUOTE_NUMBER => [
+                    'type' => 'text',
+                    'required' => true,
+                    'label' => __('Offertenummer', 'stride'),
+                ],
+                self::FIELD_ITEMS => [
+                    'type' => 'json',
+                    'label' => __('Regelitems', 'stride'),
+                ],
+                self::FIELD_SUBTOTAL => [
+                    'type' => 'float',
+                    'min' => 0,
+                    'label' => __('Subtotaal', 'stride'),
+                ],
+                self::FIELD_TAX => [
+                    'type' => 'float',
+                    'min' => 0,
+                    'label' => __('BTW', 'stride'),
+                ],
+                self::FIELD_TOTAL => [
+                    'type' => 'float',
+                    'min' => 0,
+                    'label' => __('Totaal', 'stride'),
+                ],
+                self::FIELD_VALID_UNTIL => [
+                    'type' => 'text',
+                    'label' => __('Geldig tot', 'stride'),
+                ],
+                self::FIELD_BILLING => [
+                    'type' => 'json',
+                    'label' => __('Factuurgegevens', 'stride'),
+                ],
+                self::FIELD_ORDER_NUMBER => [
+                    'type' => 'text',
+                    'label' => __('Bestelnummer', 'stride'),
+                ],
+                self::FIELD_VOUCHER_CODE => [
+                    'type' => 'text',
+                    'label' => __('Vouchercode', 'stride'),
+                ],
+                self::FIELD_PDF_PATH => [
+                    'type' => 'text',
+                    'label' => __('PDF pad', 'stride'),
+                ],
+                self::FIELD_CREATED_AT => [
+                    'type' => 'text',
+                    'label' => __('Aangemaakt op', 'stride'),
+                ],
+                self::FIELD_SENT_AT => [
+                    'type' => 'text',
+                    'label' => __('Verzonden op', 'stride'),
+                ],
+                self::FIELD_EXPORTED_AT => [
+                    'type' => 'text',
+                    'label' => __('Geëxporteerd op', 'stride'),
+                ],
+            ],
+
+            // Tabbed metabox for admin
+            'field_groups' => [
+                'general' => [
+                    'title' => __('Algemeen', 'stride'),
+                    'fields' => [self::FIELD_QUOTE_NUMBER, self::FIELD_STATUS, self::FIELD_USER_ID, self::FIELD_COURSE_ID],
+                ],
+                'amounts' => [
+                    'title' => __('Bedragen', 'stride'),
+                    'fields' => [self::FIELD_SUBTOTAL, self::FIELD_TAX, self::FIELD_TOTAL, self::FIELD_ITEMS],
+                ],
+                'billing' => [
+                    'title' => __('Facturatie', 'stride'),
+                    'fields' => [self::FIELD_BILLING, self::FIELD_ORDER_NUMBER, self::FIELD_VOUCHER_CODE],
+                ],
+                'dates' => [
+                    'title' => __('Datums', 'stride'),
+                    'fields' => [self::FIELD_VALID_UNTIL, self::FIELD_CREATED_AT, self::FIELD_SENT_AT, self::FIELD_EXPORTED_AT],
+                ],
+            ],
+            'use_tabs' => true,
         ]);
+    }
+
+    /**
+     * Fallback CPT registration if DataManager not available
+     */
+    private function registerPostTypeFallback(): void
+    {
+        register_post_type(self::POST_TYPE, [
+            'labels' => [
+                'name' => __('Offertes', 'stride'),
+                'singular_name' => __('Offerte', 'stride'),
+            ],
+            'public' => false,
+            'show_ui' => true,
+            'show_in_menu' => 'stride-admin',
+            'supports' => ['title'],
+        ]);
+    }
+
+    /**
+     * Register API endpoints via NTDST API system
+     */
+    public function registerApiEndpoints(): void
+    {
+        // Get single quote
+        add_filter('ntdst/api_data/stride_quote_get', [$this, 'apiGetQuote'], 10, 2);
+
+        // Update quote
+        add_filter('ntdst/api_data/stride_quote_update', [$this, 'apiUpdateQuote'], 10, 2);
+
+        // List user's quotes
+        add_filter('ntdst/api_data/stride_quote_list', [$this, 'apiListQuotes'], 10, 2);
+    }
+
+    /**
+     * Get the Data Model for quotes
+     */
+    private function getModel(): ?\NTDST_Data_Model
+    {
+        if (!function_exists('ntdst_data')) {
+            return null;
+        }
+        return ntdst_data()->get(self::POST_TYPE);
+    }
+
+    // ========================================
+    // API ENDPOINTS
+    // ========================================
+
+    /**
+     * API: Get quote by ID
+     */
+    public function apiGetQuote($data, $params): array|WP_Error
+    {
+        $quoteId = absint($params['id'] ?? 0);
+
+        if (!$quoteId) {
+            return new WP_Error('invalid_input', __('Offerte ID is vereist.', 'stride'), ['status' => 400]);
+        }
+
+        $quote = $this->getQuote($quoteId);
+        if (!$quote) {
+            return new WP_Error('not_found', __('Offerte niet gevonden.', 'stride'), ['status' => 404]);
+        }
+
+        // Check permission: owner or admin
+        $userId = get_current_user_id();
+        if (!current_user_can('manage_options') && $userId !== $quote['user_id']) {
+            return new WP_Error('forbidden', __('Geen toegang tot deze offerte.', 'stride'), ['status' => 403]);
+        }
+
+        return [
+            'success' => true,
+            'quote' => $quote,
+        ];
+    }
+
+    /**
+     * API: Update quote
+     */
+    public function apiUpdateQuote($data, $params): array|WP_Error
+    {
+        $quoteId = absint($params['id'] ?? 0);
+
+        if (!$quoteId) {
+            return new WP_Error('invalid_input', __('Offerte ID is vereist.', 'stride'), ['status' => 400]);
+        }
+
+        $quote = $this->getQuote($quoteId);
+        if (!$quote) {
+            return new WP_Error('not_found', __('Offerte niet gevonden.', 'stride'), ['status' => 404]);
+        }
+
+        // Check permission: owner or admin
+        $userId = get_current_user_id();
+        if (!current_user_can('manage_options') && $userId !== $quote['user_id']) {
+            return new WP_Error('forbidden', __('Geen toegang tot deze offerte.', 'stride'), ['status' => 403]);
+        }
+
+        // Sanitize update data
+        $updateData = [];
+        if (isset($params['company'])) {
+            $updateData['company'] = sanitize_text_field($params['company']);
+        }
+        if (isset($params['address'])) {
+            $updateData['address'] = sanitize_text_field($params['address']);
+        }
+        if (isset($params['city'])) {
+            $updateData['city'] = sanitize_text_field($params['city']);
+        }
+        if (isset($params['postal_code'])) {
+            $updateData['postal_code'] = sanitize_text_field($params['postal_code']);
+        }
+        if (isset($params['vat_number'])) {
+            $updateData['vat_number'] = sanitize_text_field($params['vat_number']);
+        }
+        if (isset($params['gln_number'])) {
+            $updateData['gln_number'] = sanitize_text_field($params['gln_number']);
+        }
+        if (isset($params['order_number'])) {
+            $updateData['order_number'] = sanitize_text_field($params['order_number']);
+        }
+
+        $result = $this->updateQuote($quoteId, $updateData);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return [
+            'success' => true,
+            'message' => __('Offerte bijgewerkt.', 'stride'),
+            'quote' => $this->getQuote($quoteId),
+        ];
+    }
+
+    /**
+     * API: List user's quotes
+     */
+    public function apiListQuotes($data, $params): array|WP_Error
+    {
+        $userId = get_current_user_id();
+
+        if (!$userId) {
+            return new WP_Error('unauthorized', __('Niet ingelogd.', 'stride'), ['status' => 401]);
+        }
+
+        $status = isset($params['status']) ? sanitize_text_field($params['status']) : null;
+        $quotes = $this->getUserQuotes($userId, $status);
+
+        return [
+            'success' => true,
+            'quotes' => $quotes,
+            'count' => count($quotes),
+        ];
     }
 
     // ========================================
@@ -261,49 +485,35 @@ class QuoteService implements \NTDST_Service_Meta
         $validDays = $this->getConfig('valid_days', 30);
         $validUntil = date('Y-m-d', strtotime("+{$validDays} days"));
 
-        // Wrap quote creation in transaction for atomicity
-        global $wpdb;
-        $wpdb->query('START TRANSACTION');
-
-        try {
-            // Create quote post
-            $quoteId = wp_insert_post([
-                'post_type' => self::POST_TYPE,
-                'post_status' => 'publish',
-                'post_title' => $quoteNumber,
-                'post_author' => $userId,
-            ]);
-
-            if (is_wp_error($quoteId)) {
-                $wpdb->query('ROLLBACK');
-                return $quoteId;
-            }
-
-            // Store meta data
-            update_post_meta($quoteId, self::META_USER_ID, $userId);
-            update_post_meta($quoteId, self::META_COURSE_ID, $courseId);
-            update_post_meta($quoteId, self::META_STATUS, self::STATUS_DRAFT);
-            update_post_meta($quoteId, self::META_QUOTE_NUMBER, $quoteNumber);
-            update_post_meta($quoteId, self::META_ITEMS, $items);
-            update_post_meta($quoteId, self::META_SUBTOTAL, $subtotal);
-            update_post_meta($quoteId, self::META_TAX, $tax);
-            update_post_meta($quoteId, self::META_TOTAL, $total);
-            update_post_meta($quoteId, self::META_VALID_UNTIL, $validUntil);
-            update_post_meta($quoteId, self::META_BILLING, $billing);
-            update_post_meta($quoteId, self::META_CREATED_AT, current_time('mysql'));
-
-            if (!empty($data['order_number'])) {
-                update_post_meta($quoteId, self::META_ORDER_NUMBER, sanitize_text_field($data['order_number']));
-            }
-            if (!empty($data['voucher_code'])) {
-                update_post_meta($quoteId, self::META_VOUCHER_CODE, sanitize_text_field($data['voucher_code']));
-            }
-
-            $wpdb->query('COMMIT');
-        } catch (\Exception $e) {
-            $wpdb->query('ROLLBACK');
-            return new WP_Error('quote_creation_failed', __('Offerte aanmaken mislukt.', 'stride'));
+        // Use DataManager to create quote
+        $model = $this->getModel();
+        if (!$model) {
+            return new WP_Error('no_model', __('DataManager niet beschikbaar.', 'stride'));
         }
+
+        $result = $model->create([
+            'title' => $quoteNumber,
+            'status' => 'publish',
+            self::FIELD_USER_ID => $userId,
+            self::FIELD_COURSE_ID => $courseId,
+            self::FIELD_STATUS => self::STATUS_DRAFT,
+            self::FIELD_QUOTE_NUMBER => $quoteNumber,
+            self::FIELD_ITEMS => $items,
+            self::FIELD_SUBTOTAL => $subtotal,
+            self::FIELD_TAX => $tax,
+            self::FIELD_TOTAL => $total,
+            self::FIELD_VALID_UNTIL => $validUntil,
+            self::FIELD_BILLING => $billing,
+            self::FIELD_ORDER_NUMBER => sanitize_text_field($data['order_number'] ?? ''),
+            self::FIELD_VOUCHER_CODE => sanitize_text_field($data['voucher_code'] ?? ''),
+            self::FIELD_CREATED_AT => current_time('mysql'),
+        ]);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        $quoteId = $result->ID;
 
         // Create CRM note
         $this->subscriberService->createNote(
@@ -318,59 +528,43 @@ class QuoteService implements \NTDST_Service_Meta
     }
 
     /**
-     * Get quote data as array (with request-level caching)
+     * Get quote data as array
      *
      * @param int $quoteId Quote post ID
-     * @param bool $bypassCache Force fresh fetch
      * @return array|null Quote data or null if not found
      */
-    public function getQuote(int $quoteId, bool $bypassCache = false): ?array
+    public function getQuote(int $quoteId): ?array
     {
-        // Check request-level cache first
-        if (!$bypassCache && isset(self::$quoteCache[$quoteId])) {
-            return self::$quoteCache[$quoteId];
-        }
-
-        $post = get_post($quoteId);
-        if (!$post || $post->post_type !== self::POST_TYPE) {
+        $model = $this->getModel();
+        if (!$model) {
             return null;
         }
 
-        // Fetch all meta in single query (prevents N+1)
-        $allMeta = get_post_meta($quoteId);
+        $post = $model->find($quoteId);
+        if (is_wp_error($post) || !$post) {
+            return null;
+        }
 
-        $quote = [
-            'id' => $quoteId,
-            'number' => $allMeta[self::META_QUOTE_NUMBER][0] ?? '',
-            'status' => $allMeta[self::META_STATUS][0] ?? self::STATUS_DRAFT,
-            'user_id' => (int) ($allMeta[self::META_USER_ID][0] ?? 0),
-            'course_id' => (int) ($allMeta[self::META_COURSE_ID][0] ?? 0),
-            'items' => isset($allMeta[self::META_ITEMS][0]) ? maybe_unserialize($allMeta[self::META_ITEMS][0]) : [],
-            'subtotal' => (float) ($allMeta[self::META_SUBTOTAL][0] ?? 0),
-            'tax' => (float) ($allMeta[self::META_TAX][0] ?? 0),
-            'total' => (float) ($allMeta[self::META_TOTAL][0] ?? 0),
-            'valid_until' => $allMeta[self::META_VALID_UNTIL][0] ?? '',
-            'billing' => isset($allMeta[self::META_BILLING][0]) ? maybe_unserialize($allMeta[self::META_BILLING][0]) : [],
-            'order_number' => $allMeta[self::META_ORDER_NUMBER][0] ?? '',
-            'voucher_code' => $allMeta[self::META_VOUCHER_CODE][0] ?? '',
-            'pdf_path' => $allMeta[self::META_PDF_PATH][0] ?? '',
-            'created_at' => $allMeta[self::META_CREATED_AT][0] ?? '',
-            'sent_at' => $allMeta[self::META_SENT_AT][0] ?? '',
-            'exported_at' => $allMeta[self::META_EXPORTED_AT][0] ?? '',
+        // Convert WP_Post with meta to our array format
+        return [
+            'id' => $post->ID,
+            'number' => $post->fields[self::FIELD_QUOTE_NUMBER] ?? '',
+            'status' => $post->fields[self::FIELD_STATUS] ?? self::STATUS_DRAFT,
+            'user_id' => (int) ($post->fields[self::FIELD_USER_ID] ?? 0),
+            'course_id' => (int) ($post->fields[self::FIELD_COURSE_ID] ?? 0),
+            'items' => $post->fields[self::FIELD_ITEMS] ?? [],
+            'subtotal' => (float) ($post->fields[self::FIELD_SUBTOTAL] ?? 0),
+            'tax' => (float) ($post->fields[self::FIELD_TAX] ?? 0),
+            'total' => (float) ($post->fields[self::FIELD_TOTAL] ?? 0),
+            'valid_until' => $post->fields[self::FIELD_VALID_UNTIL] ?? '',
+            'billing' => $post->fields[self::FIELD_BILLING] ?? [],
+            'order_number' => $post->fields[self::FIELD_ORDER_NUMBER] ?? '',
+            'voucher_code' => $post->fields[self::FIELD_VOUCHER_CODE] ?? '',
+            'pdf_path' => $post->fields[self::FIELD_PDF_PATH] ?? '',
+            'created_at' => $post->fields[self::FIELD_CREATED_AT] ?? '',
+            'sent_at' => $post->fields[self::FIELD_SENT_AT] ?? '',
+            'exported_at' => $post->fields[self::FIELD_EXPORTED_AT] ?? '',
         ];
-
-        // Cache for this request
-        self::$quoteCache[$quoteId] = $quote;
-
-        return $quote;
-    }
-
-    /**
-     * Clear quote from request cache (call after updates)
-     */
-    public function clearQuoteCache(int $quoteId): void
-    {
-        unset(self::$quoteCache[$quoteId]);
     }
 
     /**
@@ -391,6 +585,13 @@ class QuoteService implements \NTDST_Service_Meta
         if ($quote['status'] !== self::STATUS_DRAFT) {
             return new WP_Error('quote_locked', __('Offerte kan niet meer worden gewijzigd.', 'stride'));
         }
+
+        $model = $this->getModel();
+        if (!$model) {
+            return new WP_Error('no_model', __('DataManager niet beschikbaar.', 'stride'));
+        }
+
+        $updateData = [];
 
         // Update billing data
         if (isset($data['billing']) || isset($data['company']) || isset($data['address'])) {
@@ -424,21 +625,28 @@ class QuoteService implements \NTDST_Service_Meta
                 }
             }
 
-            update_post_meta($quoteId, self::META_BILLING, $billing);
+            $updateData[self::FIELD_BILLING] = $billing;
         }
 
         // Update order number
         if (isset($data['order_number'])) {
-            update_post_meta($quoteId, self::META_ORDER_NUMBER, sanitize_text_field($data['order_number']));
+            $updateData[self::FIELD_ORDER_NUMBER] = sanitize_text_field($data['order_number']);
         }
 
         // Update voucher code
         if (isset($data['voucher_code'])) {
-            update_post_meta($quoteId, self::META_VOUCHER_CODE, sanitize_text_field($data['voucher_code']));
+            $updateData[self::FIELD_VOUCHER_CODE] = sanitize_text_field($data['voucher_code']);
         }
 
-        // Clear cache after update
-        $this->clearQuoteCache($quoteId);
+        if (empty($updateData)) {
+            return true;
+        }
+
+        $result = $model->update($quoteId, $updateData);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
 
         // Fire hook
         do_action('stride/quote/updated', $quoteId, $data);
@@ -463,11 +671,19 @@ class QuoteService implements \NTDST_Service_Meta
             return new WP_Error('invalid_status', __('Offerte is al verzonden.', 'stride'));
         }
 
-        update_post_meta($quoteId, self::META_STATUS, self::STATUS_SENT);
-        update_post_meta($quoteId, self::META_SENT_AT, current_time('mysql'));
+        $model = $this->getModel();
+        if (!$model) {
+            return new WP_Error('no_model', __('DataManager niet beschikbaar.', 'stride'));
+        }
 
-        // Clear cache after update
-        $this->clearQuoteCache($quoteId);
+        $result = $model->update($quoteId, [
+            self::FIELD_STATUS => self::STATUS_SENT,
+            self::FIELD_SENT_AT => current_time('mysql'),
+        ]);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
 
         // Fire hook (for email notification, PDF generation, etc.)
         do_action('stride/quote/sent', $quoteId, $quote);
@@ -488,16 +704,45 @@ class QuoteService implements \NTDST_Service_Meta
             return new WP_Error('quote_not_found', __('Offerte niet gevonden.', 'stride'));
         }
 
-        update_post_meta($quoteId, self::META_STATUS, self::STATUS_EXPORTED);
-        update_post_meta($quoteId, self::META_EXPORTED_AT, current_time('mysql'));
+        $model = $this->getModel();
+        if (!$model) {
+            return new WP_Error('no_model', __('DataManager niet beschikbaar.', 'stride'));
+        }
 
-        // Clear cache after update
-        $this->clearQuoteCache($quoteId);
+        $result = $model->update($quoteId, [
+            self::FIELD_STATUS => self::STATUS_EXPORTED,
+            self::FIELD_EXPORTED_AT => current_time('mysql'),
+        ]);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
 
         // Fire hook
         do_action('stride/quote/exported', $quoteId, $quote);
 
         return true;
+    }
+
+    /**
+     * Update PDF path for quote
+     *
+     * @param int $quoteId Quote post ID
+     * @param string $path PDF file path
+     * @return true|WP_Error
+     */
+    public function setPdfPath(int $quoteId, string $path): true|WP_Error
+    {
+        $model = $this->getModel();
+        if (!$model) {
+            return new WP_Error('no_model', __('DataManager niet beschikbaar.', 'stride'));
+        }
+
+        $result = $model->update($quoteId, [
+            self::FIELD_PDF_PATH => $path,
+        ]);
+
+        return is_wp_error($result) ? $result : true;
     }
 
     // ========================================
@@ -513,17 +758,18 @@ class QuoteService implements \NTDST_Service_Meta
      */
     public function getUserQuoteForCourse(int $userId, int $courseId): ?int
     {
-        $quotes = get_posts([
-            'post_type' => self::POST_TYPE,
-            'meta_query' => [
-                ['key' => self::META_USER_ID, 'value' => $userId],
-                ['key' => self::META_COURSE_ID, 'value' => $courseId],
-            ],
-            'posts_per_page' => 1,
-            'fields' => 'ids',
-        ]);
+        $model = $this->getModel();
+        if (!$model) {
+            return null;
+        }
 
-        return $quotes[0] ?? null;
+        $quote = $model
+            ->where(self::FIELD_USER_ID, $userId)
+            ->where(self::FIELD_COURSE_ID, $courseId)
+            ->limit(1)
+            ->first();
+
+        return $quote ? (int) $quote->id : null;
     }
 
     /**
@@ -535,31 +781,23 @@ class QuoteService implements \NTDST_Service_Meta
      */
     public function getUserQuotes(int $userId, ?string $status = null): array
     {
-        $metaQuery = [
-            ['key' => self::META_USER_ID, 'value' => $userId],
-        ];
-
-        if ($status) {
-            $metaQuery[] = ['key' => self::META_STATUS, 'value' => $status];
-        }
-
-        $posts = get_posts([
-            'post_type' => self::POST_TYPE,
-            'meta_query' => $metaQuery,
-            'posts_per_page' => -1,
-            'orderby' => 'date',
-            'order' => 'DESC',
-        ]);
-
-        if (empty($posts)) {
+        $model = $this->getModel();
+        if (!$model) {
             return [];
         }
 
-        // Prime meta cache for all posts in single query (prevents N+1)
-        $postIds = wp_list_pluck($posts, 'ID');
-        update_meta_cache('post', $postIds);
+        $query = $model
+            ->where(self::FIELD_USER_ID, $userId)
+            ->orderBy('date', 'DESC')
+            ->withMeta();
 
-        return array_map(fn($post) => $this->getQuote($post->ID), $posts);
+        if ($status) {
+            $query = $query->where(self::FIELD_STATUS, $status);
+        }
+
+        $posts = $query->limit(100)->get();
+
+        return array_map(fn($post) => $this->getQuote((int) $post['id']), $posts);
     }
 
     /**
@@ -571,25 +809,19 @@ class QuoteService implements \NTDST_Service_Meta
      */
     public function getQuotesByStatus(string $status, int $limit = 100): array
     {
-        $posts = get_posts([
-            'post_type' => self::POST_TYPE,
-            'meta_query' => [
-                ['key' => self::META_STATUS, 'value' => $status],
-            ],
-            'posts_per_page' => $limit,
-            'orderby' => 'date',
-            'order' => 'ASC',
-        ]);
-
-        if (empty($posts)) {
+        $model = $this->getModel();
+        if (!$model) {
             return [];
         }
 
-        // Prime meta cache for all posts in single query (prevents N+1)
-        $postIds = wp_list_pluck($posts, 'ID');
-        update_meta_cache('post', $postIds);
+        $posts = $model
+            ->where(self::FIELD_STATUS, $status)
+            ->orderBy('date', 'ASC')
+            ->withMeta()
+            ->limit($limit)
+            ->get();
 
-        return array_map(fn($post) => $this->getQuote($post->ID), $posts);
+        return array_map(fn($post) => $this->getQuote((int) $post['id']), $posts);
     }
 
     // ========================================
