@@ -109,6 +109,13 @@ return [
             'stride\\services\\enrollment\\EnrollmentService',
             'stride\\services\\enrollment\\FormSubmissionHandler',
             'stride\\services\\enrollment\\FluentFormsHelper',
+
+            // Phase 3: Invoicing Services
+            'stride\\services\\invoicing\\QuoteService',
+            'stride\\services\\invoicing\\VATValidator',
+            'stride\\services\\invoicing\\QuoteUpdateHandler',
+            'stride\\services\\invoicing\\QuotePDFGenerator',
+            'stride\\services\\invoicing\\ExactOnlineExporter',
         ],
 
         // Admin-only services
@@ -167,10 +174,27 @@ return [
         ],
 
         'invoicing' => [
+            // Quote numbering
             'prefix' => 'STRIDE',
             'tax_rate' => 21.0,
             'currency' => 'EUR',
-            'ogm_enabled' => true, // Belgian OGM payment reference
+            'valid_days' => 30, // Quote validity period
+
+            // Company details for PDF generation
+            'company' => [
+                'name' => 'Stride LMS',
+                'address' => '', // Configure in production
+                'city' => '',
+                'postal_code' => '',
+                'country' => 'Belgium',
+                'vat' => '', // e.g., BE0123456789
+                'email' => '', // e.g., info@example.com
+                'phone' => '',
+                'bank_account' => '', // IBAN for payment instructions
+            ],
+
+            // PDF storage
+            'pdf_storage' => 'private', // 'private' (protected) or 'uploads'
         ],
     ],
 ];
