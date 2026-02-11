@@ -80,9 +80,9 @@ themes/stride/
 Must support all current functionality:
 
 **Course Type Detection:**
-- [ ] `isInPerson($courseId)` - has 'VAD vormingen' category
-- [ ] `isOnline($courseId)` - no 'VAD vormingen' category
-- [ ] `isTraject($courseId)` - has course_modules_select
+- [ ] `isInPerson($courseId)` - has 'In-person' category
+- [ ] `isOnline($courseId)` - has 'Online' category
+- [ ] `isTraject($courseId)` - has 'Traject' category
 
 **Course Dates:**
 - [ ] `getCourseDates($courseId)` - array of timestamps from `course_days`

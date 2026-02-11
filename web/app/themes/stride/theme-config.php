@@ -100,8 +100,12 @@ return [
             // Historical data bridge (loads early, priority 5)
             'stride\\services\\core\\HistoricalDataService',
 
-            // Add core services here as they are built
-            // 'stride\\services\\core\\CourseService',
+            // Phase 1: Core Services
+            'stride\\services\\core\\CourseService',
+            'stride\\services\\core\\SubscriberService',
+            'stride\\services\\core\\OrganizationService',
+
+            // Phase 2: Enrollment (to be added)
             // 'stride\\services\\enrollment\\EnrollmentService',
         ],
 
@@ -112,13 +116,13 @@ return [
 
         // Conditional services
         'conditional' => [
-            // FluentCRM integration
+            // FluentCRM integration (optional bridge service)
             'fluentcrm' => [
                 'service' => 'stride\\services\\integrations\\FluentCRMService',
                 'condition' => fn() => defined('FLUENTCRM'),
             ],
 
-            // LearnDash integration
+            // LearnDash integration (optional bridge service)
             'learndash' => [
                 'service' => 'stride\\services\\integrations\\LearnDashService',
                 'condition' => fn() => defined('LEARNDASH_VERSION'),

@@ -34,6 +34,22 @@ $bootstrap->register();
 ntdst_set(NTDST_Bootstrap::class, fn() => $bootstrap);
 
 // ========================================
+// DEPENDENCY INJECTION BINDINGS
+// ========================================
+
+// Bind adapter interfaces to concrete implementations
+// This allows services to receive mocks during testing
+ntdst_set(
+    \stride\services\contracts\LearnDashAdapterInterface::class,
+    fn() => new \stride\services\adapters\LearnDashAdapter()
+);
+
+ntdst_set(
+    \stride\services\contracts\FluentCRMAdapterInterface::class,
+    fn() => new \stride\services\adapters\FluentCRMAdapter()
+);
+
+// ========================================
 // LIFECYCLE HOOKS
 // ========================================
 

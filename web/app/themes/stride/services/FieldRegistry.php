@@ -1,0 +1,400 @@
+<?php
+
+namespace stride\services;
+
+// Polyfill translation function for non-WordPress contexts (testing)
+if (!function_exists('__')) {
+    function __($text, $domain = 'default')
+    {
+        return $text;
+    }
+}
+
+/**
+ * Field Registry
+ *
+ * Central registry for all custom field names used across Stride services.
+ * Provides clean, consistent naming with backward compatibility for V3 legacy fields.
+ *
+ * Usage:
+ *   FieldRegistry::SUBSCRIBER_VAT_NUMBER // Returns 'vat_number'
+ *   FieldRegistry::legacyToNew('btw_ondernemingsnummer') // Returns 'vat_number'
+ *   FieldRegistry::newToLegacy('vat_number', 'subscriber') // Returns 'btw_ondernemingsnummer'
+ *
+ * @package stride
+ */
+final class FieldRegistry
+{
+    // ========================================
+    // SUBSCRIBER CUSTOM FIELDS (FluentCRM Contact)
+    // ========================================
+
+    /** Organization name for invoice */
+    public const SUBSCRIBER_INVOICE_ORG_NAME = 'invoice_organization_name';
+
+    /** Invoice address line */
+    public const SUBSCRIBER_INVOICE_ADDRESS = 'invoice_address';
+
+    /** Invoice city */
+    public const SUBSCRIBER_INVOICE_CITY = 'invoice_city';
+
+    /** Invoice postal code */
+    public const SUBSCRIBER_INVOICE_POSTAL_CODE = 'invoice_postal_code';
+
+    /** Invoice email address */
+    public const SUBSCRIBER_INVOICE_EMAIL = 'invoice_email';
+
+    /** VAT/BTW number */
+    public const SUBSCRIBER_VAT_NUMBER = 'vat_number';
+
+    /** GLN/Peppol number for e-invoicing */
+    public const SUBSCRIBER_GLN_NUMBER = 'gln_number';
+
+    /** Department/division name */
+    public const SUBSCRIBER_DEPARTMENT = 'department';
+
+    /** Accounting export ID (Winbooks) */
+    public const SUBSCRIBER_EXPORT_ID = 'export_id';
+
+    /** Profile/member type */
+    public const SUBSCRIBER_PROFILE_TYPE = 'profile_type';
+
+    // ========================================
+    // COMPANY CUSTOM FIELDS (FluentCRM Company)
+    // ========================================
+
+    /** Company invoice name (may differ from company name) */
+    public const COMPANY_INVOICE_NAME = 'invoice_name';
+
+    /** Company invoice address */
+    public const COMPANY_INVOICE_ADDRESS = 'invoice_address';
+
+    /** Company invoice city */
+    public const COMPANY_INVOICE_CITY = 'invoice_city';
+
+    /** Company invoice postal code */
+    public const COMPANY_INVOICE_POSTAL_CODE = 'invoice_postal_code';
+
+    /** Company invoice email */
+    public const COMPANY_INVOICE_EMAIL = 'invoice_email';
+
+    /** Company VAT number */
+    public const COMPANY_VAT_NUMBER = 'vat_number';
+
+    /** Company GLN/Peppol number */
+    public const COMPANY_GLN_NUMBER = 'gln_number';
+
+    /** Company department */
+    public const COMPANY_DEPARTMENT = 'department';
+
+    /** Company accounting export ID */
+    public const COMPANY_EXPORT_ID = 'export_id';
+
+    // ========================================
+    // COURSE SETTINGS (LearnDash Meta)
+    // ========================================
+
+    /** Course dates array */
+    public const COURSE_DATES = 'course_days';
+
+    /** Course cancelled status */
+    public const COURSE_STATUS_CANCELLED = 'course_status_cancelled';
+
+    /** Course postponed status */
+    public const COURSE_STATUS_POSTPONED = 'course_status_postponed';
+
+    /** Course full status */
+    public const COURSE_STATUS_FULL = 'course_status_full';
+
+    /** Course announcement status */
+    public const COURSE_STATUS_ANNOUNCEMENT = 'course_status_announcement';
+
+    /** Maximum participants */
+    public const COURSE_MAX_PARTICIPANTS = 'course_max_participants';
+
+    /** Course speakers/supervisors */
+    public const COURSE_SPEAKERS = 'course_supervisors';
+
+    /** Course modules (trajectory) */
+    public const COURSE_MODULES = 'course_modules_select';
+
+    /** Is this a module course */
+    public const COURSE_MODULES_ENABLED = 'course_modules_enabled';
+
+    /** Course price */
+    public const COURSE_PRICE = 'course_price';
+
+    /** Invoice item ID */
+    public const COURSE_INVOICE_ITEM = 'course_invoice_item';
+
+    /** Invoice enabled flag */
+    public const COURSE_INVOICE_ENABLED = 'course_invoice_enabled';
+
+    /** Certificate enabled flag */
+    public const COURSE_CERTIFICATE_ENABLED = 'course_certificate_enabled';
+
+    /** Custom enrollment form */
+    public const COURSE_CUSTOM_FORM = 'course_custom_form';
+
+    /** Course location/address */
+    public const COURSE_ADDRESS = 'course_address';
+
+    // ========================================
+    // CATEGORY NAMES
+    // ========================================
+
+    /** In-person course category */
+    public const CATEGORY_IN_PERSON = 'In-person';
+
+    // ========================================
+    // COMPANY TYPES
+    // ========================================
+
+    /** Member/partner organization type */
+    public const COMPANY_TYPE_PARTNER = 'partner';
+
+    /** Standard company type */
+    public const COMPANY_TYPE_COMPANY = 'company';
+
+    // ========================================
+    // LEGACY MAPPINGS (V3 → V4)
+    // ========================================
+
+    /**
+     * Legacy field mappings for subscriber custom fields
+     * Maps V3 Dutch/truncated names to V4 clean names
+     */
+    private const SUBSCRIBER_LEGACY_MAP = [
+        // V3 field => V4 field
+        'facturatie_naam_organisat' => self::SUBSCRIBER_INVOICE_ORG_NAME,
+        'facturatie_adres' => self::SUBSCRIBER_INVOICE_ADDRESS,
+        'facturatie_stad' => self::SUBSCRIBER_INVOICE_CITY,
+        'facturatie_postcode' => self::SUBSCRIBER_INVOICE_POSTAL_CODE,
+        'facturatie_email' => self::SUBSCRIBER_INVOICE_EMAIL,
+        'btw_ondernemingsnummer' => self::SUBSCRIBER_VAT_NUMBER,
+        'gln_nummer' => self::SUBSCRIBER_GLN_NUMBER,
+        'afdeling_organisatie' => self::SUBSCRIBER_DEPARTMENT,
+        'winbooks_id' => self::SUBSCRIBER_EXPORT_ID,
+        'profile_type' => self::SUBSCRIBER_PROFILE_TYPE, // Already clean
+    ];
+
+    /**
+     * Legacy field mappings for company custom fields
+     */
+    private const COMPANY_LEGACY_MAP = [
+        // V3 field => V4 field
+        'naam_organisatie_fac' => self::COMPANY_INVOICE_NAME,
+        'adres_organisatie_fac' => self::COMPANY_INVOICE_ADDRESS,
+        'stad_organisatie_fac' => self::COMPANY_INVOICE_CITY,
+        'postcode_organisatie_fac' => self::COMPANY_INVOICE_POSTAL_CODE,
+        'email_organisatie_fac' => self::COMPANY_INVOICE_EMAIL,
+        'btw_organisatie_fac' => self::COMPANY_VAT_NUMBER,
+        'gln_nummer' => self::COMPANY_GLN_NUMBER,
+        'afdeling_organisatie' => self::COMPANY_DEPARTMENT,
+        'export_id' => self::COMPANY_EXPORT_ID, // Already clean
+    ];
+
+    /**
+     * Legacy field mappings for course settings
+     */
+    private const COURSE_LEGACY_MAP = [
+        // V3 field => V4 field (mostly already clean)
+        'course_price_type_vad_invoice_item' => self::COURSE_INVOICE_ITEM,
+        'course_extraform_item' => self::COURSE_CUSTOM_FORM,
+        'course_price_type_vad_custom_form' => self::COURSE_CUSTOM_FORM,
+    ];
+
+    // ========================================
+    // CONVERSION METHODS
+    // ========================================
+
+    /**
+     * Convert legacy field name to new field name
+     *
+     * @param string $legacyField The V3 field name
+     * @param string $context 'subscriber', 'company', or 'course'
+     * @return string The V4 field name (or original if no mapping)
+     */
+    public static function legacyToNew(string $legacyField, string $context = 'subscriber'): string
+    {
+        $map = match ($context) {
+            'subscriber' => self::SUBSCRIBER_LEGACY_MAP,
+            'company' => self::COMPANY_LEGACY_MAP,
+            'course' => self::COURSE_LEGACY_MAP,
+            default => [],
+        };
+
+        return $map[$legacyField] ?? $legacyField;
+    }
+
+    /**
+     * Convert new field name to legacy field name (for database compatibility)
+     *
+     * @param string $newField The V4 field name
+     * @param string $context 'subscriber', 'company', or 'course'
+     * @return string The V3 field name for database storage
+     */
+    public static function newToLegacy(string $newField, string $context = 'subscriber'): string
+    {
+        $map = match ($context) {
+            'subscriber' => array_flip(self::SUBSCRIBER_LEGACY_MAP),
+            'company' => array_flip(self::COMPANY_LEGACY_MAP),
+            'course' => array_flip(self::COURSE_LEGACY_MAP),
+            default => [],
+        };
+
+        return $map[$newField] ?? $newField;
+    }
+
+    /**
+     * Get all subscriber field names (new names)
+     *
+     * @return array<string, string> Field constant name => field value
+     */
+    public static function getSubscriberFields(): array
+    {
+        return [
+            'INVOICE_ORG_NAME' => self::SUBSCRIBER_INVOICE_ORG_NAME,
+            'INVOICE_ADDRESS' => self::SUBSCRIBER_INVOICE_ADDRESS,
+            'INVOICE_CITY' => self::SUBSCRIBER_INVOICE_CITY,
+            'INVOICE_POSTAL_CODE' => self::SUBSCRIBER_INVOICE_POSTAL_CODE,
+            'INVOICE_EMAIL' => self::SUBSCRIBER_INVOICE_EMAIL,
+            'VAT_NUMBER' => self::SUBSCRIBER_VAT_NUMBER,
+            'GLN_NUMBER' => self::SUBSCRIBER_GLN_NUMBER,
+            'DEPARTMENT' => self::SUBSCRIBER_DEPARTMENT,
+            'EXPORT_ID' => self::SUBSCRIBER_EXPORT_ID,
+            'PROFILE_TYPE' => self::SUBSCRIBER_PROFILE_TYPE,
+        ];
+    }
+
+    /**
+     * Get all company field names (new names)
+     *
+     * @return array<string, string> Field constant name => field value
+     */
+    public static function getCompanyFields(): array
+    {
+        return [
+            'INVOICE_NAME' => self::COMPANY_INVOICE_NAME,
+            'INVOICE_ADDRESS' => self::COMPANY_INVOICE_ADDRESS,
+            'INVOICE_CITY' => self::COMPANY_INVOICE_CITY,
+            'INVOICE_POSTAL_CODE' => self::COMPANY_INVOICE_POSTAL_CODE,
+            'INVOICE_EMAIL' => self::COMPANY_INVOICE_EMAIL,
+            'VAT_NUMBER' => self::COMPANY_VAT_NUMBER,
+            'GLN_NUMBER' => self::COMPANY_GLN_NUMBER,
+            'DEPARTMENT' => self::COMPANY_DEPARTMENT,
+            'EXPORT_ID' => self::COMPANY_EXPORT_ID,
+        ];
+    }
+
+    /**
+     * Get display name for a field (for admin UI)
+     *
+     * @param string $field Field name (new format)
+     * @param string $context 'subscriber' or 'company'
+     * @return string Human-readable label
+     */
+    public static function getFieldLabel(string $field, string $context = 'subscriber'): string
+    {
+        $labels = [
+            // Subscriber fields
+            self::SUBSCRIBER_INVOICE_ORG_NAME => __('Invoice Organization Name', 'stride'),
+            self::SUBSCRIBER_INVOICE_ADDRESS => __('Invoice Address', 'stride'),
+            self::SUBSCRIBER_INVOICE_CITY => __('Invoice City', 'stride'),
+            self::SUBSCRIBER_INVOICE_POSTAL_CODE => __('Invoice Postal Code', 'stride'),
+            self::SUBSCRIBER_INVOICE_EMAIL => __('Invoice Email', 'stride'),
+            self::SUBSCRIBER_VAT_NUMBER => __('VAT Number', 'stride'),
+            self::SUBSCRIBER_GLN_NUMBER => __('GLN/Peppol Number', 'stride'),
+            self::SUBSCRIBER_DEPARTMENT => __('Department', 'stride'),
+            self::SUBSCRIBER_EXPORT_ID => __('Accounting ID', 'stride'),
+            self::SUBSCRIBER_PROFILE_TYPE => __('Profile Type', 'stride'),
+
+            // Company fields
+            self::COMPANY_INVOICE_NAME => __('Invoice Name', 'stride'),
+            self::COMPANY_INVOICE_ADDRESS => __('Invoice Address', 'stride'),
+            self::COMPANY_INVOICE_CITY => __('Invoice City', 'stride'),
+            self::COMPANY_INVOICE_POSTAL_CODE => __('Invoice Postal Code', 'stride'),
+            self::COMPANY_INVOICE_EMAIL => __('Invoice Email', 'stride'),
+            self::COMPANY_VAT_NUMBER => __('VAT Number', 'stride'),
+            self::COMPANY_GLN_NUMBER => __('GLN/Peppol Number', 'stride'),
+            self::COMPANY_DEPARTMENT => __('Department', 'stride'),
+            self::COMPANY_EXPORT_ID => __('Accounting ID', 'stride'),
+        ];
+
+        return $labels[$field] ?? ucfirst(str_replace('_', ' ', $field));
+    }
+
+    /**
+     * Check if we're in legacy database mode
+     * When true, services should use legacy field names for database operations
+     *
+     * @return bool
+     */
+    public static function useLegacyFieldNames(): bool
+    {
+        // Check if WordPress is available
+        if (!function_exists('apply_filters')) {
+            return true; // Default to legacy mode outside WordPress
+        }
+
+        return apply_filters('stride/use_legacy_field_names', true);
+    }
+
+    /**
+     * Get the database field name (legacy or new based on mode)
+     *
+     * @param string $newField The V4 field name
+     * @param string $context 'subscriber', 'company', or 'course'
+     * @return string The field name to use for database operations
+     */
+    public static function getDbFieldName(string $newField, string $context = 'subscriber'): string
+    {
+        if (self::useLegacyFieldNames()) {
+            return self::newToLegacy($newField, $context);
+        }
+
+        return $newField;
+    }
+
+    /**
+     * Convert array keys from legacy to new field names
+     *
+     * @param array $data Data with legacy field names as keys
+     * @param string $context 'subscriber', 'company', or 'course'
+     * @return array Data with new field names as keys
+     */
+    public static function convertLegacyData(array $data, string $context = 'subscriber'): array
+    {
+        $converted = [];
+
+        foreach ($data as $key => $value) {
+            $newKey = self::legacyToNew($key, $context);
+            $converted[$newKey] = $value;
+        }
+
+        return $converted;
+    }
+
+    /**
+     * Convert array keys from new to legacy field names (for database storage)
+     *
+     * @param array $data Data with new field names as keys
+     * @param string $context 'subscriber', 'company', or 'course'
+     * @return array Data with legacy field names as keys
+     */
+    public static function convertToLegacyData(array $data, string $context = 'subscriber'): array
+    {
+        if (!self::useLegacyFieldNames()) {
+            return $data;
+        }
+
+        $converted = [];
+
+        foreach ($data as $key => $value) {
+            $legacyKey = self::newToLegacy($key, $context);
+            $converted[$legacyKey] = $value;
+        }
+
+        return $converted;
+    }
+}
