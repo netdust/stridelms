@@ -26,6 +26,46 @@ if (!function_exists('__')) {
 final class FieldRegistry
 {
     // ========================================
+    // STANDARD FIELDS (WordPress + FluentCRM core)
+    // ========================================
+
+    /** Email address */
+    public const FIELD_EMAIL = 'email';
+
+    /** First name */
+    public const FIELD_FIRST_NAME = 'first_name';
+
+    /** Last name */
+    public const FIELD_LAST_NAME = 'last_name';
+
+    /** Display name */
+    public const FIELD_DISPLAY_NAME = 'display_name';
+
+    /** Phone number */
+    public const FIELD_PHONE = 'phone';
+
+    /** Primary address line */
+    public const FIELD_ADDRESS = 'address_line_1';
+
+    /** Secondary address line */
+    public const FIELD_ADDRESS_2 = 'address_line_2';
+
+    /** City */
+    public const FIELD_CITY = 'city';
+
+    /** Postal/ZIP code */
+    public const FIELD_POSTAL_CODE = 'postal_code';
+
+    /** Country code */
+    public const FIELD_COUNTRY = 'country';
+
+    /** State/Province */
+    public const FIELD_STATE = 'state';
+
+    /** User managed by (email of manager) */
+    public const FIELD_MANAGED_BY = 'managed_by';
+
+    // ========================================
     // SUBSCRIBER CUSTOM FIELDS (FluentCRM Contact)
     // ========================================
 
@@ -247,7 +287,30 @@ final class FieldRegistry
     }
 
     /**
-     * Get all subscriber field names (new names)
+     * Get all standard field names (shared between WP and FluentCRM)
+     *
+     * @return array<string, string> Field constant name => field value
+     */
+    public static function getStandardFields(): array
+    {
+        return [
+            'EMAIL' => self::FIELD_EMAIL,
+            'FIRST_NAME' => self::FIELD_FIRST_NAME,
+            'LAST_NAME' => self::FIELD_LAST_NAME,
+            'DISPLAY_NAME' => self::FIELD_DISPLAY_NAME,
+            'PHONE' => self::FIELD_PHONE,
+            'ADDRESS' => self::FIELD_ADDRESS,
+            'ADDRESS_2' => self::FIELD_ADDRESS_2,
+            'CITY' => self::FIELD_CITY,
+            'POSTAL_CODE' => self::FIELD_POSTAL_CODE,
+            'COUNTRY' => self::FIELD_COUNTRY,
+            'STATE' => self::FIELD_STATE,
+            'MANAGED_BY' => self::FIELD_MANAGED_BY,
+        ];
+    }
+
+    /**
+     * Get all subscriber custom field names (new names)
      *
      * @return array<string, string> Field constant name => field value
      */
@@ -265,6 +328,16 @@ final class FieldRegistry
             'EXPORT_ID' => self::SUBSCRIBER_EXPORT_ID,
             'PROFILE_TYPE' => self::SUBSCRIBER_PROFILE_TYPE,
         ];
+    }
+
+    /**
+     * Get all subscriber fields including standard fields
+     *
+     * @return array<string, string>
+     */
+    public static function getAllSubscriberFields(): array
+    {
+        return array_merge(self::getStandardFields(), self::getSubscriberFields());
     }
 
     /**

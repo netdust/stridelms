@@ -6,6 +6,7 @@ defined('ABSPATH') || exit;
 
 use stride\services\contracts\FluentCRMAdapterInterface;
 use stride\services\adapters\FluentCRMAdapter;
+use stride\services\sync\UserDataSync;
 use stride\services\FieldRegistry;
 use WP_Error;
 
@@ -25,6 +26,7 @@ class SubscriberService implements \NTDST_Service_Meta
 {
     private array $config;
     private FluentCRMAdapterInterface $fluentcrm;
+    private UserDataSync $dataSync;
 
     /**
      * Service metadata for NTDST Bootstrap
@@ -43,9 +45,12 @@ class SubscriberService implements \NTDST_Service_Meta
     /**
      * Constructor - dependencies injected by DI container
      */
-    public function __construct(?FluentCRMAdapterInterface $fluentcrm = null)
-    {
+    public function __construct(
+        ?FluentCRMAdapterInterface $fluentcrm = null,
+        ?UserDataSync $dataSync = null
+    ) {
         $this->fluentcrm = $fluentcrm ?? new FluentCRMAdapter();
+        $this->dataSync = $dataSync ?? new UserDataSync();
         $this->config = $this->getDefaultConfig();
         $this->init();
     }
@@ -211,30 +216,31 @@ class SubscriberService implements \NTDST_Service_Meta
     // ========================================
 
     /**
-     * Get custom field value
+     * Get field value (synced across all storage backends)
      *
      * @param int $userId
-     * @param string $fieldName
+     * @param string $fieldName Use FieldRegistry constants
      * @return mixed|WP_Error
      */
     public function getField(int $userId, string $fieldName): mixed
     {
-        $subscriberId = $this->getSubscriberId($userId);
-
-        if (!$subscriberId) {
-            return new WP_Error('subscriber_not_found', 'Subscriber not found');
+        if (!$this->isAvailable()) {
+            return new WP_Error('fluentcrm_unavailable', 'FluentCRM is not available');
         }
 
-        return $this->fluentcrm->getCustomField($subscriberId, $fieldName);
+        // UserDataSync checks all backends in priority order
+        $value = $this->dataSync->getField($userId, $fieldName);
+
+        return $value;
     }
 
     /**
-     * Update custom field value
+     * Update field value (synced to all storage backends)
      *
      * SECURITY: Requires admin capability OR current user updating their own field.
      *
      * @param int $userId
-     * @param string $fieldName
+     * @param string $fieldName Use FieldRegistry constants
      * @param mixed $value
      * @return true|WP_Error
      */
@@ -246,28 +252,17 @@ class SubscriberService implements \NTDST_Service_Meta
             return $authCheck;
         }
 
-        $subscriberId = $this->getSubscriberId($userId);
-
-        if (!$subscriberId) {
-            return new WP_Error('subscriber_not_found', 'Subscriber not found');
-        }
-
-        $result = $this->fluentcrm->updateCustomField($subscriberId, $fieldName, $value);
-
-        if (!$result) {
-            return new WP_Error('update_failed', 'Failed to update field');
-        }
-
-        return true;
+        // UserDataSync writes to all backends
+        return $this->dataSync->setField($userId, $fieldName, $value);
     }
 
     /**
-     * Update multiple profile fields
+     * Update multiple profile fields (synced to all storage backends)
      *
      * SECURITY: Requires admin capability OR current user updating their own profile.
      *
      * @param int $userId
-     * @param array $data
+     * @param array $data Use FieldRegistry constants as keys
      * @return true|WP_Error
      */
     public function updateProfile(int $userId, array $data): true|WP_Error
@@ -278,53 +273,24 @@ class SubscriberService implements \NTDST_Service_Meta
             return $authCheck;
         }
 
-        $subscriberId = $this->getSubscriberId($userId);
-
-        if (!$subscriberId) {
-            return new WP_Error('subscriber_not_found', 'Subscriber not found');
-        }
-
-        // Separate standard fields from custom fields
-        $standardFields = ['first_name', 'last_name', 'email', 'phone', 'address_line_1',
-                          'address_line_2', 'city', 'state', 'postal_code', 'country'];
-
-        $baseData = [];
-        $customData = [];
-
+        // Sanitize input
+        $sanitizedData = [];
         foreach ($data as $key => $value) {
-            // Sanitize based on field type
-            $sanitized = match ($key) {
-                'email' => sanitize_email($value),
-                'phone' => sanitize_text_field($value),
-                'first_name', 'last_name' => sanitize_text_field($value),
-                'address_line_1', 'address_line_2', 'city', 'state' => sanitize_text_field($value),
-                'postal_code' => sanitize_text_field($value),
-                'country' => sanitize_text_field($value),
+            $sanitizedData[$key] = match ($key) {
+                FieldRegistry::FIELD_EMAIL,
+                FieldRegistry::SUBSCRIBER_INVOICE_EMAIL => sanitize_email($value),
                 default => is_string($value) ? sanitize_text_field($value) : $value,
             };
-
-            if (in_array($key, $standardFields, true)) {
-                $baseData[$key] = $sanitized;
-            } else {
-                $customData[$key] = $sanitized;
-            }
         }
 
-        // Update base subscriber data
-        if (!empty($baseData)) {
-            $result = $this->fluentcrm->updateSubscriber($subscriberId, $baseData);
+        // UserDataSync handles writing to all backends
+        $result = $this->dataSync->setFields($userId, $sanitizedData);
 
-            if (!$result) {
-                return new WP_Error('update_failed', 'Failed to update profile');
-            }
+        if (is_wp_error($result)) {
+            return $result;
         }
 
-        // Update custom fields
-        foreach ($customData as $key => $value) {
-            $this->fluentcrm->updateCustomField($subscriberId, $key, $value);
-        }
-
-        do_action('stride/subscriber_profile_updated', $userId, $data);
+        do_action('stride/subscriber_profile_updated', $userId, $sanitizedData);
 
         return true;
     }
@@ -758,9 +724,8 @@ class SubscriberService implements \NTDST_Service_Meta
         $updates = [];
         foreach ($fieldMapping as $companyField => $subscriberField) {
             if (!empty($companyFields[$companyField])) {
-                // Convert to database field name if needed
-                $dbField = FieldRegistry::getDbFieldName($subscriberField, 'subscriber');
-                $updates[$dbField] = $companyFields[$companyField];
+                // Use logical field names - UserDataSync handles storage mapping
+                $updates[$subscriberField] = $companyFields[$companyField];
             }
         }
 
@@ -822,9 +787,8 @@ class SubscriberService implements \NTDST_Service_Meta
      */
     public function getMemberType(int $userId): ?string
     {
-        // Use database field name for lookup
-        $dbField = FieldRegistry::getDbFieldName(FieldRegistry::SUBSCRIBER_PROFILE_TYPE, 'subscriber');
-        $profileType = $this->getField($userId, $dbField);
+        // Use logical field name - UserDataSync handles storage mapping
+        $profileType = $this->getField($userId, FieldRegistry::SUBSCRIBER_PROFILE_TYPE);
 
         if (is_wp_error($profileType)) {
             return null;
