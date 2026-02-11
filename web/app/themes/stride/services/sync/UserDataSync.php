@@ -16,10 +16,43 @@ use WP_Error;
  * Read strategy: Check backends in priority order, return first non-null value
  * Write strategy: Write-through to ALL backends
  *
+ * SECURITY - AUTHORIZATION RESPONSIBILITY:
+ *
+ * This service does NOT perform authorization checks internally. It is a
+ * low-level data synchronization service used by higher-level services
+ * (SmartCode providers, profile services, admin tools) that ARE responsible
+ * for authorization.
+ *
+ * CALLER RESPONSIBILITIES:
+ * 1. Verify the current user has permission to access the target user's data
+ * 2. For admin operations: check current_user_can('edit_users')
+ * 3. For user self-service: verify $userId === get_current_user_id()
+ * 4. For automation/system: ensure context is trusted (FluentCRM automation, cron)
+ *
+ * Example usage with authorization:
+ * ```php
+ * // Admin editing another user
+ * if (!current_user_can('edit_users')) {
+ *     return new WP_Error('forbidden', 'Permission denied');
+ * }
+ * $dataSync->setField($userId, 'field', $value);
+ *
+ * // User self-service
+ * if ($userId !== get_current_user_id()) {
+ *     return new WP_Error('forbidden', 'Can only edit own profile');
+ * }
+ * $dataSync->setField($userId, 'field', $value);
+ * ```
+ *
+ * For convenience, use setFieldsWithAuth() and getFieldWithAuth() methods
+ * which perform standard capability checks.
+ *
  * Available filters:
  * - stride/user_data_sync/backends - Modify registered backends
  * - stride/user_data_sync/before_write - Intercept/modify data before write
  * - stride/user_data_sync/after_write - Action after successful write
+ * - stride/user_data_sync/can_read_user - Custom authorization for reads
+ * - stride/user_data_sync/can_write_user - Custom authorization for writes
  *
  * @package stride
  */
@@ -123,12 +156,138 @@ class UserDataSync implements \NTDST_Service_Meta
     }
 
     // ========================================
+    // AUTHORIZATION HELPERS
+    // ========================================
+
+    /**
+     * Check if current user can access another user's data
+     *
+     * Authorization rules:
+     * 1. User can always access their own data
+     * 2. Admins (edit_users capability) can access any user
+     * 3. Custom filter for application-specific rules
+     *
+     * @param int $userId Target user ID
+     * @param string $operation 'read' or 'write'
+     * @return bool
+     */
+    public function canAccessUser(int $userId, string $operation = 'read'): bool
+    {
+        // Users can access their own data
+        $currentUserId = get_current_user_id();
+        if ($currentUserId > 0 && $currentUserId === $userId) {
+            return true;
+        }
+
+        // Admins can access any user
+        if (current_user_can('edit_users')) {
+            return true;
+        }
+
+        // Allow filter for custom authorization (managed accounts, team access, etc.)
+        $filterHook = $operation === 'write'
+            ? 'stride/user_data_sync/can_write_user'
+            : 'stride/user_data_sync/can_read_user';
+
+        return apply_filters($filterHook, false, $userId, $currentUserId);
+    }
+
+    /**
+     * Get a field value with authorization check
+     *
+     * SECURITY: Use this method for user-facing operations.
+     * Returns WP_Error if current user cannot access target user's data.
+     *
+     * @param int $userId
+     * @param string $field
+     * @return mixed|WP_Error Field value or error
+     */
+    public function getFieldWithAuth(int $userId, string $field): mixed
+    {
+        if (!$this->canAccessUser($userId, 'read')) {
+            return new WP_Error(
+                'unauthorized',
+                __('You do not have permission to access this user\'s data.', 'stride'),
+                ['status' => 403]
+            );
+        }
+
+        return $this->getField($userId, $field);
+    }
+
+    /**
+     * Get multiple fields with authorization check
+     *
+     * SECURITY: Use this method for user-facing operations.
+     * Returns WP_Error if current user cannot access target user's data.
+     *
+     * @param int $userId
+     * @param array $fields Specific fields or empty for all
+     * @return array|WP_Error Field values or error
+     */
+    public function getFieldsWithAuth(int $userId, array $fields = []): array|WP_Error
+    {
+        if (!$this->canAccessUser($userId, 'read')) {
+            return new WP_Error(
+                'unauthorized',
+                __('You do not have permission to access this user\'s data.', 'stride'),
+                ['status' => 403]
+            );
+        }
+
+        return $this->getFields($userId, $fields);
+    }
+
+    /**
+     * Set fields with authorization check
+     *
+     * SECURITY: Use this method for user-facing operations.
+     * Returns WP_Error if current user cannot modify target user's data.
+     *
+     * @param int $userId
+     * @param array $data Field => value map
+     * @return true|WP_Error
+     */
+    public function setFieldsWithAuth(int $userId, array $data): true|WP_Error
+    {
+        if (!$this->canAccessUser($userId, 'write')) {
+            return new WP_Error(
+                'unauthorized',
+                __('You do not have permission to modify this user\'s data.', 'stride'),
+                ['status' => 403]
+            );
+        }
+
+        return $this->setFields($userId, $data);
+    }
+
+    /**
+     * Set a single field with authorization check
+     *
+     * SECURITY: Use this method for user-facing operations.
+     * Returns WP_Error if current user cannot modify target user's data.
+     *
+     * @param int $userId
+     * @param string $field
+     * @param mixed $value
+     * @return true|WP_Error
+     */
+    public function setFieldWithAuth(int $userId, string $field, mixed $value): true|WP_Error
+    {
+        return $this->setFieldsWithAuth($userId, [$field => $value]);
+    }
+
+    // ========================================
     // READ OPERATIONS
     // ========================================
 
     /**
      * Get a single field value
      * Checks backends in priority order, returns first non-null value
+     *
+     * SECURITY: This method does NOT check authorization.
+     * Use getFieldWithAuth() for user-facing operations, or verify
+     * authorization before calling this method.
      *
      * @param int $userId
      * @param string $field
@@ -153,6 +312,10 @@ class UserDataSync implements \NTDST_Service_Meta
     /**
      * Get multiple fields
      * Merges from all backends, higher priority wins
+     *
+     * SECURITY: This method does NOT check authorization.
+     * Use getFieldsWithAuth() for user-facing operations, or verify
+     * authorization before calling this method.
      *
      * @param int $userId
      * @param array $fields Specific fields or empty for all
@@ -181,6 +344,9 @@ class UserDataSync implements \NTDST_Service_Meta
     /**
      * Get all user data from all backends
      *
+     * SECURITY: This method does NOT check authorization.
+     * Verify authorization before calling this method.
+     *
      * @param int $userId
      * @return array
      */
@@ -197,6 +363,10 @@ class UserDataSync implements \NTDST_Service_Meta
      * Set a single field value
      * Writes to ALL available backends (write-through)
      *
+     * SECURITY: This method does NOT check authorization.
+     * Use setFieldWithAuth() for user-facing operations, or verify
+     * authorization before calling this method.
+     *
      * @param int $userId
      * @param string $field
      * @param mixed $value
@@ -210,6 +380,10 @@ class UserDataSync implements \NTDST_Service_Meta
     /**
      * Set multiple field values
      * Writes to ALL available backends (write-through)
+     *
+     * SECURITY: This method does NOT check authorization.
+     * Use setFieldsWithAuth() for user-facing operations, or verify
+     * authorization before calling this method.
      *
      * @param int $userId
      * @param array $data Field => value map
@@ -263,6 +437,9 @@ class UserDataSync implements \NTDST_Service_Meta
     /**
      * Update user profile (alias for setFields)
      *
+     * SECURITY: This method does NOT check authorization.
+     * Verify authorization before calling this method.
+     *
      * @param int $userId
      * @param array $data
      * @return true|WP_Error
@@ -279,6 +456,10 @@ class UserDataSync implements \NTDST_Service_Meta
     /**
      * Sync data from one user to another
      * Useful for managed accounts / team enrollments
+     *
+     * SECURITY: This method requires admin privileges.
+     * Syncing data between users should only be done by administrators
+     * or during trusted system operations (like team enrollment).
      *
      * @param int $targetUserId User to receive data
      * @param int $sourceUserId User to copy from
@@ -299,6 +480,9 @@ class UserDataSync implements \NTDST_Service_Meta
     /**
      * Force sync between all backends for a user
      * Reads from highest priority, writes to all others
+     *
+     * SECURITY: This method should only be called by administrators
+     * or during trusted system operations.
      *
      * @param int $userId
      * @param array $fields Specific fields or empty for all
@@ -360,6 +544,12 @@ class UserDataSync implements \NTDST_Service_Meta
      * Find or create a WordPress user
      * Also ensures FluentCRM subscriber exists
      *
+     * SECURITY: Creating users is a privileged operation.
+     * This method should only be called by:
+     * - Administrators (enrollment management)
+     * - Trusted system processes (form submission handlers, automations)
+     * - Self-registration flows with proper validation
+     *
      * @param string $email
      * @param string $firstName
      * @param string $lastName
@@ -418,6 +608,10 @@ class UserDataSync implements \NTDST_Service_Meta
     /**
      * Mark a user as managed by current user
      * Used when an admin enrolls someone else
+     *
+     * SECURITY: This method should only be called by administrators
+     * or during the enrollment flow when an admin enrolls on behalf
+     * of another person. The calling code must verify admin privileges.
      *
      * @param int $userId The managed user
      * @param string|null $managerEmail Manager's email (null = current user)

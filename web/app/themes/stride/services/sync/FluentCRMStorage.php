@@ -14,6 +14,9 @@ use stride\services\FieldRegistry;
  * Stores user data in FluentCRM subscriber records.
  * High priority - FluentCRM is source of truth for CRM data.
  *
+ * PERFORMANCE: Subscriber data is cached at the request level to avoid
+ * duplicate database queries when reading multiple fields.
+ *
  * @package stride
  */
 class FluentCRMStorage extends AbstractStorageBackend
@@ -21,9 +24,10 @@ class FluentCRMStorage extends AbstractStorageBackend
     private FluentCRMAdapterInterface $adapter;
 
     /**
-     * Subscriber ID cache: [userId => subscriberId]
+     * Subscriber cache: [userId => ['id' => int, 'data' => array]]
+     * Caches both subscriber ID and full data to avoid double lookups.
      */
-    private static array $subscriberIdCache = [];
+    private static array $subscriberCache = [];
 
     /**
      * Standard FluentCRM contact fields (not custom)
@@ -126,6 +130,8 @@ class FluentCRMStorage extends AbstractStorageBackend
 
     /**
      * @inheritDoc
+     *
+     * PERFORMANCE: Uses cached subscriber data to avoid duplicate database queries.
      */
     protected function readFromStorage(int $userId, string $storageKey): mixed
     {
@@ -133,16 +139,14 @@ class FluentCRMStorage extends AbstractStorageBackend
             return null;
         }
 
-        $subscriberId = $this->getSubscriberId($userId);
-        if (!$subscriberId) {
+        // Get cached subscriber (fetches and caches if not present)
+        $cachedSubscriber = $this->getCachedSubscriber($userId);
+        if (!$cachedSubscriber) {
             return null;
         }
 
-        // Get subscriber data (cached in adapter)
-        $subscriber = $this->adapter->getSubscriberByUserId($userId);
-        if (!$subscriber) {
-            return null;
-        }
+        $subscriberId = $cachedSubscriber['id'];
+        $subscriber = $cachedSubscriber['data'];
 
         // Check standard fields first (use FluentCRM field name)
         if (isset($subscriber[$storageKey])) {
@@ -256,9 +260,9 @@ class FluentCRMStorage extends AbstractStorageBackend
         parent::clearCache($userId);
 
         if ($userId === null) {
-            self::$subscriberIdCache = [];
+            self::$subscriberCache = [];
         } else {
-            unset(self::$subscriberIdCache[$userId]);
+            unset(self::$subscriberCache[$userId]);
         }
 
         // Also clear adapter cache
@@ -266,22 +270,45 @@ class FluentCRMStorage extends AbstractStorageBackend
     }
 
     /**
-     * Get FluentCRM subscriber ID for WordPress user
+     * Get cached subscriber data for user
+     *
+     * PERFORMANCE: Fetches subscriber once and caches both ID and data.
+     * Subsequent calls return cached data without database queries.
+     *
+     * @param int $userId
+     * @return array|null ['id' => int, 'data' => array] or null
      */
-    private function getSubscriberId(int $userId): ?int
+    private function getCachedSubscriber(int $userId): ?array
     {
-        if (isset(self::$subscriberIdCache[$userId])) {
-            return self::$subscriberIdCache[$userId];
+        if (isset(self::$subscriberCache[$userId])) {
+            return self::$subscriberCache[$userId];
         }
 
         $subscriber = $this->adapter->getSubscriberByUserId($userId);
 
         if ($subscriber) {
-            self::$subscriberIdCache[$userId] = (int) $subscriber['id'];
-            return self::$subscriberIdCache[$userId];
+            self::$subscriberCache[$userId] = [
+                'id' => (int) $subscriber['id'],
+                'data' => $subscriber,
+            ];
+            return self::$subscriberCache[$userId];
         }
 
         return null;
+    }
+
+    /**
+     * Get FluentCRM subscriber ID for WordPress user
+     *
+     * PERFORMANCE: Uses cached subscriber data when available.
+     *
+     * @param int $userId
+     * @return int|null
+     */
+    private function getSubscriberId(int $userId): ?int
+    {
+        $cached = $this->getCachedSubscriber($userId);
+        return $cached ? $cached['id'] : null;
     }
 
     /**
@@ -303,7 +330,8 @@ class FluentCRMStorage extends AbstractStorageBackend
         ]);
 
         if ($subscriberId) {
-            self::$subscriberIdCache[$userId] = $subscriberId;
+            // Clear cache to force re-fetch with new data
+            unset(self::$subscriberCache[$userId]);
         }
 
         return $subscriberId;
