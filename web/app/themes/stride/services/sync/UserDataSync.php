@@ -574,8 +574,10 @@ class UserDataSync implements \NTDST_Service_Meta
         if ($user) {
             $userId = $user->ID;
         } else {
-            // Create new user
-            $password = wp_generate_password(12, false);
+            // Create new user with strong auto-generated password
+            // SECURITY: 16 chars with special characters for better entropy
+            // Users will typically reset via "forgot password" flow
+            $password = wp_generate_password(16, true, true);
             $userId = wp_create_user($email, $password, $email);
 
             if (is_wp_error($userId)) {

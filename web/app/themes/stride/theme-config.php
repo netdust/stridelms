@@ -105,8 +105,9 @@ return [
             'stride\\services\\core\\SubscriberService',
             'stride\\services\\core\\OrganizationService',
 
-            // Phase 2: Enrollment (to be added)
-            // 'stride\\services\\enrollment\\EnrollmentService',
+            // Phase 2: Enrollment Services
+            'stride\\services\\enrollment\\EnrollmentService',
+            'stride\\services\\enrollment\\FormSubmissionHandler',
         ],
 
         // Admin-only services
