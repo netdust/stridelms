@@ -1,0 +1,44 @@
+<?php
+
+/**
+ * Plugin Name: NTDST Core Framework
+ * Description: DI Container, Bootstrap, and Service System for WordPress
+ * Version: 2.0.0
+ * Author: Stefan Vandermeulen
+ *
+ * Architecture:
+ * - core/     → Foundation (Container, Bootstrap, Theme, Router)
+ * - api/      → Request Flow (Endpoints, Data, Response)
+ * - services/ → Built-in services (Logger, Mailer)
+ */
+
+defined('ABSPATH') || exit;
+
+// Define plugin constants
+define('NTDST_PATH', __DIR__ . '/ntdst-core');
+define('NTDST_URL', plugins_url('ntdst-core', __FILE__));
+
+// Load core foundation
+require_once NTDST_PATH . '/core/Container.php';
+require_once NTDST_PATH . '/core/Router.php';
+require_once NTDST_PATH . '/core/Theme.php';
+require_once NTDST_PATH . '/core/ServiceInterface.php';
+require_once NTDST_PATH . '/core/SectorRegistry.php';
+require_once NTDST_PATH . '/core/Bootstrap.php';
+
+// Load API layer (request flow)
+require_once NTDST_PATH . '/api/Data.php';
+require_once NTDST_PATH . '/api/Response.php';
+require_once NTDST_PATH . '/api/MetaboxGenerator.php';
+
+// Load and initialize endpoints system
+require_once NTDST_PATH . '/api/Endpoints.php';
+ntdst_endpoints(); // Initialize endpoints to register REST routes
+
+// Load services
+require_once NTDST_PATH . '/services/Logger.php';
+require_once NTDST_PATH . '/services/Mailer.php';
+require_once NTDST_PATH . '/services/RelationField.php';
+
+// Register singleton instances that can't be auto-wired
+ntdst_set(NTDST_SectorRegistry::class, fn() => ntdst_sectors());
