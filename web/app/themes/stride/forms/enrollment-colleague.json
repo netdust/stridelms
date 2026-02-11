@@ -1,5 +1,5 @@
-{
-  "form": {
+[
+  {
     "title": "Inschrijving Collega's",
     "status": "published",
     "appearance_settings": "{\"labelPlacement\":\"top\",\"helpMessagePlacement\":\"with_label\",\"errorMessagePlacement\":\"inline\",\"asteriskPlacement\":\"asterisk-right\"}",
@@ -17,38 +17,55 @@
             "admin_field_label": "Course ID"
           },
           "editor_options": {
-            "title": "Hidden Field"
-          }
+            "title": "Hidden Field",
+            "icon_class": "ff-edit-hidden-field",
+            "template": "inputHidden"
+          },
+          "uniqElKey": "el_coll_course_id"
         },
         {
           "index": 1,
           "element": "custom_html",
+          "attributes": [],
           "settings": {
             "html_codes": "<h3>Uw gegevens (beheerder)</h3><p>Als beheerder ontvangt u een bevestiging van alle inschrijvingen.</p>",
-            "admin_field_label": "Manager Header"
+            "admin_field_label": "Manager Header",
+            "container_class": ""
           },
           "editor_options": {
-            "title": "Manager Section"
-          }
+            "title": "Custom HTML",
+            "icon_class": "ff-edit-html",
+            "template": "customHTML"
+          },
+          "uniqElKey": "el_coll_manager_header"
         },
         {
           "index": 2,
           "element": "container",
+          "attributes": [],
+          "settings": {
+            "container_class": "",
+            "conditional_logics": []
+          },
           "columns": [
             {
               "fields": [
                 {
                   "index": 3,
-                  "element": "input_name",
+                  "element": "input_text",
                   "attributes": {
+                    "type": "text",
                     "name": "voornaam",
+                    "value": "",
                     "class": "",
                     "placeholder": ""
                   },
                   "settings": {
+                    "container_class": "",
                     "label": "Uw voornaam",
                     "label_placement": "",
                     "admin_field_label": "Beheerder Voornaam",
+                    "help_message": "",
                     "validation_rules": {
                       "required": {
                         "value": true,
@@ -57,8 +74,11 @@
                     }
                   },
                   "editor_options": {
-                    "title": "Manager First Name"
-                  }
+                    "title": "Simple Text",
+                    "icon_class": "ff-edit-text",
+                    "template": "inputText"
+                  },
+                  "uniqElKey": "el_coll_manager_voornaam"
                 }
               ]
             },
@@ -66,16 +86,20 @@
               "fields": [
                 {
                   "index": 4,
-                  "element": "input_name",
+                  "element": "input_text",
                   "attributes": {
+                    "type": "text",
                     "name": "achternaam",
+                    "value": "",
                     "class": "",
                     "placeholder": ""
                   },
                   "settings": {
+                    "container_class": "",
                     "label": "Uw achternaam",
                     "label_placement": "",
                     "admin_field_label": "Beheerder Achternaam",
+                    "help_message": "",
                     "validation_rules": {
                       "required": {
                         "value": true,
@@ -84,18 +108,20 @@
                     }
                   },
                   "editor_options": {
-                    "title": "Manager Last Name"
-                  }
+                    "title": "Simple Text",
+                    "icon_class": "ff-edit-text",
+                    "template": "inputText"
+                  },
+                  "uniqElKey": "el_coll_manager_achternaam"
                 }
               ]
             }
           ],
-          "settings": {
-            "container_class": ""
-          },
           "editor_options": {
-            "title": "Manager Name Row"
-          }
+            "title": "Two Column Container",
+            "icon_class": "ff-edit-column-2"
+          },
+          "uniqElKey": "el_coll_manager_name_row"
         },
         {
           "index": 5,
@@ -103,13 +129,17 @@
           "attributes": {
             "type": "email",
             "name": "email",
+            "value": "",
+            "id": "",
             "class": "",
             "placeholder": "uw.email@organisatie.be"
           },
           "settings": {
+            "container_class": "",
             "label": "Uw e-mailadres",
             "label_placement": "",
             "admin_field_label": "Beheerder Email",
+            "help_message": "",
             "validation_rules": {
               "required": {
                 "value": true,
@@ -122,21 +152,28 @@
             }
           },
           "editor_options": {
-            "title": "Manager Email"
-          }
+            "title": "E-mail",
+            "icon_class": "ff-edit-email",
+            "template": "inputText"
+          },
+          "uniqElKey": "el_coll_manager_email"
         },
         {
           "index": 6,
-          "element": "phone",
+          "element": "input_text",
           "attributes": {
+            "type": "text",
             "name": "telefoon",
+            "value": "",
             "class": "",
             "placeholder": "+32 ..."
           },
           "settings": {
+            "container_class": "",
             "label": "Uw telefoonnummer",
             "label_placement": "",
             "admin_field_label": "Beheerder Telefoon",
+            "help_message": "",
             "validation_rules": {
               "required": {
                 "value": false,
@@ -145,44 +182,60 @@
             }
           },
           "editor_options": {
-            "title": "Manager Phone"
-          }
+            "title": "Simple Text",
+            "icon_class": "ff-edit-text",
+            "template": "inputText"
+          },
+          "uniqElKey": "el_coll_manager_telefoon"
         },
         {
           "index": 7,
           "element": "custom_html",
+          "attributes": [],
           "settings": {
             "html_codes": "<h3>Organisatie</h3>",
-            "admin_field_label": "Org Header"
+            "admin_field_label": "Org Header",
+            "container_class": ""
           },
           "editor_options": {
-            "title": "Organisation Section"
-          }
+            "title": "Custom HTML",
+            "icon_class": "ff-edit-html",
+            "template": "customHTML"
+          },
+          "uniqElKey": "el_coll_org_header"
         },
         {
           "index": 8,
           "element": "select",
           "attributes": {
             "name": "organisations",
+            "value": "",
+            "id": "",
             "class": "stride-company-select"
           },
           "settings": {
+            "container_class": "",
             "label": "Organisatie",
             "label_placement": "",
             "admin_field_label": "Organisatie",
             "placeholder": "Selecteer uw organisatie",
+            "help_message": "",
             "enable_select_2": "yes",
             "validation_rules": {
               "required": {
                 "value": true,
                 "message": "Selecteer een organisatie"
               }
-            }
+            },
+            "advanced_options": []
           },
-          "options": {},
           "editor_options": {
-            "title": "Organisation Dropdown"
-          }
+            "title": "Dropdown",
+            "icon_class": "ff-edit-dropdown",
+            "element": "select",
+            "template": "select"
+          },
+          "uniqElKey": "el_coll_organisations"
         },
         {
           "index": 9,
@@ -190,13 +243,16 @@
           "attributes": {
             "type": "text",
             "name": "afdeling",
+            "value": "",
             "class": "",
             "placeholder": ""
           },
           "settings": {
+            "container_class": "",
             "label": "Afdeling",
             "label_placement": "",
             "admin_field_label": "Afdeling",
+            "help_message": "",
             "validation_rules": {
               "required": {
                 "value": false,
@@ -205,32 +261,41 @@
             }
           },
           "editor_options": {
-            "title": "Department"
-          }
+            "title": "Simple Text",
+            "icon_class": "ff-edit-text",
+            "template": "inputText"
+          },
+          "uniqElKey": "el_coll_afdeling"
         },
         {
           "index": 10,
           "element": "custom_html",
+          "attributes": [],
           "settings": {
             "html_codes": "<h3>Collega's inschrijven</h3><p>Voeg hieronder de collega's toe die u wilt inschrijven. Elke collega ontvangt een eigen bevestigingsmail.</p>",
-            "admin_field_label": "Colleagues Header"
+            "admin_field_label": "Colleagues Header",
+            "container_class": ""
           },
           "editor_options": {
-            "title": "Colleagues Section"
-          }
+            "title": "Custom HTML",
+            "icon_class": "ff-edit-html",
+            "template": "customHTML"
+          },
+          "uniqElKey": "el_coll_colleagues_header"
         },
         {
           "index": 11,
           "element": "repeater_field",
           "attributes": {
             "name": "collegas",
-            "class": ""
+            "data-type": "repeater_field"
           },
           "settings": {
             "label": "Collega's",
             "label_placement": "",
             "admin_field_label": "Collegas Repeater",
-            "max_repeat_field": 20,
+            "container_class": "",
+            "max_repeat_field": "20",
             "validation_rules": {
               "required": {
                 "value": true,
@@ -245,13 +310,16 @@
               "attributes": {
                 "type": "text",
                 "name": "voornaam",
+                "value": "",
                 "class": "",
                 "placeholder": "Voornaam"
               },
               "settings": {
+                "container_class": "",
                 "label": "Voornaam",
                 "label_placement": "",
                 "admin_field_label": "Collega Voornaam",
+                "help_message": "",
                 "validation_rules": {
                   "required": {
                     "value": true,
@@ -260,8 +328,11 @@
                 }
               },
               "editor_options": {
-                "title": "Colleague First Name"
-              }
+                "title": "Simple Text",
+                "icon_class": "ff-edit-text",
+                "template": "inputText"
+              },
+              "uniqElKey": "el_coll_rep_voornaam"
             },
             {
               "index": 13,
@@ -269,13 +340,16 @@
               "attributes": {
                 "type": "text",
                 "name": "achternaam",
+                "value": "",
                 "class": "",
                 "placeholder": "Achternaam"
               },
               "settings": {
+                "container_class": "",
                 "label": "Achternaam",
                 "label_placement": "",
                 "admin_field_label": "Collega Achternaam",
+                "help_message": "",
                 "validation_rules": {
                   "required": {
                     "value": true,
@@ -284,8 +358,11 @@
                 }
               },
               "editor_options": {
-                "title": "Colleague Last Name"
-              }
+                "title": "Simple Text",
+                "icon_class": "ff-edit-text",
+                "template": "inputText"
+              },
+              "uniqElKey": "el_coll_rep_achternaam"
             },
             {
               "index": 14,
@@ -293,13 +370,16 @@
               "attributes": {
                 "type": "email",
                 "name": "email",
+                "value": "",
                 "class": "",
                 "placeholder": "collega@organisatie.be"
               },
               "settings": {
+                "container_class": "",
                 "label": "E-mailadres",
                 "label_placement": "",
                 "admin_field_label": "Collega Email",
+                "help_message": "",
                 "validation_rules": {
                   "required": {
                     "value": true,
@@ -312,13 +392,19 @@
                 }
               },
               "editor_options": {
-                "title": "Colleague Email"
-              }
+                "title": "E-mail",
+                "icon_class": "ff-edit-email",
+                "template": "inputText"
+              },
+              "uniqElKey": "el_coll_rep_email"
             }
           ],
           "editor_options": {
-            "title": "Colleagues Repeater"
-          }
+            "title": "Repeat Field",
+            "icon_class": "ff-edit-repeat",
+            "template": "repeater"
+          },
+          "uniqElKey": "el_coll_repeater"
         },
         {
           "index": 15,
@@ -339,8 +425,11 @@
             }
           },
           "editor_options": {
-            "title": "GDPR Agreement"
-          }
+            "title": "GDPR Agreement",
+            "icon_class": "ff-edit-gdpr",
+            "template": "termsCheckbox"
+          },
+          "uniqElKey": "el_coll_gdpr"
         },
         {
           "index": 16,
@@ -362,74 +451,72 @@
             }
           },
           "editor_options": {
-            "title": "Submit Button"
-          }
+            "title": "Submit Button",
+            "icon_class": "ff-edit-submit"
+          },
+          "uniqElKey": "el_coll_submit"
         }
       ]
-    }
-  },
-  "metas": {
-    "formSettings": {
-      "confirmation": {
-        "redirectTo": "samePage",
-        "messageToShow": "Bedankt! Uw collega's zijn ingeschreven. Iedereen ontvangt een bevestiging per e-mail.",
-        "customPage": null,
-        "customUrl": null,
-        "samePageFormBehavior": "hide_form"
-      },
-      "restrictions": {
-        "limitNumberOfEntries": {
-          "enabled": false
-        },
-        "scheduleForm": {
-          "enabled": false
-        },
-        "requireLogin": {
-          "enabled": false
+    },
+    "metas": [
+      {
+        "meta_key": "formSettings",
+        "value": {
+          "confirmation": {
+            "redirectTo": "samePage",
+            "messageToShow": "Bedankt! Uw collega's zijn ingeschreven. Iedereen ontvangt een bevestiging per e-mail.",
+            "customPage": null,
+            "customUrl": null,
+            "samePageFormBehavior": "hide_form"
+          },
+          "restrictions": {
+            "limitNumberOfEntries": {"enabled": false},
+            "scheduleForm": {"enabled": false},
+            "requireLogin": {"enabled": false}
+          },
+          "layout": {
+            "labelPlacement": "top",
+            "helpMessagePlacement": "with_label",
+            "errorMessagePlacement": "inline",
+            "asteriskPlacement": "asterisk-right"
+          }
         }
       },
-      "layout": {
-        "labelPlacement": "top",
-        "helpMessagePlacement": "with_label",
-        "errorMessagePlacement": "inline",
-        "asteriskPlacement": "asterisk-right"
-      }
-    },
-    "notifications": [
       {
-        "name": "Admin Notification",
-        "sendTo": {
-          "type": "email",
-          "email": "{wp.admin_email}",
-          "field": null,
-          "routing": []
-        },
-        "fromName": "Stride LMS",
-        "fromEmail": "{wp.admin_email}",
-        "replyTo": "{inputs.email}",
-        "subject": "Groepsinschrijving: {inputs.voornaam} {inputs.achternaam} ({all-fields.repeat-counting}x)",
-        "message": "<p>Er is een groepsinschrijving ontvangen.</p><p><strong>Cursus ID:</strong> {inputs.course_id}</p><p><strong>Beheerder:</strong> {inputs.voornaam} {inputs.achternaam}</p><p><strong>Email:</strong> {inputs.email}</p><p><strong>Organisatie:</strong> {inputs.organisations}</p><h4>Collega's:</h4>{inputs.collegas}",
-        "enabled": true
-      },
-      {
-        "name": "Manager Confirmation",
-        "sendTo": {
-          "type": "field",
-          "email": null,
-          "field": "email",
-          "routing": []
-        },
-        "fromName": "Stride LMS",
-        "fromEmail": "{wp.admin_email}",
-        "replyTo": "{wp.admin_email}",
-        "subject": "Bevestiging groepsinschrijving",
-        "message": "<p>Beste {inputs.voornaam},</p><p>Bedankt voor uw inschrijving. De volgende collega's zijn ingeschreven:</p>{inputs.collegas}<p>Iedereen ontvangt een eigen bevestigingsmail met verdere instructies.</p><p>Met vriendelijke groeten,<br>Stride LMS</p>",
-        "enabled": true
+        "meta_key": "notifications",
+        "value": [
+          {
+            "name": "Admin Notification",
+            "sendTo": {
+              "type": "email",
+              "email": "{wp.admin_email}",
+              "field": null,
+              "routing": []
+            },
+            "fromName": "Stride LMS",
+            "fromEmail": "{wp.admin_email}",
+            "replyTo": "{inputs.email}",
+            "subject": "Groepsinschrijving: {inputs.voornaam} {inputs.achternaam}",
+            "message": "<p>Er is een groepsinschrijving ontvangen.</p><p><strong>Cursus ID:</strong> {inputs.course_id}</p><p><strong>Beheerder:</strong> {inputs.voornaam} {inputs.achternaam}</p><p><strong>Email:</strong> {inputs.email}</p><p><strong>Organisatie:</strong> {inputs.organisations}</p><h4>Collega's:</h4>{inputs.collegas}",
+            "enabled": true
+          },
+          {
+            "name": "Manager Confirmation",
+            "sendTo": {
+              "type": "field",
+              "email": null,
+              "field": "email",
+              "routing": []
+            },
+            "fromName": "Stride LMS",
+            "fromEmail": "{wp.admin_email}",
+            "replyTo": "{wp.admin_email}",
+            "subject": "Bevestiging groepsinschrijving",
+            "message": "<p>Beste {inputs.voornaam},</p><p>Bedankt voor uw inschrijving. De volgende collega's zijn ingeschreven:</p>{inputs.collegas}<p>Iedereen ontvangt een eigen bevestigingsmail met verdere instructies.</p><p>Met vriendelijke groeten,<br>Stride LMS</p>",
+            "enabled": true
+          }
+        ]
       }
-    ],
-    "step_data": {
-      "total_steps": 1,
-      "steps": []
-    }
+    ]
   }
-}
+]

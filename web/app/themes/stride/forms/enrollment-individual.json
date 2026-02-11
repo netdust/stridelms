@@ -1,5 +1,5 @@
-{
-  "form": {
+[
+  {
     "title": "Inschrijving Vorming",
     "status": "published",
     "appearance_settings": "{\"labelPlacement\":\"top\",\"helpMessagePlacement\":\"with_label\",\"errorMessagePlacement\":\"inline\",\"asteriskPlacement\":\"asterisk-right\"}",
@@ -17,27 +17,39 @@
             "admin_field_label": "Course ID"
           },
           "editor_options": {
-            "title": "Hidden Field"
-          }
+            "title": "Hidden Field",
+            "icon_class": "ff-edit-hidden-field",
+            "template": "inputHidden"
+          },
+          "uniqElKey": "el_stride_course_id"
         },
         {
           "index": 1,
           "element": "container",
+          "attributes": [],
+          "settings": {
+            "container_class": "",
+            "conditional_logics": []
+          },
           "columns": [
             {
               "fields": [
                 {
                   "index": 2,
-                  "element": "input_name",
+                  "element": "input_text",
                   "attributes": {
+                    "type": "text",
                     "name": "voornaam",
+                    "value": "",
                     "class": "",
                     "placeholder": ""
                   },
                   "settings": {
+                    "container_class": "",
                     "label": "Voornaam",
                     "label_placement": "",
                     "admin_field_label": "Voornaam",
+                    "help_message": "",
                     "validation_rules": {
                       "required": {
                         "value": true,
@@ -46,8 +58,11 @@
                     }
                   },
                   "editor_options": {
-                    "title": "Voornaam"
-                  }
+                    "title": "Simple Text",
+                    "icon_class": "ff-edit-text",
+                    "template": "inputText"
+                  },
+                  "uniqElKey": "el_stride_voornaam"
                 }
               ]
             },
@@ -55,16 +70,20 @@
               "fields": [
                 {
                   "index": 3,
-                  "element": "input_name",
+                  "element": "input_text",
                   "attributes": {
+                    "type": "text",
                     "name": "achternaam",
+                    "value": "",
                     "class": "",
                     "placeholder": ""
                   },
                   "settings": {
+                    "container_class": "",
                     "label": "Achternaam",
                     "label_placement": "",
                     "admin_field_label": "Achternaam",
+                    "help_message": "",
                     "validation_rules": {
                       "required": {
                         "value": true,
@@ -73,18 +92,20 @@
                     }
                   },
                   "editor_options": {
-                    "title": "Achternaam"
-                  }
+                    "title": "Simple Text",
+                    "icon_class": "ff-edit-text",
+                    "template": "inputText"
+                  },
+                  "uniqElKey": "el_stride_achternaam"
                 }
               ]
             }
           ],
-          "settings": {
-            "container_class": ""
-          },
           "editor_options": {
-            "title": "Two Columns"
-          }
+            "title": "Two Column Container",
+            "icon_class": "ff-edit-column-2"
+          },
+          "uniqElKey": "el_stride_name_row"
         },
         {
           "index": 4,
@@ -92,13 +113,17 @@
           "attributes": {
             "type": "email",
             "name": "email",
+            "value": "",
+            "id": "",
             "class": "",
             "placeholder": "uw.email@voorbeeld.be"
           },
           "settings": {
+            "container_class": "",
             "label": "E-mailadres",
             "label_placement": "",
             "admin_field_label": "Email",
+            "help_message": "",
             "validation_rules": {
               "required": {
                 "value": true,
@@ -111,21 +136,28 @@
             }
           },
           "editor_options": {
-            "title": "Email"
-          }
+            "title": "E-mail",
+            "icon_class": "ff-edit-email",
+            "template": "inputText"
+          },
+          "uniqElKey": "el_stride_email"
         },
         {
           "index": 5,
-          "element": "phone",
+          "element": "input_text",
           "attributes": {
+            "type": "text",
             "name": "telefoon",
+            "value": "",
             "class": "",
             "placeholder": "+32 ..."
           },
           "settings": {
+            "container_class": "",
             "label": "Telefoonnummer",
             "label_placement": "",
             "admin_field_label": "Telefoon",
+            "help_message": "",
             "validation_rules": {
               "required": {
                 "value": false,
@@ -134,77 +166,83 @@
             }
           },
           "editor_options": {
-            "title": "Phone"
-          }
+            "title": "Simple Text",
+            "icon_class": "ff-edit-text",
+            "template": "inputText"
+          },
+          "uniqElKey": "el_stride_telefoon"
         },
         {
           "index": 6,
           "element": "select",
           "attributes": {
             "name": "profiel_type",
+            "value": "",
+            "id": "",
             "class": ""
           },
           "settings": {
+            "container_class": "",
             "label": "Profiel",
             "label_placement": "",
             "admin_field_label": "Profiel Type",
             "placeholder": "Selecteer uw profiel",
+            "help_message": "",
+            "enable_select_2": "no",
             "validation_rules": {
               "required": {
                 "value": false,
                 "message": ""
               }
-            }
-          },
-          "options": {
-            "option_0": {
-              "label": "Zorgverlener",
-              "value": "zorgverlener"
             },
-            "option_1": {
-              "label": "Beleidsmaker",
-              "value": "beleidsmaker"
-            },
-            "option_2": {
-              "label": "Onderzoeker",
-              "value": "onderzoeker"
-            },
-            "option_3": {
-              "label": "Student",
-              "value": "student"
-            },
-            "option_4": {
-              "label": "Andere",
-              "value": "andere"
-            }
+            "advanced_options": [
+              {"label": "Zorgverlener", "value": "zorgverlener", "calc_value": ""},
+              {"label": "Beleidsmaker", "value": "beleidsmaker", "calc_value": ""},
+              {"label": "Onderzoeker", "value": "onderzoeker", "calc_value": ""},
+              {"label": "Student", "value": "student", "calc_value": ""},
+              {"label": "Andere", "value": "andere", "calc_value": ""}
+            ]
           },
           "editor_options": {
-            "title": "Dropdown"
-          }
+            "title": "Dropdown",
+            "icon_class": "ff-edit-dropdown",
+            "element": "select",
+            "template": "select"
+          },
+          "uniqElKey": "el_stride_profiel"
         },
         {
           "index": 7,
           "element": "custom_html",
+          "attributes": [],
           "settings": {
             "html_codes": "<h3>Organisatie</h3><p>Selecteer uw organisatie uit de lijst of typ een nieuwe naam.</p>",
-            "admin_field_label": "Organisatie Header"
+            "admin_field_label": "Organisatie Header",
+            "container_class": ""
           },
           "editor_options": {
-            "title": "Section Header"
-          }
+            "title": "Custom HTML",
+            "icon_class": "ff-edit-html",
+            "template": "customHTML"
+          },
+          "uniqElKey": "el_stride_org_header"
         },
         {
           "index": 8,
           "element": "select",
           "attributes": {
             "name": "organisations",
+            "value": "",
+            "id": "",
             "class": "stride-company-select"
           },
           "settings": {
+            "container_class": "",
             "label": "Organisatie",
             "label_placement": "",
             "admin_field_label": "Organisatie",
             "placeholder": "Selecteer of typ nieuwe organisatie",
+            "help_message": "Staat uw organisatie niet in de lijst? Typ dan de naam.",
             "enable_select_2": "yes",
             "validation_rules": {
               "required": {
@@ -212,12 +250,15 @@
                 "message": ""
               }
             },
-            "help_message": "Staat uw organisatie niet in de lijst? Typ dan de naam."
+            "advanced_options": []
           },
-          "options": {},
           "editor_options": {
-            "title": "Organisation Dropdown"
-          }
+            "title": "Dropdown",
+            "icon_class": "ff-edit-dropdown",
+            "element": "select",
+            "template": "select"
+          },
+          "uniqElKey": "el_stride_organisations"
         },
         {
           "index": 9,
@@ -225,13 +266,16 @@
           "attributes": {
             "type": "text",
             "name": "afdeling",
+            "value": "",
             "class": "",
             "placeholder": ""
           },
           "settings": {
+            "container_class": "",
             "label": "Afdeling",
             "label_placement": "",
             "admin_field_label": "Afdeling",
+            "help_message": "",
             "validation_rules": {
               "required": {
                 "value": false,
@@ -240,30 +284,34 @@
             }
           },
           "editor_options": {
-            "title": "Department"
-          }
+            "title": "Simple Text",
+            "icon_class": "ff-edit-text",
+            "template": "inputText"
+          },
+          "uniqElKey": "el_stride_afdeling"
         },
         {
           "index": 10,
           "element": "custom_html",
+          "attributes": [],
           "settings": {
             "html_codes": "<h3>Facturatiegegevens</h3><p>Vul deze gegevens in als uw organisatie niet in de lijst staat.</p>",
             "admin_field_label": "Invoice Header",
+            "container_class": "",
             "conditional_logics": {
+              "type": "any",
               "status": true,
-              "type": "show",
               "conditions": [
-                {
-                  "field": "organisations",
-                  "operator": "=",
-                  "value": ""
-                }
+                {"field": "organisations", "operator": "=", "value": ""}
               ]
             }
           },
           "editor_options": {
-            "title": "Invoice Section Header"
-          }
+            "title": "Custom HTML",
+            "icon_class": "ff-edit-html",
+            "template": "customHTML"
+          },
+          "uniqElKey": "el_stride_invoice_header"
         },
         {
           "index": 11,
@@ -271,13 +319,16 @@
           "attributes": {
             "type": "text",
             "name": "facturatie_naam",
+            "value": "",
             "class": "",
             "placeholder": ""
           },
           "settings": {
+            "container_class": "",
             "label": "Naam organisatie (voor factuur)",
             "label_placement": "",
             "admin_field_label": "Facturatie Naam",
+            "help_message": "",
             "validation_rules": {
               "required": {
                 "value": false,
@@ -285,20 +336,19 @@
               }
             },
             "conditional_logics": {
+              "type": "any",
               "status": true,
-              "type": "show",
               "conditions": [
-                {
-                  "field": "organisations",
-                  "operator": "=",
-                  "value": ""
-                }
+                {"field": "organisations", "operator": "=", "value": ""}
               ]
             }
           },
           "editor_options": {
-            "title": "Invoice Org Name"
-          }
+            "title": "Simple Text",
+            "icon_class": "ff-edit-text",
+            "template": "inputText"
+          },
+          "uniqElKey": "el_stride_invoice_name"
         },
         {
           "index": 12,
@@ -306,13 +356,16 @@
           "attributes": {
             "type": "text",
             "name": "facturatie_adres",
+            "value": "",
             "class": "",
             "placeholder": ""
           },
           "settings": {
+            "container_class": "",
             "label": "Adres",
             "label_placement": "",
             "admin_field_label": "Facturatie Adres",
+            "help_message": "",
             "validation_rules": {
               "required": {
                 "value": false,
@@ -320,24 +373,34 @@
               }
             },
             "conditional_logics": {
+              "type": "any",
               "status": true,
-              "type": "show",
               "conditions": [
-                {
-                  "field": "organisations",
-                  "operator": "=",
-                  "value": ""
-                }
+                {"field": "organisations", "operator": "=", "value": ""}
               ]
             }
           },
           "editor_options": {
-            "title": "Invoice Address"
-          }
+            "title": "Simple Text",
+            "icon_class": "ff-edit-text",
+            "template": "inputText"
+          },
+          "uniqElKey": "el_stride_invoice_adres"
         },
         {
           "index": 13,
           "element": "container",
+          "attributes": [],
+          "settings": {
+            "container_class": "",
+            "conditional_logics": {
+              "type": "any",
+              "status": true,
+              "conditions": [
+                {"field": "organisations", "operator": "=", "value": ""}
+              ]
+            }
+          },
           "columns": [
             {
               "fields": [
@@ -347,34 +410,26 @@
                   "attributes": {
                     "type": "text",
                     "name": "facturatie_postcode",
+                    "value": "",
                     "class": "",
                     "placeholder": ""
                   },
                   "settings": {
+                    "container_class": "",
                     "label": "Postcode",
                     "label_placement": "",
                     "admin_field_label": "Facturatie Postcode",
+                    "help_message": "",
                     "validation_rules": {
-                      "required": {
-                        "value": false,
-                        "message": ""
-                      }
-                    },
-                    "conditional_logics": {
-                      "status": true,
-                      "type": "show",
-                      "conditions": [
-                        {
-                          "field": "organisations",
-                          "operator": "=",
-                          "value": ""
-                        }
-                      ]
+                      "required": {"value": false, "message": ""}
                     }
                   },
                   "editor_options": {
-                    "title": "Invoice Postal Code"
-                  }
+                    "title": "Simple Text",
+                    "icon_class": "ff-edit-text",
+                    "template": "inputText"
+                  },
+                  "uniqElKey": "el_stride_invoice_postcode"
                 }
               ]
             },
@@ -386,55 +441,35 @@
                   "attributes": {
                     "type": "text",
                     "name": "facturatie_gemeente",
+                    "value": "",
                     "class": "",
                     "placeholder": ""
                   },
                   "settings": {
+                    "container_class": "",
                     "label": "Gemeente",
                     "label_placement": "",
                     "admin_field_label": "Facturatie Gemeente",
+                    "help_message": "",
                     "validation_rules": {
-                      "required": {
-                        "value": false,
-                        "message": ""
-                      }
-                    },
-                    "conditional_logics": {
-                      "status": true,
-                      "type": "show",
-                      "conditions": [
-                        {
-                          "field": "organisations",
-                          "operator": "=",
-                          "value": ""
-                        }
-                      ]
+                      "required": {"value": false, "message": ""}
                     }
                   },
                   "editor_options": {
-                    "title": "Invoice City"
-                  }
+                    "title": "Simple Text",
+                    "icon_class": "ff-edit-text",
+                    "template": "inputText"
+                  },
+                  "uniqElKey": "el_stride_invoice_city"
                 }
               ]
             }
           ],
-          "settings": {
-            "container_class": "",
-            "conditional_logics": {
-              "status": true,
-              "type": "show",
-              "conditions": [
-                {
-                  "field": "organisations",
-                  "operator": "=",
-                  "value": ""
-                }
-              ]
-            }
-          },
           "editor_options": {
-            "title": "Postal/City Row"
-          }
+            "title": "Two Column Container",
+            "icon_class": "ff-edit-column-2"
+          },
+          "uniqElKey": "el_stride_invoice_location_row"
         },
         {
           "index": 16,
@@ -442,34 +477,33 @@
           "attributes": {
             "type": "text",
             "name": "btw_nummer",
+            "value": "",
             "class": "",
             "placeholder": "BE0123456789"
           },
           "settings": {
+            "container_class": "",
             "label": "BTW-nummer",
             "label_placement": "",
             "admin_field_label": "BTW Nummer",
+            "help_message": "",
             "validation_rules": {
-              "required": {
-                "value": false,
-                "message": ""
-              }
+              "required": {"value": false, "message": ""}
             },
             "conditional_logics": {
+              "type": "any",
               "status": true,
-              "type": "show",
               "conditions": [
-                {
-                  "field": "organisations",
-                  "operator": "=",
-                  "value": ""
-                }
+                {"field": "organisations", "operator": "=", "value": ""}
               ]
             }
           },
           "editor_options": {
-            "title": "VAT Number"
-          }
+            "title": "Simple Text",
+            "icon_class": "ff-edit-text",
+            "template": "inputText"
+          },
+          "uniqElKey": "el_stride_btw"
         },
         {
           "index": 17,
@@ -477,35 +511,33 @@
           "attributes": {
             "type": "text",
             "name": "gln_nummer",
+            "value": "",
             "class": "",
             "placeholder": ""
           },
           "settings": {
+            "container_class": "",
             "label": "GLN-nummer (optioneel)",
             "label_placement": "",
             "admin_field_label": "GLN Nummer",
             "help_message": "Enkel voor ziekenhuizen en grote organisaties",
             "validation_rules": {
-              "required": {
-                "value": false,
-                "message": ""
-              }
+              "required": {"value": false, "message": ""}
             },
             "conditional_logics": {
+              "type": "any",
               "status": true,
-              "type": "show",
               "conditions": [
-                {
-                  "field": "organisations",
-                  "operator": "=",
-                  "value": ""
-                }
+                {"field": "organisations", "operator": "=", "value": ""}
               ]
             }
           },
           "editor_options": {
-            "title": "GLN Number"
-          }
+            "title": "Simple Text",
+            "icon_class": "ff-edit-text",
+            "template": "inputText"
+          },
+          "uniqElKey": "el_stride_gln"
         },
         {
           "index": 18,
@@ -513,38 +545,35 @@
           "attributes": {
             "type": "email",
             "name": "facturatie_email",
+            "value": "",
+            "id": "",
             "class": "",
             "placeholder": "facturen@organisatie.be"
           },
           "settings": {
+            "container_class": "",
             "label": "E-mailadres voor facturen",
             "label_placement": "",
             "admin_field_label": "Facturatie Email",
+            "help_message": "",
             "validation_rules": {
-              "required": {
-                "value": false,
-                "message": ""
-              },
-              "email": {
-                "value": true,
-                "message": "Voer een geldig e-mailadres in"
-              }
+              "required": {"value": false, "message": ""},
+              "email": {"value": true, "message": "Voer een geldig e-mailadres in"}
             },
             "conditional_logics": {
+              "type": "any",
               "status": true,
-              "type": "show",
               "conditions": [
-                {
-                  "field": "organisations",
-                  "operator": "=",
-                  "value": ""
-                }
+                {"field": "organisations", "operator": "=", "value": ""}
               ]
             }
           },
           "editor_options": {
-            "title": "Invoice Email"
-          }
+            "title": "E-mail",
+            "icon_class": "ff-edit-email",
+            "template": "inputText"
+          },
+          "uniqElKey": "el_stride_invoice_email"
         },
         {
           "index": 19,
@@ -565,8 +594,11 @@
             }
           },
           "editor_options": {
-            "title": "GDPR Agreement"
-          }
+            "title": "GDPR Agreement",
+            "icon_class": "ff-edit-gdpr",
+            "template": "termsCheckbox"
+          },
+          "uniqElKey": "el_stride_gdpr"
         },
         {
           "index": 20,
@@ -588,59 +620,57 @@
             }
           },
           "editor_options": {
-            "title": "Submit Button"
-          }
+            "title": "Submit Button",
+            "icon_class": "ff-edit-submit"
+          },
+          "uniqElKey": "el_stride_submit"
         }
       ]
-    }
-  },
-  "metas": {
-    "formSettings": {
-      "confirmation": {
-        "redirectTo": "samePage",
-        "messageToShow": "Bedankt voor uw inschrijving! U ontvangt een bevestiging per e-mail.",
-        "customPage": null,
-        "customUrl": null,
-        "samePageFormBehavior": "hide_form"
-      },
-      "restrictions": {
-        "limitNumberOfEntries": {
-          "enabled": false
-        },
-        "scheduleForm": {
-          "enabled": false
-        },
-        "requireLogin": {
-          "enabled": false
+    },
+    "metas": [
+      {
+        "meta_key": "formSettings",
+        "value": {
+          "confirmation": {
+            "redirectTo": "samePage",
+            "messageToShow": "Bedankt voor uw inschrijving! U ontvangt een bevestiging per e-mail.",
+            "customPage": null,
+            "customUrl": null,
+            "samePageFormBehavior": "hide_form"
+          },
+          "restrictions": {
+            "limitNumberOfEntries": {"enabled": false},
+            "scheduleForm": {"enabled": false},
+            "requireLogin": {"enabled": false}
+          },
+          "layout": {
+            "labelPlacement": "top",
+            "helpMessagePlacement": "with_label",
+            "errorMessagePlacement": "inline",
+            "asteriskPlacement": "asterisk-right"
+          }
         }
       },
-      "layout": {
-        "labelPlacement": "top",
-        "helpMessagePlacement": "with_label",
-        "errorMessagePlacement": "inline",
-        "asteriskPlacement": "asterisk-right"
-      }
-    },
-    "notifications": [
       {
-        "name": "Admin Notification",
-        "sendTo": {
-          "type": "email",
-          "email": "{wp.admin_email}",
-          "field": null,
-          "routing": []
-        },
-        "fromName": "Stride LMS",
-        "fromEmail": "{wp.admin_email}",
-        "replyTo": "{inputs.email}",
-        "subject": "Nieuwe inschrijving: {inputs.voornaam} {inputs.achternaam}",
-        "message": "<p>Er is een nieuwe inschrijving ontvangen.</p><p><strong>Cursus ID:</strong> {inputs.course_id}</p><p><strong>Naam:</strong> {inputs.voornaam} {inputs.achternaam}</p><p><strong>Email:</strong> {inputs.email}</p><p><strong>Telefoon:</strong> {inputs.telefoon}</p><p><strong>Organisatie:</strong> {inputs.organisations}</p>",
-        "enabled": true
+        "meta_key": "notifications",
+        "value": [
+          {
+            "name": "Admin Notification",
+            "sendTo": {
+              "type": "email",
+              "email": "{wp.admin_email}",
+              "field": null,
+              "routing": []
+            },
+            "fromName": "Stride LMS",
+            "fromEmail": "{wp.admin_email}",
+            "replyTo": "{inputs.email}",
+            "subject": "Nieuwe inschrijving: {inputs.voornaam} {inputs.achternaam}",
+            "message": "<p>Er is een nieuwe inschrijving ontvangen.</p><p><strong>Cursus ID:</strong> {inputs.course_id}</p><p><strong>Naam:</strong> {inputs.voornaam} {inputs.achternaam}</p><p><strong>Email:</strong> {inputs.email}</p><p><strong>Telefoon:</strong> {inputs.telefoon}</p><p><strong>Organisatie:</strong> {inputs.organisations}</p>",
+            "enabled": true
+          }
+        ]
       }
-    ],
-    "step_data": {
-      "total_steps": 1,
-      "steps": []
-    }
+    ]
   }
-}
+]

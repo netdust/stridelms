@@ -1,5 +1,5 @@
-{
-  "form": {
+[
+  {
     "title": "Inschrijving Traject",
     "status": "published",
     "appearance_settings": "{\"labelPlacement\":\"top\",\"helpMessagePlacement\":\"with_label\",\"errorMessagePlacement\":\"inline\",\"asteriskPlacement\":\"asterisk-right\"}",
@@ -17,38 +17,55 @@
             "admin_field_label": "Group/Traject ID"
           },
           "editor_options": {
-            "title": "Hidden Field"
-          }
+            "title": "Hidden Field",
+            "icon_class": "ff-edit-hidden-field",
+            "template": "inputHidden"
+          },
+          "uniqElKey": "el_traj_group_id"
         },
         {
           "index": 1,
           "element": "custom_html",
+          "attributes": [],
           "settings": {
             "html_codes": "<h3>Persoonlijke gegevens</h3>",
-            "admin_field_label": "Personal Header"
+            "admin_field_label": "Personal Header",
+            "container_class": ""
           },
           "editor_options": {
-            "title": "Personal Section"
-          }
+            "title": "Custom HTML",
+            "icon_class": "ff-edit-html",
+            "template": "customHTML"
+          },
+          "uniqElKey": "el_traj_personal_header"
         },
         {
           "index": 2,
           "element": "container",
+          "attributes": [],
+          "settings": {
+            "container_class": "",
+            "conditional_logics": []
+          },
           "columns": [
             {
               "fields": [
                 {
                   "index": 3,
-                  "element": "input_name",
+                  "element": "input_text",
                   "attributes": {
+                    "type": "text",
                     "name": "voornaam",
+                    "value": "",
                     "class": "",
                     "placeholder": ""
                   },
                   "settings": {
+                    "container_class": "",
                     "label": "Voornaam",
                     "label_placement": "",
                     "admin_field_label": "Voornaam",
+                    "help_message": "",
                     "validation_rules": {
                       "required": {
                         "value": true,
@@ -57,8 +74,11 @@
                     }
                   },
                   "editor_options": {
-                    "title": "First Name"
-                  }
+                    "title": "Simple Text",
+                    "icon_class": "ff-edit-text",
+                    "template": "inputText"
+                  },
+                  "uniqElKey": "el_traj_voornaam"
                 }
               ]
             },
@@ -66,16 +86,20 @@
               "fields": [
                 {
                   "index": 4,
-                  "element": "input_name",
+                  "element": "input_text",
                   "attributes": {
+                    "type": "text",
                     "name": "achternaam",
+                    "value": "",
                     "class": "",
                     "placeholder": ""
                   },
                   "settings": {
+                    "container_class": "",
                     "label": "Achternaam",
                     "label_placement": "",
                     "admin_field_label": "Achternaam",
+                    "help_message": "",
                     "validation_rules": {
                       "required": {
                         "value": true,
@@ -84,18 +108,20 @@
                     }
                   },
                   "editor_options": {
-                    "title": "Last Name"
-                  }
+                    "title": "Simple Text",
+                    "icon_class": "ff-edit-text",
+                    "template": "inputText"
+                  },
+                  "uniqElKey": "el_traj_achternaam"
                 }
               ]
             }
           ],
-          "settings": {
-            "container_class": ""
-          },
           "editor_options": {
-            "title": "Name Row"
-          }
+            "title": "Two Column Container",
+            "icon_class": "ff-edit-column-2"
+          },
+          "uniqElKey": "el_traj_name_row"
         },
         {
           "index": 5,
@@ -103,13 +129,17 @@
           "attributes": {
             "type": "email",
             "name": "email",
+            "value": "",
+            "id": "",
             "class": "",
             "placeholder": "uw.email@voorbeeld.be"
           },
           "settings": {
+            "container_class": "",
             "label": "E-mailadres",
             "label_placement": "",
             "admin_field_label": "Email",
+            "help_message": "",
             "validation_rules": {
               "required": {
                 "value": true,
@@ -122,21 +152,28 @@
             }
           },
           "editor_options": {
-            "title": "Email"
-          }
+            "title": "E-mail",
+            "icon_class": "ff-edit-email",
+            "template": "inputText"
+          },
+          "uniqElKey": "el_traj_email"
         },
         {
           "index": 6,
-          "element": "phone",
+          "element": "input_text",
           "attributes": {
+            "type": "text",
             "name": "telefoon",
+            "value": "",
             "class": "",
             "placeholder": "+32 ..."
           },
           "settings": {
+            "container_class": "",
             "label": "Telefoonnummer",
             "label_placement": "",
             "admin_field_label": "Telefoon",
+            "help_message": "",
             "validation_rules": {
               "required": {
                 "value": true,
@@ -145,77 +182,83 @@
             }
           },
           "editor_options": {
-            "title": "Phone"
-          }
+            "title": "Simple Text",
+            "icon_class": "ff-edit-text",
+            "template": "inputText"
+          },
+          "uniqElKey": "el_traj_telefoon"
         },
         {
           "index": 7,
           "element": "select",
           "attributes": {
             "name": "profiel_type",
+            "value": "",
+            "id": "",
             "class": ""
           },
           "settings": {
+            "container_class": "",
             "label": "Profiel",
             "label_placement": "",
             "admin_field_label": "Profiel Type",
             "placeholder": "Selecteer uw profiel",
+            "help_message": "",
+            "enable_select_2": "no",
             "validation_rules": {
               "required": {
                 "value": true,
                 "message": "Selecteer uw profiel"
               }
-            }
-          },
-          "options": {
-            "option_0": {
-              "label": "Zorgverlener",
-              "value": "zorgverlener"
             },
-            "option_1": {
-              "label": "Beleidsmaker",
-              "value": "beleidsmaker"
-            },
-            "option_2": {
-              "label": "Onderzoeker",
-              "value": "onderzoeker"
-            },
-            "option_3": {
-              "label": "Student",
-              "value": "student"
-            },
-            "option_4": {
-              "label": "Andere",
-              "value": "andere"
-            }
+            "advanced_options": [
+              {"label": "Zorgverlener", "value": "zorgverlener", "calc_value": ""},
+              {"label": "Beleidsmaker", "value": "beleidsmaker", "calc_value": ""},
+              {"label": "Onderzoeker", "value": "onderzoeker", "calc_value": ""},
+              {"label": "Student", "value": "student", "calc_value": ""},
+              {"label": "Andere", "value": "andere", "calc_value": ""}
+            ]
           },
           "editor_options": {
-            "title": "Profile Type"
-          }
+            "title": "Dropdown",
+            "icon_class": "ff-edit-dropdown",
+            "element": "select",
+            "template": "select"
+          },
+          "uniqElKey": "el_traj_profiel"
         },
         {
           "index": 8,
           "element": "custom_html",
+          "attributes": [],
           "settings": {
             "html_codes": "<h3>Organisatie</h3>",
-            "admin_field_label": "Org Header"
+            "admin_field_label": "Org Header",
+            "container_class": ""
           },
           "editor_options": {
-            "title": "Organisation Section"
-          }
+            "title": "Custom HTML",
+            "icon_class": "ff-edit-html",
+            "template": "customHTML"
+          },
+          "uniqElKey": "el_traj_org_header"
         },
         {
           "index": 9,
           "element": "select",
           "attributes": {
             "name": "organisations",
+            "value": "",
+            "id": "",
             "class": "stride-company-select"
           },
           "settings": {
+            "container_class": "",
             "label": "Organisatie",
             "label_placement": "",
             "admin_field_label": "Organisatie",
             "placeholder": "Selecteer of typ nieuwe organisatie",
+            "help_message": "Staat uw organisatie niet in de lijst? Typ dan de naam.",
             "enable_select_2": "yes",
             "validation_rules": {
               "required": {
@@ -223,12 +266,15 @@
                 "message": "Selecteer een organisatie"
               }
             },
-            "help_message": "Staat uw organisatie niet in de lijst? Typ dan de naam."
+            "advanced_options": []
           },
-          "options": {},
           "editor_options": {
-            "title": "Organisation Dropdown"
-          }
+            "title": "Dropdown",
+            "icon_class": "ff-edit-dropdown",
+            "element": "select",
+            "template": "select"
+          },
+          "uniqElKey": "el_traj_organisations"
         },
         {
           "index": 10,
@@ -236,13 +282,16 @@
           "attributes": {
             "type": "text",
             "name": "afdeling",
+            "value": "",
             "class": "",
             "placeholder": ""
           },
           "settings": {
+            "container_class": "",
             "label": "Afdeling",
             "label_placement": "",
             "admin_field_label": "Afdeling",
+            "help_message": "",
             "validation_rules": {
               "required": {
                 "value": false,
@@ -251,44 +300,57 @@
             }
           },
           "editor_options": {
-            "title": "Department"
-          }
+            "title": "Simple Text",
+            "icon_class": "ff-edit-text",
+            "template": "inputText"
+          },
+          "uniqElKey": "el_traj_afdeling"
         },
         {
           "index": 11,
           "element": "custom_html",
+          "attributes": [],
           "settings": {
             "html_codes": "<h3>Motivatie</h3>",
-            "admin_field_label": "Motivation Header"
+            "admin_field_label": "Motivation Header",
+            "container_class": ""
           },
           "editor_options": {
-            "title": "Motivation Section"
-          }
+            "title": "Custom HTML",
+            "icon_class": "ff-edit-html",
+            "template": "customHTML"
+          },
+          "uniqElKey": "el_traj_motivation_header"
         },
         {
           "index": 12,
           "element": "textarea",
           "attributes": {
             "name": "motivatie",
+            "value": "",
             "class": "",
             "placeholder": "Waarom wilt u dit traject volgen?",
-            "rows": 4
+            "rows": "4"
           },
           "settings": {
+            "container_class": "",
             "label": "Motivatie",
             "label_placement": "",
             "admin_field_label": "Motivatie",
+            "help_message": "Beschrijf kort waarom u dit traject wilt volgen en wat u hoopt te leren.",
             "validation_rules": {
               "required": {
                 "value": true,
                 "message": "Geef een korte motivatie"
               }
-            },
-            "help_message": "Beschrijf kort waarom u dit traject wilt volgen en wat u hoopt te leren."
+            }
           },
           "editor_options": {
-            "title": "Motivation Textarea"
-          }
+            "title": "Text Area",
+            "icon_class": "ff-edit-textarea",
+            "template": "inputTextarea"
+          },
+          "uniqElKey": "el_traj_motivatie"
         },
         {
           "index": 13,
@@ -309,8 +371,11 @@
             }
           },
           "editor_options": {
-            "title": "GDPR Agreement"
-          }
+            "title": "GDPR Agreement",
+            "icon_class": "ff-edit-gdpr",
+            "template": "termsCheckbox"
+          },
+          "uniqElKey": "el_traj_gdpr"
         },
         {
           "index": 14,
@@ -332,74 +397,72 @@
             }
           },
           "editor_options": {
-            "title": "Submit Button"
-          }
+            "title": "Submit Button",
+            "icon_class": "ff-edit-submit"
+          },
+          "uniqElKey": "el_traj_submit"
         }
       ]
-    }
-  },
-  "metas": {
-    "formSettings": {
-      "confirmation": {
-        "redirectTo": "samePage",
-        "messageToShow": "Bedankt voor uw inschrijving voor dit traject! U ontvangt een bevestiging per e-mail met meer informatie over de verschillende onderdelen.",
-        "customPage": null,
-        "customUrl": null,
-        "samePageFormBehavior": "hide_form"
-      },
-      "restrictions": {
-        "limitNumberOfEntries": {
-          "enabled": false
-        },
-        "scheduleForm": {
-          "enabled": false
-        },
-        "requireLogin": {
-          "enabled": false
+    },
+    "metas": [
+      {
+        "meta_key": "formSettings",
+        "value": {
+          "confirmation": {
+            "redirectTo": "samePage",
+            "messageToShow": "Bedankt voor uw inschrijving voor dit traject! U ontvangt een bevestiging per e-mail met meer informatie over de verschillende onderdelen.",
+            "customPage": null,
+            "customUrl": null,
+            "samePageFormBehavior": "hide_form"
+          },
+          "restrictions": {
+            "limitNumberOfEntries": {"enabled": false},
+            "scheduleForm": {"enabled": false},
+            "requireLogin": {"enabled": false}
+          },
+          "layout": {
+            "labelPlacement": "top",
+            "helpMessagePlacement": "with_label",
+            "errorMessagePlacement": "inline",
+            "asteriskPlacement": "asterisk-right"
+          }
         }
       },
-      "layout": {
-        "labelPlacement": "top",
-        "helpMessagePlacement": "with_label",
-        "errorMessagePlacement": "inline",
-        "asteriskPlacement": "asterisk-right"
-      }
-    },
-    "notifications": [
       {
-        "name": "Admin Notification",
-        "sendTo": {
-          "type": "email",
-          "email": "{wp.admin_email}",
-          "field": null,
-          "routing": []
-        },
-        "fromName": "Stride LMS",
-        "fromEmail": "{wp.admin_email}",
-        "replyTo": "{inputs.email}",
-        "subject": "Nieuwe traject-inschrijving: {inputs.voornaam} {inputs.achternaam}",
-        "message": "<p>Er is een nieuwe traject-inschrijving ontvangen.</p><p><strong>Traject ID:</strong> {inputs.group_id}</p><p><strong>Naam:</strong> {inputs.voornaam} {inputs.achternaam}</p><p><strong>Email:</strong> {inputs.email}</p><p><strong>Telefoon:</strong> {inputs.telefoon}</p><p><strong>Profiel:</strong> {inputs.profiel_type}</p><p><strong>Organisatie:</strong> {inputs.organisations}</p><h4>Motivatie:</h4><p>{inputs.motivatie}</p>",
-        "enabled": true
-      },
-      {
-        "name": "Participant Confirmation",
-        "sendTo": {
-          "type": "field",
-          "email": null,
-          "field": "email",
-          "routing": []
-        },
-        "fromName": "Stride LMS",
-        "fromEmail": "{wp.admin_email}",
-        "replyTo": "{wp.admin_email}",
-        "subject": "Bevestiging inschrijving traject",
-        "message": "<p>Beste {inputs.voornaam},</p><p>Bedankt voor uw inschrijving voor dit traject.</p><p>U bent nu ingeschreven voor alle onderdelen van het traject. U ontvangt aparte uitnodigingen voor elk onderdeel.</p><p>Met vriendelijke groeten,<br>Stride LMS</p>",
-        "enabled": true
+        "meta_key": "notifications",
+        "value": [
+          {
+            "name": "Admin Notification",
+            "sendTo": {
+              "type": "email",
+              "email": "{wp.admin_email}",
+              "field": null,
+              "routing": []
+            },
+            "fromName": "Stride LMS",
+            "fromEmail": "{wp.admin_email}",
+            "replyTo": "{inputs.email}",
+            "subject": "Nieuwe traject-inschrijving: {inputs.voornaam} {inputs.achternaam}",
+            "message": "<p>Er is een nieuwe traject-inschrijving ontvangen.</p><p><strong>Traject ID:</strong> {inputs.group_id}</p><p><strong>Naam:</strong> {inputs.voornaam} {inputs.achternaam}</p><p><strong>Email:</strong> {inputs.email}</p><p><strong>Telefoon:</strong> {inputs.telefoon}</p><p><strong>Profiel:</strong> {inputs.profiel_type}</p><p><strong>Organisatie:</strong> {inputs.organisations}</p><h4>Motivatie:</h4><p>{inputs.motivatie}</p>",
+            "enabled": true
+          },
+          {
+            "name": "Participant Confirmation",
+            "sendTo": {
+              "type": "field",
+              "email": null,
+              "field": "email",
+              "routing": []
+            },
+            "fromName": "Stride LMS",
+            "fromEmail": "{wp.admin_email}",
+            "replyTo": "{wp.admin_email}",
+            "subject": "Bevestiging inschrijving traject",
+            "message": "<p>Beste {inputs.voornaam},</p><p>Bedankt voor uw inschrijving voor dit traject.</p><p>U bent nu ingeschreven voor alle onderdelen van het traject. U ontvangt aparte uitnodigingen voor elk onderdeel.</p><p>Met vriendelijke groeten,<br>Stride LMS</p>",
+            "enabled": true
+          }
+        ]
       }
-    ],
-    "step_data": {
-      "total_steps": 1,
-      "steps": []
-    }
+    ]
   }
-}
+]
