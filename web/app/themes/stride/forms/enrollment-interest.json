@@ -1,0 +1,287 @@
+{
+  "form": {
+    "title": "Interesse Aanmelden",
+    "status": "published",
+    "appearance_settings": "{\"labelPlacement\":\"top\",\"helpMessagePlacement\":\"with_label\",\"errorMessagePlacement\":\"inline\",\"asteriskPlacement\":\"asterisk-right\"}",
+    "form_fields": {
+      "fields": [
+        {
+          "index": 0,
+          "element": "input_hidden",
+          "attributes": {
+            "type": "hidden",
+            "name": "course_id",
+            "value": ""
+          },
+          "settings": {
+            "admin_field_label": "Course ID"
+          },
+          "editor_options": {
+            "title": "Hidden Field"
+          }
+        },
+        {
+          "index": 1,
+          "element": "custom_html",
+          "settings": {
+            "html_codes": "<h3>Interesse aanmelden</h3><p>Vul uw gegevens in en wij brengen u op de hoogte zodra er plaatsen beschikbaar zijn of wanneer een nieuwe datum wordt gepland.</p>",
+            "admin_field_label": "Interest Header"
+          },
+          "editor_options": {
+            "title": "Interest Section"
+          }
+        },
+        {
+          "index": 2,
+          "element": "container",
+          "columns": [
+            {
+              "fields": [
+                {
+                  "index": 3,
+                  "element": "input_name",
+                  "attributes": {
+                    "name": "voornaam",
+                    "class": "",
+                    "placeholder": ""
+                  },
+                  "settings": {
+                    "label": "Voornaam",
+                    "label_placement": "",
+                    "admin_field_label": "Voornaam",
+                    "validation_rules": {
+                      "required": {
+                        "value": true,
+                        "message": "Dit veld is verplicht"
+                      }
+                    }
+                  },
+                  "editor_options": {
+                    "title": "First Name"
+                  }
+                }
+              ]
+            },
+            {
+              "fields": [
+                {
+                  "index": 4,
+                  "element": "input_name",
+                  "attributes": {
+                    "name": "achternaam",
+                    "class": "",
+                    "placeholder": ""
+                  },
+                  "settings": {
+                    "label": "Achternaam",
+                    "label_placement": "",
+                    "admin_field_label": "Achternaam",
+                    "validation_rules": {
+                      "required": {
+                        "value": true,
+                        "message": "Dit veld is verplicht"
+                      }
+                    }
+                  },
+                  "editor_options": {
+                    "title": "Last Name"
+                  }
+                }
+              ]
+            }
+          ],
+          "settings": {
+            "container_class": ""
+          },
+          "editor_options": {
+            "title": "Name Row"
+          }
+        },
+        {
+          "index": 5,
+          "element": "input_email",
+          "attributes": {
+            "type": "email",
+            "name": "email",
+            "class": "",
+            "placeholder": "uw.email@voorbeeld.be"
+          },
+          "settings": {
+            "label": "E-mailadres",
+            "label_placement": "",
+            "admin_field_label": "Email",
+            "validation_rules": {
+              "required": {
+                "value": true,
+                "message": "Dit veld is verplicht"
+              },
+              "email": {
+                "value": true,
+                "message": "Voer een geldig e-mailadres in"
+              }
+            }
+          },
+          "editor_options": {
+            "title": "Email"
+          }
+        },
+        {
+          "index": 6,
+          "element": "phone",
+          "attributes": {
+            "name": "telefoon",
+            "class": "",
+            "placeholder": "+32 ..."
+          },
+          "settings": {
+            "label": "Telefoonnummer (optioneel)",
+            "label_placement": "",
+            "admin_field_label": "Telefoon",
+            "validation_rules": {
+              "required": {
+                "value": false,
+                "message": ""
+              }
+            }
+          },
+          "editor_options": {
+            "title": "Phone"
+          }
+        },
+        {
+          "index": 7,
+          "element": "textarea",
+          "attributes": {
+            "name": "opmerking",
+            "class": "",
+            "placeholder": "Heeft u specifieke vragen of opmerkingen?",
+            "rows": 3
+          },
+          "settings": {
+            "label": "Opmerking (optioneel)",
+            "label_placement": "",
+            "admin_field_label": "Opmerking",
+            "validation_rules": {
+              "required": {
+                "value": false,
+                "message": ""
+              }
+            }
+          },
+          "editor_options": {
+            "title": "Remarks"
+          }
+        },
+        {
+          "index": 8,
+          "element": "gdpr_agreement",
+          "attributes": {
+            "name": "gdpr_akkoord",
+            "class": ""
+          },
+          "settings": {
+            "label": "",
+            "admin_field_label": "GDPR Akkoord",
+            "tnc_html": "Ik ga akkoord met de <a href=\"/privacy\" target=\"_blank\">privacyverklaring</a> en geef toestemming om gecontacteerd te worden.",
+            "validation_rules": {
+              "required": {
+                "value": true,
+                "message": "U moet akkoord gaan om door te gaan"
+              }
+            }
+          },
+          "editor_options": {
+            "title": "GDPR Agreement"
+          }
+        },
+        {
+          "index": 9,
+          "element": "button",
+          "attributes": {
+            "name": "submit",
+            "class": ""
+          },
+          "settings": {
+            "btn_text": "Interesse aanmelden",
+            "button_style": "default",
+            "button_size": "md",
+            "container_class": "",
+            "align": "left",
+            "button_ui": {
+              "type": "default",
+              "text": "Interesse aanmelden",
+              "img_url": ""
+            }
+          },
+          "editor_options": {
+            "title": "Submit Button"
+          }
+        }
+      ]
+    }
+  },
+  "metas": {
+    "formSettings": {
+      "confirmation": {
+        "redirectTo": "samePage",
+        "messageToShow": "Bedankt voor uw interesse! U ontvangt een bevestiging per e-mail en wij brengen u op de hoogte zodra er plaatsen beschikbaar zijn.",
+        "customPage": null,
+        "customUrl": null,
+        "samePageFormBehavior": "hide_form"
+      },
+      "restrictions": {
+        "limitNumberOfEntries": {
+          "enabled": false
+        },
+        "scheduleForm": {
+          "enabled": false
+        },
+        "requireLogin": {
+          "enabled": false
+        }
+      },
+      "layout": {
+        "labelPlacement": "top",
+        "helpMessagePlacement": "with_label",
+        "errorMessagePlacement": "inline",
+        "asteriskPlacement": "asterisk-right"
+      }
+    },
+    "notifications": [
+      {
+        "name": "Admin Notification",
+        "sendTo": {
+          "type": "email",
+          "email": "{wp.admin_email}",
+          "field": null,
+          "routing": []
+        },
+        "fromName": "Stride LMS",
+        "fromEmail": "{wp.admin_email}",
+        "replyTo": "{inputs.email}",
+        "subject": "Nieuwe interesse: {inputs.voornaam} {inputs.achternaam}",
+        "message": "<p>Er is een nieuwe interesse-aanmelding ontvangen.</p><p><strong>Cursus ID:</strong> {inputs.course_id}</p><p><strong>Naam:</strong> {inputs.voornaam} {inputs.achternaam}</p><p><strong>Email:</strong> {inputs.email}</p><p><strong>Telefoon:</strong> {inputs.telefoon}</p><h4>Opmerking:</h4><p>{inputs.opmerking}</p>",
+        "enabled": true
+      },
+      {
+        "name": "Interest Confirmation",
+        "sendTo": {
+          "type": "field",
+          "email": null,
+          "field": "email",
+          "routing": []
+        },
+        "fromName": "Stride LMS",
+        "fromEmail": "{wp.admin_email}",
+        "replyTo": "{wp.admin_email}",
+        "subject": "Bevestiging interesse aanmelding",
+        "message": "<p>Beste {inputs.voornaam},</p><p>Bedankt voor uw interesse. Wij hebben uw aanmelding ontvangen en brengen u op de hoogte zodra er plaatsen beschikbaar zijn of wanneer een nieuwe datum wordt gepland.</p><p>Met vriendelijke groeten,<br>Stride LMS</p>",
+        "enabled": true
+      }
+    ],
+    "step_data": {
+      "total_steps": 1,
+      "steps": []
+    }
+  }
+}

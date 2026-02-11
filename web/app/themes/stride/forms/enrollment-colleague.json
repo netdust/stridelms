@@ -1,0 +1,435 @@
+{
+  "form": {
+    "title": "Inschrijving Collega's",
+    "status": "published",
+    "appearance_settings": "{\"labelPlacement\":\"top\",\"helpMessagePlacement\":\"with_label\",\"errorMessagePlacement\":\"inline\",\"asteriskPlacement\":\"asterisk-right\"}",
+    "form_fields": {
+      "fields": [
+        {
+          "index": 0,
+          "element": "input_hidden",
+          "attributes": {
+            "type": "hidden",
+            "name": "course_id",
+            "value": ""
+          },
+          "settings": {
+            "admin_field_label": "Course ID"
+          },
+          "editor_options": {
+            "title": "Hidden Field"
+          }
+        },
+        {
+          "index": 1,
+          "element": "custom_html",
+          "settings": {
+            "html_codes": "<h3>Uw gegevens (beheerder)</h3><p>Als beheerder ontvangt u een bevestiging van alle inschrijvingen.</p>",
+            "admin_field_label": "Manager Header"
+          },
+          "editor_options": {
+            "title": "Manager Section"
+          }
+        },
+        {
+          "index": 2,
+          "element": "container",
+          "columns": [
+            {
+              "fields": [
+                {
+                  "index": 3,
+                  "element": "input_name",
+                  "attributes": {
+                    "name": "voornaam",
+                    "class": "",
+                    "placeholder": ""
+                  },
+                  "settings": {
+                    "label": "Uw voornaam",
+                    "label_placement": "",
+                    "admin_field_label": "Beheerder Voornaam",
+                    "validation_rules": {
+                      "required": {
+                        "value": true,
+                        "message": "Dit veld is verplicht"
+                      }
+                    }
+                  },
+                  "editor_options": {
+                    "title": "Manager First Name"
+                  }
+                }
+              ]
+            },
+            {
+              "fields": [
+                {
+                  "index": 4,
+                  "element": "input_name",
+                  "attributes": {
+                    "name": "achternaam",
+                    "class": "",
+                    "placeholder": ""
+                  },
+                  "settings": {
+                    "label": "Uw achternaam",
+                    "label_placement": "",
+                    "admin_field_label": "Beheerder Achternaam",
+                    "validation_rules": {
+                      "required": {
+                        "value": true,
+                        "message": "Dit veld is verplicht"
+                      }
+                    }
+                  },
+                  "editor_options": {
+                    "title": "Manager Last Name"
+                  }
+                }
+              ]
+            }
+          ],
+          "settings": {
+            "container_class": ""
+          },
+          "editor_options": {
+            "title": "Manager Name Row"
+          }
+        },
+        {
+          "index": 5,
+          "element": "input_email",
+          "attributes": {
+            "type": "email",
+            "name": "email",
+            "class": "",
+            "placeholder": "uw.email@organisatie.be"
+          },
+          "settings": {
+            "label": "Uw e-mailadres",
+            "label_placement": "",
+            "admin_field_label": "Beheerder Email",
+            "validation_rules": {
+              "required": {
+                "value": true,
+                "message": "Dit veld is verplicht"
+              },
+              "email": {
+                "value": true,
+                "message": "Voer een geldig e-mailadres in"
+              }
+            }
+          },
+          "editor_options": {
+            "title": "Manager Email"
+          }
+        },
+        {
+          "index": 6,
+          "element": "phone",
+          "attributes": {
+            "name": "telefoon",
+            "class": "",
+            "placeholder": "+32 ..."
+          },
+          "settings": {
+            "label": "Uw telefoonnummer",
+            "label_placement": "",
+            "admin_field_label": "Beheerder Telefoon",
+            "validation_rules": {
+              "required": {
+                "value": false,
+                "message": ""
+              }
+            }
+          },
+          "editor_options": {
+            "title": "Manager Phone"
+          }
+        },
+        {
+          "index": 7,
+          "element": "custom_html",
+          "settings": {
+            "html_codes": "<h3>Organisatie</h3>",
+            "admin_field_label": "Org Header"
+          },
+          "editor_options": {
+            "title": "Organisation Section"
+          }
+        },
+        {
+          "index": 8,
+          "element": "select",
+          "attributes": {
+            "name": "organisations",
+            "class": "stride-company-select"
+          },
+          "settings": {
+            "label": "Organisatie",
+            "label_placement": "",
+            "admin_field_label": "Organisatie",
+            "placeholder": "Selecteer uw organisatie",
+            "enable_select_2": "yes",
+            "validation_rules": {
+              "required": {
+                "value": true,
+                "message": "Selecteer een organisatie"
+              }
+            }
+          },
+          "options": {},
+          "editor_options": {
+            "title": "Organisation Dropdown"
+          }
+        },
+        {
+          "index": 9,
+          "element": "input_text",
+          "attributes": {
+            "type": "text",
+            "name": "afdeling",
+            "class": "",
+            "placeholder": ""
+          },
+          "settings": {
+            "label": "Afdeling",
+            "label_placement": "",
+            "admin_field_label": "Afdeling",
+            "validation_rules": {
+              "required": {
+                "value": false,
+                "message": ""
+              }
+            }
+          },
+          "editor_options": {
+            "title": "Department"
+          }
+        },
+        {
+          "index": 10,
+          "element": "custom_html",
+          "settings": {
+            "html_codes": "<h3>Collega's inschrijven</h3><p>Voeg hieronder de collega's toe die u wilt inschrijven. Elke collega ontvangt een eigen bevestigingsmail.</p>",
+            "admin_field_label": "Colleagues Header"
+          },
+          "editor_options": {
+            "title": "Colleagues Section"
+          }
+        },
+        {
+          "index": 11,
+          "element": "repeater_field",
+          "attributes": {
+            "name": "collegas",
+            "class": ""
+          },
+          "settings": {
+            "label": "Collega's",
+            "label_placement": "",
+            "admin_field_label": "Collegas Repeater",
+            "max_repeat_field": 20,
+            "validation_rules": {
+              "required": {
+                "value": true,
+                "message": "Voeg minimaal 1 collega toe"
+              }
+            }
+          },
+          "fields": [
+            {
+              "index": 12,
+              "element": "input_text",
+              "attributes": {
+                "type": "text",
+                "name": "voornaam",
+                "class": "",
+                "placeholder": "Voornaam"
+              },
+              "settings": {
+                "label": "Voornaam",
+                "label_placement": "",
+                "admin_field_label": "Collega Voornaam",
+                "validation_rules": {
+                  "required": {
+                    "value": true,
+                    "message": "Voornaam is verplicht"
+                  }
+                }
+              },
+              "editor_options": {
+                "title": "Colleague First Name"
+              }
+            },
+            {
+              "index": 13,
+              "element": "input_text",
+              "attributes": {
+                "type": "text",
+                "name": "achternaam",
+                "class": "",
+                "placeholder": "Achternaam"
+              },
+              "settings": {
+                "label": "Achternaam",
+                "label_placement": "",
+                "admin_field_label": "Collega Achternaam",
+                "validation_rules": {
+                  "required": {
+                    "value": true,
+                    "message": "Achternaam is verplicht"
+                  }
+                }
+              },
+              "editor_options": {
+                "title": "Colleague Last Name"
+              }
+            },
+            {
+              "index": 14,
+              "element": "input_email",
+              "attributes": {
+                "type": "email",
+                "name": "email",
+                "class": "",
+                "placeholder": "collega@organisatie.be"
+              },
+              "settings": {
+                "label": "E-mailadres",
+                "label_placement": "",
+                "admin_field_label": "Collega Email",
+                "validation_rules": {
+                  "required": {
+                    "value": true,
+                    "message": "E-mailadres is verplicht"
+                  },
+                  "email": {
+                    "value": true,
+                    "message": "Voer een geldig e-mailadres in"
+                  }
+                }
+              },
+              "editor_options": {
+                "title": "Colleague Email"
+              }
+            }
+          ],
+          "editor_options": {
+            "title": "Colleagues Repeater"
+          }
+        },
+        {
+          "index": 15,
+          "element": "gdpr_agreement",
+          "attributes": {
+            "name": "gdpr_akkoord",
+            "class": ""
+          },
+          "settings": {
+            "label": "",
+            "admin_field_label": "GDPR Akkoord",
+            "tnc_html": "Ik verklaar dat ik toestemming heb van de opgegeven collega's om hun gegevens te gebruiken voor deze inschrijving. Ik ga akkoord met de <a href=\"/privacy\" target=\"_blank\">privacyverklaring</a>.",
+            "validation_rules": {
+              "required": {
+                "value": true,
+                "message": "U moet akkoord gaan om door te gaan"
+              }
+            }
+          },
+          "editor_options": {
+            "title": "GDPR Agreement"
+          }
+        },
+        {
+          "index": 16,
+          "element": "button",
+          "attributes": {
+            "name": "submit",
+            "class": ""
+          },
+          "settings": {
+            "btn_text": "Collega's inschrijven",
+            "button_style": "default",
+            "button_size": "md",
+            "container_class": "",
+            "align": "left",
+            "button_ui": {
+              "type": "default",
+              "text": "Collega's inschrijven",
+              "img_url": ""
+            }
+          },
+          "editor_options": {
+            "title": "Submit Button"
+          }
+        }
+      ]
+    }
+  },
+  "metas": {
+    "formSettings": {
+      "confirmation": {
+        "redirectTo": "samePage",
+        "messageToShow": "Bedankt! Uw collega's zijn ingeschreven. Iedereen ontvangt een bevestiging per e-mail.",
+        "customPage": null,
+        "customUrl": null,
+        "samePageFormBehavior": "hide_form"
+      },
+      "restrictions": {
+        "limitNumberOfEntries": {
+          "enabled": false
+        },
+        "scheduleForm": {
+          "enabled": false
+        },
+        "requireLogin": {
+          "enabled": false
+        }
+      },
+      "layout": {
+        "labelPlacement": "top",
+        "helpMessagePlacement": "with_label",
+        "errorMessagePlacement": "inline",
+        "asteriskPlacement": "asterisk-right"
+      }
+    },
+    "notifications": [
+      {
+        "name": "Admin Notification",
+        "sendTo": {
+          "type": "email",
+          "email": "{wp.admin_email}",
+          "field": null,
+          "routing": []
+        },
+        "fromName": "Stride LMS",
+        "fromEmail": "{wp.admin_email}",
+        "replyTo": "{inputs.email}",
+        "subject": "Groepsinschrijving: {inputs.voornaam} {inputs.achternaam} ({all-fields.repeat-counting}x)",
+        "message": "<p>Er is een groepsinschrijving ontvangen.</p><p><strong>Cursus ID:</strong> {inputs.course_id}</p><p><strong>Beheerder:</strong> {inputs.voornaam} {inputs.achternaam}</p><p><strong>Email:</strong> {inputs.email}</p><p><strong>Organisatie:</strong> {inputs.organisations}</p><h4>Collega's:</h4>{inputs.collegas}",
+        "enabled": true
+      },
+      {
+        "name": "Manager Confirmation",
+        "sendTo": {
+          "type": "field",
+          "email": null,
+          "field": "email",
+          "routing": []
+        },
+        "fromName": "Stride LMS",
+        "fromEmail": "{wp.admin_email}",
+        "replyTo": "{wp.admin_email}",
+        "subject": "Bevestiging groepsinschrijving",
+        "message": "<p>Beste {inputs.voornaam},</p><p>Bedankt voor uw inschrijving. De volgende collega's zijn ingeschreven:</p>{inputs.collegas}<p>Iedereen ontvangt een eigen bevestigingsmail met verdere instructies.</p><p>Met vriendelijke groeten,<br>Stride LMS</p>",
+        "enabled": true
+      }
+    ],
+    "step_data": {
+      "total_steps": 1,
+      "steps": []
+    }
+  }
+}

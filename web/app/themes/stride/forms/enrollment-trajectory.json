@@ -1,0 +1,405 @@
+{
+  "form": {
+    "title": "Inschrijving Traject",
+    "status": "published",
+    "appearance_settings": "{\"labelPlacement\":\"top\",\"helpMessagePlacement\":\"with_label\",\"errorMessagePlacement\":\"inline\",\"asteriskPlacement\":\"asterisk-right\"}",
+    "form_fields": {
+      "fields": [
+        {
+          "index": 0,
+          "element": "input_hidden",
+          "attributes": {
+            "type": "hidden",
+            "name": "group_id",
+            "value": ""
+          },
+          "settings": {
+            "admin_field_label": "Group/Traject ID"
+          },
+          "editor_options": {
+            "title": "Hidden Field"
+          }
+        },
+        {
+          "index": 1,
+          "element": "custom_html",
+          "settings": {
+            "html_codes": "<h3>Persoonlijke gegevens</h3>",
+            "admin_field_label": "Personal Header"
+          },
+          "editor_options": {
+            "title": "Personal Section"
+          }
+        },
+        {
+          "index": 2,
+          "element": "container",
+          "columns": [
+            {
+              "fields": [
+                {
+                  "index": 3,
+                  "element": "input_name",
+                  "attributes": {
+                    "name": "voornaam",
+                    "class": "",
+                    "placeholder": ""
+                  },
+                  "settings": {
+                    "label": "Voornaam",
+                    "label_placement": "",
+                    "admin_field_label": "Voornaam",
+                    "validation_rules": {
+                      "required": {
+                        "value": true,
+                        "message": "Dit veld is verplicht"
+                      }
+                    }
+                  },
+                  "editor_options": {
+                    "title": "First Name"
+                  }
+                }
+              ]
+            },
+            {
+              "fields": [
+                {
+                  "index": 4,
+                  "element": "input_name",
+                  "attributes": {
+                    "name": "achternaam",
+                    "class": "",
+                    "placeholder": ""
+                  },
+                  "settings": {
+                    "label": "Achternaam",
+                    "label_placement": "",
+                    "admin_field_label": "Achternaam",
+                    "validation_rules": {
+                      "required": {
+                        "value": true,
+                        "message": "Dit veld is verplicht"
+                      }
+                    }
+                  },
+                  "editor_options": {
+                    "title": "Last Name"
+                  }
+                }
+              ]
+            }
+          ],
+          "settings": {
+            "container_class": ""
+          },
+          "editor_options": {
+            "title": "Name Row"
+          }
+        },
+        {
+          "index": 5,
+          "element": "input_email",
+          "attributes": {
+            "type": "email",
+            "name": "email",
+            "class": "",
+            "placeholder": "uw.email@voorbeeld.be"
+          },
+          "settings": {
+            "label": "E-mailadres",
+            "label_placement": "",
+            "admin_field_label": "Email",
+            "validation_rules": {
+              "required": {
+                "value": true,
+                "message": "Dit veld is verplicht"
+              },
+              "email": {
+                "value": true,
+                "message": "Voer een geldig e-mailadres in"
+              }
+            }
+          },
+          "editor_options": {
+            "title": "Email"
+          }
+        },
+        {
+          "index": 6,
+          "element": "phone",
+          "attributes": {
+            "name": "telefoon",
+            "class": "",
+            "placeholder": "+32 ..."
+          },
+          "settings": {
+            "label": "Telefoonnummer",
+            "label_placement": "",
+            "admin_field_label": "Telefoon",
+            "validation_rules": {
+              "required": {
+                "value": true,
+                "message": "Dit veld is verplicht"
+              }
+            }
+          },
+          "editor_options": {
+            "title": "Phone"
+          }
+        },
+        {
+          "index": 7,
+          "element": "select",
+          "attributes": {
+            "name": "profiel_type",
+            "class": ""
+          },
+          "settings": {
+            "label": "Profiel",
+            "label_placement": "",
+            "admin_field_label": "Profiel Type",
+            "placeholder": "Selecteer uw profiel",
+            "validation_rules": {
+              "required": {
+                "value": true,
+                "message": "Selecteer uw profiel"
+              }
+            }
+          },
+          "options": {
+            "option_0": {
+              "label": "Zorgverlener",
+              "value": "zorgverlener"
+            },
+            "option_1": {
+              "label": "Beleidsmaker",
+              "value": "beleidsmaker"
+            },
+            "option_2": {
+              "label": "Onderzoeker",
+              "value": "onderzoeker"
+            },
+            "option_3": {
+              "label": "Student",
+              "value": "student"
+            },
+            "option_4": {
+              "label": "Andere",
+              "value": "andere"
+            }
+          },
+          "editor_options": {
+            "title": "Profile Type"
+          }
+        },
+        {
+          "index": 8,
+          "element": "custom_html",
+          "settings": {
+            "html_codes": "<h3>Organisatie</h3>",
+            "admin_field_label": "Org Header"
+          },
+          "editor_options": {
+            "title": "Organisation Section"
+          }
+        },
+        {
+          "index": 9,
+          "element": "select",
+          "attributes": {
+            "name": "organisations",
+            "class": "stride-company-select"
+          },
+          "settings": {
+            "label": "Organisatie",
+            "label_placement": "",
+            "admin_field_label": "Organisatie",
+            "placeholder": "Selecteer of typ nieuwe organisatie",
+            "enable_select_2": "yes",
+            "validation_rules": {
+              "required": {
+                "value": true,
+                "message": "Selecteer een organisatie"
+              }
+            },
+            "help_message": "Staat uw organisatie niet in de lijst? Typ dan de naam."
+          },
+          "options": {},
+          "editor_options": {
+            "title": "Organisation Dropdown"
+          }
+        },
+        {
+          "index": 10,
+          "element": "input_text",
+          "attributes": {
+            "type": "text",
+            "name": "afdeling",
+            "class": "",
+            "placeholder": ""
+          },
+          "settings": {
+            "label": "Afdeling",
+            "label_placement": "",
+            "admin_field_label": "Afdeling",
+            "validation_rules": {
+              "required": {
+                "value": false,
+                "message": ""
+              }
+            }
+          },
+          "editor_options": {
+            "title": "Department"
+          }
+        },
+        {
+          "index": 11,
+          "element": "custom_html",
+          "settings": {
+            "html_codes": "<h3>Motivatie</h3>",
+            "admin_field_label": "Motivation Header"
+          },
+          "editor_options": {
+            "title": "Motivation Section"
+          }
+        },
+        {
+          "index": 12,
+          "element": "textarea",
+          "attributes": {
+            "name": "motivatie",
+            "class": "",
+            "placeholder": "Waarom wilt u dit traject volgen?",
+            "rows": 4
+          },
+          "settings": {
+            "label": "Motivatie",
+            "label_placement": "",
+            "admin_field_label": "Motivatie",
+            "validation_rules": {
+              "required": {
+                "value": true,
+                "message": "Geef een korte motivatie"
+              }
+            },
+            "help_message": "Beschrijf kort waarom u dit traject wilt volgen en wat u hoopt te leren."
+          },
+          "editor_options": {
+            "title": "Motivation Textarea"
+          }
+        },
+        {
+          "index": 13,
+          "element": "gdpr_agreement",
+          "attributes": {
+            "name": "gdpr_akkoord",
+            "class": ""
+          },
+          "settings": {
+            "label": "",
+            "admin_field_label": "GDPR Akkoord",
+            "tnc_html": "Ik ga akkoord met de <a href=\"/privacy\" target=\"_blank\">privacyverklaring</a> en geef toestemming voor de verwerking van mijn gegevens.",
+            "validation_rules": {
+              "required": {
+                "value": true,
+                "message": "U moet akkoord gaan om door te gaan"
+              }
+            }
+          },
+          "editor_options": {
+            "title": "GDPR Agreement"
+          }
+        },
+        {
+          "index": 14,
+          "element": "button",
+          "attributes": {
+            "name": "submit",
+            "class": ""
+          },
+          "settings": {
+            "btn_text": "Inschrijven voor traject",
+            "button_style": "default",
+            "button_size": "md",
+            "container_class": "",
+            "align": "left",
+            "button_ui": {
+              "type": "default",
+              "text": "Inschrijven voor traject",
+              "img_url": ""
+            }
+          },
+          "editor_options": {
+            "title": "Submit Button"
+          }
+        }
+      ]
+    }
+  },
+  "metas": {
+    "formSettings": {
+      "confirmation": {
+        "redirectTo": "samePage",
+        "messageToShow": "Bedankt voor uw inschrijving voor dit traject! U ontvangt een bevestiging per e-mail met meer informatie over de verschillende onderdelen.",
+        "customPage": null,
+        "customUrl": null,
+        "samePageFormBehavior": "hide_form"
+      },
+      "restrictions": {
+        "limitNumberOfEntries": {
+          "enabled": false
+        },
+        "scheduleForm": {
+          "enabled": false
+        },
+        "requireLogin": {
+          "enabled": false
+        }
+      },
+      "layout": {
+        "labelPlacement": "top",
+        "helpMessagePlacement": "with_label",
+        "errorMessagePlacement": "inline",
+        "asteriskPlacement": "asterisk-right"
+      }
+    },
+    "notifications": [
+      {
+        "name": "Admin Notification",
+        "sendTo": {
+          "type": "email",
+          "email": "{wp.admin_email}",
+          "field": null,
+          "routing": []
+        },
+        "fromName": "Stride LMS",
+        "fromEmail": "{wp.admin_email}",
+        "replyTo": "{inputs.email}",
+        "subject": "Nieuwe traject-inschrijving: {inputs.voornaam} {inputs.achternaam}",
+        "message": "<p>Er is een nieuwe traject-inschrijving ontvangen.</p><p><strong>Traject ID:</strong> {inputs.group_id}</p><p><strong>Naam:</strong> {inputs.voornaam} {inputs.achternaam}</p><p><strong>Email:</strong> {inputs.email}</p><p><strong>Telefoon:</strong> {inputs.telefoon}</p><p><strong>Profiel:</strong> {inputs.profiel_type}</p><p><strong>Organisatie:</strong> {inputs.organisations}</p><h4>Motivatie:</h4><p>{inputs.motivatie}</p>",
+        "enabled": true
+      },
+      {
+        "name": "Participant Confirmation",
+        "sendTo": {
+          "type": "field",
+          "email": null,
+          "field": "email",
+          "routing": []
+        },
+        "fromName": "Stride LMS",
+        "fromEmail": "{wp.admin_email}",
+        "replyTo": "{wp.admin_email}",
+        "subject": "Bevestiging inschrijving traject",
+        "message": "<p>Beste {inputs.voornaam},</p><p>Bedankt voor uw inschrijving voor dit traject.</p><p>U bent nu ingeschreven voor alle onderdelen van het traject. U ontvangt aparte uitnodigingen voor elk onderdeel.</p><p>Met vriendelijke groeten,<br>Stride LMS</p>",
+        "enabled": true
+      }
+    ],
+    "step_data": {
+      "total_steps": 1,
+      "steps": []
+    }
+  }
+}

@@ -108,6 +108,7 @@ return [
             // Phase 2: Enrollment Services
             'stride\\services\\enrollment\\EnrollmentService',
             'stride\\services\\enrollment\\FormSubmissionHandler',
+            'stride\\services\\enrollment\\FluentFormsHelper',
         ],
 
         // Admin-only services
