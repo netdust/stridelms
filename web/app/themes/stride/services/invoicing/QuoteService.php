@@ -155,19 +155,10 @@ class QuoteService implements \NTDST_Service_Meta
             'has_archive' => false,
             'menu_icon' => 'dashicons-media-text',
 
-            // Field schema - all hidden from auto-generated metaboxes
-            // We render everything via custom metaboxes for invoice-style layout
+            // Field schema for ORM - metabox removed via registerMetaboxes()
             'fields' => [
-                self::FIELD_USER_ID => [
-                    'type' => 'integer',
-                    'required' => true,
-                    'show_in_metabox' => false,
-                ],
-                self::FIELD_COURSE_ID => [
-                    'type' => 'integer',
-                    'required' => true,
-                    'show_in_metabox' => false,
-                ],
+                self::FIELD_USER_ID => ['type' => 'integer', 'required' => true],
+                self::FIELD_COURSE_ID => ['type' => 'integer', 'required' => true],
                 self::FIELD_STATUS => [
                     'type' => 'select',
                     'options' => [
@@ -176,75 +167,22 @@ class QuoteService implements \NTDST_Service_Meta
                         self::STATUS_EXPORTED => __('Geëxporteerd', 'stride'),
                     ],
                     'default' => self::STATUS_DRAFT,
-                    'show_in_metabox' => false,
                 ],
-                self::FIELD_QUOTE_NUMBER => [
-                    'type' => 'text',
-                    'required' => true,
-                    'show_in_metabox' => false,
-                ],
-                self::FIELD_ITEMS => [
-                    'type' => 'json',
-                    'show_in_metabox' => false,
-                ],
-                self::FIELD_SUBTOTAL => [
-                    'type' => 'float',
-                    'min' => 0,
-                    'show_in_metabox' => false,
-                ],
-                self::FIELD_TAX => [
-                    'type' => 'float',
-                    'min' => 0,
-                    'show_in_metabox' => false,
-                ],
-                self::FIELD_TOTAL => [
-                    'type' => 'float',
-                    'min' => 0,
-                    'show_in_metabox' => false,
-                ],
-                self::FIELD_VALID_UNTIL => [
-                    'type' => 'text',
-                    'show_in_metabox' => false,
-                ],
-                self::FIELD_BILLING => [
-                    'type' => 'json',
-                    'show_in_metabox' => false,
-                ],
-                self::FIELD_ORDER_NUMBER => [
-                    'type' => 'text',
-                    'show_in_metabox' => false,
-                ],
-                self::FIELD_VOUCHER_CODE => [
-                    'type' => 'text',
-                    'show_in_metabox' => false,
-                ],
-                self::FIELD_PDF_PATH => [
-                    'type' => 'text',
-                    'show_in_metabox' => false,
-                ],
-                self::FIELD_CREATED_AT => [
-                    'type' => 'text',
-                    'show_in_metabox' => false,
-                ],
-                self::FIELD_SENT_AT => [
-                    'type' => 'text',
-                    'show_in_metabox' => false,
-                ],
-                self::FIELD_EXPORTED_AT => [
-                    'type' => 'text',
-                    'show_in_metabox' => false,
-                ],
-                self::FIELD_DISCOUNT => [
-                    'type' => 'float',
-                    'min' => 0,
-                    'show_in_metabox' => false,
-                ],
+                self::FIELD_QUOTE_NUMBER => ['type' => 'text', 'required' => true],
+                self::FIELD_ITEMS => ['type' => 'json'],
+                self::FIELD_SUBTOTAL => ['type' => 'float', 'min' => 0],
+                self::FIELD_TAX => ['type' => 'float', 'min' => 0],
+                self::FIELD_TOTAL => ['type' => 'float', 'min' => 0],
+                self::FIELD_VALID_UNTIL => ['type' => 'text'],
+                self::FIELD_BILLING => ['type' => 'json'],
+                self::FIELD_ORDER_NUMBER => ['type' => 'text'],
+                self::FIELD_VOUCHER_CODE => ['type' => 'text'],
+                self::FIELD_PDF_PATH => ['type' => 'text'],
+                self::FIELD_CREATED_AT => ['type' => 'text'],
+                self::FIELD_SENT_AT => ['type' => 'text'],
+                self::FIELD_EXPORTED_AT => ['type' => 'text'],
+                self::FIELD_DISCOUNT => ['type' => 'float', 'min' => 0],
             ],
-
-            // Disable auto-generated field groups entirely
-            'field_groups' => [],
-            'use_tabs' => false,
-            'show_metabox' => false,
         ]);
     }
 
@@ -288,10 +226,15 @@ class QuoteService implements \NTDST_Service_Meta
         // Remove default editor
         remove_post_type_support(self::POST_TYPE, 'editor');
 
-        // Main quote overview
+        // IMPORTANT: Remove auto-generated NTDST metabox
+        // The DataManager auto-registers metaboxes for all models with fields
+        remove_meta_box('ntdst_' . self::POST_TYPE . '_fields', self::POST_TYPE, 'normal');
+        remove_meta_box('ntdst_' . self::POST_TYPE . '_tabbed', self::POST_TYPE, 'normal');
+
+        // Main quote overview - invoice style
         add_meta_box(
             'stride_quote_overview',
-            __('Offerte Overzicht', 'stride'),
+            __('Offerte', 'stride'),
             [$this, 'renderOverviewMetabox'],
             self::POST_TYPE,
             'normal',
