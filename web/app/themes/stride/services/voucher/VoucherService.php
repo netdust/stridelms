@@ -178,12 +178,20 @@ class VoucherService implements \NTDST_Service_Meta
                     'label' => __('Aantal gebruikt', 'stride'),
                 ],
                 self::FIELD_COURSE_ID => [
-                    'type' => 'integer',
-                    'label' => __('Cursus', 'stride'),
+                    'type' => 'relation',
+                    'post_type' => 'sfwd-courses',
+                    'multiple' => false,
+                    'label' => __('Beperkt tot cursus', 'stride'),
+                    'placeholder' => __('Zoek cursus...', 'stride'),
+                    'description' => __('Laat leeg voor alle cursussen', 'stride'),
                 ],
                 self::FIELD_GROUP_ID => [
-                    'type' => 'integer',
-                    'label' => __('Traject', 'stride'),
+                    'type' => 'relation',
+                    'post_type' => 'groups',
+                    'multiple' => false,
+                    'label' => __('Beperkt tot traject', 'stride'),
+                    'placeholder' => __('Zoek traject...', 'stride'),
+                    'description' => __('Laat leeg voor alle trajecten', 'stride'),
                 ],
                 self::FIELD_DISCOUNT_TYPE => [
                     'type' => 'select',
@@ -394,6 +402,19 @@ class VoucherService implements \NTDST_Service_Meta
     /**
      * Get client IP address safely
      */
+    /**
+     * Extract single ID from relation field value
+     *
+     * Relation fields may return array even with multiple=false
+     */
+    private function extractSingleId(mixed $value): int
+    {
+        if (is_array($value)) {
+            return (int) ($value[0] ?? 0);
+        }
+        return (int) $value;
+    }
+
     private function getClientIp(): string
     {
         // Check for proxy headers (only trust if behind known proxy)
@@ -680,8 +701,8 @@ class VoucherService implements \NTDST_Service_Meta
             'type' => $post->fields[self::FIELD_TYPE] ?? self::TYPE_SINGLE,
             'usage_limit' => (int) ($post->fields[self::FIELD_USAGE_LIMIT] ?? 1),
             'used_count' => (int) ($post->fields[self::FIELD_USED_COUNT] ?? 0),
-            'course_id' => (int) ($post->fields[self::FIELD_COURSE_ID] ?? 0),
-            'group_id' => (int) ($post->fields[self::FIELD_GROUP_ID] ?? 0),
+            'course_id' => $this->extractSingleId($post->fields[self::FIELD_COURSE_ID] ?? 0),
+            'group_id' => $this->extractSingleId($post->fields[self::FIELD_GROUP_ID] ?? 0),
             'discount_type' => $post->fields[self::FIELD_DISCOUNT_TYPE] ?? self::DISCOUNT_FULL,
             'discount_value' => (float) ($post->fields[self::FIELD_DISCOUNT_VALUE] ?? 0),
             'valid_from' => $post->fields[self::FIELD_VALID_FROM] ?? '',
@@ -704,8 +725,8 @@ class VoucherService implements \NTDST_Service_Meta
             'type' => $post[self::FIELD_TYPE] ?? self::TYPE_SINGLE,
             'usage_limit' => (int) ($post[self::FIELD_USAGE_LIMIT] ?? 1),
             'used_count' => (int) ($post[self::FIELD_USED_COUNT] ?? 0),
-            'course_id' => (int) ($post[self::FIELD_COURSE_ID] ?? 0),
-            'group_id' => (int) ($post[self::FIELD_GROUP_ID] ?? 0),
+            'course_id' => $this->extractSingleId($post[self::FIELD_COURSE_ID] ?? 0),
+            'group_id' => $this->extractSingleId($post[self::FIELD_GROUP_ID] ?? 0),
             'discount_type' => $post[self::FIELD_DISCOUNT_TYPE] ?? self::DISCOUNT_FULL,
             'discount_value' => (float) ($post[self::FIELD_DISCOUNT_VALUE] ?? 0),
             'valid_from' => $post[self::FIELD_VALID_FROM] ?? '',
