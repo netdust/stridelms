@@ -4,532 +4,366 @@ namespace stride\services\smartcode;
 
 defined('ABSPATH') || exit;
 
-use stride\services\smartcode\contracts\SmartCodeProviderInterface;
-use stride\services\smartcode\providers\ContactSmartCodeProvider;
-use stride\services\smartcode\providers\CourseSmartCodeProvider;
-use stride\services\smartcode\providers\InvoiceSmartCodeProvider;
+use stride\services\sync\UserDataSync;
+use stride\services\core\CourseService;
+use stride\services\core\SubscriberService;
+use stride\services\invoicing\QuoteService;
+use stride\services\FieldRegistry;
 
 /**
  * SmartCode Service
  *
- * Main orchestrator for SmartCode system.
- * Registers all providers with FluentCRM and FluentForms.
+ * Registers SmartCodes with FluentCRM and FluentForms for dynamic content.
  *
- * Available hooks:
- * - stride/smartcode/providers - Filter to add/remove providers
- * - stride/smartcode/context - Filter to modify context resolution
- *
- * SECURITY: External providers added via filter are logged for audit purposes.
- *
- * PERFORMANCE: Uses singleton pattern for providers and includes batch
- * prefetch hooks for FluentCRM email campaigns.
+ * Available SmartCode groups:
+ * - stride_contact.* - Contact/subscriber data
+ * - stride_course.* - Course data (requires context)
+ * - stride_quote.* - Quote data (requires context)
  *
  * @package stride\services\smartcode
  */
 class SmartCodeService implements \NTDST_Service_Meta
 {
-    /**
-     * @var SmartCodeProviderInterface[]
-     */
-    private array $providers = [];
+    private UserDataSync $dataSync;
+    private CourseService $courseService;
+    private SubscriberService $subscriberService;
+    private QuoteService $quoteService;
+    private string $dateFormat;
 
-    /**
-     * @var SmartCodeContext
-     */
-    private SmartCodeContext $context;
+    /** @var int|null Explicit course context */
+    private ?int $courseId = null;
 
-    /**
-     * Default provider classes (for security validation)
-     */
-    private const DEFAULT_PROVIDER_CLASSES = [
-        ContactSmartCodeProvider::class,
-        CourseSmartCodeProvider::class,
-        InvoiceSmartCodeProvider::class,
-    ];
+    /** @var int|null Explicit quote context */
+    private ?int $quoteId = null;
 
-    /**
-     * Service metadata for NTDST Bootstrap
-     */
     public static function metadata(): array
     {
         return [
             'name' => 'SmartCode Service',
-            'description' => 'SmartCode integration for FluentCRM and FluentForms',
+            'description' => 'SmartCode integration for FluentCRM/FluentForms',
             'admin_only' => false,
             'enabled' => true,
-            'priority' => 20, // Load after core services
+            'priority' => 20,
         ];
     }
 
-    /**
-     * Constructor
-     *
-     * PERFORMANCE: Dependencies can be injected; defaults use singleton pattern
-     * via DI container when available.
-     *
-     * @param SmartCodeContext|null $context
-     * @param array|null $providers Optional pre-configured providers
-     */
-    public function __construct(?SmartCodeContext $context = null, ?array $providers = null)
-    {
-        $this->context = $context ?? $this->getOrCreateContext();
-        $this->registerProviders($providers);
-        $this->init();
-    }
+    public function __construct(
+        ?UserDataSync $dataSync = null,
+        ?CourseService $courseService = null,
+        ?SubscriberService $subscriberService = null,
+        ?QuoteService $quoteService = null
+    ) {
+        $this->dataSync = $dataSync ?? $this->resolveService(UserDataSync::class);
+        $this->courseService = $courseService ?? $this->resolveService(CourseService::class);
+        $this->subscriberService = $subscriberService ?? $this->resolveService(SubscriberService::class);
+        $this->quoteService = $quoteService ?? $this->resolveService(QuoteService::class);
+        $this->dateFormat = get_option('date_format', 'd/m/Y');
 
-    /**
-     * Get or create context using DI container if available
-     *
-     * @return SmartCodeContext
-     */
-    private function getOrCreateContext(): SmartCodeContext
-    {
-        // Try DI container first for singleton behavior
-        if (function_exists('ntdst_get')) {
-            try {
-                $context = ntdst_get(SmartCodeContext::class);
-                if ($context instanceof SmartCodeContext) {
-                    return $context;
-                }
-            } catch (\Exception $e) {
-                // Container doesn't have it, create new
-            }
-        }
-
-        return new SmartCodeContext();
-    }
-
-    /**
-     * Register default providers
-     *
-     * PERFORMANCE: Uses DI container for singleton behavior when available.
-     * SECURITY: External providers are validated and logged.
-     *
-     * @param array|null $providers Pre-configured providers to use
-     */
-    private function registerProviders(?array $providers = null): void
-    {
-        if ($providers !== null) {
-            // Use provided providers directly
-            foreach ($providers as $provider) {
-                if ($provider instanceof SmartCodeProviderInterface) {
-                    $this->providers[$provider->getKey()] = $provider;
-                }
-            }
-            return;
-        }
-
-        // Create default providers using DI container for singleton behavior
-        $defaultProviders = $this->createDefaultProviders();
-
-        // Allow filtering of providers
-        $filteredProviders = apply_filters('stride/smartcode/providers', $defaultProviders);
-
-        // Validate and register providers
-        foreach ($filteredProviders as $provider) {
-            if (!($provider instanceof SmartCodeProviderInterface)) {
-                continue;
-            }
-
-            $this->providers[$provider->getKey()] = $provider;
-
-            // Log external providers for security audit
-            if (!$this->isDefaultProvider($provider)) {
-                $this->logExternalProvider($provider);
-            }
-        }
-    }
-
-    /**
-     * Create default providers using DI container when available
-     *
-     * @return SmartCodeProviderInterface[]
-     */
-    private function createDefaultProviders(): array
-    {
-        $providers = [];
-
-        foreach (self::DEFAULT_PROVIDER_CLASSES as $class) {
-            $provider = $this->createProvider($class);
-            if ($provider) {
-                $providers[] = $provider;
-            }
-        }
-
-        return $providers;
-    }
-
-    /**
-     * Create a provider instance using DI container if available
-     *
-     * @param string $class
-     * @return SmartCodeProviderInterface|null
-     */
-    private function createProvider(string $class): ?SmartCodeProviderInterface
-    {
-        // Try DI container first for singleton behavior
-        if (function_exists('ntdst_get')) {
-            try {
-                $provider = ntdst_get($class);
-                if ($provider instanceof SmartCodeProviderInterface) {
-                    return $provider;
-                }
-            } catch (\Exception $e) {
-                // Container doesn't have it, create new
-            }
-        }
-
-        // Fallback to direct instantiation
-        if (class_exists($class)) {
-            return new $class();
-        }
-
-        return null;
-    }
-
-    /**
-     * Check if provider is a default (built-in) provider
-     *
-     * @param SmartCodeProviderInterface $provider
-     * @return bool
-     */
-    private function isDefaultProvider(SmartCodeProviderInterface $provider): bool
-    {
-        foreach (self::DEFAULT_PROVIDER_CLASSES as $class) {
-            if ($provider instanceof $class) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Log external provider registration for security audit
-     *
-     * SECURITY: External providers can expose sensitive data, so we log
-     * when they are registered for audit purposes.
-     *
-     * @param SmartCodeProviderInterface $provider
-     */
-    private function logExternalProvider(SmartCodeProviderInterface $provider): void
-    {
-        if (!function_exists('do_action')) {
-            return;
-        }
-
-        $providerClass = get_class($provider);
-        $providerKey = $provider->getKey();
-
-        // Log via WordPress action for monitoring
-        do_action('stride/smartcode/external_provider_registered', $providerKey, $providerClass);
-
-        // Also log if error_log is available (for debugging)
-        if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-            error_log(sprintf(
-                '[Stride SmartCode] External provider registered: %s (%s)',
-                $providerKey,
-                $providerClass
-            ));
-        }
-    }
-
-    /**
-     * Initialize hooks
-     */
-    private function init(): void
-    {
-        // FluentCRM registration - after FluentCRM initializes
         add_action('fluent_crm/after_init', [$this, 'registerFluentCRM']);
-
-        // FluentForms editor registration
-        add_filter('fluentform/editor_shortcodes', [$this, 'registerFluentFormsEditor'], 10, 1);
-        add_filter('fluentform/all_editor_shortcodes', [$this, 'registerFluentFormsAll'], 10, 1);
-
-        // Register FluentForms callbacks for each provider
-        foreach ($this->providers as $provider) {
-            add_filter(
-                'fluentform/editor_shortcode_callback_group_' . $provider->getKey(),
-                fn($value, $form, $handler) => $this->handleFluentForms($provider, $handler),
-                10,
-                3
-            );
-        }
-
-        // PERFORMANCE: Hook into FluentCRM batch operations for prefetch
-        add_action('fluent_crm/email_campaign_starting', [$this, 'prefetchCampaignData'], 10, 2);
-        add_action('fluent_crm/sending_emails_starting', [$this, 'prefetchBatchEmails'], 10, 2);
-
-        // Action for when service is ready
-        do_action('stride/smartcode_service_ready', $this);
+        add_filter('fluentform/editor_shortcodes', [$this, 'registerFluentFormsEditor']);
     }
 
-    /**
-     * Prefetch data for email campaign
-     *
-     * PERFORMANCE: Warms cache with subscriber data before batch email send.
-     *
-     * @param object $campaign FluentCRM campaign object
-     * @param array $subscribers Array of subscriber objects
-     */
-    public function prefetchCampaignData($campaign, $subscribers): void
+    private function resolveService(string $class): object
     {
-        if (empty($subscribers) || !is_array($subscribers)) {
-            return;
-        }
-
-        // Extract user IDs from subscribers
-        $userIds = [];
-        foreach ($subscribers as $subscriber) {
-            $userId = is_object($subscriber) ? ($subscriber->user_id ?? null) : ($subscriber['user_id'] ?? null);
-            if ($userId) {
-                $userIds[] = (int) $userId;
+        if (function_exists('ntdst_get')) {
+            try {
+                $service = ntdst_get($class);
+                if ($service instanceof $class) {
+                    return $service;
+                }
+            } catch (\Exception $e) {
+                // Fall through
             }
         }
-
-        if (empty($userIds)) {
-            return;
-        }
-
-        // Prefetch via ContactSmartCodeProvider if available
-        $contactProvider = $this->getProvider('stride_contact');
-        if ($contactProvider instanceof ContactSmartCodeProvider) {
-            $contactProvider->prefetchUsers($userIds);
-        }
+        return new $class();
     }
 
-    /**
-     * Prefetch data for batch email sending
-     *
-     * @param array $emails Array of emails being sent
-     * @param object $campaign Campaign object
-     */
-    public function prefetchBatchEmails($emails, $campaign): void
-    {
-        // Delegate to campaign prefetch
-        $this->prefetchCampaignData($campaign, $emails);
-    }
+    // ========================================
+    // FLUENTCRM REGISTRATION
+    // ========================================
 
-    /**
-     * Register SmartCodes with FluentCRM
-     */
     public function registerFluentCRM(): void
     {
-        // Check if FluentCRM extender API is available
         if (!function_exists('FluentCrmApi')) {
             return;
         }
 
         $extender = FluentCrmApi('extender');
-
         if (!$extender || !method_exists($extender, 'addSmartCode')) {
             return;
         }
 
-        foreach ($this->providers as $provider) {
-            $extender->addSmartCode(
-                $provider->getKey(),
-                $provider->getTitle(),
-                $provider->getShortCodes(),
-                function ($code, $valueKey, $defaultValue, $subscriber) use ($provider) {
-                    $context = apply_filters('stride/smartcode/context', $this->context);
-                    $value = $provider->getValue($valueKey, $subscriber, $context);
+        // Contact SmartCodes
+        $extender->addSmartCode('stride_contact', __('Stride Contact', 'stride'), [
+            'first_name' => __('First Name', 'stride'),
+            'last_name' => __('Last Name', 'stride'),
+            'full_name' => __('Full Name', 'stride'),
+            'phone' => __('Phone', 'stride'),
+            'profile_type' => __('Profile Type', 'stride'),
+            'is_member' => __('Is Member', 'stride'),
+            'invoice_org' => __('Invoice Organization', 'stride'),
+            'invoice_address' => __('Invoice Address', 'stride'),
+            'invoice_city' => __('Invoice City', 'stride'),
+            'invoice_postal' => __('Invoice Postal Code', 'stride'),
+            'vat_number' => __('VAT Number', 'stride'),
+            'gln_number' => __('GLN Number', 'stride'),
+        ], fn($code, $key, $default, $subscriber) =>
+            $this->resolveContact($key, $this->getUserId($subscriber)) ?? $default
+        );
 
-                    return $value ?? $defaultValue;
-                }
-            );
-        }
+        // Course SmartCodes
+        $extender->addSmartCode('stride_course', __('Stride Course', 'stride'), [
+            'title' => __('Course Title', 'stride'),
+            'url' => __('Course URL', 'stride'),
+            'start_date' => __('Start Date', 'stride'),
+            'end_date' => __('End Date', 'stride'),
+            'location' => __('Location', 'stride'),
+            'available_spots' => __('Available Spots', 'stride'),
+            'price' => __('Price', 'stride'),
+            'is_online' => __('Is Online', 'stride'),
+            'speakers' => __('Speakers', 'stride'),
+        ], fn($code, $key, $default, $subscriber) =>
+            $this->resolveCourse($key, $this->getCourseContext()) ?? $default
+        );
+
+        // Quote SmartCodes
+        $extender->addSmartCode('stride_quote', __('Stride Quote', 'stride'), [
+            'number' => __('Quote Number', 'stride'),
+            'date' => __('Quote Date', 'stride'),
+            'total' => __('Total Amount', 'stride'),
+            'status' => __('Status', 'stride'),
+            'pdf_link' => __('PDF Link', 'stride'),
+        ], fn($code, $key, $default, $subscriber) =>
+            $this->resolveQuote($key, $this->getQuoteContext()) ?? $default
+        );
     }
 
-    /**
-     * Register SmartCodes with FluentForms editor
-     *
-     * @param array $shortcodes Existing shortcodes
-     * @return array Modified shortcodes
-     */
+    // ========================================
+    // FLUENTFORMS REGISTRATION
+    // ========================================
+
     public function registerFluentFormsEditor(array $shortcodes): array
     {
-        foreach ($this->providers as $provider) {
-            $shortcodes[] = [
-                'title' => $provider->getTitle(),
-                'shortcodes' => $this->formatForFluentForms($provider),
-            ];
-        }
+        $shortcodes[] = [
+            'title' => __('Stride Contact', 'stride'),
+            'shortcodes' => [
+                '{stride_contact.first_name}' => __('First Name', 'stride'),
+                '{stride_contact.last_name}' => __('Last Name', 'stride'),
+                '{stride_contact.full_name}' => __('Full Name', 'stride'),
+                '{stride_contact.phone}' => __('Phone', 'stride'),
+            ],
+        ];
+
+        $shortcodes[] = [
+            'title' => __('Stride Course', 'stride'),
+            'shortcodes' => [
+                '{stride_course.title}' => __('Course Title', 'stride'),
+                '{stride_course.start_date}' => __('Start Date', 'stride'),
+                '{stride_course.location}' => __('Location', 'stride'),
+            ],
+        ];
 
         return $shortcodes;
     }
 
-    /**
-     * Register SmartCodes with FluentForms (all shortcodes)
-     *
-     * @param array $shortcodes Existing shortcodes
-     * @return array Modified shortcodes
-     */
-    public function registerFluentFormsAll(array $shortcodes): array
+    // ========================================
+    // VALUE RESOLUTION
+    // ========================================
+
+    private function resolveContact(string $key, ?int $userId): ?string
     {
-        foreach ($this->providers as $provider) {
-            $formatted = $this->formatForFluentForms($provider);
-
-            foreach ($formatted as $code => $label) {
-                $shortcodes[$code] = $label;
-            }
-        }
-
-        return $shortcodes;
-    }
-
-    /**
-     * Handle FluentForms shortcode replacement
-     *
-     * @param SmartCodeProviderInterface $provider
-     * @param mixed $handler FluentForms handler
-     * @return string|null
-     */
-    public function handleFluentForms(SmartCodeProviderInterface $provider, mixed $handler): ?string
-    {
-        // Extract the value key from the handler
-        $valueKey = $this->extractValueKeyFromHandler($handler, $provider->getKey());
-
-        if (!$valueKey) {
+        if (!$userId) {
             return null;
         }
 
-        // Create a minimal subscriber object from current user
-        $subscriber = $this->getCurrentUserAsSubscriber();
+        $value = match ($key) {
+            'first_name' => $this->dataSync->getField($userId, FieldRegistry::FIELD_FIRST_NAME),
+            'last_name' => $this->dataSync->getField($userId, FieldRegistry::FIELD_LAST_NAME),
+            'full_name' => $this->subscriberService->getFullName($userId),
+            'phone' => $this->dataSync->getField($userId, FieldRegistry::FIELD_PHONE),
+            'profile_type' => $this->dataSync->getField($userId, FieldRegistry::SUBSCRIBER_PROFILE_TYPE),
+            'is_member' => $this->subscriberService->isMember($userId) ? __('yes', 'stride') : __('no', 'stride'),
+            'invoice_org' => $this->dataSync->getField($userId, FieldRegistry::SUBSCRIBER_INVOICE_ORG_NAME),
+            'invoice_address' => $this->dataSync->getField($userId, FieldRegistry::SUBSCRIBER_INVOICE_ADDRESS),
+            'invoice_city' => $this->dataSync->getField($userId, FieldRegistry::SUBSCRIBER_INVOICE_CITY),
+            'invoice_postal' => $this->dataSync->getField($userId, FieldRegistry::SUBSCRIBER_INVOICE_POSTAL_CODE),
+            'vat_number' => $this->dataSync->getField($userId, FieldRegistry::SUBSCRIBER_VAT_NUMBER),
+            'gln_number' => $this->dataSync->getField($userId, FieldRegistry::SUBSCRIBER_GLN_NUMBER),
+            default => null,
+        };
 
-        $context = apply_filters('stride/smartcode/context', $this->context);
-
-        return $provider->getValue($valueKey, $subscriber, $context);
+        return $value !== null && $value !== '' ? esc_html((string) $value) : null;
     }
 
-    /**
-     * Format provider shortcodes for FluentForms
-     *
-     * @param SmartCodeProviderInterface $provider
-     * @return array
-     */
-    private function formatForFluentForms(SmartCodeProviderInterface $provider): array
+    private function resolveCourse(string $key, ?int $courseId): ?string
     {
-        $formatted = [];
-        $key = $provider->getKey();
-
-        foreach ($provider->getShortCodes() as $code => $label) {
-            // Format: {stride_contact.first_name}
-            $fullCode = '{' . $key . '.' . $code . '}';
-            $formatted[$fullCode] = $label;
+        if (!$courseId) {
+            return null;
         }
 
-        return $formatted;
+        $value = match ($key) {
+            'title' => $this->courseService->getCourseTitle($courseId),
+            'url' => get_permalink($courseId),
+            'start_date' => $this->formatDate($this->courseService->getStartDate($courseId)),
+            'end_date' => $this->formatDate($this->courseService->getEndDate($courseId)),
+            'location' => $this->courseService->getCourseAddress($courseId),
+            'available_spots' => $this->formatSpots($this->courseService->getAvailableSpots($courseId)),
+            'price' => $this->formatPrice($this->courseService->getCoursePrice($courseId)),
+            'is_online' => $this->courseService->isOnline($courseId) ? __('yes', 'stride') : __('no', 'stride'),
+            'speakers' => $this->formatSpeakers($this->courseService->getCourseSpeakers($courseId)),
+            default => null,
+        };
+
+        if ($value === null) {
+            return null;
+        }
+
+        return in_array($key, ['url'], true) ? esc_url($value) : esc_html($value);
     }
 
-    /**
-     * Extract value key from FluentForms handler
-     *
-     * @param mixed $handler
-     * @param string $providerKey
-     * @return string|null
-     */
-    private function extractValueKeyFromHandler(mixed $handler, string $providerKey): ?string
+    private function resolveQuote(string $key, ?int $quoteId): ?string
     {
-        // FluentForms passes the shortcode string
-        if (is_string($handler)) {
-            // Pattern: {stride_contact.first_name} or stride_contact.first_name
-            $pattern = '/^(?:\{)?' . preg_quote($providerKey, '/') . '\.([a-z_]+)(?:\})?$/';
+        if (!$quoteId) {
+            return null;
+        }
 
-            if (preg_match($pattern, $handler, $matches)) {
-                return $matches[1];
+        $quote = $this->quoteService->getQuote($quoteId);
+        if (!$quote) {
+            return null;
+        }
+
+        $value = match ($key) {
+            'number' => $quote['number'] ?? null,
+            'date' => $this->formatDate(strtotime($quote['created_at'] ?? '')),
+            'total' => $this->formatPrice($quote['total'] ?? 0),
+            'status' => $quote['status'] ?? null,
+            'pdf_link' => $this->quoteService->getQuoteUrl($quoteId),
+            default => null,
+        };
+
+        if ($value === null) {
+            return null;
+        }
+
+        return in_array($key, ['pdf_link'], true) ? esc_url($value) : esc_html($value);
+    }
+
+    // ========================================
+    // CONTEXT RESOLUTION
+    // ========================================
+
+    public function setCourseId(?int $courseId): self
+    {
+        $this->courseId = $courseId;
+        return $this;
+    }
+
+    public function setQuoteId(?int $quoteId): self
+    {
+        $this->quoteId = $quoteId;
+        return $this;
+    }
+
+    private function getCourseContext(): ?int
+    {
+        if ($this->courseId) {
+            return $this->courseId;
+        }
+
+        // Check URL parameter
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+        if (isset($_GET['course_id'])) {
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+            $courseId = absint($_GET['course_id']);
+            if ($courseId > 0 && $this->courseService->getCourse($courseId)) {
+                return $courseId;
             }
+        }
+
+        // Check queried object
+        $queried = get_queried_object();
+        if ($queried instanceof \WP_Post && $queried->post_type === 'sfwd-courses') {
+            return $queried->ID;
         }
 
         return null;
     }
 
-    /**
-     * Get current user as subscriber array
-     *
-     * @return array|null
-     */
-    private function getCurrentUserAsSubscriber(): ?array
+    private function getQuoteContext(): ?int
     {
-        $userId = get_current_user_id();
-
-        if (!$userId) {
-            return null;
+        if ($this->quoteId) {
+            return $this->quoteId;
         }
 
-        return [
-            'user_id' => $userId,
-        ];
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+        if (isset($_GET['quote_id'])) {
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+            return absint($_GET['quote_id']);
+        }
+
+        return null;
     }
 
-    /**
-     * Get a specific provider by key
-     *
-     * @param string $key
-     * @return SmartCodeProviderInterface|null
-     */
-    public function getProvider(string $key): ?SmartCodeProviderInterface
+    // ========================================
+    // HELPERS
+    // ========================================
+
+    private function getUserId(mixed $subscriber): ?int
     {
-        return $this->providers[$key] ?? null;
+        if (is_object($subscriber)) {
+            return isset($subscriber->user_id) ? absint($subscriber->user_id) : null;
+        }
+        if (is_array($subscriber)) {
+            return isset($subscriber['user_id']) ? absint($subscriber['user_id']) : null;
+        }
+        return null;
     }
 
-    /**
-     * Get all registered providers
-     *
-     * @return SmartCodeProviderInterface[]
-     */
-    public function getProviders(): array
+    private function formatDate(?int $timestamp): ?string
     {
-        return $this->providers;
+        return $timestamp ? wp_date($this->dateFormat, $timestamp) : null;
     }
 
-    /**
-     * Get the context instance
-     *
-     * @return SmartCodeContext
-     */
-    public function getContext(): SmartCodeContext
+    private function formatPrice(?float $price): ?string
     {
-        return $this->context;
+        return $price !== null ? sprintf('€ %.2f', $price) : null;
+    }
+
+    private function formatSpots(?int $spots): string
+    {
+        return $spots === null ? __('Unlimited', 'stride') : (string) $spots;
+    }
+
+    private function formatSpeakers(array $speakers): ?string
+    {
+        if (empty($speakers)) {
+            return null;
+        }
+        return implode(', ', array_column($speakers, 'name'));
     }
 
     /**
-     * Manually resolve a SmartCode value
-     *
-     * Useful for testing or programmatic access.
+     * Programmatic SmartCode value resolution
      *
      * @param string $fullCode Full SmartCode (e.g., 'stride_contact.first_name')
      * @param int|null $userId User ID (null for current user)
      * @param int|null $courseId Course ID (null for context resolution)
-     * @return string|null
+     * @return string|null Resolved value
      */
-    public function resolve(string $fullCode, ?int $userId = null, ?int $courseId = null): ?string
+    public function getValue(string $fullCode, ?int $userId = null, ?int $courseId = null): ?string
     {
-        // Parse the full code
         $parts = explode('.', $fullCode, 2);
-
         if (count($parts) !== 2) {
             return null;
         }
 
-        [$providerKey, $valueKey] = $parts;
+        [$group, $key] = $parts;
 
-        // Get the provider
-        $provider = $this->getProvider($providerKey);
-
-        if (!$provider) {
-            return null;
-        }
-
-        // Set up context
-        $context = clone $this->context;
-        if ($courseId !== null) {
-            $context->setCourseId($courseId);
-        }
-
-        // Create subscriber from user ID
-        $targetUserId = $userId ?? get_current_user_id();
-        $subscriber = $targetUserId ? ['user_id' => $targetUserId] : null;
-
-        return $provider->getValue($valueKey, $subscriber, $context);
+        return match ($group) {
+            'stride_contact' => $this->resolveContact($key, $userId ?? get_current_user_id()),
+            'stride_course' => $this->resolveCourse($key, $courseId ?? $this->getCourseContext()),
+            'stride_quote' => $this->resolveQuote($key, $this->getQuoteContext()),
+            default => null,
+        };
     }
 }
