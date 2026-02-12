@@ -253,28 +253,32 @@ class VoucherService implements \NTDST_Service_Meta
             ],
 
             'field_groups' => [
-                'general' => [
-                    'title' => __('Algemeen', 'stride'),
-                    'fields' => [self::FIELD_CODE, self::FIELD_TYPE, self::FIELD_STATUS],
+                'settings' => [
+                    'title' => __('Voucher Instellingen', 'stride'),
+                    'fields' => [
+                        self::FIELD_CODE,
+                        self::FIELD_TYPE,
+                        self::FIELD_STATUS,
+                        self::FIELD_USAGE_LIMIT,
+                        self::FIELD_USED_COUNT,
+                        self::FIELD_COURSE_ID,
+                        self::FIELD_GROUP_ID,
+                        self::FIELD_DISCOUNT_TYPE,
+                        self::FIELD_DISCOUNT_VALUE,
+                        self::FIELD_VALID_FROM,
+                        self::FIELD_VALID_UNTIL,
+                    ],
+                    'context' => 'normal',
+                    'priority' => 'high',
                 ],
-                'usage' => [
-                    'title' => __('Gebruik', 'stride'),
-                    'fields' => [self::FIELD_USAGE_LIMIT, self::FIELD_USED_COUNT, self::FIELD_REDEMPTIONS],
-                ],
-                'scope' => [
-                    'title' => __('Scope', 'stride'),
-                    'fields' => [self::FIELD_COURSE_ID, self::FIELD_GROUP_ID],
-                ],
-                'discount' => [
-                    'title' => __('Korting', 'stride'),
-                    'fields' => [self::FIELD_DISCOUNT_TYPE, self::FIELD_DISCOUNT_VALUE],
-                ],
-                'validity' => [
-                    'title' => __('Geldigheid', 'stride'),
-                    'fields' => [self::FIELD_VALID_FROM, self::FIELD_VALID_UNTIL],
+                'audit' => [
+                    'title' => __('Verzilveringshistorie', 'stride'),
+                    'fields' => [self::FIELD_REDEMPTIONS],
+                    'context' => 'normal',
+                    'priority' => 'low',
                 ],
             ],
-            'use_tabs' => true,
+            'use_tabs' => false,
         ]);
     }
 
