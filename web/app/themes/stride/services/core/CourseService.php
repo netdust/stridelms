@@ -651,6 +651,53 @@ class CourseService implements \NTDST_Service_Meta
     }
 
     // ========================================
+    // COURSE DATA
+    // ========================================
+
+    /**
+     * Get course post object
+     *
+     * @param int $courseId
+     * @return \WP_Post|null
+     */
+    public function getCourse(int $courseId): ?\WP_Post
+    {
+        return $this->learndash->getCourse($courseId);
+    }
+
+    /**
+     * Get course title
+     *
+     * @param int $courseId
+     * @return string|null
+     */
+    public function getCourseTitle(int $courseId): ?string
+    {
+        $course = $this->getCourse($courseId);
+        return $course ? $course->post_title : null;
+    }
+
+    /**
+     * Check if course exists and is valid
+     *
+     * @param int $courseId
+     * @return true|WP_Error
+     */
+    public function validateCourse(int $courseId): true|WP_Error
+    {
+        if ($courseId <= 0) {
+            return new WP_Error('invalid_course_id', __('Ongeldige cursus ID.', 'stride'));
+        }
+
+        $course = $this->getCourse($courseId);
+        if (!$course) {
+            return new WP_Error('course_not_found', __('Cursus niet gevonden.', 'stride'), ['course_id' => $courseId]);
+        }
+
+        return true;
+    }
+
+    // ========================================
     // PRICING
     // ========================================
 

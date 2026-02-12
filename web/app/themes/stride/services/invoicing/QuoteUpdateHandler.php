@@ -448,22 +448,23 @@ class QuoteUpdateHandler implements \NTDST_Service_Meta
     }
 
     /**
-     * Prepare billing data from form input
+     * Prepare and validate billing data from form input
      *
      * @param array $formData Raw form data
-     * @return array Sanitized billing data
+     * @return array Sanitized and validated billing data
      */
     private function prepareBillingData(array $formData): array
     {
+        // Sanitize all input first
         $billing = [
-            'company' => sanitize_text_field($formData['company_name'] ?? ''),
-            'address' => sanitize_text_field($formData['address'] ?? ''),
-            'city' => sanitize_text_field($formData['city'] ?? ''),
-            'postal_code' => sanitize_text_field($formData['postal_code'] ?? ''),
-            'vat_number' => sanitize_text_field($formData['vat_number'] ?? ''),
-            'gln_number' => sanitize_text_field($formData['gln_number'] ?? ''),
-            'order_number' => sanitize_text_field($formData['order_number'] ?? ''),
-            'voucher_code' => sanitize_text_field($formData['voucher_code'] ?? ''),
+            'company' => $this->sanitizeCompanyName($formData['company_name'] ?? ''),
+            'address' => $this->sanitizeAddress($formData['address'] ?? ''),
+            'city' => $this->sanitizeCity($formData['city'] ?? ''),
+            'postal_code' => $this->sanitizePostalCode($formData['postal_code'] ?? ''),
+            'vat_number' => $this->sanitizeVatNumber($formData['vat_number'] ?? ''),
+            'gln_number' => $this->sanitizeGlnNumber($formData['gln_number'] ?? ''),
+            'order_number' => $this->sanitizeOrderNumber($formData['order_number'] ?? ''),
+            'voucher_code' => $this->sanitizeVoucherCode($formData['voucher_code'] ?? ''),
         ];
 
         // Validate and enrich VAT data
@@ -485,6 +486,97 @@ class QuoteUpdateHandler implements \NTDST_Service_Meta
         }
 
         return $billing;
+    }
+
+    /**
+     * Sanitize company name
+     * Allows letters, numbers, spaces, common punctuation
+     */
+    private function sanitizeCompanyName(string $value): string
+    {
+        $value = sanitize_text_field($value);
+        // Remove any characters that shouldn't be in a company name
+        return preg_replace('/[^\p{L}\p{N}\s\-\.\,\&\'\"\/\(\)]/u', '', $value);
+    }
+
+    /**
+     * Sanitize address
+     * Allows letters, numbers, spaces, and common address characters
+     */
+    private function sanitizeAddress(string $value): string
+    {
+        $value = sanitize_text_field($value);
+        return preg_replace('/[^\p{L}\p{N}\s\-\.\,\/]/u', '', $value);
+    }
+
+    /**
+     * Sanitize city name
+     * Allows letters, spaces, hyphens
+     */
+    private function sanitizeCity(string $value): string
+    {
+        $value = sanitize_text_field($value);
+        return preg_replace('/[^\p{L}\s\-\']/u', '', $value);
+    }
+
+    /**
+     * Sanitize Belgian postal code
+     * Must be 4 digits
+     */
+    private function sanitizePostalCode(string $value): string
+    {
+        $value = preg_replace('/[^0-9]/', '', $value);
+        // Belgian postal codes are 4 digits
+        if (strlen($value) === 4) {
+            return $value;
+        }
+        // Return empty if invalid format
+        return strlen($value) > 0 ? substr($value, 0, 4) : '';
+    }
+
+    /**
+     * Sanitize VAT number
+     * Removes spaces and special characters, keeps alphanumeric
+     */
+    private function sanitizeVatNumber(string $value): string
+    {
+        // Remove spaces and special characters
+        return strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $value));
+    }
+
+    /**
+     * Sanitize GLN number
+     * Must be 13 digits
+     */
+    private function sanitizeGlnNumber(string $value): string
+    {
+        $value = preg_replace('/[^0-9]/', '', $value);
+        // GLN numbers are 13 digits
+        if (strlen($value) === 13) {
+            return $value;
+        }
+        // Return empty if invalid
+        return '';
+    }
+
+    /**
+     * Sanitize order/PO number
+     * Allows alphanumeric, hyphens, underscores
+     */
+    private function sanitizeOrderNumber(string $value): string
+    {
+        $value = sanitize_text_field($value);
+        return preg_replace('/[^A-Za-z0-9\-\_\/]/', '', $value);
+    }
+
+    /**
+     * Sanitize voucher code
+     * Allows alphanumeric, hyphens (typical voucher format)
+     */
+    private function sanitizeVoucherCode(string $value): string
+    {
+        $value = strtoupper(sanitize_text_field($value));
+        return preg_replace('/[^A-Z0-9\-]/', '', $value);
     }
 
     /**

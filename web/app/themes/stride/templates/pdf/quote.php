@@ -22,15 +22,35 @@
 
 defined('ABSPATH') || exit;
 
-$billing = $quote['billing'] ?? [];
-$company = $quote['company'] ?? [];
-$user = $quote['user'] ?? [];
+// Defensive: Ensure $quote is an array
+if (!isset($quote) || !is_array($quote)) {
+    echo '<p>Error: Invalid quote data</p>';
+    return;
+}
+
+// Extract and validate sub-arrays with defaults
+$billing = is_array($quote['billing'] ?? null) ? $quote['billing'] : [];
+$company = is_array($quote['company'] ?? null) ? $quote['company'] : [];
+$user = is_array($quote['user'] ?? null) ? $quote['user'] : [];
+$items = is_array($quote['items'] ?? null) ? $quote['items'] : [];
+
+// Ensure critical values have defaults
+$quoteNumber = $quote['number'] ?? __('N/A', 'stride');
+$createdDate = $quote['created_date'] ?? date('d-m-Y');
+$validUntilDate = $quote['valid_until_date'] ?? '';
+$taxRate = $quote['tax_rate'] ?? 21;
+$subtotalFormatted = $quote['subtotal_formatted'] ?? '€ 0,00';
+$taxFormatted = $quote['tax_formatted'] ?? '€ 0,00';
+$totalFormatted = $quote['total_formatted'] ?? '€ 0,00';
+$orderNumber = $quote['order_number'] ?? '';
+$companyName = $company['name'] ?? __('VAD', 'stride');
+$companyEmail = $company['email'] ?? '';
 ?>
 <!DOCTYPE html>
 <html lang="nl">
 <head>
     <meta charset="UTF-8">
-    <title><?php echo esc_html(sprintf(__('Offerte %s', 'stride'), $quote['number'])); ?></title>
+    <title><?php echo esc_html(sprintf(__('Offerte %s', 'stride'), $quoteNumber)); ?></title>
     <style>
         /* Reset & Base */
         * {
@@ -293,7 +313,7 @@ $user = $quote['user'] ?? [];
             <table class="header-table">
                 <tr>
                     <td class="company-logo">
-                        <h1><?php echo esc_html($company['name']); ?></h1>
+                        <h1><?php echo esc_html($companyName); ?></h1>
                         <div class="company-details">
                             <?php if (!empty($company['address'])): ?>
                                 <?php echo esc_html($company['address']); ?><br>
@@ -311,10 +331,10 @@ $user = $quote['user'] ?? [];
                     </td>
                     <td class="document-info">
                         <div class="document-type"><?php esc_html_e('OFFERTE', 'stride'); ?></div>
-                        <div class="document-number"><?php echo esc_html($quote['number']); ?></div>
+                        <div class="document-number"><?php echo esc_html($quoteNumber); ?></div>
                         <div class="document-dates">
-                            <div><span class="label"><?php esc_html_e('Datum:', 'stride'); ?></span> <?php echo esc_html($quote['created_date']); ?></div>
-                            <div><span class="label"><?php esc_html_e('Geldig tot:', 'stride'); ?></span> <?php echo esc_html($quote['valid_until_date']); ?></div>
+                            <div><span class="label"><?php esc_html_e('Datum:', 'stride'); ?></span> <?php echo esc_html($createdDate); ?></div>
+                            <div><span class="label"><?php esc_html_e('Geldig tot:', 'stride'); ?></span> <?php echo esc_html($validUntilDate); ?></div>
                         </div>
                     </td>
                 </tr>
@@ -348,11 +368,11 @@ $user = $quote['user'] ?? [];
                         </div>
                     </td>
                     <td class="address-cell">
-                        <?php if (!empty($quote['order_number']) || !empty($billing['gln_number'])): ?>
+                        <?php if (!empty($orderNumber) || !empty($billing['gln_number'])): ?>
                             <div class="address-label"><?php esc_html_e('Referenties', 'stride'); ?></div>
                             <div class="address-content">
-                                <?php if (!empty($quote['order_number'])): ?>
-                                    <div><strong><?php esc_html_e('Bestelnummer:', 'stride'); ?></strong> <?php echo esc_html($quote['order_number']); ?></div>
+                                <?php if (!empty($orderNumber)): ?>
+                                    <div><strong><?php esc_html_e('Bestelnummer:', 'stride'); ?></strong> <?php echo esc_html($orderNumber); ?></div>
                                 <?php endif; ?>
                                 <?php if (!empty($billing['gln_number'])): ?>
                                     <div><strong><?php esc_html_e('GLN:', 'stride'); ?></strong> <?php echo esc_html($billing['gln_number']); ?></div>
@@ -376,7 +396,13 @@ $user = $quote['user'] ?? [];
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($quote['items'] as $item): ?>
+                    <?php if (empty($items)): ?>
+                    <tr>
+                        <td colspan="4"><?php esc_html_e('Geen items', 'stride'); ?></td>
+                    </tr>
+                    <?php else: ?>
+                    <?php foreach ($items as $item): ?>
+                    <?php if (!is_array($item)) continue; ?>
                     <tr>
                         <td class="item-description"><?php echo esc_html($item['title'] ?? ''); ?></td>
                         <td class="amount"><?php echo esc_html($item['quantity'] ?? 1); ?></td>
@@ -384,6 +410,7 @@ $user = $quote['user'] ?? [];
                         <td class="amount"><?php echo esc_html($this->formatCurrency($item['total'] ?? 0)); ?></td>
                     </tr>
                     <?php endforeach; ?>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
@@ -393,15 +420,15 @@ $user = $quote['user'] ?? [];
             <table class="totals-table">
                 <tr>
                     <td class="label"><?php esc_html_e('Subtotaal', 'stride'); ?></td>
-                    <td class="value"><?php echo esc_html($quote['subtotal_formatted']); ?></td>
+                    <td class="value"><?php echo esc_html($subtotalFormatted); ?></td>
                 </tr>
                 <tr>
-                    <td class="label"><?php echo esc_html(sprintf(__('BTW (%s%%)', 'stride'), $quote['tax_rate'])); ?></td>
-                    <td class="value"><?php echo esc_html($quote['tax_formatted']); ?></td>
+                    <td class="label"><?php echo esc_html(sprintf(__('BTW (%s%%)', 'stride'), $taxRate)); ?></td>
+                    <td class="value"><?php echo esc_html($taxFormatted); ?></td>
                 </tr>
                 <tr class="total-row">
                     <td class="label"><?php esc_html_e('Totaal', 'stride'); ?></td>
-                    <td class="value"><?php echo esc_html($quote['total_formatted']); ?></td>
+                    <td class="value"><?php echo esc_html($totalFormatted); ?></td>
                 </tr>
             </table>
         </div>
@@ -417,7 +444,7 @@ $user = $quote['user'] ?? [];
                 </div>
                 <div class="row">
                     <span class="label"><?php esc_html_e('Mededeling:', 'stride'); ?></span>
-                    <?php echo esc_html($quote['number']); ?>
+                    <?php echo esc_html($quoteNumber); ?>
                 </div>
             </div>
         </div>
@@ -426,20 +453,27 @@ $user = $quote['user'] ?? [];
         <!-- Notes -->
         <div class="notes-section">
             <p class="valid-until">
+                <?php if (!empty($validUntilDate) && !empty($companyEmail)): ?>
                 <?php echo esc_html(sprintf(
                     __('Deze offerte is geldig tot %s. Bij vragen kunt u contact met ons opnemen via %s.', 'stride'),
-                    $quote['valid_until_date'],
-                    $company['email']
+                    $validUntilDate,
+                    $companyEmail
                 )); ?>
+                <?php elseif (!empty($validUntilDate)): ?>
+                <?php echo esc_html(sprintf(
+                    __('Deze offerte is geldig tot %s.', 'stride'),
+                    $validUntilDate
+                )); ?>
+                <?php endif; ?>
             </p>
         </div>
 
         <!-- Footer -->
         <div class="footer">
             <span class="footer-content">
-                <?php echo esc_html($company['name']); ?>
-                <?php if (!empty($company['email'])): ?>
-                    &nbsp;|&nbsp;<?php echo esc_html($company['email']); ?>
+                <?php echo esc_html($companyName); ?>
+                <?php if (!empty($companyEmail)): ?>
+                    &nbsp;|&nbsp;<?php echo esc_html($companyEmail); ?>
                 <?php endif; ?>
                 <?php if (!empty($company['phone'])): ?>
                     &nbsp;|&nbsp;<?php echo esc_html($company['phone']); ?>

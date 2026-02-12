@@ -212,6 +212,61 @@ class SubscriberService implements \NTDST_Service_Meta
     }
 
     // ========================================
+    // USER DATA HELPERS
+    // ========================================
+
+    /**
+     * Get user email address
+     *
+     * Tries FluentCRM subscriber first, falls back to WordPress user.
+     *
+     * @param int $userId
+     * @return string|null Email or null if user not found
+     */
+    public function getUserEmail(int $userId): ?string
+    {
+        // Try FluentCRM subscriber first (may have updated email)
+        if ($this->isAvailable()) {
+            $subscriber = $this->fluentcrm->getSubscriberByUserId($userId);
+            if ($subscriber && !empty($subscriber['email'])) {
+                return $subscriber['email'];
+            }
+        }
+
+        // Fallback to WordPress user
+        $user = get_user_by('ID', $userId);
+        return $user ? $user->user_email : null;
+    }
+
+    /**
+     * Get user email domain
+     *
+     * @param int $userId
+     * @return string|null Domain or null if user not found
+     */
+    public function getUserEmailDomain(int $userId): ?string
+    {
+        $email = $this->getUserEmail($userId);
+        if (!$email) {
+            return null;
+        }
+
+        $domain = substr(strrchr($email, '@'), 1);
+        return $domain ?: null;
+    }
+
+    /**
+     * Check if user exists
+     *
+     * @param int $userId
+     * @return bool
+     */
+    public function userExists(int $userId): bool
+    {
+        return (bool) get_user_by('ID', $userId);
+    }
+
+    // ========================================
     // FIELD OPERATIONS
     // ========================================
 

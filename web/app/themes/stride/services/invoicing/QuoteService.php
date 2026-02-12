@@ -428,11 +428,13 @@ class QuoteService implements \NTDST_Service_Meta
         // Generate quote number
         $quoteNumber = $this->generateQuoteNumber();
 
-        // Get course data
-        $course = get_post($courseId);
-        if (!$course || $course->post_type !== 'sfwd-courses') {
-            return new WP_Error('invalid_course', __('Ongeldige cursus.', 'stride'));
+        // Validate course via CourseService
+        $courseValidation = $this->courseService->validateCourse($courseId);
+        if (is_wp_error($courseValidation)) {
+            return $courseValidation;
         }
+
+        $courseTitle = $this->courseService->getCourseTitle($courseId);
 
         // Get billing data from subscriber
         $billing = $this->subscriberService->getBillingData($userId);
@@ -474,7 +476,7 @@ class QuoteService implements \NTDST_Service_Meta
             [
                 'id' => $courseId,
                 'type' => 'course',
-                'title' => $course->post_title,
+                'title' => $courseTitle,
                 'quantity' => 1,
                 'unit_price' => $coursePrice,
                 'total' => $coursePrice,
@@ -518,7 +520,7 @@ class QuoteService implements \NTDST_Service_Meta
         // Create CRM note
         $this->subscriberService->createNote(
             $userId,
-            sprintf(__('Offerte %s aangemaakt voor: %s', 'stride'), $quoteNumber, $course->post_title)
+            sprintf(__('Offerte %s aangemaakt voor: %s', 'stride'), $quoteNumber, $courseTitle)
         );
 
         // Fire hook
@@ -869,13 +871,12 @@ class QuoteService implements \NTDST_Service_Meta
         }
 
         // Skip for internal email domains
-        $user = get_userdata($userId);
-        if (!$user) {
+        $emailDomain = $this->subscriberService->getUserEmailDomain($userId);
+        if (!$emailDomain) {
             return false;
         }
 
         $skipDomains = $this->getConfig('skip_domains', ['vad.be', 'druglijn.be']);
-        $emailDomain = substr(strrchr($user->user_email, '@'), 1);
         if (in_array($emailDomain, $skipDomains, true)) {
             return false;
         }
@@ -907,6 +908,10 @@ class QuoteService implements \NTDST_Service_Meta
     /**
      * Generate unique quote number with atomic increment
      *
+     * EXCEPTION: Uses raw $wpdb for atomic MySQL transaction.
+     * DataManager doesn't support MySQL transactions for counter increment.
+     * This prevents race conditions in concurrent quote number generation.
+     *
      * @return string Quote number (VADQ-YYYY-NNNNN)
      */
     private function generateQuoteNumber(): string
@@ -917,43 +922,43 @@ class QuoteService implements \NTDST_Service_Meta
         $year = date('Y');
         $optionName = "stride_quote_last_{$year}";
 
-        // Atomic increment to prevent race conditions
-        $wpdb->query('START TRANSACTION');
+        try {
+            $wpdb->query('START TRANSACTION');
 
-        $wpdb->query($wpdb->prepare(
-            "INSERT INTO {$wpdb->options} (option_name, option_value, autoload)
-             VALUES (%s, 1, 'no')
-             ON DUPLICATE KEY UPDATE option_value = option_value + 1",
-            $optionName
-        ));
+            $wpdb->query($wpdb->prepare(
+                "INSERT INTO {$wpdb->options} (option_name, option_value, autoload)
+                 VALUES (%s, 1, 'no')
+                 ON DUPLICATE KEY UPDATE option_value = option_value + 1",
+                $optionName
+            ));
 
-        $number = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s",
-            $optionName
-        ));
+            $number = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s",
+                $optionName
+            ));
 
-        $wpdb->query('COMMIT');
+            $wpdb->query('COMMIT');
 
-        return sprintf('%s-%s-%05d', $prefix, $year, $number);
+            return sprintf('%s-%s-%05d', $prefix, $year, $number);
+
+        } catch (\Exception $e) {
+            $wpdb->query('ROLLBACK');
+            error_log('Stride: Quote number generation failed: ' . $e->getMessage());
+            // Fallback to timestamp-based number to prevent blocking
+            return sprintf('%s-%s-%s', $prefix, $year, strtoupper(substr(md5(microtime(true)), 0, 5)));
+        }
     }
 
     /**
-     * Get course price from LearnDash settings
+     * Get course price via CourseService
      *
      * @param int $courseId LearnDash course ID
      * @return float Price or 0
      */
     private function getCoursePrice(int $courseId): float
     {
-        // LearnDash stores price in course meta
-        $settings = get_post_meta($courseId, '_sfwd-courses', true);
-        if (is_array($settings) && isset($settings['sfwd-courses_course_price'])) {
-            return (float) $settings['sfwd-courses_course_price'];
-        }
-
-        // Fallback to direct meta
-        $price = get_post_meta($courseId, 'course_price', true);
-        return (float) $price;
+        $price = $this->courseService->getCoursePrice($courseId);
+        return $price ?? 0.0;
     }
 
     /**
