@@ -94,6 +94,7 @@ class VoucherService implements \NTDST_Service_Meta
 
         add_action('init', [$this, 'registerModel'], 5);
         add_action('init', [$this, 'registerApiEndpoints'], 10);
+        add_action('add_meta_boxes', [$this, 'registerAuditMetabox']);
     }
 
     /**
@@ -228,57 +229,36 @@ class VoucherService implements \NTDST_Service_Meta
                     'label' => __('Aangemaakt door', 'stride'),
                 ],
                 self::FIELD_REDEMPTIONS => [
-                    'type' => 'repeater',
+                    'type' => 'json',
                     'label' => __('Verzilveringen', 'stride'),
-                    'button_text' => __('Verzilvering toevoegen', 'stride'),
-                    'fields' => [
-                        'user_id' => [
-                            'type' => 'integer',
-                            'label' => __('Gebruiker ID', 'stride'),
-                        ],
-                        'course_id' => [
-                            'type' => 'integer',
-                            'label' => __('Cursus ID', 'stride'),
-                        ],
-                        'discount' => [
-                            'type' => 'float',
-                            'label' => __('Korting', 'stride'),
-                        ],
-                        'redeemed_at' => [
-                            'type' => 'text',
-                            'label' => __('Verzilverd op', 'stride'),
-                        ],
-                    ],
+                    'show_in_metabox' => false, // Rendered in separate audit metabox
                 ],
             ],
 
             'field_groups' => [
-                'settings' => [
-                    'title' => __('Voucher Instellingen', 'stride'),
-                    'fields' => [
-                        self::FIELD_CODE,
-                        self::FIELD_TYPE,
-                        self::FIELD_STATUS,
-                        self::FIELD_USAGE_LIMIT,
-                        self::FIELD_USED_COUNT,
-                        self::FIELD_COURSE_ID,
-                        self::FIELD_GROUP_ID,
-                        self::FIELD_DISCOUNT_TYPE,
-                        self::FIELD_DISCOUNT_VALUE,
-                        self::FIELD_VALID_FROM,
-                        self::FIELD_VALID_UNTIL,
-                    ],
-                    'context' => 'normal',
-                    'priority' => 'high',
+                'general' => [
+                    'title' => __('Algemeen', 'stride'),
+                    'fields' => [self::FIELD_CODE, self::FIELD_TYPE, self::FIELD_STATUS],
                 ],
-                'audit' => [
-                    'title' => __('Verzilveringshistorie', 'stride'),
-                    'fields' => [self::FIELD_REDEMPTIONS],
-                    'context' => 'normal',
-                    'priority' => 'low',
+                'usage' => [
+                    'title' => __('Gebruik', 'stride'),
+                    'fields' => [self::FIELD_USAGE_LIMIT, self::FIELD_USED_COUNT],
                 ],
+                'scope' => [
+                    'title' => __('Scope', 'stride'),
+                    'fields' => [self::FIELD_COURSE_ID, self::FIELD_GROUP_ID],
+                ],
+                'discount' => [
+                    'title' => __('Korting', 'stride'),
+                    'fields' => [self::FIELD_DISCOUNT_TYPE, self::FIELD_DISCOUNT_VALUE],
+                ],
+                'validity' => [
+                    'title' => __('Geldigheid', 'stride'),
+                    'fields' => [self::FIELD_VALID_FROM, self::FIELD_VALID_UNTIL],
+                ],
+                // Note: FIELD_REDEMPTIONS excluded - rendered in separate metabox
             ],
-            'use_tabs' => false,
+            'use_tabs' => true,
         ]);
     }
 
@@ -306,6 +286,69 @@ class VoucherService implements \NTDST_Service_Meta
     {
         add_filter('ntdst/api_data/stride_voucher_validate', [$this, 'apiValidateVoucher'], 10, 2);
         add_filter('ntdst/api_data/stride_voucher_redeem', [$this, 'apiRedeemVoucher'], 10, 2);
+    }
+
+    /**
+     * Register separate audit metabox for redemption history
+     */
+    public function registerAuditMetabox(): void
+    {
+        add_meta_box(
+            'stride_voucher_audit',
+            __('Verzilveringshistorie', 'stride'),
+            [$this, 'renderAuditMetabox'],
+            self::POST_TYPE,
+            'normal',
+            'low'
+        );
+    }
+
+    /**
+     * Render the audit metabox with redemption history
+     */
+    public function renderAuditMetabox(\WP_Post $post): void
+    {
+        $voucher = $this->getVoucher($post->ID);
+        $redemptions = $voucher['redemptions'] ?? [];
+
+        if (empty($redemptions)) {
+            echo '<p class="description">' . esc_html__('Nog geen verzilveringen.', 'stride') . '</p>';
+            return;
+        }
+
+        echo '<table class="widefat striped">';
+        echo '<thead><tr>';
+        echo '<th>' . esc_html__('Gebruiker', 'stride') . '</th>';
+        echo '<th>' . esc_html__('Cursus', 'stride') . '</th>';
+        echo '<th>' . esc_html__('Korting', 'stride') . '</th>';
+        echo '<th>' . esc_html__('Datum', 'stride') . '</th>';
+        echo '</tr></thead>';
+        echo '<tbody>';
+
+        foreach ($redemptions as $redemption) {
+            $userId = (int) ($redemption['user_id'] ?? 0);
+            $courseId = (int) ($redemption['course_id'] ?? 0);
+            $discount = (float) ($redemption['discount'] ?? 0);
+            $date = $redemption['redeemed_at'] ?? '';
+
+            // Get user display name
+            $user = get_userdata($userId);
+            $userName = $user ? esc_html($user->display_name) : sprintf(__('Gebruiker #%d', 'stride'), $userId);
+            $userLink = $user ? '<a href="' . esc_url(get_edit_user_link($userId)) . '">' . $userName . '</a>' : $userName;
+
+            // Get course title
+            $courseTitle = $courseId ? get_the_title($courseId) : '-';
+            $courseLink = $courseId ? '<a href="' . esc_url(get_edit_post_link($courseId)) . '">' . esc_html($courseTitle) . '</a>' : '-';
+
+            echo '<tr>';
+            echo '<td>' . $userLink . '</td>';
+            echo '<td>' . $courseLink . '</td>';
+            echo '<td>€ ' . esc_html(number_format($discount, 2, ',', '.')) . '</td>';
+            echo '<td>' . esc_html($date) . '</td>';
+            echo '</tr>';
+        }
+
+        echo '</tbody></table>';
     }
 
     /**
