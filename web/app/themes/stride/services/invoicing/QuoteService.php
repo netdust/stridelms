@@ -55,6 +55,13 @@ class QuoteService implements \NTDST_Service_Meta
     public const FIELD_SENT_AT = 'sent_at';
     public const FIELD_EXPORTED_AT = 'exported_at';
     public const FIELD_DISCOUNT = 'discount';
+    public const FIELD_NOTES = 'notes';
+    public const FIELD_LOCKED = 'locked';
+    public const FIELD_LAST_SENT_TO = 'last_sent_to';
+
+    // Note types
+    public const NOTE_TYPE_ADMIN = 'admin';
+    public const NOTE_TYPE_CUSTOMER = 'customer';
 
     private ?CourseService $courseService;
     private ?SubscriberService $subscriberService;
@@ -97,6 +104,9 @@ class QuoteService implements \NTDST_Service_Meta
 
         // Custom admin metaboxes for quote overview
         add_action('add_meta_boxes', [$this, 'registerMetaboxes']);
+
+        // Save metabox data
+        add_action('save_post_' . self::POST_TYPE, [$this, 'saveQuoteMetabox'], 10, 2);
 
         // Hook into enrollment completion
         add_action('stride/enrollment/completed', [$this, 'handleEnrollmentCompleted'], 10, 3);
@@ -182,6 +192,9 @@ class QuoteService implements \NTDST_Service_Meta
                 self::FIELD_SENT_AT => ['type' => 'text'],
                 self::FIELD_EXPORTED_AT => ['type' => 'text'],
                 self::FIELD_DISCOUNT => ['type' => 'float', 'min' => 0],
+                self::FIELD_NOTES => ['type' => 'json'],
+                self::FIELD_LOCKED => ['type' => 'boolean', 'default' => false],
+                self::FIELD_LAST_SENT_TO => ['type' => 'text'],
             ],
 
             // Disable auto-generated metabox - we use custom invoice-style layout
@@ -243,15 +256,574 @@ class QuoteService implements \NTDST_Service_Meta
         add_meta_box(
             'stride_quote_status',
             __('Status & Acties', 'stride'),
-            [$this, 'renderStatusMetabox'],
+            [$this, 'renderActionsMetabox'],
             self::POST_TYPE,
             'side',
             'high'
         );
+
+        // Notes metabox (admin & customer notes)
+        add_meta_box(
+            'stride_quote_notes',
+            __('Notities', 'stride'),
+            [$this, 'renderNotesMetabox'],
+            self::POST_TYPE,
+            'normal',
+            'default'
+        );
     }
 
     /**
-     * Render main quote overview metabox - Invoice style layout
+     * Save quote metabox data (billing, items, etc.)
+     *
+     * @param int $postId Post ID
+     * @param \WP_Post $post Post object
+     */
+    public function saveQuoteMetabox(int $postId, \WP_Post $post): void
+    {
+        // Verify nonce
+        if (!isset($_POST['stride_quote_nonce']) ||
+            !wp_verify_nonce($_POST['stride_quote_nonce'], 'stride_save_quote')) {
+            return;
+        }
+
+        // Check autosave
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+            return;
+        }
+
+        // Check permissions
+        if (!current_user_can('edit_post', $postId)) {
+            return;
+        }
+
+        // Get current quote to check status
+        $quote = $this->getQuote($postId);
+
+        // Handle new quote creation (from manual form)
+        if (!$quote) {
+            $this->handleNewQuoteCreation($postId, $post);
+            return;
+        }
+
+        $model = $this->getModel();
+        if (!$model) {
+            return;
+        }
+
+        $updateData = [];
+
+        // Check if quote is editable for billing/items changes
+        // Only locked status blocks editing - not the quote status
+        $isLocked = (bool) ($quote['locked'] ?? false);
+        $isEditable = !$isLocked;
+
+        // Process billing data (only if editable)
+        if ($isEditable && isset($_POST['billing']) && is_array($_POST['billing'])) {
+            $billing = $quote['billing'];
+            $billingFields = ['organisation', 'email', 'address', 'postal_code', 'city', 'vat_number', 'gln_number'];
+
+            foreach ($billingFields as $field) {
+                if (isset($_POST['billing'][$field])) {
+                    $billing[$field] = sanitize_text_field($_POST['billing'][$field]);
+                }
+            }
+
+            // Re-validate VAT if changed
+            $newVat = $billing['vat_number'] ?? '';
+            $oldVat = $quote['billing']['vat_number'] ?? '';
+            if (!empty($newVat) && $newVat !== $oldVat) {
+                $vatResult = $this->vatValidator->validate($newVat);
+                $billing['vat_validated'] = $vatResult['valid'];
+                $billing['vat_source'] = $vatResult['source'] ?? 'unknown';
+                if ($vatResult['valid'] && !empty($vatResult['name']) && empty($billing['organisation'])) {
+                    $billing['organisation'] = $vatResult['name'];
+                }
+            }
+
+            $updateData[self::FIELD_BILLING] = $billing;
+        }
+
+        // Process items data (only if editable)
+        if ($isEditable && isset($_POST['items']) && is_array($_POST['items'])) {
+            $items = [];
+            $subtotal = 0.0;
+
+            foreach ($_POST['items'] as $index => $itemData) {
+                // Skip empty rows (removed items)
+                if (empty($itemData['title']) && empty($itemData['unit_price'])) {
+                    continue;
+                }
+
+                $quantity = max(1, (int) ($itemData['quantity'] ?? 1));
+                $unitPrice = (float) ($itemData['unit_price'] ?? 0);
+                $itemTotal = $quantity * $unitPrice;
+                $type = sanitize_text_field($itemData['type'] ?? 'course');
+
+                $items[] = [
+                    'id' => (int) ($itemData['id'] ?? 0),
+                    'type' => $type,
+                    'title' => sanitize_text_field($itemData['title'] ?? ''),
+                    'quantity' => $quantity,
+                    'unit_price' => $unitPrice,
+                    'total' => $itemTotal,
+                ];
+
+                // Calculate subtotal (discount items have negative prices)
+                $subtotal += $itemTotal;
+            }
+
+            // Extract discount from items
+            $discount = 0.0;
+            foreach ($items as $item) {
+                if ($item['type'] === 'discount') {
+                    $discount += abs($item['total']);
+                }
+            }
+
+            // Calculate totals
+            $subtotalBeforeDiscount = $subtotal + $discount; // Add back the discount amount that was subtracted
+            $discountedSubtotal = max(0, $subtotal); // subtotal already has discount subtracted
+            $taxRate = $this->getTaxRate();
+            $tax = round($discountedSubtotal * ($taxRate / 100), 2);
+            $total = $discountedSubtotal + $tax;
+
+            $updateData[self::FIELD_ITEMS] = $items;
+            $updateData[self::FIELD_SUBTOTAL] = $subtotalBeforeDiscount;
+            $updateData[self::FIELD_DISCOUNT] = $discount;
+            $updateData[self::FIELD_TAX] = $tax;
+            $updateData[self::FIELD_TOTAL] = $total;
+        }
+
+        // Process notes data
+        if (isset($_POST['stride_notes_data'])) {
+            $notesJson = wp_unslash($_POST['stride_notes_data']);
+            $notes = json_decode($notesJson, true);
+
+            if (is_array($notes)) {
+                // Filter out deleted notes and sanitize
+                $cleanNotes = [];
+                foreach ($notes as $note) {
+                    if (!empty($note['_deleted'])) {
+                        continue;
+                    }
+                    $cleanNotes[] = [
+                        'type' => sanitize_text_field($note['type'] ?? self::NOTE_TYPE_ADMIN),
+                        'content' => sanitize_textarea_field($note['content'] ?? ''),
+                        'author' => sanitize_text_field($note['author'] ?? ''),
+                        'date' => sanitize_text_field($note['date'] ?? current_time('mysql')),
+                    ];
+                }
+                $updateData[self::FIELD_NOTES] = $cleanNotes;
+            }
+        }
+
+        // Handle lock/unlock action
+        if (!empty($_POST['stride_lock_action'])) {
+            $lockAction = sanitize_text_field($_POST['stride_lock_action']);
+            if ($lockAction === 'lock') {
+                $updateData[self::FIELD_LOCKED] = true;
+                $this->addAuditNote($postId, __('Offerte vergrendeld', 'stride'));
+            } elseif ($lockAction === 'unlock') {
+                $updateData[self::FIELD_LOCKED] = false;
+                $this->addAuditNote($postId, __('Offerte ontgrendeld', 'stride'));
+            }
+        }
+
+        // Handle status change
+        if (!empty($_POST['stride_change_status'])) {
+            $newStatus = sanitize_text_field($_POST['stride_change_status']);
+            $validStatuses = [self::STATUS_DRAFT, self::STATUS_SENT, self::STATUS_EXPORTED];
+
+            if (in_array($newStatus, $validStatuses, true) && $newStatus !== $quote['status']) {
+                $updateData[self::FIELD_STATUS] = $newStatus;
+
+                // Set timestamp for status transitions
+                if ($newStatus === self::STATUS_SENT && empty($quote['sent_at'])) {
+                    $updateData[self::FIELD_SENT_AT] = current_time('mysql');
+                } elseif ($newStatus === self::STATUS_EXPORTED) {
+                    if (empty($quote['exported_at'])) {
+                        $updateData[self::FIELD_EXPORTED_AT] = current_time('mysql');
+                    }
+                    // Auto-lock on export
+                    $updateData[self::FIELD_LOCKED] = true;
+                }
+
+                $this->addAuditNote($postId, sprintf(
+                    __('Status gewijzigd naar: %s', 'stride'),
+                    $newStatus
+                ));
+            }
+        }
+
+        // Update if we have data
+        if (!empty($updateData)) {
+            $model->update($postId, $updateData);
+
+            // Fire update hook
+            do_action('stride/quote/updated', $postId, $updateData);
+        }
+
+        // Handle send quote action (after all updates)
+        if (!empty($_POST['stride_send_quote'])) {
+            $sendTo = sanitize_email($_POST['stride_send_to'] ?? '');
+            $sendCc = sanitize_email($_POST['stride_send_cc'] ?? '');
+
+            if ($sendTo) {
+                $this->sendQuoteEmail($postId, $sendTo, $sendCc);
+            }
+        }
+
+        // Handle PDF regeneration
+        if (!empty($_POST['stride_regenerate_pdf'])) {
+            do_action('stride/quote/regenerate_pdf', $postId);
+            $this->addAuditNote($postId, __('PDF opnieuw gegenereerd', 'stride'));
+        }
+
+        // Handle voucher application
+        if (!empty($_POST['stride_apply_voucher'])) {
+            $voucherCode = sanitize_text_field($_POST['stride_apply_voucher']);
+            $this->applyVoucherToQuote($postId, $voucherCode);
+        }
+
+        // Handle manual discount
+        if (!empty($_POST['stride_apply_discount'])) {
+            $discountAmount = (float) $_POST['stride_apply_discount'];
+            if ($discountAmount > 0) {
+                $this->applyManualDiscount($postId, $discountAmount);
+            }
+        }
+
+        // Handle voucher removal
+        if (!empty($_POST['stride_remove_voucher'])) {
+            $this->removeVoucherFromQuote($postId);
+        }
+    }
+
+    /**
+     * Apply a voucher to a quote
+     *
+     * @param int $postId Quote post ID
+     * @param string $voucherCode Voucher code
+     */
+    private function applyVoucherToQuote(int $postId, string $voucherCode): void
+    {
+        $quote = $this->getQuote($postId);
+        if (!$quote) {
+            return;
+        }
+
+        // Validate voucher via VoucherService
+        if ($this->voucherService) {
+            $validation = $this->voucherService->validateVoucher($voucherCode, $quote['course_id']);
+
+            if (is_wp_error($validation)) {
+                // Store error for admin notice
+                set_transient('stride_quote_voucher_error_' . $postId, $validation->get_error_message(), 30);
+                return;
+            }
+
+            // Calculate discount
+            $discountAmount = 0;
+            $subtotal = $quote['subtotal'] ?? 0;
+
+            if ($validation['discount_type'] === 'percentage') {
+                $discountAmount = round($subtotal * ($validation['discount_value'] / 100), 2);
+            } elseif ($validation['discount_type'] === 'fixed') {
+                $discountAmount = min($validation['discount_value'], $subtotal);
+            } elseif ($validation['discount_type'] === 'full') {
+                $discountAmount = $subtotal;
+            }
+
+            // Add discount as line item
+            $items = $quote['items'] ?? [];
+            $items[] = [
+                'id' => 0,
+                'type' => 'discount',
+                'title' => sprintf(__('Korting: %s', 'stride'), $voucherCode),
+                'quantity' => 1,
+                'unit_price' => -$discountAmount,
+                'total' => -$discountAmount,
+            ];
+
+            // Recalculate totals
+            $taxRate = $this->getTaxRate();
+            $discountedSubtotal = max(0, $subtotal - $discountAmount);
+            $tax = round($discountedSubtotal * ($taxRate / 100), 2);
+            $total = $discountedSubtotal + $tax;
+
+            $model = $this->getModel();
+            if ($model) {
+                $model->update($postId, [
+                    self::FIELD_ITEMS => $items,
+                    self::FIELD_VOUCHER_CODE => $voucherCode,
+                    self::FIELD_DISCOUNT => $discountAmount,
+                    self::FIELD_TAX => $tax,
+                    self::FIELD_TOTAL => $total,
+                ]);
+            }
+
+            $this->addAuditNote($postId, sprintf(
+                __('Voucher toegepast: %s (-%s)', 'stride'),
+                $voucherCode,
+                $this->formatCurrency($discountAmount)
+            ));
+        }
+    }
+
+    /**
+     * Apply a manual discount to a quote
+     *
+     * @param int $postId Quote post ID
+     * @param float $amount Discount amount
+     */
+    private function applyManualDiscount(int $postId, float $amount): void
+    {
+        $quote = $this->getQuote($postId);
+        if (!$quote) {
+            return;
+        }
+
+        $subtotal = $quote['subtotal'] ?? 0;
+        $discountAmount = min($amount, $subtotal);
+
+        // Add discount as line item
+        $items = $quote['items'] ?? [];
+
+        // Remove existing manual discount items
+        $items = array_filter($items, fn($item) =>
+            !(($item['type'] ?? '') === 'discount' && empty($item['voucher']))
+        );
+        $items = array_values($items);
+
+        $items[] = [
+            'id' => 0,
+            'type' => 'discount',
+            'title' => __('Handmatige korting', 'stride'),
+            'quantity' => 1,
+            'unit_price' => -$discountAmount,
+            'total' => -$discountAmount,
+        ];
+
+        // Recalculate totals
+        $taxRate = $this->getTaxRate();
+        $discountedSubtotal = max(0, $subtotal - $discountAmount);
+        $tax = round($discountedSubtotal * ($taxRate / 100), 2);
+        $total = $discountedSubtotal + $tax;
+
+        $model = $this->getModel();
+        if ($model) {
+            $model->update($postId, [
+                self::FIELD_ITEMS => $items,
+                self::FIELD_DISCOUNT => $discountAmount,
+                self::FIELD_TAX => $tax,
+                self::FIELD_TOTAL => $total,
+            ]);
+        }
+
+        $this->addAuditNote($postId, sprintf(
+            __('Handmatige korting toegepast: -%s', 'stride'),
+            $this->formatCurrency($discountAmount)
+        ));
+    }
+
+    /**
+     * Remove voucher/discount from a quote
+     *
+     * @param int $postId Quote post ID
+     */
+    private function removeVoucherFromQuote(int $postId): void
+    {
+        $quote = $this->getQuote($postId);
+        if (!$quote) {
+            return;
+        }
+
+        // Remove all discount items
+        $items = $quote['items'] ?? [];
+        $items = array_filter($items, fn($item) => ($item['type'] ?? '') !== 'discount');
+        $items = array_values($items);
+
+        // Recalculate totals without discount
+        $subtotal = $quote['subtotal'] ?? 0;
+        $taxRate = $this->getTaxRate();
+        $tax = round($subtotal * ($taxRate / 100), 2);
+        $total = $subtotal + $tax;
+
+        $model = $this->getModel();
+        if ($model) {
+            $model->update($postId, [
+                self::FIELD_ITEMS => $items,
+                self::FIELD_VOUCHER_CODE => '',
+                self::FIELD_DISCOUNT => 0,
+                self::FIELD_TAX => $tax,
+                self::FIELD_TOTAL => $total,
+            ]);
+        }
+
+        $this->addAuditNote($postId, __('Korting verwijderd', 'stride'));
+    }
+
+    /**
+     * Add an audit note to the quote
+     *
+     * @param int $postId Quote post ID
+     * @param string $message Note message
+     */
+    private function addAuditNote(int $postId, string $message): void
+    {
+        $model = $this->getModel();
+        if (!$model) {
+            return;
+        }
+
+        $quote = $this->getQuote($postId);
+        $notes = $quote['notes'] ?? [];
+
+        $currentUser = wp_get_current_user();
+
+        $notes[] = [
+            'type' => self::NOTE_TYPE_ADMIN,
+            'content' => $message,
+            'author' => $currentUser->display_name ?: 'System',
+            'date' => current_time('mysql'),
+        ];
+
+        $model->update($postId, [
+            self::FIELD_NOTES => $notes,
+        ]);
+    }
+
+    /**
+     * Send quote email to customer
+     *
+     * @param int $postId Quote post ID
+     * @param string $to Recipient email
+     * @param string $cc CC email (optional)
+     */
+    private function sendQuoteEmail(int $postId, string $to, string $cc = ''): void
+    {
+        $quote = $this->getQuote($postId);
+        if (!$quote) {
+            return;
+        }
+
+        // Store recipients for reference
+        $sentTo = $to;
+        if ($cc) {
+            $sentTo .= ', ' . $cc;
+        }
+
+        $model = $this->getModel();
+        if ($model) {
+            $updateData = [
+                self::FIELD_LAST_SENT_TO => $sentTo,
+            ];
+
+            // Update status to sent if still draft
+            if ($quote['status'] === self::STATUS_DRAFT) {
+                $updateData[self::FIELD_STATUS] = self::STATUS_SENT;
+                $updateData[self::FIELD_SENT_AT] = current_time('mysql');
+            }
+
+            $model->update($postId, $updateData);
+        }
+
+        // Add audit note
+        $this->addAuditNote($postId, sprintf(
+            __('Offerte verzonden naar: %s', 'stride'),
+            $sentTo
+        ));
+
+        // Fire hook for email sending (handled by separate service)
+        do_action('stride/quote/send_email', $postId, $to, $cc, $quote);
+    }
+
+    /**
+     * Handle creation of a new quote from manual admin form
+     *
+     * @param int $postId Post ID
+     * @param \WP_Post $post Post object
+     */
+    private function handleNewQuoteCreation(int $postId, \WP_Post $post): void
+    {
+        // Check for required fields from ntdst_fields
+        $fields = $_POST['ntdst_fields'] ?? [];
+        $userId = absint($fields['user_id'] ?? 0);
+        $courseId = absint($fields['course_id'] ?? 0);
+
+        if (!$userId || !$courseId) {
+            return;
+        }
+
+        // Generate quote number
+        $quoteNumber = $this->generateQuoteNumber();
+
+        // Get course details
+        $courseTitle = $this->courseService->getCourseTitle($courseId);
+        $coursePrice = $this->getCoursePrice($courseId);
+
+        // Get billing data from subscriber
+        $billing = $this->subscriberService->getBillingData($userId);
+        if (is_wp_error($billing)) {
+            $billing = [];
+        }
+
+        // Calculate totals
+        $taxRate = $this->getTaxRate();
+        $subtotal = $coursePrice;
+        $tax = round($subtotal * ($taxRate / 100), 2);
+        $total = $subtotal + $tax;
+
+        // Build items
+        $items = [
+            [
+                'id' => $courseId,
+                'type' => 'course',
+                'title' => $courseTitle,
+                'quantity' => 1,
+                'unit_price' => $coursePrice,
+                'total' => $coursePrice,
+            ],
+        ];
+
+        // Calculate valid until
+        $validDays = $this->getConfig('valid_days', 30);
+        $validUntil = date('Y-m-d', strtotime("+{$validDays} days"));
+
+        $model = $this->getModel();
+        if (!$model) {
+            return;
+        }
+
+        // Update the post with generated data
+        $model->update($postId, [
+            self::FIELD_USER_ID => $userId,
+            self::FIELD_COURSE_ID => $courseId,
+            self::FIELD_STATUS => self::STATUS_DRAFT,
+            self::FIELD_QUOTE_NUMBER => $quoteNumber,
+            self::FIELD_ITEMS => $items,
+            self::FIELD_SUBTOTAL => $subtotal,
+            self::FIELD_DISCOUNT => 0,
+            self::FIELD_TAX => $tax,
+            self::FIELD_TOTAL => $total,
+            self::FIELD_VALID_UNTIL => $validUntil,
+            self::FIELD_BILLING => $billing,
+            self::FIELD_CREATED_AT => current_time('mysql'),
+        ]);
+
+        // Update post title to quote number
+        wp_update_post([
+            'ID' => $postId,
+            'post_title' => $quoteNumber,
+        ]);
+
+        // Fire created hook
+        do_action('stride/quote/created', $postId, $userId, $courseId);
+    }
+
+    /**
+     * Render main quote overview metabox - Editable invoice style layout
      */
     public function renderOverviewMetabox(\WP_Post $post): void
     {
@@ -268,142 +840,280 @@ class QuoteService implements \NTDST_Service_Meta
         $billing = $quote['billing'] ?? [];
         $items = $quote['items'] ?? [];
         $courseId = $quote['course_id'];
-        $courseTitle = $courseId ? get_the_title($courseId) : '-';
+        $isLocked = (bool) ($quote['locked'] ?? false);
+        // Editable unless explicitly locked - status doesn't block editing
+
+        // Add default empty item row if no items exist (for new quotes)
+        if (empty($items)) {
+            $items = [
+                [
+                    'id' => 0,
+                    'type' => 'course',
+                    'title' => '',
+                    'quantity' => 1,
+                    'unit_price' => 0,
+                    'total' => 0,
+                ],
+            ];
+        }
+        $isEditable = !$isLocked;
+
+        // Security nonce
+        wp_nonce_field('stride_save_quote', 'stride_quote_nonce');
 
         $this->renderQuoteStyles();
         ?>
 
-        <div class="stride-quote-document">
-            <!-- Header: Quote Number & Company -->
+        <div class="stride-quote-admin">
+            <!-- Header: Quote Number -->
             <div class="stride-quote-header">
-                <div class="stride-quote-company">
-                    <strong>Stride LMS</strong>
-                </div>
-                <div class="stride-quote-number">
+                <div class="stride-quote-number-display">
                     <span class="label"><?php esc_html_e('Offerte', 'stride'); ?></span>
                     <span class="number"><?php echo esc_html($quote['number']); ?></span>
                 </div>
+                <div class="stride-quote-dates">
+                    <span><?php esc_html_e('Aangemaakt:', 'stride'); ?> <?php echo esc_html(date_i18n('j M Y', strtotime($quote['created_at']))); ?></span>
+                    <span><?php esc_html_e('Geldig tot:', 'stride'); ?> <?php echo esc_html(date_i18n('j M Y', strtotime($quote['valid_until']))); ?></span>
+                </div>
             </div>
 
-            <!-- Two Column: Customer | Invoice Details -->
-            <div class="stride-quote-parties">
-                <div class="stride-quote-customer">
-                    <h4><?php esc_html_e('Klant', 'stride'); ?></h4>
-                    <div class="stride-quote-address">
-                        <?php if ($user): ?>
-                            <strong>
-                                <a href="<?php echo esc_url(get_edit_user_link($userId)); ?>">
-                                    <?php echo esc_html($billing['organisation'] ?: $user->display_name); ?>
-                                </a>
-                            </strong><br>
-                            <?php if (!empty($billing['organisation'])): ?>
-                                <?php echo esc_html($user->display_name); ?><br>
+            <!-- Two Column: Customer Billing | Quote Details -->
+            <div class="stride-quote-columns">
+                <!-- Left: Billing Details (Editable) -->
+                <div class="stride-quote-billing">
+                    <h4><?php esc_html_e('Facturatiegegevens', 'stride'); ?></h4>
+
+                    <div class="stride-field-row">
+                        <div class="stride-field stride-user-field">
+                            <label for="quote_user_id"><?php esc_html_e('Klant', 'stride'); ?></label>
+                            <?php if ($isEditable): ?>
+                                <select id="quote_user_id" name="ntdst_fields[user_id]" class="stride-user-select">
+                                    <option value=""><?php esc_html_e('Selecteer klant...', 'stride'); ?></option>
+                                    <?php
+                                    // Get users with subscriber role or higher
+                                    $users = get_users([
+                                        'orderby' => 'display_name',
+                                        'order' => 'ASC',
+                                        'number' => 200,
+                                    ]);
+                                    foreach ($users as $u) {
+                                        $selected = ($u->ID == $userId) ? 'selected' : '';
+                                        $label = $u->display_name;
+                                        if ($u->user_email) {
+                                            $label .= ' (' . $u->user_email . ')';
+                                        }
+                                        echo '<option value="' . esc_attr($u->ID) . '" ' . $selected . ' data-email="' . esc_attr($u->user_email) . '">' . esc_html($label) . '</option>';
+                                    }
+                                    ?>
+                                </select>
+                                <?php if ($user): ?>
+                                    <a href="<?php echo esc_url(get_edit_user_link($userId)); ?>" class="stride-user-link" target="_blank">
+                                        <span class="dashicons dashicons-external"></span>
+                                    </a>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <?php if ($user): ?>
+                                    <div class="stride-user-display">
+                                        <a href="<?php echo esc_url(get_edit_user_link($userId)); ?>">
+                                            <?php echo esc_html($user->display_name); ?>
+                                        </a>
+                                        <span class="email">(<?php echo esc_html($user->user_email); ?>)</span>
+                                    </div>
+                                <?php else: ?>
+                                    <span class="no-user"><?php esc_html_e('Geen gebruiker', 'stride'); ?></span>
+                                <?php endif; ?>
+                                <input type="hidden" name="ntdst_fields[user_id]" value="<?php echo esc_attr($userId); ?>">
                             <?php endif; ?>
-                        <?php endif; ?>
-                        <?php if (!empty($billing['address'])): ?>
-                            <?php echo esc_html($billing['address']); ?><br>
-                        <?php endif; ?>
-                        <?php if (!empty($billing['postal_code']) || !empty($billing['city'])): ?>
-                            <?php echo esc_html(trim(($billing['postal_code'] ?? '') . ' ' . ($billing['city'] ?? ''))); ?><br>
-                        <?php endif; ?>
-                        <?php echo esc_html($billing['email'] ?? $user->user_email ?? ''); ?>
+                        </div>
                     </div>
-                    <?php if (!empty($billing['vat_number'])): ?>
-                        <div class="stride-quote-vat">
-                            <span class="label"><?php esc_html_e('BTW', 'stride'); ?>:</span>
-                            <?php echo esc_html($billing['vat_number']); ?>
-                            <?php if (!empty($billing['vat_validated'])): ?>
-                                <span class="validated" title="<?php esc_attr_e('VIES gevalideerd', 'stride'); ?>">✓</span>
-                            <?php endif; ?>
+
+                    <div class="stride-field-row two-col">
+                        <div class="stride-field">
+                            <label for="billing_organisation"><?php esc_html_e('Organisatie', 'stride'); ?></label>
+                            <input type="text" id="billing_organisation" name="billing[organisation]"
+                                   value="<?php echo esc_attr($billing['organisation'] ?? ''); ?>"
+                                   <?php echo !$isEditable ? 'readonly' : ''; ?>>
                         </div>
-                    <?php endif; ?>
-                    <?php if (!empty($billing['gln_number'])): ?>
-                        <div class="stride-quote-gln">
-                            <span class="label"><?php esc_html_e('GLN', 'stride'); ?>:</span>
-                            <?php echo esc_html($billing['gln_number']); ?>
+                        <div class="stride-field">
+                            <label for="billing_email"><?php esc_html_e('Email', 'stride'); ?></label>
+                            <input type="email" id="billing_email" name="billing[email]"
+                                   value="<?php echo esc_attr($billing['email'] ?? $user->user_email ?? ''); ?>"
+                                   <?php echo !$isEditable ? 'readonly' : ''; ?>>
                         </div>
-                    <?php endif; ?>
+                    </div>
+
+                    <div class="stride-field-row">
+                        <div class="stride-field">
+                            <label for="billing_address"><?php esc_html_e('Adres', 'stride'); ?></label>
+                            <input type="text" id="billing_address" name="billing[address]"
+                                   value="<?php echo esc_attr($billing['address'] ?? ''); ?>"
+                                   <?php echo !$isEditable ? 'readonly' : ''; ?>>
+                        </div>
+                    </div>
+
+                    <div class="stride-field-row two-col">
+                        <div class="stride-field">
+                            <label for="billing_postal_code"><?php esc_html_e('Postcode', 'stride'); ?></label>
+                            <input type="text" id="billing_postal_code" name="billing[postal_code]"
+                                   value="<?php echo esc_attr($billing['postal_code'] ?? ''); ?>"
+                                   <?php echo !$isEditable ? 'readonly' : ''; ?>>
+                        </div>
+                        <div class="stride-field">
+                            <label for="billing_city"><?php esc_html_e('Stad', 'stride'); ?></label>
+                            <input type="text" id="billing_city" name="billing[city]"
+                                   value="<?php echo esc_attr($billing['city'] ?? ''); ?>"
+                                   <?php echo !$isEditable ? 'readonly' : ''; ?>>
+                        </div>
+                    </div>
+
+                    <div class="stride-field-row two-col">
+                        <div class="stride-field">
+                            <label for="billing_vat_number"><?php esc_html_e('BTW Nummer', 'stride'); ?></label>
+                            <input type="text" id="billing_vat_number" name="billing[vat_number]"
+                                   value="<?php echo esc_attr($billing['vat_number'] ?? ''); ?>"
+                                   placeholder="BE0123456789"
+                                   <?php echo !$isEditable ? 'readonly' : ''; ?>>
+                        </div>
+                        <div class="stride-field">
+                            <label for="billing_gln_number"><?php esc_html_e('GLN Nummer', 'stride'); ?></label>
+                            <input type="text" id="billing_gln_number" name="billing[gln_number]"
+                                   value="<?php echo esc_attr($billing['gln_number'] ?? ''); ?>"
+                                   <?php echo !$isEditable ? 'readonly' : ''; ?>>
+                        </div>
+                    </div>
                 </div>
 
+                <!-- Right: Quote Details -->
                 <div class="stride-quote-details">
-                    <table>
-                        <tr>
-                            <th><?php esc_html_e('Datum', 'stride'); ?></th>
-                            <td><?php echo esc_html(date_i18n(get_option('date_format'), strtotime($quote['created_at']))); ?></td>
-                        </tr>
-                        <tr>
-                            <th><?php esc_html_e('Geldig tot', 'stride'); ?></th>
-                            <td><?php echo esc_html(date_i18n(get_option('date_format'), strtotime($quote['valid_until']))); ?></td>
-                        </tr>
-                        <?php if (!empty($quote['order_number'])): ?>
-                            <tr>
-                                <th><?php esc_html_e('Bestelnummer', 'stride'); ?></th>
-                                <td><?php echo esc_html($quote['order_number']); ?></td>
-                            </tr>
-                        <?php endif; ?>
-                        <tr>
-                            <th><?php esc_html_e('Cursus', 'stride'); ?></th>
-                            <td>
-                                <?php if ($courseId): ?>
-                                    <a href="<?php echo esc_url(get_edit_post_link($courseId)); ?>">
-                                        <?php echo esc_html($courseTitle); ?>
-                                    </a>
-                                <?php else: ?>
-                                    -
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                        <?php if (!empty($quote['voucher_code'])): ?>
-                            <tr>
-                                <th><?php esc_html_e('Voucher', 'stride'); ?></th>
-                                <td><code><?php echo esc_html($quote['voucher_code']); ?></code></td>
-                            </tr>
-                        <?php endif; ?>
-                    </table>
+                    <h4><?php esc_html_e('Offerte details', 'stride'); ?></h4>
+
+                    <div class="stride-field">
+                        <label for="quote_order_number"><?php esc_html_e('Bestelnummer (PO)', 'stride'); ?></label>
+                        <input type="text" id="quote_order_number" name="ntdst_fields[order_number]"
+                               value="<?php echo esc_attr($quote['order_number'] ?? ''); ?>"
+                               placeholder="<?php esc_attr_e('Optioneel', 'stride'); ?>"
+                               <?php echo !$isEditable ? 'readonly' : ''; ?>>
+                    </div>
+
+                    <!-- Hidden fields for reference -->
+                    <input type="hidden" name="ntdst_fields[course_id]" value="<?php echo esc_attr($courseId); ?>">
                 </div>
             </div>
 
             <!-- Line Items Table -->
-            <table class="stride-quote-items widefat striped">
-                <thead>
-                    <tr>
-                        <th class="description"><?php esc_html_e('Omschrijving', 'stride'); ?></th>
-                        <th class="qty"><?php esc_html_e('Aantal', 'stride'); ?></th>
-                        <th class="price"><?php esc_html_e('Prijs', 'stride'); ?></th>
-                        <th class="total"><?php esc_html_e('Bedrag', 'stride'); ?></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($items as $item): ?>
-                        <tr class="<?php echo ($item['type'] ?? '') === 'discount' ? 'discount-row' : ''; ?>">
-                            <td class="description"><?php echo esc_html($item['title'] ?? '-'); ?></td>
-                            <td class="qty"><?php echo esc_html($item['quantity'] ?? 1); ?></td>
-                            <td class="price"><?php echo $this->formatCurrency((float)($item['unit_price'] ?? 0)); ?></td>
-                            <td class="total"><?php echo $this->formatCurrency((float)($item['total'] ?? 0)); ?></td>
+            <div class="stride-quote-items-section">
+                <h4><?php esc_html_e('Offerte items', 'stride'); ?></h4>
+
+                <table class="stride-quote-items widefat">
+                    <thead>
+                        <tr>
+                            <th class="description"><?php esc_html_e('Omschrijving', 'stride'); ?></th>
+                            <th class="qty"><?php esc_html_e('Aantal', 'stride'); ?></th>
+                            <th class="price"><?php esc_html_e('Prijs', 'stride'); ?></th>
+                            <th class="total"><?php esc_html_e('Bedrag', 'stride'); ?></th>
+                            <?php if ($isEditable): ?>
+                                <th class="actions"></th>
+                            <?php endif; ?>
                         </tr>
-                    <?php endforeach; ?>
-                </tbody>
-                <tfoot>
-                    <tr class="subtotal">
-                        <td colspan="3"><?php esc_html_e('Subtotaal', 'stride'); ?></td>
-                        <td><?php echo $this->formatCurrency($quote['subtotal']); ?></td>
-                    </tr>
-                    <?php if ($quote['discount'] > 0): ?>
-                        <tr class="discount">
-                            <td colspan="3"><?php esc_html_e('Korting', 'stride'); ?></td>
-                            <td>- <?php echo $this->formatCurrency($quote['discount']); ?></td>
+                    </thead>
+                    <tbody id="stride-quote-items-body">
+                        <?php foreach ($items as $index => $item): ?>
+                            <tr class="item-row <?php echo ($item['type'] ?? '') === 'discount' ? 'discount-row' : ''; ?>" data-index="<?php echo esc_attr($index); ?>">
+                                <td class="description">
+                                    <?php if ($isEditable): ?>
+                                        <input type="text" name="items[<?php echo $index; ?>][title]"
+                                               value="<?php echo esc_attr($item['title'] ?? ''); ?>" class="item-title">
+                                        <input type="hidden" name="items[<?php echo $index; ?>][type]"
+                                               value="<?php echo esc_attr($item['type'] ?? 'course'); ?>">
+                                    <?php else: ?>
+                                        <?php echo esc_html($item['title'] ?? '-'); ?>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="qty">
+                                    <?php if ($isEditable): ?>
+                                        <input type="number" name="items[<?php echo $index; ?>][quantity]"
+                                               value="<?php echo esc_attr($item['quantity'] ?? 1); ?>"
+                                               min="1" step="1" class="item-qty">
+                                    <?php else: ?>
+                                        <?php echo esc_html($item['quantity'] ?? 1); ?>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="price">
+                                    <?php if ($isEditable): ?>
+                                        <input type="number" name="items[<?php echo $index; ?>][unit_price]"
+                                               value="<?php echo esc_attr($item['unit_price'] ?? 0); ?>"
+                                               min="0" step="0.01" class="item-price">
+                                    <?php else: ?>
+                                        <?php echo $this->formatCurrency((float)($item['unit_price'] ?? 0)); ?>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="total">
+                                    <?php echo $this->formatCurrency((float)($item['total'] ?? 0)); ?>
+                                </td>
+                                <?php if ($isEditable): ?>
+                                    <td class="actions">
+                                        <button type="button" class="button-link stride-remove-item" title="<?php esc_attr_e('Verwijderen', 'stride'); ?>">
+                                            <span class="dashicons dashicons-trash"></span>
+                                        </button>
+                                    </td>
+                                <?php endif; ?>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                    <tfoot>
+                        <tr class="subtotal">
+                            <td colspan="<?php echo $isEditable ? 3 : 3; ?>"><?php esc_html_e('Subtotaal', 'stride'); ?></td>
+                            <td class="amount"><?php echo $this->formatCurrency($quote['subtotal'] ?? 0); ?></td>
+                            <?php if ($isEditable): ?><td></td><?php endif; ?>
                         </tr>
-                    <?php endif; ?>
-                    <tr class="tax">
-                        <td colspan="3"><?php esc_html_e('BTW 21%', 'stride'); ?></td>
-                        <td><?php echo $this->formatCurrency($quote['tax']); ?></td>
-                    </tr>
-                    <tr class="grand-total">
-                        <td colspan="3"><?php esc_html_e('Totaal', 'stride'); ?></td>
-                        <td><?php echo $this->formatCurrency($quote['total']); ?></td>
-                    </tr>
-                </tfoot>
-            </table>
+                        <?php if (($quote['discount'] ?? 0) > 0): ?>
+                            <tr class="discount">
+                                <td colspan="<?php echo $isEditable ? 3 : 3; ?>"><?php esc_html_e('Korting', 'stride'); ?></td>
+                                <td class="amount">- <?php echo $this->formatCurrency($quote['discount']); ?></td>
+                                <?php if ($isEditable): ?><td></td><?php endif; ?>
+                            </tr>
+                        <?php endif; ?>
+                        <tr class="tax">
+                            <td colspan="<?php echo $isEditable ? 3 : 3; ?>"><?php esc_html_e('BTW 21%', 'stride'); ?></td>
+                            <td class="amount"><?php echo $this->formatCurrency($quote['tax'] ?? 0); ?></td>
+                            <?php if ($isEditable): ?><td></td><?php endif; ?>
+                        </tr>
+                        <tr class="grand-total">
+                            <td colspan="<?php echo $isEditable ? 3 : 3; ?>"><?php esc_html_e('Totaal', 'stride'); ?></td>
+                            <td class="amount"><?php echo $this->formatCurrency($quote['total'] ?? 0); ?></td>
+                            <?php if ($isEditable): ?><td></td><?php endif; ?>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                <?php if ($isEditable): ?>
+                    <div class="stride-quote-actions">
+                        <button type="button" class="button" id="stride-add-item">
+                            <span class="dashicons dashicons-plus-alt2"></span>
+                            <?php esc_html_e('Item toevoegen', 'stride'); ?>
+                        </button>
+                        <button type="button" class="button" id="stride-recalculate">
+                            <span class="dashicons dashicons-update"></span>
+                            <?php esc_html_e('Herbereken totalen', 'stride'); ?>
+                        </button>
+                    </div>
+                <?php else: ?>
+                    <p class="stride-readonly-notice">
+                        <span class="dashicons dashicons-lock"></span>
+                        <?php esc_html_e('Deze offerte is vergrendeld. Ontgrendel via de zijbalk om te bewerken.', 'stride'); ?>
+                    </p>
+                <?php endif; ?>
+            </div>
+
+            <!-- Hidden fields for stored values -->
+            <input type="hidden" name="ntdst_fields[status]" value="<?php echo esc_attr($quote['status']); ?>">
+            <input type="hidden" name="ntdst_fields[quote_number]" value="<?php echo esc_attr($quote['number']); ?>">
+            <input type="hidden" name="ntdst_fields[created_at]" value="<?php echo esc_attr($quote['created_at']); ?>">
+            <input type="hidden" name="ntdst_fields[subtotal]" id="quote_subtotal" value="<?php echo esc_attr($quote['subtotal'] ?? 0); ?>">
+            <input type="hidden" name="ntdst_fields[tax]" id="quote_tax" value="<?php echo esc_attr($quote['tax'] ?? 0); ?>">
+            <input type="hidden" name="ntdst_fields[total]" id="quote_total" value="<?php echo esc_attr($quote['total'] ?? 0); ?>">
+            <input type="hidden" name="ntdst_fields[discount]" id="quote_discount" value="<?php echo esc_attr($quote['discount'] ?? 0); ?>">
+            <input type="hidden" name="ntdst_fields[voucher_code]" value="<?php echo esc_attr($quote['voucher_code'] ?? ''); ?>">
         </div>
         <?php
     }
@@ -415,133 +1125,171 @@ class QuoteService implements \NTDST_Service_Meta
     {
         ?>
         <style>
-            .stride-quote-document {
+            /* Quote Admin Container */
+            .stride-quote-admin {
                 background: #fff;
-                max-width: 800px;
+                max-width: 900px;
             }
 
+            /* Header */
             .stride-quote-header {
                 display: flex;
                 justify-content: space-between;
-                align-items: flex-start;
-                padding-bottom: 20px;
+                align-items: center;
+                padding-bottom: 15px;
                 margin-bottom: 20px;
-                border-bottom: 3px solid #0073aa;
+                border-bottom: 3px solid #2271b1;
             }
 
-            .stride-quote-company {
-                font-size: 18px;
-                color: #23282d;
-            }
-
-            .stride-quote-number {
-                text-align: right;
-            }
-
-            .stride-quote-number .label {
-                display: block;
+            .stride-quote-number-display .label {
                 font-size: 11px;
                 text-transform: uppercase;
                 letter-spacing: 1px;
                 color: #666;
             }
 
-            .stride-quote-number .number {
-                font-size: 20px;
+            .stride-quote-number-display .number {
+                font-size: 22px;
                 font-weight: 600;
-                color: #0073aa;
+                color: #2271b1;
+                margin-left: 8px;
             }
 
-            .stride-quote-parties {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 40px;
-                margin-bottom: 30px;
-            }
-
-            .stride-quote-customer h4,
-            .stride-quote-details h4 {
-                margin: 0 0 10px 0;
-                padding: 0 0 8px 0;
-                border-bottom: 1px solid #ddd;
-                font-size: 12px;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-                color: #666;
-            }
-
-            .stride-quote-address {
-                line-height: 1.6;
-                margin-bottom: 10px;
-            }
-
-            .stride-quote-address strong a {
-                color: #23282d;
-                text-decoration: none;
-            }
-
-            .stride-quote-address strong a:hover {
-                color: #0073aa;
-            }
-
-            .stride-quote-vat,
-            .stride-quote-gln {
+            .stride-quote-dates {
+                text-align: right;
                 font-size: 13px;
                 color: #666;
             }
 
-            .stride-quote-vat .label,
-            .stride-quote-gln .label {
-                font-weight: 500;
+            .stride-quote-dates span {
+                display: block;
             }
 
-            .stride-quote-vat .validated {
-                color: #46b450;
-                font-weight: bold;
+            /* Two Column Layout */
+            .stride-quote-columns {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 30px;
+                margin-bottom: 25px;
             }
 
-            .stride-quote-details table {
+            .stride-quote-billing h4,
+            .stride-quote-details h4,
+            .stride-quote-items-section h4 {
+                margin: 0 0 15px 0;
+                padding: 0 0 8px 0;
+                border-bottom: 1px solid #ddd;
+                font-size: 13px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                color: #1d2327;
+                font-weight: 600;
+            }
+
+            /* Form Fields */
+            .stride-field-row {
+                margin-bottom: 12px;
+            }
+
+            .stride-field-row.two-col {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 15px;
+            }
+
+            .stride-field label {
+                display: block;
+                font-weight: 600;
+                font-size: 12px;
+                color: #1d2327;
+                margin-bottom: 4px;
+            }
+
+            .stride-field input[type="text"],
+            .stride-field input[type="email"],
+            .stride-field input[type="number"],
+            .stride-field select {
                 width: 100%;
-                border-collapse: collapse;
-            }
-
-            .stride-quote-details th {
-                text-align: left;
-                padding: 6px 10px 6px 0;
-                font-weight: normal;
-                color: #666;
-                width: 40%;
-            }
-
-            .stride-quote-details td {
-                padding: 6px 0;
-            }
-
-            .stride-quote-details code {
-                background: #f0f0f1;
-                padding: 2px 6px;
+                padding: 6px 8px;
+                border: 1px solid #8c8f94;
                 border-radius: 3px;
+                font-size: 13px;
+            }
+
+            .stride-field input[readonly],
+            .stride-field select[disabled] {
+                background: #f6f7f7;
+                color: #646970;
+            }
+
+            .stride-user-display {
+                padding: 6px 0;
+                font-size: 13px;
+            }
+
+            .stride-user-display a {
+                font-weight: 600;
+                color: #2271b1;
+                text-decoration: none;
+            }
+
+            .stride-user-display .email {
+                color: #646970;
+            }
+
+            .stride-voucher-display code {
+                background: #dff0d8;
+                color: #3c763d;
+                padding: 4px 8px;
+                border-radius: 3px;
+                font-size: 13px;
+            }
+
+            /* Items Section */
+            .stride-quote-items-section {
+                margin-top: 20px;
             }
 
             /* Line Items Table */
             .stride-quote-items {
                 margin-top: 0 !important;
+                border: 1px solid #c3c4c7;
             }
 
             .stride-quote-items th {
                 background: #f6f7f7;
                 font-weight: 600;
+                font-size: 12px;
             }
 
             .stride-quote-items th,
             .stride-quote-items td {
-                padding: 12px;
+                padding: 10px 12px;
             }
 
-            .stride-quote-items .description { width: 50%; }
+            .stride-quote-items .description { width: 45%; }
             .stride-quote-items .qty { width: 10%; text-align: center; }
-            .stride-quote-items .price,
-            .stride-quote-items .total { width: 20%; text-align: right; }
+            .stride-quote-items .price { width: 15%; text-align: right; }
+            .stride-quote-items .total { width: 15%; text-align: right; }
+            .stride-quote-items .actions { width: 5%; text-align: center; }
+
+            /* Editable inputs in items table */
+            .stride-quote-items tbody input.item-title {
+                width: 100%;
+                padding: 4px 6px;
+            }
+
+            .stride-quote-items tbody input.item-qty {
+                width: 60px;
+                text-align: center;
+                padding: 4px 6px;
+            }
+
+            .stride-quote-items tbody input.item-price {
+                width: 80px;
+                text-align: right;
+                padding: 4px 6px;
+            }
 
             .stride-quote-items tbody td.qty { text-align: center; }
             .stride-quote-items tbody td.price,
@@ -549,15 +1297,32 @@ class QuoteService implements \NTDST_Service_Meta
 
             .stride-quote-items .discount-row td { color: #d63638; }
 
+            .stride-quote-items .actions .button-link {
+                color: #a00;
+                padding: 0;
+            }
+
+            .stride-quote-items .actions .button-link:hover {
+                color: #dc3232;
+            }
+
+            .stride-quote-items .actions .dashicons {
+                font-size: 18px;
+                width: 18px;
+                height: 18px;
+            }
+
+            /* Totals */
             .stride-quote-items tfoot td {
                 text-align: right;
                 font-family: monospace;
                 padding: 8px 12px;
+                background: #f9f9f9;
             }
 
             .stride-quote-items tfoot tr.subtotal td {
                 border-top: 1px solid #ddd;
-                padding-top: 15px;
+                padding-top: 12px;
             }
 
             .stride-quote-items tfoot tr.discount td {
@@ -565,20 +1330,161 @@ class QuoteService implements \NTDST_Service_Meta
             }
 
             .stride-quote-items tfoot tr.grand-total td {
-                border-top: 2px solid #23282d;
-                font-size: 16px;
+                border-top: 2px solid #1d2327;
+                font-size: 15px;
                 font-weight: 600;
-                padding-top: 12px;
-                padding-bottom: 12px;
+                padding-top: 10px;
+                padding-bottom: 10px;
+                background: #f0f6fc;
             }
 
+            /* Actions */
+            .stride-quote-actions {
+                margin-top: 15px;
+                padding-top: 15px;
+                border-top: 1px solid #ddd;
+            }
+
+            .stride-quote-actions .button {
+                margin-right: 8px;
+            }
+
+            .stride-quote-actions .dashicons {
+                font-size: 16px;
+                width: 16px;
+                height: 16px;
+                vertical-align: text-top;
+                margin-right: 4px;
+            }
+
+            .stride-readonly-notice {
+                margin-top: 15px;
+                padding: 10px 12px;
+                background: #f6f7f7;
+                border-left: 4px solid #dba617;
+                color: #646970;
+                font-size: 13px;
+            }
+
+            .stride-readonly-notice .dashicons {
+                color: #dba617;
+                margin-right: 6px;
+            }
+
+            /* Responsive */
             @media (max-width: 782px) {
-                .stride-quote-parties {
+                .stride-quote-columns {
                     grid-template-columns: 1fr;
                     gap: 20px;
                 }
+
+                .stride-field-row.two-col {
+                    grid-template-columns: 1fr;
+                    gap: 12px;
+                }
             }
         </style>
+
+        <script>
+        jQuery(function($) {
+            var itemIndex = $('#stride-quote-items-body tr').length;
+            var taxRate = 0.21; // 21% BTW
+
+            // Add new item row
+            $('#stride-add-item').on('click', function(e) {
+                e.preventDefault();
+
+                var newRow = '<tr class="item-row" data-index="' + itemIndex + '">' +
+                    '<td class="description">' +
+                        '<input type="text" name="items[' + itemIndex + '][title]" value="" class="item-title" placeholder="<?php esc_attr_e('Omschrijving', 'stride'); ?>">' +
+                        '<input type="hidden" name="items[' + itemIndex + '][type]" value="custom">' +
+                    '</td>' +
+                    '<td class="qty">' +
+                        '<input type="number" name="items[' + itemIndex + '][quantity]" value="1" min="1" step="1" class="item-qty">' +
+                    '</td>' +
+                    '<td class="price">' +
+                        '<input type="number" name="items[' + itemIndex + '][unit_price]" value="0" min="0" step="0.01" class="item-price">' +
+                    '</td>' +
+                    '<td class="total">€ 0,00</td>' +
+                    '<td class="actions">' +
+                        '<button type="button" class="button-link stride-remove-item" title="<?php esc_attr_e('Verwijderen', 'stride'); ?>">' +
+                            '<span class="dashicons dashicons-trash"></span>' +
+                        '</button>' +
+                    '</td>' +
+                '</tr>';
+
+                $('#stride-quote-items-body').append(newRow);
+                itemIndex++;
+            });
+
+            // Remove item row
+            $(document).on('click', '.stride-remove-item', function(e) {
+                e.preventDefault();
+                $(this).closest('tr').remove();
+                recalculateTotals();
+            });
+
+            // Recalculate on input change
+            $(document).on('input change', '.item-qty, .item-price', function() {
+                var row = $(this).closest('tr');
+                var qty = parseFloat(row.find('.item-qty').val()) || 0;
+                var price = parseFloat(row.find('.item-price').val()) || 0;
+                var total = qty * price;
+                row.find('td.total').text(formatCurrency(total));
+            });
+
+            // Recalculate button
+            $('#stride-recalculate').on('click', function(e) {
+                e.preventDefault();
+                recalculateTotals();
+            });
+
+            function recalculateTotals() {
+                var subtotal = 0;
+                var discount = 0;
+
+                $('#stride-quote-items-body tr').each(function() {
+                    var qty = parseFloat($(this).find('.item-qty').val()) || 0;
+                    var price = parseFloat($(this).find('.item-price').val()) || 0;
+                    var type = $(this).find('input[name*="[type]"]').val() || 'course';
+                    var total = qty * price;
+
+                    $(this).find('td.total').text(formatCurrency(total));
+
+                    if (type === 'discount') {
+                        discount += Math.abs(total);
+                    }
+                    subtotal += total;
+                });
+
+                // subtotal already has discount subtracted (discount items are negative)
+                var subtotalBeforeDiscount = subtotal + discount;
+                var discountedSubtotal = Math.max(0, subtotal);
+                var tax = discountedSubtotal * taxRate;
+                var total = discountedSubtotal + tax;
+
+                // Update displayed totals
+                $('.stride-quote-items tfoot tr.subtotal td.amount').text(formatCurrency(subtotalBeforeDiscount));
+                $('.stride-quote-items tfoot tr.tax td.amount').text(formatCurrency(tax));
+                $('.stride-quote-items tfoot tr.grand-total td.amount').text(formatCurrency(total));
+
+                // Update discount row if present
+                if (discount > 0) {
+                    $('.stride-quote-items tfoot tr.discount td.amount').text('- ' + formatCurrency(discount));
+                }
+
+                // Update hidden fields
+                $('#quote_subtotal').val(subtotalBeforeDiscount.toFixed(2));
+                $('#quote_tax').val(tax.toFixed(2));
+                $('#quote_total').val(total.toFixed(2));
+                $('#quote_discount').val(discount.toFixed(2));
+            }
+
+            function formatCurrency(amount) {
+                return '€ ' + amount.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+            }
+        });
+        </script>
         <?php
     }
 
@@ -588,7 +1494,7 @@ class QuoteService implements \NTDST_Service_Meta
     private function renderNewQuoteForm(\WP_Post $post): void
     {
         // Security nonce
-        wp_nonce_field('stride_create_quote', 'stride_quote_nonce');
+        wp_nonce_field('stride_save_quote', 'stride_quote_nonce');
         ?>
         <div class="stride-new-quote-form">
             <style>
@@ -676,9 +1582,9 @@ class QuoteService implements \NTDST_Service_Meta
     }
 
     /**
-     * Render status sidebar metabox
+     * Render actions sidebar metabox
      */
-    public function renderStatusMetabox(\WP_Post $post): void
+    public function renderActionsMetabox(\WP_Post $post): void
     {
         $quote = $this->getQuote($post->ID);
 
@@ -694,6 +1600,13 @@ class QuoteService implements \NTDST_Service_Meta
         }
 
         $status = $quote['status'];
+        $isLocked = (bool) ($quote['locked'] ?? false);
+        $isEditable = !$isLocked;
+        $userId = $quote['user_id'];
+        $user = get_userdata($userId);
+        $defaultEmail = $quote['billing']['email'] ?? ($user ? $user->user_email : '');
+        $lastSentTo = $quote['last_sent_to'] ?? '';
+
         $statusConfig = [
             self::STATUS_DRAFT => [
                 'label' => __('Concept', 'stride'),
@@ -731,12 +1644,36 @@ class QuoteService implements \NTDST_Service_Meta
                 height: 24px;
                 color: <?php echo esc_attr($config['color']); ?>;
             }
-            .stride-sidebar-status .label {
+            .stride-sidebar-status .status-label {
                 display: block;
                 font-size: 14px;
                 font-weight: 600;
                 color: <?php echo esc_attr($config['color']); ?>;
                 margin-top: 5px;
+            }
+            .stride-sidebar-status .lock-badge {
+                display: inline-block;
+                margin-top: 8px;
+                padding: 2px 8px;
+                background: #d63638;
+                color: #fff;
+                font-size: 11px;
+                border-radius: 3px;
+            }
+            .stride-sidebar-total {
+                background: #f6f7f7;
+                padding: 12px;
+                margin: 0 -12px 15px -12px;
+                text-align: center;
+            }
+            .stride-sidebar-total .amount {
+                font-size: 24px;
+                font-weight: 600;
+                color: #1d2327;
+            }
+            .stride-sidebar-total .currency {
+                font-size: 14px;
+                color: #646970;
             }
             .stride-sidebar-meta {
                 margin: 0 0 15px 0;
@@ -760,19 +1697,22 @@ class QuoteService implements \NTDST_Service_Meta
                 font-weight: 500;
                 color: #1d2327;
             }
-            .stride-sidebar-total {
-                background: #f6f7f7;
-                padding: 12px;
-                margin: 0 -12px 15px -12px;
-                text-align: center;
+            .stride-sidebar-section {
+                margin-bottom: 15px;
+                padding-bottom: 15px;
+                border-bottom: 1px solid #f0f0f1;
             }
-            .stride-sidebar-total .amount {
-                font-size: 24px;
-                font-weight: 600;
-                color: #1d2327;
+            .stride-sidebar-section:last-child {
+                margin-bottom: 0;
+                padding-bottom: 0;
+                border-bottom: none;
             }
-            .stride-sidebar-total .currency {
-                font-size: 14px;
+            .stride-sidebar-section h4 {
+                margin: 0 0 10px 0;
+                padding: 0;
+                font-size: 12px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
                 color: #646970;
             }
             .stride-sidebar-actions {
@@ -781,20 +1721,127 @@ class QuoteService implements \NTDST_Service_Meta
                 gap: 8px;
             }
             .stride-sidebar-actions .button {
+                display: flex;
+                align-items: center;
                 justify-content: center;
+                gap: 5px;
+            }
+            .stride-sidebar-actions .button .dashicons {
+                font-size: 16px;
+                width: 16px;
+                height: 16px;
+            }
+            .stride-action-row {
+                display: flex;
+                gap: 8px;
+            }
+            .stride-action-row .button {
+                flex: 1;
+            }
+            .stride-send-form {
+                background: #f6f7f7;
+                padding: 12px;
+                margin: 10px -12px;
+                border-top: 1px solid #ddd;
+                border-bottom: 1px solid #ddd;
+            }
+            .stride-send-form label {
+                display: block;
+                font-size: 12px;
+                font-weight: 600;
+                margin-bottom: 4px;
+                color: #1d2327;
+            }
+            .stride-send-form input[type="email"] {
+                width: 100%;
+                margin-bottom: 8px;
+            }
+            .stride-send-form .help-text {
+                font-size: 11px;
+                color: #646970;
+                margin-bottom: 8px;
+            }
+            .stride-status-select {
+                width: 100%;
+                margin-bottom: 8px;
+            }
+
+            /* Voucher/Discount */
+            .stride-voucher-applied {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                background: #ecf7ed;
+                border: 1px solid #00a32a;
+                padding: 8px 10px;
+                border-radius: 3px;
+            }
+            .stride-voucher-applied .voucher-info {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                flex: 1;
+            }
+            .stride-voucher-applied .voucher-info .dashicons {
+                color: #00a32a;
+                font-size: 16px;
+                width: 16px;
+                height: 16px;
+            }
+            .stride-voucher-applied code {
+                background: transparent;
+                font-size: 12px;
+                color: #1d2327;
+            }
+            .stride-voucher-applied .voucher-amount {
+                font-weight: 600;
+                color: #00a32a;
+                font-size: 13px;
+            }
+            .stride-voucher-applied .stride-remove-voucher {
+                color: #a00;
+                padding: 0;
+            }
+            .stride-voucher-applied .stride-remove-voucher:hover {
+                color: #dc3232;
+            }
+            .stride-voucher-form .voucher-input-row,
+            .stride-voucher-form .discount-input-row {
+                display: flex;
+                gap: 6px;
+            }
+            .stride-voucher-form .discount-divider {
+                text-align: center;
+                font-size: 11px;
+                color: #646970;
+                margin: 8px 0;
+                text-transform: uppercase;
+            }
+            .stride-voucher-form input[type="text"],
+            .stride-voucher-form input[type="number"] {
+                min-width: 0;
             }
         </style>
 
+        <!-- Status Header -->
         <div class="stride-sidebar-status">
             <span class="dashicons dashicons-<?php echo esc_attr($config['icon']); ?>"></span>
-            <span class="label"><?php echo esc_html($config['label']); ?></span>
+            <span class="status-label"><?php echo esc_html($config['label']); ?></span>
+            <?php if ($isLocked): ?>
+                <span class="lock-badge">
+                    <span class="dashicons dashicons-lock" style="font-size: 12px; width: 12px; height: 12px; vertical-align: middle;"></span>
+                    <?php esc_html_e('Vergrendeld', 'stride'); ?>
+                </span>
+            <?php endif; ?>
         </div>
 
+        <!-- Total -->
         <div class="stride-sidebar-total">
             <span class="currency"><?php esc_html_e('Totaal', 'stride'); ?></span><br>
             <span class="amount"><?php echo $this->formatCurrency($quote['total']); ?></span>
         </div>
 
+        <!-- Meta Info -->
         <ul class="stride-sidebar-meta">
             <li>
                 <span class="meta-label"><?php esc_html_e('Aangemaakt', 'stride'); ?></span>
@@ -802,12 +1849,24 @@ class QuoteService implements \NTDST_Service_Meta
             </li>
             <li>
                 <span class="meta-label"><?php esc_html_e('Geldig tot', 'stride'); ?></span>
-                <span class="meta-value"><?php echo esc_html($quote['valid_until'] ? date_i18n('d M Y', strtotime($quote['valid_until'])) : '-'); ?></span>
+                <?php if ($isEditable): ?>
+                    <input type="date" name="ntdst_fields[valid_until]" class="stride-date-input"
+                           value="<?php echo esc_attr($quote['valid_until'] ? date('Y-m-d', strtotime($quote['valid_until'])) : ''); ?>"
+                           style="width: 100%; margin-top: 4px; padding: 4px 6px; font-size: 12px; border: 1px solid #8c8f94; border-radius: 3px;">
+                <?php else: ?>
+                    <span class="meta-value"><?php echo esc_html($quote['valid_until'] ? date_i18n('d M Y', strtotime($quote['valid_until'])) : '-'); ?></span>
+                <?php endif; ?>
             </li>
             <?php if ($quote['sent_at']): ?>
                 <li>
                     <span class="meta-label"><?php esc_html_e('Verzonden', 'stride'); ?></span>
-                    <span class="meta-value"><?php echo esc_html(date_i18n('d M Y', strtotime($quote['sent_at']))); ?></span>
+                    <span class="meta-value"><?php echo esc_html(date_i18n('d M Y H:i', strtotime($quote['sent_at']))); ?></span>
+                </li>
+            <?php endif; ?>
+            <?php if ($lastSentTo): ?>
+                <li>
+                    <span class="meta-label"><?php esc_html_e('Verzonden naar', 'stride'); ?></span>
+                    <span class="meta-value" style="word-break: break-all; font-size: 11px;"><?php echo esc_html($lastSentTo); ?></span>
                 </li>
             <?php endif; ?>
             <?php if ($quote['exported_at']): ?>
@@ -818,28 +1877,219 @@ class QuoteService implements \NTDST_Service_Meta
             <?php endif; ?>
         </ul>
 
-        <div class="stride-sidebar-actions">
-            <?php if (!empty($quote['pdf_path'])): ?>
-                <a href="<?php echo esc_url($this->getQuoteUrl($post->ID)); ?>" class="button" target="_blank">
-                    <span class="dashicons dashicons-pdf" style="margin-top: 4px;"></span>
-                    <?php esc_html_e('PDF Bekijken', 'stride'); ?>
-                </a>
-            <?php endif; ?>
+        <!-- View Actions -->
+        <div class="stride-sidebar-section">
+            <h4><?php esc_html_e('Bekijken', 'stride'); ?></h4>
+            <div class="stride-sidebar-actions">
+                <div class="stride-action-row">
+                    <?php if (!empty($quote['pdf_path'])): ?>
+                        <a href="<?php echo esc_url($this->getQuoteUrl($post->ID)); ?>" class="button" target="_blank">
+                            <span class="dashicons dashicons-pdf"></span>
+                            <?php esc_html_e('PDF', 'stride'); ?>
+                        </a>
+                    <?php else: ?>
+                        <button type="button" class="button" disabled title="<?php esc_attr_e('PDF nog niet gegenereerd', 'stride'); ?>">
+                            <span class="dashicons dashicons-pdf"></span>
+                            <?php esc_html_e('PDF', 'stride'); ?>
+                        </button>
+                    <?php endif; ?>
 
-            <?php if ($status === self::STATUS_DRAFT): ?>
-                <button type="button" class="button button-primary" onclick="document.getElementById('stride_send_quote').value='1'; document.getElementById('publish').click();">
-                    <span class="dashicons dashicons-email" style="margin-top: 4px;"></span>
-                    <?php esc_html_e('Verzenden naar klant', 'stride'); ?>
-                </button>
-                <input type="hidden" name="stride_send_quote" id="stride_send_quote" value="">
-            <?php endif; ?>
-
-            <?php if ($status === self::STATUS_SENT): ?>
-                <span class="description" style="text-align: center; display: block;">
-                    <?php esc_html_e('Wacht op export naar Exact Online', 'stride'); ?>
-                </span>
-            <?php endif; ?>
+                    <a href="<?php echo esc_url($this->getQuoteFormUrl($post->ID)); ?>" class="button" target="_blank">
+                        <span class="dashicons dashicons-visibility"></span>
+                        <?php esc_html_e('Formulier', 'stride'); ?>
+                    </a>
+                </div>
+            </div>
         </div>
+
+        <!-- Send Quote -->
+        <div class="stride-sidebar-section">
+            <h4><?php esc_html_e('Verzenden', 'stride'); ?></h4>
+
+            <div class="stride-send-form" id="stride-send-form">
+                <label for="stride_send_to"><?php esc_html_e('Naar', 'stride'); ?></label>
+                <input type="email" id="stride_send_to" name="stride_send_to"
+                       value="<?php echo esc_attr($defaultEmail); ?>"
+                       placeholder="klant@email.com">
+
+                <label for="stride_send_cc"><?php esc_html_e('CC (optioneel)', 'stride'); ?></label>
+                <input type="email" id="stride_send_cc" name="stride_send_cc"
+                       value=""
+                       placeholder="kopie@email.com">
+
+                <p class="help-text"><?php esc_html_e('De offerte PDF wordt als bijlage verzonden.', 'stride'); ?></p>
+
+                <button type="button" class="button button-primary" id="stride-send-quote-btn" style="width: 100%;">
+                    <span class="dashicons dashicons-email"></span>
+                    <?php esc_html_e('Verzenden', 'stride'); ?>
+                </button>
+            </div>
+
+            <input type="hidden" name="stride_send_quote" id="stride_send_quote" value="">
+        </div>
+
+        <!-- Discount / Voucher -->
+        <div class="stride-sidebar-section">
+            <h4><?php esc_html_e('Korting', 'stride'); ?></h4>
+
+            <?php
+            $currentVoucher = $quote['voucher_code'] ?? '';
+            $currentDiscount = $quote['discount'] ?? 0;
+            ?>
+
+            <?php if ($currentVoucher): ?>
+                <div class="stride-voucher-applied">
+                    <div class="voucher-info">
+                        <span class="dashicons dashicons-tag"></span>
+                        <code><?php echo esc_html($currentVoucher); ?></code>
+                    </div>
+                    <?php if ($currentDiscount > 0): ?>
+                        <div class="voucher-amount">- <?php echo $this->formatCurrency($currentDiscount); ?></div>
+                    <?php endif; ?>
+                    <?php if ($isEditable): ?>
+                        <button type="button" class="button-link stride-remove-voucher" title="<?php esc_attr_e('Verwijderen', 'stride'); ?>">
+                            <span class="dashicons dashicons-no-alt"></span>
+                        </button>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($isEditable): ?>
+                <div class="stride-voucher-form" <?php echo $currentVoucher ? 'style="display:none;"' : ''; ?>>
+                    <div class="voucher-input-row">
+                        <input type="text" id="stride_voucher_code" name="stride_voucher_code"
+                               placeholder="<?php esc_attr_e('Vouchercode', 'stride'); ?>"
+                               style="flex: 1;">
+                        <button type="button" class="button" id="stride-apply-voucher">
+                            <?php esc_html_e('Toepassen', 'stride'); ?>
+                        </button>
+                    </div>
+
+                    <div class="discount-divider"><?php esc_html_e('of', 'stride'); ?></div>
+
+                    <div class="discount-input-row">
+                        <input type="number" id="stride_manual_discount" name="stride_manual_discount"
+                               placeholder="<?php esc_attr_e('Bedrag', 'stride'); ?>"
+                               min="0" step="0.01" style="flex: 1;">
+                        <button type="button" class="button" id="stride-apply-discount">
+                            <?php esc_html_e('Korting', 'stride'); ?>
+                        </button>
+                    </div>
+                </div>
+            <?php elseif (!$currentVoucher && $currentDiscount <= 0): ?>
+                <p class="description" style="margin: 0; color: #646970;">
+                    <?php esc_html_e('Geen korting toegepast.', 'stride'); ?>
+                </p>
+            <?php endif; ?>
+
+            <input type="hidden" name="stride_remove_voucher" id="stride_remove_voucher" value="">
+            <input type="hidden" name="stride_apply_voucher" id="stride_apply_voucher_action" value="">
+            <input type="hidden" name="stride_apply_discount" id="stride_apply_discount_action" value="">
+        </div>
+
+        <!-- Status Change -->
+        <div class="stride-sidebar-section">
+            <h4><?php esc_html_e('Status wijzigen', 'stride'); ?></h4>
+            <select name="stride_change_status" id="stride_change_status" class="stride-status-select">
+                <option value=""><?php esc_html_e('— Geen wijziging —', 'stride'); ?></option>
+                <option value="<?php echo esc_attr(self::STATUS_DRAFT); ?>" <?php selected($status, self::STATUS_DRAFT); ?>>
+                    <?php esc_html_e('Concept', 'stride'); ?>
+                </option>
+                <option value="<?php echo esc_attr(self::STATUS_SENT); ?>" <?php selected($status, self::STATUS_SENT); ?>>
+                    <?php esc_html_e('Verzonden', 'stride'); ?>
+                </option>
+                <option value="<?php echo esc_attr(self::STATUS_EXPORTED); ?>" <?php selected($status, self::STATUS_EXPORTED); ?>>
+                    <?php esc_html_e('Geëxporteerd', 'stride'); ?>
+                </option>
+            </select>
+
+            <div class="stride-sidebar-actions">
+                <div class="stride-action-row">
+                    <?php if ($isLocked): ?>
+                        <button type="button" class="button" id="stride-unlock-btn">
+                            <span class="dashicons dashicons-unlock"></span>
+                            <?php esc_html_e('Ontgrendelen', 'stride'); ?>
+                        </button>
+                    <?php else: ?>
+                        <button type="button" class="button" id="stride-lock-btn">
+                            <span class="dashicons dashicons-lock"></span>
+                            <?php esc_html_e('Vergrendelen', 'stride'); ?>
+                        </button>
+                    <?php endif; ?>
+
+                    <button type="button" class="button" id="stride-regenerate-pdf-btn" title="<?php esc_attr_e('PDF opnieuw genereren', 'stride'); ?>">
+                        <span class="dashicons dashicons-update"></span>
+                        <?php esc_html_e('PDF', 'stride'); ?>
+                    </button>
+                </div>
+            </div>
+
+            <input type="hidden" name="stride_lock_action" id="stride_lock_action" value="">
+            <input type="hidden" name="stride_regenerate_pdf" id="stride_regenerate_pdf" value="">
+        </div>
+
+        <script>
+        jQuery(function($) {
+            // Send quote button
+            $('#stride-send-quote-btn').on('click', function(e) {
+                e.preventDefault();
+                var sendTo = $('#stride_send_to').val();
+                if (!sendTo) {
+                    alert('<?php esc_attr_e('Vul een e-mailadres in.', 'stride'); ?>');
+                    return;
+                }
+                $('#stride_send_quote').val('1');
+                $('#publish').click();
+            });
+
+            // Lock/Unlock buttons
+            $('#stride-lock-btn, #stride-unlock-btn').on('click', function(e) {
+                e.preventDefault();
+                var action = $(this).attr('id') === 'stride-lock-btn' ? 'lock' : 'unlock';
+                $('#stride_lock_action').val(action);
+                $('#publish').click();
+            });
+
+            // Regenerate PDF button
+            $('#stride-regenerate-pdf-btn').on('click', function(e) {
+                e.preventDefault();
+                $('#stride_regenerate_pdf').val('1');
+                $('#publish').click();
+            });
+
+            // Apply voucher
+            $('#stride-apply-voucher').on('click', function(e) {
+                e.preventDefault();
+                var code = $('#stride_voucher_code').val().trim();
+                if (!code) {
+                    alert('<?php esc_attr_e('Vul een vouchercode in.', 'stride'); ?>');
+                    return;
+                }
+                $('#stride_apply_voucher_action').val(code);
+                $('#publish').click();
+            });
+
+            // Apply manual discount
+            $('#stride-apply-discount').on('click', function(e) {
+                e.preventDefault();
+                var amount = parseFloat($('#stride_manual_discount').val()) || 0;
+                if (amount <= 0) {
+                    alert('<?php esc_attr_e('Vul een kortingsbedrag in.', 'stride'); ?>');
+                    return;
+                }
+                $('#stride_apply_discount_action').val(amount);
+                $('#publish').click();
+            });
+
+            // Remove voucher
+            $('.stride-remove-voucher').on('click', function(e) {
+                e.preventDefault();
+                if (!confirm('<?php esc_attr_e('Voucher verwijderen?', 'stride'); ?>')) return;
+                $('#stride_remove_voucher').val('1');
+                $('#publish').click();
+            });
+        });
+        </script>
         <?php
     }
 
@@ -858,6 +2108,357 @@ class QuoteService implements \NTDST_Service_Meta
             'stride_quote' => $quoteId,
             'action' => 'download_pdf',
         ], home_url('/'));
+    }
+
+    /**
+     * Get public URL for quote form (customer view)
+     */
+    public function getQuoteFormUrl(int $quoteId): string
+    {
+        return add_query_arg([
+            'stride_quote' => $quoteId,
+            'action' => 'view',
+        ], home_url('/offerte/'));
+    }
+
+    /**
+     * Render notes metabox - unified timeline with type selector
+     */
+    public function renderNotesMetabox(\WP_Post $post): void
+    {
+        $quote = $this->getQuote($post->ID);
+
+        if (!$quote) {
+            echo '<p class="description">' . esc_html__('Sla de offerte eerst op om notities toe te voegen.', 'stride') . '</p>';
+            return;
+        }
+
+        $notes = $quote['notes'] ?? [];
+        $currentUser = wp_get_current_user();
+
+        // Sort notes by date descending (newest first)
+        usort($notes, fn($a, $b) => strtotime($b['date'] ?? 0) - strtotime($a['date'] ?? 0));
+        ?>
+        <style>
+            .stride-notes-timeline {
+                max-height: 350px;
+                overflow-y: auto;
+                margin-bottom: 15px;
+                padding-right: 5px;
+            }
+
+            .stride-note-item {
+                display: flex;
+                gap: 10px;
+                padding: 10px 0;
+                border-bottom: 1px solid #f0f0f1;
+                position: relative;
+            }
+
+            .stride-note-item:last-child {
+                border-bottom: none;
+            }
+
+            .stride-note-icon {
+                flex-shrink: 0;
+                width: 28px;
+                height: 28px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: #fff;
+                font-size: 14px;
+            }
+
+            .stride-note-icon.admin {
+                background: #2271b1;
+            }
+
+            .stride-note-icon.customer {
+                background: #00a32a;
+            }
+
+            .stride-note-body {
+                flex: 1;
+                min-width: 0;
+            }
+
+            .stride-note-meta {
+                font-size: 11px;
+                color: #646970;
+                margin-bottom: 3px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .stride-note-meta .author {
+                font-weight: 600;
+                color: #1d2327;
+            }
+
+            .stride-note-meta .type-badge {
+                font-size: 10px;
+                padding: 1px 6px;
+                border-radius: 3px;
+                text-transform: uppercase;
+                letter-spacing: 0.3px;
+            }
+
+            .stride-note-meta .type-badge.admin {
+                background: #e5f5fa;
+                color: #2271b1;
+            }
+
+            .stride-note-meta .type-badge.customer {
+                background: #ecf7ed;
+                color: #00a32a;
+            }
+
+            .stride-note-content {
+                font-size: 13px;
+                color: #1d2327;
+                white-space: pre-wrap;
+                word-break: break-word;
+            }
+
+            .stride-note-delete {
+                position: absolute;
+                top: 10px;
+                right: 0;
+                color: #a00;
+                cursor: pointer;
+                opacity: 0;
+                transition: opacity 0.2s;
+            }
+
+            .stride-note-item:hover .stride-note-delete {
+                opacity: 1;
+            }
+
+            .stride-note-delete:hover {
+                color: #dc3232;
+            }
+
+            .stride-empty-notes {
+                color: #646970;
+                font-style: italic;
+                padding: 20px;
+                text-align: center;
+                background: #f9f9f9;
+                border: 1px dashed #ddd;
+            }
+
+            .stride-add-note-form {
+                background: #f6f7f7;
+                padding: 12px;
+                border: 1px solid #ddd;
+            }
+
+            .stride-add-note-form textarea {
+                width: 100%;
+                height: 60px;
+                margin-bottom: 10px;
+                resize: vertical;
+            }
+
+            .stride-add-note-form .form-row {
+                display: flex;
+                align-items: center;
+                gap: 15px;
+            }
+
+            .stride-add-note-form .type-selector {
+                display: flex;
+                gap: 12px;
+            }
+
+            .stride-add-note-form .type-selector label {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                font-size: 13px;
+                cursor: pointer;
+            }
+
+            .stride-add-note-form .type-selector input[type="radio"] {
+                margin: 0;
+            }
+
+            .stride-add-note-form .type-icon {
+                width: 16px;
+                height: 16px;
+                border-radius: 50%;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                color: #fff;
+                font-size: 10px;
+            }
+
+            .stride-add-note-form .type-icon.admin {
+                background: #2271b1;
+            }
+
+            .stride-add-note-form .type-icon.customer {
+                background: #00a32a;
+            }
+
+            .stride-add-note-form .button {
+                margin-left: auto;
+            }
+        </style>
+
+        <!-- Notes Timeline -->
+        <div class="stride-notes-timeline" id="stride-notes-list">
+            <?php if (empty($notes)): ?>
+                <div class="stride-empty-notes">
+                    <?php esc_html_e('Nog geen notities toegevoegd.', 'stride'); ?>
+                </div>
+            <?php else: ?>
+                <?php foreach ($notes as $index => $note):
+                    $isCustomer = ($note['type'] ?? '') === self::NOTE_TYPE_CUSTOMER;
+                    $typeClass = $isCustomer ? 'customer' : 'admin';
+                    $typeLabel = $isCustomer ? __('Klant', 'stride') : __('Intern', 'stride');
+                    $icon = $isCustomer ? 'format-quote' : 'shield';
+                ?>
+                    <div class="stride-note-item" data-index="<?php echo esc_attr($index); ?>">
+                        <div class="stride-note-icon <?php echo esc_attr($typeClass); ?>">
+                            <span class="dashicons dashicons-<?php echo esc_attr($icon); ?>"></span>
+                        </div>
+                        <div class="stride-note-body">
+                            <div class="stride-note-meta">
+                                <span class="author"><?php echo esc_html($note['author'] ?? 'Onbekend'); ?></span>
+                                <span class="type-badge <?php echo esc_attr($typeClass); ?>"><?php echo esc_html($typeLabel); ?></span>
+                                <span class="date"><?php echo esc_html(date_i18n('d M Y H:i', strtotime($note['date'] ?? ''))); ?></span>
+                            </div>
+                            <div class="stride-note-content"><?php echo esc_html($note['content'] ?? ''); ?></div>
+                        </div>
+                        <span class="stride-note-delete dashicons dashicons-no-alt" title="<?php esc_attr_e('Verwijderen', 'stride'); ?>"></span>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+
+        <!-- Add Note Form -->
+        <div class="stride-add-note-form">
+            <textarea id="stride-new-note" placeholder="<?php esc_attr_e('Schrijf een notitie...', 'stride'); ?>"></textarea>
+            <div class="form-row">
+                <div class="type-selector">
+                    <label>
+                        <input type="radio" name="stride_note_type" value="<?php echo esc_attr(self::NOTE_TYPE_ADMIN); ?>" checked>
+                        <span class="type-icon admin"><span class="dashicons dashicons-shield"></span></span>
+                        <?php esc_html_e('Intern', 'stride'); ?>
+                    </label>
+                    <label>
+                        <input type="radio" name="stride_note_type" value="<?php echo esc_attr(self::NOTE_TYPE_CUSTOMER); ?>">
+                        <span class="type-icon customer"><span class="dashicons dashicons-format-quote"></span></span>
+                        <?php esc_html_e('Klant (op offerte)', 'stride'); ?>
+                    </label>
+                </div>
+                <button type="button" class="button" id="stride-add-note-btn">
+                    <span class="dashicons dashicons-plus-alt2" style="margin-top: 3px;"></span>
+                    <?php esc_html_e('Toevoegen', 'stride'); ?>
+                </button>
+            </div>
+        </div>
+
+        <!-- Hidden field to store notes JSON -->
+        <input type="hidden" name="stride_notes_data" id="stride_notes_data" value="<?php echo esc_attr(wp_json_encode($notes)); ?>">
+
+        <script>
+        jQuery(function($) {
+            var notesData = <?php echo wp_json_encode($notes ?: []); ?>;
+            var currentUser = '<?php echo esc_js($currentUser->display_name); ?>';
+
+            function updateNotesField() {
+                $('#stride_notes_data').val(JSON.stringify(notesData));
+            }
+
+            function escapeHtml(text) {
+                var div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            function renderNote(note, index) {
+                var isCustomer = note.type === '<?php echo self::NOTE_TYPE_CUSTOMER; ?>';
+                var typeClass = isCustomer ? 'customer' : 'admin';
+                var typeLabel = isCustomer ? '<?php esc_html_e('Klant', 'stride'); ?>' : '<?php esc_html_e('Intern', 'stride'); ?>';
+                var icon = isCustomer ? 'format-quote' : 'shield';
+
+                var html = '<div class="stride-note-item" data-index="' + index + '">' +
+                    '<div class="stride-note-icon ' + typeClass + '">' +
+                        '<span class="dashicons dashicons-' + icon + '"></span>' +
+                    '</div>' +
+                    '<div class="stride-note-body">' +
+                        '<div class="stride-note-meta">' +
+                            '<span class="author">' + escapeHtml(note.author) + '</span>' +
+                            '<span class="type-badge ' + typeClass + '">' + typeLabel + '</span>' +
+                            '<span class="date">' + note.date_formatted + '</span>' +
+                        '</div>' +
+                        '<div class="stride-note-content">' + escapeHtml(note.content) + '</div>' +
+                    '</div>' +
+                    '<span class="stride-note-delete dashicons dashicons-no-alt" title="<?php esc_attr_e('Verwijderen', 'stride'); ?>"></span>' +
+                '</div>';
+
+                // Remove empty state and prepend new note (newest first)
+                $('#stride-notes-list .stride-empty-notes').remove();
+                $('#stride-notes-list').prepend(html);
+            }
+
+            // Add note
+            $('#stride-add-note-btn').on('click', function() {
+                var content = $('#stride-new-note').val().trim();
+                if (!content) return;
+
+                var noteType = $('input[name="stride_note_type"]:checked').val();
+
+                var note = {
+                    type: noteType,
+                    content: content,
+                    author: currentUser,
+                    date: new Date().toISOString(),
+                    date_formatted: new Date().toLocaleString('nl-BE', {day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'})
+                };
+
+                notesData.unshift(note); // Add to beginning (newest first)
+                updateNotesField();
+                renderNote(note, 0);
+                $('#stride-new-note').val('');
+
+                // Re-index existing notes
+                $('#stride-notes-list .stride-note-item').each(function(i) {
+                    $(this).data('index', i);
+                });
+            });
+
+            // Delete note
+            $(document).on('click', '.stride-note-delete', function() {
+                if (!confirm('<?php esc_attr_e('Notitie verwijderen?', 'stride'); ?>')) return;
+
+                var $item = $(this).closest('.stride-note-item');
+                var index = parseInt($item.data('index'), 10);
+
+                // Mark as deleted
+                if (notesData[index]) {
+                    notesData[index]._deleted = true;
+                }
+
+                updateNotesField();
+                $item.fadeOut(200, function() {
+                    $(this).remove();
+
+                    // Show empty state if no visible notes left
+                    if ($('#stride-notes-list .stride-note-item').length === 0) {
+                        $('#stride-notes-list').html('<div class="stride-empty-notes"><?php esc_html_e('Nog geen notities toegevoegd.', 'stride'); ?></div>');
+                    }
+                });
+            });
+        });
+        </script>
+        <?php
     }
 
     /**
@@ -1167,6 +2768,9 @@ class QuoteService implements \NTDST_Service_Meta
             'created_at' => $post->fields[self::FIELD_CREATED_AT] ?? '',
             'sent_at' => $post->fields[self::FIELD_SENT_AT] ?? '',
             'exported_at' => $post->fields[self::FIELD_EXPORTED_AT] ?? '',
+            'notes' => $post->fields[self::FIELD_NOTES] ?? [],
+            'locked' => (bool) ($post->fields[self::FIELD_LOCKED] ?? false),
+            'last_sent_to' => $post->fields[self::FIELD_LAST_SENT_TO] ?? '',
         ];
     }
 
