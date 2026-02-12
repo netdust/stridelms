@@ -80,6 +80,12 @@ class NTDST_MetaboxGenerator
     public function register_metaboxes(): void
     {
         foreach ($this->registered_models as $model_name => $config) {
+            // Skip if auto_metabox is explicitly set to false
+            // This allows services to handle their own metabox rendering
+            if (isset($config['auto_metabox']) && $config['auto_metabox'] === false) {
+                continue;
+            }
+
             $fields = $config['fields'] ?? [];
 
             if (empty($fields)) {

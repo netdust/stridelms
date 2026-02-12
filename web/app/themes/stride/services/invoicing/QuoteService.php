@@ -183,6 +183,9 @@ class QuoteService implements \NTDST_Service_Meta
                 self::FIELD_EXPORTED_AT => ['type' => 'text'],
                 self::FIELD_DISCOUNT => ['type' => 'float', 'min' => 0],
             ],
+
+            // Disable auto-generated metabox - we use custom invoice-style layout
+            'auto_metabox' => false,
         ]);
     }
 
@@ -226,11 +229,6 @@ class QuoteService implements \NTDST_Service_Meta
         // Remove default editor
         remove_post_type_support(self::POST_TYPE, 'editor');
 
-        // IMPORTANT: Remove auto-generated NTDST metabox
-        // The DataManager auto-registers metaboxes for all models with fields
-        remove_meta_box('ntdst_' . self::POST_TYPE . '_fields', self::POST_TYPE, 'normal');
-        remove_meta_box('ntdst_' . self::POST_TYPE . '_tabbed', self::POST_TYPE, 'normal');
-
         // Main quote overview - invoice style
         add_meta_box(
             'stride_quote_overview',
@@ -258,8 +256,10 @@ class QuoteService implements \NTDST_Service_Meta
     public function renderOverviewMetabox(\WP_Post $post): void
     {
         $quote = $this->getQuote($post->ID);
+
+        // Handle new/unsaved quotes
         if (!$quote) {
-            echo '<p>' . esc_html__('Offerte niet gevonden.', 'stride') . '</p>';
+            $this->renderNewQuoteForm($post);
             return;
         }
 
@@ -583,6 +583,91 @@ class QuoteService implements \NTDST_Service_Meta
     }
 
     /**
+     * Render form for new quotes (manual creation)
+     */
+    private function renderNewQuoteForm(\WP_Post $post): void
+    {
+        // Security nonce
+        wp_nonce_field('stride_create_quote', 'stride_quote_nonce');
+        ?>
+        <div class="stride-new-quote-form">
+            <style>
+                .stride-new-quote-form {
+                    max-width: 600px;
+                }
+                .stride-new-quote-info {
+                    background: #f0f6fc;
+                    border-left: 4px solid #2271b1;
+                    padding: 12px 16px;
+                    margin-bottom: 20px;
+                }
+                .stride-new-quote-form .form-field {
+                    margin-bottom: 15px;
+                }
+                .stride-new-quote-form .form-field label {
+                    display: block;
+                    font-weight: 600;
+                    margin-bottom: 5px;
+                }
+                .stride-new-quote-form .form-field input,
+                .stride-new-quote-form .form-field select {
+                    width: 100%;
+                    max-width: 400px;
+                }
+                .stride-new-quote-form .form-field .description {
+                    font-size: 12px;
+                    color: #646970;
+                    margin-top: 5px;
+                }
+            </style>
+
+            <div class="stride-new-quote-info">
+                <p><strong><?php esc_html_e('Nieuwe offerte', 'stride'); ?></strong></p>
+                <p><?php esc_html_e('Offertes worden normaal automatisch aangemaakt bij inschrijving. U kunt hier ook handmatig een offerte aanmaken.', 'stride'); ?></p>
+            </div>
+
+            <div class="form-field">
+                <label for="quote_user_id"><?php esc_html_e('Gebruiker', 'stride'); ?></label>
+                <?php
+                wp_dropdown_users([
+                    'name' => 'ntdst_fields[user_id]',
+                    'id' => 'quote_user_id',
+                    'show_option_none' => __('Selecteer gebruiker...', 'stride'),
+                    'option_none_value' => '',
+                ]);
+                ?>
+            </div>
+
+            <div class="form-field">
+                <label for="quote_course_id"><?php esc_html_e('Cursus', 'stride'); ?></label>
+                <select name="ntdst_fields[course_id]" id="quote_course_id">
+                    <option value=""><?php esc_html_e('Selecteer cursus...', 'stride'); ?></option>
+                    <?php
+                    $courses = get_posts([
+                        'post_type' => 'sfwd-courses',
+                        'posts_per_page' => -1,
+                        'orderby' => 'title',
+                        'order' => 'ASC',
+                        'post_status' => 'publish',
+                    ]);
+                    foreach ($courses as $course) {
+                        echo '<option value="' . esc_attr($course->ID) . '">' . esc_html($course->post_title) . '</option>';
+                    }
+                    ?>
+                </select>
+            </div>
+
+            <input type="hidden" name="ntdst_fields[status]" value="<?php echo esc_attr(self::STATUS_DRAFT); ?>">
+            <input type="hidden" name="ntdst_fields[created_at]" value="<?php echo esc_attr(current_time('mysql')); ?>">
+
+            <p class="description">
+                <?php esc_html_e('Na opslaan worden de offerte details automatisch berekend op basis van de cursus prijs.', 'stride'); ?>
+            </p>
+        </div>
+        <?php
+    }
+
+    /**
      * Format currency value
      */
     private function formatCurrency(float $amount): string
@@ -596,7 +681,15 @@ class QuoteService implements \NTDST_Service_Meta
     public function renderStatusMetabox(\WP_Post $post): void
     {
         $quote = $this->getQuote($post->ID);
+
+        // For new quotes, show simple save prompt
         if (!$quote) {
+            ?>
+            <div style="text-align: center; padding: 20px 0; color: #646970;">
+                <span class="dashicons dashicons-edit" style="font-size: 32px; width: 32px; height: 32px; color: #ddd;"></span>
+                <p><?php esc_html_e('Vul de gegevens in en sla op om een offerte aan te maken.', 'stride'); ?></p>
+            </div>
+            <?php
             return;
         }
 
