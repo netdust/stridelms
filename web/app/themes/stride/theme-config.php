@@ -127,7 +127,7 @@ return [
 
         // Admin-only services
         'admin' => [
-            // 'stride\\services\\admin\\AdminDashboardService',
+            'stride\\services\\admin\\AdminMenuService',
         ],
 
         // Conditional services
