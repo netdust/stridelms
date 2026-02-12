@@ -95,6 +95,9 @@ class QuoteService implements \NTDST_Service_Meta
         // Register API endpoints
         add_action('init', [$this, 'registerApiEndpoints'], 10);
 
+        // Custom admin metaboxes for quote overview
+        add_action('add_meta_boxes', [$this, 'registerMetaboxes']);
+
         // Hook into enrollment completion
         add_action('stride/enrollment/completed', [$this, 'handleEnrollmentCompleted'], 10, 3);
     }
@@ -237,26 +240,8 @@ class QuoteService implements \NTDST_Service_Meta
                 ],
             ],
 
-            // Tabbed metabox for admin
-            'field_groups' => [
-                'general' => [
-                    'title' => __('Algemeen', 'stride'),
-                    'fields' => [self::FIELD_QUOTE_NUMBER, self::FIELD_STATUS, self::FIELD_USER_ID, self::FIELD_COURSE_ID],
-                ],
-                'amounts' => [
-                    'title' => __('Bedragen', 'stride'),
-                    'fields' => [self::FIELD_SUBTOTAL, self::FIELD_DISCOUNT, self::FIELD_TAX, self::FIELD_TOTAL, self::FIELD_ITEMS],
-                ],
-                'billing' => [
-                    'title' => __('Facturatie', 'stride'),
-                    'fields' => [self::FIELD_BILLING, self::FIELD_ORDER_NUMBER, self::FIELD_VOUCHER_CODE],
-                ],
-                'dates' => [
-                    'title' => __('Datums', 'stride'),
-                    'fields' => [self::FIELD_VALID_UNTIL, self::FIELD_CREATED_AT, self::FIELD_SENT_AT, self::FIELD_EXPORTED_AT],
-                ],
-            ],
-            'use_tabs' => true,
+            // Custom metaboxes registered via registerMetaboxes()
+            // No field_groups - we render everything manually for invoice-style layout
         ]);
     }
 
@@ -290,6 +275,312 @@ class QuoteService implements \NTDST_Service_Meta
 
         // List user's quotes
         add_filter('ntdst/api_data/stride_quote_list', [$this, 'apiListQuotes'], 10, 2);
+    }
+
+    /**
+     * Register custom metaboxes for quote overview
+     */
+    public function registerMetaboxes(): void
+    {
+        // Remove default editor
+        remove_post_type_support(self::POST_TYPE, 'editor');
+
+        // Main quote overview
+        add_meta_box(
+            'stride_quote_overview',
+            __('Offerte Overzicht', 'stride'),
+            [$this, 'renderOverviewMetabox'],
+            self::POST_TYPE,
+            'normal',
+            'high'
+        );
+
+        // Status & actions sidebar
+        add_meta_box(
+            'stride_quote_status',
+            __('Status & Acties', 'stride'),
+            [$this, 'renderStatusMetabox'],
+            self::POST_TYPE,
+            'side',
+            'high'
+        );
+    }
+
+    /**
+     * Render main quote overview metabox
+     */
+    public function renderOverviewMetabox(\WP_Post $post): void
+    {
+        $quote = $this->getQuote($post->ID);
+        if (!$quote) {
+            echo '<p>' . esc_html__('Offerte niet gevonden.', 'stride') . '</p>';
+            return;
+        }
+
+        $userId = $quote['user_id'];
+        $user = get_userdata($userId);
+        $billing = $quote['billing'] ?? [];
+        $items = $quote['items'] ?? [];
+
+        // Get course info
+        $courseId = $quote['course_id'];
+        $courseTitle = $courseId ? get_the_title($courseId) : '-';
+
+        ?>
+        <style>
+            .stride-quote-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+            .stride-quote-section { background: #f9f9f9; padding: 15px; border-radius: 4px; }
+            .stride-quote-section h4 { margin: 0 0 10px 0; padding-bottom: 8px; border-bottom: 1px solid #ddd; }
+            .stride-quote-section table { width: 100%; }
+            .stride-quote-section td { padding: 4px 0; vertical-align: top; }
+            .stride-quote-section td:first-child { color: #666; width: 40%; }
+            .stride-quote-items { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            .stride-quote-items th, .stride-quote-items td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+            .stride-quote-items th { background: #f0f0f0; }
+            .stride-quote-items .amount { text-align: right; }
+            .stride-quote-totals { margin-top: 15px; background: #f9f9f9; padding: 15px; border-radius: 4px; }
+            .stride-quote-totals table { width: 300px; margin-left: auto; }
+            .stride-quote-totals td { padding: 5px 0; }
+            .stride-quote-totals td:last-child { text-align: right; font-weight: 500; }
+            .stride-quote-totals tr.total { font-size: 1.2em; border-top: 2px solid #333; }
+            .stride-quote-totals tr.total td { padding-top: 10px; }
+            @media (max-width: 782px) { .stride-quote-grid { grid-template-columns: 1fr; } }
+        </style>
+
+        <div class="stride-quote-grid">
+            <!-- User Details -->
+            <div class="stride-quote-section">
+                <h4><?php esc_html_e('Klantgegevens', 'stride'); ?></h4>
+                <table>
+                    <tr>
+                        <td><?php esc_html_e('Naam', 'stride'); ?></td>
+                        <td>
+                            <?php if ($user): ?>
+                                <a href="<?php echo esc_url(get_edit_user_link($userId)); ?>">
+                                    <?php echo esc_html($user->display_name); ?>
+                                </a>
+                            <?php else: ?>
+                                <?php echo esc_html(sprintf(__('Gebruiker #%d', 'stride'), $userId)); ?>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><?php esc_html_e('E-mail', 'stride'); ?></td>
+                        <td><?php echo esc_html($billing['email'] ?? ($user->user_email ?? '-')); ?></td>
+                    </tr>
+                    <tr>
+                        <td><?php esc_html_e('Organisatie', 'stride'); ?></td>
+                        <td><?php echo esc_html($billing['organisation'] ?? '-'); ?></td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Billing Details -->
+            <div class="stride-quote-section">
+                <h4><?php esc_html_e('Facturatiegegevens', 'stride'); ?></h4>
+                <table>
+                    <tr>
+                        <td><?php esc_html_e('Adres', 'stride'); ?></td>
+                        <td><?php echo esc_html($billing['address'] ?? '-'); ?></td>
+                    </tr>
+                    <tr>
+                        <td><?php esc_html_e('Postcode / Plaats', 'stride'); ?></td>
+                        <td><?php echo esc_html(trim(($billing['postal_code'] ?? '') . ' ' . ($billing['city'] ?? '')) ?: '-'); ?></td>
+                    </tr>
+                    <tr>
+                        <td><?php esc_html_e('BTW-nummer', 'stride'); ?></td>
+                        <td>
+                            <?php echo esc_html($billing['vat_number'] ?? '-'); ?>
+                            <?php if (!empty($billing['vat_validated'])): ?>
+                                <span style="color: green;" title="<?php esc_attr_e('Gevalideerd', 'stride'); ?>">✓</span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><?php esc_html_e('GLN-nummer', 'stride'); ?></td>
+                        <td><?php echo esc_html($billing['gln_number'] ?? '-'); ?></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Quote Details -->
+        <div class="stride-quote-section" style="margin-bottom: 20px;">
+            <h4><?php esc_html_e('Offerte Details', 'stride'); ?></h4>
+            <div class="stride-quote-grid">
+                <table>
+                    <tr>
+                        <td><?php esc_html_e('Offertenummer', 'stride'); ?></td>
+                        <td><strong><?php echo esc_html($quote['number']); ?></strong></td>
+                    </tr>
+                    <tr>
+                        <td><?php esc_html_e('Bestelnummer', 'stride'); ?></td>
+                        <td><?php echo esc_html($quote['order_number'] ?: '-'); ?></td>
+                    </tr>
+                </table>
+                <table>
+                    <tr>
+                        <td><?php esc_html_e('Cursus', 'stride'); ?></td>
+                        <td>
+                            <?php if ($courseId): ?>
+                                <a href="<?php echo esc_url(get_edit_post_link($courseId)); ?>">
+                                    <?php echo esc_html($courseTitle); ?>
+                                </a>
+                            <?php else: ?>
+                                -
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><?php esc_html_e('Voucher', 'stride'); ?></td>
+                        <td><?php echo esc_html($quote['voucher_code'] ?: '-'); ?></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Line Items -->
+        <h4><?php esc_html_e('Regelitems', 'stride'); ?></h4>
+        <table class="stride-quote-items widefat">
+            <thead>
+                <tr>
+                    <th><?php esc_html_e('Omschrijving', 'stride'); ?></th>
+                    <th class="amount"><?php esc_html_e('Aantal', 'stride'); ?></th>
+                    <th class="amount"><?php esc_html_e('Prijs', 'stride'); ?></th>
+                    <th class="amount"><?php esc_html_e('Totaal', 'stride'); ?></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($items as $item): ?>
+                    <tr>
+                        <td><?php echo esc_html($item['title'] ?? '-'); ?></td>
+                        <td class="amount"><?php echo esc_html($item['quantity'] ?? 1); ?></td>
+                        <td class="amount">€ <?php echo esc_html(number_format((float)($item['unit_price'] ?? 0), 2, ',', '.')); ?></td>
+                        <td class="amount">€ <?php echo esc_html(number_format((float)($item['total'] ?? 0), 2, ',', '.')); ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+
+        <!-- Totals -->
+        <div class="stride-quote-totals">
+            <table>
+                <tr>
+                    <td><?php esc_html_e('Subtotaal', 'stride'); ?></td>
+                    <td>€ <?php echo esc_html(number_format($quote['subtotal'], 2, ',', '.')); ?></td>
+                </tr>
+                <?php if ($quote['discount'] > 0): ?>
+                    <tr>
+                        <td><?php esc_html_e('Korting', 'stride'); ?></td>
+                        <td>- € <?php echo esc_html(number_format($quote['discount'], 2, ',', '.')); ?></td>
+                    </tr>
+                <?php endif; ?>
+                <tr>
+                    <td><?php esc_html_e('BTW (21%)', 'stride'); ?></td>
+                    <td>€ <?php echo esc_html(number_format($quote['tax'], 2, ',', '.')); ?></td>
+                </tr>
+                <tr class="total">
+                    <td><?php esc_html_e('Totaal', 'stride'); ?></td>
+                    <td>€ <?php echo esc_html(number_format($quote['total'], 2, ',', '.')); ?></td>
+                </tr>
+            </table>
+        </div>
+        <?php
+    }
+
+    /**
+     * Render status sidebar metabox
+     */
+    public function renderStatusMetabox(\WP_Post $post): void
+    {
+        $quote = $this->getQuote($post->ID);
+        if (!$quote) {
+            return;
+        }
+
+        $statusLabels = [
+            self::STATUS_DRAFT => __('Concept', 'stride'),
+            self::STATUS_SENT => __('Verzonden', 'stride'),
+            self::STATUS_EXPORTED => __('Geëxporteerd', 'stride'),
+        ];
+
+        $statusColors = [
+            self::STATUS_DRAFT => '#f0ad4e',
+            self::STATUS_SENT => '#5bc0de',
+            self::STATUS_EXPORTED => '#5cb85c',
+        ];
+
+        $status = $quote['status'];
+        ?>
+        <style>
+            .stride-status-badge { display: inline-block; padding: 5px 12px; border-radius: 3px; color: #fff; font-weight: 500; margin-bottom: 15px; }
+            .stride-status-dates td { padding: 4px 0; }
+            .stride-status-dates td:first-child { color: #666; }
+        </style>
+
+        <p>
+            <span class="stride-status-badge" style="background: <?php echo esc_attr($statusColors[$status] ?? '#999'); ?>">
+                <?php echo esc_html($statusLabels[$status] ?? $status); ?>
+            </span>
+        </p>
+
+        <table class="stride-status-dates" style="width: 100%; margin-bottom: 15px;">
+            <tr>
+                <td><?php esc_html_e('Aangemaakt', 'stride'); ?></td>
+                <td><?php echo esc_html($quote['created_at'] ?: '-'); ?></td>
+            </tr>
+            <tr>
+                <td><?php esc_html_e('Geldig tot', 'stride'); ?></td>
+                <td><?php echo esc_html($quote['valid_until'] ?: '-'); ?></td>
+            </tr>
+            <?php if ($quote['sent_at']): ?>
+                <tr>
+                    <td><?php esc_html_e('Verzonden', 'stride'); ?></td>
+                    <td><?php echo esc_html($quote['sent_at']); ?></td>
+                </tr>
+            <?php endif; ?>
+            <?php if ($quote['exported_at']): ?>
+                <tr>
+                    <td><?php esc_html_e('Geëxporteerd', 'stride'); ?></td>
+                    <td><?php echo esc_html($quote['exported_at']); ?></td>
+                </tr>
+            <?php endif; ?>
+        </table>
+
+        <?php if (!empty($quote['pdf_path'])): ?>
+            <p>
+                <a href="<?php echo esc_url($this->getQuoteUrl($post->ID)); ?>" class="button" target="_blank">
+                    <?php esc_html_e('PDF Bekijken', 'stride'); ?>
+                </a>
+            </p>
+        <?php endif; ?>
+
+        <?php if ($status === self::STATUS_DRAFT): ?>
+            <p>
+                <button type="button" class="button button-primary" onclick="document.getElementById('stride_send_quote').value='1'; document.getElementById('publish').click();">
+                    <?php esc_html_e('Verzenden', 'stride'); ?>
+                </button>
+                <input type="hidden" name="stride_send_quote" id="stride_send_quote" value="">
+            </p>
+        <?php endif; ?>
+        <?php
+    }
+
+    /**
+     * Get public URL for quote PDF
+     */
+    public function getQuoteUrl(int $quoteId): string
+    {
+        $quote = $this->getQuote($quoteId);
+        if (!$quote || empty($quote['pdf_path'])) {
+            return '';
+        }
+
+        // Return URL to protected PDF download endpoint
+        return add_query_arg([
+            'stride_quote' => $quoteId,
+            'action' => 'download_pdf',
+        ], home_url('/'));
     }
 
     /**
