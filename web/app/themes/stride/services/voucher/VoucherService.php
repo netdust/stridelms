@@ -228,8 +228,27 @@ class VoucherService implements \NTDST_Service_Meta
                     'label' => __('Aangemaakt door', 'stride'),
                 ],
                 self::FIELD_REDEMPTIONS => [
-                    'type' => 'json',
+                    'type' => 'repeater',
                     'label' => __('Verzilveringen', 'stride'),
+                    'button_text' => __('Verzilvering toevoegen', 'stride'),
+                    'fields' => [
+                        'user_id' => [
+                            'type' => 'integer',
+                            'label' => __('Gebruiker ID', 'stride'),
+                        ],
+                        'course_id' => [
+                            'type' => 'integer',
+                            'label' => __('Cursus ID', 'stride'),
+                        ],
+                        'discount' => [
+                            'type' => 'float',
+                            'label' => __('Korting', 'stride'),
+                        ],
+                        'redeemed_at' => [
+                            'type' => 'text',
+                            'label' => __('Verzilverd op', 'stride'),
+                        ],
+                    ],
                 ],
             ],
 
