@@ -994,17 +994,17 @@ class NTDST_Data_Model
             // Extract type string from config array if needed
             $type = is_array($type_config) ? ($type_config['type'] ?? 'text') : $type_config;
 
-            // Type cast
+            // Type cast (with null safety for json_decode in PHP 8.1+)
             $formatted[$field] = match ($type) {
                 'int', 'integer' => (int) $value,
                 'float', 'double' => (float) $value,
                 'bool', 'boolean' => (bool) $value,
                 'array' => is_array($value) ? $value : [],
-                'json' => is_array($value) ? $value : json_decode($value, true),
-                'relation' => is_array($value) ? array_map('intval', $value) : (is_string($value) ? json_decode($value, true) : []),
-                'gallery' => is_array($value) ? array_map('intval', $value) : (is_string($value) ? json_decode($value, true) : []),
+                'json' => is_array($value) ? $value : (is_string($value) && $value !== '' ? json_decode($value, true) : []),
+                'relation' => is_array($value) ? array_map('intval', $value) : (is_string($value) && $value !== '' ? json_decode($value, true) : []),
+                'gallery' => is_array($value) ? array_map('intval', $value) : (is_string($value) && $value !== '' ? json_decode($value, true) : []),
                 'repeater' => $this->formatRepeaterField($value),
-                default => is_array($value) ? json_encode($value) : (string) $value,
+                default => is_array($value) ? json_encode($value) : (string) ($value ?? ''),
             };
 
             // Additional sanitization for simple arrays only (not JSON/nested structures)
