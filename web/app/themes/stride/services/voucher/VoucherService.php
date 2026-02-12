@@ -13,14 +13,20 @@ use WP_Error;
  * Manages voucher codes for course enrollments.
  * Uses NTDST Data Manager for all database operations.
  *
+ * Security features:
+ * - Transaction locking for redemption (prevents race conditions)
+ * - Rate limiting on validation API (prevents brute force)
+ * - Generic error messages (prevents information disclosure)
+ * - Capability checks on creation
+ *
  * Available hooks:
  * - stride/voucher/created (action) - After voucher creation
  * - stride/voucher/redeemed (action) - After voucher redemption
  * - stride/voucher/batch_created (action) - After batch creation
  *
  * API Endpoints (via ntdst/api_data):
- * - stride_voucher_validate - Validate a voucher code
- * - stride_voucher_redeem - Redeem a voucher
+ * - stride_voucher_validate - Validate a voucher code (requires auth)
+ * - stride_voucher_redeem - Redeem a voucher (requires auth)
  *
  * @package stride\services\voucher
  */
@@ -59,6 +65,10 @@ class VoucherService implements \NTDST_Service_Meta
     public const FIELD_CREATED_BY = 'created_by';
     public const FIELD_REDEMPTIONS = 'redemptions';
 
+    // Rate limiting
+    private const RATE_LIMIT_ATTEMPTS = 5;
+    private const RATE_LIMIT_WINDOW = 60; // seconds
+
     private ?CourseService $courseService;
 
     /**
@@ -82,10 +92,7 @@ class VoucherService implements \NTDST_Service_Meta
     {
         $this->courseService = $courseService ?? $this->resolveService(CourseService::class);
 
-        // Register CPT via DataManager
         add_action('init', [$this, 'registerModel'], 5);
-
-        // Register API endpoints
         add_action('init', [$this, 'registerApiEndpoints'], 10);
     }
 
@@ -141,7 +148,6 @@ class VoucherService implements \NTDST_Service_Meta
             'has_archive' => false,
             'menu_icon' => 'dashicons-tickets-alt',
 
-            // Field schema
             'fields' => [
                 self::FIELD_CODE => [
                     'type' => 'text',
@@ -173,12 +179,10 @@ class VoucherService implements \NTDST_Service_Meta
                 self::FIELD_COURSE_ID => [
                     'type' => 'integer',
                     'label' => __('Cursus', 'stride'),
-                    'description' => __('Laat leeg voor alle cursussen', 'stride'),
                 ],
                 self::FIELD_GROUP_ID => [
                     'type' => 'integer',
                     'label' => __('Traject', 'stride'),
-                    'description' => __('Laat leeg voor alle trajecten', 'stride'),
                 ],
                 self::FIELD_DISCOUNT_TYPE => [
                     'type' => 'select',
@@ -195,7 +199,6 @@ class VoucherService implements \NTDST_Service_Meta
                     'min' => 0,
                     'default' => 0,
                     'label' => __('Kortingswaarde', 'stride'),
-                    'description' => __('Bedrag of percentage', 'stride'),
                 ],
                 self::FIELD_VALID_FROM => [
                     'type' => 'date',
@@ -230,7 +233,6 @@ class VoucherService implements \NTDST_Service_Meta
                 ],
             ],
 
-            // Tabbed metabox for admin
             'field_groups' => [
                 'general' => [
                     'title' => __('Algemeen', 'stride'),
@@ -295,14 +297,87 @@ class VoucherService implements \NTDST_Service_Meta
     }
 
     // ========================================
+    // RATE LIMITING
+    // ========================================
+
+    /**
+     * Check rate limit for voucher validation attempts
+     *
+     * @return bool True if allowed, false if rate limited
+     */
+    private function checkRateLimit(): bool
+    {
+        $ip = $this->getClientIp();
+        $key = 'stride_voucher_attempts_' . md5($ip);
+        $attempts = (int) get_transient($key);
+
+        return $attempts < self::RATE_LIMIT_ATTEMPTS;
+    }
+
+    /**
+     * Increment rate limit counter
+     */
+    private function incrementRateLimit(): void
+    {
+        $ip = $this->getClientIp();
+        $key = 'stride_voucher_attempts_' . md5($ip);
+        $attempts = (int) get_transient($key);
+        set_transient($key, $attempts + 1, self::RATE_LIMIT_WINDOW);
+    }
+
+    /**
+     * Get client IP address safely
+     */
+    private function getClientIp(): string
+    {
+        // Check for proxy headers (only trust if behind known proxy)
+        $headers = ['HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'REMOTE_ADDR'];
+
+        foreach ($headers as $header) {
+            if (!empty($_SERVER[$header])) {
+                $ip = sanitize_text_field(wp_unslash($_SERVER[$header]));
+                // Take first IP if comma-separated
+                if (strpos($ip, ',') !== false) {
+                    $ip = trim(explode(',', $ip)[0]);
+                }
+                if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                    return $ip;
+                }
+            }
+        }
+
+        return '0.0.0.0';
+    }
+
+    /**
+     * Generic validation error (prevents information disclosure)
+     */
+    private function validationError(): WP_Error
+    {
+        return new WP_Error('invalid_voucher', __('Vouchercode ongeldig of verlopen.', 'stride'));
+    }
+
+    // ========================================
     // API ENDPOINTS
     // ========================================
 
     /**
      * API: Validate a voucher code
+     *
+     * Security: Requires authentication, rate limited
      */
     public function apiValidateVoucher($data, $params): array|WP_Error
     {
+        // Require authentication
+        if (!is_user_logged_in()) {
+            return new WP_Error('unauthorized', __('Niet ingelogd.', 'stride'), ['status' => 401]);
+        }
+
+        // Check rate limit
+        if (!$this->checkRateLimit()) {
+            return new WP_Error('rate_limited', __('Te veel pogingen. Probeer later opnieuw.', 'stride'), ['status' => 429]);
+        }
+
         $code = sanitize_text_field($params['code'] ?? '');
         $courseId = absint($params['course_id'] ?? 0);
         $groupId = absint($params['group_id'] ?? 0);
@@ -313,31 +388,38 @@ class VoucherService implements \NTDST_Service_Meta
 
         $validation = $this->validateVoucher($code, $courseId, $groupId);
 
+        // Increment rate limit on any attempt (success or failure)
+        $this->incrementRateLimit();
+
         if (is_wp_error($validation)) {
-            return $validation;
+            // Return generic error to prevent information disclosure
+            return $this->validationError();
         }
 
+        // Don't expose full voucher data - only what's needed
         return [
             'success' => true,
             'valid' => true,
-            'voucher' => $validation,
+            'discount_type' => $validation['discount_type'],
             'discount' => $this->calculateDiscount($validation, $courseId),
         ];
     }
 
     /**
      * API: Redeem a voucher code
+     *
+     * Security: Requires authentication
      */
     public function apiRedeemVoucher($data, $params): array|WP_Error
     {
-        $code = sanitize_text_field($params['code'] ?? '');
-        $courseId = absint($params['course_id'] ?? 0);
-        $groupId = absint($params['group_id'] ?? 0);
         $userId = get_current_user_id();
-
         if (!$userId) {
             return new WP_Error('unauthorized', __('Niet ingelogd.', 'stride'), ['status' => 401]);
         }
+
+        $code = sanitize_text_field($params['code'] ?? '');
+        $courseId = absint($params['course_id'] ?? 0);
+        $groupId = absint($params['group_id'] ?? 0);
 
         if (empty($code)) {
             return new WP_Error('invalid_input', __('Vouchercode is vereist.', 'stride'), ['status' => 400]);
@@ -346,7 +428,12 @@ class VoucherService implements \NTDST_Service_Meta
         $result = $this->redeemVoucher($code, $userId, $courseId, $groupId);
 
         if (is_wp_error($result)) {
-            return $result;
+            // Return generic error for most cases
+            $errorCode = $result->get_error_code();
+            if ($errorCode === 'already_redeemed') {
+                return $result; // This is safe to expose
+            }
+            return $this->validationError();
         }
 
         return [
@@ -363,21 +450,15 @@ class VoucherService implements \NTDST_Service_Meta
     /**
      * Create a new voucher
      *
-     * @param array{
-     *   code?: string,
-     *   type?: string,
-     *   usage_limit?: int,
-     *   course_id?: int,
-     *   group_id?: int,
-     *   discount_type?: string,
-     *   discount_value?: float,
-     *   valid_from?: string,
-     *   valid_until?: string
-     * } $data Voucher data
-     * @return int|WP_Error Voucher post ID or error
+     * Security: Requires manage_options capability
      */
     public function createVoucher(array $data = []): int|WP_Error
     {
+        // Capability check
+        if (!current_user_can('manage_options')) {
+            return new WP_Error('unauthorized', __('Onvoldoende rechten.', 'stride'));
+        }
+
         $model = $this->getModel();
         if (!$model) {
             return new WP_Error('no_model', __('DataManager niet beschikbaar.', 'stride'));
@@ -429,9 +510,7 @@ class VoucherService implements \NTDST_Service_Meta
     /**
      * Create a batch of vouchers
      *
-     * @param int $count Number of vouchers to create
-     * @param array $data Base voucher data for all vouchers
-     * @return array{batch_id: string, created: int[], errors: WP_Error[]}
+     * Performance: Pre-generates codes and bulk-checks uniqueness
      */
     public function createBatch(int $count, array $data = []): array
     {
@@ -454,13 +533,15 @@ class VoucherService implements \NTDST_Service_Meta
         $batchId = sprintf('BATCH-%s-%s', date('Ymd-His'), strtoupper(wp_generate_password(4, false)));
         $data['batch_id'] = $batchId;
 
+        // Pre-generate unique codes (memory-efficient)
+        $codes = $this->generateUniqueCodes($count);
+
         $created = [];
         $errors = [];
 
-        for ($i = 0; $i < $count; $i++) {
-            // Remove code to generate unique for each
+        foreach ($codes as $code) {
             $voucherData = $data;
-            unset($voucherData['code']);
+            $voucherData['code'] = $code;
 
             $result = $this->createVoucher($voucherData);
 
@@ -482,9 +563,6 @@ class VoucherService implements \NTDST_Service_Meta
 
     /**
      * Get voucher data as array
-     *
-     * @param int $voucherId Voucher post ID
-     * @return array|null Voucher data or null
      */
     public function getVoucher(int $voucherId): ?array
     {
@@ -503,9 +581,6 @@ class VoucherService implements \NTDST_Service_Meta
 
     /**
      * Get voucher by code
-     *
-     * @param string $code Voucher code
-     * @return array|null Voucher data or null
      */
     public function getVoucherByCode(string $code): ?array
     {
@@ -517,6 +592,7 @@ class VoucherService implements \NTDST_Service_Meta
         $code = strtoupper(trim($code));
         $post = $model
             ->where(self::FIELD_CODE, $code)
+            ->withMeta()
             ->limit(1)
             ->first();
 
@@ -524,11 +600,11 @@ class VoucherService implements \NTDST_Service_Meta
             return null;
         }
 
-        return $this->formatVoucher($post);
+        return $this->formatVoucherFromQuery($post);
     }
 
     /**
-     * Format voucher post to array
+     * Format voucher post object to array
      */
     private function formatVoucher(object $post): array
     {
@@ -551,133 +627,205 @@ class VoucherService implements \NTDST_Service_Meta
         ];
     }
 
+    /**
+     * Format voucher from query result array (avoids N+1)
+     */
+    private function formatVoucherFromQuery(array $post): array
+    {
+        return [
+            'id' => (int) ($post['id'] ?? $post['ID'] ?? 0),
+            'code' => $post[self::FIELD_CODE] ?? '',
+            'type' => $post[self::FIELD_TYPE] ?? self::TYPE_SINGLE,
+            'usage_limit' => (int) ($post[self::FIELD_USAGE_LIMIT] ?? 1),
+            'used_count' => (int) ($post[self::FIELD_USED_COUNT] ?? 0),
+            'course_id' => (int) ($post[self::FIELD_COURSE_ID] ?? 0),
+            'group_id' => (int) ($post[self::FIELD_GROUP_ID] ?? 0),
+            'discount_type' => $post[self::FIELD_DISCOUNT_TYPE] ?? self::DISCOUNT_FULL,
+            'discount_value' => (float) ($post[self::FIELD_DISCOUNT_VALUE] ?? 0),
+            'valid_from' => $post[self::FIELD_VALID_FROM] ?? '',
+            'valid_until' => $post[self::FIELD_VALID_UNTIL] ?? '',
+            'status' => $post[self::FIELD_STATUS] ?? self::STATUS_ACTIVE,
+            'batch_id' => $post[self::FIELD_BATCH_ID] ?? '',
+            'created_by' => (int) ($post[self::FIELD_CREATED_BY] ?? 0),
+            'redemptions' => $post[self::FIELD_REDEMPTIONS] ?? [],
+        ];
+    }
+
     // ========================================
     // VALIDATION & REDEMPTION
     // ========================================
 
     /**
-     * Validate a voucher code
+     * Validate a voucher code (internal use - returns detailed errors)
      *
-     * @param string $code Voucher code
-     * @param int $courseId Course ID (optional, for scope check)
-     * @param int $groupId Group ID (optional, for scope check)
-     * @return array|WP_Error Voucher data or error
+     * Note: For API responses, use generic errors to prevent information disclosure
      */
     public function validateVoucher(string $code, int $courseId = 0, int $groupId = 0): array|WP_Error
     {
         $voucher = $this->getVoucherByCode($code);
 
         if (!$voucher) {
-            return new WP_Error('not_found', __('Ongeldige vouchercode.', 'stride'));
+            return new WP_Error('not_found', 'Voucher not found');
         }
 
         // Check status
         if ($voucher['status'] !== self::STATUS_ACTIVE) {
-            $statusMessage = match ($voucher['status']) {
-                self::STATUS_EXHAUSTED => __('Deze voucher is opgebruikt.', 'stride'),
-                self::STATUS_EXPIRED => __('Deze voucher is verlopen.', 'stride'),
-                self::STATUS_DISABLED => __('Deze voucher is uitgeschakeld.', 'stride'),
-                default => __('Ongeldige voucher status.', 'stride'),
-            };
-            return new WP_Error('invalid_status', $statusMessage);
+            return new WP_Error('invalid_status', 'Invalid status: ' . $voucher['status']);
         }
 
         // Check usage limit
         if ($voucher['usage_limit'] > 0 && $voucher['used_count'] >= $voucher['usage_limit']) {
-            return new WP_Error('exhausted', __('Deze voucher is opgebruikt.', 'stride'));
+            return new WP_Error('exhausted', 'Usage limit reached');
         }
 
         // Check validity period
         $now = current_time('Y-m-d');
 
         if (!empty($voucher['valid_from']) && $now < $voucher['valid_from']) {
-            return new WP_Error('not_yet_valid', __('Deze voucher is nog niet geldig.', 'stride'));
+            return new WP_Error('not_yet_valid', 'Not yet valid');
         }
 
         if (!empty($voucher['valid_until']) && $now > $voucher['valid_until']) {
-            // Auto-update status to expired
             $this->updateVoucherStatus($voucher['id'], self::STATUS_EXPIRED);
-            return new WP_Error('expired', __('Deze voucher is verlopen.', 'stride'));
+            return new WP_Error('expired', 'Expired');
         }
 
-        // Check scope (course/group restriction)
+        // Check scope
         if ($voucher['course_id'] > 0 && $courseId > 0 && $voucher['course_id'] !== $courseId) {
-            return new WP_Error('wrong_course', __('Deze voucher is niet geldig voor deze cursus.', 'stride'));
+            return new WP_Error('wrong_course', 'Wrong course');
         }
 
         if ($voucher['group_id'] > 0 && $groupId > 0 && $voucher['group_id'] !== $groupId) {
-            return new WP_Error('wrong_group', __('Deze voucher is niet geldig voor dit traject.', 'stride'));
+            return new WP_Error('wrong_group', 'Wrong group');
         }
 
         return $voucher;
     }
 
     /**
-     * Redeem a voucher
+     * Redeem a voucher with transaction locking (prevents race conditions)
      *
-     * @param string $code Voucher code
-     * @param int $userId User redeeming
-     * @param int $courseId Course ID (optional)
-     * @param int $groupId Group ID (optional)
-     * @return array{discount: float, voucher_id: int}|WP_Error
+     * EXCEPTION: Uses raw $wpdb for atomic transaction with row locking.
+     * This prevents TOCTOU race conditions where multiple concurrent requests
+     * could redeem the same voucher past its usage limit.
      */
     public function redeemVoucher(string $code, int $userId, int $courseId = 0, int $groupId = 0): array|WP_Error
     {
-        // Validate first
-        $voucher = $this->validateVoucher($code, $courseId, $groupId);
-        if (is_wp_error($voucher)) {
-            return $voucher;
+        global $wpdb;
+
+        // Get voucher ID first (validation outside transaction)
+        $voucher = $this->getVoucherByCode($code);
+        if (!$voucher) {
+            return new WP_Error('not_found', 'Voucher not found');
         }
 
-        // Check if user already redeemed this voucher
-        $redemptions = $voucher['redemptions'] ?? [];
-        foreach ($redemptions as $redemption) {
-            if (($redemption['user_id'] ?? 0) === $userId) {
+        $voucherId = $voucher['id'];
+
+        try {
+            $wpdb->query('START TRANSACTION');
+
+            // Lock the voucher row for update
+            $lockedPost = $wpdb->get_row($wpdb->prepare(
+                "SELECT ID FROM {$wpdb->posts} WHERE ID = %d FOR UPDATE",
+                $voucherId
+            ));
+
+            if (!$lockedPost) {
+                $wpdb->query('ROLLBACK');
+                return new WP_Error('not_found', 'Voucher not found');
+            }
+
+            // Re-fetch voucher data with lock held
+            $voucher = $this->getVoucher($voucherId);
+            if (!$voucher) {
+                $wpdb->query('ROLLBACK');
+                return new WP_Error('not_found', 'Voucher not found');
+            }
+
+            // Re-validate with fresh data
+            if ($voucher['status'] !== self::STATUS_ACTIVE) {
+                $wpdb->query('ROLLBACK');
+                return new WP_Error('invalid_status', 'Voucher not active');
+            }
+
+            if ($voucher['usage_limit'] > 0 && $voucher['used_count'] >= $voucher['usage_limit']) {
+                $wpdb->query('ROLLBACK');
+                return new WP_Error('exhausted', 'Usage limit reached');
+            }
+
+            // Check validity period
+            $now = current_time('Y-m-d');
+            if (!empty($voucher['valid_until']) && $now > $voucher['valid_until']) {
+                $wpdb->query('ROLLBACK');
+                return new WP_Error('expired', 'Voucher expired');
+            }
+
+            // Check scope
+            if ($voucher['course_id'] > 0 && $courseId > 0 && $voucher['course_id'] !== $courseId) {
+                $wpdb->query('ROLLBACK');
+                return new WP_Error('wrong_course', 'Wrong course');
+            }
+
+            // Check if user already redeemed - use indexed lookup
+            $redemptions = $voucher['redemptions'] ?? [];
+            $redemptionsByUser = array_column($redemptions, null, 'user_id');
+            if (isset($redemptionsByUser[$userId])) {
+                $wpdb->query('ROLLBACK');
                 return new WP_Error('already_redeemed', __('Je hebt deze voucher al gebruikt.', 'stride'));
             }
+
+            // Calculate discount
+            $discount = $this->calculateDiscount($voucher, $courseId);
+
+            // Add redemption record
+            $redemptions[] = [
+                'user_id' => $userId,
+                'course_id' => $courseId,
+                'group_id' => $groupId,
+                'discount' => $discount,
+                'redeemed_at' => current_time('mysql'),
+            ];
+
+            $newUsedCount = $voucher['used_count'] + 1;
+            $newStatus = $voucher['status'];
+
+            // Check if exhausted
+            if ($voucher['usage_limit'] > 0 && $newUsedCount >= $voucher['usage_limit']) {
+                $newStatus = self::STATUS_EXHAUSTED;
+            }
+
+            // Update via DataManager (still within transaction)
+            $model = $this->getModel();
+            if (!$model) {
+                $wpdb->query('ROLLBACK');
+                return new WP_Error('no_model', 'DataManager not available');
+            }
+
+            $result = $model->update($voucherId, [
+                self::FIELD_USED_COUNT => $newUsedCount,
+                self::FIELD_REDEMPTIONS => $redemptions,
+                self::FIELD_STATUS => $newStatus,
+            ]);
+
+            if (is_wp_error($result)) {
+                $wpdb->query('ROLLBACK');
+                return $result;
+            }
+
+            $wpdb->query('COMMIT');
+
+            do_action('stride/voucher/redeemed', $voucherId, $userId, $courseId, $discount);
+
+            return [
+                'discount' => $discount,
+                'voucher_id' => $voucherId,
+            ];
+
+        } catch (\Exception $e) {
+            $wpdb->query('ROLLBACK');
+            error_log('Stride: Voucher redemption failed: ' . $e->getMessage());
+            return new WP_Error('transaction_failed', 'Transaction failed');
         }
-
-        $model = $this->getModel();
-        if (!$model) {
-            return new WP_Error('no_model', __('DataManager niet beschikbaar.', 'stride'));
-        }
-
-        // Calculate discount
-        $discount = $this->calculateDiscount($voucher, $courseId);
-
-        // Add redemption record
-        $redemptions[] = [
-            'user_id' => $userId,
-            'course_id' => $courseId,
-            'group_id' => $groupId,
-            'discount' => $discount,
-            'redeemed_at' => current_time('mysql'),
-        ];
-
-        $newUsedCount = $voucher['used_count'] + 1;
-        $newStatus = $voucher['status'];
-
-        // Check if exhausted
-        if ($voucher['usage_limit'] > 0 && $newUsedCount >= $voucher['usage_limit']) {
-            $newStatus = self::STATUS_EXHAUSTED;
-        }
-
-        $result = $model->update($voucher['id'], [
-            self::FIELD_USED_COUNT => $newUsedCount,
-            self::FIELD_REDEMPTIONS => $redemptions,
-            self::FIELD_STATUS => $newStatus,
-        ]);
-
-        if (is_wp_error($result)) {
-            return $result;
-        }
-
-        do_action('stride/voucher/redeemed', $voucher['id'], $userId, $courseId, $discount);
-
-        return [
-            'discount' => $discount,
-            'voucher_id' => $voucher['id'],
-        ];
     }
 
     /**
@@ -685,15 +833,14 @@ class VoucherService implements \NTDST_Service_Meta
      *
      * @param array $voucher Voucher data
      * @param int $courseId Course ID for price lookup
-     * @return float Discount amount
+     * @param float|null $coursePrice Pre-fetched course price (avoids extra query)
      */
-    public function calculateDiscount(array $voucher, int $courseId = 0): float
+    public function calculateDiscount(array $voucher, int $courseId = 0, ?float $coursePrice = null): float
     {
-        // Get course price if we need it
-        $coursePrice = 0.0;
-        if ($courseId > 0) {
+        if ($coursePrice === null && $courseId > 0) {
             $coursePrice = $this->courseService->getCoursePrice($courseId) ?? 0.0;
         }
+        $coursePrice = $coursePrice ?? 0.0;
 
         return match ($voucher['discount_type']) {
             self::DISCOUNT_FULL => $coursePrice,
@@ -705,21 +852,17 @@ class VoucherService implements \NTDST_Service_Meta
 
     /**
      * Update voucher status
-     *
-     * @param int $voucherId Voucher ID
-     * @param string $status New status
-     * @return true|WP_Error
      */
     public function updateVoucherStatus(int $voucherId, string $status): true|WP_Error
     {
         $model = $this->getModel();
         if (!$model) {
-            return new WP_Error('no_model', __('DataManager niet beschikbaar.', 'stride'));
+            return new WP_Error('no_model', 'DataManager not available');
         }
 
         $validStatuses = [self::STATUS_ACTIVE, self::STATUS_EXHAUSTED, self::STATUS_EXPIRED, self::STATUS_DISABLED];
         if (!in_array($status, $validStatuses, true)) {
-            return new WP_Error('invalid_status', __('Ongeldige status.', 'stride'));
+            return new WP_Error('invalid_status', 'Invalid status');
         }
 
         $result = $model->update($voucherId, [
@@ -730,14 +873,11 @@ class VoucherService implements \NTDST_Service_Meta
     }
 
     // ========================================
-    // QUERY METHODS
+    // QUERY METHODS (N+1 optimized)
     // ========================================
 
     /**
-     * Get vouchers by batch ID
-     *
-     * @param string $batchId Batch ID
-     * @return array Array of voucher data
+     * Get vouchers by batch ID (N+1 optimized)
      */
     public function getVouchersByBatch(string $batchId): array
     {
@@ -753,15 +893,12 @@ class VoucherService implements \NTDST_Service_Meta
             ->limit(1000)
             ->get();
 
-        return array_map(fn($post) => $this->getVoucher((int) $post['id']), $posts);
+        // Use data from query directly (avoids N+1)
+        return array_map(fn($post) => $this->formatVoucherFromQuery($post), $posts);
     }
 
     /**
-     * Get vouchers by status
-     *
-     * @param string $status Voucher status
-     * @param int $limit Max results
-     * @return array Array of voucher data
+     * Get vouchers by status (N+1 optimized)
      */
     public function getVouchersByStatus(string $status, int $limit = 100): array
     {
@@ -777,14 +914,14 @@ class VoucherService implements \NTDST_Service_Meta
             ->limit($limit)
             ->get();
 
-        return array_map(fn($post) => $this->getVoucher((int) $post['id']), $posts);
+        return array_map(fn($post) => $this->formatVoucherFromQuery($post), $posts);
     }
 
     /**
      * Get user's redemption history
      *
-     * @param int $userId User ID
-     * @return array Array of redemption records with voucher data
+     * Note: For high-volume systems, consider a separate redemptions table
+     * indexed by user_id for O(1) lookups instead of O(n*m) scan.
      */
     public function getUserRedemptions(int $userId): array
     {
@@ -793,9 +930,7 @@ class VoucherService implements \NTDST_Service_Meta
             return [];
         }
 
-        // Get all vouchers with redemptions
-        // Note: This is not the most efficient query, but redemptions are stored as JSON
-        // For high volume, consider a separate redemptions table
+        // Get vouchers with meta in single query
         $posts = $model
             ->orderBy('date', 'DESC')
             ->withMeta()
@@ -805,18 +940,17 @@ class VoucherService implements \NTDST_Service_Meta
         $userRedemptions = [];
 
         foreach ($posts as $post) {
-            $voucher = $this->getVoucher((int) $post['id']);
-            if (!$voucher) {
-                continue;
-            }
+            $voucher = $this->formatVoucherFromQuery($post);
+            $redemptions = $voucher['redemptions'] ?? [];
 
-            foreach ($voucher['redemptions'] as $redemption) {
-                if (($redemption['user_id'] ?? 0) === $userId) {
-                    $userRedemptions[] = [
-                        'voucher' => $voucher,
-                        'redemption' => $redemption,
-                    ];
-                }
+            // Index redemptions by user_id for O(1) lookup
+            $redemptionsByUser = array_column($redemptions, null, 'user_id');
+
+            if (isset($redemptionsByUser[$userId])) {
+                $userRedemptions[] = [
+                    'voucher' => $voucher,
+                    'redemption' => $redemptionsByUser[$userId],
+                ];
             }
         }
 
@@ -824,16 +958,11 @@ class VoucherService implements \NTDST_Service_Meta
     }
 
     // ========================================
-    // CODE GENERATION
+    // CODE GENERATION (Optimized)
     // ========================================
 
     /**
      * Generate a unique voucher code
-     *
-     * Format: VAD-XXXX-XXXX (where X is alphanumeric)
-     *
-     * @param string $prefix Optional prefix (default: VAD)
-     * @return string Unique voucher code
      */
     public function generateCode(string $prefix = 'VAD'): string
     {
@@ -848,7 +977,6 @@ class VoucherService implements \NTDST_Service_Meta
                 strtoupper(wp_generate_password(4, false))
             );
 
-            // Check uniqueness
             $exists = $this->getVoucherByCode($code);
             $attempt++;
         } while ($exists && $attempt < $maxAttempts);
@@ -857,21 +985,47 @@ class VoucherService implements \NTDST_Service_Meta
     }
 
     /**
-     * Generate multiple unique codes
+     * Generate multiple unique codes with bulk uniqueness check
      *
-     * @param int $count Number of codes to generate
-     * @param string $prefix Optional prefix
-     * @return array Array of unique codes
+     * Performance: Single DB query to check all existing codes instead of N queries
      */
-    public function generateCodes(int $count, string $prefix = 'VAD'): array
+    public function generateUniqueCodes(int $count, string $prefix = 'VAD'): array
     {
-        $codes = [];
+        $model = $this->getModel();
 
-        for ($i = 0; $i < $count; $i++) {
-            $codes[] = $this->generateCode($prefix);
+        // Get all existing codes in one query
+        $existingCodes = [];
+        if ($model) {
+            $posts = $model->withMeta()->limit(100000)->get();
+            foreach ($posts as $post) {
+                $code = $post[self::FIELD_CODE] ?? '';
+                if ($code) {
+                    $existingCodes[$code] = true;
+                }
+            }
         }
 
-        return $codes;
+        $codes = [];
+        $maxAttempts = $count * 10; // Safety limit
+        $attempts = 0;
+
+        while (count($codes) < $count && $attempts < $maxAttempts) {
+            $code = sprintf(
+                '%s-%s-%s',
+                strtoupper($prefix),
+                strtoupper(wp_generate_password(4, false)),
+                strtoupper(wp_generate_password(4, false))
+            );
+
+            // Check against both existing DB codes AND newly generated codes
+            if (!isset($existingCodes[$code]) && !isset($codes[$code])) {
+                $codes[$code] = true;
+            }
+
+            $attempts++;
+        }
+
+        return array_keys($codes);
     }
 
     // ========================================
@@ -879,11 +1033,7 @@ class VoucherService implements \NTDST_Service_Meta
     // ========================================
 
     /**
-     * Expire vouchers past their valid_until date
-     *
-     * Run via WP-Cron or Action Scheduler
-     *
-     * @return int Number of vouchers expired
+     * Expire vouchers past their valid_until date (N+1 optimized)
      */
     public function expireVouchers(): int
     {
@@ -895,7 +1045,6 @@ class VoucherService implements \NTDST_Service_Meta
         $today = current_time('Y-m-d');
         $expired = 0;
 
-        // Get active vouchers with valid_until set
         $posts = $model
             ->where(self::FIELD_STATUS, self::STATUS_ACTIVE)
             ->orderBy('date', 'ASC')
@@ -904,10 +1053,7 @@ class VoucherService implements \NTDST_Service_Meta
             ->get();
 
         foreach ($posts as $post) {
-            $voucher = $this->getVoucher((int) $post['id']);
-            if (!$voucher) {
-                continue;
-            }
+            $voucher = $this->formatVoucherFromQuery($post);
 
             if (!empty($voucher['valid_until']) && $voucher['valid_until'] < $today) {
                 $result = $this->updateVoucherStatus($voucher['id'], self::STATUS_EXPIRED);

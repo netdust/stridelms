@@ -483,7 +483,7 @@ class QuoteService implements \NTDST_Service_Meta
         $discount = 0.0;
         $voucherCode = sanitize_text_field($data['voucher_code'] ?? '');
         if (!empty($voucherCode)) {
-            $discount = $this->calculateVoucherDiscount($voucherCode, $courseId);
+            $discount = $this->calculateVoucherDiscount($voucherCode, $courseId, $coursePrice);
         }
 
         $discountedSubtotal = max(0, $subtotal - $discount);
@@ -1009,9 +1009,10 @@ class QuoteService implements \NTDST_Service_Meta
      *
      * @param string $voucherCode Voucher code
      * @param int $courseId Course ID
+     * @param float $coursePrice Pre-fetched course price (avoids duplicate query)
      * @return float Discount amount (0 if invalid)
      */
-    private function calculateVoucherDiscount(string $voucherCode, int $courseId): float
+    private function calculateVoucherDiscount(string $voucherCode, int $courseId, float $coursePrice): float
     {
         if (!$this->voucherService) {
             return 0.0;
@@ -1022,7 +1023,8 @@ class QuoteService implements \NTDST_Service_Meta
             return 0.0;
         }
 
-        return $this->voucherService->calculateDiscount($voucher, $courseId);
+        // Pass course price to avoid refetching
+        return $this->voucherService->calculateDiscount($voucher, $courseId, $coursePrice);
     }
 
     /**
