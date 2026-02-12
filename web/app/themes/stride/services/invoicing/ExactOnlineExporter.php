@@ -179,6 +179,7 @@ class ExactOnlineExporter implements \NTDST_Service_Meta
             'OrderNumber' => fn($q) => $q['order_number'] ?? '',
             'Description' => fn($q) => $this->getDescription($q),
             'Amount' => fn($q) => $this->formatAmount($q['subtotal']),
+            'DiscountAmount' => fn($q) => $this->formatAmount($q['discount'] ?? 0),
             'TaxRate' => fn($q) => $this->getTaxRate(),
             'TaxAmount' => fn($q) => $this->formatAmount($q['tax']),
             'TotalAmount' => fn($q) => $this->formatAmount($q['total']),

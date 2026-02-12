@@ -6,6 +6,7 @@ defined('ABSPATH') || exit;
 
 use stride\services\core\CourseService;
 use stride\services\core\SubscriberService;
+use stride\services\voucher\VoucherService;
 use WP_Error;
 
 /**
@@ -53,10 +54,12 @@ class QuoteService implements \NTDST_Service_Meta
     public const FIELD_CREATED_AT = 'created_at';
     public const FIELD_SENT_AT = 'sent_at';
     public const FIELD_EXPORTED_AT = 'exported_at';
+    public const FIELD_DISCOUNT = 'discount';
 
     private ?CourseService $courseService;
     private ?SubscriberService $subscriberService;
     private ?VATValidator $vatValidator;
+    private ?VoucherService $voucherService;
 
     /**
      * Service metadata for NTDST Bootstrap
@@ -78,11 +81,13 @@ class QuoteService implements \NTDST_Service_Meta
     public function __construct(
         ?CourseService $courseService = null,
         ?SubscriberService $subscriberService = null,
-        ?VATValidator $vatValidator = null
+        ?VATValidator $vatValidator = null,
+        ?VoucherService $voucherService = null
     ) {
         $this->courseService = $courseService ?? $this->resolveService(CourseService::class);
         $this->subscriberService = $subscriberService ?? $this->resolveService(SubscriberService::class);
         $this->vatValidator = $vatValidator ?? new VATValidator();
+        $this->voucherService = $voucherService ?? $this->resolveService(VoucherService::class);
 
         // Register CPT via DataManager
         add_action('init', [$this, 'registerModel'], 5);
@@ -225,6 +230,11 @@ class QuoteService implements \NTDST_Service_Meta
                     'type' => 'text',
                     'label' => __('Geëxporteerd op', 'stride'),
                 ],
+                self::FIELD_DISCOUNT => [
+                    'type' => 'float',
+                    'min' => 0,
+                    'label' => __('Korting', 'stride'),
+                ],
             ],
 
             // Tabbed metabox for admin
@@ -235,7 +245,7 @@ class QuoteService implements \NTDST_Service_Meta
                 ],
                 'amounts' => [
                     'title' => __('Bedragen', 'stride'),
-                    'fields' => [self::FIELD_SUBTOTAL, self::FIELD_TAX, self::FIELD_TOTAL, self::FIELD_ITEMS],
+                    'fields' => [self::FIELD_SUBTOTAL, self::FIELD_DISCOUNT, self::FIELD_TAX, self::FIELD_TOTAL, self::FIELD_ITEMS],
                 ],
                 'billing' => [
                     'title' => __('Facturatie', 'stride'),
@@ -468,8 +478,17 @@ class QuoteService implements \NTDST_Service_Meta
         $coursePrice = $this->getCoursePrice($courseId);
         $taxRate = $this->getTaxRate();
         $subtotal = $coursePrice;
-        $tax = round($subtotal * ($taxRate / 100), 2);
-        $total = $subtotal + $tax;
+
+        // Apply voucher discount if provided
+        $discount = 0.0;
+        $voucherCode = sanitize_text_field($data['voucher_code'] ?? '');
+        if (!empty($voucherCode)) {
+            $discount = $this->calculateVoucherDiscount($voucherCode, $courseId);
+        }
+
+        $discountedSubtotal = max(0, $subtotal - $discount);
+        $tax = round($discountedSubtotal * ($taxRate / 100), 2);
+        $total = $discountedSubtotal + $tax;
 
         // Build items array
         $items = [
@@ -482,6 +501,18 @@ class QuoteService implements \NTDST_Service_Meta
                 'total' => $coursePrice,
             ],
         ];
+
+        // Add discount line if applicable
+        if ($discount > 0) {
+            $items[] = [
+                'id' => 0,
+                'type' => 'discount',
+                'title' => sprintf(__('Korting (voucher: %s)', 'stride'), $voucherCode),
+                'quantity' => 1,
+                'unit_price' => -$discount,
+                'total' => -$discount,
+            ];
+        }
 
         // Calculate valid until date
         $validDays = $this->getConfig('valid_days', 30);
@@ -502,12 +533,13 @@ class QuoteService implements \NTDST_Service_Meta
             self::FIELD_QUOTE_NUMBER => $quoteNumber,
             self::FIELD_ITEMS => $items,
             self::FIELD_SUBTOTAL => $subtotal,
+            self::FIELD_DISCOUNT => $discount,
             self::FIELD_TAX => $tax,
             self::FIELD_TOTAL => $total,
             self::FIELD_VALID_UNTIL => $validUntil,
             self::FIELD_BILLING => $billing,
             self::FIELD_ORDER_NUMBER => sanitize_text_field($data['order_number'] ?? ''),
-            self::FIELD_VOUCHER_CODE => sanitize_text_field($data['voucher_code'] ?? ''),
+            self::FIELD_VOUCHER_CODE => $voucherCode,
             self::FIELD_CREATED_AT => current_time('mysql'),
         ]);
 
@@ -556,6 +588,7 @@ class QuoteService implements \NTDST_Service_Meta
             'course_id' => (int) ($post->fields[self::FIELD_COURSE_ID] ?? 0),
             'items' => $post->fields[self::FIELD_ITEMS] ?? [],
             'subtotal' => (float) ($post->fields[self::FIELD_SUBTOTAL] ?? 0),
+            'discount' => (float) ($post->fields[self::FIELD_DISCOUNT] ?? 0),
             'tax' => (float) ($post->fields[self::FIELD_TAX] ?? 0),
             'total' => (float) ($post->fields[self::FIELD_TOTAL] ?? 0),
             'valid_until' => $post->fields[self::FIELD_VALID_UNTIL] ?? '',
@@ -969,6 +1002,27 @@ class QuoteService implements \NTDST_Service_Meta
     private function getTaxRate(): float
     {
         return $this->getConfig('tax_rate', 21.0);
+    }
+
+    /**
+     * Calculate voucher discount amount
+     *
+     * @param string $voucherCode Voucher code
+     * @param int $courseId Course ID
+     * @return float Discount amount (0 if invalid)
+     */
+    private function calculateVoucherDiscount(string $voucherCode, int $courseId): float
+    {
+        if (!$this->voucherService) {
+            return 0.0;
+        }
+
+        $voucher = $this->voucherService->validateVoucher($voucherCode, $courseId);
+        if (is_wp_error($voucher)) {
+            return 0.0;
+        }
+
+        return $this->voucherService->calculateDiscount($voucher, $courseId);
     }
 
     /**

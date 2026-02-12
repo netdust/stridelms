@@ -116,6 +116,13 @@ return [
             'stride\\services\\invoicing\\QuoteUpdateHandler',
             'stride\\services\\invoicing\\QuotePDFGenerator',
             'stride\\services\\invoicing\\ExactOnlineExporter',
+
+            // Phase 4: Voucher System
+            'stride\\services\\voucher\\VoucherService',
+
+            // Integration Services
+            'stride\\services\\smartcode\\SmartCodeService',
+            'stride\\services\\sync\\UserDataSync',
         ],
 
         // Admin-only services
@@ -169,8 +176,14 @@ return [
         ],
 
         'vouchers' => [
-            'types' => ['action', 'member', 'speaker', 'day'],
-            'auto_day_voucher' => true,
+            'code_prefix' => 'VAD',
+            'default_validity_days' => 365,
+            'types' => [
+                'action' => ['label' => 'Actie', 'discount_type' => 'percentage'],
+                'member' => ['label' => 'Lid', 'discount_type' => 'full'],
+                'speaker' => ['label' => 'Spreker', 'discount_type' => 'full'],
+                'day' => ['label' => 'Dagvoucher', 'discount_type' => 'full'],
+            ],
         ],
 
         'invoicing' => [
