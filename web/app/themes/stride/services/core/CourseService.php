@@ -698,6 +698,73 @@ class CourseService implements \NTDST_Service_Meta
     }
 
     // ========================================
+    // GROUPS (TRAJECTORIES)
+    // ========================================
+
+    /**
+     * Get LearnDash group post object
+     *
+     * @param int $groupId
+     * @return \WP_Post|null
+     */
+    public function getGroup(int $groupId): ?\WP_Post
+    {
+        $post = get_post($groupId);
+
+        if (!$post || $post->post_type !== 'groups') {
+            return null;
+        }
+
+        return $post;
+    }
+
+    /**
+     * Get group title
+     *
+     * @param int $groupId
+     * @return string|null
+     */
+    public function getGroupTitle(int $groupId): ?string
+    {
+        $group = $this->getGroup($groupId);
+        return $group ? $group->post_title : null;
+    }
+
+    /**
+     * Check if group exists and is valid
+     *
+     * @param int $groupId
+     * @return true|WP_Error
+     */
+    public function validateGroup(int $groupId): true|WP_Error
+    {
+        if ($groupId <= 0) {
+            return new WP_Error('invalid_group_id', __('Ongeldige groep ID.', 'stride'));
+        }
+
+        $group = $this->getGroup($groupId);
+        if (!$group) {
+            return new WP_Error('group_not_found', __('Groep niet gevonden.', 'stride'), ['group_id' => $groupId]);
+        }
+
+        return true;
+    }
+
+    /**
+     * Get user email by ID (via SubscriberService-like lookup)
+     *
+     * Convenience method for enrollment notes where we need manager email.
+     *
+     * @param int $userId
+     * @return string|null
+     */
+    public function getUserDisplayInfo(int $userId): ?string
+    {
+        $user = get_user_by('ID', $userId);
+        return $user ? $user->user_email : null;
+    }
+
+    // ========================================
     // PRICING
     // ========================================
 

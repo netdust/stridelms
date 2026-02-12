@@ -6,6 +6,8 @@ defined('ABSPATH') || exit;
 
 use Dompdf\Dompdf;
 use Dompdf\Options;
+use stride\services\core\CourseService;
+use stride\services\core\SubscriberService;
 use WP_Error;
 
 /**
@@ -21,6 +23,8 @@ class QuotePDFGenerator implements \NTDST_Service_Meta
     private string $uploadDir;
     private string $uploadUrl;
     private ?QuoteService $quoteService;
+    private ?CourseService $courseService;
+    private ?SubscriberService $subscriberService;
 
     /**
      * Service metadata for NTDST Bootstrap
@@ -39,9 +43,14 @@ class QuotePDFGenerator implements \NTDST_Service_Meta
     /**
      * Constructor
      */
-    public function __construct(?QuoteService $quoteService = null)
-    {
+    public function __construct(
+        ?QuoteService $quoteService = null,
+        ?CourseService $courseService = null,
+        ?SubscriberService $subscriberService = null
+    ) {
         $this->quoteService = $quoteService ?? $this->resolveService(QuoteService::class);
+        $this->courseService = $courseService ?? $this->resolveService(CourseService::class);
+        $this->subscriberService = $subscriberService ?? $this->resolveService(SubscriberService::class);
 
         $upload = wp_upload_dir();
         $this->uploadDir = $upload['basedir'] . '/stride-quotes/';
@@ -270,11 +279,14 @@ class QuotePDFGenerator implements \NTDST_Service_Meta
      */
     private function enrichQuoteData(array $quote): array
     {
-        // Get user data
-        $user = get_userdata($quote['user_id']);
+        // Get user data via SubscriberService
+        $userId = (int) ($quote['user_id'] ?? 0);
+        $userName = $this->subscriberService->getFullName($userId);
+        $userEmail = $this->subscriberService->getUserEmail($userId);
 
-        // Get course data
-        $course = get_post($quote['course_id']);
+        // Get course data via CourseService
+        $courseId = (int) ($quote['course_id'] ?? 0);
+        $courseTitle = $this->courseService->getCourseTitle($courseId);
 
         // Format dates
         $quote['created_date'] = $quote['created_at']
@@ -295,13 +307,13 @@ class QuotePDFGenerator implements \NTDST_Service_Meta
 
         // User info
         $quote['user'] = [
-            'name' => $user ? trim($user->first_name . ' ' . $user->last_name) : '',
-            'email' => $user->user_email ?? '',
+            'name' => $userName ?? '',
+            'email' => $userEmail ?? '',
         ];
 
         // Course info
         $quote['course'] = [
-            'title' => $course->post_title ?? '',
+            'title' => $courseTitle ?? '',
         ];
 
         // Company info from theme config or defaults

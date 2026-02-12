@@ -4,6 +4,7 @@ namespace stride\services\invoicing;
 
 defined('ABSPATH') || exit;
 
+use stride\services\core\SubscriberService;
 use WP_Error;
 
 /**
@@ -17,6 +18,7 @@ use WP_Error;
 class ExactOnlineExporter implements \NTDST_Service_Meta
 {
     private ?QuoteService $quoteService;
+    private ?SubscriberService $subscriberService;
 
     /**
      * Service metadata for NTDST Bootstrap
@@ -35,9 +37,12 @@ class ExactOnlineExporter implements \NTDST_Service_Meta
     /**
      * Constructor
      */
-    public function __construct(?QuoteService $quoteService = null)
-    {
+    public function __construct(
+        ?QuoteService $quoteService = null,
+        ?SubscriberService $subscriberService = null
+    ) {
         $this->quoteService = $quoteService ?? $this->resolveService(QuoteService::class);
+        $this->subscriberService = $subscriberService ?? $this->resolveService(SubscriberService::class);
     }
 
     /**
@@ -261,9 +266,9 @@ class ExactOnlineExporter implements \NTDST_Service_Meta
             return $quote['billing']['organisation'];
         }
 
-        $user = get_userdata($quote['user_id']);
-        if ($user) {
-            return trim($user->first_name . ' ' . $user->last_name);
+        $userId = (int) ($quote['user_id'] ?? 0);
+        if ($userId > 0) {
+            return $this->subscriberService->getFullName($userId) ?? '';
         }
 
         return '';

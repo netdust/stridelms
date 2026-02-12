@@ -150,9 +150,9 @@ class EnrollmentService implements \NTDST_Service_Meta
      */
     public function enrollUserInGroup(int $userId, int $groupId, array $data = []): true|WP_Error
     {
-        // Validate group exists and is correct post type
-        $group = get_post($groupId);
-        if (!$group || $group->post_type !== 'groups') {
+        // Validate group exists via CourseService
+        $groupValidation = $this->courseService->validateGroup($groupId);
+        if (is_wp_error($groupValidation)) {
             return new WP_Error('invalid_group', __('Ongeldig traject.', 'stride'));
         }
 
@@ -298,14 +298,14 @@ class EnrollmentService implements \NTDST_Service_Meta
      */
     private function createEnrollmentNote(int $userId, int $courseId, array $data): void
     {
-        $courseTitle = get_the_title($courseId);
+        $courseTitle = $this->courseService->getCourseTitle($courseId) ?? __('Onbekende cursus', 'stride');
         $note = sprintf(__('Ingeschreven voor: %s', 'stride'), $courseTitle);
 
         // Add manager info if enrolled by someone else
         $enrolledByUserId = $data['enrolled_by_user_id'] ?? null;
         if ($enrolledByUserId && $enrolledByUserId !== $userId) {
-            $manager = get_userdata($enrolledByUserId);
-            $note .= sprintf(' (door %s)', $manager->user_email ?? 'onbekend');
+            $managerEmail = $this->courseService->getUserDisplayInfo($enrolledByUserId);
+            $note .= sprintf(' (door %s)', $managerEmail ?? 'onbekend');
         }
 
         // Add enrollment path for audit trail
@@ -320,14 +320,14 @@ class EnrollmentService implements \NTDST_Service_Meta
      */
     private function createGroupEnrollmentNote(int $userId, int $groupId, array $data): void
     {
-        $groupTitle = get_the_title($groupId);
+        $groupTitle = $this->courseService->getGroupTitle($groupId) ?? __('Onbekend traject', 'stride');
         $note = sprintf(__('Ingeschreven voor traject: %s', 'stride'), $groupTitle);
 
         // Add manager info if enrolled by someone else
         $enrolledByUserId = $data['enrolled_by_user_id'] ?? null;
         if ($enrolledByUserId && $enrolledByUserId !== $userId) {
-            $manager = get_userdata($enrolledByUserId);
-            $note .= sprintf(' (door %s)', $manager->user_email ?? 'onbekend');
+            $managerEmail = $this->courseService->getUserDisplayInfo($enrolledByUserId);
+            $note .= sprintf(' (door %s)', $managerEmail ?? 'onbekend');
         }
 
         $this->subscriberService->createNote($userId, $note);

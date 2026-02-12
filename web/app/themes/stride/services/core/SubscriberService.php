@@ -266,6 +266,36 @@ class SubscriberService implements \NTDST_Service_Meta
         return (bool) get_user_by('ID', $userId);
     }
 
+    /**
+     * Get user's full name
+     *
+     * @param int $userId
+     * @return string|null
+     */
+    public function getFullName(int $userId): ?string
+    {
+        if ($this->isAvailable()) {
+            $subscriber = $this->fluentcrm->getSubscriberByUserId($userId);
+            if ($subscriber) {
+                $firstName = $subscriber['first_name'] ?? '';
+                $lastName = $subscriber['last_name'] ?? '';
+                $fullName = trim($firstName . ' ' . $lastName);
+                if ($fullName !== '') {
+                    return $fullName;
+                }
+            }
+        }
+
+        // Fallback to WordPress user
+        $user = get_user_by('ID', $userId);
+        if ($user) {
+            $fullName = trim($user->first_name . ' ' . $user->last_name);
+            return $fullName !== '' ? $fullName : $user->display_name;
+        }
+
+        return null;
+    }
+
     // ========================================
     // FIELD OPERATIONS
     // ========================================
