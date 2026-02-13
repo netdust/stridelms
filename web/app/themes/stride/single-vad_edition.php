@@ -25,8 +25,10 @@ if (!$edition) {
 
 $courseId = $edition['course_id'] ?? null;
 $courseTitle = $courseId ? get_the_title($courseId) : '';
-$startDate = $editionService->getStartDate($editionId);
-$endDate = $editionService->getEndDate($editionId);
+$startDateStr = $editionService->getStartDate($editionId);
+$endDateStr = $editionService->getEndDate($editionId);
+$startDate = $startDateStr ? strtotime($startDateStr) : null;
+$endDate = $endDateStr ? strtotime($endDateStr) : null;
 $venue = $editionService->getVenue($editionId);
 $price = $editionService->getPrice($editionId);
 $isFull = $editionService->isFull($editionId);

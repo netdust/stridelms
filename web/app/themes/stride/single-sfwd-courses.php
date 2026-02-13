@@ -81,8 +81,10 @@ $typeLabel = $isOnline ? __('Online', 'stride') : __('In-person', 'stride');
                                 <div class="stride-editions-list">
                                     <?php foreach ($editions as $edition):
                                         $editionId = $edition['id'];
-                                        $startDate = $editionService->getStartDate($editionId);
-                                        $endDate = $editionService->getEndDate($editionId);
+                                        $startDateStr = $editionService->getStartDate($editionId);
+                                        $endDateStr = $editionService->getEndDate($editionId);
+                                        $startDate = $startDateStr ? strtotime($startDateStr) : null;
+                                        $endDate = $endDateStr ? strtotime($endDateStr) : null;
                                         $venue = $editionService->getVenue($editionId);
                                         $price = $editionService->getPrice($editionId);
                                         $isFull = $editionService->isFull($editionId);

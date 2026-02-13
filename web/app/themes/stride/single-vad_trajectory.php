@@ -108,7 +108,8 @@ $electiveModules = array_filter($courses, fn($r) => ($r['group'] ?? '') === 'ele
                                     if ($editionService) {
                                         $editions = $editionService->getUpcomingEditionsForCourse($courseId);
                                         if (!empty($editions)) {
-                                            $nextDate = $editionService->getStartDate($editions[0]['id']);
+                                            $nextDateStr = $editionService->getStartDate($editions[0]['id']);
+                                            $nextDate = $nextDateStr ? strtotime($nextDateStr) : null;
                                         }
                                     }
                                 ?>
