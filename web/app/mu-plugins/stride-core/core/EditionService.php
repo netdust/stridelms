@@ -4,6 +4,7 @@ namespace ntdst\Stride\core;
 
 defined('ABSPATH') || exit;
 
+use ntdst\Stride\core\Admin\EditionAdminController;
 use ntdst\Stride\FieldRegistry;
 use WP_Error;
 
@@ -58,6 +59,11 @@ class EditionService implements \NTDST_Service_Meta
         // Auto-update edition status when registrations change
         add_action('stride/registration/created', [$this, 'onRegistrationCreated'], 10, 2);
         add_action('stride/registration/cancelled', [$this, 'onRegistrationCancelled'], 10, 1);
+
+        // Initialize admin controller for custom metaboxes
+        if (is_admin()) {
+            new EditionAdminController();
+        }
     }
 
     /**
@@ -145,8 +151,14 @@ class EditionService implements \NTDST_Service_Meta
                 FieldRegistry::EDITION_IS_MULTI_YEAR => ['type' => 'boolean', 'default' => false],
                 FieldRegistry::EDITION_COMPLETION_MODE => ['type' => 'text', 'default' => 'attend_all'],
                 FieldRegistry::EDITION_COMPLETION_THRESHOLD => ['type' => 'integer', 'default' => 100],
+                FieldRegistry::EDITION_SESSION_SLOTS => ['type' => 'json', 'default' => []],
+                FieldRegistry::EDITION_SELECTION_DEADLINE => ['type' => 'text'],
+                FieldRegistry::EDITION_TARGET_GROUP => ['type' => 'text'],
+                FieldRegistry::EDITION_PREREQUISITES => ['type' => 'text'],
+                FieldRegistry::EDITION_TRAINERS => ['type' => 'text'],
+                FieldRegistry::EDITION_ACCREDITATION => ['type' => 'text'],
             ],
-            'auto_metabox' => true,
+            'auto_metabox' => false, // Custom metaboxes via EditionAdminController
         ]);
     }
 
@@ -219,6 +231,56 @@ class EditionService implements \NTDST_Service_Meta
             ->get();
 
         return array_map([$this, 'formatEditionFromArray'], $posts);
+    }
+
+    /**
+     * Get editions for multiple courses in a single query
+     *
+     * More efficient than calling getEditionsForCourse multiple times.
+     *
+     * @param array $courseIds Array of LearnDash course IDs
+     * @return array<int, array> Editions grouped by course_id
+     */
+    public function getEditionsForCourses(array $courseIds): array
+    {
+        if (empty($courseIds)) {
+            return [];
+        }
+
+        $model = $this->getModel();
+        if (!$model) {
+            return [];
+        }
+
+        // Sanitize course IDs
+        $courseIds = array_map('absint', $courseIds);
+        $courseIds = array_filter($courseIds);
+        $courseIds = array_unique($courseIds);
+
+        if (empty($courseIds)) {
+            return [];
+        }
+
+        $posts = $model
+            ->whereIn(FieldRegistry::EDITION_COURSE_ID, $courseIds)
+            ->orderBy(FieldRegistry::EDITION_START_DATE, 'ASC')
+            ->get();
+
+        // Group by course_id
+        $grouped = [];
+        foreach ($courseIds as $id) {
+            $grouped[$id] = []; // Initialize all course IDs
+        }
+
+        foreach ($posts as $post) {
+            $edition = $this->formatEditionFromArray($post);
+            $courseId = (int) $edition['course_id'];
+            if (isset($grouped[$courseId])) {
+                $grouped[$courseId][] = $edition;
+            }
+        }
+
+        return $grouped;
     }
 
     /**
@@ -1015,6 +1077,10 @@ class EditionService implements \NTDST_Service_Meta
             'certificate_enabled' => (bool) ($post->fields[FieldRegistry::EDITION_CERTIFICATE_ENABLED] ?? false),
             'custom_form' => $post->fields[FieldRegistry::EDITION_CUSTOM_FORM] ?? '',
             'is_multi_year_training' => (bool) ($post->fields[FieldRegistry::EDITION_IS_MULTI_YEAR] ?? false),
+            'target_group' => $post->fields[FieldRegistry::EDITION_TARGET_GROUP] ?? '',
+            'prerequisites' => $post->fields[FieldRegistry::EDITION_PREREQUISITES] ?? '',
+            'trainers' => $post->fields[FieldRegistry::EDITION_TRAINERS] ?? '',
+            'accreditation' => $post->fields[FieldRegistry::EDITION_ACCREDITATION] ?? '',
         ];
     }
 
@@ -1042,6 +1108,10 @@ class EditionService implements \NTDST_Service_Meta
             'certificate_enabled' => (bool) ($meta[FieldRegistry::EDITION_CERTIFICATE_ENABLED] ?? false),
             'custom_form' => $meta[FieldRegistry::EDITION_CUSTOM_FORM] ?? '',
             'is_multi_year_training' => (bool) ($meta[FieldRegistry::EDITION_IS_MULTI_YEAR] ?? false),
+            'target_group' => $meta[FieldRegistry::EDITION_TARGET_GROUP] ?? '',
+            'prerequisites' => $meta[FieldRegistry::EDITION_PREREQUISITES] ?? '',
+            'trainers' => $meta[FieldRegistry::EDITION_TRAINERS] ?? '',
+            'accreditation' => $meta[FieldRegistry::EDITION_ACCREDITATION] ?? '',
         ];
     }
 
@@ -1058,5 +1128,109 @@ class EditionService implements \NTDST_Service_Meta
     {
         $edition = $this->getEdition($editionId);
         return (bool) ($edition['is_multi_year_training'] ?? false);
+    }
+
+    // ========================================
+    // SESSION SLOT CONFIGURATION
+    // ========================================
+
+    /**
+     * Get session slot configuration for edition
+     *
+     * Format: [
+     *   ['slot' => 'morning', 'label' => 'Voormiddag', 'pick_count' => 1, 'required' => true],
+     *   ['slot' => 'afternoon', 'label' => 'Namiddag', 'pick_count' => 1, 'required' => true],
+     * ]
+     *
+     * @param int $editionId Edition post ID
+     * @return array Array of slot configurations
+     */
+    public function getSessionSlots(int $editionId): array
+    {
+        $model = $this->getModel();
+        if (!$model) {
+            return [];
+        }
+
+        $slots = $model->getMeta($editionId, FieldRegistry::EDITION_SESSION_SLOTS);
+        if (is_string($slots)) {
+            $slots = json_decode($slots, true) ?: [];
+        }
+
+        return (array) $slots;
+    }
+
+    /**
+     * Check if edition requires session selection
+     *
+     * @param int $editionId Edition post ID
+     * @return bool True if session selection is required
+     */
+    public function requiresSessionSelection(int $editionId): bool
+    {
+        $slots = $this->getSessionSlots($editionId);
+        return !empty($slots);
+    }
+
+    /**
+     * Get selection deadline for edition
+     *
+     * @param int $editionId Edition post ID
+     * @return string|null Date string or null if no deadline
+     */
+    public function getSelectionDeadline(int $editionId): ?string
+    {
+        $model = $this->getModel();
+        if (!$model) {
+            return null;
+        }
+
+        $deadline = $model->getMeta($editionId, FieldRegistry::EDITION_SELECTION_DEADLINE);
+        return $deadline ?: null;
+    }
+
+    /**
+     * Check if session selection is still allowed
+     *
+     * @param int $editionId Edition post ID
+     * @return bool True if selection can still be changed
+     */
+    public function isSelectionOpen(int $editionId): bool
+    {
+        $deadline = $this->getSelectionDeadline($editionId);
+        if (!$deadline) {
+            // No deadline = selection always open until edition starts
+            return !$this->hasStarted($editionId);
+        }
+
+        return strtotime($deadline) >= strtotime(wp_date('Y-m-d'));
+    }
+
+    /**
+     * Set session slot configuration for edition
+     *
+     * @param int $editionId Edition post ID
+     * @param array $slots Array of slot configurations
+     * @return true|WP_Error
+     */
+    public function setSessionSlots(int $editionId, array $slots): true|WP_Error
+    {
+        return $this->updateEdition($editionId, [
+            FieldRegistry::EDITION_SESSION_SLOTS => $slots,
+        ]);
+    }
+
+    /**
+     * Set selection deadline for edition
+     *
+     * @param int $editionId Edition post ID
+     * @param string|null $deadline Date string or null to clear
+     * @return true|WP_Error
+     */
+    public function setSelectionDeadline(int $editionId, ?string $deadline): true|WP_Error
+    {
+        return $this->updateEdition($editionId, [
+            FieldRegistry::EDITION_SELECTION_DEADLINE => $deadline,
+        ]);
     }
 }

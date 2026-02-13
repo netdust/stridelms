@@ -261,6 +261,84 @@ final class FieldRegistry
     /** Attendees array (user IDs) */
     public const SESSION_ATTENDEES = 'attendees';
 
+    /** Session slot identifier for grouping (e.g., "morning", "afternoon") */
+    public const SESSION_SLOT = 'slot';
+
+    /** Session slot display label (e.g., "Voormiddag", "Namiddag") */
+    public const SESSION_SLOT_LABEL = 'slot_label';
+
+    // ========================================
+    // TRAJECTORY FIELDS (vad_trajectory CPT)
+    // ========================================
+
+    /** Trajectory description */
+    public const TRAJECTORY_DESCRIPTION = 'description';
+
+    /** Trajectory status (open, closed, archived) */
+    public const TRAJECTORY_STATUS = 'status';
+
+    /** Number of months to complete trajectory */
+    public const TRAJECTORY_DEADLINE_MONTHS = 'deadline_months';
+
+    /** Course requirements JSON array */
+    public const TRAJECTORY_COURSES = 'courses';
+
+    // Trajectory status values
+    public const TRAJECTORY_STATUS_OPEN = 'open';
+    public const TRAJECTORY_STATUS_CLOSED = 'closed';
+    public const TRAJECTORY_STATUS_ARCHIVED = 'archived';
+
+    // ========================================
+    // TRAJECTORY MODE FIELDS
+    // ========================================
+
+    /** Trajectory mode: self_paced or cohort */
+    public const TRAJECTORY_MODE = 'mode';
+
+    /** Mode value: self-paced (user picks own editions at own pace) */
+    public const TRAJECTORY_MODE_SELF_PACED = 'self_paced';
+
+    /** Mode value: cohort (pre-linked editions, group moves together) */
+    public const TRAJECTORY_MODE_COHORT = 'cohort';
+
+    /** Cohort: enrollment closes after this date (YYYY-MM-DD) */
+    public const TRAJECTORY_ENROLLMENT_DEADLINE = 'enrollment_deadline';
+
+    /** Cohort: elective choices become available after this date (YYYY-MM-DD) */
+    public const TRAJECTORY_CHOICE_AVAILABLE = 'choice_available_date';
+
+    /** Cohort: deadline for elective choices (YYYY-MM-DD) */
+    public const TRAJECTORY_CHOICE_DEADLINE = 'choice_deadline';
+
+    /** Cohort: linked editions per course (JSON: [{course_id, edition_id}, ...]) */
+    public const TRAJECTORY_LINKED_EDITIONS = 'linked_editions';
+
+    // ========================================
+    // EDITION SESSION SLOTS (Edition Meta)
+    // ========================================
+
+    /** Session slot configuration for edition */
+    public const EDITION_SESSION_SLOTS = 'session_slots';
+
+    /** Session selection deadline (users can change until this date) */
+    public const EDITION_SELECTION_DEADLINE = 'selection_deadline';
+
+    // ========================================
+    // EDITION INFORMATIONAL FIELDS
+    // ========================================
+
+    /** Target audience description */
+    public const EDITION_TARGET_GROUP = 'target_group';
+
+    /** Prerequisites/prior education */
+    public const EDITION_PREREQUISITES = 'prerequisites';
+
+    /** Organization guides/supervisors (not speakers) */
+    public const EDITION_TRAINERS = 'trainers';
+
+    /** Accreditation information */
+    public const EDITION_ACCREDITATION = 'accreditation';
+
     // ========================================
     // CATEGORY NAMES
     // ========================================
