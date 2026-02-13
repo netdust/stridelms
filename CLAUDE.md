@@ -11,7 +11,9 @@
 - CRM/Forms: FluentCRM, FluentForms, Fluent SMTP
 - Frontend: TBD (likely Alpine.js + Tailwind or UIkit)
 
-**Project Plan:** See `docs/V4-PROJECT-PLAN.md` for the full feature inventory and 8-phase implementation plan.
+**Project Plan:** See `docs/V4-PROJECT-PLAN master.md` for the full feature inventory and 9-phase implementation plan.
+
+**Current Phase:** Phase 1.5 - Edition/Session Layer (critical path)
 
 ---
 
@@ -87,9 +89,12 @@ These specialized agents help with complex tasks:
 ```
 stride/
 ├── docs/
-│   ├── V4-PROJECT-PLAN.md           # Feature inventory & implementation phases
+│   ├── V4-PROJECT-PLAN master.md    # Feature inventory & 9-phase implementation
 │   ├── ARCHITECTURE-V4-PROPOSAL.md  # Architecture decisions & design
 │   └── ARCHITECTURE-V3-ANALYSIS.md  # V3 analysis for reference
+├── scripts/
+│   ├── seed.php                     # Development data seeder
+│   └── unseed.php                   # Seed data cleanup
 ├── web/
 │   ├── app/
 │   │   ├── mu-plugins/
@@ -101,7 +106,7 @@ stride/
 │   │           ├── functions.php        # Bootstrap lifecycle
 │   │           ├── theme-config.php     # Services & module config
 │   │           ├── services/            # Business logic
-│   │           │   ├── core/            # CourseService, etc.
+│   │           │   ├── core/            # CourseService, EditionService, SessionService, RegistrationRepository
 │   │           │   ├── enrollment/      # Enrollment workflows
 │   │           │   ├── invoicing/       # Quote generation
 │   │           │   ├── voucher/         # Voucher management
@@ -185,6 +190,65 @@ stride_service(CourseService::class);
 
 ---
 
+## Edition/Session Data Model
+
+The Edition/Session layer separates scheduled course offerings from LearnDash course content.
+
+### Key Concepts
+
+- **Course** (`sfwd-courses`): LearnDash content only (lessons, quizzes, certificates)
+- **Edition** (`vad_edition`): A scheduled offering of a course (dates, price, venue, capacity)
+- **Session** (`vad_session`): Individual meeting days within an edition (time slots, attendance)
+- **Registration** (`wp_vad_registrations`): User enrollment in an edition
+
+### CPTs and Tables
+
+| Type | Purpose |
+|------|---------|
+| `vad_edition` | Scheduled course offerings with pricing, dates, venue |
+| `vad_session` | Meeting days with time slots and attendance tracking |
+| `vad_voucher` | Discount codes |
+| `vad_quote` | Quotes/invoices |
+| `wp_vad_registrations` | High-volume registration table |
+
+### Core Services
+
+```php
+// EditionService - scheduled offerings
+$editionService = ntdst_get(EditionService::class);
+$edition = $editionService->getEdition($editionId);
+$editions = $editionService->getEditionsForCourse($courseId);
+$price = $editionService->getPrice($editionId);
+
+// SessionService - meeting days and attendance
+$sessionService = ntdst_get(SessionService::class);
+$sessions = $sessionService->getSessionsForEdition($editionId);
+$sessionService->markPresent($sessionId, $userId);
+$hours = $sessionService->getHoursAttended($userId, $editionId);
+
+// RegistrationRepository - enrollments
+$regRepo = ntdst_get(RegistrationRepository::class);
+$regId = $regRepo->create([
+    'user_id' => $userId,
+    'edition_id' => $editionId,
+    'status' => 'confirmed',
+    'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
+]);
+```
+
+### LearnDash Integration (4 points only)
+
+```php
+// CourseService wraps LearnDash
+$courseService = ntdst_get(CourseService::class);
+$courseService->grantAccess($userId, $courseId);   // On registration
+$courseService->revokeAccess($userId, $courseId);  // On cancellation
+$courseService->isComplete($userId, $courseId);    // Check completion
+$courseService->getCertificateLink($userId, $courseId);
+```
+
+---
+
 ## Development Workflow
 
 ### Local Development
@@ -208,6 +272,20 @@ composer require wpackagist-plugin/plugin-name
 ddev exec wp plugin activate plugin-name
 ```
 
+### Seed/Unseed Development Data
+```bash
+# Seed the database with test data (users, courses, editions, sessions, registrations, vouchers, quotes)
+ddev exec wp eval-file scripts/seed.php
+
+# Remove all seed data
+ddev exec bash -c 'FORCE_UNSEED=1 wp eval-file scripts/unseed.php'
+```
+
+Test credentials after seeding:
+- All seed users have password: `seedpass123`
+- Admin: `seed_admin@seed.test`
+- Students: `seed_student1@seed.test` through `seed_student5@seed.test`
+
 ---
 
 ## Key Decisions
@@ -218,6 +296,8 @@ ddev exec wp plugin activate plugin-name
 4. **User Migration**: Port user data, maintain their history via DB bridge
 5. **Simplified Admin**: Unified user profile view instead of 6+ tools
 6. **Journey UX**: Trajectories shown as visual learning paths, not course grids
+7. **Edition/Session Model**: LearnDash courses are content only; editions are scheduled offerings with dates, pricing, capacity; sessions are individual meeting days
+8. **LearnDash as Content Engine**: Only 4 integration points: `grantAccess`, `revokeAccess`, `isComplete`, `getCertificateLink`
 
 ---
 
@@ -233,8 +313,9 @@ ddev exec wp plugin activate plugin-name
 
 ## Related Documentation
 
-- **V4 Project Plan:** `docs/V4-PROJECT-PLAN.md`
+- **V4 Project Plan (Master):** `docs/V4-PROJECT-PLAN master.md`
 - **V4 Architecture:** `docs/ARCHITECTURE-V4-PROPOSAL.md`
 - **V3 Analysis:** `docs/ARCHITECTURE-V3-ANALYSIS.md`
+- **Seed Scripts:** `scripts/seed.php`, `scripts/unseed.php`
 - **V3 Codebase (reference):** `/home/ntdst/Sites/vad-vormingen/`
 - **NTDST Core (Rossi reference):** `/home/ntdst/Sites/rossi/`
