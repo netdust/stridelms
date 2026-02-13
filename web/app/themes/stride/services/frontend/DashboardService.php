@@ -5,8 +5,15 @@ namespace stride\services\frontend;
 defined('ABSPATH') || exit;
 
 use ntdst\Stride\core\CourseService;
+use ntdst\Stride\core\EditionService;
+use ntdst\Stride\core\SessionService;
+use ntdst\Stride\core\TrajectoryService;
+use ntdst\Stride\core\RegistrationRepository;
+use ntdst\Stride\core\TrajectoryEnrollmentRepository;
+use ntdst\Stride\core\ProgressEngine;
 use ntdst\Stride\invoicing\QuoteService;
 use ntdst\Stride\sync\UserDataSync;
+use ntdst\Stride\FieldRegistry;
 use WP_Error;
 use WP_Post;
 
@@ -14,14 +21,25 @@ use WP_Post;
  * Dashboard Service
  *
  * Provides aggregated data for user dashboard templates.
- * Orchestrates data from CourseService, QuoteService, and UserDataSync
- * to provide a unified dashboard experience.
+ * Orchestrates data from Edition/Session/Course services to provide
+ * a unified dashboard experience.
+ *
+ * Phase 6 Refactor: Now uses Edition model for scheduled offerings
+ * - User enrolls in EDITIONS (not courses directly)
+ * - Upcoming dates come from SESSIONS (meeting days)
+ * - Trajectories use TrajectoryService/ProgressEngine
  *
  * @package stride\services\frontend
  */
 class DashboardService implements \NTDST_Service_Meta
 {
     private ?CourseService $courseService;
+    private ?EditionService $editionService;
+    private ?SessionService $sessionService;
+    private ?TrajectoryService $trajectoryService;
+    private ?RegistrationRepository $registrationRepo;
+    private ?TrajectoryEnrollmentRepository $trajectoryEnrollmentRepo;
+    private ?ProgressEngine $progressEngine;
     private ?QuoteService $quoteService;
     private ?UserDataSync $userDataSync;
 
@@ -44,10 +62,22 @@ class DashboardService implements \NTDST_Service_Meta
      */
     public function __construct(
         ?CourseService $courseService = null,
+        ?EditionService $editionService = null,
+        ?SessionService $sessionService = null,
+        ?TrajectoryService $trajectoryService = null,
+        ?RegistrationRepository $registrationRepo = null,
+        ?TrajectoryEnrollmentRepository $trajectoryEnrollmentRepo = null,
+        ?ProgressEngine $progressEngine = null,
         ?QuoteService $quoteService = null,
         ?UserDataSync $userDataSync = null
     ) {
         $this->courseService = $courseService ?? $this->resolveService(CourseService::class);
+        $this->editionService = $editionService ?? $this->resolveService(EditionService::class);
+        $this->sessionService = $sessionService ?? $this->resolveService(SessionService::class);
+        $this->trajectoryService = $trajectoryService ?? $this->resolveService(TrajectoryService::class);
+        $this->registrationRepo = $registrationRepo ?? $this->resolveService(RegistrationRepository::class);
+        $this->trajectoryEnrollmentRepo = $trajectoryEnrollmentRepo ?? new TrajectoryEnrollmentRepository();
+        $this->progressEngine = $progressEngine ?? $this->resolveService(ProgressEngine::class);
         $this->quoteService = $quoteService ?? $this->resolveService(QuoteService::class);
         $this->userDataSync = $userDataSync ?? $this->resolveService(UserDataSync::class);
 
@@ -79,33 +109,37 @@ class DashboardService implements \NTDST_Service_Meta
     }
 
     // ========================================
-    // USER COURSE DATA
+    // USER EDITION REGISTRATIONS
     // ========================================
 
     /**
-     * Get all courses for a user with enriched data
+     * Get all editions/courses for a user with enriched data
+     *
+     * Now queries from RegistrationRepository (edition enrollments)
+     * and enriches with edition/course data.
      *
      * @param int $userId
      * @param array $filters Optional filters: type (online|in-person), status (enrolled|completed|in_progress)
-     * @return array Array of course data
+     * @return array Array of edition/course data
      */
     public function getUserCourses(int $userId, array $filters = []): array
     {
-        if (!$this->courseService || !$this->courseService->isAvailable()) {
+        if (!$this->registrationRepo || !$this->editionService) {
             return [];
         }
 
-        // Get enrolled course IDs
-        $enrolledCourses = $this->getEnrolledCourseIds($userId);
+        // Get user's edition registrations (confirmed only)
+        $registrations = $this->registrationRepo->getByUser($userId, RegistrationRepository::STATUS_CONFIRMED);
 
-        if (empty($enrolledCourses)) {
+        if (empty($registrations)) {
             return [];
         }
 
         $courses = [];
 
-        foreach ($enrolledCourses as $courseId) {
-            $courseData = $this->buildCourseData($courseId, $userId);
+        foreach ($registrations as $registration) {
+            $editionId = $registration['edition_id'];
+            $courseData = $this->buildEditionCourseData($editionId, $userId, $registration);
 
             if ($courseData === null) {
                 continue;
@@ -148,20 +182,35 @@ class DashboardService implements \NTDST_Service_Meta
     }
 
     /**
-     * Build course data array for a single course
+     * Build course data array from edition registration
+     *
+     * @param int $editionId Edition post ID
+     * @param int $userId User ID
+     * @param array $registration Registration data
+     * @return array|null Course data or null if invalid
      */
-    private function buildCourseData(int $courseId, int $userId): ?array
+    private function buildEditionCourseData(int $editionId, int $userId, array $registration): ?array
     {
-        $course = $this->courseService->getCourse($courseId);
+        $edition = $this->editionService->getEdition($editionId);
+        if (!$edition) {
+            return null;
+        }
 
+        $courseId = $edition['course_id'];
+        $course = $this->courseService ? $this->courseService->getCourse($courseId) : get_post($courseId);
         if (!$course) {
             return null;
         }
 
-        $isCompleted = $this->courseService->isUserCompleted($userId, $courseId);
-        $isInPerson = $this->courseService->isInPerson($courseId);
+        // Determine if in-person or online based on edition venue
+        $isInPerson = !empty($edition['venue']);
         $isOnline = !$isInPerson;
-        $hasStarted = $this->courseService->hasStarted($courseId);
+
+        // Check completion via CourseService (LearnDash)
+        $isCompleted = $this->courseService && $this->courseService->isUserCompleted($userId, $courseId);
+
+        // Check if edition has started
+        $hasStarted = $this->editionService->hasStarted($editionId);
 
         // Determine status
         $status = 'enrolled';
@@ -181,28 +230,55 @@ class DashboardService implements \NTDST_Service_Meta
             $progress = $progressData['percentage'] ?? 0;
         }
 
+        // Get sessions for this edition
+        $sessions = $this->sessionService ? $this->sessionService->getSessionsForEdition($editionId) : [];
+        $sessionDates = array_map(function ($s) {
+            return strtotime($s['date']);
+        }, $sessions);
+        sort($sessionDates);
+
+        // Find next date (first future session)
+        $now = time();
+        $nextDate = null;
+        foreach ($sessionDates as $date) {
+            if ($date > $now) {
+                $nextDate = $date;
+                break;
+            }
+        }
+
+        // If no sessions, use edition start date
+        if (empty($sessionDates) && $edition['start_date']) {
+            $sessionDates = [strtotime($edition['start_date'])];
+            $nextDate = strtotime($edition['start_date']) > $now ? strtotime($edition['start_date']) : null;
+        }
+
         return [
-            'id' => $courseId,
-            'title' => $course->post_title,
+            'id' => $courseId, // Course ID for linking to LearnDash course
+            'edition_id' => $editionId,
+            'title' => $course->post_title ?? $edition['title'],
             'excerpt' => get_the_excerpt($course),
             'permalink' => get_permalink($courseId),
             'thumbnail' => get_the_post_thumbnail_url($courseId, 'stride_course_card'),
             'is_online' => $isOnline,
             'is_in_person' => $isInPerson,
-            'is_trajectory' => $this->courseService->isTraject($courseId),
+            'is_trajectory' => false, // Trajectories are separate
             'status' => $status,
             'progress' => $progress,
-            'start_date' => $this->courseService->getStartDate($courseId),
-            'next_date' => $this->courseService->getNextDate($courseId),
-            'dates' => $this->courseService->getCourseDates($courseId),
-            'location' => $this->courseService->getCourseAddress($courseId),
-            'certificate_link' => $isCompleted ? $this->courseService->getCertificateLink($userId, $courseId) : null,
-            'speakers' => $this->courseService->getCourseSpeakers($courseId),
+            'start_date' => $edition['start_date'] ? strtotime($edition['start_date']) : null,
+            'next_date' => $nextDate,
+            'dates' => $sessionDates,
+            'location' => $edition['venue'],
+            'certificate_link' => $isCompleted && $this->courseService
+                ? $this->courseService->getCertificateLink($userId, $courseId)
+                : null,
+            'speakers' => $this->editionService->getSpeakers($editionId),
+            'registration' => $registration,
         ];
     }
 
     /**
-     * Get enrolled course IDs for a user
+     * Get enrolled course IDs for a user (LearnDash fallback for legacy)
      */
     private function getEnrolledCourseIds(int $userId): array
     {
@@ -220,70 +296,87 @@ class DashboardService implements \NTDST_Service_Meta
     /**
      * Get user's trajectories with progress
      *
+     * Uses TrajectoryService and TrajectoryEnrollmentRepository
+     * instead of LearnDash groups.
+     *
      * @param int $userId
      * @return array
      */
     public function getUserTrajectories(int $userId): array
     {
-        if (!function_exists('learndash_get_users_group_ids')) {
+        if (!$this->trajectoryEnrollmentRepo || !$this->trajectoryService) {
             return [];
         }
 
-        $groupIds = learndash_get_users_group_ids($userId, true);
+        // Get user's trajectory enrollments
+        $enrollments = $this->trajectoryEnrollmentRepo->getByUser($userId);
 
-        if (empty($groupIds)) {
+        if (empty($enrollments)) {
             return [];
         }
 
         $trajectories = [];
 
-        foreach ($groupIds as $groupId) {
-            $group = get_post($groupId);
+        foreach ($enrollments as $enrollment) {
+            $trajectoryId = $enrollment['trajectory_id'];
+            $trajectory = $this->trajectoryService->getTrajectory($trajectoryId);
 
-            if (!$group || $group->post_type !== 'groups') {
+            if (!$trajectory) {
                 continue;
             }
 
-            // Get group courses
-            $groupCourses = learndash_get_group_courses_list($groupId);
+            // Get progress from ProgressEngine
+            $progress = $this->progressEngine
+                ? $this->progressEngine->getProgress($trajectoryId, $userId)
+                : ['percentage' => 0, 'is_complete' => false];
 
-            if (empty($groupCourses)) {
-                continue;
-            }
-
-            $totalCourses = count($groupCourses);
+            $courses = $trajectory['courses'] ?? [];
+            $totalCourses = 0;
             $completedCourses = 0;
             $modules = [];
 
-            foreach ($groupCourses as $courseId) {
-                $isCompleted = $this->courseService->isUserCompleted($userId, $courseId);
+            // Build modules list from trajectory courses
+            foreach ($courses as $course) {
+                $courseId = $course['course_id'] ?? 0;
+                if (!$courseId) {
+                    continue;
+                }
+
+                $totalCourses++;
+                $isCompleted = in_array($courseId, $progress['completed_courses'] ?? [], true);
                 if ($isCompleted) {
                     $completedCourses++;
                 }
 
+                // Get next session date for this course
+                $nextDate = $this->getNextSessionDateForCourse($courseId, $trajectory);
+
                 $modules[] = [
                     'id' => $courseId,
                     'title' => get_the_title($courseId),
-                    'status' => $this->getModuleStatus($courseId, $userId),
+                    'group' => $course['group'] ?? 'Modules',
+                    'status' => $this->getModuleStatus($courseId, $userId, $progress),
                     'is_completed' => $isCompleted,
-                    'next_date' => $this->courseService->getNextDate($courseId),
+                    'next_date' => $nextDate,
                 ];
             }
 
-            $progress = $totalCourses > 0
+            $progressPercent = $totalCourses > 0
                 ? round(($completedCourses / $totalCourses) * 100)
                 : 0;
 
             $trajectories[] = [
-                'id' => $groupId,
-                'title' => $group->post_title,
-                'excerpt' => get_the_excerpt($group),
-                'permalink' => get_permalink($groupId),
+                'id' => $trajectoryId,
+                'title' => $trajectory['title'],
+                'excerpt' => $trajectory['description'] ?? '',
+                'permalink' => get_permalink($trajectoryId),
+                'mode' => $trajectory['mode'] ?? FieldRegistry::TRAJECTORY_MODE_SELF_PACED,
                 'total_modules' => $totalCourses,
                 'completed_modules' => $completedCourses,
-                'progress' => $progress,
+                'progress' => $progressPercent,
                 'modules' => $modules,
                 'current_module' => $this->getCurrentModule($modules),
+                'enrollment' => $enrollment,
             ];
         }
 
@@ -291,34 +384,103 @@ class DashboardService implements \NTDST_Service_Meta
     }
 
     /**
+     * Get next session date for a course in a trajectory
+     *
+     * For cohort mode: looks at linked editions
+     * For self-paced: looks at next available edition
+     */
+    private function getNextSessionDateForCourse(int $courseId, array $trajectory): ?int
+    {
+        // For cohort trajectories, check linked editions
+        $linkedEditions = $trajectory['linked_editions'] ?? [];
+        $editionId = null;
+
+        foreach ($linkedEditions as $link) {
+            if (($link['course_id'] ?? 0) == $courseId) {
+                $editionId = $link['edition_id'] ?? 0;
+                break;
+            }
+        }
+
+        // If no linked edition, find next available edition for this course
+        if (!$editionId && $this->editionService) {
+            $upcomingEditions = $this->editionService->getUpcomingEditionsForCourse($courseId, 1);
+            if (!empty($upcomingEditions)) {
+                $editionId = $upcomingEditions[0]['id'];
+            }
+        }
+
+        if (!$editionId || !$this->sessionService) {
+            return null;
+        }
+
+        // Get first session date
+        $sessions = $this->sessionService->getSessionsForEdition($editionId);
+        if (empty($sessions)) {
+            // Fall back to edition start date
+            $startDate = $this->editionService->getStartDate($editionId);
+            return $startDate ? strtotime($startDate) : null;
+        }
+
+        $now = time();
+        foreach ($sessions as $session) {
+            $sessionDate = strtotime($session['date']);
+            if ($sessionDate > $now) {
+                return $sessionDate;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Get single trajectory with full journey data
      *
-     * @param int $trajectoryId Group ID
+     * @param int $trajectoryId Trajectory post ID
      * @param int $userId
      * @return array|null
      */
     public function getTrajectory(int $trajectoryId, int $userId): ?array
     {
-        $group = get_post($trajectoryId);
-
-        if (!$group || $group->post_type !== 'groups') {
+        if (!$this->trajectoryService || !$this->progressEngine) {
             return null;
         }
 
-        $groupCourses = learndash_get_group_courses_list($trajectoryId);
-
-        if (empty($groupCourses)) {
+        $trajectory = $this->trajectoryService->getTrajectory($trajectoryId);
+        if (!$trajectory) {
             return null;
         }
+
+        $progress = $this->progressEngine->getProgress($trajectoryId, $userId);
+        $courses = $trajectory['courses'] ?? [];
 
         $mandatoryModules = [];
         $electiveModules = [];
         $completedCount = 0;
         $currentModuleIndex = -1;
 
-        foreach ($groupCourses as $index => $courseId) {
-            $isCompleted = $this->courseService->isUserCompleted($userId, $courseId);
-            $isElective = $this->courseService->isModuleCourse($courseId);
+        // Group courses by type (mandatory vs elective)
+        $coursesByGroup = [];
+        foreach ($courses as $course) {
+            $group = $course['group'] ?? 'Modules';
+            if (!isset($coursesByGroup[$group])) {
+                $coursesByGroup[$group] = [
+                    'courses' => [],
+                    'pick_count' => $course['pick_count'] ?? null,
+                ];
+            }
+            $coursesByGroup[$group]['courses'][] = $course;
+        }
+
+        foreach ($courses as $index => $course) {
+            $courseId = $course['course_id'] ?? 0;
+            if (!$courseId) {
+                continue;
+            }
+
+            $isCompleted = in_array($courseId, $progress['completed_courses'] ?? [], true);
+            $group = $course['group'] ?? 'Modules';
+            $isElective = isset($coursesByGroup[$group]['pick_count']);
 
             if ($isCompleted) {
                 $completedCount++;
@@ -328,10 +490,11 @@ class DashboardService implements \NTDST_Service_Meta
                 'id' => $courseId,
                 'title' => get_the_title($courseId),
                 'permalink' => get_permalink($courseId),
-                'status' => $this->getModuleStatus($courseId, $userId),
+                'group' => $group,
+                'status' => $this->getModuleStatus($courseId, $userId, $progress),
                 'is_completed' => $isCompleted,
-                'next_date' => $this->courseService->getNextDate($courseId),
-                'location' => $this->courseService->getCourseAddress($courseId),
+                'next_date' => $this->getNextSessionDateForCourse($courseId, $trajectory),
+                'location' => $this->getModuleLocation($courseId, $trajectory),
             ];
 
             if ($isElective) {
@@ -346,9 +509,9 @@ class DashboardService implements \NTDST_Service_Meta
             }
         }
 
-        $totalMandatory = count($mandatoryModules);
-        $progress = $totalMandatory > 0
-            ? round(($completedCount / count($groupCourses)) * 100)
+        $totalCount = count($courses);
+        $progressPercent = $totalCount > 0
+            ? round(($completedCount / $totalCount) * 100)
             : 0;
 
         // Get next upcoming session
@@ -362,28 +525,55 @@ class DashboardService implements \NTDST_Service_Meta
 
         return [
             'id' => $trajectoryId,
-            'title' => $group->post_title,
-            'description' => apply_filters('the_content', $group->post_content),
-            'progress' => $progress,
+            'title' => $trajectory['title'],
+            'description' => apply_filters('the_content', $trajectory['description'] ?? ''),
+            'mode' => $trajectory['mode'] ?? FieldRegistry::TRAJECTORY_MODE_SELF_PACED,
+            'progress' => $progressPercent,
             'mandatory_modules' => $mandatoryModules,
             'elective_modules' => $electiveModules,
             'current_module_index' => $currentModuleIndex,
             'next_session' => $nextSession,
             'completed_count' => $completedCount,
-            'total_count' => count($groupCourses),
+            'total_count' => $totalCount,
         ];
+    }
+
+    /**
+     * Get module location from linked edition or upcoming edition
+     */
+    private function getModuleLocation(int $courseId, array $trajectory): ?string
+    {
+        // Check linked editions first (cohort mode)
+        $linkedEditions = $trajectory['linked_editions'] ?? [];
+        $editionId = null;
+
+        foreach ($linkedEditions as $link) {
+            if (($link['course_id'] ?? 0) == $courseId) {
+                $editionId = $link['edition_id'] ?? 0;
+                break;
+            }
+        }
+
+        if ($editionId && $this->editionService) {
+            return $this->editionService->getVenue($editionId);
+        }
+
+        return null;
     }
 
     /**
      * Get module status string
      */
-    private function getModuleStatus(int $courseId, int $userId): string
+    private function getModuleStatus(int $courseId, int $userId, array $progress = []): string
     {
-        if ($this->courseService->isUserCompleted($userId, $courseId)) {
+        $completedCourses = $progress['completed_courses'] ?? [];
+
+        if (in_array($courseId, $completedCourses, true)) {
             return 'completed';
         }
 
-        if ($this->courseService->hasStarted($courseId)) {
+        // Check if user has started this course via LearnDash
+        if ($this->courseService && $this->courseService->hasStarted($courseId)) {
             return 'current';
         }
 
@@ -416,7 +606,9 @@ class DashboardService implements \NTDST_Service_Meta
     // ========================================
 
     /**
-     * Get upcoming course dates for user
+     * Get upcoming session dates for user
+     *
+     * Now queries sessions from user's registered editions.
      *
      * @param int $userId
      * @param int $limit Maximum dates to return
@@ -424,26 +616,71 @@ class DashboardService implements \NTDST_Service_Meta
      */
     public function getUpcomingDates(int $userId, int $limit = 3): array
     {
-        $courses = $this->getUserCourses($userId);
-        $upcomingDates = [];
+        if (!$this->registrationRepo || !$this->sessionService) {
+            return [];
+        }
 
-        foreach ($courses as $course) {
-            if ($course['status'] === 'completed') {
+        // Get user's active registrations
+        $registrations = $this->registrationRepo->getByUser($userId, RegistrationRepository::STATUS_CONFIRMED);
+
+        if (empty($registrations)) {
+            return [];
+        }
+
+        $upcomingDates = [];
+        $now = time();
+
+        foreach ($registrations as $registration) {
+            $editionId = $registration['edition_id'];
+            $edition = $this->editionService ? $this->editionService->getEdition($editionId) : null;
+
+            if (!$edition) {
                 continue;
             }
 
-            foreach ($course['dates'] as $timestamp) {
+            $courseId = $edition['course_id'];
+            $courseTitle = get_the_title($courseId) ?: $edition['title'];
+
+            // Get sessions for this edition
+            $sessions = $this->sessionService->getSessionsForEdition($editionId);
+
+            if (empty($sessions)) {
+                // Fall back to edition start date if no sessions
+                $startTimestamp = $edition['start_date'] ? strtotime($edition['start_date']) : null;
+                if ($startTimestamp && $startTimestamp > $now) {
+                    $upcomingDates[] = [
+                        'timestamp' => $startTimestamp,
+                        'course_id' => $courseId,
+                        'edition_id' => $editionId,
+                        'session_id' => null,
+                        'course_title' => $courseTitle,
+                        'location' => $edition['venue'],
+                        'day' => date_i18n('j', $startTimestamp),
+                        'month' => date_i18n('M', $startTimestamp),
+                        'full_date' => date_i18n('j F Y', $startTimestamp),
+                        'time' => null,
+                    ];
+                }
+                continue;
+            }
+
+            foreach ($sessions as $session) {
+                $sessionDate = $session['date'];
+                $timestamp = strtotime($sessionDate);
+
                 // Only future dates
-                if ($timestamp > time()) {
+                if ($timestamp > $now) {
                     $upcomingDates[] = [
                         'timestamp' => $timestamp,
-                        'course_id' => $course['id'],
-                        'course_title' => $course['title'],
-                        'location' => $course['location'],
+                        'course_id' => $courseId,
+                        'edition_id' => $editionId,
+                        'session_id' => $session['id'],
+                        'course_title' => $courseTitle,
+                        'location' => $session['location'] ?: $edition['venue'],
                         'day' => date_i18n('j', $timestamp),
                         'month' => date_i18n('M', $timestamp),
                         'full_date' => date_i18n('j F Y', $timestamp),
-                        'time' => date_i18n('H:i', $timestamp),
+                        'time' => $session['start_time'] ?: null,
                     ];
                 }
             }
@@ -793,6 +1030,8 @@ class DashboardService implements \NTDST_Service_Meta
     public function handleIcalDownload(): void
     {
         $courseId = (int) ($_GET['course_id'] ?? 0);
+        $editionId = (int) ($_GET['edition_id'] ?? 0);
+        $sessionId = (int) ($_GET['session_id'] ?? 0);
         $nonce = $_GET['nonce'] ?? '';
 
         if (!wp_verify_nonce($nonce, 'stride_frontend')) {
@@ -801,17 +1040,30 @@ class DashboardService implements \NTDST_Service_Meta
 
         $userId = get_current_user_id();
 
-        if (!$userId || !$this->courseService->isUserEnrolled($userId, $courseId)) {
+        // Verify user has access to this edition
+        if ($editionId && $this->registrationRepo) {
+            $registration = $this->registrationRepo->findByUserAndEdition($userId, $editionId);
+            if (!$registration || $registration['status'] !== RegistrationRepository::STATUS_CONFIRMED) {
+                wp_die(__('Geen toegang.', 'stride'));
+            }
+        } elseif ($courseId && $this->courseService && !$this->courseService->isUserEnrolled($userId, $courseId)) {
             wp_die(__('Geen toegang.', 'stride'));
         }
 
         $icalService = stride_service(ICalService::class);
 
         if ($icalService) {
-            $icalService->downloadCourseEvent($courseId);
+            // Use session-aware iCal if session ID provided
+            if ($sessionId) {
+                $icalService->downloadSessionEvent($sessionId);
+            } elseif ($editionId) {
+                $icalService->downloadEditionEvent($editionId);
+            } else {
+                $icalService->downloadCourseEvent($courseId);
+            }
         } else {
             // Fallback simple iCal generation
-            $this->generateSimpleIcal($courseId);
+            $this->generateSimpleIcal($courseId, $editionId, $sessionId);
         }
 
         exit;
@@ -820,20 +1072,36 @@ class DashboardService implements \NTDST_Service_Meta
     /**
      * Simple iCal generation fallback
      */
-    private function generateSimpleIcal(int $courseId): void
+    private function generateSimpleIcal(int $courseId, int $editionId = 0, int $sessionId = 0): void
     {
-        $course = $this->courseService->getCourse($courseId);
-        $startDate = $this->courseService->getStartDate($courseId);
-        $location = $this->courseService->getCourseAddress($courseId);
+        $title = get_the_title($courseId);
+        $startDate = null;
+        $location = null;
 
-        if (!$course || !$startDate) {
+        // Get data from session or edition
+        if ($sessionId && $this->sessionService) {
+            $session = $this->sessionService->getSession($sessionId);
+            if ($session) {
+                $startDate = strtotime($session['date'] . ' ' . ($session['start_time'] ?: '09:00'));
+                $location = $session['location'];
+            }
+        } elseif ($editionId && $this->editionService) {
+            $startDateStr = $this->editionService->getStartDate($editionId);
+            $startDate = $startDateStr ? strtotime($startDateStr) : null;
+            $location = $this->editionService->getVenue($editionId);
+        } elseif ($this->courseService) {
+            $startDate = $this->courseService->getStartDate($courseId);
+            $location = $this->courseService->getCourseAddress($courseId);
+        }
+
+        if (!$title || !$startDate) {
             wp_die(__('Geen datum gevonden.', 'stride'));
         }
 
         $dtStart = gmdate('Ymd\THis\Z', $startDate);
         $dtEnd = gmdate('Ymd\THis\Z', $startDate + 28800); // +8 hours default
         $dtstamp = gmdate('Ymd\THis\Z');
-        $uid = 'stride-course-' . $courseId . '@' . wp_parse_url(home_url(), PHP_URL_HOST);
+        $uid = 'stride-' . ($sessionId ?: $editionId ?: $courseId) . '@' . wp_parse_url(home_url(), PHP_URL_HOST);
 
         $ical = "BEGIN:VCALENDAR\r\n";
         $ical .= "VERSION:2.0\r\n";
@@ -844,7 +1112,7 @@ class DashboardService implements \NTDST_Service_Meta
         $ical .= "DTSTAMP:{$dtstamp}\r\n";
         $ical .= "DTSTART:{$dtStart}\r\n";
         $ical .= "DTEND:{$dtEnd}\r\n";
-        $ical .= "SUMMARY:" . $this->escapeIcal($course->post_title) . "\r\n";
+        $ical .= "SUMMARY:" . $this->escapeIcal($title) . "\r\n";
         if ($location) {
             $ical .= "LOCATION:" . $this->escapeIcal($location) . "\r\n";
         }
@@ -853,7 +1121,7 @@ class DashboardService implements \NTDST_Service_Meta
         $ical .= "END:VCALENDAR\r\n";
 
         header('Content-Type: text/calendar; charset=utf-8');
-        header('Content-Disposition: attachment; filename="course-' . $courseId . '.ics"');
+        header('Content-Disposition: attachment; filename="event-' . ($sessionId ?: $editionId ?: $courseId) . '.ics"');
         echo $ical;
     }
 
@@ -898,19 +1166,40 @@ class DashboardService implements \NTDST_Service_Meta
     }
 
     // ========================================
-    // COURSE SIDEBAR HELPERS
+    // EDITION SIDEBAR HELPERS
     // ========================================
 
     /**
-     * Get course action button data based on user status
+     * Get edition action button data based on user status
      *
-     * @param int $courseId
+     * @param int $editionId Edition post ID
      * @param int|null $userId
      * @return array
      */
-    public function getCourseActionButton(int $courseId, ?int $userId = null): array
+    public function getEditionActionButton(int $editionId, ?int $userId = null): array
     {
         $userId = $userId ?? get_current_user_id();
+
+        if (!$this->editionService) {
+            return [
+                'label' => __('Niet beschikbaar', 'stride'),
+                'style' => 'muted',
+                'url' => null,
+                'disabled' => true,
+            ];
+        }
+
+        $edition = $this->editionService->getEdition($editionId);
+        if (!$edition) {
+            return [
+                'label' => __('Niet beschikbaar', 'stride'),
+                'style' => 'muted',
+                'url' => null,
+                'disabled' => true,
+            ];
+        }
+
+        $courseId = $edition['course_id'];
 
         if (!$userId) {
             return [
@@ -921,37 +1210,42 @@ class DashboardService implements \NTDST_Service_Meta
             ];
         }
 
-        // Check if enrolled
-        if ($this->courseService->isUserEnrolled($userId, $courseId)) {
-            if ($this->courseService->isUserCompleted($userId, $courseId)) {
-                $certificateLink = $this->courseService->getCertificateLink($userId, $courseId);
+        // Check if enrolled in this edition
+        if ($this->registrationRepo) {
+            $registration = $this->registrationRepo->findByUserAndEdition($userId, $editionId);
+            if ($registration && $registration['status'] === RegistrationRepository::STATUS_CONFIRMED) {
+                // Check completion
+                if ($this->courseService && $this->courseService->isUserCompleted($userId, $courseId)) {
+                    $certificateLink = $this->courseService->getCertificateLink($userId, $courseId);
+                    return [
+                        'label' => __('Download Certificaat', 'stride'),
+                        'style' => 'success',
+                        'url' => $certificateLink ?: '#',
+                        'disabled' => !$certificateLink,
+                    ];
+                }
+
+                // Online course - can continue
+                if (empty($edition['venue'])) {
+                    return [
+                        'label' => __('Ga verder', 'stride'),
+                        'style' => 'primary',
+                        'url' => get_permalink($courseId),
+                        'disabled' => false,
+                    ];
+                }
+
                 return [
-                    'label' => __('Download Certificaat', 'stride'),
+                    'label' => __('U bent ingeschreven', 'stride'),
                     'style' => 'success',
-                    'url' => $certificateLink ?: '#',
-                    'disabled' => !$certificateLink,
+                    'url' => null,
+                    'disabled' => true,
                 ];
             }
-
-            if ($this->courseService->isOnline($courseId)) {
-                return [
-                    'label' => __('Ga verder', 'stride'),
-                    'style' => 'primary',
-                    'url' => get_permalink($courseId),
-                    'disabled' => false,
-                ];
-            }
-
-            return [
-                'label' => __('U bent ingeschreven', 'stride'),
-                'style' => 'success',
-                'url' => null,
-                'disabled' => true,
-            ];
         }
 
-        // Check course status
-        if ($this->courseService->isCancelled($courseId)) {
+        // Check edition status
+        if ($this->editionService->isCancelled($editionId)) {
             return [
                 'label' => __('Geannuleerd', 'stride'),
                 'style' => 'danger',
@@ -960,7 +1254,7 @@ class DashboardService implements \NTDST_Service_Meta
             ];
         }
 
-        if ($this->courseService->hasEnded($courseId)) {
+        if ($this->editionService->hasEnded($editionId)) {
             return [
                 'label' => __('Afgelopen', 'stride'),
                 'style' => 'muted',
@@ -969,7 +1263,7 @@ class DashboardService implements \NTDST_Service_Meta
             ];
         }
 
-        if ($this->courseService->isFull($courseId)) {
+        if ($this->editionService->isFull($editionId)) {
             return [
                 'label' => __('Volzet', 'stride'),
                 'style' => 'warning',
@@ -978,7 +1272,7 @@ class DashboardService implements \NTDST_Service_Meta
             ];
         }
 
-        if ($this->courseService->isAnnouncement($courseId)) {
+        if ($this->editionService->isAnnouncement($editionId)) {
             return [
                 'label' => __('Binnenkort beschikbaar', 'stride'),
                 'style' => 'muted',
@@ -991,22 +1285,83 @@ class DashboardService implements \NTDST_Service_Meta
         return [
             'label' => __('Schrijf je in', 'stride'),
             'style' => 'primary',
-            'url' => $this->getEnrollmentUrl($courseId),
+            'url' => $this->getEnrollmentUrl($editionId, $courseId),
             'disabled' => false,
         ];
     }
 
     /**
-     * Get enrollment URL for a course
+     * Get course action button - legacy wrapper for edition-based enrollment
+     *
+     * @param int $courseId
+     * @param int|null $userId
+     * @return array
      */
-    private function getEnrollmentUrl(int $courseId): string
+    public function getCourseActionButton(int $courseId, ?int $userId = null): array
+    {
+        $userId = $userId ?? get_current_user_id();
+
+        // Find next available edition for this course
+        if ($this->editionService) {
+            $upcomingEditions = $this->editionService->getUpcomingEditionsForCourse($courseId, 1);
+            if (!empty($upcomingEditions)) {
+                return $this->getEditionActionButton($upcomingEditions[0]['id'], $userId);
+            }
+        }
+
+        // Fall back to course-level check
+        if (!$userId) {
+            return [
+                'label' => __('Log in om in te schrijven', 'stride'),
+                'style' => 'default',
+                'url' => wp_login_url(get_permalink($courseId)),
+                'disabled' => false,
+            ];
+        }
+
+        // Check if enrolled via LearnDash
+        if ($this->courseService && $this->courseService->isUserEnrolled($userId, $courseId)) {
+            if ($this->courseService->isUserCompleted($userId, $courseId)) {
+                $certificateLink = $this->courseService->getCertificateLink($userId, $courseId);
+                return [
+                    'label' => __('Download Certificaat', 'stride'),
+                    'style' => 'success',
+                    'url' => $certificateLink ?: '#',
+                    'disabled' => !$certificateLink,
+                ];
+            }
+
+            return [
+                'label' => __('Ga verder', 'stride'),
+                'style' => 'primary',
+                'url' => get_permalink($courseId),
+                'disabled' => false,
+            ];
+        }
+
+        return [
+            'label' => __('Schrijf je in', 'stride'),
+            'style' => 'primary',
+            'url' => $this->getEnrollmentUrl(0, $courseId),
+            'disabled' => false,
+        ];
+    }
+
+    /**
+     * Get enrollment URL for an edition or course
+     */
+    private function getEnrollmentUrl(int $editionId, int $courseId): string
     {
         // Check for custom form
-        $customForm = $this->courseService->getCustomForm($courseId);
+        $customForm = null;
+        if ($editionId && $this->editionService) {
+            $customForm = $this->editionService->getCustomForm($editionId);
+        } elseif ($this->courseService) {
+            $customForm = $this->courseService->getCustomForm($courseId);
+        }
 
-        if ($customForm) {
-            // Link to custom FluentForms page
-            return home_url('/inschrijven/?course=' . $courseId);
+        if ($editionId) {
+            return home_url('/inschrijven/?edition=' . $editionId);
         }
 
         // Default enrollment page
@@ -1014,13 +1369,78 @@ class DashboardService implements \NTDST_Service_Meta
     }
 
     /**
-     * Get course info for sidebar display
+     * Get edition info for sidebar display
+     *
+     * @param int $editionId
+     * @return array
+     */
+    public function getEditionInfo(int $editionId): array
+    {
+        if (!$this->editionService) {
+            return [];
+        }
+
+        $edition = $this->editionService->getEdition($editionId);
+        if (!$edition) {
+            return [];
+        }
+
+        $price = $edition['price'];
+        $speakers = $this->editionService->getSpeakers($editionId);
+        $sessions = $this->sessionService ? $this->sessionService->getSessionsForEdition($editionId) : [];
+        $dayCount = count($sessions) ?: 1;
+
+        $sessionDates = array_map(function ($s) {
+            return date_i18n('j F Y', strtotime($s['date']));
+        }, $sessions);
+
+        $availableSpots = $this->editionService->getAvailableSpots($editionId);
+
+        return [
+            'id' => $editionId,
+            'course_id' => $edition['course_id'],
+            'title' => $edition['title'],
+            'price' => $price,
+            'price_formatted' => $price !== null && $price > 0 ? $this->formatCurrency($price) : __('Gratis', 'stride'),
+            'price_non_member' => $edition['price_non_member'],
+            'dates' => $sessionDates,
+            'next_date' => !empty($sessionDates) ? $sessionDates[0] : ($edition['start_date'] ? date_i18n('j F Y', strtotime($edition['start_date'])) : null),
+            'start_date' => $edition['start_date'],
+            'end_date' => $edition['end_date'],
+            'location' => $edition['venue'],
+            'speakers' => $speakers,
+            'day_count' => $dayCount,
+            'is_in_person' => !empty($edition['venue']),
+            'is_online' => empty($edition['venue']),
+            'available_spots' => $availableSpots,
+            'spots_text' => $availableSpots > 0
+                ? sprintf(_n('%d plaats beschikbaar', '%d plaatsen beschikbaar', $availableSpots, 'stride'), $availableSpots)
+                : ($availableSpots < 0 ? null : __('Volzet', 'stride')),
+            'status' => $edition['status'],
+        ];
+    }
+
+    /**
+     * Get course info for sidebar display - legacy wrapper
      *
      * @param int $courseId
      * @return array
      */
     public function getCourseInfo(int $courseId): array
     {
+        // Find next available edition for this course
+        if ($this->editionService) {
+            $upcomingEditions = $this->editionService->getUpcomingEditionsForCourse($courseId, 1);
+            if (!empty($upcomingEditions)) {
+                return $this->getEditionInfo($upcomingEditions[0]['id']);
+            }
+        }
+
+        // Fall back to course-level data (legacy)
+        if (!$this->courseService) {
+            return [];
+        }
+
         $price = $this->courseService->getCoursePrice($courseId);
         $dates = $this->courseService->getCourseDates($courseId);
         $location = $this->courseService->getCourseAddress($courseId);
@@ -1029,6 +1449,8 @@ class DashboardService implements \NTDST_Service_Meta
         $availableSpots = $this->courseService->getAvailableSpots($courseId);
 
         return [
+            'id' => null,
+            'course_id' => $courseId,
             'price' => $price,
             'price_formatted' => $price !== null ? $this->formatCurrency($price) : __('Gratis', 'stride'),
             'dates' => array_map(fn($ts) => date_i18n('j F Y', $ts), $dates),
