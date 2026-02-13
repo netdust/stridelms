@@ -170,13 +170,99 @@ add_action('wp_enqueue_scripts', function () {
 // ========================================
 
 /**
- * Theme activation - flush rewrite rules
+ * Theme activation - flush rewrite rules and create pages
  * Note: Table creation is now handled by stride-core plugin
  */
 add_action('after_switch_theme', function () {
     // Flush rewrite rules for CPTs
     flush_rewrite_rules();
+
+    // Create catalog pages
+    stride_create_catalog_pages();
+
+    // Setup primary menu
+    stride_setup_primary_menu();
 });
+
+/**
+ * Create catalog pages if they don't exist
+ */
+function stride_create_catalog_pages(): void
+{
+    $pages = [
+        'cursussen' => [
+            'title' => __('Cursussen', 'stride'),
+            'content' => '[stride_course_catalog]',
+        ],
+        'trajecten' => [
+            'title' => __('Trajecten', 'stride'),
+            'content' => '[stride_trajectory_catalog]',
+        ],
+        'mijn-account' => [
+            'title' => __('Mijn Account', 'stride'),
+            'content' => '[stride_dashboard]',
+        ],
+    ];
+
+    foreach ($pages as $slug => $page) {
+        // Check if page exists
+        $existing = get_page_by_path($slug);
+        if (!$existing) {
+            wp_insert_post([
+                'post_title' => $page['title'],
+                'post_name' => $slug,
+                'post_content' => $page['content'],
+                'post_status' => 'publish',
+                'post_type' => 'page',
+            ]);
+        }
+    }
+}
+
+/**
+ * Setup primary menu with default items
+ */
+function stride_setup_primary_menu(): void
+{
+    // Check if primary menu exists
+    $menu_name = 'Hoofdmenu';
+    $menu_exists = wp_get_nav_menu_object($menu_name);
+
+    if (!$menu_exists) {
+        // Create the menu
+        $menu_id = wp_create_nav_menu($menu_name);
+
+        if (is_wp_error($menu_id)) {
+            return;
+        }
+
+        // Add menu items
+        $pages = [
+            'cursussen' => __('Cursussen', 'stride'),
+            'trajecten' => __('Trajecten', 'stride'),
+        ];
+
+        $position = 1;
+        foreach ($pages as $slug => $title) {
+            $page = get_page_by_path($slug);
+            if ($page) {
+                wp_update_nav_menu_item($menu_id, 0, [
+                    'menu-item-title' => $title,
+                    'menu-item-object' => 'page',
+                    'menu-item-object-id' => $page->ID,
+                    'menu-item-type' => 'post_type',
+                    'menu-item-status' => 'publish',
+                    'menu-item-position' => $position++,
+                ]);
+            }
+        }
+
+        // Assign menu to primary location
+        $locations = get_theme_mod('nav_menu_locations', []);
+        $locations['primary'] = $menu_id;
+        set_theme_mod('nav_menu_locations', $locations);
+    }
+}
 
 // ========================================
 // HELPER FUNCTIONS
@@ -225,6 +311,7 @@ function stride_fallback_menu(): void
     echo '<ul class="uk-navbar-nav">';
     echo '<li><a href="' . esc_url(home_url('/')) . '">' . esc_html__('Home', 'stride') . '</a></li>';
     echo '<li><a href="' . esc_url(home_url('/cursussen/')) . '">' . esc_html__('Cursussen', 'stride') . '</a></li>';
+    echo '<li><a href="' . esc_url(home_url('/trajecten/')) . '">' . esc_html__('Trajecten', 'stride') . '</a></li>';
     echo '</ul>';
 }
 
@@ -235,6 +322,7 @@ function stride_fallback_menu_items(): void
 {
     echo '<li><a href="' . esc_url(home_url('/')) . '">' . esc_html__('Home', 'stride') . '</a></li>';
     echo '<li><a href="' . esc_url(home_url('/cursussen/')) . '">' . esc_html__('Cursussen', 'stride') . '</a></li>';
+    echo '<li><a href="' . esc_url(home_url('/trajecten/')) . '">' . esc_html__('Trajecten', 'stride') . '</a></li>';
 }
 
 /**

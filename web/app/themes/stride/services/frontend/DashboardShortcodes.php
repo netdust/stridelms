@@ -79,6 +79,7 @@ class DashboardShortcodes implements \NTDST_Service_Meta
         add_shortcode('stride_my_calendar', [$this, 'renderMyCalendar']);
         add_shortcode('stride_course_sidebar', [$this, 'renderCourseSidebar']);
         add_shortcode('stride_course_catalog', [$this, 'renderCourseCatalog']);
+        add_shortcode('stride_trajectory_catalog', [$this, 'renderTrajectoryCatalog']);
     }
 
     /**
@@ -476,5 +477,62 @@ class DashboardShortcodes implements \NTDST_Service_Meta
         ];
 
         return $this->renderTemplate('course/archive.php', $data);
+    }
+
+    /**
+     * Render public trajectory catalog
+     *
+     * Shortcode: [stride_trajectory_catalog]
+     */
+    public function renderTrajectoryCatalog(array $atts = []): string
+    {
+        $atts = shortcode_atts([
+            'limit' => 12,
+            'show_filters' => 'true',
+        ], $atts);
+
+        // Get trajectory service
+        $trajectoryService = stride_service(\ntdst\Stride\core\TrajectoryService::class);
+        if (!$trajectoryService) {
+            return '<p>' . esc_html__('Trajecten service niet beschikbaar.', 'stride') . '</p>';
+        }
+
+        // Get filter values
+        $currentMode = sanitize_text_field($_GET['mode'] ?? '');
+        $currentSearch = sanitize_text_field($_GET['search'] ?? '');
+
+        // Get all active trajectories
+        $allTrajectories = $trajectoryService->getActiveTrajectories();
+
+        // Apply filters
+        $trajectories = [];
+        foreach ($allTrajectories as $trajectory) {
+            // Mode filter
+            if ($currentMode && ($trajectory['mode'] ?? 'self_paced') !== $currentMode) {
+                continue;
+            }
+
+            // Search filter
+            if ($currentSearch) {
+                $searchLower = strtolower($currentSearch);
+                $titleMatch = strpos(strtolower($trajectory['title']), $searchLower) !== false;
+                $descMatch = strpos(strtolower($trajectory['description'] ?? ''), $searchLower) !== false;
+                if (!$titleMatch && !$descMatch) {
+                    continue;
+                }
+            }
+
+            $trajectories[] = $trajectory;
+        }
+
+        $data = [
+            'trajectories' => $trajectories,
+            'total_trajectories' => count($trajectories),
+            'current_mode' => $currentMode,
+            'current_search' => $currentSearch,
+            'show_filters' => $atts['show_filters'] === 'true',
+        ];
+
+        return $this->renderTemplate('trajectory/archive.php', $data);
     }
 }

@@ -1088,6 +1088,207 @@ a:hover {
 }
 
 /* ========================================
+   SINGLE COURSE / EDITION
+   ======================================== */
+.stride-course-header {
+    background: linear-gradient(135deg, var(--stride-secondary) 0%, #2a4a6f 100%);
+    color: var(--stride-white);
+    padding: var(--stride-spacing-lg);
+    margin: calc(-1 * var(--stride-spacing-lg)) calc(-1 * var(--stride-spacing-lg)) 0;
+    border-radius: var(--stride-radius-md) var(--stride-radius-md) 0 0;
+}
+
+.stride-course-header .stride-page-title {
+    color: var(--stride-white);
+}
+
+.stride-course-header .uk-breadcrumb > * > * {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.stride-course-header .uk-breadcrumb > :last-child > * {
+    color: var(--stride-white);
+}
+
+/* Edition list on course page */
+.stride-editions-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--stride-spacing-sm);
+}
+
+.stride-edition-item {
+    display: flex;
+    align-items: center;
+    gap: var(--stride-spacing-md);
+    padding: var(--stride-spacing-md);
+    background: var(--stride-background);
+    border-radius: var(--stride-radius-md);
+    transition: background 0.2s ease;
+}
+
+.stride-edition-item:hover {
+    background: var(--stride-primary-light);
+}
+
+.stride-edition-item.is-full {
+    opacity: 0.7;
+}
+
+.stride-edition-date {
+    text-align: center;
+    min-width: 50px;
+    padding: var(--stride-spacing-xs);
+    background: var(--stride-primary);
+    border-radius: var(--stride-radius-sm);
+    color: var(--stride-white);
+}
+
+.stride-edition-date .stride-upcoming-day {
+    color: var(--stride-white);
+}
+
+.stride-edition-date .stride-upcoming-month {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.7rem;
+}
+
+.stride-edition-info {
+    flex: 1;
+}
+
+.stride-edition-action {
+    text-align: right;
+}
+
+/* Session list on edition page */
+.stride-sessions-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--stride-spacing-xs);
+}
+
+.stride-session-item {
+    display: flex;
+    align-items: center;
+    gap: var(--stride-spacing-md);
+    padding: var(--stride-spacing-sm);
+    border-left: 3px solid var(--stride-primary);
+    background: var(--stride-background);
+}
+
+.stride-session-number {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--stride-primary);
+    color: var(--stride-white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.875rem;
+    flex-shrink: 0;
+}
+
+.stride-session-info {
+    flex: 1;
+}
+
+/* Info list (used in edition details) */
+.stride-info-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.stride-info-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--stride-spacing-sm);
+    padding: var(--stride-spacing-sm) 0;
+    border-bottom: 1px solid var(--stride-border);
+}
+
+.stride-info-list li:last-child {
+    border-bottom: none;
+}
+
+.stride-info-list li > span:first-child {
+    color: var(--stride-primary);
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+/* ========================================
+   TRAJECTORY CATALOG & SINGLE
+   ======================================== */
+.stride-trajectory-catalog {
+    padding: var(--stride-spacing-lg) 0;
+}
+
+/* Module list (used in trajectory) */
+.stride-modules-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--stride-spacing-xs);
+}
+
+.stride-module-item {
+    display: flex;
+    align-items: center;
+    gap: var(--stride-spacing-md);
+    padding: var(--stride-spacing-sm) var(--stride-spacing-md);
+    background: var(--stride-background);
+    border-radius: var(--stride-radius-md);
+    border-left: 3px solid var(--stride-primary);
+    transition: all 0.2s ease;
+}
+
+.stride-module-item:hover {
+    background: var(--stride-primary-light);
+}
+
+.stride-module-item.elective {
+    border-left-color: var(--stride-info);
+}
+
+.stride-module-number {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--stride-primary);
+    color: var(--stride-white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+}
+
+.stride-module-checkbox {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--stride-radius-sm);
+    border: 2px dashed var(--stride-info);
+    color: var(--stride-info);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.stride-module-title {
+    font-weight: 500;
+    color: var(--stride-dark);
+}
+
+.stride-module-title:hover {
+    color: var(--stride-primary);
+}
+
+/* ========================================
    DASHBOARD HEADER (used in multiple places)
    ======================================== */
 .stride-dashboard-header {
