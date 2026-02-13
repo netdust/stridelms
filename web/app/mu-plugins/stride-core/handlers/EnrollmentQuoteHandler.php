@@ -290,9 +290,10 @@ class EnrollmentQuoteHandler implements \NTDST_Service_Meta
         }
 
         // Link quote to registration
+        // Note: createQuoteForItem returns int|WP_Error, not WP_Post
         $registrationRepository = $this->getRegistrationRepository();
-        if ($registrationRepository && $result instanceof \WP_Post) {
-            $registrationRepository->linkQuote($registrationId, $result->ID);
+        if ($registrationRepository && is_int($result)) {
+            $registrationRepository->linkQuote($registrationId, $result);
         }
     }
 
