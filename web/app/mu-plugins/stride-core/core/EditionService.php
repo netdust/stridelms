@@ -142,6 +142,9 @@ class EditionService implements \NTDST_Service_Meta
                 FieldRegistry::EDITION_INVOICE_ENABLED => ['type' => 'boolean', 'default' => true],
                 FieldRegistry::EDITION_CERTIFICATE_ENABLED => ['type' => 'boolean', 'default' => false],
                 FieldRegistry::EDITION_CUSTOM_FORM => ['type' => 'text'],
+                FieldRegistry::EDITION_IS_MULTI_YEAR => ['type' => 'boolean', 'default' => false],
+                FieldRegistry::EDITION_COMPLETION_MODE => ['type' => 'text', 'default' => 'attend_all'],
+                FieldRegistry::EDITION_COMPLETION_THRESHOLD => ['type' => 'integer', 'default' => 100],
             ],
             'auto_metabox' => true,
         ]);
@@ -1011,6 +1014,7 @@ class EditionService implements \NTDST_Service_Meta
             'invoice_enabled' => (bool) ($post->fields[FieldRegistry::EDITION_INVOICE_ENABLED] ?? true),
             'certificate_enabled' => (bool) ($post->fields[FieldRegistry::EDITION_CERTIFICATE_ENABLED] ?? false),
             'custom_form' => $post->fields[FieldRegistry::EDITION_CUSTOM_FORM] ?? '',
+            'is_multi_year_training' => (bool) ($post->fields[FieldRegistry::EDITION_IS_MULTI_YEAR] ?? false),
         ];
     }
 
@@ -1037,6 +1041,22 @@ class EditionService implements \NTDST_Service_Meta
             'invoice_enabled' => (bool) ($meta[FieldRegistry::EDITION_INVOICE_ENABLED] ?? true),
             'certificate_enabled' => (bool) ($meta[FieldRegistry::EDITION_CERTIFICATE_ENABLED] ?? false),
             'custom_form' => $meta[FieldRegistry::EDITION_CUSTOM_FORM] ?? '',
+            'is_multi_year_training' => (bool) ($meta[FieldRegistry::EDITION_IS_MULTI_YEAR] ?? false),
         ];
+    }
+
+    /**
+     * Check if an edition is a multi-year training program
+     *
+     * Multi-year trainings (tweejarige opleidingen) have special rules:
+     * - Member vouchers cannot be used
+     *
+     * @param int $editionId Edition ID
+     * @return bool True if multi-year training
+     */
+    public function isMultiYearTraining(int $editionId): bool
+    {
+        $edition = $this->getEdition($editionId);
+        return (bool) ($edition['is_multi_year_training'] ?? false);
     }
 }

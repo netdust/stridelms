@@ -25,6 +25,7 @@ class RegistrationRepository implements \NTDST_Service_Meta
 
     // Registration statuses
     public const STATUS_CONFIRMED = 'confirmed';
+    public const STATUS_COMPLETED = 'completed';
     public const STATUS_CANCELLED = 'cancelled';
     public const STATUS_WAITLIST = 'waitlist';
     public const STATUS_INTEREST = 'interest';

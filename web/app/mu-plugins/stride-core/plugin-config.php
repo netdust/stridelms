@@ -21,6 +21,7 @@ return [
         \ntdst\Stride\core\EditionService::class,          // Edition management
         \ntdst\Stride\core\SessionService::class,          // Session management
         \ntdst\Stride\core\CourseService::class,           // Course operations
+        \ntdst\Stride\core\CompletionEngine::class,        // Attendance-based completion
         \ntdst\Stride\core\SubscriberService::class,       // User/subscriber data
         \ntdst\Stride\core\OrganizationService::class,     // Organization management
         \ntdst\Stride\core\HistoricalDataService::class,   // V3 data bridge

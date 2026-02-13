@@ -222,6 +222,15 @@ final class FieldRegistry
     /** Custom enrollment form name */
     public const EDITION_CUSTOM_FORM = 'custom_form';
 
+    /** Multi-year training flag (tweejarige opleiding) */
+    public const EDITION_IS_MULTI_YEAR = 'is_multi_year_training';
+
+    /** Completion mode (attend_all, attend_percentage, attend_count) */
+    public const EDITION_COMPLETION_MODE = 'completion_mode';
+
+    /** Completion threshold (percentage or count based on mode) */
+    public const EDITION_COMPLETION_THRESHOLD = 'completion_threshold';
+
     // Edition status values
     public const EDITION_STATUS_OPEN = 'open';
     public const EDITION_STATUS_FULL = 'full';

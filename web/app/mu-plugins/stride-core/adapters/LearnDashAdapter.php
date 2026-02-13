@@ -200,6 +200,42 @@ class LearnDashAdapter implements LearnDashAdapterInterface
     }
 
     /**
+     * Mark course as complete for user
+     *
+     * Uses LearnDash's internal function to mark course complete.
+     * This triggers all LearnDash completion hooks and enables certificate access.
+     */
+    public function markComplete(int $userId, int $courseId): bool
+    {
+        if (!$this->isAvailable()) {
+            return false;
+        }
+
+        // LearnDash 3.x+ uses learndash_process_mark_complete
+        if (function_exists('learndash_process_mark_complete')) {
+            // Mark the course post as complete
+            // Parameters: $user_id, $post_id, $autostart_complete, $parent_id
+            learndash_process_mark_complete($userId, $courseId, false, 0);
+            return true;
+        }
+
+        // Fallback: Direct activity update for older versions
+        if (function_exists('learndash_update_user_activity')) {
+            learndash_update_user_activity([
+                'user_id' => $userId,
+                'course_id' => $courseId,
+                'post_id' => $courseId,
+                'activity_type' => 'course',
+                'activity_status' => 1, // 1 = complete
+                'activity_completed' => time(),
+            ]);
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Get course certificate link for user
      */
     public function getCertificateLink(int $courseId, int $userId): ?string

@@ -108,6 +108,15 @@ interface LearnDashAdapterInterface
     public function isCompleted(int $userId, int $courseId): bool;
 
     /**
+     * Mark course as complete for user
+     *
+     * @param int $userId
+     * @param int $courseId
+     * @return bool
+     */
+    public function markComplete(int $userId, int $courseId): bool;
+
+    /**
      * Get course certificate link for user
      *
      * @param int $courseId

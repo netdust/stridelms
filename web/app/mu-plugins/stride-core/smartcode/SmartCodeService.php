@@ -6,7 +6,10 @@ defined('ABSPATH') || exit;
 
 use ntdst\Stride\sync\UserDataSync;
 use ntdst\Stride\core\CourseService;
+use ntdst\Stride\core\EditionService;
+use ntdst\Stride\core\SessionService;
 use ntdst\Stride\core\SubscriberService;
+use ntdst\Stride\core\RegistrationRepository;
 use ntdst\Stride\invoicing\QuoteService;
 use ntdst\Stride\FieldRegistry;
 
@@ -26,12 +29,18 @@ class SmartCodeService implements \NTDST_Service_Meta
 {
     private UserDataSync $dataSync;
     private CourseService $courseService;
+    private EditionService $editionService;
+    private SessionService $sessionService;
     private SubscriberService $subscriberService;
+    private RegistrationRepository $registrationRepo;
     private QuoteService $quoteService;
     private string $dateFormat;
 
     /** @var int|null Explicit course context */
     private ?int $courseId = null;
+
+    /** @var int|null Explicit edition context */
+    private ?int $editionId = null;
 
     /** @var int|null Explicit quote context */
     private ?int $quoteId = null;
@@ -51,16 +60,28 @@ class SmartCodeService implements \NTDST_Service_Meta
         ?UserDataSync $dataSync = null,
         ?CourseService $courseService = null,
         ?SubscriberService $subscriberService = null,
-        ?QuoteService $quoteService = null
+        ?QuoteService $quoteService = null,
+        ?EditionService $editionService = null,
+        ?SessionService $sessionService = null,
+        ?RegistrationRepository $registrationRepo = null
     ) {
         $this->dataSync = $dataSync ?? $this->resolveService(UserDataSync::class);
         $this->courseService = $courseService ?? $this->resolveService(CourseService::class);
+        $this->editionService = $editionService ?? $this->resolveService(EditionService::class);
+        $this->sessionService = $sessionService ?? $this->resolveService(SessionService::class);
         $this->subscriberService = $subscriberService ?? $this->resolveService(SubscriberService::class);
+        $this->registrationRepo = $registrationRepo ?? $this->resolveService(RegistrationRepository::class);
         $this->quoteService = $quoteService ?? $this->resolveService(QuoteService::class);
         $this->dateFormat = get_option('date_format', 'd/m/Y');
 
         add_action('fluent_crm/after_init', [$this, 'registerFluentCRM']);
         add_filter('fluentform/editor_shortcodes', [$this, 'registerFluentFormsEditor']);
+
+        // Register certificate shortcodes
+        add_action('init', [$this, 'registerCertificateShortcodes']);
+
+        // Hook into LearnDash certificate to set edition context
+        add_filter('learndash_certificate_details', [$this, 'injectCertificateContext'], 10, 3);
     }
 
     private function resolveService(string $class): object
@@ -258,10 +279,280 @@ class SmartCodeService implements \NTDST_Service_Meta
         return $this;
     }
 
+    public function setEditionId(?int $editionId): self
+    {
+        $this->editionId = $editionId;
+        return $this;
+    }
+
     public function setQuoteId(?int $quoteId): self
     {
         $this->quoteId = $quoteId;
         return $this;
+    }
+
+    // ========================================
+    // CERTIFICATE SHORTCODES
+    // ========================================
+
+    /**
+     * Register certificate shortcodes for LearnDash certificates
+     */
+    public function registerCertificateShortcodes(): void
+    {
+        add_shortcode('stride_edition_dates', [$this, 'renderEditionDates']);
+        add_shortcode('stride_edition_title', [$this, 'renderEditionTitle']);
+        add_shortcode('stride_instructor', [$this, 'renderInstructor']);
+        add_shortcode('stride_venue', [$this, 'renderVenue']);
+        add_shortcode('stride_hours_attended', [$this, 'renderHoursAttended']);
+        add_shortcode('stride_total_hours', [$this, 'renderTotalHours']);
+        add_shortcode('stride_attendance_rate', [$this, 'renderAttendanceRate']);
+    }
+
+    /**
+     * Inject edition context when LearnDash generates a certificate
+     *
+     * @param array $details Certificate details
+     * @param int $userId User ID
+     * @param int $courseId Course ID
+     * @return array
+     */
+    public function injectCertificateContext(array $details, int $userId, int $courseId): array
+    {
+        // Find the user's most recent completed edition for this course
+        $editionId = $this->findUserEdition($userId, $courseId);
+        if ($editionId) {
+            $this->setEditionId($editionId);
+        }
+        return $details;
+    }
+
+    /**
+     * Find user's edition for a course (most recent completed registration)
+     */
+    private function findUserEdition(int $userId, int $courseId): ?int
+    {
+        // Get editions for this course
+        $editions = $this->editionService->getEditionsForCourse($courseId);
+        if (empty($editions)) {
+            return null;
+        }
+
+        // Find user's registration
+        foreach ($editions as $edition) {
+            $reg = $this->registrationRepo->findByUserAndEdition($userId, $edition['id']);
+            if ($reg && in_array($reg['status'], [
+                RegistrationRepository::STATUS_CONFIRMED,
+                RegistrationRepository::STATUS_COMPLETED,
+            ], true)) {
+                return $edition['id'];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Shortcode: [stride_edition_dates]
+     * Renders edition date range
+     */
+    public function renderEditionDates(array $atts): string
+    {
+        $editionId = $this->getEditionContext();
+        if (!$editionId) {
+            return '';
+        }
+
+        $edition = $this->editionService->getEdition($editionId);
+        if (!$edition) {
+            return '';
+        }
+
+        $format = $atts['format'] ?? $this->dateFormat;
+        $startDate = !empty($edition['start_date']) ? wp_date($format, strtotime($edition['start_date'])) : '';
+        $endDate = !empty($edition['end_date']) ? wp_date($format, strtotime($edition['end_date'])) : '';
+
+        if ($startDate && $endDate && $startDate !== $endDate) {
+            return esc_html(sprintf('%s - %s', $startDate, $endDate));
+        }
+
+        return esc_html($startDate ?: $endDate);
+    }
+
+    /**
+     * Shortcode: [stride_edition_title]
+     * Renders edition title
+     */
+    public function renderEditionTitle(array $atts): string
+    {
+        $editionId = $this->getEditionContext();
+        if (!$editionId) {
+            return '';
+        }
+
+        return esc_html(get_the_title($editionId) ?: '');
+    }
+
+    /**
+     * Shortcode: [stride_instructor]
+     * Renders edition speakers/instructors
+     */
+    public function renderInstructor(array $atts): string
+    {
+        $editionId = $this->getEditionContext();
+        if (!$editionId) {
+            return '';
+        }
+
+        $edition = $this->editionService->getEdition($editionId);
+        if (!$edition || empty($edition['speakers'])) {
+            return '';
+        }
+
+        $speakers = $edition['speakers'];
+        if (is_string($speakers)) {
+            return esc_html($speakers);
+        }
+
+        if (is_array($speakers)) {
+            $names = array_column($speakers, 'name');
+            return esc_html(implode(', ', array_filter($names)));
+        }
+
+        return '';
+    }
+
+    /**
+     * Shortcode: [stride_venue]
+     * Renders edition venue/location
+     */
+    public function renderVenue(array $atts): string
+    {
+        $editionId = $this->getEditionContext();
+        if (!$editionId) {
+            return '';
+        }
+
+        $edition = $this->editionService->getEdition($editionId);
+        return esc_html($edition['venue'] ?? '');
+    }
+
+    /**
+     * Shortcode: [stride_hours_attended]
+     * Renders hours attended by current user
+     */
+    public function renderHoursAttended(array $atts): string
+    {
+        $editionId = $this->getEditionContext();
+        $userId = $this->getCurrentCertificateUserId();
+
+        if (!$editionId || !$userId) {
+            return '';
+        }
+
+        $hours = $this->sessionService->getHoursAttended($userId, $editionId);
+        $decimals = isset($atts['decimals']) ? (int) $atts['decimals'] : 1;
+
+        return esc_html(number_format($hours, $decimals, ',', '.'));
+    }
+
+    /**
+     * Shortcode: [stride_total_hours]
+     * Renders total hours for edition
+     */
+    public function renderTotalHours(array $atts): string
+    {
+        $editionId = $this->getEditionContext();
+        if (!$editionId) {
+            return '';
+        }
+
+        $hours = $this->sessionService->getTotalHours($editionId);
+        $decimals = isset($atts['decimals']) ? (int) $atts['decimals'] : 1;
+
+        return esc_html(number_format($hours, $decimals, ',', '.'));
+    }
+
+    /**
+     * Shortcode: [stride_attendance_rate]
+     * Renders attendance percentage
+     */
+    public function renderAttendanceRate(array $atts): string
+    {
+        $editionId = $this->getEditionContext();
+        $userId = $this->getCurrentCertificateUserId();
+
+        if (!$editionId || !$userId) {
+            return '';
+        }
+
+        $rate = $this->sessionService->getAttendanceRate($userId, $editionId);
+        return esc_html(round($rate * 100) . '%');
+    }
+
+    /**
+     * Get current edition context
+     *
+     * Only returns edition if user has a registration or is admin/editor.
+     */
+    private function getEditionContext(): ?int
+    {
+        if ($this->editionId) {
+            return $this->editionId;
+        }
+
+        // Check URL parameter
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+        if (isset($_GET['edition_id'])) {
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+            $editionId = absint($_GET['edition_id']);
+
+            // Verify user has access to this edition
+            if ($editionId > 0) {
+                // Admins/editors can view any edition
+                if (current_user_can('manage_options') || current_user_can('edit_others_posts')) {
+                    return $editionId;
+                }
+
+                // Regular users need a registration
+                $userId = get_current_user_id();
+                if ($userId && $this->registrationRepo->findByUserAndEdition($userId, $editionId)) {
+                    return $editionId;
+                }
+            }
+
+            return null;
+        }
+
+        return null;
+    }
+
+    /**
+     * Get user ID for certificate context
+     *
+     * Only allows viewing other users' data if current user has admin/editor capabilities.
+     */
+    private function getCurrentCertificateUserId(): ?int
+    {
+        $currentUserId = get_current_user_id();
+
+        // Check URL parameter (LearnDash certificate URLs)
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+        if (isset($_GET['user'])) {
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+            $requestedUserId = absint($_GET['user']);
+
+            // Only allow viewing other users if admin/editor
+            if ($requestedUserId !== $currentUserId) {
+                if (!current_user_can('manage_options') && !current_user_can('edit_others_posts')) {
+                    return $currentUserId ?: null;
+                }
+            }
+
+            return $requestedUserId;
+        }
+
+        return $currentUserId ?: null;
     }
 
     private function getCourseContext(): ?int

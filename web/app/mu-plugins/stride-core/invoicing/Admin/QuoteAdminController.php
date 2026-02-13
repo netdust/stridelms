@@ -665,6 +665,10 @@ class QuoteAdminController
      */
     public function ajaxGetUserData(): void
     {
+        if (!check_ajax_referer('stride_quote_admin', 'nonce', false)) {
+            wp_send_json_error(['message' => 'Invalid security token'], 403);
+        }
+
         if (!current_user_can('edit_posts')) {
             wp_send_json_error(['message' => 'Unauthorized'], 403);
         }

@@ -367,6 +367,49 @@ class CourseService implements \NTDST_Service_Meta
     }
 
     /**
+     * Mark course as complete for user
+     *
+     * Called by CompletionEngine when edition attendance requirements are met.
+     * This triggers LearnDash's course completion which enables certificate access.
+     *
+     * @param int $userId WordPress user ID
+     * @param int $courseId LearnDash course ID
+     * @return true|WP_Error True on success, WP_Error on failure
+     */
+    public function markComplete(int $userId, int $courseId): true|WP_Error
+    {
+        if (!$this->isAvailable()) {
+            return new WP_Error('learndash_unavailable', __('LearnDash is niet beschikbaar.', 'stride'));
+        }
+
+        // Validate course
+        $validation = $this->validateCourse($courseId);
+        if (is_wp_error($validation)) {
+            return $validation;
+        }
+
+        // Check if user has access
+        if (!$this->isUserEnrolled($userId, $courseId)) {
+            return new WP_Error('not_enrolled', __('Gebruiker heeft geen toegang tot deze cursus.', 'stride'));
+        }
+
+        // Already complete?
+        if ($this->isUserCompleted($userId, $courseId)) {
+            return true; // Already done, success
+        }
+
+        // Mark complete via LearnDash
+        $result = $this->learndash->markComplete($userId, $courseId);
+        if (!$result) {
+            return new WP_Error('completion_failed', __('Kon cursus niet als voltooid markeren.', 'stride'));
+        }
+
+        do_action('stride/course/marked_complete', $userId, $courseId);
+
+        return true;
+    }
+
+    /**
      * Get certificate link for user
      *
      * Note: Certificate availability should be checked via EditionService

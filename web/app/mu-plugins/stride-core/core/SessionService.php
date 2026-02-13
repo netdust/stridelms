@@ -5,6 +5,7 @@ namespace ntdst\Stride\core;
 defined('ABSPATH') || exit;
 
 use ntdst\Stride\FieldRegistry;
+use ntdst\Stride\core\AttendanceRepository;
 use WP_Error;
 
 /**
@@ -26,6 +27,23 @@ class SessionService implements \NTDST_Service_Meta
 {
     public const POST_TYPE = 'vad_session';
 
+    private ?AttendanceRepository $attendanceRepo = null;
+
+    /** @var array Request-level cache for sessions by edition */
+    private static array $sessionCache = [];
+
+    /**
+     * Invalidate session cache for an edition
+     */
+    public static function invalidateCache(?int $editionId = null): void
+    {
+        if ($editionId === null) {
+            self::$sessionCache = [];
+        } else {
+            unset(self::$sessionCache[$editionId]);
+        }
+    }
+
     /**
      * Service metadata for NTDST Bootstrap
      */
@@ -43,10 +61,37 @@ class SessionService implements \NTDST_Service_Meta
     /**
      * Constructor
      */
-    public function __construct()
+    public function __construct(?AttendanceRepository $attendanceRepo = null)
     {
+        $this->attendanceRepo = $attendanceRepo;
+
         // Register CPT via DataManager
         add_action('init', [$this, 'registerModel'], 5);
+
+        // Create attendance table on activation
+        add_action('init', [$this, 'ensureAttendanceTable'], 6);
+    }
+
+    /**
+     * Get AttendanceRepository (lazy loaded)
+     */
+    private function getAttendanceRepo(): AttendanceRepository
+    {
+        if ($this->attendanceRepo === null) {
+            $this->attendanceRepo = new AttendanceRepository();
+        }
+        return $this->attendanceRepo;
+    }
+
+    /**
+     * Ensure attendance table exists
+     */
+    public function ensureAttendanceTable(): void
+    {
+        $repo = $this->getAttendanceRepo();
+        if (!$repo->tableExists()) {
+            $repo->createTable();
+        }
     }
 
     // ========================================
@@ -158,6 +203,11 @@ class SessionService implements \NTDST_Service_Meta
      */
     public function getSessionsForEdition(int $editionId): array
     {
+        // Check request-level cache
+        if (isset(self::$sessionCache[$editionId])) {
+            return self::$sessionCache[$editionId];
+        }
+
         $model = $this->getModel();
         if (!$model) {
             return [];
@@ -169,7 +219,12 @@ class SessionService implements \NTDST_Service_Meta
             ->withMeta()
             ->get();
 
-        return array_map([$this, 'formatSessionFromArray'], $posts);
+        $result = array_map([$this, 'formatSessionFromArray'], $posts);
+
+        // Cache for this request
+        self::$sessionCache[$editionId] = $result;
+
+        return $result;
     }
 
     /**
@@ -180,6 +235,11 @@ class SessionService implements \NTDST_Service_Meta
      */
     public function getSessionCount(int $editionId): int
     {
+        // Use cached sessions if available
+        if (isset(self::$sessionCache[$editionId])) {
+            return count(self::$sessionCache[$editionId]);
+        }
+
         $model = $this->getModel();
         if (!$model) {
             return 0;
@@ -221,17 +281,19 @@ class SessionService implements \NTDST_Service_Meta
             return new WP_Error('unauthorized', __('Je hebt geen rechten om aanwezigheid te beheren.', 'stride'));
         }
 
-        $attendees = $this->getAttendees($sessionId);
+        $wasPresent = $this->isPresent($sessionId, $userId);
+        $result = $this->getAttendanceRepo()->mark(
+            $sessionId,
+            $userId,
+            AttendanceRepository::STATUS_PRESENT,
+            get_current_user_id()
+        );
 
-        // Add if not already present
-        if (!in_array($userId, $attendees, true)) {
-            $attendees[] = $userId;
-            $this->saveAttendees($sessionId, $attendees);
-
+        if ($result && !$wasPresent) {
             do_action('stride/session/attendance_marked', $sessionId, $userId, true);
         }
 
-        return true;
+        return $result ? true : new WP_Error('mark_failed', __('Kon aanwezigheid niet markeren.', 'stride'));
     }
 
     /**
@@ -247,18 +309,68 @@ class SessionService implements \NTDST_Service_Meta
             return new WP_Error('unauthorized', __('Je hebt geen rechten om aanwezigheid te beheren.', 'stride'));
         }
 
-        $attendees = $this->getAttendees($sessionId);
+        $wasPresent = $this->isPresent($sessionId, $userId);
+        $result = $this->getAttendanceRepo()->mark(
+            $sessionId,
+            $userId,
+            AttendanceRepository::STATUS_ABSENT,
+            get_current_user_id()
+        );
 
-        // Remove if present
-        $key = array_search($userId, $attendees, true);
-        if ($key !== false) {
-            unset($attendees[$key]);
-            $this->saveAttendees($sessionId, array_values($attendees));
-
+        if ($result && $wasPresent) {
             do_action('stride/session/attendance_marked', $sessionId, $userId, false);
         }
 
-        return true;
+        return $result ? true : new WP_Error('mark_failed', __('Kon afwezigheid niet markeren.', 'stride'));
+    }
+
+    /**
+     * Mark a user as excused for a session
+     *
+     * @param int $sessionId Session post ID
+     * @param int $userId WordPress user ID
+     * @return true|WP_Error True on success, WP_Error on failure
+     */
+    public function markExcused(int $sessionId, int $userId): true|WP_Error
+    {
+        if (!$this->canManageAttendance()) {
+            return new WP_Error('unauthorized', __('Je hebt geen rechten om aanwezigheid te beheren.', 'stride'));
+        }
+
+        $result = $this->getAttendanceRepo()->mark(
+            $sessionId,
+            $userId,
+            AttendanceRepository::STATUS_EXCUSED,
+            get_current_user_id()
+        );
+
+        if ($result) {
+            do_action('stride/session/attendance_marked', $sessionId, $userId, 'excused');
+        }
+
+        return $result ? true : new WP_Error('mark_failed', __('Kon verontschuldiging niet markeren.', 'stride'));
+    }
+
+    /**
+     * Batch mark attendance for multiple users
+     *
+     * @param int $sessionId Session post ID
+     * @param array $userStatuses Array of [user_id => status]
+     * @return int Number of records updated
+     */
+    public function batchMarkAttendance(int $sessionId, array $userStatuses): int
+    {
+        if (!$this->canManageAttendance()) {
+            return 0;
+        }
+
+        $count = $this->getAttendanceRepo()->batchMark($sessionId, $userStatuses, get_current_user_id());
+
+        if ($count > 0) {
+            do_action('stride/session/batch_attendance_marked', $sessionId, $userStatuses);
+        }
+
+        return $count;
     }
 
     /**
@@ -266,7 +378,7 @@ class SessionService implements \NTDST_Service_Meta
      *
      * @return bool
      */
-    private function canManageAttendance(): bool
+    public function canManageAttendance(): bool
     {
         // Admins and editors can manage attendance
         if (current_user_can('manage_options') || current_user_can('edit_others_posts')) {
@@ -286,47 +398,41 @@ class SessionService implements \NTDST_Service_Meta
      */
     public function isPresent(int $sessionId, int $userId): bool
     {
-        $attendees = $this->getAttendees($sessionId);
-        return in_array($userId, $attendees, true);
+        return $this->getAttendanceRepo()->isPresent($sessionId, $userId);
     }
 
     /**
-     * Get all attendees for a session
+     * Get attendance status for a user in a session
+     *
+     * @param int $sessionId Session post ID
+     * @param int $userId WordPress user ID
+     * @return string|null Status or null if not recorded
+     */
+    public function getAttendanceStatus(int $sessionId, int $userId): ?string
+    {
+        return $this->getAttendanceRepo()->getStatus($sessionId, $userId);
+    }
+
+    /**
+     * Get all attendees for a session (present users)
      *
      * @param int $sessionId Session post ID
      * @return array Array of user IDs
      */
     public function getAttendees(int $sessionId): array
     {
-        $model = $this->getModel();
-        if (!$model) {
-            return [];
-        }
-
-        $attendees = $model->getMeta($sessionId, FieldRegistry::SESSION_ATTENDEES, []);
-
-        // Handle JSON string (legacy or direct DB query)
-        if (is_string($attendees)) {
-            $attendees = json_decode($attendees, true) ?: [];
-        }
-
-        // Ensure all values are integers
-        return array_map('intval', array_filter((array) $attendees));
+        return $this->getAttendanceRepo()->getAttendeesForSession($sessionId, AttendanceRepository::STATUS_PRESENT);
     }
 
     /**
-     * Save attendees array to session
+     * Get attendance records with full details for a session
+     *
+     * @param int $sessionId Session post ID
+     * @return array Array of attendance records
      */
-    private function saveAttendees(int $sessionId, array $attendees): void
+    public function getSessionAttendance(int $sessionId): array
     {
-        $model = $this->getModel();
-        if (!$model) {
-            return;
-        }
-
-        $model->update($sessionId, [
-            FieldRegistry::SESSION_ATTENDEES => $attendees,
-        ]);
+        return $this->getAttendanceRepo()->getSessionAttendance($sessionId);
     }
 
     // ========================================
@@ -385,8 +491,7 @@ class SessionService implements \NTDST_Service_Meta
     /**
      * Get total hours attended by a user for an edition
      *
-     * Uses fresh attendee data via batch query to ensure recently marked
-     * attendance is counted without N+1 query issues.
+     * Uses AttendanceRepository for efficient batch queries.
      *
      * @param int $userId WordPress user ID
      * @param int $editionId Edition post ID
@@ -399,9 +504,9 @@ class SessionService implements \NTDST_Service_Meta
             return 0.0;
         }
 
-        // Batch fetch fresh attendees for all sessions
+        // Batch fetch attendance using repository
         $sessionIds = array_column($sessions, 'id');
-        $attendeesMap = $this->batchGetAttendees($sessionIds);
+        $attendeesMap = $this->getAttendanceRepo()->batchGetAttendees($sessionIds, AttendanceRepository::STATUS_PRESENT);
 
         $totalHours = 0.0;
         foreach ($sessions as $session) {
@@ -417,8 +522,7 @@ class SessionService implements \NTDST_Service_Meta
     /**
      * Get attendance rate for a user in an edition
      *
-     * Uses fresh attendee data via batch query to ensure recently marked
-     * attendance is counted without N+1 query issues.
+     * Uses AttendanceRepository for efficient counting.
      *
      * @param int $userId WordPress user ID
      * @param int $editionId Edition post ID
@@ -433,76 +537,33 @@ class SessionService implements \NTDST_Service_Meta
             return 0.0;
         }
 
-        // Batch fetch fresh attendees for all sessions
-        $sessionIds = array_column($sessions, 'id');
-        $attendeesMap = $this->batchGetAttendees($sessionIds);
-
-        $attendedCount = 0;
-        foreach ($sessions as $session) {
-            $attendees = $attendeesMap[$session['id']] ?? [];
-            if (in_array($userId, $attendees, true)) {
-                $attendedCount++;
-            }
-        }
+        // Use repository for efficient count
+        $attendedCount = $this->getAttendanceRepo()->countAttendedSessions($userId, $editionId);
 
         return $attendedCount / $totalSessions;
     }
 
     /**
-     * Batch fetch attendees for multiple sessions
+     * Count attended sessions for a user in an edition
      *
-     * Efficiently fetches attendees meta for multiple session IDs in a single query.
+     * @param int $userId WordPress user ID
+     * @param int $editionId Edition post ID
+     * @return int Number of sessions attended
+     */
+    public function countAttendedSessions(int $userId, int $editionId): int
+    {
+        return $this->getAttendanceRepo()->countAttendedSessions($userId, $editionId);
+    }
+
+    /**
+     * Batch fetch attendees for multiple sessions
      *
      * @param array $sessionIds Array of session post IDs
      * @return array Map of session_id => attendees array
      */
-    private function batchGetAttendees(array $sessionIds): array
+    public function batchGetAttendees(array $sessionIds): array
     {
-        if (empty($sessionIds)) {
-            return [];
-        }
-
-        global $wpdb;
-
-        // Batch fetch all attendees meta in a single query
-        $placeholders = implode(',', array_fill(0, count($sessionIds), '%d'));
-        $metaKey = FieldRegistry::SESSION_ATTENDEES;
-
-        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-        $results = $wpdb->get_results($wpdb->prepare(
-            "SELECT post_id, meta_value FROM {$wpdb->postmeta}
-             WHERE meta_key = %s AND post_id IN ({$placeholders})",
-            array_merge([$metaKey], $sessionIds)
-        ), ARRAY_A);
-
-        // Build map of session_id => attendees
-        $attendeesMap = [];
-        foreach ($results as $row) {
-            $postId = (int) $row['post_id'];
-            $value = $row['meta_value'];
-
-            // Parse JSON or serialized array
-            if (is_string($value)) {
-                $parsed = json_decode($value, true);
-                if (json_last_error() !== JSON_ERROR_NONE) {
-                    $parsed = maybe_unserialize($value);
-                }
-                $attendees = is_array($parsed) ? $parsed : [];
-            } else {
-                $attendees = [];
-            }
-
-            $attendeesMap[$postId] = array_map('intval', $attendees);
-        }
-
-        // Ensure all session IDs have entries (empty array for sessions without attendees)
-        foreach ($sessionIds as $id) {
-            if (!isset($attendeesMap[$id])) {
-                $attendeesMap[$id] = [];
-            }
-        }
-
-        return $attendeesMap;
+        return $this->getAttendanceRepo()->batchGetAttendees($sessionIds, AttendanceRepository::STATUS_PRESENT);
     }
 
     /**
@@ -618,6 +679,12 @@ class SessionService implements \NTDST_Service_Meta
             return $result;
         }
 
+        // Invalidate cache for this edition
+        $editionId = $data[FieldRegistry::SESSION_EDITION_ID] ?? 0;
+        if ($editionId) {
+            self::invalidateCache((int) $editionId);
+        }
+
         return $result->ID;
     }
 
@@ -644,6 +711,13 @@ class SessionService implements \NTDST_Service_Meta
         $result = $model->update($sessionId, $data);
         if (is_wp_error($result)) {
             return $result;
+        }
+
+        // Invalidate cache for this edition
+        $editionId = $data[FieldRegistry::SESSION_EDITION_ID]
+            ?? get_post_meta($sessionId, FieldRegistry::SESSION_EDITION_ID, true);
+        if ($editionId) {
+            self::invalidateCache((int) $editionId);
         }
 
         return true;
