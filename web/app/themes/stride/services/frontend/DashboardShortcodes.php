@@ -402,20 +402,40 @@ class DashboardShortcodes implements \NTDST_Service_Meta
         $query = new \WP_Query($queryArgs);
         $courses = [];
 
-        // Get course service for type filtering
+        // Get services for course data
         $courseService = stride_service(\ntdst\Stride\core\CourseService::class);
+        $editionService = stride_service(\ntdst\Stride\core\EditionService::class);
 
         foreach ($query->posts as $post) {
             $courseId = $post->ID;
+            $isInPerson = $courseService->isInPerson($courseId);
+            $isOnline = $courseService->isOnline($courseId);
 
             // Type filter
             if ($currentType) {
-                $isInPerson = $courseService->isInPerson($courseId);
                 if ($currentType === 'online' && $isInPerson) {
                     continue;
                 }
                 if ($currentType === 'in-person' && !$isInPerson) {
                     continue;
+                }
+            }
+
+            // Get next upcoming edition for this course
+            $nextEdition = null;
+            $nextDate = null;
+            $price = null;
+            $isFull = false;
+            $availableSpots = null;
+
+            if ($editionService) {
+                $upcomingEditions = $editionService->getUpcomingEditionsForCourse($courseId);
+                if (!empty($upcomingEditions)) {
+                    $nextEdition = $upcomingEditions[0];
+                    $nextDate = $editionService->getStartDate($nextEdition['id']);
+                    $price = $editionService->getPrice($nextEdition['id']);
+                    $isFull = $editionService->isFull($nextEdition['id']);
+                    $availableSpots = $editionService->getAvailableSpots($nextEdition['id']);
                 }
             }
 
@@ -425,13 +445,14 @@ class DashboardShortcodes implements \NTDST_Service_Meta
                 'excerpt' => get_the_excerpt($post),
                 'permalink' => get_permalink($courseId),
                 'thumbnail' => get_the_post_thumbnail_url($courseId, 'stride_course_card'),
-                'is_in_person' => $courseService->isInPerson($courseId),
-                'is_online' => $courseService->isOnline($courseId),
-                'next_date' => $courseService->getNextDate($courseId),
-                'price' => $courseService->getCoursePrice($courseId),
-                'is_full' => $courseService->isFull($courseId),
-                'is_cancelled' => $courseService->isCancelled($courseId),
-                'available_spots' => $courseService->getAvailableSpots($courseId),
+                'is_in_person' => $isInPerson,
+                'is_online' => $isOnline,
+                'next_date' => $nextDate,
+                'price' => $price,
+                'is_full' => $isFull,
+                'is_cancelled' => false, // Courses don't get cancelled, editions do
+                'available_spots' => $availableSpots,
+                'next_edition_id' => $nextEdition['id'] ?? null,
             ];
         }
 
