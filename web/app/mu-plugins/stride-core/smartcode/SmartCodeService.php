@@ -222,16 +222,23 @@ class SmartCodeService implements \NTDST_Service_Meta
             return null;
         }
 
+        // Get edition data if available (prefer explicit edition, then first upcoming)
+        $editionId = $this->editionId;
+        if (!$editionId) {
+            $upcomingEditions = $this->editionService->getUpcomingEditionsForCourse($courseId, 1);
+            $editionId = !empty($upcomingEditions) ? $upcomingEditions[0]['id'] : null;
+        }
+
         $value = match ($key) {
             'title' => $this->courseService->getCourseTitle($courseId),
             'url' => get_permalink($courseId),
-            'start_date' => $this->formatDate($this->courseService->getStartDate($courseId)),
-            'end_date' => $this->formatDate($this->courseService->getEndDate($courseId)),
-            'location' => $this->courseService->getCourseAddress($courseId),
-            'available_spots' => $this->formatSpots($this->courseService->getAvailableSpots($courseId)),
-            'price' => $this->formatPrice($this->courseService->getCoursePrice($courseId)),
+            'start_date' => $editionId ? $this->formatDate(strtotime($this->editionService->getStartDate($editionId) ?? '')) : null,
+            'end_date' => $editionId ? $this->formatDate(strtotime($this->editionService->getEndDate($editionId) ?? '')) : null,
+            'location' => $editionId ? $this->editionService->getVenue($editionId) : null,
+            'available_spots' => $editionId ? $this->formatSpots($this->editionService->getAvailableSpots($editionId)) : null,
+            'price' => $editionId ? $this->formatPrice($this->editionService->getPrice($editionId)) : null,
             'is_online' => $this->courseService->isOnline($courseId) ? __('yes', 'stride') : __('no', 'stride'),
-            'speakers' => $this->formatSpeakers($this->courseService->getCourseSpeakers($courseId)),
+            'speakers' => $editionId ? $this->formatSpeakers($this->editionService->getSpeakers($editionId)) : null,
             default => null,
         };
 

@@ -193,22 +193,20 @@ if ($isCancelled) {
                         </div>
                     <?php endif; ?>
 
-                    <?php if ($courseId): ?>
-                        <!-- Course Content -->
+                    <?php
+                    // Show course description if available (without LearnDash filters)
+                    $course = $courseId ? get_post($courseId) : null;
+                    if ($course && !empty($course->post_content)):
+                    ?>
                         <div class="stride-card uk-margin-top">
                             <div class="stride-card-header">
                                 <h2 class="stride-card-title">
                                     <span uk-icon="icon: file-text"></span>
-                                    <?php esc_html_e('Cursusinhoud', 'stride'); ?>
+                                    <?php esc_html_e('Over deze cursus', 'stride'); ?>
                                 </h2>
                             </div>
                             <div class="stride-article-content">
-                                <?php
-                                $course = get_post($courseId);
-                                if ($course) {
-                                    echo wp_kses_post(apply_filters('the_content', $course->post_content));
-                                }
-                                ?>
+                                <?php echo wp_kses_post(wpautop($course->post_content)); ?>
                             </div>
                         </div>
                     <?php endif; ?>

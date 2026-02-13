@@ -1436,34 +1436,23 @@ class DashboardService implements \NTDST_Service_Meta
             }
         }
 
-        // Fall back to course-level data (legacy)
-        if (!$this->courseService) {
-            return [];
-        }
-
-        $price = $this->courseService->getCoursePrice($courseId);
-        $dates = $this->courseService->getCourseDates($courseId);
-        $location = $this->courseService->getCourseAddress($courseId);
-        $speakers = $this->courseService->getCourseSpeakers($courseId);
-        $dayCount = $this->courseService->getDayCount($courseId);
-        $availableSpots = $this->courseService->getAvailableSpots($courseId);
+        // No editions available - return basic course info
+        $isOnline = $this->courseService ? $this->courseService->isOnline($courseId) : false;
 
         return [
             'id' => null,
             'course_id' => $courseId,
-            'price' => $price,
-            'price_formatted' => $price !== null ? $this->formatCurrency($price) : __('Gratis', 'stride'),
-            'dates' => array_map(fn($ts) => date_i18n('j F Y', $ts), $dates),
-            'next_date' => !empty($dates) ? date_i18n('j F Y', $dates[0]) : null,
-            'location' => $location,
-            'speakers' => $speakers,
-            'day_count' => $dayCount,
-            'is_in_person' => $this->courseService->isInPerson($courseId),
-            'is_online' => $this->courseService->isOnline($courseId),
-            'available_spots' => $availableSpots,
-            'spots_text' => $availableSpots !== null
-                ? sprintf(_n('%d plaats beschikbaar', '%d plaatsen beschikbaar', $availableSpots, 'stride'), $availableSpots)
-                : null,
+            'price' => null,
+            'price_formatted' => null,
+            'dates' => [],
+            'next_date' => null,
+            'location' => null,
+            'speakers' => [],
+            'day_count' => null,
+            'is_in_person' => !$isOnline,
+            'is_online' => $isOnline,
+            'available_spots' => null,
+            'spots_text' => null,
         ];
     }
 }
