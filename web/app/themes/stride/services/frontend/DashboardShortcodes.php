@@ -403,7 +403,7 @@ class DashboardShortcodes implements \NTDST_Service_Meta
         $courses = [];
 
         // Get course service for type filtering
-        $courseService = stride_service(\stride\services\core\CourseService::class);
+        $courseService = stride_service(\ntdst\Stride\core\CourseService::class);
 
         foreach ($query->posts as $post) {
             $courseId = $post->ID;
