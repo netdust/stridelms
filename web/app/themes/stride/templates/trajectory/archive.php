@@ -77,7 +77,7 @@ defined('ABSPATH') || exit;
                     $mode = $trajectory['mode'] ?? 'self_paced';
                     $isCohort = $mode === 'cohort';
                     $thumbnail = $trajectory['thumbnail'] ?? get_stylesheet_directory_uri() . '/assets/images/trajectory-placeholder.jpg';
-                    $courseCount = count($trajectory['requirements'] ?? []);
+                    $courseCount = count($trajectory['courses'] ?? []);
                     ?>
                     <div>
                         <div class="stride-course-card">

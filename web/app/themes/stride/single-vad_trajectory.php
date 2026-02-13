@@ -24,7 +24,7 @@ if (!$trajectory) {
 
 $mode = $trajectory['mode'] ?? 'self_paced';
 $isCohort = $mode === 'cohort';
-$requirements = $trajectory['requirements'] ?? [];
+$courses = $trajectory['courses'] ?? [];
 $enrollmentDeadline = $trajectory['enrollment_deadline'] ?? null;
 $choiceDeadline = $trajectory['choice_deadline'] ?? null;
 
@@ -32,9 +32,9 @@ $choiceDeadline = $trajectory['choice_deadline'] ?? null;
 $statusClass = $isCohort ? 'stride-badge-info' : 'stride-badge-in-person';
 $statusLabel = $isCohort ? __('Cohort', 'stride') : __('Zelfstandig tempo', 'stride');
 
-// Group requirements
-$mandatoryModules = array_filter($requirements, fn($r) => ($r['group'] ?? '') !== 'elective');
-$electiveModules = array_filter($requirements, fn($r) => ($r['group'] ?? '') === 'elective');
+// Group courses by mandatory/elective
+$mandatoryModules = array_filter($courses, fn($r) => ($r['group'] ?? 'mandatory') !== 'elective');
+$electiveModules = array_filter($courses, fn($r) => ($r['group'] ?? '') === 'elective');
 ?>
 
 <div class="uk-container uk-container-large">
@@ -60,8 +60,8 @@ $electiveModules = array_filter($requirements, fn($r) => ($r['group'] ?? '') ===
                 <p class="uk-text-lead uk-margin-small-top uk-margin-remove-bottom">
                     <span uk-icon="icon: git-branch"></span>
                     <?php printf(
-                        esc_html(_n('%d module', '%d modules', count($requirements), 'stride')),
-                        count($requirements)
+                        esc_html(_n('%d module', '%d modules', count($courses), 'stride')),
+                        count($courses)
                     ); ?>
                 </p>
             </div>
@@ -185,7 +185,7 @@ $electiveModules = array_filter($requirements, fn($r) => ($r['group'] ?? '') ===
                                     <?php echo $isCohort ? esc_html__('Groepstraject', 'stride') : esc_html__('Individueel traject', 'stride'); ?>
                                 </p>
                                 <p class="stride-course-price-label">
-                                    <?php printf(esc_html__('%d modules', 'stride'), count($requirements)); ?>
+                                    <?php printf(esc_html__('%d modules', 'stride'), count($courses)); ?>
                                 </p>
                             </div>
 
