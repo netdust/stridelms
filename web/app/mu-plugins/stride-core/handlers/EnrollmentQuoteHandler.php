@@ -8,6 +8,7 @@ use ntdst\Stride\core\CourseService;
 use ntdst\Stride\core\EditionService;
 use ntdst\Stride\core\RegistrationRepository;
 use ntdst\Stride\core\SubscriberService;
+use ntdst\Stride\core\TrajectoryService;
 use ntdst\Stride\invoicing\QuoteService;
 use ntdst\Stride\invoicing\VoucherService;
 use ntdst\Stride\invoicing\Support\QuoteConfig;
@@ -39,6 +40,7 @@ class EnrollmentQuoteHandler implements \NTDST_Service_Meta
     private ?RegistrationRepository $registrationRepository = null;
     private ?QuoteService $quoteService = null;
     private ?VoucherService $voucherService = null;
+    private ?TrajectoryService $trajectoryService = null;
 
     /**
      * Service metadata for NTDST Bootstrap
@@ -78,10 +80,10 @@ class EnrollmentQuoteHandler implements \NTDST_Service_Meta
     // ========================================
 
     /**
-     * Resolve item details for 'edition' type
+     * Resolve item details for 'edition', 'trajectory', or 'course' types
      *
      * @param array|null $resolved Previous resolution (for chaining)
-     * @param string $itemType Item type ('edition' or 'course' for legacy)
+     * @param string $itemType Item type ('edition', 'trajectory', or 'course' for legacy)
      * @param int $itemId Item ID
      * @return array|null Resolved item data or null if not handled
      */
@@ -90,6 +92,11 @@ class EnrollmentQuoteHandler implements \NTDST_Service_Meta
         // Handle edition type
         if ($itemType === 'edition') {
             return $this->resolveEditionItem($itemId);
+        }
+
+        // Handle trajectory type
+        if ($itemType === 'trajectory') {
+            return $this->resolveTrajectoryItem($itemId);
         }
 
         // Handle legacy course type
@@ -181,6 +188,59 @@ class EnrollmentQuoteHandler implements \NTDST_Service_Meta
     }
 
     /**
+     * Resolve trajectory item details for invoicing
+     *
+     * Returns fixed trajectory price if set, otherwise calculates from linked editions.
+     * For self-paced trajectories without a fixed price, returns valid=false
+     * (user should be invoiced per edition instead).
+     *
+     * @param int $trajectoryId Trajectory post ID
+     * @return array|null Item resolution data
+     */
+    private function resolveTrajectoryItem(int $trajectoryId): ?array
+    {
+        $trajectoryService = $this->getTrajectoryService();
+        if (!$trajectoryService) {
+            return null;
+        }
+
+        $trajectory = $trajectoryService->getTrajectory($trajectoryId);
+        if (!$trajectory) {
+            return [
+                'valid' => false,
+                'error' => __('Traject niet gevonden.', 'stride'),
+            ];
+        }
+
+        // Get effective price (fixed or calculated from editions)
+        $editionService = $this->getEditionService();
+        $price = $trajectoryService->getEffectivePrice($trajectoryId, $editionService);
+
+        if ($price === null) {
+            return [
+                'valid' => false,
+                'error' => __('Dit traject heeft geen vaste prijs. Factureer per editie.', 'stride'),
+            ];
+        }
+
+        // Build linked editions metadata
+        $linkedEditions = $trajectory['linked_editions'] ?? [];
+        $editionIds = array_map(fn($link) => (int) ($link['edition_id'] ?? 0), $linkedEditions);
+        $editionIds = array_filter($editionIds);
+
+        return [
+            'valid' => true,
+            'title' => $trajectory['title'],
+            'price' => $price,
+            'meta' => [
+                'trajectory_id' => $trajectoryId,
+                'mode' => $trajectory['mode'] ?? 'self_paced',
+                'edition_ids' => $editionIds,
+            ],
+        ];
+    }
+
+    /**
      * Resolve price for 'edition' type
      *
      * @param float $price Previous price (for chaining)
@@ -194,6 +254,16 @@ class EnrollmentQuoteHandler implements \NTDST_Service_Meta
             $editionService = $this->getEditionService();
             if ($editionService) {
                 return $editionService->getPrice($itemId) ?? $price;
+            }
+        }
+
+        // Trajectory type
+        if ($itemType === 'trajectory') {
+            $trajectoryService = $this->getTrajectoryService();
+            $editionService = $this->getEditionService();
+            if ($trajectoryService) {
+                $effectivePrice = $trajectoryService->getEffectivePrice($itemId, $editionService);
+                return $effectivePrice ?? $price;
             }
         }
 
@@ -502,6 +572,17 @@ class EnrollmentQuoteHandler implements \NTDST_Service_Meta
             $this->voucherService = $this->resolveService(VoucherService::class);
         }
         return $this->voucherService;
+    }
+
+    /**
+     * Get TrajectoryService instance
+     */
+    private function getTrajectoryService(): ?TrajectoryService
+    {
+        if ($this->trajectoryService === null) {
+            $this->trajectoryService = $this->resolveService(TrajectoryService::class);
+        }
+        return $this->trajectoryService;
     }
 
     /**

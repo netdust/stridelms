@@ -313,6 +313,9 @@ final class FieldRegistry
     /** Cohort: linked editions per course (JSON: [{course_id, edition_id}, ...]) */
     public const TRAJECTORY_LINKED_EDITIONS = 'linked_editions';
 
+    /** Trajectory price (optional fixed price, if not set = sum of editions) */
+    public const TRAJECTORY_PRICE = 'price';
+
     // ========================================
     // EDITION SESSION SLOTS (Edition Meta)
     // ========================================

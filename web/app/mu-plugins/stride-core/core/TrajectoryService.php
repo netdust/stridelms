@@ -124,6 +124,7 @@ class TrajectoryService implements \NTDST_Service_Meta
                 FieldRegistry::TRAJECTORY_CHOICE_AVAILABLE => ['type' => 'text'],
                 FieldRegistry::TRAJECTORY_CHOICE_DEADLINE => ['type' => 'text'],
                 FieldRegistry::TRAJECTORY_LINKED_EDITIONS => ['type' => 'json', 'default' => []],
+                FieldRegistry::TRAJECTORY_PRICE => ['type' => 'float', 'min' => 0],
             ],
             'auto_metabox' => false, // Custom metaboxes via TrajectoryAdminController
         ]);
@@ -292,6 +293,7 @@ class TrajectoryService implements \NTDST_Service_Meta
             'choice_available_date' => $meta[FieldRegistry::TRAJECTORY_CHOICE_AVAILABLE][0] ?? null,
             'choice_deadline' => $meta[FieldRegistry::TRAJECTORY_CHOICE_DEADLINE][0] ?? null,
             'linked_editions' => (array) $linkedEditions,
+            'price' => isset($meta[FieldRegistry::TRAJECTORY_PRICE][0]) ? (float) $meta[FieldRegistry::TRAJECTORY_PRICE][0] : null,
         ];
     }
 
@@ -740,6 +742,7 @@ class TrajectoryService implements \NTDST_Service_Meta
             'choice_available_date' => $post->fields[FieldRegistry::TRAJECTORY_CHOICE_AVAILABLE] ?? null,
             'choice_deadline' => $post->fields[FieldRegistry::TRAJECTORY_CHOICE_DEADLINE] ?? null,
             'linked_editions' => (array) $linkedEditions,
+            'price' => isset($post->fields[FieldRegistry::TRAJECTORY_PRICE]) ? (float) $post->fields[FieldRegistry::TRAJECTORY_PRICE] : null,
         ];
     }
 
@@ -774,6 +777,7 @@ class TrajectoryService implements \NTDST_Service_Meta
             'choice_available_date' => $meta[FieldRegistry::TRAJECTORY_CHOICE_AVAILABLE] ?? null,
             'choice_deadline' => $meta[FieldRegistry::TRAJECTORY_CHOICE_DEADLINE] ?? null,
             'linked_editions' => (array) $linkedEditions,
+            'price' => isset($meta[FieldRegistry::TRAJECTORY_PRICE]) ? (float) $meta[FieldRegistry::TRAJECTORY_PRICE] : null,
         ];
     }
 
@@ -994,5 +998,72 @@ class TrajectoryService implements \NTDST_Service_Meta
         return $this->updateTrajectory($trajectoryId, [
             FieldRegistry::TRAJECTORY_LINKED_EDITIONS => $linkedEditions,
         ]);
+    }
+
+    // ========================================
+    // PRICING
+    // ========================================
+
+    /**
+     * Get effective price for a trajectory
+     *
+     * Returns the fixed price if set, otherwise calculates from linked editions (cohort)
+     * or returns null for self-paced (user pays per edition).
+     *
+     * @param int $trajectoryId Trajectory post ID
+     * @param EditionService|null $editionService Optional EditionService (for testing)
+     * @return float|null Price or null if not applicable
+     */
+    public function getEffectivePrice(int $trajectoryId, ?EditionService $editionService = null): ?float
+    {
+        $trajectory = $this->getTrajectory($trajectoryId);
+        if (!$trajectory) {
+            return null;
+        }
+
+        // If fixed price is set, use that
+        $fixedPrice = $trajectory['price'] ?? null;
+        if ($fixedPrice !== null && $fixedPrice > 0) {
+            return (float) $fixedPrice;
+        }
+
+        // For cohort mode, calculate from linked editions
+        $mode = $trajectory['mode'] ?? '';
+        if ($mode === FieldRegistry::TRAJECTORY_MODE_COHORT) {
+            $linkedEditions = $trajectory['linked_editions'] ?? [];
+            if (empty($linkedEditions)) {
+                return 0.0;
+            }
+
+            // Resolve EditionService
+            if ($editionService === null) {
+                if (function_exists('ntdst_get')) {
+                    try {
+                        $editionService = ntdst_get(EditionService::class);
+                    } catch (\Exception $e) {
+                        return null;
+                    }
+                } else {
+                    return null;
+                }
+            }
+
+            // Sum edition prices
+            $total = 0.0;
+            foreach ($linkedEditions as $link) {
+                $editionId = (int) ($link['edition_id'] ?? 0);
+                if ($editionId > 0) {
+                    $price = $editionService->getPrice($editionId);
+                    if ($price !== null) {
+                        $total += $price;
+                    }
+                }
+            }
+
+            return $total;
+        }
+
+        // Self-paced: no fixed trajectory price (user pays per edition)
+        return null;
     }
 }
