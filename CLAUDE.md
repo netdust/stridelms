@@ -9,11 +9,27 @@
 - Stack: Bedrock WordPress
 - LMS: LearnDash
 - CRM/Forms: FluentCRM, FluentForms, Fluent SMTP
-- Frontend: TBD (likely Alpine.js + Tailwind or UIkit)
+- Frontend: UIkit 3
 
 **Project Plan:** See `docs/V4-PROJECT-PLAN master.md` for the full feature inventory and 9-phase implementation plan.
 
-**Current Phase:** Phase 1.5 - Edition/Session Layer (critical path)
+**Current Phase:** Phase 3 - Invoicing/Vouchers
+
+---
+
+## Architecture Overview
+
+Stride follows WordPress mu-plugin architecture with clear separation:
+
+- **stride-core** (mu-plugin): All business logic, services, data models
+- **stride** (theme): Presentation only - templates, assets, frontend services
+
+### Namespace Structure
+
+| Location | Namespace | Purpose |
+|----------|-----------|---------|
+| `mu-plugins/stride-core/` | `ntdst\Stride\` | Business logic services |
+| `themes/stride/services/frontend/` | `stride\services\frontend` | Presentation services |
 
 ---
 
@@ -92,6 +108,7 @@ stride/
 │   ├── V4-PROJECT-PLAN master.md    # Feature inventory & 9-phase implementation
 │   ├── ARCHITECTURE-V4-PROPOSAL.md  # Architecture decisions & design
 │   └── ARCHITECTURE-V3-ANALYSIS.md  # V3 analysis for reference
+├── plans/                            # Implementation plans
 ├── scripts/
 │   ├── seed.php                     # Development data seeder
 │   └── unseed.php                   # Seed data cleanup
@@ -99,19 +116,27 @@ stride/
 │   ├── app/
 │   │   ├── mu-plugins/
 │   │   │   ├── ntdst-coreloader.php    # Framework loader
-│   │   │   └── ntdst-core/             # DI, Bootstrap, Router, Theme
+│   │   │   ├── ntdst-core/             # DI, Bootstrap, Router, Theme
+│   │   │   ├── stride-coreloader.php   # Stride business logic loader
+│   │   │   └── stride-core/            # Stride business logic
+│   │   │       ├── core/               # EditionService, SessionService, CourseService, etc.
+│   │   │       ├── enrollment/         # EnrollmentService, FormSubmissionHandler
+│   │   │       ├── invoicing/          # QuoteService, VoucherService
+│   │   │       ├── handlers/           # EnrollmentQuoteHandler, QuoteUpdateHandler
+│   │   │       ├── sync/               # UserDataSync
+│   │   │       ├── adapters/           # LearnDashAdapter, FluentCRMAdapter
+│   │   │       ├── contracts/          # Interfaces
+│   │   │       ├── admin/              # AdminMenuService
+│   │   │       ├── smartcode/          # SmartCodeService
+│   │   │       ├── FieldRegistry.php   # Field name constants
+│   │   │       └── plugin-config.php   # Service registration
 │   │   ├── plugins/                     # Composer-managed plugins
 │   │   └── themes/
 │   │       └── stride/
 │   │           ├── functions.php        # Bootstrap lifecycle
-│   │           ├── theme-config.php     # Services & module config
-│   │           ├── services/            # Business logic
-│   │           │   ├── core/            # CourseService, EditionService, SessionService, RegistrationRepository
-│   │           │   ├── enrollment/      # Enrollment workflows
-│   │           │   ├── invoicing/       # Quote generation
-│   │           │   ├── voucher/         # Voucher management
-│   │           │   ├── admin/           # Admin dashboard
-│   │           │   └── integrations/    # LearnDash, FluentCRM bridges
+│   │           ├── theme-config.php     # Frontend services config
+│   │           ├── services/
+│   │           │   └── frontend/        # DashboardService, DashboardShortcodes, ICalService
 │   │           └── templates/           # View templates
 │   │               ├── dashboard/
 │   │               ├── course/
@@ -130,39 +155,44 @@ stride/
 
 ## Architecture Patterns
 
-### Service Registration (theme-config.php)
+### Service Registration (stride-core/plugin-config.php)
 
 ```php
-'services' => [
-    'core' => [
-        'stride\\services\\core\\CourseService',
-        'stride\\services\\enrollment\\EnrollmentService',
+return [
+    'services' => [
+        // Core Services
+        \ntdst\Stride\core\RegistrationRepository::class,
+        \ntdst\Stride\core\EditionService::class,
+        \ntdst\Stride\core\SessionService::class,
+        \ntdst\Stride\core\CourseService::class,
+
+        // Enrollment
+        \ntdst\Stride\enrollment\EnrollmentService::class,
+
+        // Invoicing
+        \ntdst\Stride\invoicing\QuoteService::class,
+        \ntdst\Stride\invoicing\VoucherService::class,
+
+        // Handlers
+        \ntdst\Stride\handlers\EnrollmentQuoteHandler::class,
     ],
-    'conditional' => [
-        'learndash' => [
-            'service' => 'stride\\services\\integrations\\LearnDashService',
-            'condition' => fn() => defined('LEARNDASH_VERSION'),
-        ],
-    ],
-    'auto_discover' => true,
-    'discovery_paths' => [get_stylesheet_directory() . '/services'],
-],
+];
 ```
 
 ### Service Class Pattern
 
 ```php
 <?php
-namespace stride\services\core;
+namespace ntdst\Stride\core;
 
-class CourseService implements NTDST_ServiceInterface
+class EditionService implements \NTDST_Service_Meta
 {
     public static function metadata(): array
     {
         return [
-            'name' => 'Course Service',
-            'description' => 'Course data and status management',
-            'priority' => 10,
+            'name' => 'Edition Service',
+            'description' => 'Manages scheduled course offerings',
+            'priority' => 5,
         ];
     }
 
@@ -178,14 +208,14 @@ class CourseService implements NTDST_ServiceInterface
 ### Container Access
 
 ```php
-// Get service instance
-$courseService = ntdst_get(CourseService::class);
+// Get service instance (new namespace)
+$editionService = ntdst_get(\ntdst\Stride\core\EditionService::class);
 
 // Register singleton
 ntdst_set(MyService::class, fn() => new MyService());
 
-// Theme helper
-stride_service(CourseService::class);
+// Theme helper (still works)
+stride_service(\ntdst\Stride\core\EditionService::class);
 ```
 
 ---
@@ -214,6 +244,10 @@ The Edition/Session layer separates scheduled course offerings from LearnDash co
 ### Core Services
 
 ```php
+use ntdst\Stride\core\EditionService;
+use ntdst\Stride\core\SessionService;
+use ntdst\Stride\core\RegistrationRepository;
+
 // EditionService - scheduled offerings
 $editionService = ntdst_get(EditionService::class);
 $edition = $editionService->getEdition($editionId);
@@ -239,6 +273,8 @@ $regId = $regRepo->create([
 ### LearnDash Integration (4 points only)
 
 ```php
+use ntdst\Stride\core\CourseService;
+
 // CourseService wraps LearnDash
 $courseService = ntdst_get(CourseService::class);
 $courseService->grantAccess($userId, $courseId);   // On registration
@@ -286,6 +322,11 @@ Test credentials after seeding:
 - Admin: `seed_admin@seed.test`
 - Students: `seed_student1@seed.test` through `seed_student5@seed.test`
 
+### Verify Plugin Load
+```bash
+ddev exec wp eval "echo class_exists('\ntdst\Stride\core\EditionService') ? 'OK' : 'FAIL';"
+```
+
 ---
 
 ## Key Decisions
@@ -298,6 +339,7 @@ Test credentials after seeding:
 6. **Journey UX**: Trajectories shown as visual learning paths, not course grids
 7. **Edition/Session Model**: LearnDash courses are content only; editions are scheduled offerings with dates, pricing, capacity; sessions are individual meeting days
 8. **LearnDash as Content Engine**: Only 4 integration points: `grantAccess`, `revokeAccess`, `isComplete`, `getCertificateLink`
+9. **Plugin Architecture**: Business logic in mu-plugin (`stride-core`), presentation in theme (`stride`)
 
 ---
 
@@ -316,6 +358,7 @@ Test credentials after seeding:
 - **V4 Project Plan (Master):** `docs/V4-PROJECT-PLAN master.md`
 - **V4 Architecture:** `docs/ARCHITECTURE-V4-PROPOSAL.md`
 - **V3 Analysis:** `docs/ARCHITECTURE-V3-ANALYSIS.md`
+- **Plugin Extraction Plan:** `plans/plugin-extraction.md`
 - **Seed Scripts:** `scripts/seed.php`, `scripts/unseed.php`
 - **V3 Codebase (reference):** `/home/ntdst/Sites/vad-vormingen/`
 - **NTDST Core (Rossi reference):** `/home/ntdst/Sites/rossi/`

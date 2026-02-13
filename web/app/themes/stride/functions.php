@@ -37,17 +37,8 @@ ntdst_set(NTDST_Bootstrap::class, fn() => $bootstrap);
 // DEPENDENCY INJECTION BINDINGS
 // ========================================
 
-// Bind adapter interfaces to concrete implementations
-// This allows services to receive mocks during testing
-ntdst_set(
-    \stride\services\contracts\LearnDashAdapterInterface::class,
-    fn() => new \stride\services\adapters\LearnDashAdapter()
-);
-
-ntdst_set(
-    \stride\services\contracts\FluentCRMAdapterInterface::class,
-    fn() => new \stride\services\adapters\FluentCRMAdapter()
-);
+// Note: Adapter bindings are now registered in stride-coreloader.php
+// Theme only registers presentation-layer bindings if needed
 
 // ========================================
 // LIFECYCLE HOOKS
@@ -103,6 +94,83 @@ add_action('after_setup_theme', function () use ($config) {
 add_action('after_setup_theme', function () use ($bootstrap) {
     $bootstrap->bootFeatures();
 }, 15);
+
+// ========================================
+// FRONTEND ASSETS
+// ========================================
+
+/**
+ * Enqueue frontend styles and scripts
+ */
+add_action('wp_enqueue_scripts', function () {
+    // UIkit CSS
+    wp_enqueue_style(
+        'uikit',
+        'https://cdn.jsdelivr.net/npm/uikit@3.21.6/dist/css/uikit.min.css',
+        [],
+        '3.21.6'
+    );
+
+    // Stride custom styles
+    wp_enqueue_style(
+        'stride',
+        get_stylesheet_directory_uri() . '/assets/css/stride.css',
+        ['uikit'],
+        wp_get_theme()->get('Version')
+    );
+
+    // UIkit JS
+    wp_enqueue_script(
+        'uikit',
+        'https://cdn.jsdelivr.net/npm/uikit@3.21.6/dist/js/uikit.min.js',
+        [],
+        '3.21.6',
+        true
+    );
+
+    // UIkit Icons
+    wp_enqueue_script(
+        'uikit-icons',
+        'https://cdn.jsdelivr.net/npm/uikit@3.21.6/dist/js/uikit-icons.min.js',
+        ['uikit'],
+        '3.21.6',
+        true
+    );
+
+    // Stride custom JS
+    wp_enqueue_script(
+        'stride',
+        get_stylesheet_directory_uri() . '/assets/js/stride.js',
+        ['uikit', 'uikit-icons'],
+        wp_get_theme()->get('Version'),
+        true
+    );
+
+    // Localize script with config
+    wp_localize_script('stride', 'strideConfig', [
+        'ajaxUrl' => admin_url('admin-ajax.php'),
+        'nonce' => wp_create_nonce('stride_frontend'),
+        'strings' => [
+            'saving' => __('Opslaan...', 'stride'),
+            'saved' => __('Opgeslagen', 'stride'),
+            'error' => __('Er is een fout opgetreden', 'stride'),
+            'confirm' => __('Weet je het zeker?', 'stride'),
+        ],
+    ]);
+}, 10);
+
+// ========================================
+// THEME ACTIVATION
+// ========================================
+
+/**
+ * Theme activation - flush rewrite rules
+ * Note: Table creation is now handled by stride-core plugin
+ */
+add_action('after_switch_theme', function () {
+    // Flush rewrite rules for CPTs
+    flush_rewrite_rules();
+});
 
 // ========================================
 // HELPER FUNCTIONS

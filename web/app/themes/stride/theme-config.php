@@ -94,62 +94,28 @@ return [
     // ========================================
     // SERVICES CONFIGURATION
     // ========================================
+    // Note: Business logic services are now in the stride-core mu-plugin
+    // Theme only registers frontend/presentation services
     'services' => [
-        // Core services (always loaded)
+        // Frontend services (presentation layer only)
         'core' => [
-            // Historical data bridge (loads early, priority 5)
-            'stride\\services\\core\\HistoricalDataService',
-
-            // Phase 1: Core Services
-            'stride\\services\\core\\CourseService',
-            'stride\\services\\core\\SubscriberService',
-            'stride\\services\\core\\OrganizationService',
-
-            // Phase 2: Enrollment Services
-            'stride\\services\\enrollment\\EnrollmentService',
-            'stride\\services\\enrollment\\FormSubmissionHandler',
-            'stride\\services\\enrollment\\FluentFormsHelper',
-
-            // Phase 3: Invoicing Services
-            'stride\\services\\invoicing\\QuoteService',
-            'stride\\services\\invoicing\\VATValidator',
-            'stride\\services\\invoicing\\QuoteUpdateHandler',
-            'stride\\services\\invoicing\\QuotePDFGenerator',
-            'stride\\services\\invoicing\\ExactOnlineExporter',
-
-            // Phase 4: Voucher System
-            'stride\\services\\voucher\\VoucherService',
-
-            // Integration Services
-            'stride\\services\\smartcode\\SmartCodeService',
-            'stride\\services\\sync\\UserDataSync',
+            'stride\\services\\frontend\\DashboardService',
+            'stride\\services\\frontend\\DashboardShortcodes',
+            'stride\\services\\frontend\\ICalService',
         ],
 
-        // Admin-only services
-        'admin' => [
-            'stride\\services\\admin\\AdminMenuService',
-        ],
+        // No handlers in theme - all in plugin
+        'handlers' => [],
 
-        // Conditional services
-        'conditional' => [
-            // FluentCRM integration (optional bridge service)
-            'fluentcrm' => [
-                'service' => 'stride\\services\\integrations\\FluentCRMService',
-                'condition' => fn() => defined('FLUENTCRM'),
-            ],
+        // No admin services in theme - all in plugin
+        'admin' => [],
 
-            // LearnDash integration (optional bridge service)
-            'learndash' => [
-                'service' => 'stride\\services\\integrations\\LearnDashService',
-                'condition' => fn() => defined('LEARNDASH_VERSION'),
-            ],
-        ],
+        // No conditional services in theme
+        'conditional' => [],
 
-        // Auto-discovery settings
-        'auto_discover' => true,
-        'discovery_paths' => [
-            get_stylesheet_directory() . '/services',
-        ],
+        // Auto-discovery disabled - plugin handles service registration
+        'auto_discover' => false,
+        'discovery_paths' => [],
     ],
 
     // ========================================

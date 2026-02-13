@@ -24,7 +24,7 @@ if (defined('WP_ENV') && WP_ENV === 'production') {
     exit(1);
 }
 
-use stride\services\core\RegistrationRepository;
+use ntdst\Stride\core\RegistrationRepository;
 
 /**
  * Seed Data Cleaner
