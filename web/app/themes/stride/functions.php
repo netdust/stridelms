@@ -57,6 +57,12 @@ add_action('after_setup_theme', function () use ($bootstrap) {
  * Priority: 10 (default)
  */
 add_action('after_setup_theme', function () use ($config) {
+    // Register navigation menus
+    register_nav_menus([
+        'primary' => __('Hoofdmenu', 'stride'),
+        'footer' => __('Footermenu', 'stride'),
+    ]);
+
     // Initialize theme with configuration
     $theme = new NTDST_Theme($config);
 
@@ -205,4 +211,104 @@ function stride_bootstrap()
 function stride_service(string $class)
 {
     return ntdst_get($class);
+}
+
+// ========================================
+// NAVIGATION HELPERS
+// ========================================
+
+/**
+ * Fallback menu when no menu is assigned
+ */
+function stride_fallback_menu(): void
+{
+    echo '<ul class="uk-navbar-nav">';
+    echo '<li><a href="' . esc_url(home_url('/')) . '">' . esc_html__('Home', 'stride') . '</a></li>';
+    echo '<li><a href="' . esc_url(home_url('/cursussen/')) . '">' . esc_html__('Cursussen', 'stride') . '</a></li>';
+    echo '</ul>';
+}
+
+/**
+ * Fallback menu items for mobile nav
+ */
+function stride_fallback_menu_items(): void
+{
+    echo '<li><a href="' . esc_url(home_url('/')) . '">' . esc_html__('Home', 'stride') . '</a></li>';
+    echo '<li><a href="' . esc_url(home_url('/cursussen/')) . '">' . esc_html__('Cursussen', 'stride') . '</a></li>';
+}
+
+/**
+ * UIkit Nav Walker for navbar menus
+ */
+class Stride_UIkit_Nav_Walker extends Walker_Nav_Menu
+{
+    /**
+     * Start level (submenu)
+     */
+    public function start_lvl(&$output, $depth = 0, $args = null): void
+    {
+        $output .= '<div class="uk-navbar-dropdown"><ul class="uk-nav uk-navbar-dropdown-nav">';
+    }
+
+    /**
+     * End level
+     */
+    public function end_lvl(&$output, $depth = 0, $args = null): void
+    {
+        $output .= '</ul></div>';
+    }
+
+    /**
+     * Start element (menu item)
+     */
+    public function start_el(&$output, $item, $depth = 0, $args = null, $id = 0): void
+    {
+        $classes = empty($item->classes) ? [] : (array) $item->classes;
+        $classes[] = 'menu-item-' . $item->ID;
+
+        // Check if item has children
+        $has_children = in_array('menu-item-has-children', $classes);
+
+        // Active state
+        if (in_array('current-menu-item', $classes) || in_array('current-menu-ancestor', $classes)) {
+            $classes[] = 'uk-active';
+        }
+
+        $class_names = join(' ', array_filter($classes));
+        $class_names = $class_names ? ' class="' . esc_attr($class_names) . '"' : '';
+
+        $output .= '<li' . $class_names . '>';
+
+        $atts = [];
+        $atts['title'] = !empty($item->attr_title) ? $item->attr_title : '';
+        $atts['target'] = !empty($item->target) ? $item->target : '';
+        $atts['rel'] = !empty($item->xfn) ? $item->xfn : '';
+        $atts['href'] = !empty($item->url) ? $item->url : '';
+
+        $attributes = '';
+        foreach ($atts as $attr => $value) {
+            if (!empty($value)) {
+                $value = ('href' === $attr) ? esc_url($value) : esc_attr($value);
+                $attributes .= ' ' . $attr . '="' . $value . '"';
+            }
+        }
+
+        $title = apply_filters('the_title', $item->title, $item->ID);
+
+        $item_output = $args->before ?? '';
+        $item_output .= '<a' . $attributes . '>';
+        $item_output .= ($args->link_before ?? '') . $title . ($args->link_after ?? '');
+        $item_output .= '</a>';
+        $item_output .= $args->after ?? '';
+
+        $output .= apply_filters('walker_nav_menu_start_el', $item_output, $item, $depth, $args);
+    }
+
+    /**
+     * End element
+     */
+    public function end_el(&$output, $item, $depth = 0, $args = null): void
+    {
+        $output .= '</li>';
+    }
 }
