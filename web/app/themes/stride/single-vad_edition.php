@@ -145,13 +145,16 @@ if ($isCancelled) {
                     </div>
 
                     <?php if (!empty($sessions)): ?>
-                        <!-- Sessions -->
+                        <!-- Sessions / Class Schedule -->
                         <div class="stride-card">
                             <div class="stride-card-header">
                                 <h2 class="stride-card-title">
-                                    <span uk-icon="icon: calendar"></span>
-                                    <?php esc_html_e('Sessies', 'stride'); ?>
+                                    <span uk-icon="icon: clock"></span>
+                                    <?php esc_html_e('Lesrooster', 'stride'); ?>
                                 </h2>
+                                <p class="uk-text-muted uk-margin-remove">
+                                    <?php printf(esc_html__('%d lesmomenten', 'stride'), count($sessions)); ?>
+                                </p>
                             </div>
 
                             <div class="stride-sessions-list">
