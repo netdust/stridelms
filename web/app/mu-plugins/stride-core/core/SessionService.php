@@ -124,7 +124,7 @@ class SessionService implements \NTDST_Service_Meta
             ],
             'public' => false,
             'show_ui' => true,
-            'show_in_menu' => 'stride-admin',
+            'show_in_menu' => false, // Sessions managed inline through edition edit screen
             'show_in_rest' => false,
             'supports' => ['title'],
             'capability_type' => 'post',
@@ -140,6 +140,10 @@ class SessionService implements \NTDST_Service_Meta
                 FieldRegistry::SESSION_END_TIME => ['type' => 'text'],
                 FieldRegistry::SESSION_LOCATION => ['type' => 'text'],
                 FieldRegistry::SESSION_ATTENDEES => ['type' => 'json', 'default' => []],
+                FieldRegistry::SESSION_SLOT => ['type' => 'text'],
+                FieldRegistry::SESSION_SLOT_LABEL => ['type' => 'text'],
+                FieldRegistry::SESSION_TYPE => ['type' => 'text', 'default' => FieldRegistry::SESSION_TYPE_IN_PERSON],
+                FieldRegistry::SESSION_LESSON_IDS => ['type' => 'json', 'default' => []],
             ],
             'auto_metabox' => true,
         ]);
@@ -154,7 +158,7 @@ class SessionService implements \NTDST_Service_Meta
             'label' => __('Sessies', 'stride'),
             'public' => false,
             'show_ui' => true,
-            'show_in_menu' => 'stride-admin',
+            'show_in_menu' => false, // Sessions managed inline through edition edit screen
             'supports' => ['title'],
         ]);
     }
@@ -215,16 +219,102 @@ class SessionService implements \NTDST_Service_Meta
 
         $posts = $model
             ->where(FieldRegistry::SESSION_EDITION_ID, $editionId)
-            ->orderBy(FieldRegistry::SESSION_DATE, 'ASC')
             ->withMeta()
             ->get();
 
         $result = array_map([$this, 'formatSessionFromArray'], $posts);
 
+        // Sort by date, then by start_time
+        usort($result, function ($a, $b) {
+            $dateCompare = strcmp($a['date'] ?? '', $b['date'] ?? '');
+            if ($dateCompare !== 0) {
+                return $dateCompare;
+            }
+            return strcmp($a['start_time'] ?? '', $b['start_time'] ?? '');
+        });
+
         // Cache for this request
         self::$sessionCache[$editionId] = $result;
 
         return $result;
+    }
+
+    /**
+     * Batch get sessions by IDs
+     *
+     * Performance optimization - single query instead of N+1.
+     *
+     * @param array $sessionIds Array of session post IDs
+     * @return array Map of session_id => session data
+     */
+    public function getSessionsByIds(array $sessionIds): array
+    {
+        if (empty($sessionIds)) {
+            return [];
+        }
+
+        $model = $this->getModel();
+        if (!$model) {
+            return [];
+        }
+
+        // Limit batch size to prevent memory issues
+        $sessionIds = array_slice(array_map('intval', $sessionIds), 0, 500);
+
+        // Use WP_Query for batch fetch
+        $posts = get_posts([
+            'post_type' => self::POST_TYPE,
+            'post__in' => $sessionIds,
+            'posts_per_page' => count($sessionIds),
+            'post_status' => 'any',
+            'no_found_rows' => true,
+            'update_post_term_cache' => false,
+        ]);
+
+        $result = [];
+        foreach ($posts as $post) {
+            // Get meta data
+            $meta = get_post_meta($post->ID);
+            $session = $this->formatSessionFromMeta($post, $meta);
+            $result[$post->ID] = $session;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Format session from post and raw meta
+     *
+     * @param \WP_Post $post Post object
+     * @param array $meta Raw meta array from get_post_meta
+     * @return array Formatted session data
+     */
+    private function formatSessionFromMeta(\WP_Post $post, array $meta): array
+    {
+        $attendees = $meta[FieldRegistry::SESSION_ATTENDEES][0] ?? '[]';
+        if (is_string($attendees)) {
+            $attendees = json_decode($attendees, true) ?: [];
+        }
+
+        $lessonIds = $meta[FieldRegistry::SESSION_LESSON_IDS][0] ?? '[]';
+        if (is_string($lessonIds)) {
+            $lessonIds = json_decode($lessonIds, true) ?: [];
+        }
+
+        return [
+            'id' => $post->ID,
+            'title' => $post->post_title,
+            'edition_id' => (int) ($meta[FieldRegistry::SESSION_EDITION_ID][0] ?? 0),
+            'date' => $meta[FieldRegistry::SESSION_DATE][0] ?? null,
+            'start_time' => $meta[FieldRegistry::SESSION_START_TIME][0] ?? null,
+            'end_time' => $meta[FieldRegistry::SESSION_END_TIME][0] ?? null,
+            'location' => $meta[FieldRegistry::SESSION_LOCATION][0] ?? null,
+            'slot' => $meta[FieldRegistry::SESSION_SLOT][0] ?? null,
+            'slot_label' => $meta[FieldRegistry::SESSION_SLOT_LABEL][0] ?? null,
+            'attendees' => (array) $attendees,
+            'type' => $meta[FieldRegistry::SESSION_TYPE][0] ?? FieldRegistry::SESSION_TYPE_IN_PERSON,
+            'lesson_ids' => array_map('intval', (array) $lessonIds),
+        ];
     }
 
     /**
@@ -262,6 +352,91 @@ class SessionService implements \NTDST_Service_Meta
         $sessions = $this->getSessionsForEdition($editionId);
         $dates = array_unique(array_column($sessions, 'date'));
         return count($dates);
+    }
+
+    // ========================================
+    // SESSION COMPLETION METHODS
+    // ========================================
+
+    /**
+     * Check if a session is complete for a user
+     *
+     * Behavior depends on session type:
+     * - in_person: User must be marked present
+     * - online: All linked lessons must be completed in LearnDash
+     * - assignment: All linked lessons must be completed in LearnDash
+     *
+     * @param int $sessionId Session post ID
+     * @param int $userId WordPress user ID
+     * @return bool True if session is complete
+     */
+    public function isSessionComplete(int $sessionId, int $userId): bool
+    {
+        $session = $this->getSession($sessionId);
+        if (!$session) {
+            return false;
+        }
+
+        $type = $session['type'] ?? FieldRegistry::SESSION_TYPE_IN_PERSON;
+
+        return match ($type) {
+            FieldRegistry::SESSION_TYPE_ONLINE,
+            FieldRegistry::SESSION_TYPE_ASSIGNMENT => $this->areLessonsComplete($session, $userId),
+            default => $this->isPresent($sessionId, $userId),
+        };
+    }
+
+    /**
+     * Check if all linked lessons are complete for a user
+     *
+     * @param array $session Session data
+     * @param int $userId WordPress user ID
+     * @return bool True if all lessons complete (or no lessons linked)
+     */
+    private function areLessonsComplete(array $session, int $userId): bool
+    {
+        $lessonIds = $session['lesson_ids'] ?? [];
+        if (empty($lessonIds)) {
+            return true; // No lessons = auto-complete
+        }
+
+        // Get course ID from the edition
+        $editionId = $session['edition_id'] ?? 0;
+        $courseId = $editionId ? (int) get_post_meta($editionId, FieldRegistry::EDITION_COURSE_ID, true) : 0;
+
+        if (!$courseId) {
+            return true; // No course linked = auto-complete
+        }
+
+        // Check each lesson
+        foreach ($lessonIds as $lessonId) {
+            if (!function_exists('learndash_is_lesson_complete')) {
+                return false; // LearnDash not available
+            }
+            if (!learndash_is_lesson_complete($userId, (int) $lessonId, $courseId)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Count completed sessions for a user in an edition
+     *
+     * Uses session type to determine completion:
+     * - in_person: attendance required
+     * - online/assignment: lesson completion required
+     *
+     * @param int $userId WordPress user ID
+     * @param int $editionId Edition post ID
+     * @return int Number of completed sessions
+     */
+    public function countCompletedSessions(int $userId, int $editionId): int
+    {
+        $sessions = $this->getSessionsForEdition($editionId);
+
+        return count(array_filter($sessions, fn($s) => $this->isSessionComplete($s['id'], $userId)));
     }
 
     // ========================================
@@ -737,6 +912,11 @@ class SessionService implements \NTDST_Service_Meta
             $attendees = json_decode($attendees, true) ?: [];
         }
 
+        $lessonIds = $post->fields[FieldRegistry::SESSION_LESSON_IDS] ?? [];
+        if (is_string($lessonIds)) {
+            $lessonIds = json_decode($lessonIds, true) ?: [];
+        }
+
         return [
             'id' => $post->ID,
             'title' => $post->post_title,
@@ -746,6 +926,10 @@ class SessionService implements \NTDST_Service_Meta
             'end_time' => $post->fields[FieldRegistry::SESSION_END_TIME] ?? '',
             'location' => $post->fields[FieldRegistry::SESSION_LOCATION] ?? '',
             'attendees' => array_map('intval', (array) $attendees),
+            'slot' => $post->fields[FieldRegistry::SESSION_SLOT] ?? '',
+            'slot_label' => $post->fields[FieldRegistry::SESSION_SLOT_LABEL] ?? '',
+            'type' => $post->fields[FieldRegistry::SESSION_TYPE] ?? FieldRegistry::SESSION_TYPE_IN_PERSON,
+            'lesson_ids' => array_map('intval', (array) $lessonIds),
         ];
     }
 
@@ -761,6 +945,11 @@ class SessionService implements \NTDST_Service_Meta
             $attendees = json_decode($attendees, true) ?: [];
         }
 
+        $lessonIds = $meta[FieldRegistry::SESSION_LESSON_IDS] ?? [];
+        if (is_string($lessonIds)) {
+            $lessonIds = json_decode($lessonIds, true) ?: [];
+        }
+
         return [
             'id' => $data['id'] ?? 0,
             'title' => $data['title'] ?? '',
@@ -770,6 +959,80 @@ class SessionService implements \NTDST_Service_Meta
             'end_time' => $meta[FieldRegistry::SESSION_END_TIME] ?? '',
             'location' => $meta[FieldRegistry::SESSION_LOCATION] ?? '',
             'attendees' => array_map('intval', (array) $attendees),
+            'slot' => $meta[FieldRegistry::SESSION_SLOT] ?? '',
+            'slot_label' => $meta[FieldRegistry::SESSION_SLOT_LABEL] ?? '',
+            'type' => $meta[FieldRegistry::SESSION_TYPE] ?? FieldRegistry::SESSION_TYPE_IN_PERSON,
+            'lesson_ids' => array_map('intval', (array) $lessonIds),
         ];
+    }
+
+    // ========================================
+    // SLOT METHODS
+    // ========================================
+
+    /**
+     * Get sessions grouped by slot
+     *
+     * @param int $editionId Edition post ID
+     * @return array Sessions grouped by slot name
+     */
+    public function getSessionsBySlot(int $editionId): array
+    {
+        $sessions = $this->getSessionsForEdition($editionId);
+        $grouped = [];
+
+        foreach ($sessions as $session) {
+            $slot = $session['slot'] ?: 'default';
+            if (!isset($grouped[$slot])) {
+                $grouped[$slot] = [
+                    'slot' => $slot,
+                    'label' => $session['slot_label'] ?: $slot,
+                    'sessions' => [],
+                ];
+            }
+            $grouped[$slot]['sessions'][] = $session;
+        }
+
+        return $grouped;
+    }
+
+    /**
+     * Get sessions for a specific slot
+     *
+     * @param int $editionId Edition post ID
+     * @param string $slot Slot identifier
+     * @return array Array of sessions in slot
+     */
+    public function getSessionsForSlot(int $editionId, string $slot): array
+    {
+        $sessions = $this->getSessionsForEdition($editionId);
+
+        return array_filter($sessions, function ($session) use ($slot) {
+            return ($session['slot'] ?: 'default') === $slot;
+        });
+    }
+
+    /**
+     * Get unique slots for an edition
+     *
+     * @param int $editionId Edition post ID
+     * @return array Array of unique slot names
+     */
+    public function getSlots(int $editionId): array
+    {
+        $sessions = $this->getSessionsForEdition($editionId);
+        $slots = [];
+
+        foreach ($sessions as $session) {
+            $slot = $session['slot'] ?: 'default';
+            if (!isset($slots[$slot])) {
+                $slots[$slot] = [
+                    'slot' => $slot,
+                    'label' => $session['slot_label'] ?: $slot,
+                ];
+            }
+        }
+
+        return array_values($slots);
     }
 }

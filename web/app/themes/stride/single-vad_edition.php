@@ -37,8 +37,9 @@ $availableSpots = $editionService->getAvailableSpots($editionId);
 $capacity = $edition['capacity'] ?? null;
 $speakers = $editionService->getSpeakers($editionId);
 
-// Get sessions
+// Get sessions and slot configuration
 $sessions = $sessionService ? $sessionService->getSessionsForEdition($editionId) : [];
+$sessionSlots = $editionService ? $editionService->getSessionSlots($editionId) : [];
 
 // Status badge
 $statusClass = 'stride-badge-enrolled';
@@ -61,9 +62,6 @@ if ($isCancelled) {
                     <ul class="uk-breadcrumb">
                         <li><a href="<?php echo esc_url(home_url('/')); ?>"><?php esc_html_e('Home', 'stride'); ?></a></li>
                         <li><a href="<?php echo esc_url(home_url('/cursussen/')); ?>"><?php esc_html_e('Cursussen', 'stride'); ?></a></li>
-                        <?php if ($courseId): ?>
-                            <li><a href="<?php echo esc_url(get_permalink($courseId)); ?>"><?php echo esc_html($courseTitle); ?></a></li>
-                        <?php endif; ?>
                         <li><span><?php the_title(); ?></span></li>
                     </ul>
                 </nav>
@@ -157,39 +155,102 @@ if ($isCancelled) {
                                 </p>
                             </div>
 
-                            <div class="stride-sessions-list">
-                                <?php foreach ($sessions as $index => $session):
-                                    $sessionDate = $session['date'] ?? null;
-                                    $startTime = $session['start_time'] ?? null;
-                                    $endTime = $session['end_time'] ?? null;
-                                    $sessionVenue = $session['venue'] ?? $venue;
+                            <?php if (!empty($sessionSlots)): ?>
+                                <!-- Grouped by slots with opt-in -->
+                                <?php foreach ($sessionSlots as $slot):
+                                    $slotSessions = array_filter($sessions, fn($s) => ($s['slot'] ?? '') === $slot['slot']);
+                                    if (empty($slotSessions)) continue;
+                                    $pickCount = $slot['pick_count'] ?? 0;
+                                    $slotSessionCount = count($slotSessions);
+                                    // Only show "kies X" if there's actually a choice (more sessions than pick_count)
+                                    $showPickBadge = $pickCount > 0 && $slotSessionCount > 1 && $slotSessionCount > $pickCount;
                                 ?>
-                                    <div class="stride-session-item">
-                                        <div class="stride-session-number">
-                                            <?php echo esc_html($index + 1); ?>
-                                        </div>
-                                        <div class="stride-session-info uk-flex-1">
-                                            <?php if ($sessionDate): ?>
-                                                <strong><?php echo esc_html(date_i18n('l j F Y', strtotime($sessionDate))); ?></strong>
-                                            <?php endif; ?>
-                                            <?php if ($startTime): ?>
-                                                <span class="uk-text-muted">
-                                                    <?php echo esc_html($startTime); ?>
-                                                    <?php if ($endTime): ?>
-                                                        - <?php echo esc_html($endTime); ?>
-                                                    <?php endif; ?>
+                                    <div class="stride-session-slot uk-margin-bottom">
+                                        <div class="stride-session-slot-header uk-flex uk-flex-between uk-flex-middle uk-margin-small-bottom">
+                                            <h4 class="uk-h5 uk-margin-remove">
+                                                <?php echo esc_html($slot['label'] ?? $slot['slot']); ?>
+                                            </h4>
+                                            <?php if ($showPickBadge): ?>
+                                                <span class="stride-badge stride-badge-info">
+                                                    <?php printf(
+                                                        esc_html(_n('kies %d sessie', 'kies %d sessies', $pickCount, 'stride')),
+                                                        $pickCount
+                                                    ); ?>
                                                 </span>
                                             <?php endif; ?>
-                                            <?php if ($sessionVenue && $sessionVenue !== $venue): ?>
-                                                <div class="uk-text-small uk-text-muted uk-margin-small-top">
-                                                    <span uk-icon="icon: location; ratio: 0.7"></span>
-                                                    <?php echo esc_html($sessionVenue); ?>
+                                        </div>
+                                        <div class="stride-sessions-list">
+                                            <?php $slotIndex = 0; foreach ($slotSessions as $session):
+                                                $sessionDate = $session['date'] ?? null;
+                                                $startTime = $session['start_time'] ?? null;
+                                                $endTime = $session['end_time'] ?? null;
+                                                $sessionVenue = $session['location'] ?? $venue;
+                                                $slotIndex++;
+                                            ?>
+                                                <div class="stride-session-item">
+                                                    <div class="stride-session-number">
+                                                        <?php echo esc_html($slotIndex); ?>
+                                                    </div>
+                                                    <div class="stride-session-info uk-flex-1">
+                                                        <?php if ($sessionDate): ?>
+                                                            <strong><?php echo esc_html(date_i18n('l j F Y', strtotime($sessionDate))); ?></strong>
+                                                        <?php endif; ?>
+                                                        <?php if ($startTime): ?>
+                                                            <span class="uk-text-muted">
+                                                                <?php echo esc_html($startTime); ?>
+                                                                <?php if ($endTime): ?>
+                                                                    - <?php echo esc_html($endTime); ?>
+                                                                <?php endif; ?>
+                                                            </span>
+                                                        <?php endif; ?>
+                                                        <?php if ($sessionVenue && $sessionVenue !== $venue): ?>
+                                                            <div class="uk-text-small uk-text-muted uk-margin-small-top">
+                                                                <span uk-icon="icon: location; ratio: 0.7"></span>
+                                                                <?php echo esc_html($sessionVenue); ?>
+                                                            </div>
+                                                        <?php endif; ?>
+                                                    </div>
                                                 </div>
-                                            <?php endif; ?>
+                                            <?php endforeach; ?>
                                         </div>
                                     </div>
                                 <?php endforeach; ?>
-                            </div>
+                            <?php else: ?>
+                                <!-- Simple flat list -->
+                                <div class="stride-sessions-list">
+                                    <?php foreach ($sessions as $index => $session):
+                                        $sessionDate = $session['date'] ?? null;
+                                        $startTime = $session['start_time'] ?? null;
+                                        $endTime = $session['end_time'] ?? null;
+                                        $sessionVenue = $session['location'] ?? $venue;
+                                    ?>
+                                        <div class="stride-session-item">
+                                            <div class="stride-session-number">
+                                                <?php echo esc_html($index + 1); ?>
+                                            </div>
+                                            <div class="stride-session-info uk-flex-1">
+                                                <?php if ($sessionDate): ?>
+                                                    <strong><?php echo esc_html(date_i18n('l j F Y', strtotime($sessionDate))); ?></strong>
+                                                <?php endif; ?>
+                                                <?php if ($startTime): ?>
+                                                    <span class="uk-text-muted">
+                                                        <?php echo esc_html($startTime); ?>
+                                                        <?php if ($endTime): ?>
+                                                            - <?php echo esc_html($endTime); ?>
+                                                        <?php endif; ?>
+                                                    </span>
+                                                <?php endif; ?>
+                                                <?php if ($sessionVenue && $sessionVenue !== $venue): ?>
+                                                    <div class="uk-text-small uk-text-muted uk-margin-small-top">
+                                                        <span uk-icon="icon: location; ratio: 0.7"></span>
+                                                        <?php echo esc_html($sessionVenue); ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
                         </div>
                     <?php endif; ?>
 
@@ -285,14 +346,6 @@ if ($isCancelled) {
                             </div>
                         </div>
 
-                        <?php if ($courseId): ?>
-                            <div class="uk-margin-top">
-                                <a href="<?php echo esc_url(get_permalink($courseId)); ?>" class="uk-link-muted uk-display-block uk-text-center">
-                                    <span uk-icon="icon: arrow-left; ratio: 0.8"></span>
-                                    <?php esc_html_e('Terug naar cursus', 'stride'); ?>
-                                </a>
-                            </div>
-                        <?php endif; ?>
                     </div>
                 </div>
             </div>
