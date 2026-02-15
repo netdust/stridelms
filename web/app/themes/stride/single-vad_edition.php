@@ -143,114 +143,122 @@ if ($isCancelled) {
                     </div>
 
                     <?php if (!empty($sessions)): ?>
-                        <!-- Sessions / Class Schedule -->
+                        <?php
+                        // Helper to render a session block
+                        $renderSession = function($session, $defaultVenue) {
+                            $date = $session['date'] ?? null;
+                            $startTime = $session['start_time'] ?? null;
+                            $endTime = $session['end_time'] ?? null;
+                            $title = $session['title'] ?? '';
+                            $description = $session['description'] ?? '';
+                            $type = $session['type'] ?? 'in_person';
+                            $location = $session['location'] ?: $defaultVenue;
+                            $webinarLink = $session['webinar_link'] ?? '';
+                            $lessonIds = $session['lesson_ids'] ?? [];
+
+                            // For online/assignment types, get lesson info
+                            $lessonExcerpt = '';
+                            if (($type === 'online' || $type === 'assignment') && !empty($lessonIds)) {
+                                $lesson = get_post($lessonIds[0]);
+                                if ($lesson) {
+                                    if (!$title) $title = $lesson->post_title;
+                                    if (!$description) $lessonExcerpt = wp_trim_words(strip_tags($lesson->post_content), 20, '...');
+                                }
+                            }
+
+                            $showDescription = $description ?: $lessonExcerpt;
+
+                            // Type config
+                            $typeLabel = match($type) {
+                                'webinar' => __('Webinar', 'stride'),
+                                'online' => __('Online module', 'stride'),
+                                'assignment' => __('Opdracht', 'stride'),
+                                default => null,
+                            };
+                            ?>
+                            <div class="stride-program-item">
+                                <div class="stride-program-date">
+                                    <?php if ($date): ?>
+                                        <span class="stride-program-day"><?php echo esc_html(date_i18n('D', strtotime($date))); ?></span>
+                                        <span class="stride-program-daynum"><?php echo esc_html(date_i18n('j', strtotime($date))); ?></span>
+                                        <span class="stride-program-month"><?php echo esc_html(date_i18n('M', strtotime($date))); ?></span>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="stride-program-content">
+                                    <div class="stride-program-header">
+                                        <h4 class="stride-program-title">
+                                            <?php echo esc_html($title ?: __('Sessie', 'stride')); ?>
+                                            <?php if ($typeLabel): ?>
+                                                <span class="stride-program-type"><?php echo esc_html($typeLabel); ?></span>
+                                            <?php endif; ?>
+                                        </h4>
+                                        <?php if ($startTime): ?>
+                                            <span class="stride-program-time"><?php echo esc_html($startTime); ?><?php if ($endTime): ?> – <?php echo esc_html($endTime); ?><?php endif; ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <?php if ($showDescription): ?>
+                                        <p class="stride-program-desc"><?php echo esc_html($showDescription); ?></p>
+                                    <?php endif; ?>
+                                    <div class="stride-program-meta">
+                                        <?php if ($type === 'in_person' && $location): ?>
+                                            <span><span uk-icon="icon: location; ratio: 0.75"></span> <?php echo esc_html($location); ?></span>
+                                        <?php endif; ?>
+                                        <?php if ($type === 'webinar' && $webinarLink): ?>
+                                            <a href="<?php echo esc_url($webinarLink); ?>" target="_blank" rel="noopener"><span uk-icon="icon: link; ratio: 0.75"></span> <?php esc_html_e('Webinar link', 'stride'); ?></a>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php
+                        };
+
+                        // Split sessions by slot
+                        $slotNames = !empty($sessionSlots) ? array_column($sessionSlots, 'slot') : [];
+                        $unslottedSessions = array_filter($sessions, fn($s) => empty($s['slot']) || !in_array($s['slot'], $slotNames, true));
+                        ?>
+
+                        <!-- Sessions / Course Program -->
                         <div class="stride-card">
                             <div class="stride-card-header">
                                 <h2 class="stride-card-title">
                                     <span uk-icon="icon: clock"></span>
-                                    <?php esc_html_e('Lesrooster', 'stride'); ?>
+                                    <?php esc_html_e('Programma', 'stride'); ?>
                                 </h2>
-                                <p class="uk-text-muted uk-margin-remove">
-                                    <?php printf(esc_html__('%d lesmomenten', 'stride'), count($sessions)); ?>
-                                </p>
                             </div>
 
-                            <?php if (!empty($sessionSlots)): ?>
-                                <!-- Grouped by slots with opt-in -->
-                                <?php foreach ($sessionSlots as $slot):
-                                    $slotSessions = array_filter($sessions, fn($s) => ($s['slot'] ?? '') === $slot['slot']);
-                                    if (empty($slotSessions)) continue;
-                                    $pickCount = $slot['pick_count'] ?? 0;
-                                    $slotSessionCount = count($slotSessions);
-                                    // Only show "kies X" if there's actually a choice (more sessions than pick_count)
-                                    $showPickBadge = $pickCount > 0 && $slotSessionCount > 1 && $slotSessionCount > $pickCount;
-                                ?>
-                                    <div class="stride-session-slot uk-margin-bottom">
-                                        <div class="stride-session-slot-header uk-flex uk-flex-between uk-flex-middle uk-margin-small-bottom">
-                                            <h4 class="uk-h5 uk-margin-remove">
-                                                <?php echo esc_html($slot['label'] ?? $slot['slot']); ?>
-                                            </h4>
-                                            <?php if ($showPickBadge): ?>
-                                                <span class="stride-badge stride-badge-info">
-                                                    <?php printf(
-                                                        esc_html(_n('kies %d sessie', 'kies %d sessies', $pickCount, 'stride')),
-                                                        $pickCount
-                                                    ); ?>
-                                                </span>
-                                            <?php endif; ?>
-                                        </div>
-                                        <div class="stride-sessions-list">
-                                            <?php $slotIndex = 0; foreach ($slotSessions as $session):
-                                                $sessionDate = $session['date'] ?? null;
-                                                $startTime = $session['start_time'] ?? null;
-                                                $endTime = $session['end_time'] ?? null;
-                                                $sessionVenue = $session['location'] ?? $venue;
-                                                $slotIndex++;
-                                            ?>
-                                                <div class="stride-session-item">
-                                                    <div class="stride-session-number">
-                                                        <?php echo esc_html($slotIndex); ?>
-                                                    </div>
-                                                    <div class="stride-session-info uk-flex-1">
-                                                        <?php if ($sessionDate): ?>
-                                                            <strong><?php echo esc_html(date_i18n('l j F Y', strtotime($sessionDate))); ?></strong>
-                                                        <?php endif; ?>
-                                                        <?php if ($startTime): ?>
-                                                            <span class="uk-text-muted">
-                                                                <?php echo esc_html($startTime); ?>
-                                                                <?php if ($endTime): ?>
-                                                                    - <?php echo esc_html($endTime); ?>
-                                                                <?php endif; ?>
-                                                            </span>
-                                                        <?php endif; ?>
-                                                        <?php if ($sessionVenue && $sessionVenue !== $venue): ?>
-                                                            <div class="uk-text-small uk-text-muted uk-margin-small-top">
-                                                                <span uk-icon="icon: location; ratio: 0.7"></span>
-                                                                <?php echo esc_html($sessionVenue); ?>
-                                                            </div>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                </div>
-                                            <?php endforeach; ?>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <!-- Simple flat list -->
-                                <div class="stride-sessions-list">
-                                    <?php foreach ($sessions as $index => $session):
-                                        $sessionDate = $session['date'] ?? null;
-                                        $startTime = $session['start_time'] ?? null;
-                                        $endTime = $session['end_time'] ?? null;
-                                        $sessionVenue = $session['location'] ?? $venue;
+                            <div class="stride-program">
+                                <?php if (!empty($sessionSlots)): ?>
+                                    <?php foreach ($sessionSlots as $slot):
+                                        $slotSessions = array_filter($sessions, fn($s) => ($s['slot'] ?? '') === $slot['slot']);
+                                        if (empty($slotSessions)) continue;
+                                        $pickCount = (int)($slot['pick_count'] ?? 0);
+                                        $isOptIn = $pickCount > 0 && count($slotSessions) > $pickCount;
                                     ?>
-                                        <div class="stride-session-item">
-                                            <div class="stride-session-number">
-                                                <?php echo esc_html($index + 1); ?>
+                                        <?php if ($isOptIn): ?>
+                                            <div class="stride-program-slot stride-program-slot-optin">
+                                                <div class="stride-program-slot-header">
+                                                    <span uk-icon="icon: git-branch; ratio: 0.85"></span>
+                                                    <strong><?php echo esc_html($slot['label'] ?? $slot['slot']); ?></strong>
+                                                    <span class="stride-program-slot-pick"><?php printf(esc_html__('Kies %d van %d', 'stride'), $pickCount, count($slotSessions)); ?></span>
+                                                </div>
+                                                <div class="stride-program-slot-options">
+                                                    <?php foreach ($slotSessions as $session): ?>
+                                                        <?php $renderSession($session, $venue); ?>
+                                                    <?php endforeach; ?>
+                                                </div>
                                             </div>
-                                            <div class="stride-session-info uk-flex-1">
-                                                <?php if ($sessionDate): ?>
-                                                    <strong><?php echo esc_html(date_i18n('l j F Y', strtotime($sessionDate))); ?></strong>
-                                                <?php endif; ?>
-                                                <?php if ($startTime): ?>
-                                                    <span class="uk-text-muted">
-                                                        <?php echo esc_html($startTime); ?>
-                                                        <?php if ($endTime): ?>
-                                                            - <?php echo esc_html($endTime); ?>
-                                                        <?php endif; ?>
-                                                    </span>
-                                                <?php endif; ?>
-                                                <?php if ($sessionVenue && $sessionVenue !== $venue): ?>
-                                                    <div class="uk-text-small uk-text-muted uk-margin-small-top">
-                                                        <span uk-icon="icon: location; ratio: 0.7"></span>
-                                                        <?php echo esc_html($sessionVenue); ?>
-                                                    </div>
-                                                <?php endif; ?>
-                                            </div>
-                                        </div>
+                                        <?php else: ?>
+                                            <?php foreach ($slotSessions as $session): ?>
+                                                <?php $renderSession($session, $venue); ?>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
                                     <?php endforeach; ?>
-                                </div>
-                            <?php endif; ?>
+                                <?php endif; ?>
+
+                                <?php foreach ($unslottedSessions as $session): ?>
+                                    <?php $renderSession($session, $venue); ?>
+                                <?php endforeach; ?>
+                            </div>
                         </div>
                     <?php endif; ?>
 

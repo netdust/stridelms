@@ -308,7 +308,7 @@ class SessionService implements \NTDST_Service_Meta
 
         return [
             'id' => $post->ID,
-            'title' => $post->post_title,
+            'post_title' => $post->post_title,
             'edition_id' => (int) ($meta[FieldRegistry::SESSION_EDITION_ID][0] ?? 0),
             'date' => $meta[FieldRegistry::SESSION_DATE][0] ?? null,
             'start_time' => $meta[FieldRegistry::SESSION_START_TIME][0] ?? null,
@@ -319,6 +319,10 @@ class SessionService implements \NTDST_Service_Meta
             'attendees' => (array) $attendees,
             'type' => $meta[FieldRegistry::SESSION_TYPE][0] ?? FieldRegistry::SESSION_TYPE_IN_PERSON,
             'lesson_ids' => array_map('intval', (array) $lessonIds),
+            // Session-specific fields
+            'title' => $meta[FieldRegistry::SESSION_TITLE][0] ?? '',
+            'description' => $meta[FieldRegistry::SESSION_DESCRIPTION][0] ?? '',
+            'webinar_link' => $meta[FieldRegistry::SESSION_WEBINAR_LINK][0] ?? '',
         ];
     }
 
@@ -959,7 +963,7 @@ class SessionService implements \NTDST_Service_Meta
 
         return [
             'id' => $data['id'] ?? 0,
-            'title' => $data['title'] ?? '',
+            'post_title' => $data['title'] ?? '',
             'edition_id' => (int) ($meta[FieldRegistry::SESSION_EDITION_ID] ?? 0),
             'date' => $meta[FieldRegistry::SESSION_DATE] ?? '',
             'start_time' => $meta[FieldRegistry::SESSION_START_TIME] ?? '',
@@ -970,6 +974,10 @@ class SessionService implements \NTDST_Service_Meta
             'slot_label' => $meta[FieldRegistry::SESSION_SLOT_LABEL] ?? '',
             'type' => $meta[FieldRegistry::SESSION_TYPE] ?? FieldRegistry::SESSION_TYPE_IN_PERSON,
             'lesson_ids' => array_map('intval', (array) $lessonIds),
+            // Session-specific fields
+            'title' => $meta[FieldRegistry::SESSION_TITLE] ?? '',
+            'description' => $meta[FieldRegistry::SESSION_DESCRIPTION] ?? '',
+            'webinar_link' => $meta[FieldRegistry::SESSION_WEBINAR_LINK] ?? '',
         ];
     }
 

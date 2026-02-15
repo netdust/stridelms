@@ -1373,3 +1373,186 @@ a:hover {
         padding: var(--stride-spacing-xs);
     }
 }
+
+/* ========================================
+   COURSE PROGRAM (Edition Page)
+   ======================================== */
+.stride-program {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Individual program item */
+.stride-program-item {
+    display: flex;
+    gap: var(--stride-spacing-md);
+    padding: var(--stride-spacing-md) 0;
+    border-bottom: 1px solid var(--stride-border);
+}
+
+.stride-program-item:last-child {
+    border-bottom: none;
+}
+
+/* Date block on the left */
+.stride-program-date {
+    flex-shrink: 0;
+    width: 50px;
+    text-align: center;
+    line-height: 1.2;
+}
+
+.stride-program-day {
+    display: block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    color: var(--stride-muted);
+    letter-spacing: 0.05em;
+}
+
+.stride-program-daynum {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--stride-primary);
+}
+
+.stride-program-month {
+    display: block;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--stride-muted);
+}
+
+/* Content section */
+.stride-program-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.stride-program-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--stride-spacing-sm);
+    margin-bottom: var(--stride-spacing-xs);
+}
+
+.stride-program-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--stride-dark);
+}
+
+.stride-program-type {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    color: var(--stride-info);
+    background: var(--stride-info-light);
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-left: var(--stride-spacing-xs);
+    vertical-align: middle;
+}
+
+.stride-program-time {
+    flex-shrink: 0;
+    font-size: 0.875rem;
+    color: var(--stride-muted);
+    white-space: nowrap;
+}
+
+.stride-program-desc {
+    margin: 0 0 var(--stride-spacing-xs) 0;
+    font-size: 0.9rem;
+    color: var(--stride-muted);
+    line-height: 1.5;
+}
+
+.stride-program-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--stride-spacing-sm);
+    font-size: 0.85rem;
+    color: var(--stride-muted);
+}
+
+.stride-program-meta a {
+    color: var(--stride-primary);
+}
+
+/* Opt-in slot styling */
+.stride-program-slot-optin {
+    background: var(--stride-info-light);
+    border-radius: var(--stride-radius);
+    padding: var(--stride-spacing-sm);
+    margin: var(--stride-spacing-sm) 0;
+}
+
+.stride-program-slot-header {
+    display: flex;
+    align-items: center;
+    gap: var(--stride-spacing-xs);
+    padding-bottom: var(--stride-spacing-sm);
+    margin-bottom: var(--stride-spacing-xs);
+    border-bottom: 1px solid rgba(52, 152, 219, 0.2);
+    color: var(--stride-info);
+}
+
+.stride-program-slot-pick {
+    margin-left: auto;
+    font-size: 0.85rem;
+    font-weight: normal;
+}
+
+.stride-program-slot-options {
+    background: var(--stride-white);
+    border-radius: var(--stride-radius-sm);
+}
+
+.stride-program-slot-options .stride-program-item {
+    padding: var(--stride-spacing-sm) var(--stride-spacing-md);
+}
+
+.stride-program-slot-options .stride-program-item:first-child {
+    border-radius: var(--stride-radius-sm) var(--stride-radius-sm) 0 0;
+}
+
+.stride-program-slot-options .stride-program-item:last-child {
+    border-radius: 0 0 var(--stride-radius-sm) var(--stride-radius-sm);
+    border-bottom: none;
+}
+
+/* Mobile adjustments */
+@media (max-width: 639px) {
+    .stride-program-item {
+        flex-direction: column;
+        gap: var(--stride-spacing-sm);
+    }
+
+    .stride-program-date {
+        width: auto;
+        display: flex;
+        gap: var(--stride-spacing-xs);
+        text-align: left;
+    }
+
+    .stride-program-day,
+    .stride-program-daynum,
+    .stride-program-month {
+        display: inline;
+        font-size: 0.9rem;
+    }
+
+    .stride-program-daynum {
+        font-size: 0.9rem;
+    }
+
+    .stride-program-header {
+        flex-direction: column;
+        gap: var(--stride-spacing-xs);
+    }
+}
