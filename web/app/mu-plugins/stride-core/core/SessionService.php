@@ -144,6 +144,11 @@ class SessionService implements \NTDST_Service_Meta
                 FieldRegistry::SESSION_SLOT_LABEL => ['type' => 'text'],
                 FieldRegistry::SESSION_TYPE => ['type' => 'text', 'default' => FieldRegistry::SESSION_TYPE_IN_PERSON],
                 FieldRegistry::SESSION_LESSON_IDS => ['type' => 'json', 'default' => []],
+                FieldRegistry::SESSION_SORT_ORDER => ['type' => 'integer', 'default' => 0],
+                FieldRegistry::SESSION_TITLE => ['type' => 'text', 'default' => ''],
+                FieldRegistry::SESSION_DESCRIPTION => ['type' => 'text', 'default' => ''],
+                FieldRegistry::SESSION_WEBINAR_LINK => ['type' => 'text', 'default' => ''],
+                FieldRegistry::SESSION_DEADLINE => ['type' => 'text', 'default' => ''],
             ],
             'auto_metabox' => true,
         ]);
@@ -380,6 +385,8 @@ class SessionService implements \NTDST_Service_Meta
         $type = $session['type'] ?? FieldRegistry::SESSION_TYPE_IN_PERSON;
 
         return match ($type) {
+            FieldRegistry::SESSION_TYPE_IN_PERSON,
+            FieldRegistry::SESSION_TYPE_WEBINAR => $this->isPresent($sessionId, $userId),
             FieldRegistry::SESSION_TYPE_ONLINE,
             FieldRegistry::SESSION_TYPE_ASSIGNMENT => $this->areLessonsComplete($session, $userId),
             default => $this->isPresent($sessionId, $userId),

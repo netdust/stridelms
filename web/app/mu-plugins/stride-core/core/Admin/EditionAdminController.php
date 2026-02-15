@@ -43,6 +43,7 @@ class EditionAdminController
         add_action('wp_ajax_stride_add_session', [$this, 'ajaxAddSession']);
         add_action('wp_ajax_stride_update_session', [$this, 'ajaxUpdateSession']);
         add_action('wp_ajax_stride_delete_session', [$this, 'ajaxDeleteSession']);
+        add_action('wp_ajax_stride_get_course_lessons', [$this, 'ajaxGetCourseLessons']);
 
         // AJAX endpoints for attendance
         add_action('wp_ajax_stride_get_attendance', [$this, 'ajaxGetAttendance']);
@@ -141,6 +142,13 @@ class EditionAdminController
             'ajaxurl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('stride_edition_admin'),
             'editionId' => get_the_ID(),
+            'sessionTypes' => [
+                FieldRegistry::SESSION_TYPE_IN_PERSON => __('Fysiek', 'stride'),
+                FieldRegistry::SESSION_TYPE_WEBINAR => __('Webinar', 'stride'),
+                FieldRegistry::SESSION_TYPE_ONLINE => __('Online (zelfgestuurd)', 'stride'),
+                FieldRegistry::SESSION_TYPE_ASSIGNMENT => __('Opdracht', 'stride'),
+            ],
+            'defaultSessionType' => FieldRegistry::SESSION_TYPE_IN_PERSON,
             'i18n' => [
                 'addSession' => __('Sessie toevoegen', 'stride'),
                 'editSession' => __('Sessie bewerken', 'stride'),
@@ -153,6 +161,7 @@ class EditionAdminController
                 'endTime' => __('Eindtijd', 'stride'),
                 'location' => __('Locatie', 'stride'),
                 'slot' => __('Slot', 'stride'),
+                'type' => __('Type', 'stride'),
                 'noSlot' => __('Geen slot', 'stride'),
                 'attendees' => __('Deelnemers', 'stride'),
                 'present' => __('Aanwezig', 'stride'),
@@ -443,6 +452,7 @@ class EditionAdminController
                             <th class="column-date"><?php esc_html_e('Datum', 'stride'); ?></th>
                             <th class="column-time"><?php esc_html_e('Tijd', 'stride'); ?></th>
                             <th class="column-location"><?php esc_html_e('Locatie', 'stride'); ?></th>
+                            <th class="column-type"><?php esc_html_e('Type', 'stride'); ?></th>
                             <?php if (!empty($editionSlots)): ?>
                                 <th class="column-slot"><?php esc_html_e('Slot', 'stride'); ?></th>
                             <?php endif; ?>
@@ -453,7 +463,7 @@ class EditionAdminController
                     <tbody id="stride-sessions-body">
                         <?php if (empty($sessions)): ?>
                             <tr class="no-sessions-row">
-                                <td colspan="5" class="no-sessions">
+                                <td colspan="<?php echo !empty($editionSlots) ? '8' : '7'; ?>" class="no-sessions">
                                     <?php esc_html_e('Nog geen sessies toegevoegd.', 'stride'); ?>
                                 </td>
                             </tr>
@@ -468,29 +478,28 @@ class EditionAdminController
                 <!-- Inline edit form template (hidden) -->
                 <template id="stride-session-form-template">
                     <tr class="stride-session-form-row">
-                        <td colspan="<?php echo !empty($editionSlots) ? '7' : '6'; ?>">
+                        <td colspan="<?php echo !empty($editionSlots) ? '8' : '7'; ?>">
                             <div class="stride-session-form">
                                 <input type="hidden" name="session_id" value="">
-                                <div class="stride-session-form-fields">
+
+                                <!-- Row 1: Date and Time -->
+                                <div class="stride-form-section stride-datetime-section">
                                     <div class="stride-field">
                                         <label><?php esc_html_e('Datum', 'stride'); ?></label>
                                         <input type="date" name="session_date" value="" required>
                                     </div>
                                     <div class="stride-field">
                                         <label><?php esc_html_e('Starttijd', 'stride'); ?></label>
-                                        <input type="time" name="session_start_time" value="" placeholder="09:00">
+                                        <input type="time" name="session_start_time" value="">
                                     </div>
                                     <div class="stride-field">
                                         <label><?php esc_html_e('Eindtijd', 'stride'); ?></label>
-                                        <input type="time" name="session_end_time" value="" placeholder="17:00">
+                                        <input type="time" name="session_end_time" value="">
                                     </div>
+                                    <?php if (!empty($editionSlots)): ?>
                                     <div class="stride-field">
-                                        <label><?php esc_html_e('Locatie', 'stride'); ?></label>
-                                        <input type="text" name="session_location" value="" placeholder="<?php esc_attr_e('Optioneel', 'stride'); ?>">
-                                    </div>
-                                    <div class="stride-field stride-slot-field">
                                         <label><?php esc_html_e('Slot', 'stride'); ?></label>
-                                        <select name="session_slot" id="stride-session-slot-select">
+                                        <select name="session_slot">
                                             <option value=""><?php esc_html_e('Geen slot', 'stride'); ?></option>
                                             <?php foreach ($editionSlots as $slot): ?>
                                                 <option value="<?php echo esc_attr($slot['slot']); ?>">
@@ -499,7 +508,100 @@ class EditionAdminController
                                             <?php endforeach; ?>
                                         </select>
                                     </div>
+                                    <?php endif; ?>
                                 </div>
+
+                                <!-- Row 2: Type Selection -->
+                                <div class="stride-form-section stride-type-section">
+                                    <label class="stride-type-label"><?php esc_html_e('Type', 'stride'); ?></label>
+                                    <div class="stride-type-buttons">
+                                        <label class="stride-type-option active" data-type="<?php echo esc_attr(FieldRegistry::SESSION_TYPE_IN_PERSON); ?>">
+                                            <input type="radio" name="session_type" value="<?php echo esc_attr(FieldRegistry::SESSION_TYPE_IN_PERSON); ?>" checked>
+                                            <span class="dashicons dashicons-location"></span>
+                                            <span class="stride-type-name"><?php esc_html_e('Fysiek', 'stride'); ?></span>
+                                        </label>
+                                        <label class="stride-type-option" data-type="<?php echo esc_attr(FieldRegistry::SESSION_TYPE_WEBINAR); ?>">
+                                            <input type="radio" name="session_type" value="<?php echo esc_attr(FieldRegistry::SESSION_TYPE_WEBINAR); ?>">
+                                            <span class="dashicons dashicons-video-alt2"></span>
+                                            <span class="stride-type-name"><?php esc_html_e('Webinar', 'stride'); ?></span>
+                                        </label>
+                                        <label class="stride-type-option" data-type="<?php echo esc_attr(FieldRegistry::SESSION_TYPE_ONLINE); ?>">
+                                            <input type="radio" name="session_type" value="<?php echo esc_attr(FieldRegistry::SESSION_TYPE_ONLINE); ?>">
+                                            <span class="dashicons dashicons-laptop"></span>
+                                            <span class="stride-type-name"><?php esc_html_e('Online', 'stride'); ?></span>
+                                        </label>
+                                        <label class="stride-type-option" data-type="<?php echo esc_attr(FieldRegistry::SESSION_TYPE_ASSIGNMENT); ?>">
+                                            <input type="radio" name="session_type" value="<?php echo esc_attr(FieldRegistry::SESSION_TYPE_ASSIGNMENT); ?>">
+                                            <span class="dashicons dashicons-edit-page"></span>
+                                            <span class="stride-type-name"><?php esc_html_e('Opdracht', 'stride'); ?></span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Type-specific fields -->
+                                <div class="stride-form-section stride-type-fields">
+                                    <!-- Fysiek fields -->
+                                    <div class="stride-type-panel" data-for-type="<?php echo esc_attr(FieldRegistry::SESSION_TYPE_IN_PERSON); ?>">
+                                        <div class="stride-field-row two-col">
+                                            <div class="stride-field">
+                                                <label><?php esc_html_e('Titel', 'stride'); ?> <span class="optional">(<?php esc_html_e('optioneel', 'stride'); ?>)</span></label>
+                                                <input type="text" name="session_title" value="" placeholder="<?php esc_attr_e('Bijv. Dag 1 - Theorie', 'stride'); ?>">
+                                            </div>
+                                            <div class="stride-field">
+                                                <label><?php esc_html_e('Locatie', 'stride'); ?></label>
+                                                <input type="text" name="session_location" value="" placeholder="<?php esc_attr_e('Bijv. Conferentiezaal A, Brussel', 'stride'); ?>">
+                                            </div>
+                                        </div>
+                                        <div class="stride-field">
+                                            <label><?php esc_html_e('Omschrijving', 'stride'); ?> <span class="optional">(<?php esc_html_e('optioneel', 'stride'); ?>)</span></label>
+                                            <textarea name="session_description" rows="2" placeholder="<?php esc_attr_e('Extra informatie over deze sessie...', 'stride'); ?>"></textarea>
+                                        </div>
+                                    </div>
+
+                                    <!-- Webinar fields -->
+                                    <div class="stride-type-panel" data-for-type="<?php echo esc_attr(FieldRegistry::SESSION_TYPE_WEBINAR); ?>" style="display: none;">
+                                        <div class="stride-field-row two-col">
+                                            <div class="stride-field">
+                                                <label><?php esc_html_e('Titel', 'stride'); ?> <span class="optional">(<?php esc_html_e('optioneel', 'stride'); ?>)</span></label>
+                                                <input type="text" name="session_title" value="" placeholder="<?php esc_attr_e('Bijv. Introductie webinar', 'stride'); ?>">
+                                            </div>
+                                            <div class="stride-field">
+                                                <label><?php esc_html_e('Webinar link', 'stride'); ?></label>
+                                                <input type="url" name="session_webinar_link" value="" placeholder="<?php esc_attr_e('https://zoom.us/j/...', 'stride'); ?>">
+                                            </div>
+                                        </div>
+                                        <div class="stride-field">
+                                            <label><?php esc_html_e('Omschrijving', 'stride'); ?> <span class="optional">(<?php esc_html_e('optioneel', 'stride'); ?>)</span></label>
+                                            <textarea name="session_description" rows="2" placeholder="<?php esc_attr_e('Instructies voor deelnemers...', 'stride'); ?>"></textarea>
+                                        </div>
+                                    </div>
+
+                                    <!-- Online fields -->
+                                    <div class="stride-type-panel" data-for-type="<?php echo esc_attr(FieldRegistry::SESSION_TYPE_ONLINE); ?>" style="display: none;">
+                                        <div class="stride-field">
+                                            <label><?php esc_html_e('Gekoppelde les', 'stride'); ?></label>
+                                            <select name="session_lesson_id" class="stride-lesson-select">
+                                                <option value=""><?php esc_html_e('Selecteer een les...', 'stride'); ?></option>
+                                                <!-- Populated via AJAX -->
+                                            </select>
+                                            <p class="description"><?php esc_html_e('De les die afgerond moet worden.', 'stride'); ?></p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Opdracht fields -->
+                                    <div class="stride-type-panel" data-for-type="<?php echo esc_attr(FieldRegistry::SESSION_TYPE_ASSIGNMENT); ?>" style="display: none;">
+                                        <div class="stride-field">
+                                            <label><?php esc_html_e('Gekoppelde les of quiz', 'stride'); ?></label>
+                                            <select name="session_lesson_id" class="stride-content-select">
+                                                <option value=""><?php esc_html_e('Selecteer les of quiz...', 'stride'); ?></option>
+                                                <!-- Populated via AJAX -->
+                                            </select>
+                                            <p class="description"><?php esc_html_e('De les of quiz die afgerond moet worden.', 'stride'); ?></p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Actions -->
                                 <div class="stride-session-form-actions">
                                     <button type="button" class="button button-primary stride-session-save">
                                         <?php esc_html_e('Opslaan', 'stride'); ?>
@@ -649,11 +751,41 @@ class EditionAdminController
             }
         }
 
+        // Get session type label
+        $sessionType = $session['type'] ?? FieldRegistry::SESSION_TYPE_IN_PERSON;
+        $typeLabels = [
+            FieldRegistry::SESSION_TYPE_IN_PERSON => __('Fysiek', 'stride'),
+            FieldRegistry::SESSION_TYPE_WEBINAR => __('Webinar', 'stride'),
+            FieldRegistry::SESSION_TYPE_ONLINE => __('Online', 'stride'),
+            FieldRegistry::SESSION_TYPE_ASSIGNMENT => __('Opdracht', 'stride'),
+        ];
+        $typeLabel = $typeLabels[$sessionType] ?? $sessionType;
+
         $hasSlots = !empty($editionSlots);
+
+        // Get lesson IDs for online/assignment sessions
+        $lessonIds = $session['lesson_ids'] ?? [];
+        $lessonIdsStr = !empty($lessonIds) ? implode(',', $lessonIds) : '';
+
+        // Get additional type-specific fields
+        $description = $session['description'] ?? '';
+        $webinarLink = $session['webinar_link'] ?? '';
+        $title = $session['title'] ?? '';
 
         ob_start();
         ?>
-        <tr class="session-row" data-session-id="<?php echo esc_attr($session['id']); ?>" data-session-slot="<?php echo esc_attr($session['slot'] ?? ''); ?>">
+        <tr class="session-row"
+            data-session-id="<?php echo esc_attr($session['id']); ?>"
+            data-session-slot="<?php echo esc_attr($session['slot'] ?? ''); ?>"
+            data-session-type="<?php echo esc_attr($sessionType); ?>"
+            data-date="<?php echo esc_attr($session['date'] ?? ''); ?>"
+            data-start-time="<?php echo esc_attr($session['start_time'] ?? ''); ?>"
+            data-end-time="<?php echo esc_attr($session['end_time'] ?? ''); ?>"
+            data-location="<?php echo esc_attr($session['location'] ?? ''); ?>"
+            data-lesson-ids="<?php echo esc_attr($lessonIdsStr); ?>"
+            data-description="<?php echo esc_attr($description); ?>"
+            data-webinar-link="<?php echo esc_attr($webinarLink); ?>"
+            data-title="<?php echo esc_attr($title); ?>">
             <td class="column-date">
                 <?php echo esc_html(date_i18n('d M Y', strtotime($session['date']))); ?>
             </td>
@@ -662,6 +794,9 @@ class EditionAdminController
             </td>
             <td class="column-location">
                 <?php echo esc_html($session['location'] ?: '-'); ?>
+            </td>
+            <td class="column-type">
+                <span class="session-type-badge session-type-<?php echo esc_attr($sessionType); ?>"><?php echo esc_html($typeLabel); ?></span>
             </td>
             <?php if ($hasSlots): ?>
                 <td class="column-slot">
@@ -1129,9 +1264,35 @@ class EditionAdminController
         $endTime = sanitize_text_field($_POST['end_time'] ?? '');
         $location = sanitize_text_field($_POST['location'] ?? '');
         $slot = sanitize_text_field($_POST['slot'] ?? '');
+        // Accept both 'type' and 'session_type' for flexibility
+        $type = sanitize_text_field($_POST['session_type'] ?? $_POST['type'] ?? FieldRegistry::SESSION_TYPE_IN_PERSON);
+
+        // Type-specific fields
+        $description = sanitize_textarea_field($_POST['description'] ?? '');
+        $webinarLink = esc_url_raw($_POST['webinar_link'] ?? '');
+        $title = sanitize_text_field($_POST['title'] ?? '');
+
+        // Handle lesson_id (single) or lesson_ids (array) for backwards compatibility
+        $lessonIds = [];
+        if (!empty($_POST['lesson_id'])) {
+            $lessonIds = [absint($_POST['lesson_id'])];
+        } elseif (isset($_POST['lesson_ids'])) {
+            $lessonIds = array_map('absint', (array) $_POST['lesson_ids']);
+        }
 
         if (!$editionId || !$date) {
             wp_send_json_error(['message' => __('Editie en datum zijn verplicht.', 'stride')]);
+        }
+
+        // Validate session type
+        $validTypes = [
+            FieldRegistry::SESSION_TYPE_IN_PERSON,
+            FieldRegistry::SESSION_TYPE_WEBINAR,
+            FieldRegistry::SESSION_TYPE_ONLINE,
+            FieldRegistry::SESSION_TYPE_ASSIGNMENT,
+        ];
+        if (!in_array($type, $validTypes, true)) {
+            $type = FieldRegistry::SESSION_TYPE_IN_PERSON;
         }
 
         $sessionData = [
@@ -1139,8 +1300,28 @@ class EditionAdminController
             FieldRegistry::SESSION_DATE => $date,
             FieldRegistry::SESSION_START_TIME => $startTime,
             FieldRegistry::SESSION_END_TIME => $endTime,
-            FieldRegistry::SESSION_LOCATION => $location,
+            FieldRegistry::SESSION_TYPE => $type,
         ];
+
+        // Add type-specific fields
+        switch ($type) {
+            case FieldRegistry::SESSION_TYPE_IN_PERSON:
+                $sessionData[FieldRegistry::SESSION_LOCATION] = $location;
+                $sessionData[FieldRegistry::SESSION_DESCRIPTION] = $description;
+                $sessionData[FieldRegistry::SESSION_TITLE] = $title;
+                break;
+
+            case FieldRegistry::SESSION_TYPE_WEBINAR:
+                $sessionData[FieldRegistry::SESSION_WEBINAR_LINK] = $webinarLink;
+                $sessionData[FieldRegistry::SESSION_DESCRIPTION] = $description;
+                $sessionData[FieldRegistry::SESSION_TITLE] = $title;
+                break;
+
+            case FieldRegistry::SESSION_TYPE_ONLINE:
+            case FieldRegistry::SESSION_TYPE_ASSIGNMENT:
+                $sessionData[FieldRegistry::SESSION_LESSON_IDS] = array_filter($lessonIds);
+                break;
+        }
 
         if ($slot) {
             $sessionData[FieldRegistry::SESSION_SLOT] = $slot;
@@ -1187,18 +1368,78 @@ class EditionAdminController
         $endTime = sanitize_text_field($_POST['end_time'] ?? '');
         $location = sanitize_text_field($_POST['location'] ?? '');
         $slot = sanitize_text_field($_POST['slot'] ?? '');
+        // Accept both 'type' and 'session_type' for flexibility
+        $type = sanitize_text_field($_POST['session_type'] ?? $_POST['type'] ?? '');
+
+        // Type-specific fields
+        $description = sanitize_textarea_field($_POST['description'] ?? '');
+        $webinarLink = esc_url_raw($_POST['webinar_link'] ?? '');
+        $title = sanitize_text_field($_POST['title'] ?? '');
+
+        // Handle lesson_id (single) or lesson_ids (array) for backwards compatibility
+        $lessonIds = [];
+        if (!empty($_POST['lesson_id'])) {
+            $lessonIds = [absint($_POST['lesson_id'])];
+        } elseif (isset($_POST['lesson_ids'])) {
+            $lessonIds = array_map('absint', (array) $_POST['lesson_ids']);
+        }
 
         if (!$sessionId || !$date) {
             wp_send_json_error(['message' => __('Sessie en datum zijn verplicht.', 'stride')]);
         }
 
-        $result = $this->getSessionService()->updateSession($sessionId, [
+        // Validate session type
+        $validTypes = [
+            FieldRegistry::SESSION_TYPE_IN_PERSON,
+            FieldRegistry::SESSION_TYPE_WEBINAR,
+            FieldRegistry::SESSION_TYPE_ONLINE,
+            FieldRegistry::SESSION_TYPE_ASSIGNMENT,
+        ];
+
+        $updateData = [
             FieldRegistry::SESSION_DATE => $date,
             FieldRegistry::SESSION_START_TIME => $startTime,
             FieldRegistry::SESSION_END_TIME => $endTime,
-            FieldRegistry::SESSION_LOCATION => $location,
             FieldRegistry::SESSION_SLOT => $slot,
-        ]);
+        ];
+
+        // Update type if provided and valid
+        if ($type && in_array($type, $validTypes, true)) {
+            $updateData[FieldRegistry::SESSION_TYPE] = $type;
+
+            // Add type-specific fields based on the new type
+            switch ($type) {
+                case FieldRegistry::SESSION_TYPE_IN_PERSON:
+                    $updateData[FieldRegistry::SESSION_LOCATION] = $location;
+                    $updateData[FieldRegistry::SESSION_DESCRIPTION] = $description;
+                    $updateData[FieldRegistry::SESSION_TITLE] = $title;
+                    // Clear other type fields
+                    $updateData[FieldRegistry::SESSION_WEBINAR_LINK] = '';
+                    $updateData[FieldRegistry::SESSION_LESSON_IDS] = [];
+                    break;
+
+                case FieldRegistry::SESSION_TYPE_WEBINAR:
+                    $updateData[FieldRegistry::SESSION_WEBINAR_LINK] = $webinarLink;
+                    $updateData[FieldRegistry::SESSION_DESCRIPTION] = $description;
+                    $updateData[FieldRegistry::SESSION_TITLE] = $title;
+                    // Clear other type fields
+                    $updateData[FieldRegistry::SESSION_LOCATION] = '';
+                    $updateData[FieldRegistry::SESSION_LESSON_IDS] = [];
+                    break;
+
+                case FieldRegistry::SESSION_TYPE_ONLINE:
+                case FieldRegistry::SESSION_TYPE_ASSIGNMENT:
+                    $updateData[FieldRegistry::SESSION_LESSON_IDS] = array_filter($lessonIds);
+                    // Clear other type fields
+                    $updateData[FieldRegistry::SESSION_LOCATION] = '';
+                    $updateData[FieldRegistry::SESSION_DESCRIPTION] = '';
+                    $updateData[FieldRegistry::SESSION_WEBINAR_LINK] = '';
+                    $updateData[FieldRegistry::SESSION_TITLE] = '';
+                    break;
+            }
+        }
+
+        $result = $this->getSessionService()->updateSession($sessionId, $updateData);
 
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);
@@ -1262,6 +1503,61 @@ class EditionAdminController
         }
 
         wp_send_json_success(['html' => $html, 'count' => count($sessions)]);
+    }
+
+    /**
+     * AJAX: Get lessons for a course (for online/assignment session types)
+     */
+    public function ajaxGetCourseLessons(): void
+    {
+        check_ajax_referer('stride_edition_admin', 'nonce');
+
+        $editionId = absint($_POST['edition_id'] ?? 0);
+        if (!$editionId) {
+            wp_send_json_error(['message' => __('Ongeldige editie.', 'stride')]);
+        }
+
+        // Get the course linked to this edition
+        $courseId = (int) get_post_meta($editionId, FieldRegistry::EDITION_COURSE_ID, true);
+        if (!$courseId) {
+            wp_send_json_success(['lessons' => []]);
+        }
+
+        // Get lessons for the course
+        $lessons = [];
+        if (function_exists('learndash_get_lesson_list')) {
+            $lessonList = learndash_get_lesson_list($courseId, ['num' => -1]);
+            foreach ($lessonList as $lesson) {
+                $lessons[] = [
+                    'id' => $lesson->ID,
+                    'title' => $lesson->post_title,
+                ];
+            }
+        } else {
+            // Fallback: get lessons directly
+            $lessonPosts = get_posts([
+                'post_type' => 'sfwd-lessons',
+                'posts_per_page' => -1,
+                'meta_query' => [
+                    [
+                        'key' => 'course_id',
+                        'value' => $courseId,
+                        'compare' => '=',
+                    ],
+                ],
+                'orderby' => 'menu_order',
+                'order' => 'ASC',
+            ]);
+
+            foreach ($lessonPosts as $lesson) {
+                $lessons[] = [
+                    'id' => $lesson->ID,
+                    'title' => $lesson->post_title,
+                ];
+            }
+        }
+
+        wp_send_json_success(['lessons' => $lessons]);
     }
 
     // ========================================

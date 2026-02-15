@@ -231,6 +231,9 @@ final class FieldRegistry
     /** Completion threshold (percentage or count based on mode) */
     public const EDITION_COMPLETION_THRESHOLD = 'completion_threshold';
 
+    /** Is this the default edition for the course */
+    public const EDITION_IS_DEFAULT = 'is_default';
+
     // Edition status values
     public const EDITION_STATUS_OPEN = 'open';
     public const EDITION_STATUS_FULL = 'full';
@@ -266,6 +269,33 @@ final class FieldRegistry
 
     /** Session slot display label (e.g., "Voormiddag", "Namiddag") */
     public const SESSION_SLOT_LABEL = 'slot_label';
+
+    /** Session type (in_person, webinar, online, assignment) */
+    public const SESSION_TYPE = 'type';
+
+    /** Linked LearnDash lesson IDs (for online/assignment sessions) */
+    public const SESSION_LESSON_IDS = 'lesson_ids';
+
+    /** Session sort order */
+    public const SESSION_SORT_ORDER = 'sort_order';
+
+    /** Session title (for fysiek/webinar sessions) */
+    public const SESSION_TITLE = 'title';
+
+    /** Session description */
+    public const SESSION_DESCRIPTION = 'description';
+
+    /** Webinar link (for webinar sessions) */
+    public const SESSION_WEBINAR_LINK = 'webinar_link';
+
+    /** Session deadline (for online/assignment sessions) */
+    public const SESSION_DEADLINE = 'deadline';
+
+    // Session type values
+    public const SESSION_TYPE_IN_PERSON = 'in_person';
+    public const SESSION_TYPE_WEBINAR = 'webinar';
+    public const SESSION_TYPE_ONLINE = 'online';
+    public const SESSION_TYPE_ASSIGNMENT = 'assignment';
 
     // ========================================
     // TRAJECTORY FIELDS (vad_trajectory CPT)
