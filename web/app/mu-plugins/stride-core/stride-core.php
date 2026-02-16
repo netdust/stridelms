@@ -1,0 +1,34 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Plugin Name: Stride Core
+ * Description: Business logic for Stride LMS
+ * Version: 1.0.0
+ * Author: NTDST
+ */
+
+defined('ABSPATH') || exit;
+
+// Load autoloader
+require_once __DIR__ . '/autoload.php';
+
+// Load config
+$config = require __DIR__ . '/plugin-config.php';
+
+// Register DI bindings
+add_action('ntdst/core_ready', function () use ($config): void {
+    foreach ($config['bindings'] as $interface => $implementation) {
+        ntdst_set($interface, $implementation);
+    }
+});
+
+// Register services
+add_action('ntdst/features_ready', function () use ($config): void {
+    foreach ($config['services'] as $serviceClass) {
+        if (class_exists($serviceClass)) {
+            ntdst_get($serviceClass);
+        }
+    }
+});
