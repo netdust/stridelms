@@ -17,6 +17,9 @@ require_once __DIR__ . '/autoload.php';
 // Load config
 $config = require __DIR__ . '/plugin-config.php';
 
+// Register CPTs early
+add_action('init', [\Stride\Modules\Edition\EditionCPT::class, 'register'], 5);
+
 // Register DI bindings
 add_action('ntdst/core_ready', function () use ($config): void {
     foreach ($config['bindings'] as $interface => $implementation) {
