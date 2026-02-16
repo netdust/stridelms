@@ -20,8 +20,21 @@ $config = require __DIR__ . '/plugin-config.php';
 // Register CPTs early
 add_action('init', [\Stride\Modules\Edition\EditionCPT::class, 'register'], 5);
 
+// Create custom tables on activation
+add_action('init', function (): void {
+    if (!get_option('stride_tables_created')) {
+        \Stride\Modules\Enrollment\RegistrationTable::create();
+        update_option('stride_tables_created', '1');
+    }
+}, 1);
+
 // Register DI bindings
 add_action('ntdst/core_ready', function () use ($config): void {
+    // Register repositories first
+    ntdst_set(\Stride\Modules\Edition\EditionRepository::class);
+    ntdst_set(\Stride\Modules\Enrollment\RegistrationRepository::class);
+
+    // Register interface bindings
     foreach ($config['bindings'] as $interface => $implementation) {
         ntdst_set($interface, $implementation);
     }

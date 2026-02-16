@@ -9,7 +9,9 @@ declare(strict_types=1);
  */
 
 use Stride\Adapters\LearnDashAdapter;
+use Stride\Contracts\EditionQueryInterface;
 use Stride\Contracts\LMSAdapterInterface;
+use Stride\Modules\Edition\EditionService;
 
 return [
     /**
@@ -19,6 +21,7 @@ return [
      */
     'bindings' => [
         LMSAdapterInterface::class => LearnDashAdapter::class,
+        EditionQueryInterface::class => EditionService::class,
     ],
 
     /**
@@ -27,24 +30,17 @@ return [
      * Services are loaded in order, by priority from metadata().
      */
     'services' => [
-        // Core services will be added as modules are built
+        \Stride\Modules\Edition\EditionService::class,
+        \Stride\Modules\Enrollment\EnrollmentService::class,
     ],
 
     /**
      * Module configuration
      */
     'modules' => [
-        'edition' => [
-            // Edition module config
-        ],
-        'enrollment' => [
-            // Enrollment module config
-        ],
-        'invoicing' => [
-            // Invoicing module config
-        ],
-        'trajectory' => [
-            // Trajectory module config
-        ],
+        'edition' => [],
+        'enrollment' => [],
+        'invoicing' => [],
+        'trajectory' => [],
     ],
 ];
