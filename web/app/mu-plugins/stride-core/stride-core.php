@@ -47,4 +47,8 @@ add_action('ntdst/features_ready', function () use ($config): void {
             ntdst_get($serviceClass);
         }
     }
+
+    // Register shortcodes
+    ntdst_set(\Stride\Modules\User\DashboardShortcode::class);
+    ntdst_get(\Stride\Modules\User\DashboardShortcode::class);
 });
