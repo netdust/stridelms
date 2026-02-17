@@ -30,7 +30,8 @@ final class QuoteCPT
             'menu_icon' => 'dashicons-media-text',
             'supports' => ['title'],
             'fields' => self::getFields(),
-            'field_groups' => self::getFieldGroups(),
+            // Disable auto-generated metabox - custom UI handled by QuoteAdminController
+            'auto_metabox' => false,
         ]);
     }
 
@@ -111,25 +112,4 @@ final class QuoteCPT
         ];
     }
 
-    private static function getFieldGroups(): array
-    {
-        return [
-            'quote_main' => [
-                'title' => 'Offerte',
-                'fields' => ['user_id', 'registration_id', 'edition_id', 'quote_number', 'status'],
-            ],
-            'quote_amounts' => [
-                'title' => 'Bedragen',
-                'fields' => ['subtotal', 'discount', 'tax', 'total'],
-            ],
-            'quote_billing' => [
-                'title' => 'Facturatie',
-                'fields' => ['billing', 'voucher_code', 'valid_until'],
-            ],
-            'quote_meta' => [
-                'title' => 'Meta',
-                'fields' => ['sent_at', 'pdf_path', 'notes'],
-            ],
-        ];
-    }
 }
