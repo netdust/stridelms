@@ -54,6 +54,9 @@ add_action('ntdst/features_ready', function () use ($config): void {
     ntdst_set(\Stride\Modules\User\DashboardShortcode::class);
     ntdst_get(\Stride\Modules\User\DashboardShortcode::class);
 
+    ntdst_set(\Stride\Modules\User\QuotesShortcode::class);
+    ntdst_get(\Stride\Modules\User\QuotesShortcode::class);
+
     // Register handlers
     ntdst_set(\Stride\Handlers\EnrollmentQuoteHandler::class);
     ntdst_get(\Stride\Handlers\EnrollmentQuoteHandler::class);
