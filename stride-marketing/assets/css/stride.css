@@ -1,0 +1,270 @@
+/* Stride Marketing Site - Custom Styles */
+
+:root {
+    /* Colors */
+    --stride-primary: #4a69bd;
+    --stride-primary-dark: #3c5aa6;
+    --stride-secondary: #f8f9fa;
+    --stride-accent: #27ae60;
+    --stride-text: #2d3436;
+    --stride-text-muted: #636e72;
+    --stride-border: #dfe6e9;
+
+    /* Typography */
+    --stride-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+    font-family: var(--stride-font);
+    color: var(--stride-text);
+}
+
+/* Header */
+.stride-header {
+    border-bottom: 1px solid var(--stride-border);
+}
+
+.stride-logo {
+    font-weight: 700;
+    font-size: 1.5rem;
+    color: var(--stride-primary);
+    text-decoration: none;
+}
+
+/* Hero */
+.stride-hero {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    padding: 80px 0;
+}
+
+.stride-hero h1 {
+    font-size: 3rem;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 1.5rem;
+}
+
+.stride-hero .uk-text-lead {
+    font-size: 1.25rem;
+    color: var(--stride-text-muted);
+}
+
+/* Feature Cards */
+.stride-feature-card {
+    text-align: center;
+    padding: 2rem;
+}
+
+.stride-feature-card .uk-icon {
+    color: var(--stride-primary);
+    margin-bottom: 1rem;
+}
+
+.stride-feature-card h3 {
+    font-size: 1.25rem;
+    margin-bottom: 0.75rem;
+}
+
+/* Problem/Solution Section */
+.stride-problem {
+    background: var(--stride-secondary);
+}
+
+.stride-problem-card {
+    background: white;
+    border: 1px solid var(--stride-border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: center;
+}
+
+/* Steps Section */
+.stride-steps {
+    counter-reset: step;
+}
+
+.stride-step {
+    text-align: center;
+}
+
+.stride-step::before {
+    counter-increment: step;
+    content: counter(step);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    background: var(--stride-primary);
+    color: white;
+    border-radius: 50%;
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 auto 1rem;
+}
+
+/* CTA Section */
+.stride-cta {
+    background: var(--stride-primary);
+    color: white;
+    text-align: center;
+    padding: 60px 0;
+}
+
+.stride-cta h2 {
+    color: white;
+    margin-bottom: 1.5rem;
+}
+
+.stride-cta .uk-button-default {
+    background: white;
+    color: var(--stride-primary);
+    border: none;
+}
+
+/* Pricing Cards */
+.stride-pricing-card {
+    border: 1px solid var(--stride-border);
+    border-radius: 8px;
+    padding: 2rem;
+    text-align: center;
+    height: 100%;
+}
+
+.stride-pricing-card.popular {
+    border-color: var(--stride-primary);
+    box-shadow: 0 4px 20px rgba(74, 105, 189, 0.15);
+}
+
+.stride-pricing-card .price {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--stride-primary);
+    margin: 1rem 0;
+}
+
+.stride-pricing-card .price span {
+    font-size: 1rem;
+    font-weight: 400;
+    color: var(--stride-text-muted);
+}
+
+.stride-pricing-card ul {
+    text-align: left;
+    list-style: none;
+    padding: 0;
+    margin: 1.5rem 0;
+}
+
+.stride-pricing-card li {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--stride-border);
+}
+
+.stride-pricing-card li:last-child {
+    border-bottom: none;
+}
+
+/* Feature Detail Sections */
+.stride-feature-section {
+    padding: 60px 0;
+}
+
+.stride-feature-section:nth-child(even) {
+    background: var(--stride-secondary);
+}
+
+.stride-feature-section h2 {
+    margin-bottom: 1rem;
+}
+
+.stride-feature-section ul {
+    margin-top: 1.5rem;
+}
+
+/* Integrations */
+.stride-integrations {
+    text-align: center;
+    padding: 40px 0;
+    background: var(--stride-secondary);
+}
+
+.stride-integrations img {
+    height: 40px;
+    margin: 0 1.5rem;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.stride-integrations img:hover {
+    opacity: 1;
+}
+
+/* Footer */
+.stride-footer {
+    background: var(--stride-text);
+    color: white;
+    padding: 40px 0;
+}
+
+.stride-footer a {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.stride-footer a:hover {
+    color: white;
+    text-decoration: none;
+}
+
+/* Comparison Table */
+.stride-comparison th {
+    background: var(--stride-secondary);
+}
+
+.stride-comparison td {
+    text-align: center;
+}
+
+.stride-comparison td:first-child {
+    text-align: left;
+    font-weight: 500;
+}
+
+/* FAQ */
+.stride-faq .uk-accordion-title {
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+/* Buttons */
+.uk-button-primary {
+    background: var(--stride-primary);
+}
+
+.uk-button-primary:hover {
+    background: var(--stride-primary-dark);
+}
+
+/* Badge */
+.stride-badge {
+    display: inline-block;
+    background: var(--stride-primary);
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    margin-bottom: 0.5rem;
+}
+
+/* Responsive */
+@media (max-width: 960px) {
+    .stride-hero h1 {
+        font-size: 2rem;
+    }
+
+    .stride-hero {
+        padding: 40px 0;
+    }
+}
