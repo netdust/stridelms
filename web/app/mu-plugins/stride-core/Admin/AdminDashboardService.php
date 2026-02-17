@@ -18,7 +18,7 @@ class AdminDashboardService extends AbstractService
     private const MENU_SLUG = 'stride-dashboard';
 
     /** Capability required to access */
-    private const CAPABILITY = 'manage_options';
+    private const CAPABILITY = 'edit_others_posts';
 
     /**
      * {@inheritDoc}

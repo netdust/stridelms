@@ -31,6 +31,7 @@ return [
      */
     'services' => [
         \Stride\Admin\AdminDashboardService::class,
+        \Stride\Admin\AdminAPIController::class,
         \Stride\Modules\Edition\EditionService::class,
         \Stride\Modules\Edition\SessionService::class,
         \Stride\Modules\Edition\SessionSelectionService::class,
