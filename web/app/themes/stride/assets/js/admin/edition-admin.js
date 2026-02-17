@@ -250,7 +250,7 @@
             if ($('#stride-sessions-body .session-row').length === 0) {
                 var i18n = strideEditionAdmin.i18n || {};
                 $('#stride-sessions-body').html(
-                    '<tr class="no-sessions-row"><td colspan="5" class="no-sessions">' +
+                    '<tr class="no-sessions-row"><td colspan="6" class="no-sessions">' +
                     (i18n.noSessions || 'Nog geen sessies toegevoegd.') +
                     '</td></tr>'
                 );
@@ -371,7 +371,7 @@
             } else {
                 var i18n = strideEditionAdmin.i18n || {};
                 $body.html(
-                    '<tr class="no-sessions-row"><td colspan="5" class="no-sessions">' +
+                    '<tr class="no-sessions-row"><td colspan="6" class="no-sessions">' +
                     (i18n.noSessions || 'Nog geen sessies toegevoegd.') +
                     '</td></tr>'
                 );

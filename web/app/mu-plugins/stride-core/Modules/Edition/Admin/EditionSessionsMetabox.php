@@ -59,6 +59,7 @@ final class EditionSessionsMetabox
                         <th class="column-date"><?php esc_html_e('Datum', 'stride'); ?></th>
                         <th class="column-time"><?php esc_html_e('Tijd', 'stride'); ?></th>
                         <th class="column-type"><?php esc_html_e('Type', 'stride'); ?></th>
+                        <th class="column-slot"><?php esc_html_e('Slot', 'stride'); ?></th>
                         <th class="column-location"><?php esc_html_e('Locatie', 'stride'); ?></th>
                         <th class="column-actions"><?php esc_html_e('Acties', 'stride'); ?></th>
                     </tr>
@@ -66,13 +67,13 @@ final class EditionSessionsMetabox
                 <tbody id="stride-sessions-body">
                     <?php if (empty($sessions)): ?>
                         <tr class="no-sessions-row">
-                            <td colspan="5" class="no-sessions">
+                            <td colspan="6" class="no-sessions">
                                 <?php esc_html_e('Nog geen sessies toegevoegd.', 'stride'); ?>
                             </td>
                         </tr>
                     <?php else: ?>
                         <?php foreach ($sessions as $session): ?>
-                            <?php $this->renderSessionRow($session); ?>
+                            <?php $this->renderSessionRow($session, $sessionSlots); ?>
                         <?php endforeach; ?>
                     <?php endif; ?>
                 </tbody>
@@ -86,7 +87,7 @@ final class EditionSessionsMetabox
         <?php
     }
 
-    private function renderSessionRow(array $session): void
+    private function renderSessionRow(array $session, array $sessionSlots = []): void
     {
         $type = SessionType::tryFrom($session['type']) ?? SessionType::InPerson;
         $dateFormatted = !empty($session['date']) ? date_i18n('d M Y', strtotime($session['date'])) : '-';
@@ -95,6 +96,21 @@ final class EditionSessionsMetabox
             $timeFormatted = $session['start_time'];
             if (!empty($session['end_time'])) {
                 $timeFormatted .= ' - ' . $session['end_time'];
+            }
+        }
+
+        // Get slot label
+        $slotValue = $session['slot'] ?? '';
+        $slotLabel = '';
+        if ($slotValue) {
+            foreach ($sessionSlots as $slot) {
+                if ($slot['slot'] === $slotValue) {
+                    $slotLabel = $slot['label'] ?: $slotValue;
+                    break;
+                }
+            }
+            if (!$slotLabel) {
+                $slotLabel = $slotValue; // Fallback to slot key if label not found
             }
         }
         ?>
@@ -113,6 +129,7 @@ final class EditionSessionsMetabox
                     <?php echo esc_html($type->label()); ?>
                 </span>
             </td>
+            <td class="column-slot"><?php echo esc_html($slotLabel ?: '-'); ?></td>
             <td class="column-location"><?php echo esc_html($session['location'] ?: '-'); ?></td>
             <td class="column-actions">
                 <button type="button" class="button-link stride-edit-session" title="<?php esc_attr_e('Bewerken', 'stride'); ?>">
@@ -130,7 +147,7 @@ final class EditionSessionsMetabox
     {
         ?>
         <tr class="stride-session-form-row">
-            <td colspan="5">
+            <td colspan="6">
                 <div class="stride-session-form">
                     <input type="hidden" name="session_id" value="">
 
