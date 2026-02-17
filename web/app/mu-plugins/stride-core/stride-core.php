@@ -29,6 +29,7 @@ add_action('init', function (): void {
     if (!get_option('stride_tables_created')) {
         \Stride\Modules\Enrollment\RegistrationTable::create();
         \Stride\Modules\Edition\SessionRegistrationTable::create();
+        \Stride\Modules\Trajectory\TrajectoryEnrollmentTable::create();
         update_option('stride_tables_created', '1');
     }
 }, 1);
@@ -38,6 +39,14 @@ add_action('init', function (): void {
     if (!get_option('stride_session_registrations_table_created')) {
         \Stride\Modules\Edition\SessionRegistrationTable::create();
         update_option('stride_session_registrations_table_created', '1');
+    }
+}, 1);
+
+// Create trajectory_enrollments table if missing
+add_action('init', function (): void {
+    if (!get_option('stride_trajectory_enrollments_table_created')) {
+        \Stride\Modules\Trajectory\TrajectoryEnrollmentTable::create();
+        update_option('stride_trajectory_enrollments_table_created', '1');
     }
 }, 1);
 
