@@ -30,6 +30,7 @@ return [
      * Services are loaded in order, by priority from metadata().
      */
     'services' => [
+        \Stride\Admin\AdminDashboardService::class,
         \Stride\Modules\Edition\EditionService::class,
         \Stride\Modules\Edition\SessionService::class,
         \Stride\Modules\Edition\SessionSelectionService::class,
