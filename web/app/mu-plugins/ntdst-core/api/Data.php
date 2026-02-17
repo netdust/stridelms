@@ -197,12 +197,13 @@ class NTDST_Data_Model
 
         foreach ($data as $key => $value) {
             // Handle core WordPress fields
-            if (in_array($key, ['title', 'content', 'excerpt', 'status'])) {
+            // Note: Use 'post_status' not 'status' to avoid conflict with custom meta fields named 'status'
+            if (in_array($key, ['title', 'content', 'excerpt', 'post_status'])) {
                 $sanitized[$key] = match ($key) {
                     'title' => sanitize_text_field($value),
                     'content' => wp_kses_post($value),
                     'excerpt' => sanitize_textarea_field($value),
-                    'status' => in_array($value, ['publish', 'draft', 'pending', 'private']) ? $value : 'draft',
+                    'post_status' => in_array($value, ['publish', 'draft', 'pending', 'private', 'trash', 'auto-draft', 'future']) ? $value : 'draft',
                     default => sanitize_text_field($value),
                 };
             } else {
@@ -218,17 +219,19 @@ class NTDST_Data_Model
      * Validate data based on schema rules
      *
      * @param array $data Data to validate
+     * @param bool $isUpdate Whether this is an update operation (skips required validation for missing fields)
      * @return true|WP_Error True if valid, WP_Error if validation fails
      */
-    protected function validateData(array $data)
+    protected function validateData(array $data, bool $isUpdate = false)
     {
         $errors = [];
 
         foreach ($this->validators as $field => $rules) {
             $value = $data[$field] ?? null;
 
-            // Check required
-            if ($rules['required'] && (empty($value) && $value !== '0' && $value !== 0)) {
+            // Check required - only for create operations, or if the field is being explicitly set
+            // For updates, missing fields are not an error (they keep their existing values)
+            if ($rules['required'] && !$isUpdate && (empty($value) && $value !== '0' && $value !== 0)) {
                 $errors[$field][] = sprintf('%s is required', $field);
             }
 
@@ -336,8 +339,8 @@ class NTDST_Data_Model
             return new WP_Error('not_found', 'Post not found', ['status' => 404]);
         }
 
-        // Validate input
-        $validation = $this->validateData($data);
+        // Validate input - isUpdate=true skips required field validation for missing fields
+        $validation = $this->validateData($data, true);
         if (is_wp_error($validation)) {
             return $validation;
         }
@@ -369,25 +372,28 @@ class NTDST_Data_Model
         // Fire after hook
         do_action('ntdst_model_update_after', $this->post_type, $id, $data);
 
-        return $this->find($id);
+        // Return fresh data (skip cache since we just mutated)
+        return $this->find($id, true);
     }
 
     /**
      * Find a post by ID
      *
      * @param int $id Post ID
+     * @param bool $skipCache Skip cache (use after mutations)
      * @return object|WP_Error Post object or error
      */
-    public function find(int $id)
+    public function find(int $id, bool $skipCache = false)
     {
         // Use our super-fast query system with meta included
+        // Skip cache after mutations to ensure fresh data is returned
         $results = NTDST_Data_Manager::getPostsFast([
             'post_type' => $this->post_type,
             'post_status' => 'any',
             'p' => $id,
             'posts_per_page' => 1,
             'include_meta' => true,
-            'cache_time' => $this->cache_time,
+            'cache_time' => $skipCache ? 0 : $this->cache_time,
         ]);
 
         if (empty($results)) {
@@ -472,6 +478,50 @@ class NTDST_Data_Model
         $this->clearCache($id);
 
         return $result !== false;
+    }
+
+    /**
+     * Update multiple meta values for a post at once.
+     *
+     * This is the batch version of updateMeta() - use this when updating
+     * multiple fields to avoid repeated cache clearing and validation.
+     *
+     * @param int $id Post ID
+     * @param array<string, mixed> $data Associative array of key => value pairs
+     * @return bool True if all updates succeeded, false if any failed
+     */
+    public function updateMetaBatch(int $id, array $data): bool
+    {
+        // Verify post exists once
+        $post = get_post($id);
+        if (!$post || $post->post_type !== $this->post_type) {
+            return false;
+        }
+
+        foreach ($data as $key => $value) {
+            // Get field schema for sanitization (schema IS the fields array)
+            $fieldSchema = $this->schema[$key] ?? null;
+            if ($fieldSchema && is_array($fieldSchema)) {
+                $fieldType = $fieldSchema['type'] ?? 'text';
+                $sanitizer = $this->getDefaultSanitizer($fieldType);
+                if (is_callable($sanitizer)) {
+                    $value = $sanitizer($value);
+                }
+            }
+
+            // update_post_meta returns meta_id, true, or false
+            // false can mean failure OR unchanged value (WordPress quirk)
+            // We don't fail on unchanged values, only on actual errors
+            update_post_meta($id, $key, $value);
+        }
+
+        // Clear cache once after all updates
+        $this->clearCache($id);
+
+        // Also clear the static NTDST_Data_Manager cache
+        NTDST_Data_Manager::clearCache($id);
+
+        return true;
     }
 
     /**
@@ -942,11 +992,33 @@ class NTDST_Data_Model
     }
 
     /**
-     * Clear cache for a specific post (Clears the Model's item cache)
+     * Clear cache for a specific post (Clears the Model's item cache and getPostsFast cache)
      */
     protected function clearCache(int $id): void
     {
         wp_cache_delete('item_' . $id, $this->cache_group);
+
+        // Also clear the getPostsFast cache used by find()
+        // CRITICAL: Key order must match exactly how getPostsFast builds cache_args
+        // Order: wp_parse_args preserves first array order, adds defaults, then p->post__in, then include_meta/terms
+        $cache_args = [
+            'post_type' => $this->post_type,      // from find() args
+            'post_status' => 'any',               // from find() args
+            'posts_per_page' => 1,                // from find() args (set again when p converted)
+            'orderby' => 'date',                  // from defaults
+            'order' => 'DESC',                    // from defaults
+            'no_found_rows' => true,              // from defaults
+            'update_post_term_cache' => false,    // from defaults
+            'update_post_meta_cache' => false,    // from defaults
+            'suppress_filters' => true,           // from defaults
+            'ignore_sticky_posts' => true,        // from defaults
+            'fields' => '',                       // from defaults
+            'post__in' => [$id],                  // converted from 'p' (added at end of array)
+            'include_meta' => true,               // added to cache_args at end
+            'include_terms' => false,             // added to cache_args at end
+        ];
+        $cache_key = 'ntdst_posts_fast_' . md5(json_encode($cache_args, JSON_THROW_ON_ERROR));
+        wp_cache_delete($cache_key, 'ntdst_posts');
     }
 
     /**
@@ -1094,13 +1166,15 @@ class NTDST_Data_Manager
      */
     public static function getPostMetaFromCache(int $post_id, int $cache_time = 3600): array
     {
-        // First check our ntdst cache
         $key = "post_meta_{$post_id}";
         $cache_group = 'ntdst_posts';
-        $cached = wp_cache_get($key, $cache_group);
 
-        if ($cached !== false) {
-            return $cached;
+        // Only check ntdst cache if caching is enabled (cache_time > 0)
+        if ($cache_time > 0) {
+            $cached = wp_cache_get($key, $cache_group);
+            if ($cached !== false) {
+                return $cached;
+            }
         }
 
         // Try WordPress's primed meta cache (from update_postmeta_cache)
@@ -1137,13 +1211,15 @@ class NTDST_Data_Manager
      */
     public static function getPostTermsFromCache(int $post_id, string $post_type, int $cache_time = 3600): array
     {
-        // First check our ntdst cache
         $key = "post_terms_{$post_id}";
         $cache_group = 'ntdst_posts';
-        $cached = wp_cache_get($key, $cache_group);
 
-        if ($cached !== false) {
-            return $cached;
+        // Only check ntdst cache if caching is enabled (cache_time > 0)
+        if ($cache_time > 0) {
+            $cached = wp_cache_get($key, $cache_group);
+            if ($cached !== false) {
+                return $cached;
+            }
         }
 
         // Get all taxonomies for this post type

@@ -119,7 +119,7 @@ final class QuoteRepository extends AbstractRepository
             $data['sent_at'] = current_time('mysql');
         }
 
-        return $this->model()->updateMeta($quoteId, $data) !== false;
+        return $this->model()->updateMetaBatch($quoteId, $data);
     }
 
     /**
@@ -135,16 +135,6 @@ final class QuoteRepository extends AbstractRepository
      */
     public function updateMeta(int $quoteId, array $data): bool
     {
-        foreach ($data as $key => $value) {
-            $result = $this->model()->updateMeta($quoteId, $key, $value);
-            if ($result === false || is_wp_error($result)) {
-                return false;
-            }
-        }
-
-        // Clear caches to ensure fresh data on next read
-        \NTDST_Data_Manager::clearCache($quoteId);
-
-        return true;
+        return $this->model()->updateMetaBatch($quoteId, $data);
     }
 }

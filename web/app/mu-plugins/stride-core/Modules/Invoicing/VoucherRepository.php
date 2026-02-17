@@ -67,17 +67,7 @@ final class VoucherRepository extends AbstractRepository
      */
     public function updateMeta(int $voucherId, array $data): bool
     {
-        foreach ($data as $key => $value) {
-            $result = $this->model()->updateMeta($voucherId, $key, $value);
-            if ($result === false || is_wp_error($result)) {
-                return false;
-            }
-        }
-
-        // Clear caches to ensure fresh data on next read
-        \NTDST_Data_Manager::clearCache($voucherId);
-
-        return true;
+        return $this->model()->updateMetaBatch($voucherId, $data);
     }
 
     /**
@@ -92,14 +82,10 @@ final class VoucherRepository extends AbstractRepository
 
         $currentRedemptions[] = $redemption;
 
-        // Update each field individually
-        $this->model()->updateMeta($voucherId, 'used_count', $newUsedCount);
-        $this->model()->updateMeta($voucherId, 'redemptions', $currentRedemptions);
-        $this->model()->updateMeta($voucherId, 'status', $newStatus->value);
-
-        // Clear caches to ensure fresh data on next read
-        \NTDST_Data_Manager::clearCache($voucherId);
-
-        return true;
+        return $this->model()->updateMetaBatch($voucherId, [
+            'used_count' => $newUsedCount,
+            'redemptions' => $currentRedemptions,
+            'status' => $newStatus->value,
+        ]);
     }
 }
