@@ -1024,9 +1024,14 @@ final class AdminAPIController extends AbstractService
             $quoteNumber = get_post_meta($quoteId, '_quote_number', true);
             $quoteStatus = get_post_meta($quoteId, '_quote_status', true);
             $quoteTotal = (float) get_post_meta($quoteId, '_quote_total', true);
+            $quoteSubtotal = (float) get_post_meta($quoteId, '_quote_subtotal', true);
+            $quoteTax = (float) get_post_meta($quoteId, '_quote_tax', true);
             $userId = (int) get_post_meta($quoteId, '_quote_user_id', true);
             $editionId = (int) get_post_meta($quoteId, '_quote_item_id', true);
             $sentAt = get_post_meta($quoteId, '_quote_sent_at', true);
+            $validUntil = get_post_meta($quoteId, '_quote_valid_until', true);
+            $quoteItems = get_post_meta($quoteId, '_quote_items', true);
+            $billing = get_post_meta($quoteId, '_quote_billing', true);
 
             // Get user info
             $userName = '';
@@ -1057,10 +1062,13 @@ final class AdminAPIController extends AbstractService
                 'number' => $quoteNumber ?: null,
                 'status' => $quoteStatus ?: 'draft',
                 'statusLabel' => $statusLabel,
+                'subtotal' => $quoteSubtotal,
+                'tax' => $quoteTax,
                 'total' => $quoteTotal,
                 'totalFormatted' => number_format($quoteTotal, 2, ',', '.'),
                 'date' => $quote->post_date,
                 'sentAt' => $sentAt ?: null,
+                'validUntil' => $validUntil ?: null,
                 'user' => [
                     'id' => $userId,
                     'name' => $userName,
@@ -1070,6 +1078,8 @@ final class AdminAPIController extends AbstractService
                     'id' => $editionId,
                     'title' => $editionTitle,
                 ],
+                'lineItems' => is_array($quoteItems) ? $quoteItems : (json_decode($quoteItems, true) ?: []),
+                'billing' => is_array($billing) ? $billing : (json_decode($billing, true) ?: []),
                 'editUrl' => admin_url("post.php?post={$quoteId}&action=edit"),
             ];
         }

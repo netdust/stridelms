@@ -964,6 +964,63 @@ class AdminDashboardService extends AbstractService
                 color: var(--stride-text-muted);
             }
 
+            .stride-info-divider {
+                border-top: 2px solid var(--stride-border);
+                margin-top: 8px;
+                padding-top: 16px;
+            }
+
+            .stride-info-total {
+                font-size: 16px;
+                font-weight: 600;
+            }
+
+            .stride-amount-lg {
+                font-size: 18px;
+                font-weight: 600;
+                color: var(--stride-primary);
+            }
+
+            .stride-info-actions {
+                margin-top: 24px;
+                padding-top: 16px;
+                border-top: 1px solid var(--stride-border);
+            }
+
+            .stride-text-muted {
+                font-size: 13px;
+                color: var(--stride-text-muted);
+            }
+
+            .stride-quote-items {
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .stride-quote-item {
+                padding: 12px;
+                background: var(--stride-bg-subtle);
+                border-radius: 6px;
+            }
+
+            .stride-quote-item-title {
+                font-weight: 500;
+                margin-bottom: 4px;
+            }
+
+            .stride-quote-item-details {
+                display: flex;
+                justify-content: space-between;
+                font-size: 13px;
+                color: var(--stride-text-muted);
+            }
+
+            .stride-quote-item-price {
+                font-weight: 500;
+                color: var(--stride-text);
+            }
+
             /* Trajectory specific */
             .stride-trajectory-name {
                 font-weight: 500;
@@ -1600,12 +1657,11 @@ class AdminDashboardService extends AbstractService
                                                 <th>Date</th>
                                                 <th>Total</th>
                                                 <th>Status</th>
-                                                <th></th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <template x-for="quote in quotes" :key="quote.id">
-                                                <tr>
+                                                <tr @click="openQuote(quote)" class="stride-clickable">
                                                     <td>
                                                         <span class="stride-quote-number" x-text="quote.number || '-'"></span>
                                                     </td>
@@ -1623,11 +1679,6 @@ class AdminDashboardService extends AbstractService
                                                     <td>
                                                         <span class="stride-badge" :class="'stride-badge-' + quote.status" x-text="quote.status"></span>
                                                     </td>
-                                                    <td>
-                                                        <a :href="quote.editUrl" class="stride-btn stride-btn-sm stride-btn-outline">
-                                                            View
-                                                        </a>
-                                                    </td>
                                                 </tr>
                                             </template>
                                         </tbody>
@@ -1644,6 +1695,99 @@ class AdminDashboardService extends AbstractService
                                 </template>
                             </div>
                         </div>
+
+                        <!-- Quote Detail Slide-over -->
+                        <template x-if="selectedQuote">
+                            <div class="stride-slideover-backdrop" @click.self="selectedQuote = null">
+                                <div class="stride-slideover">
+                                    <div class="stride-slideover-header">
+                                        <h3>Quote <span x-text="selectedQuote.number || '#' + selectedQuote.id"></span></h3>
+                                        <button class="stride-slideover-close" @click="selectedQuote = null">&times;</button>
+                                    </div>
+                                    <div class="stride-slideover-tabs">
+                                        <button class="stride-slideover-tab" :class="{ 'active': quoteTab === 'details' }" @click="quoteTab = 'details'">
+                                            Details
+                                        </button>
+                                        <button class="stride-slideover-tab" :class="{ 'active': quoteTab === 'items' }" @click="quoteTab = 'items'">
+                                            Items
+                                        </button>
+                                    </div>
+                                    <div class="stride-slideover-body">
+                                        <!-- Details Tab -->
+                                        <template x-if="quoteTab === 'details'">
+                                            <div class="stride-info-list">
+                                                <div class="stride-info-row">
+                                                    <span class="stride-info-label">Status</span>
+                                                    <span class="stride-badge" :class="'stride-badge-' + selectedQuote.status" x-text="selectedQuote.statusLabel || selectedQuote.status"></span>
+                                                </div>
+                                                <div class="stride-info-row">
+                                                    <span class="stride-info-label">Customer</span>
+                                                    <div>
+                                                        <div x-text="selectedQuote.user?.name || 'Unknown'"></div>
+                                                        <div class="stride-text-muted" x-text="selectedQuote.user?.email || ''"></div>
+                                                    </div>
+                                                </div>
+                                                <div class="stride-info-row">
+                                                    <span class="stride-info-label">Edition</span>
+                                                    <span x-text="selectedQuote.edition?.title || '-'"></span>
+                                                </div>
+                                                <div class="stride-info-row">
+                                                    <span class="stride-info-label">Created</span>
+                                                    <span x-text="formatDate(selectedQuote.date)"></span>
+                                                </div>
+                                                <div class="stride-info-row" x-show="selectedQuote.sentAt">
+                                                    <span class="stride-info-label">Sent</span>
+                                                    <span x-text="formatDate(selectedQuote.sentAt)"></span>
+                                                </div>
+                                                <div class="stride-info-row" x-show="selectedQuote.validUntil">
+                                                    <span class="stride-info-label">Valid Until</span>
+                                                    <span x-text="formatDate(selectedQuote.validUntil)"></span>
+                                                </div>
+                                                <div class="stride-info-row stride-info-divider">
+                                                    <span class="stride-info-label">Subtotal</span>
+                                                    <span x-text="formatCurrency(selectedQuote.subtotal)"></span>
+                                                </div>
+                                                <div class="stride-info-row">
+                                                    <span class="stride-info-label">BTW (21%)</span>
+                                                    <span x-text="formatCurrency(selectedQuote.tax)"></span>
+                                                </div>
+                                                <div class="stride-info-row stride-info-total">
+                                                    <span class="stride-info-label">Total</span>
+                                                    <span class="stride-amount-lg" x-text="formatCurrency(selectedQuote.total)"></span>
+                                                </div>
+                                                <div class="stride-info-actions">
+                                                    <a :href="selectedQuote.editUrl" class="stride-btn stride-btn-primary">
+                                                        Edit in WP Admin
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </template>
+
+                                        <!-- Items Tab -->
+                                        <template x-if="quoteTab === 'items'">
+                                            <div>
+                                                <template x-if="selectedQuote.lineItems && selectedQuote.lineItems.length > 0">
+                                                    <div class="stride-quote-items">
+                                                        <template x-for="(item, index) in selectedQuote.lineItems" :key="index">
+                                                            <div class="stride-quote-item">
+                                                                <div class="stride-quote-item-title" x-text="item.title || item.description || 'Item'"></div>
+                                                                <div class="stride-quote-item-details">
+                                                                    <span class="stride-quote-item-type" x-text="item.type || ''"></span>
+                                                                    <span class="stride-quote-item-price" x-text="formatCurrency(item.price || item.amount || 0)"></span>
+                                                                </div>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </template>
+                                                <template x-if="!selectedQuote.lineItems || selectedQuote.lineItems.length === 0">
+                                                    <div class="stride-empty-sm">No line items</div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
                     </div>
                 </template>
 
@@ -1797,6 +1941,8 @@ class AdminDashboardService extends AbstractService
                 quotePage: 1,
                 quotePages: 1,
                 quoteEditions: [],
+                selectedQuote: null,
+                quoteTab: 'details',
 
                 // Trajectories state
                 trajectories: [],
@@ -2095,6 +2241,11 @@ class AdminDashboardService extends AbstractService
                     } catch (e) {
                         console.error('Failed to load editions for quote filter:', e);
                     }
+                },
+
+                openQuote(quote) {
+                    this.selectedQuote = quote;
+                    this.quoteTab = 'details';
                 },
 
                 async loadTrajectories() {
