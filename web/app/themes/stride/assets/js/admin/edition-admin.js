@@ -432,6 +432,12 @@
          */
         cycleAttendanceStatus: function($button) {
             var self = this;
+
+            // Prevent race condition - ignore clicks while processing
+            if ($button.hasClass('processing')) {
+                return;
+            }
+
             var sessionId = $button.data('session-id');
             var userId = $button.data('user-id');
 
@@ -439,7 +445,8 @@
             var currentStatus = this.getAttendanceStatus($button);
             var nextStatus = this.getNextAttendanceStatus(currentStatus);
 
-            // Optimistically update UI
+            // Mark as processing and optimistically update UI
+            $button.addClass('processing');
             $button.removeClass('unmarked present absent excused').addClass(nextStatus);
 
             // Send to server
@@ -454,6 +461,7 @@
                     status: nextStatus
                 },
                 success: function(response) {
+                    $button.removeClass('processing');
                     if (response.success) {
                         self.updateSessionTotals(sessionId, response.data);
                     } else {
@@ -464,7 +472,7 @@
                 },
                 error: function() {
                     // Revert on error
-                    $button.removeClass('unmarked present absent excused').addClass(currentStatus);
+                    $button.removeClass('processing unmarked present absent excused').addClass(currentStatus);
                     alert(strideEditionAdmin.i18n.error);
                 }
             });
@@ -827,19 +835,20 @@
                 var type = note.type || 'userinfo';
                 var typeConfig = noteTypes[type] || noteTypes['userinfo'];
 
+                // Escape all user-provided data to prevent XSS
                 var html = '<div class="stride-note-item" data-index="' + index + '">' +
-                    '<div class="stride-note-icon ' + type + '">' +
-                        '<span class="dashicons dashicons-' + typeConfig.icon + '"></span>' +
+                    '<div class="stride-note-icon ' + self.escapeHtml(type) + '">' +
+                        '<span class="dashicons dashicons-' + self.escapeHtml(typeConfig.icon) + '"></span>' +
                     '</div>' +
                     '<div class="stride-note-body">' +
                         '<div class="stride-note-meta">' +
-                            '<span class="author">' + (note.author || 'Onbekend') + '</span>' +
-                            '<span class="type-badge ' + type + '">' + typeConfig.label + '</span>' +
-                            '<span class="date">' + note.date + '</span>' +
+                            '<span class="author">' + self.escapeHtml(note.author || 'Onbekend') + '</span>' +
+                            '<span class="type-badge ' + self.escapeHtml(type) + '">' + self.escapeHtml(typeConfig.label) + '</span>' +
+                            '<span class="date">' + self.escapeHtml(note.date || '') + '</span>' +
                         '</div>' +
                         '<div class="stride-note-content">' + self.escapeHtml(note.content) + '</div>' +
                     '</div>' +
-                    '<span class="stride-note-delete dashicons dashicons-no-alt" title="' + (i18n.remove || 'Verwijderen') + '"></span>' +
+                    '<span class="stride-note-delete dashicons dashicons-no-alt" title="' + self.escapeHtml(i18n.remove || 'Verwijderen') + '"></span>' +
                 '</div>';
 
                 $list.append(html);

@@ -25,7 +25,7 @@ final class EditionDetailsMetabox
 
     public function render(WP_Post $post): void
     {
-        wp_nonce_field('stride_save_edition', 'stride_edition_nonce');
+        wp_nonce_field(EditionAdminController::NONCE_SAVE, EditionAdminController::NONCE_FIELD);
 
         $courseId = (int) $this->repository->getField($post->ID, 'course_id', 0);
         $startDate = $this->repository->getField($post->ID, 'start_date', '');

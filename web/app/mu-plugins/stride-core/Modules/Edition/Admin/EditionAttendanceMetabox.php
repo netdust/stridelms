@@ -162,7 +162,7 @@ final class EditionAttendanceMetabox
     {
         global $wpdb;
 
-        $table = $wpdb->prefix . 'vad_registrations';
+        $table = $wpdb->prefix . EditionAdminController::REGISTRATIONS_TABLE;
 
         return $wpdb->get_results($wpdb->prepare(
             "SELECT user_id FROM {$table} WHERE edition_id = %d AND status = 'confirmed' ORDER BY user_id ASC",

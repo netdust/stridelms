@@ -24,6 +24,11 @@ use WP_Post;
  */
 final class EditionAdminController extends AbstractService
 {
+    public const NONCE_SAVE = 'stride_save_edition';
+    public const NONCE_FIELD = 'stride_edition_nonce';
+    public const REGISTRATIONS_TABLE = 'vad_registrations';
+    private const NONCE_AJAX = 'stride_edition_admin';
+
     public function __construct(
         private readonly EditionService $editionService,
         private readonly EditionRepository $editionRepository,
@@ -172,7 +177,7 @@ final class EditionAdminController extends AbstractService
             $currentUser = wp_get_current_user();
             wp_localize_script('stride-edition-admin', 'strideEditionAdmin', [
                 'ajaxurl' => admin_url('admin-ajax.php'),
-                'nonce' => wp_create_nonce('stride_edition_admin'),
+                'nonce' => wp_create_nonce(self::NONCE_AJAX),
                 'editionId' => $post ? $post->ID : 0,
                 'currentUser' => $currentUser->display_name ?: $currentUser->user_login,
                 'i18n' => [
@@ -311,7 +316,7 @@ final class EditionAdminController extends AbstractService
     {
         // Verify nonce
         if (!isset($_POST['stride_edition_nonce']) ||
-            !wp_verify_nonce($_POST['stride_edition_nonce'], 'stride_save_edition')) {
+            !wp_verify_nonce($_POST['stride_edition_nonce'], self::NONCE_SAVE)) {
             return;
         }
 
@@ -385,8 +390,17 @@ final class EditionAdminController extends AbstractService
 
         // Process notes (stored as JSON)
         if (isset($fields['notes'])) {
-            $notes = json_decode(stripslashes($fields['notes']), true);
-            if (is_array($notes)) {
+            $jsonString = stripslashes($fields['notes']);
+            $notes = json_decode($jsonString, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                // Log JSON decode error for debugging
+                error_log(sprintf(
+                    'Stride Edition: JSON decode error for notes on post %d: %s',
+                    $postId,
+                    json_last_error_msg()
+                ));
+            } elseif (is_array($notes)) {
                 // Filter out deleted notes and sanitize
                 $sanitizedNotes = [];
                 foreach ($notes as $note) {
@@ -483,6 +497,11 @@ final class EditionAdminController extends AbstractService
         }
 
         $editionId = $session['edition_id'];
+
+        // Verify user can edit the parent edition
+        if (!current_user_can('edit_post', $editionId)) {
+            wp_send_json_error(['message' => __('Geen toegang.', 'stride')], 403);
+        }
 
         wp_delete_post($sessionId, true);
 
@@ -583,7 +602,7 @@ final class EditionAdminController extends AbstractService
 
     private function verifyAjaxNonce(): bool
     {
-        if (!check_ajax_referer('stride_edition_admin', 'nonce', false)) {
+        if (!check_ajax_referer(self::NONCE_AJAX, 'nonce', false)) {
             wp_send_json_error(['message' => 'Invalid security token'], 403);
             return false;
         }
@@ -663,6 +682,13 @@ final class EditionAdminController extends AbstractService
             }
         }
         ?>
+        <?php
+        // Prepare lesson_ids as comma-separated string
+        $lessonIds = '';
+        if (!empty($session['lesson_ids']) && is_array($session['lesson_ids'])) {
+            $lessonIds = implode(',', array_map('intval', $session['lesson_ids']));
+        }
+        ?>
         <tr class="session-row"
             data-session-id="<?php echo esc_attr($session['id']); ?>"
             data-date="<?php echo esc_attr($session['date']); ?>"
@@ -670,7 +696,11 @@ final class EditionAdminController extends AbstractService
             data-end-time="<?php echo esc_attr($session['end_time']); ?>"
             data-location="<?php echo esc_attr($session['location'] ?? ''); ?>"
             data-session-type="<?php echo esc_attr($session['type']); ?>"
-            data-session-slot="<?php echo esc_attr($session['slot'] ?? ''); ?>">
+            data-session-slot="<?php echo esc_attr($session['slot'] ?? ''); ?>"
+            data-title="<?php echo esc_attr($session['title'] ?? ''); ?>"
+            data-description="<?php echo esc_attr($session['description'] ?? ''); ?>"
+            data-webinar-link="<?php echo esc_attr($session['webinar_link'] ?? ''); ?>"
+            data-lesson-ids="<?php echo esc_attr($lessonIds); ?>">
             <td class="column-date"><?php echo esc_html($dateFormatted); ?></td>
             <td class="column-time"><?php echo esc_html($timeFormatted ?: '-'); ?></td>
             <td class="column-type">
@@ -724,7 +754,7 @@ final class EditionAdminController extends AbstractService
     {
         global $wpdb;
 
-        $table = $wpdb->prefix . 'vad_registrations';
+        $table = $wpdb->prefix . self::REGISTRATIONS_TABLE;
 
         return $wpdb->get_results($wpdb->prepare(
             "SELECT user_id FROM {$table} WHERE edition_id = %d AND status = 'confirmed'",
