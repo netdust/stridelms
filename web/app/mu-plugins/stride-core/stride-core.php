@@ -27,7 +27,16 @@ add_action('init', [\Stride\Modules\Invoicing\VoucherCPT::class, 'register'], 5)
 add_action('init', function (): void {
     if (!get_option('stride_tables_created')) {
         \Stride\Modules\Enrollment\RegistrationTable::create();
+        \Stride\Modules\Edition\SessionRegistrationTable::create();
         update_option('stride_tables_created', '1');
+    }
+}, 1);
+
+// Create session_registrations table if missing (added in later version)
+add_action('init', function (): void {
+    if (!get_option('stride_session_registrations_table_created')) {
+        \Stride\Modules\Edition\SessionRegistrationTable::create();
+        update_option('stride_session_registrations_table_created', '1');
     }
 }, 1);
 
