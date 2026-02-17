@@ -197,24 +197,34 @@ final class SessionService extends AbstractService
 
     /**
      * Format array result to session array.
+     *
+     * NTDST_Data_Manager::getPostsFast returns data with:
+     * - 'id' (lowercase) at top level
+     * - meta fields nested under 'meta' key
      */
     private function formatSessionArray(array $data): array
     {
-        $typeValue = $data['type'] ?? 'in_person';
+        // Meta fields are nested under 'meta' key from getPostsFast
+        $meta = $data['meta'] ?? [];
+
+        $typeValue = $meta['type'] ?? 'in_person';
         $type = SessionType::tryFrom($typeValue) ?? SessionType::InPerson;
 
+        // NTDST_Data_Manager::getPostsFast returns 'id' (lowercase)
+        $id = (int) ($data['id'] ?? $data['ID'] ?? 0);
+
         return [
-            'id' => (int) $data['ID'],
-            'edition_id' => (int) ($data['edition_id'] ?? 0),
-            'slot' => $data['slot'] ?? '',
-            'date' => $data['date'] ?? '',
-            'start_time' => $data['start_time'] ?? '',
-            'end_time' => $data['end_time'] ?? '',
-            'location' => $data['location'] ?? '',
+            'id' => $id,
+            'edition_id' => (int) ($meta['edition_id'] ?? 0),
+            'slot' => $meta['slot'] ?? '',
+            'date' => $meta['date'] ?? '',
+            'start_time' => $meta['start_time'] ?? '',
+            'end_time' => $meta['end_time'] ?? '',
+            'location' => $meta['location'] ?? '',
             'type' => $type->value,
             'type_enum' => $type,
-            'capacity' => (int) ($data['capacity'] ?? 0),
-            'optional' => (bool) ($data['optional'] ?? false),
+            'capacity' => (int) ($meta['capacity'] ?? 0),
+            'optional' => (bool) ($meta['optional'] ?? false),
         ];
     }
 }
