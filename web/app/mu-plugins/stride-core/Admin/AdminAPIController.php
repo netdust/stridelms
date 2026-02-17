@@ -187,6 +187,10 @@ final class AdminAPIController extends AbstractService
                     'type' => 'string',
                     'default' => '',
                 ],
+                'edition_id' => [
+                    'type' => 'integer',
+                    'default' => 0,
+                ],
             ],
         ]);
 
@@ -958,23 +962,37 @@ final class AdminAPIController extends AbstractService
         $perPage = $request->get_param('per_page');
         $search = sanitize_text_field($request->get_param('search') ?? '');
         $status = sanitize_text_field($request->get_param('status') ?? '');
+        $editionId = (int) $request->get_param('edition_id');
         $offset = ($page - 1) * $perPage;
 
         // Build query
         $where = ["p.post_type = %s", "p.post_status = 'publish'"];
         $params = [QuoteCPT::POST_TYPE];
 
+        // Search by user name or email
         if (!empty($search)) {
-            // Search in title or quote_number meta
-            $where[] = "(p.post_title LIKE %s OR EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_search WHERE pm_search.post_id = p.ID AND pm_search.meta_key = 'quote_number' AND pm_search.meta_value LIKE %s))";
             $searchPattern = '%' . $wpdb->esc_like($search) . '%';
+            $where[] = "EXISTS (
+                SELECT 1 FROM {$wpdb->postmeta} pm_user
+                INNER JOIN {$wpdb->users} u ON u.ID = pm_user.meta_value
+                WHERE pm_user.post_id = p.ID
+                AND pm_user.meta_key = '_quote_user_id'
+                AND (u.display_name LIKE %s OR u.user_email LIKE %s)
+            )";
             $params[] = $searchPattern;
             $params[] = $searchPattern;
         }
 
+        // Filter by status
         if (!empty($status)) {
-            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = 'status' AND pm_status.meta_value = %s)";
+            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = '_quote_status' AND pm_status.meta_value = %s)";
             $params[] = $status;
+        }
+
+        // Filter by edition (item_id when item_type is edition)
+        if ($editionId > 0) {
+            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_edition WHERE pm_edition.post_id = p.ID AND pm_edition.meta_key = '_quote_item_id' AND pm_edition.meta_value = %d)";
+            $params[] = $editionId;
         }
 
         $whereClause = implode(' AND ', $where);
@@ -1002,13 +1020,13 @@ final class AdminAPIController extends AbstractService
         foreach ($quotes as $quote) {
             $quoteId = (int) $quote->ID;
 
-            // Get meta values
-            $quoteNumber = get_post_meta($quoteId, 'quote_number', true);
-            $quoteStatus = get_post_meta($quoteId, 'status', true);
-            $quoteTotal = (int) get_post_meta($quoteId, 'total', true);
-            $userId = (int) get_post_meta($quoteId, 'user_id', true);
-            $editionId = (int) get_post_meta($quoteId, 'edition_id', true);
-            $sentAt = get_post_meta($quoteId, 'sent_at', true);
+            // Get meta values (using _quote_ prefix)
+            $quoteNumber = get_post_meta($quoteId, '_quote_number', true);
+            $quoteStatus = get_post_meta($quoteId, '_quote_status', true);
+            $quoteTotal = (float) get_post_meta($quoteId, '_quote_total', true);
+            $userId = (int) get_post_meta($quoteId, '_quote_user_id', true);
+            $editionId = (int) get_post_meta($quoteId, '_quote_item_id', true);
+            $sentAt = get_post_meta($quoteId, '_quote_sent_at', true);
 
             // Get user info
             $userName = '';
@@ -1040,7 +1058,7 @@ final class AdminAPIController extends AbstractService
                 'status' => $quoteStatus ?: 'draft',
                 'statusLabel' => $statusLabel,
                 'total' => $quoteTotal,
-                'totalFormatted' => number_format($quoteTotal / 100, 2, ',', '.'),
+                'totalFormatted' => number_format($quoteTotal, 2, ',', '.'),
                 'date' => $quote->post_date,
                 'sentAt' => $sentAt ?: null,
                 'user' => [

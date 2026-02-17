@@ -1557,7 +1557,16 @@ class AdminDashboardService extends AbstractService
                             <div class="stride-filters">
                                 <div class="stride-filter-group">
                                     <label class="stride-filter-label">Search</label>
-                                    <input type="text" class="stride-input" placeholder="Quote number or name..." x-model="quoteFilters.search" @input.debounce.300ms="loadQuotes()">
+                                    <input type="text" class="stride-input" placeholder="Search user name or email..." x-model="quoteFilters.search" @input.debounce.300ms="loadQuotes()">
+                                </div>
+                                <div class="stride-filter-group">
+                                    <label class="stride-filter-label">Edition</label>
+                                    <select class="stride-select" x-model="quoteFilters.editionId" @change="loadQuotes()">
+                                        <option value="">All Editions</option>
+                                        <template x-for="edition in quoteEditions" :key="edition.id">
+                                            <option :value="edition.id" x-text="edition.title"></option>
+                                        </template>
+                                    </select>
                                 </div>
                                 <div class="stride-filter-group">
                                     <label class="stride-filter-label">Status</label>
@@ -1587,6 +1596,7 @@ class AdminDashboardService extends AbstractService
                                             <tr>
                                                 <th>Quote #</th>
                                                 <th>Customer</th>
+                                                <th>Edition</th>
                                                 <th>Date</th>
                                                 <th>Total</th>
                                                 <th>Status</th>
@@ -1597,11 +1607,14 @@ class AdminDashboardService extends AbstractService
                                             <template x-for="quote in quotes" :key="quote.id">
                                                 <tr>
                                                     <td>
-                                                        <span class="stride-quote-number" x-text="quote.number"></span>
+                                                        <span class="stride-quote-number" x-text="quote.number || '-'"></span>
                                                     </td>
                                                     <td>
-                                                        <div class="stride-customer-name" x-text="quote.userName || 'Unknown'"></div>
-                                                        <div class="stride-customer-email" x-text="quote.userEmail || ''"></div>
+                                                        <div class="stride-customer-name" x-text="quote.user?.name || 'Unknown'"></div>
+                                                        <div class="stride-customer-email" x-text="quote.user?.email || ''"></div>
+                                                    </td>
+                                                    <td>
+                                                        <div class="stride-edition-title" x-text="quote.edition?.title || '-'"></div>
                                                     </td>
                                                     <td x-text="formatDate(quote.date)"></td>
                                                     <td>
@@ -1780,9 +1793,10 @@ class AdminDashboardService extends AbstractService
                 // Quotes state
                 quotes: [],
                 quotesLoading: false,
-                quoteFilters: { search: '', status: '' },
+                quoteFilters: { search: '', status: '', editionId: '' },
                 quotePage: 1,
                 quotePages: 1,
+                quoteEditions: [],
 
                 // Trajectories state
                 trajectories: [],
@@ -1824,8 +1838,13 @@ class AdminDashboardService extends AbstractService
                         }
                         // Initialize date picker after DOM update
                         this.$nextTick(() => this.initDateRangePicker());
-                    } else if (view === 'quotes' && this.quotes.length === 0) {
-                        this.loadQuotes();
+                    } else if (view === 'quotes') {
+                        if (this.quotes.length === 0) {
+                            this.loadQuotes();
+                        }
+                        if (this.quoteEditions.length === 0) {
+                            this.loadQuoteEditions();
+                        }
                     } else if (view === 'trajectories' && this.trajectories.length === 0) {
                         this.loadTrajectories();
                     }
@@ -1954,7 +1973,18 @@ class AdminDashboardService extends AbstractService
                             }
                         });
                         if (response.ok) {
-                            this.registrations = await response.json();
+                            const data = await response.json();
+                            // Update sessions on the selected edition
+                            if (this.selectedEdition && data.sessions) {
+                                this.selectedEdition.sessions = data.sessions;
+                            }
+                            // Flatten user data for template compatibility
+                            this.registrations = (data.items || []).map(reg => ({
+                                ...reg,
+                                userId: reg.user?.id,
+                                name: reg.user?.name,
+                                email: reg.user?.email,
+                            }));
                         }
                     } catch (e) {
                         console.error('Failed to load registrations:', e);
@@ -2028,9 +2058,16 @@ class AdminDashboardService extends AbstractService
                     try {
                         const params = new URLSearchParams({
                             page: this.quotePage,
-                            search: this.quoteFilters.search,
-                            status: this.quoteFilters.status
                         });
+                        if (this.quoteFilters.search) {
+                            params.append('search', this.quoteFilters.search);
+                        }
+                        if (this.quoteFilters.status) {
+                            params.append('status', this.quoteFilters.status);
+                        }
+                        if (this.quoteFilters.editionId) {
+                            params.append('edition_id', this.quoteFilters.editionId);
+                        }
                         const response = await fetch(`${StrideConfig.apiUrl}/admin/quotes?${params}`, {
                             headers: { 'X-WP-Nonce': StrideConfig.nonce }
                         });
@@ -2043,6 +2080,21 @@ class AdminDashboardService extends AbstractService
                         console.error('Failed to load quotes:', e);
                     }
                     this.quotesLoading = false;
+                },
+
+                async loadQuoteEditions() {
+                    try {
+                        // Load all published editions for the dropdown
+                        const response = await fetch(`${StrideConfig.apiUrl}/admin/editions?per_page=100&view=list`, {
+                            headers: { 'X-WP-Nonce': StrideConfig.nonce }
+                        });
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.quoteEditions = data.items || [];
+                        }
+                    } catch (e) {
+                        console.error('Failed to load editions for quote filter:', e);
+                    }
                 },
 
                 async loadTrajectories() {
