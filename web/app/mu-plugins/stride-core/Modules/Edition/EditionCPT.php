@@ -26,7 +26,7 @@ final class EditionCPT
             ],
             'public' => false,
             'show_ui' => true,
-            'show_in_menu' => true,
+            'show_in_menu' => 'stride-dashboard',
             'menu_icon' => 'dashicons-calendar-alt',
             'supports' => ['title'],
             'fields' => self::getFields(),

@@ -48,6 +48,7 @@ class AdminDashboardService extends AbstractService
     protected function init(): void
     {
         add_action('admin_menu', [$this, 'registerAdminPage']);
+        add_action('admin_menu', [$this, 'reorderSubmenus'], 999);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
         add_action('admin_head', [$this, 'injectStyles']);
         add_action('admin_footer', [$this, 'injectScripts']);
@@ -68,6 +69,46 @@ class AdminDashboardService extends AbstractService
             'dashicons-welcome-learn-more',
             2
         );
+
+        // Add explicit Dashboard submenu as first item
+        add_submenu_page(
+            self::MENU_SLUG,
+            'Dashboard',
+            'Dashboard',
+            self::CAPABILITY,
+            self::MENU_SLUG,
+            [$this, 'renderDashboard']
+        );
+    }
+
+    /**
+     * Reorder submenus to put Dashboard first
+     */
+    public function reorderSubmenus(): void
+    {
+        global $submenu;
+
+        if (!isset($submenu[self::MENU_SLUG])) {
+            return;
+        }
+
+        $items = $submenu[self::MENU_SLUG];
+        $dashboard = null;
+        $others = [];
+
+        foreach ($items as $key => $item) {
+            // Dashboard has the same slug as the parent menu
+            if ($item[2] === self::MENU_SLUG) {
+                $dashboard = $item;
+            } else {
+                $others[] = $item;
+            }
+        }
+
+        // Rebuild with Dashboard first
+        if ($dashboard) {
+            $submenu[self::MENU_SLUG] = array_merge([$dashboard], $others);
+        }
     }
 
     /**
