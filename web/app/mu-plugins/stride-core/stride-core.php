@@ -44,6 +44,7 @@ add_action('init', function (): void {
 add_action('ntdst/core_ready', function () use ($config): void {
     // Register repositories first
     ntdst_set(\Stride\Modules\Edition\EditionRepository::class);
+    ntdst_set(\Stride\Modules\Edition\SessionRepository::class);
     ntdst_set(\Stride\Modules\Enrollment\RegistrationRepository::class);
     ntdst_set(\Stride\Modules\Invoicing\QuoteRepository::class);
     ntdst_set(\Stride\Modules\Invoicing\VoucherRepository::class);
