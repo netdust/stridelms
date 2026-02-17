@@ -36,6 +36,7 @@ return [
         \Stride\Modules\Enrollment\EnrollmentService::class,
         \Stride\Modules\Invoicing\QuoteService::class,
         \Stride\Modules\Invoicing\VoucherService::class,
+        \Stride\Modules\Trajectory\TrajectoryService::class,
     ],
 
     /**
