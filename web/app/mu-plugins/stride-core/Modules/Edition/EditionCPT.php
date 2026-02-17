@@ -76,6 +76,16 @@ final class EditionCPT
                 'type' => 'text',
                 'label' => 'Sprekers',
             ],
+            'selection_deadline' => [
+                'type' => 'text',
+                'label' => 'Selectie deadline',
+                'description' => 'Deadline for session selection (YYYY-MM-DD)',
+            ],
+            'session_slots' => [
+                'type' => 'json',
+                'label' => 'Sessie slots',
+                'description' => 'JSON array of slot configurations',
+            ],
         ];
     }
 
@@ -93,6 +103,10 @@ final class EditionCPT
             'edition_info' => [
                 'title' => 'Extra Info',
                 'fields' => ['speakers'],
+            ],
+            'edition_sessions' => [
+                'title' => 'Sessie Selectie',
+                'fields' => ['selection_deadline', 'session_slots'],
             ],
         ];
     }
