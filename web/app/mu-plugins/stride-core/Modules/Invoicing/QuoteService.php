@@ -1,0 +1,218 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Stride\Modules\Invoicing;
+
+use Stride\Contracts\EditionQueryInterface;
+use Stride\Domain\Money;
+use Stride\Domain\QuoteStatus;
+use Stride\Infrastructure\AbstractService;
+use WP_Error;
+use WP_Post;
+
+/**
+ * Quote business logic.
+ */
+final class QuoteService extends AbstractService
+{
+    public function __construct(
+        private readonly QuoteRepository $repository,
+        private readonly EditionQueryInterface $editions,
+    ) {
+        parent::__construct();
+    }
+
+    public static function metadata(): array
+    {
+        return [
+            'name' => 'Quote Service',
+            'description' => 'Manages quotes and invoices',
+            'priority' => 20,
+        ];
+    }
+
+    protected function getConfigSlug(): string
+    {
+        return 'invoicing';
+    }
+
+    protected function init(): void
+    {
+        // No hooks needed - quote creation triggered by handler
+    }
+
+    /**
+     * Create a quote for a registration.
+     *
+     * @param array<array{title: string, quantity: int, unit_price: Money}> $items
+     * @param array<string, mixed> $billing
+     */
+    public function createQuote(
+        int $userId,
+        int $registrationId,
+        int $editionId,
+        array $items,
+        array $billing = [],
+        ?string $voucherCode = null,
+        ?Money $discount = null,
+    ): int|WP_Error {
+        // Calculate totals
+        $totals = QuoteCalculator::calculateTotals($items, $discount);
+
+        // Generate quote number
+        $quoteNumber = $this->repository->generateQuoteNumber();
+
+        // Get edition title for quote title
+        $edition = $this->editions->exists($editionId)
+            ? get_post($editionId)
+            : null;
+        $title = $edition ? $edition->post_title : "Offerte {$quoteNumber}";
+
+        // Format items for storage
+        $storedItems = QuoteCalculator::formatItemsForStorage($items);
+
+        // Create quote
+        $quoteId = $this->repository->create([
+            'title' => $title,
+            'user_id' => $userId,
+            'registration_id' => $registrationId,
+            'edition_id' => $editionId,
+            'quote_number' => $quoteNumber,
+            'status' => QuoteStatus::Draft->value,
+            'items' => $storedItems,
+            'subtotal' => $totals['subtotal']->inCents(),
+            'discount' => $totals['discount']->inCents(),
+            'tax' => $totals['tax']->inCents(),
+            'total' => $totals['total']->inCents(),
+            'billing' => $billing,
+            'voucher_code' => $voucherCode,
+            'valid_until' => date('Y-m-d', strtotime('+30 days')),
+        ]);
+
+        if (is_wp_error($quoteId)) {
+            return $quoteId;
+        }
+
+        // Fire event
+        $this->dispatch('quote/created', [
+            'quote_id' => $quoteId,
+            'user_id' => $userId,
+            'registration_id' => $registrationId,
+            'edition_id' => $editionId,
+            'total' => $totals['total']->inCents(),
+        ]);
+
+        return $quoteId;
+    }
+
+    /**
+     * Get quote by ID.
+     */
+    public function getQuote(int $quoteId): array|WP_Error
+    {
+        $result = $this->repository->find($quoteId);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return $this->hydrateQuote($result);
+    }
+
+    /**
+     * Get quotes for a user.
+     *
+     * @return array<array<string, mixed>>
+     */
+    public function getUserQuotes(int $userId): array
+    {
+        $quotes = $this->repository->findByUser($userId);
+
+        return array_map([$this, 'hydrateQuote'], $quotes);
+    }
+
+    /**
+     * Get quote by registration.
+     */
+    public function getQuoteByRegistration(int $registrationId): ?array
+    {
+        $quote = $this->repository->findByRegistration($registrationId);
+
+        return $quote ? $this->hydrateQuote($quote) : null;
+    }
+
+    /**
+     * Mark quote as sent.
+     */
+    public function markAsSent(int $quoteId): bool|WP_Error
+    {
+        $quote = $this->repository->find($quoteId);
+
+        if (is_wp_error($quote)) {
+            return $quote;
+        }
+
+        $status = QuoteStatus::tryFrom($quote->status ?? '');
+
+        if ($status !== QuoteStatus::Draft) {
+            return new WP_Error('invalid_status', 'Only draft quotes can be sent');
+        }
+
+        $result = $this->repository->updateStatus($quoteId, QuoteStatus::Sent);
+
+        if ($result) {
+            $this->dispatch('quote/sent', ['quote_id' => $quoteId]);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Cancel quote.
+     */
+    public function cancel(int $quoteId): bool|WP_Error
+    {
+        $quote = $this->repository->find($quoteId);
+
+        if (is_wp_error($quote)) {
+            return $quote;
+        }
+
+        $status = QuoteStatus::tryFrom($quote->status ?? '');
+
+        if ($status === QuoteStatus::Exported) {
+            return new WP_Error('cannot_cancel', 'Exported quotes cannot be cancelled');
+        }
+
+        $result = $this->repository->updateStatus($quoteId, QuoteStatus::Cancelled);
+
+        if ($result) {
+            $this->dispatch('quote/cancelled', ['quote_id' => $quoteId]);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Hydrate quote data with Money objects.
+     *
+     * @param array<string, mixed>|WP_Post $quote
+     * @return array<string, mixed>
+     */
+    private function hydrateQuote(array|WP_Post $quote): array
+    {
+        $data = is_array($quote) ? $quote : (array) $quote;
+
+        // Convert cents to Money objects
+        $data['subtotal_money'] = Money::cents((int) ($data['subtotal'] ?? 0));
+        $data['discount_money'] = Money::cents((int) ($data['discount'] ?? 0));
+        $data['tax_money'] = Money::cents((int) ($data['tax'] ?? 0));
+        $data['total_money'] = Money::cents((int) ($data['total'] ?? 0));
+
+        // Parse status
+        $data['status_enum'] = QuoteStatus::tryFrom($data['status'] ?? '') ?? QuoteStatus::Draft;
+
+        return $data;
+    }
+}
