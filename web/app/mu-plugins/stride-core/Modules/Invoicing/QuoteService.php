@@ -73,7 +73,7 @@ final class QuoteService extends AbstractService
         $storedItems = QuoteCalculator::formatItemsForStorage($items);
 
         // Create quote
-        $quoteId = $this->repository->create([
+        $result = $this->repository->create([
             'title' => $title,
             'user_id' => $userId,
             'registration_id' => $registrationId,
@@ -90,9 +90,11 @@ final class QuoteService extends AbstractService
             'valid_until' => date('Y-m-d', strtotime('+30 days')),
         ]);
 
-        if (is_wp_error($quoteId)) {
-            return $quoteId;
+        if (is_wp_error($result)) {
+            return $result;
         }
+
+        $quoteId = $result->ID;
 
         // Fire event
         $this->dispatch('quote/created', [
@@ -203,6 +205,11 @@ final class QuoteService extends AbstractService
     private function hydrateQuote(array|WP_Post $quote): array
     {
         $data = is_array($quote) ? $quote : (array) $quote;
+
+        // Flatten meta fields to top level if present
+        if (isset($data['meta']) && is_array($data['meta'])) {
+            $data = array_merge($data, $data['meta']);
+        }
 
         // Convert cents to Money objects
         $data['subtotal_money'] = Money::cents((int) ($data['subtotal'] ?? 0));
