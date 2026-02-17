@@ -15,7 +15,6 @@ use WP_Post;
  * - Algemeen: Course selection, dates, venue
  * - Informatie: Speakers, description
  * - Prijzen: Member/non-member pricing
- * - Sessie Selectie: Slot configuration
  */
 final class EditionDetailsMetabox
 {
@@ -36,12 +35,6 @@ final class EditionDetailsMetabox
         $speakers = $this->repository->getField($post->ID, 'speakers', '');
         $price = (int) $this->repository->getField($post->ID, 'price', 0);
         $priceNonMember = (int) $this->repository->getField($post->ID, 'price_non_member', 0);
-        $selectionDeadline = $this->repository->getField($post->ID, 'selection_deadline', '');
-        $sessionSlots = $this->repository->getField($post->ID, 'session_slots', []);
-
-        if (is_string($sessionSlots)) {
-            $sessionSlots = json_decode($sessionSlots, true) ?: [];
-        }
 
         // Get all courses for dropdown
         $courses = $this->getCourses();
@@ -58,9 +51,6 @@ final class EditionDetailsMetabox
                     <button type="button" class="stride-tab" data-tab="prijzen">
                         <?php esc_html_e('Prijzen', 'stride'); ?>
                     </button>
-                    <button type="button" class="stride-tab" data-tab="sessie-selectie">
-                        <?php esc_html_e('Sessie Selectie', 'stride'); ?>
-                    </button>
                 </div>
 
                 <!-- Tab: Algemeen -->
@@ -76,11 +66,6 @@ final class EditionDetailsMetabox
                 <!-- Tab: Prijzen -->
                 <div class="stride-tab-content" data-tab="prijzen">
                     <?php $this->renderPrijzenTab($price, $priceNonMember); ?>
-                </div>
-
-                <!-- Tab: Sessie Selectie -->
-                <div class="stride-tab-content" data-tab="sessie-selectie">
-                    <?php $this->renderSessieSelectieTab($selectionDeadline, $sessionSlots); ?>
                 </div>
             </div>
         </div>
@@ -187,93 +172,6 @@ final class EditionDetailsMetabox
                                min="0" step="0.01" placeholder="0.00">
                         <p class="description"><?php esc_html_e('excl. BTW', 'stride'); ?></p>
                     </div>
-                </div>
-            </div>
-        </div>
-        <?php
-    }
-
-    private function renderSessieSelectieTab(string $selectionDeadline, array $sessionSlots): void
-    {
-        ?>
-        <div class="stride-edition-columns">
-            <div class="stride-edition-main">
-                <h4><?php esc_html_e('Sessie Selectie Configuratie', 'stride'); ?></h4>
-                <p class="description" style="margin-bottom: 15px;">
-                    <?php esc_html_e('Configureer tijdslots zodat deelnemers kunnen kiezen welke sessies ze volgen.', 'stride'); ?>
-                </p>
-
-                <div class="stride-field-row">
-                    <div class="stride-field">
-                        <label for="edition_selection_deadline"><?php esc_html_e('Selectie deadline', 'stride'); ?></label>
-                        <input type="date" name="ntdst_fields[selection_deadline]" id="edition_selection_deadline"
-                               value="<?php echo esc_attr($selectionDeadline); ?>">
-                        <p class="description"><?php esc_html_e('Tot wanneer kunnen deelnemers hun sessiekeuze wijzigen?', 'stride'); ?></p>
-                    </div>
-                </div>
-
-                <div class="stride-session-slots-section">
-                    <h4><?php esc_html_e('Tijdslots', 'stride'); ?></h4>
-                    <p class="description"><?php esc_html_e('Definieer slots waaruit deelnemers kunnen kiezen. Sessies kunnen vervolgens aan een slot worden gekoppeld.', 'stride'); ?></p>
-
-                    <div class="stride-session-slots-wrapper">
-                        <div id="stride-session-slots-list">
-                            <?php foreach ($sessionSlots as $index => $slot): ?>
-                                <?php $this->renderSlotRow($index, $slot); ?>
-                            <?php endforeach; ?>
-                        </div>
-
-                        <button type="button" class="button" id="stride-add-slot-btn">
-                            <span class="dashicons dashicons-plus-alt2"></span>
-                            <?php esc_html_e('Slot toevoegen', 'stride'); ?>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Slot row template -->
-        <script type="text/template" id="stride-slot-row-template">
-            <?php $this->renderSlotRow('__INDEX__', []); ?>
-        </script>
-        <?php
-    }
-
-    private function renderSlotRow(int|string $index, array $slot): void
-    {
-        $slotId = $slot['slot'] ?? '';
-        $label = $slot['label'] ?? '';
-        $maxSelections = $slot['max_selections'] ?? 1;
-        $required = $slot['required'] ?? false;
-        ?>
-        <div class="stride-slot-row" data-slot-index="<?php echo esc_attr($index); ?>">
-            <div class="stride-field-row four-col">
-                <div class="stride-field">
-                    <label><?php esc_html_e('Slot ID', 'stride'); ?></label>
-                    <input type="text" name="ntdst_fields[session_slots][<?php echo esc_attr($index); ?>][slot]"
-                           value="<?php echo esc_attr($slotId); ?>"
-                           placeholder="<?php esc_attr_e('bijv. dag1_vm', 'stride'); ?>">
-                </div>
-                <div class="stride-field">
-                    <label><?php esc_html_e('Label', 'stride'); ?></label>
-                    <input type="text" name="ntdst_fields[session_slots][<?php echo esc_attr($index); ?>][label]"
-                           value="<?php echo esc_attr($label); ?>"
-                           placeholder="<?php esc_attr_e('bijv. Dag 1 - Voormiddag', 'stride'); ?>">
-                </div>
-                <div class="stride-field">
-                    <label><?php esc_html_e('Max selecties', 'stride'); ?></label>
-                    <input type="number" name="ntdst_fields[session_slots][<?php echo esc_attr($index); ?>][max_selections]"
-                           value="<?php echo esc_attr($maxSelections); ?>" min="1">
-                </div>
-                <div class="stride-slot-actions">
-                    <label>
-                        <input type="checkbox" name="ntdst_fields[session_slots][<?php echo esc_attr($index); ?>][required]"
-                               value="1" <?php checked($required); ?>>
-                        <?php esc_html_e('Verplicht', 'stride'); ?>
-                    </label>
-                    <button type="button" class="button-link stride-remove-slot" title="<?php esc_attr_e('Verwijderen', 'stride'); ?>">
-                        <span class="dashicons dashicons-trash"></span>
-                    </button>
                 </div>
             </div>
         </div>

@@ -13,9 +13,10 @@ use WP_Post;
  * Edition Sessions Metabox.
  *
  * Renders inline session management:
- * - Sessions table with date, time, type, location
+ * - Sessions table with date, time, type, slot, location
  * - Inline form for adding/editing sessions
  * - Type-specific fields (location, webinar link, lesson selection)
+ * - Slot configuration for session selection
  */
 final class EditionSessionsMetabox
 {
@@ -42,6 +43,7 @@ final class EditionSessionsMetabox
         if (is_string($sessionSlots)) {
             $sessionSlots = json_decode($sessionSlots, true) ?: [];
         }
+        $selectionDeadline = $this->editionRepository->getField($post->ID, 'selection_deadline', '');
         ?>
         <div class="stride-sessions-admin">
             <!-- Header with Add button -->
@@ -78,6 +80,9 @@ final class EditionSessionsMetabox
                     <?php endif; ?>
                 </tbody>
             </table>
+
+            <!-- Slot Configuration -->
+            <?php $this->renderSlotConfiguration($selectionDeadline, $sessionSlots); ?>
         </div>
 
         <!-- Session Form Template (hidden, used by JS) -->
@@ -275,5 +280,84 @@ final class EditionSessionsMetabox
             SessionType::Online => 'dashicons-laptop',
             SessionType::Assignment => 'dashicons-welcome-write-blog',
         };
+    }
+
+    private function renderSlotConfiguration(string $selectionDeadline, array $sessionSlots): void
+    {
+        ?>
+        <div class="stride-session-slots-config">
+            <h4><?php esc_html_e('Sessie Selectie', 'stride'); ?></h4>
+            <p class="description">
+                <?php esc_html_e('Definieer tijdslots zodat deelnemers kunnen kiezen welke sessies ze volgen.', 'stride'); ?>
+            </p>
+
+            <div class="stride-field-row">
+                <div class="stride-field" style="max-width: 250px;">
+                    <label for="edition_selection_deadline"><?php esc_html_e('Selectie deadline', 'stride'); ?></label>
+                    <input type="date" name="ntdst_fields[selection_deadline]" id="edition_selection_deadline"
+                           value="<?php echo esc_attr($selectionDeadline); ?>">
+                </div>
+            </div>
+
+            <div class="stride-session-slots-wrapper">
+                <div id="stride-session-slots-list">
+                    <?php foreach ($sessionSlots as $index => $slot): ?>
+                        <?php $this->renderSlotRow($index, $slot); ?>
+                    <?php endforeach; ?>
+                </div>
+
+                <button type="button" class="button" id="stride-add-slot-btn">
+                    <span class="dashicons dashicons-plus-alt2"></span>
+                    <?php esc_html_e('Slot toevoegen', 'stride'); ?>
+                </button>
+            </div>
+        </div>
+
+        <!-- Slot row template -->
+        <script type="text/template" id="stride-slot-row-template">
+            <?php $this->renderSlotRow('__INDEX__', []); ?>
+        </script>
+        <?php
+    }
+
+    private function renderSlotRow(int|string $index, array $slot): void
+    {
+        $slotId = $slot['slot'] ?? '';
+        $label = $slot['label'] ?? '';
+        $maxSelections = $slot['max_selections'] ?? 1;
+        $required = $slot['required'] ?? false;
+        ?>
+        <div class="stride-slot-row" data-slot-index="<?php echo esc_attr($index); ?>">
+            <div class="stride-field-row four-col">
+                <div class="stride-field">
+                    <label><?php esc_html_e('Slot ID', 'stride'); ?></label>
+                    <input type="text" name="ntdst_fields[session_slots][<?php echo esc_attr($index); ?>][slot]"
+                           value="<?php echo esc_attr($slotId); ?>"
+                           placeholder="<?php esc_attr_e('bijv. dag1_vm', 'stride'); ?>">
+                </div>
+                <div class="stride-field">
+                    <label><?php esc_html_e('Label', 'stride'); ?></label>
+                    <input type="text" name="ntdst_fields[session_slots][<?php echo esc_attr($index); ?>][label]"
+                           value="<?php echo esc_attr($label); ?>"
+                           placeholder="<?php esc_attr_e('bijv. Dag 1 - Voormiddag', 'stride'); ?>">
+                </div>
+                <div class="stride-field">
+                    <label><?php esc_html_e('Max selecties', 'stride'); ?></label>
+                    <input type="number" name="ntdst_fields[session_slots][<?php echo esc_attr($index); ?>][max_selections]"
+                           value="<?php echo esc_attr($maxSelections); ?>" min="1">
+                </div>
+                <div class="stride-slot-actions">
+                    <label>
+                        <input type="checkbox" name="ntdst_fields[session_slots][<?php echo esc_attr($index); ?>][required]"
+                               value="1" <?php checked($required); ?>>
+                        <?php esc_html_e('Verplicht', 'stride'); ?>
+                    </label>
+                    <button type="button" class="button-link stride-remove-slot" title="<?php esc_attr_e('Verwijderen', 'stride'); ?>">
+                        <span class="dashicons dashicons-trash"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <?php
     }
 }
