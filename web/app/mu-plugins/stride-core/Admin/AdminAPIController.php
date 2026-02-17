@@ -13,6 +13,7 @@ use Stride\Modules\Edition\EditionCPT;
 use Stride\Modules\Edition\SessionCPT;
 use Stride\Modules\Enrollment\RegistrationTable;
 use Stride\Modules\Invoicing\QuoteCPT;
+use Stride\Modules\Trajectory\TrajectoryCPT;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -86,6 +87,23 @@ final class AdminAPIController extends AbstractService
                     'type' => 'string',
                     'default' => '',
                 ],
+                'date_from' => [
+                    'type' => 'string',
+                    'default' => '',
+                ],
+                'date_to' => [
+                    'type' => 'string',
+                    'default' => '',
+                ],
+                'course_tag' => [
+                    'type' => 'integer',
+                    'default' => 0,
+                ],
+                'view' => [
+                    'type' => 'string',
+                    'default' => 'agenda',
+                    'enum' => ['agenda', 'list'],
+                ],
             ],
         ]);
 
@@ -113,6 +131,13 @@ final class AdminAPIController extends AbstractService
                     'required' => true,
                 ],
             ],
+        ]);
+
+        // Course tags for filter
+        register_rest_route(self::NAMESPACE, '/admin/course-tags', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getCourseTags'],
+            'permission_callback' => [$this, 'canAccessAdmin'],
         ]);
 
         // Mark attendance
@@ -164,6 +189,34 @@ final class AdminAPIController extends AbstractService
                 ],
             ],
         ]);
+
+        // Trajectories list
+        register_rest_route(self::NAMESPACE, '/admin/trajectories', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getTrajectories'],
+            'permission_callback' => [$this, 'canAccessAdmin'],
+            'args' => [
+                'page' => [
+                    'type' => 'integer',
+                    'default' => 1,
+                    'minimum' => 1,
+                ],
+                'per_page' => [
+                    'type' => 'integer',
+                    'default' => 20,
+                    'minimum' => 1,
+                    'maximum' => 100,
+                ],
+                'search' => [
+                    'type' => 'string',
+                    'default' => '',
+                ],
+                'status' => [
+                    'type' => 'string',
+                    'default' => '',
+                ],
+            ],
+        ]);
     }
 
     /**
@@ -191,7 +244,7 @@ final class AdminAPIController extends AbstractService
              INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = %s
              WHERE p.post_type = %s AND p.post_status = 'publish'
              AND pm.meta_value >= %s",
-            '_vad_start_date',
+            'start_date',
             EditionCPT::POST_TYPE,
             $today
         ));
@@ -211,7 +264,7 @@ final class AdminAPIController extends AbstractService
              INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = %s
              WHERE p.post_type = %s AND p.post_status = 'publish'
              AND pm.meta_value = %s",
-            '_vad_status',
+            'status',
             QuoteCPT::POST_TYPE,
             QuoteStatus::Draft->value
         ));
@@ -222,9 +275,20 @@ final class AdminAPIController extends AbstractService
              INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = %s
              WHERE p.post_type = %s AND p.post_status = 'publish'
              AND pm.meta_value = %s",
-            '_vad_date',
+            'date',
             SessionCPT::POST_TYPE,
             $today
+        ));
+
+        // Open trajectories (status = 'open')
+        $openTrajectories = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->posts} p
+             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = %s
+             WHERE p.post_type = %s AND p.post_status = 'publish'
+             AND pm.meta_value = %s",
+            'status',
+            TrajectoryCPT::POST_TYPE,
+            'open'
         ));
 
         return new WP_REST_Response([
@@ -232,6 +296,7 @@ final class AdminAPIController extends AbstractService
             'totalRegistrations' => $totalRegistrations,
             'pendingQuotes' => $pendingQuotes,
             'todaySessions' => $todaySessions,
+            'openTrajectories' => $openTrajectories,
         ]);
     }
 
@@ -239,20 +304,41 @@ final class AdminAPIController extends AbstractService
      * GET /admin/editions
      *
      * List editions with pagination, search, and status filtering.
+     * Supports two views:
+     * - 'agenda' (default): Shows each session date as a row (calendar view)
+     * - 'list': Shows each edition as a row (collapsed view)
      */
     public function getEditions(WP_REST_Request $request): WP_REST_Response
     {
         global $wpdb;
 
+        $view = $request->get_param('view') ?? 'agenda';
         $page = $request->get_param('page');
         $perPage = $request->get_param('per_page');
         $search = sanitize_text_field($request->get_param('search') ?? '');
         $status = sanitize_text_field($request->get_param('status') ?? '');
+        $dateFrom = sanitize_text_field($request->get_param('date_from') ?? '');
+        $dateTo = sanitize_text_field($request->get_param('date_to') ?? '');
+        $courseTag = (int) $request->get_param('course_tag');
         $offset = ($page - 1) * $perPage;
 
-        // Build query
+        $today = current_time('Y-m-d');
+        $twoDaysAgo = wp_date('Y-m-d', strtotime('-2 days'));
+
+        if ($view === 'agenda') {
+            return $this->getEditionsAgendaView($request, $today, $twoDaysAgo);
+        }
+
+        // LIST VIEW: One row per edition
+        // Build query with JOIN on start_date meta
         $where = ["p.post_type = %s", "p.post_status = 'publish'"];
         $params = [EditionCPT::POST_TYPE];
+
+        // By default, only show editions that haven't passed more than 2 days ago
+        if (empty($dateFrom)) {
+            $where[] = "pm_start.meta_value >= %s";
+            $params[] = $twoDaysAgo;
+        }
 
         if (!empty($search)) {
             $where[] = "p.post_title LIKE %s";
@@ -260,26 +346,53 @@ final class AdminAPIController extends AbstractService
         }
 
         if (!empty($status)) {
-            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = '_vad_status' AND pm_status.meta_value = %s)";
+            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = 'status' AND pm_status.meta_value = %s)";
             $params[] = $status;
+        }
+
+        // Date range filter
+        if (!empty($dateFrom)) {
+            $where[] = "pm_start.meta_value >= %s";
+            $params[] = $dateFrom;
+        }
+        if (!empty($dateTo)) {
+            $where[] = "pm_start.meta_value <= %s";
+            $params[] = $dateTo;
+        }
+
+        // Course tag filter (via linked course)
+        $tagJoin = '';
+        if ($courseTag > 0) {
+            $tagJoin = "INNER JOIN {$wpdb->postmeta} pm_course ON p.ID = pm_course.post_id AND pm_course.meta_key = 'course_id'
+                        INNER JOIN {$wpdb->term_relationships} tr ON pm_course.meta_value = tr.object_id
+                        INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id AND tt.taxonomy = 'ld_course_tag'";
+            $where[] = "tt.term_id = %d";
+            $params[] = $courseTag;
         }
 
         $whereClause = implode(' AND ', $where);
 
         // Get total count
+        $countParams = $params;
         $total = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$wpdb->posts} p WHERE {$whereClause}",
-            ...$params
+            "SELECT COUNT(DISTINCT p.ID) FROM {$wpdb->posts} p
+             INNER JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = 'start_date'
+             {$tagJoin}
+             WHERE {$whereClause}",
+            ...$countParams
         ));
 
-        // Get editions
+        // Get editions - ordered by start date ASC (nearest first)
         $params[] = $perPage;
         $params[] = $offset;
 
         $editions = $wpdb->get_results($wpdb->prepare(
-            "SELECT p.ID, p.post_title FROM {$wpdb->posts} p
+            "SELECT DISTINCT p.ID, p.post_title, pm_start.meta_value as start_date
+             FROM {$wpdb->posts} p
+             INNER JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = 'start_date'
+             {$tagJoin}
              WHERE {$whereClause}
-             ORDER BY p.post_date DESC
+             ORDER BY pm_start.meta_value ASC
              LIMIT %d OFFSET %d",
             ...$params
         ));
@@ -292,12 +405,188 @@ final class AdminAPIController extends AbstractService
             $editionId = (int) $edition->ID;
 
             // Get meta values
-            $startDate = get_post_meta($editionId, '_vad_start_date', true);
-            $endDate = get_post_meta($editionId, '_vad_end_date', true);
-            $venue = get_post_meta($editionId, '_vad_venue', true);
-            $capacity = (int) get_post_meta($editionId, '_vad_capacity', true);
-            $editionStatus = get_post_meta($editionId, '_vad_status', true);
-            $courseId = (int) get_post_meta($editionId, '_vad_course_id', true);
+            $startDate = get_post_meta($editionId, 'start_date', true);
+            $endDate = get_post_meta($editionId, 'end_date', true);
+            $venue = get_post_meta($editionId, 'venue', true);
+            $capacity = (int) get_post_meta($editionId, 'capacity', true);
+            $editionStatus = get_post_meta($editionId, 'status', true);
+            $courseId = (int) get_post_meta($editionId, 'course_id', true);
+
+            // Get course title and tags
+            $courseTitle = '';
+            $courseTags = [];
+            if ($courseId > 0) {
+                $course = get_post($courseId);
+                if ($course) {
+                    $courseTitle = $course->post_title;
+                }
+                $tags = wp_get_object_terms($courseId, 'ld_course_tag');
+                if (!is_wp_error($tags)) {
+                    foreach ($tags as $tag) {
+                        $courseTags[] = ['id' => $tag->term_id, 'name' => $tag->name];
+                    }
+                }
+            }
+
+            // Count registrations
+            $registeredCount = 0;
+            if (RegistrationTable::exists()) {
+                $registeredCount = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$registrationTable} WHERE edition_id = %d AND status = 'confirmed'",
+                    $editionId
+                ));
+            }
+
+            // Check if edition is today
+            $isToday = $startDate === $today || ($startDate <= $today && $endDate >= $today);
+            $isPast = !empty($endDate) ? $endDate < $today : $startDate < $today;
+
+            $items[] = [
+                'id' => $editionId,
+                'title' => $edition->post_title,
+                'course' => [
+                    'id' => $courseId,
+                    'title' => $courseTitle,
+                    'tags' => $courseTags,
+                ],
+                'startDate' => $startDate ?: null,
+                'endDate' => $endDate ?: null,
+                'venue' => $venue ?: null,
+                'capacity' => $capacity,
+                'registeredCount' => $registeredCount,
+                'status' => $editionStatus ?: 'open',
+                'isToday' => $isToday,
+                'isPast' => $isPast,
+                'editUrl' => admin_url("post.php?post={$editionId}&action=edit"),
+            ];
+        }
+
+        return new WP_REST_Response([
+            'items' => $items,
+            'total' => $total,
+            'page' => $page,
+            'perPage' => $perPage,
+            'totalPages' => (int) ceil($total / $perPage),
+            'view' => 'list',
+        ]);
+    }
+
+    /**
+     * Agenda view: Each session date is a row.
+     */
+    private function getEditionsAgendaView(WP_REST_Request $request, string $today, string $twoDaysAgo): WP_REST_Response
+    {
+        global $wpdb;
+
+        $page = $request->get_param('page');
+        $perPage = $request->get_param('per_page');
+        $search = sanitize_text_field($request->get_param('search') ?? '');
+        $status = sanitize_text_field($request->get_param('status') ?? '');
+        $dateFrom = sanitize_text_field($request->get_param('date_from') ?? '');
+        $dateTo = sanitize_text_field($request->get_param('date_to') ?? '');
+        $courseTag = (int) $request->get_param('course_tag');
+        $offset = ($page - 1) * $perPage;
+
+        // Build query for sessions with edition info
+        $where = [
+            "s.post_type = %s",
+            "s.post_status = 'publish'",
+            "e.post_type = %s",
+            "e.post_status = 'publish'",
+        ];
+        $params = [SessionCPT::POST_TYPE, EditionCPT::POST_TYPE];
+
+        // Default: only show sessions from 2 days ago onwards
+        if (empty($dateFrom)) {
+            $where[] = "pm_date.meta_value >= %s";
+            $params[] = $twoDaysAgo;
+        }
+
+        // Search by edition title
+        if (!empty($search)) {
+            $where[] = "e.post_title LIKE %s";
+            $params[] = '%' . $wpdb->esc_like($search) . '%';
+        }
+
+        // Filter by edition status
+        if (!empty($status)) {
+            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = e.ID AND pm_status.meta_key = 'status' AND pm_status.meta_value = %s)";
+            $params[] = $status;
+        }
+
+        // Date range filter on session date
+        if (!empty($dateFrom)) {
+            $where[] = "pm_date.meta_value >= %s";
+            $params[] = $dateFrom;
+        }
+        if (!empty($dateTo)) {
+            $where[] = "pm_date.meta_value <= %s";
+            $params[] = $dateTo;
+        }
+
+        // Course tag filter
+        $tagJoin = '';
+        if ($courseTag > 0) {
+            $tagJoin = "INNER JOIN {$wpdb->postmeta} pm_course ON e.ID = pm_course.post_id AND pm_course.meta_key = 'course_id'
+                        INNER JOIN {$wpdb->term_relationships} tr ON pm_course.meta_value = tr.object_id
+                        INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id AND tt.taxonomy = 'ld_course_tag'";
+            $where[] = "tt.term_id = %d";
+            $params[] = $courseTag;
+        }
+
+        $whereClause = implode(' AND ', $where);
+
+        // Count total sessions
+        $countParams = $params;
+        $total = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(DISTINCT s.ID)
+             FROM {$wpdb->posts} s
+             INNER JOIN {$wpdb->postmeta} pm_edition ON s.ID = pm_edition.post_id AND pm_edition.meta_key = 'edition_id'
+             INNER JOIN {$wpdb->posts} e ON pm_edition.meta_value = e.ID
+             INNER JOIN {$wpdb->postmeta} pm_date ON s.ID = pm_date.post_id AND pm_date.meta_key = 'date'
+             {$tagJoin}
+             WHERE {$whereClause}",
+            ...$countParams
+        ));
+
+        // Get sessions ordered by date
+        $params[] = $perPage;
+        $params[] = $offset;
+
+        $sessions = $wpdb->get_results($wpdb->prepare(
+            "SELECT s.ID as session_id, s.post_title as session_title,
+                    e.ID as edition_id, e.post_title as edition_title,
+                    pm_date.meta_value as session_date
+             FROM {$wpdb->posts} s
+             INNER JOIN {$wpdb->postmeta} pm_edition ON s.ID = pm_edition.post_id AND pm_edition.meta_key = 'edition_id'
+             INNER JOIN {$wpdb->posts} e ON pm_edition.meta_value = e.ID
+             INNER JOIN {$wpdb->postmeta} pm_date ON s.ID = pm_date.post_id AND pm_date.meta_key = 'date'
+             {$tagJoin}
+             WHERE {$whereClause}
+             ORDER BY pm_date.meta_value ASC, pm_edition.meta_value ASC
+             LIMIT %d OFFSET %d",
+            ...$params
+        ));
+
+        // Format items
+        $items = [];
+        $registrationTable = RegistrationTable::getTableName();
+
+        foreach ($sessions as $session) {
+            $sessionId = (int) $session->session_id;
+            $editionId = (int) $session->edition_id;
+            $sessionDate = $session->session_date;
+
+            // Get session times
+            $startTime = get_post_meta($sessionId, 'start_time', true);
+            $endTime = get_post_meta($sessionId, 'end_time', true);
+            $location = get_post_meta($sessionId, 'location', true);
+
+            // Get edition info
+            $venue = get_post_meta($editionId, 'venue', true);
+            $capacity = (int) get_post_meta($editionId, 'capacity', true);
+            $editionStatus = get_post_meta($editionId, 'status', true);
+            $courseId = (int) get_post_meta($editionId, 'course_id', true);
 
             // Get course title
             $courseTitle = '';
@@ -317,19 +606,28 @@ final class AdminAPIController extends AbstractService
                 ));
             }
 
+            // Check if session is today/past
+            $isToday = $sessionDate === $today;
+            $isPast = $sessionDate < $today;
+
             $items[] = [
                 'id' => $editionId,
-                'title' => $edition->post_title,
+                'sessionId' => $sessionId,
+                'title' => $session->edition_title,
+                'sessionTitle' => $session->session_title,
                 'course' => [
                     'id' => $courseId,
                     'title' => $courseTitle,
                 ],
-                'startDate' => $startDate ?: null,
-                'endDate' => $endDate ?: null,
-                'venue' => $venue ?: null,
+                'date' => $sessionDate,
+                'startTime' => $startTime ?: null,
+                'endTime' => $endTime ?: null,
+                'venue' => $location ?: $venue ?: null,
                 'capacity' => $capacity,
                 'registeredCount' => $registeredCount,
                 'status' => $editionStatus ?: 'open',
+                'isToday' => $isToday,
+                'isPast' => $isPast,
                 'editUrl' => admin_url("post.php?post={$editionId}&action=edit"),
             ];
         }
@@ -340,7 +638,36 @@ final class AdminAPIController extends AbstractService
             'page' => $page,
             'perPage' => $perPage,
             'totalPages' => (int) ceil($total / $perPage),
+            'view' => 'agenda',
         ]);
+    }
+
+    /**
+     * GET /admin/course-tags
+     *
+     * Get all course tags for filter dropdown.
+     */
+    public function getCourseTags(WP_REST_Request $request): WP_REST_Response
+    {
+        $tags = get_terms([
+            'taxonomy' => 'ld_course_tag',
+            'hide_empty' => false,
+            'orderby' => 'name',
+            'order' => 'ASC',
+        ]);
+
+        $items = [];
+        if (!is_wp_error($tags)) {
+            foreach ($tags as $tag) {
+                $items[] = [
+                    'id' => $tag->term_id,
+                    'name' => $tag->name,
+                    'count' => $tag->count,
+                ];
+            }
+        }
+
+        return new WP_REST_Response($items);
     }
 
     /**
@@ -361,15 +688,15 @@ final class AdminAPIController extends AbstractService
         }
 
         // Get meta values
-        $startDate = get_post_meta($editionId, '_vad_start_date', true);
-        $endDate = get_post_meta($editionId, '_vad_end_date', true);
-        $venue = get_post_meta($editionId, '_vad_venue', true);
-        $capacity = (int) get_post_meta($editionId, '_vad_capacity', true);
-        $editionStatus = get_post_meta($editionId, '_vad_status', true);
-        $courseId = (int) get_post_meta($editionId, '_vad_course_id', true);
-        $price = (int) get_post_meta($editionId, '_vad_price', true);
-        $priceNonMember = (int) get_post_meta($editionId, '_vad_price_non_member', true);
-        $speakers = get_post_meta($editionId, '_vad_speakers', true);
+        $startDate = get_post_meta($editionId, 'start_date', true);
+        $endDate = get_post_meta($editionId, 'end_date', true);
+        $venue = get_post_meta($editionId, 'venue', true);
+        $capacity = (int) get_post_meta($editionId, 'capacity', true);
+        $editionStatus = get_post_meta($editionId, 'status', true);
+        $courseId = (int) get_post_meta($editionId, 'course_id', true);
+        $price = (int) get_post_meta($editionId, 'price', true);
+        $priceNonMember = (int) get_post_meta($editionId, 'price_non_member', true);
+        $speakers = get_post_meta($editionId, 'speakers', true);
 
         // Get course title
         $courseTitle = '';
@@ -393,7 +720,7 @@ final class AdminAPIController extends AbstractService
         // Get sessions
         $sessions = $wpdb->get_results($wpdb->prepare(
             "SELECT p.ID, p.post_title FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_vad_edition_id'
+             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = 'edition_id'
              WHERE p.post_type = %s AND p.post_status = 'publish' AND pm.meta_value = %d
              ORDER BY p.ID ASC",
             SessionCPT::POST_TYPE,
@@ -403,10 +730,10 @@ final class AdminAPIController extends AbstractService
         $sessionItems = [];
         foreach ($sessions as $session) {
             $sessionId = (int) $session->ID;
-            $sessionDate = get_post_meta($sessionId, '_vad_date', true);
-            $startTime = get_post_meta($sessionId, '_vad_start_time', true);
-            $endTime = get_post_meta($sessionId, '_vad_end_time', true);
-            $sessionType = get_post_meta($sessionId, '_vad_type', true);
+            $sessionDate = get_post_meta($sessionId, 'date', true);
+            $startTime = get_post_meta($sessionId, 'start_time', true);
+            $endTime = get_post_meta($sessionId, 'end_time', true);
+            $sessionType = get_post_meta($sessionId, 'type', true);
 
             $sessionItems[] = [
                 'id' => $sessionId,
@@ -467,7 +794,7 @@ final class AdminAPIController extends AbstractService
         // Get sessions for this edition
         $sessions = $wpdb->get_results($wpdb->prepare(
             "SELECT p.ID FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_vad_edition_id'
+             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = 'edition_id'
              WHERE p.post_type = %s AND p.post_status = 'publish' AND pm.meta_value = %d
              ORDER BY p.ID ASC",
             SessionCPT::POST_TYPE,
@@ -478,8 +805,8 @@ final class AdminAPIController extends AbstractService
 
         $sessionItems = [];
         foreach ($sessionIds as $sessionId) {
-            $sessionDate = get_post_meta($sessionId, '_vad_date', true);
-            $startTime = get_post_meta($sessionId, '_vad_start_time', true);
+            $sessionDate = get_post_meta($sessionId, 'date', true);
+            $startTime = get_post_meta($sessionId, 'start_time', true);
 
             $sessionItems[] = [
                 'id' => $sessionId,
@@ -639,14 +966,14 @@ final class AdminAPIController extends AbstractService
 
         if (!empty($search)) {
             // Search in title or quote_number meta
-            $where[] = "(p.post_title LIKE %s OR EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_search WHERE pm_search.post_id = p.ID AND pm_search.meta_key = '_vad_quote_number' AND pm_search.meta_value LIKE %s))";
+            $where[] = "(p.post_title LIKE %s OR EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_search WHERE pm_search.post_id = p.ID AND pm_search.meta_key = 'quote_number' AND pm_search.meta_value LIKE %s))";
             $searchPattern = '%' . $wpdb->esc_like($search) . '%';
             $params[] = $searchPattern;
             $params[] = $searchPattern;
         }
 
         if (!empty($status)) {
-            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = '_vad_status' AND pm_status.meta_value = %s)";
+            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = 'status' AND pm_status.meta_value = %s)";
             $params[] = $status;
         }
 
@@ -676,12 +1003,12 @@ final class AdminAPIController extends AbstractService
             $quoteId = (int) $quote->ID;
 
             // Get meta values
-            $quoteNumber = get_post_meta($quoteId, '_vad_quote_number', true);
-            $quoteStatus = get_post_meta($quoteId, '_vad_status', true);
-            $quoteTotal = (int) get_post_meta($quoteId, '_vad_total', true);
-            $userId = (int) get_post_meta($quoteId, '_vad_user_id', true);
-            $editionId = (int) get_post_meta($quoteId, '_vad_edition_id', true);
-            $sentAt = get_post_meta($quoteId, '_vad_sent_at', true);
+            $quoteNumber = get_post_meta($quoteId, 'quote_number', true);
+            $quoteStatus = get_post_meta($quoteId, 'status', true);
+            $quoteTotal = (int) get_post_meta($quoteId, 'total', true);
+            $userId = (int) get_post_meta($quoteId, 'user_id', true);
+            $editionId = (int) get_post_meta($quoteId, 'edition_id', true);
+            $sentAt = get_post_meta($quoteId, 'sent_at', true);
 
             // Get user info
             $userName = '';
@@ -726,6 +1053,135 @@ final class AdminAPIController extends AbstractService
                     'title' => $editionTitle,
                 ],
                 'editUrl' => admin_url("post.php?post={$quoteId}&action=edit"),
+            ];
+        }
+
+        return new WP_REST_Response([
+            'items' => $items,
+            'total' => $total,
+            'page' => $page,
+            'perPage' => $perPage,
+            'totalPages' => (int) ceil($total / $perPage),
+        ]);
+    }
+
+    /**
+     * GET /admin/trajectories
+     *
+     * List trajectories with pagination, search, and status filtering.
+     */
+    public function getTrajectories(WP_REST_Request $request): WP_REST_Response
+    {
+        global $wpdb;
+
+        $page = $request->get_param('page');
+        $perPage = $request->get_param('per_page');
+        $search = sanitize_text_field($request->get_param('search') ?? '');
+        $status = sanitize_text_field($request->get_param('status') ?? '');
+        $offset = ($page - 1) * $perPage;
+
+        // Build query
+        $where = ["p.post_type = %s", "p.post_status = 'publish'"];
+        $params = [TrajectoryCPT::POST_TYPE];
+
+        if (!empty($search)) {
+            $where[] = "p.post_title LIKE %s";
+            $params[] = '%' . $wpdb->esc_like($search) . '%';
+        }
+
+        if (!empty($status)) {
+            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = 'status' AND pm_status.meta_value = %s)";
+            $params[] = $status;
+        }
+
+        $whereClause = implode(' AND ', $where);
+
+        // Get total count
+        $total = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->posts} p WHERE {$whereClause}",
+            ...$params
+        ));
+
+        // Get trajectories
+        $params[] = $perPage;
+        $params[] = $offset;
+
+        $trajectories = $wpdb->get_results($wpdb->prepare(
+            "SELECT p.ID, p.post_title, p.post_date FROM {$wpdb->posts} p
+             WHERE {$whereClause}
+             ORDER BY p.post_date DESC
+             LIMIT %d OFFSET %d",
+            ...$params
+        ));
+
+        // Format trajectories with meta
+        $items = [];
+        foreach ($trajectories as $trajectory) {
+            $trajectoryId = (int) $trajectory->ID;
+
+            // Get meta values
+            $trajectoryStatus = get_post_meta($trajectoryId, 'status', true);
+            $mode = get_post_meta($trajectoryId, 'mode', true);
+            $capacity = (int) get_post_meta($trajectoryId, 'capacity', true);
+            $enrollmentDeadline = get_post_meta($trajectoryId, 'enrollment_deadline', true);
+            $choiceDeadline = get_post_meta($trajectoryId, 'choice_deadline', true);
+            $courses = get_post_meta($trajectoryId, 'courses', true);
+            $price = (int) get_post_meta($trajectoryId, 'price', true);
+
+            // Count courses
+            $courseCount = 0;
+            if (is_array($courses)) {
+                $courseCount = count($courses);
+            } elseif (is_string($courses) && !empty($courses)) {
+                $decoded = json_decode($courses, true);
+                if (is_array($decoded)) {
+                    $courseCount = count($decoded);
+                }
+            }
+
+            // Count enrolled users (from trajectory_enrollments table if exists)
+            $enrolledCount = 0;
+            $enrollmentTable = $wpdb->prefix . 'vad_trajectory_enrollments';
+            $tableExists = $wpdb->get_var("SHOW TABLES LIKE '{$enrollmentTable}'") === $enrollmentTable;
+            if ($tableExists) {
+                $enrolledCount = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$enrollmentTable} WHERE trajectory_id = %d",
+                    $trajectoryId
+                ));
+            }
+
+            // Get status label
+            $statusLabel = match ($trajectoryStatus) {
+                'open' => 'Open',
+                'closed' => 'Gesloten',
+                'full' => 'Volzet',
+                'archived' => 'Gearchiveerd',
+                'draft' => 'Concept',
+                default => ucfirst($trajectoryStatus ?: 'draft'),
+            };
+
+            // Get mode label
+            $modeLabel = match ($mode) {
+                'cohort' => 'Cohort',
+                'open' => 'Open inschrijving',
+                default => ucfirst($mode ?: 'cohort'),
+            };
+
+            $items[] = [
+                'id' => $trajectoryId,
+                'title' => $trajectory->post_title,
+                'status' => $trajectoryStatus ?: 'draft',
+                'statusLabel' => $statusLabel,
+                'mode' => $mode ?: 'cohort',
+                'modeLabel' => $modeLabel,
+                'capacity' => $capacity,
+                'enrolledCount' => $enrolledCount,
+                'courseCount' => $courseCount,
+                'price' => $price,
+                'priceFormatted' => number_format($price / 100, 2, ',', '.'),
+                'enrollmentDeadline' => $enrollmentDeadline ?: null,
+                'choiceDeadline' => $choiceDeadline ?: null,
+                'editUrl' => admin_url("post.php?post={$trajectoryId}&action=edit"),
             ];
         }
 

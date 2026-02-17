@@ -94,10 +94,32 @@ class AdminDashboardService extends AbstractService
             return;
         }
 
+        // Flatpickr for date range picker
+        wp_enqueue_style(
+            'flatpickr',
+            'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css',
+            [],
+            '4.6.13'
+        );
+        wp_enqueue_script(
+            'flatpickr',
+            'https://cdn.jsdelivr.net/npm/flatpickr',
+            [],
+            '4.6.13',
+            true
+        );
+        wp_enqueue_script(
+            'flatpickr-nl',
+            'https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/nl.js',
+            ['flatpickr'],
+            '4.6.13',
+            true
+        );
+
         wp_enqueue_script(
             'alpinejs',
             'https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js',
-            [],
+            ['flatpickr'],
             '3.14.0',
             ['strategy' => 'defer']
         );
@@ -942,6 +964,20 @@ class AdminDashboardService extends AbstractService
                 color: var(--stride-text-muted);
             }
 
+            /* Trajectory specific */
+            .stride-trajectory-name {
+                font-weight: 500;
+            }
+
+            .stride-trajectory-deadline {
+                font-size: 13px;
+                color: var(--stride-text-muted);
+            }
+
+            .stride-capacity-indicator {
+                color: var(--stride-text-muted);
+            }
+
             .stride-amount {
                 font-variant-numeric: tabular-nums;
                 font-weight: 500;
@@ -960,6 +996,132 @@ class AdminDashboardService extends AbstractService
 
             .stride-badge-exported {
                 background: rgba(16, 185, 129, 0.1);
+                color: var(--stride-success);
+            }
+
+            /* Today/Past row highlighting */
+            .stride-row-today {
+                background: rgba(16, 185, 129, 0.08) !important;
+                border-left: 3px solid var(--stride-success);
+            }
+
+            .stride-row-today:hover {
+                background: rgba(16, 185, 129, 0.12) !important;
+            }
+
+            .stride-row-past {
+                opacity: 0.6;
+            }
+
+            .stride-badge-today {
+                background: var(--stride-success);
+                color: #fff;
+                font-size: 10px;
+                padding: 2px 6px;
+                margin-left: 8px;
+                vertical-align: middle;
+            }
+
+            /* Date range picker */
+            .stride-date-range {
+                min-width: 200px;
+            }
+
+            /* Filter actions */
+            .stride-filter-actions {
+                display: flex;
+                align-items: flex-end;
+            }
+
+            .stride-btn-text {
+                background: transparent;
+                color: var(--stride-text-muted);
+                padding: 8px 12px;
+            }
+
+            .stride-btn-text:hover {
+                color: var(--stride-primary);
+                background: rgba(99, 102, 241, 0.05);
+            }
+
+            .stride-btn-text .dashicons {
+                font-size: 16px;
+                width: 16px;
+                height: 16px;
+                margin-right: 4px;
+                vertical-align: middle;
+            }
+
+            /* Flatpickr customization */
+            .flatpickr-calendar {
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            }
+
+            /* View toggle buttons */
+            .stride-view-toggle {
+                margin-left: auto;
+            }
+
+            .stride-toggle-buttons {
+                display: flex;
+                border: 1px solid var(--stride-border);
+                border-radius: 6px;
+                overflow: hidden;
+            }
+
+            .stride-toggle-btn {
+                padding: 8px 12px;
+                background: #fff;
+                border: none;
+                cursor: pointer;
+                color: var(--stride-text-muted);
+                display: flex;
+                align-items: center;
+                transition: all 0.2s ease;
+            }
+
+            .stride-toggle-btn:not(:last-child) {
+                border-right: 1px solid var(--stride-border);
+            }
+
+            .stride-toggle-btn:hover {
+                background: var(--stride-bg);
+            }
+
+            .stride-toggle-btn.active {
+                background: var(--stride-primary);
+                color: #fff;
+            }
+
+            .stride-toggle-btn .dashicons {
+                font-size: 16px;
+                width: 16px;
+                height: 16px;
+            }
+
+            /* Agenda table styling */
+            .stride-agenda-table .stride-agenda-date {
+                min-width: 120px;
+            }
+
+            .stride-date-primary {
+                font-weight: 600;
+                color: var(--stride-text);
+            }
+
+            .stride-date-time {
+                font-size: 12px;
+                color: var(--stride-text-muted);
+                margin-top: 2px;
+            }
+
+            .stride-session-subtitle {
+                font-size: 12px;
+                color: var(--stride-text-muted);
+                margin-top: 2px;
+            }
+
+            .stride-row-today .stride-date-primary {
                 color: var(--stride-success);
             }
         </style>';
@@ -985,6 +1147,9 @@ class AdminDashboardService extends AbstractService
                         </a>
                         <a href="#/quotes" class="stride-nav-item" :class="{ 'active': view === 'quotes' }" @click.prevent="view = 'quotes'">
                             Quotes
+                        </a>
+                        <a href="#/trajectories" class="stride-nav-item" :class="{ 'active': view === 'trajectories' }" @click.prevent="view = 'trajectories'">
+                            Trajecten
                         </a>
                     </nav>
                 </div>
@@ -1083,18 +1248,46 @@ class AdminDashboardService extends AbstractService
                         <div class="stride-card">
                             <div class="stride-filters">
                                 <div class="stride-filter-group">
-                                    <label class="stride-filter-label">Search</label>
-                                    <input type="text" class="stride-input" placeholder="Search editions..." x-model="editionFilters.search" @input.debounce.300ms="loadEditions()">
+                                    <label class="stride-filter-label">Zoeken</label>
+                                    <input type="text" class="stride-input" placeholder="Zoek editions..." x-model="editionFilters.search" @input.debounce.300ms="loadEditions()">
                                 </div>
                                 <div class="stride-filter-group">
                                     <label class="stride-filter-label">Status</label>
                                     <select class="stride-select" x-model="editionFilters.status" @change="loadEditions()">
-                                        <option value="">All Statuses</option>
+                                        <option value="">Alle statussen</option>
                                         <option value="open">Open</option>
-                                        <option value="full">Full</option>
-                                        <option value="cancelled">Cancelled</option>
-                                        <option value="completed">Completed</option>
+                                        <option value="full">Vol</option>
+                                        <option value="cancelled">Geannuleerd</option>
+                                        <option value="completed">Afgerond</option>
                                     </select>
+                                </div>
+                                <div class="stride-filter-group">
+                                    <label class="stride-filter-label">Categorie</label>
+                                    <select class="stride-select" x-model="editionFilters.courseTag" @change="loadEditions()">
+                                        <option value="0">Alle categorieën</option>
+                                        <template x-for="tag in courseTags" :key="tag.id">
+                                            <option :value="tag.id" x-text="tag.name"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div class="stride-filter-group">
+                                    <label class="stride-filter-label">Periode</label>
+                                    <input type="text" class="stride-input stride-date-range" x-ref="dateRange" placeholder="Selecteer periode...">
+                                </div>
+                                <div class="stride-filter-group stride-filter-actions">
+                                    <button type="button" class="stride-btn stride-btn-text" @click="editionFilters = { search: '', status: '', dateFrom: '', dateTo: '', courseTag: 0 }; if(dateRangePicker) dateRangePicker.clear(); loadEditions();">
+                                        <span class="dashicons dashicons-dismiss"></span> Reset
+                                    </button>
+                                </div>
+                                <div class="stride-filter-group stride-view-toggle">
+                                    <div class="stride-toggle-buttons">
+                                        <button type="button" class="stride-toggle-btn" :class="{ 'active': editionView === 'agenda' }" @click="editionView = 'agenda'; editions = []; loadEditions();" title="Agenda weergave">
+                                            <span class="dashicons dashicons-calendar-alt"></span>
+                                        </button>
+                                        <button type="button" class="stride-toggle-btn" :class="{ 'active': editionView === 'list' }" @click="editionView = 'list'; editions = []; loadEditions();" title="Lijst weergave">
+                                            <span class="dashicons dashicons-list-view"></span>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1109,23 +1302,75 @@ class AdminDashboardService extends AbstractService
                                         <p>No editions found</p>
                                     </div>
                                 </template>
-                                <template x-if="!editionsLoading && editions.length > 0">
+                                <!-- Agenda View Table -->
+                                <template x-if="!editionsLoading && editions.length > 0 && editionView === 'agenda'">
+                                    <table class="stride-table stride-agenda-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Datum</th>
+                                                <th>Editie</th>
+                                                <th>Locatie</th>
+                                                <th>Capaciteit</th>
+                                                <th>Status</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="item in editions" :key="item.sessionId || item.id">
+                                                <tr @click="openEdition(item.id)" class="stride-clickable" :class="{ 'stride-row-today': item.isToday, 'stride-row-past': item.isPast }">
+                                                    <td class="stride-agenda-date">
+                                                        <div class="stride-date-primary" x-text="formatDateFull(item.date)"></div>
+                                                        <div class="stride-date-time" x-show="item.startTime">
+                                                            <span x-text="item.startTime"></span>
+                                                            <span x-show="item.endTime"> - <span x-text="item.endTime"></span></span>
+                                                        </div>
+                                                        <span x-show="item.isToday" class="stride-badge stride-badge-today">Vandaag</span>
+                                                    </td>
+                                                    <td>
+                                                        <div class="stride-edition-title" x-text="item.title"></div>
+                                                        <div class="stride-session-subtitle" x-show="item.sessionTitle" x-text="item.sessionTitle"></div>
+                                                    </td>
+                                                    <td x-text="item.venue || '-'"></td>
+                                                    <td>
+                                                        <span class="stride-capacity" :class="{ 'full': item.registeredCount >= item.capacity }">
+                                                            <span x-text="item.registeredCount"></span>/<span x-text="item.capacity"></span>
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="stride-badge" :class="'stride-badge-' + item.status" x-text="item.status"></span>
+                                                    </td>
+                                                    <td>
+                                                        <a :href="item.editUrl" class="stride-btn stride-btn-sm stride-btn-outline" @click.stop>
+                                                            Edit
+                                                        </a>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </template>
+
+                                <!-- List View Table -->
+                                <template x-if="!editionsLoading && editions.length > 0 && editionView === 'list'">
                                     <table class="stride-table">
                                         <thead>
                                             <tr>
-                                                <th>Edition</th>
-                                                <th>Date</th>
-                                                <th>Venue</th>
-                                                <th>Capacity</th>
+                                                <th>Editie</th>
+                                                <th>Periode</th>
+                                                <th>Locatie</th>
+                                                <th>Capaciteit</th>
                                                 <th>Status</th>
                                                 <th></th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <template x-for="edition in editions" :key="edition.id">
-                                                <tr @click="openEdition(edition.id)" class="stride-clickable">
+                                                <tr @click="openEdition(edition.id)" class="stride-clickable" :class="{ 'stride-row-today': edition.isToday, 'stride-row-past': edition.isPast }">
                                                     <td>
-                                                        <div class="stride-edition-title" x-text="edition.title"></div>
+                                                        <div class="stride-edition-title">
+                                                            <span x-text="edition.title"></span>
+                                                            <span x-show="edition.isToday" class="stride-badge stride-badge-today">Vandaag</span>
+                                                        </div>
                                                     </td>
                                                     <td>
                                                         <span x-text="formatDate(edition.startDate)"></span>
@@ -1388,6 +1633,105 @@ class AdminDashboardService extends AbstractService
                         </div>
                     </div>
                 </template>
+
+                <!-- Trajectories View -->
+                <template x-if="view === 'trajectories'">
+                    <div>
+                        <div class="stride-page-header">
+                            <h2 class="stride-page-title">Trajecten</h2>
+                        </div>
+
+                        <!-- Filters -->
+                        <div class="stride-card">
+                            <div class="stride-filters">
+                                <div class="stride-filter-group">
+                                    <label class="stride-filter-label">Zoeken</label>
+                                    <input type="text" class="stride-input" placeholder="Naam traject..." x-model="trajectoryFilters.search" @input.debounce.300ms="loadTrajectories()">
+                                </div>
+                                <div class="stride-filter-group">
+                                    <label class="stride-filter-label">Status</label>
+                                    <select class="stride-select" x-model="trajectoryFilters.status" @change="loadTrajectories()">
+                                        <option value="">Alle Statussen</option>
+                                        <option value="open">Open</option>
+                                        <option value="closed">Gesloten</option>
+                                        <option value="full">Volzet</option>
+                                        <option value="draft">Concept</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Table -->
+                            <div class="stride-table-wrapper">
+                                <template x-if="trajectoriesLoading">
+                                    <div class="stride-loading">Trajecten laden...</div>
+                                </template>
+                                <template x-if="!trajectoriesLoading && trajectories.length === 0">
+                                    <div class="stride-empty">
+                                        <span class="dashicons dashicons-networking stride-empty-icon"></span>
+                                        <p>Geen trajecten gevonden</p>
+                                    </div>
+                                </template>
+                                <template x-if="!trajectoriesLoading && trajectories.length > 0">
+                                    <table class="stride-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Traject</th>
+                                                <th>Modus</th>
+                                                <th>Cursussen</th>
+                                                <th>Ingeschreven</th>
+                                                <th>Prijs</th>
+                                                <th>Status</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="trajectory in trajectories" :key="trajectory.id">
+                                                <tr>
+                                                    <td>
+                                                        <div class="stride-trajectory-name" x-text="trajectory.title"></div>
+                                                        <div class="stride-trajectory-deadline" x-show="trajectory.enrollmentDeadline">
+                                                            Deadline: <span x-text="formatDate(trajectory.enrollmentDeadline)"></span>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <span class="stride-badge stride-badge-info" x-text="trajectory.modeLabel"></span>
+                                                    </td>
+                                                    <td x-text="trajectory.courseCount + ' cursussen'"></td>
+                                                    <td>
+                                                        <span x-text="trajectory.enrolledCount"></span>
+                                                        <span x-show="trajectory.capacity > 0" class="stride-capacity-indicator">
+                                                            / <span x-text="trajectory.capacity"></span>
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="stride-amount" x-text="'€ ' + trajectory.priceFormatted"></span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="stride-badge" :class="'stride-badge-' + trajectory.status" x-text="trajectory.statusLabel"></span>
+                                                    </td>
+                                                    <td>
+                                                        <a :href="trajectory.editUrl" class="stride-btn stride-btn-sm stride-btn-outline">
+                                                            Bekijken
+                                                        </a>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </template>
+
+                                <!-- Pagination -->
+                                <template x-if="trajectoryPages > 1">
+                                    <div class="stride-pagination">
+                                        <button class="stride-page-btn" @click="trajectoryPage--; loadTrajectories()" :disabled="trajectoryPage === 1">&laquo;</button>
+                                        <span class="stride-page-info">Pagina <span x-text="trajectoryPage"></span> van <span x-text="trajectoryPages"></span></span>
+                                        <button class="stride-page-btn" @click="trajectoryPage++; loadTrajectories()" :disabled="trajectoryPage >= trajectoryPages">&raquo;</button>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </template>
             </div>
         </div>
         <?php
@@ -1422,10 +1766,13 @@ class AdminDashboardService extends AbstractService
                 // Editions state
                 editions: [],
                 editionsLoading: false,
-                editionFilters: { search: '', status: '' },
+                editionFilters: { search: '', status: '', dateFrom: '', dateTo: '', courseTag: 0 },
+                editionView: 'agenda', // 'agenda' (default) or 'list'
                 editionPage: 1,
                 editionPages: 1,
                 selectedEdition: null,
+                courseTags: [],
+                dateRangePicker: null,
                 editionTab: 'students',
                 registrations: [],
                 registrationsLoading: false,
@@ -1437,22 +1784,50 @@ class AdminDashboardService extends AbstractService
                 quotePage: 1,
                 quotePages: 1,
 
+                // Trajectories state
+                trajectories: [],
+                trajectoriesLoading: false,
+                trajectoryFilters: { search: '', status: '' },
+                trajectoryPage: 1,
+                trajectoryPages: 1,
+
                 // Initialize
                 init() {
                     this.parseHash();
                     window.addEventListener('hashchange', () => this.parseHash());
                     this.loadStats();
+
+                    // Watch view changes to load data
+                    this.$watch('view', (newView) => {
+                        this.loadViewData(newView);
+                        // Update hash to match view
+                        if (window.location.hash !== '#/' + newView) {
+                            history.replaceState(null, '', '#/' + newView);
+                        }
+                    });
                 },
 
                 parseHash() {
                     const hash = window.location.hash.replace('#/', '') || 'dashboard';
                     this.view = hash;
+                    this.loadViewData(hash);
+                },
 
-                    // Load editions when switching to editions view
-                    if (hash === 'editions' && this.editions.length === 0) {
-                        this.loadEditions();
-                    } else if (hash === 'quotes' && this.quotes.length === 0) {
+                loadViewData(view) {
+                    // Load data when switching views
+                    if (view === 'editions') {
+                        if (this.editions.length === 0) {
+                            this.loadEditions();
+                        }
+                        if (this.courseTags.length === 0) {
+                            this.loadCourseTags();
+                        }
+                        // Initialize date picker after DOM update
+                        this.$nextTick(() => this.initDateRangePicker());
+                    } else if (view === 'quotes' && this.quotes.length === 0) {
                         this.loadQuotes();
+                    } else if (view === 'trajectories' && this.trajectories.length === 0) {
+                        this.loadTrajectories();
                     }
                 },
 
@@ -1478,13 +1853,23 @@ class AdminDashboardService extends AbstractService
                     try {
                         const params = new URLSearchParams({
                             page: this.editionPage,
-                            per_page: 20
+                            per_page: 20,
+                            view: this.editionView
                         });
                         if (this.editionFilters.search) {
                             params.append('search', this.editionFilters.search);
                         }
                         if (this.editionFilters.status) {
                             params.append('status', this.editionFilters.status);
+                        }
+                        if (this.editionFilters.dateFrom) {
+                            params.append('date_from', this.editionFilters.dateFrom);
+                        }
+                        if (this.editionFilters.dateTo) {
+                            params.append('date_to', this.editionFilters.dateTo);
+                        }
+                        if (this.editionFilters.courseTag) {
+                            params.append('course_tag', this.editionFilters.courseTag);
                         }
 
                         const response = await fetch(`${StrideConfig.apiUrl}/admin/editions?${params}`, {
@@ -1495,12 +1880,51 @@ class AdminDashboardService extends AbstractService
                         if (response.ok) {
                             const data = await response.json();
                             this.editions = data.items || [];
-                            this.editionPages = data.pages || 1;
+                            this.editionPages = data.totalPages || 1;
                         }
                     } catch (e) {
                         console.error('Failed to load editions:', e);
                     }
                     this.editionsLoading = false;
+                },
+
+                async loadCourseTags() {
+                    try {
+                        const response = await fetch(`${StrideConfig.apiUrl}/admin/course-tags`, {
+                            headers: {
+                                'X-WP-Nonce': StrideConfig.nonce
+                            }
+                        });
+                        if (response.ok) {
+                            this.courseTags = await response.json();
+                        }
+                    } catch (e) {
+                        console.error('Failed to load course tags:', e);
+                    }
+                },
+
+                initDateRangePicker() {
+                    if (this.dateRangePicker) return;
+                    const el = this.$refs.dateRange;
+                    if (!el || typeof flatpickr === 'undefined') return;
+
+                    this.dateRangePicker = flatpickr(el, {
+                        mode: 'range',
+                        dateFormat: 'Y-m-d',
+                        locale: typeof flatpickr.l10ns.nl !== 'undefined' ? 'nl' : 'default',
+                        allowInput: true,
+                        onChange: (selectedDates) => {
+                            if (selectedDates.length === 2) {
+                                this.editionFilters.dateFrom = selectedDates[0].toISOString().split('T')[0];
+                                this.editionFilters.dateTo = selectedDates[1].toISOString().split('T')[0];
+                                this.loadEditions();
+                            } else if (selectedDates.length === 0) {
+                                this.editionFilters.dateFrom = '';
+                                this.editionFilters.dateTo = '';
+                                this.loadEditions();
+                            }
+                        }
+                    });
                 },
 
                 async openEdition(id) {
@@ -1591,6 +2015,14 @@ class AdminDashboardService extends AbstractService
                     return `${date.getDate()} ${months[date.getMonth()]}`;
                 },
 
+                formatDateFull(dateStr) {
+                    if (!dateStr) return '';
+                    const date = new Date(dateStr);
+                    const days = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
+                    const months = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+                    return `${days[date.getDay()]} ${date.getDate()} ${months[date.getMonth()]}`;
+                },
+
                 async loadQuotes() {
                     this.quotesLoading = true;
                     try {
@@ -1605,12 +2037,34 @@ class AdminDashboardService extends AbstractService
                         if (response.ok) {
                             const data = await response.json();
                             this.quotes = data.items;
-                            this.quotePages = data.pages;
+                            this.quotePages = data.totalPages;
                         }
                     } catch (e) {
                         console.error('Failed to load quotes:', e);
                     }
                     this.quotesLoading = false;
+                },
+
+                async loadTrajectories() {
+                    this.trajectoriesLoading = true;
+                    try {
+                        const params = new URLSearchParams({
+                            page: this.trajectoryPage,
+                            search: this.trajectoryFilters.search,
+                            status: this.trajectoryFilters.status
+                        });
+                        const response = await fetch(`${StrideConfig.apiUrl}/admin/trajectories?${params}`, {
+                            headers: { 'X-WP-Nonce': StrideConfig.nonce }
+                        });
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.trajectories = data.items;
+                            this.trajectoryPages = data.totalPages;
+                        }
+                    } catch (e) {
+                        console.error('Failed to load trajectories:', e);
+                    }
+                    this.trajectoriesLoading = false;
                 },
 
                 formatCurrency(amount) {

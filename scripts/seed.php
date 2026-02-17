@@ -29,7 +29,13 @@ if (defined('WP_ENV') && WP_ENV === 'production') {
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
-use Stride\FieldRegistry;
+
+// Session type constants (matching _vad_session_type meta values)
+const SESSION_TYPE_IN_PERSON = 'in_person';
+const SESSION_TYPE_ONLINE = 'online';
+const SESSION_TYPE_ASSIGNMENT = 'assignment';
+const SESSION_TYPE_FIELD = '_vad_session_type';
+const SESSION_LESSON_IDS_FIELD = '_vad_session_lesson_ids';
 
 /**
  * Seed Data Generator
@@ -249,15 +255,15 @@ class StrideSeedData {
                         'status' => 'open',
                         'sessions' => [
                             // Day 1: In-person session
-                            ['time' => '09:00-17:00', 'offset' => 0, 'type' => FieldRegistry::SESSION_TYPE_IN_PERSON],
+                            ['time' => '09:00-17:00', 'offset' => 0, 'type' => SESSION_TYPE_IN_PERSON],
                             // Online module 1 (linked to first lesson)
-                            ['time' => '00:00-23:59', 'offset' => 3, 'type' => FieldRegistry::SESSION_TYPE_ONLINE, 'lesson_index' => 0],
+                            ['time' => '00:00-23:59', 'offset' => 3, 'type' => SESSION_TYPE_ONLINE, 'lesson_index' => 0],
                             // Online module 2 (linked to second lesson)
-                            ['time' => '00:00-23:59', 'offset' => 5, 'type' => FieldRegistry::SESSION_TYPE_ONLINE, 'lesson_index' => 1],
+                            ['time' => '00:00-23:59', 'offset' => 5, 'type' => SESSION_TYPE_ONLINE, 'lesson_index' => 1],
                             // Day 2: In-person session
-                            ['time' => '09:00-17:00', 'offset' => 7, 'type' => FieldRegistry::SESSION_TYPE_IN_PERSON],
+                            ['time' => '09:00-17:00', 'offset' => 7, 'type' => SESSION_TYPE_IN_PERSON],
                             // Assignment (linked to third lesson)
-                            ['time' => '00:00-23:59', 'offset' => 8, 'type' => FieldRegistry::SESSION_TYPE_ASSIGNMENT, 'lesson_index' => 2],
+                            ['time' => '00:00-23:59', 'offset' => 8, 'type' => SESSION_TYPE_ASSIGNMENT, 'lesson_index' => 2],
                         ],
                     ],
                 ],
@@ -469,11 +475,11 @@ class StrideSeedData {
             $sessionDate = date('Y-m-d', strtotime($editionData['start_date'] . " +{$sessionData['offset']} days"));
 
             // Determine session type and linked lessons
-            $sessionType = $sessionData['type'] ?? FieldRegistry::SESSION_TYPE_IN_PERSON;
+            $sessionType = $sessionData['type'] ?? SESSION_TYPE_IN_PERSON;
             $sessionLessonIds = [];
 
             // For online/assignment types, link to specific lessons if provided
-            if (in_array($sessionType, [FieldRegistry::SESSION_TYPE_ONLINE, FieldRegistry::SESSION_TYPE_ASSIGNMENT])) {
+            if (in_array($sessionType, [SESSION_TYPE_ONLINE, SESSION_TYPE_ASSIGNMENT])) {
                 if (!empty($sessionData['lesson_ids'])) {
                     $sessionLessonIds = $sessionData['lesson_ids'];
                 } elseif (isset($sessionData['lesson_index']) && isset($lessonIds[$sessionData['lesson_index']])) {
@@ -488,8 +494,8 @@ class StrideSeedData {
                 'start_time' => $startTime,
                 'end_time' => $endTime,
                 'location' => $editionData['venue'],
-                FieldRegistry::SESSION_TYPE => $sessionType,
-                FieldRegistry::SESSION_LESSON_IDS => $sessionLessonIds,
+                SESSION_TYPE_FIELD => $sessionType,
+                SESSION_LESSON_IDS_FIELD => $sessionLessonIds,
             ];
 
             $sessionId = $this->sessionService->createSession($createData);
@@ -506,8 +512,8 @@ class StrideSeedData {
 
             $duration = $this->sessionService->getSessionDuration($sessionId);
             $typeEmoji = match($sessionType) {
-                FieldRegistry::SESSION_TYPE_ONLINE => '💻',
-                FieldRegistry::SESSION_TYPE_ASSIGNMENT => '📝',
+                SESSION_TYPE_ONLINE => '💻',
+                SESSION_TYPE_ASSIGNMENT => '📝',
                 default => '🏢',
             };
             $lessonInfo = !empty($sessionLessonIds) ? ' (linked to ' . count($sessionLessonIds) . ' lessons)' : '';
