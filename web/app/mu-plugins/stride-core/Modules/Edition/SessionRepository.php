@@ -23,7 +23,7 @@ final class SessionRepository extends AbstractRepository
     {
         $value = $this->model()->getMeta($id, $field);
 
-        return $value !== '' ? $value : $default;
+        return $value !== null ? $value : $default;
     }
 
     /**
@@ -93,7 +93,8 @@ final class SessionRepository extends AbstractRepository
             return new WP_Error('missing_date', 'Date is required');
         }
 
-        // Validate time range if both provided
+        // Compare time-only strings - strtotime() converts to timestamps for today
+        // e.g., '09:00' < '17:00' when both are converted to same-day timestamps
         if (!empty($data['start_time']) && !empty($data['end_time'])) {
             if (strtotime($data['end_time']) <= strtotime($data['start_time'])) {
                 return new WP_Error('invalid_time_range', 'End time must be after start time');
