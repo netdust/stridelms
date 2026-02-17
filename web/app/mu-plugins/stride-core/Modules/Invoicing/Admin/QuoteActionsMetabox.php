@@ -290,13 +290,13 @@ final class QuoteActionsMetabox
         <div class="stride-sidebar-section">
             <h4><?php esc_html_e('Status', 'stride'); ?></h4>
             <select name="stride_change_status" id="stride_change_status" class="stride-status-select">
-                <option value="draft" <?php selected($status, QuoteStatus::Draft); ?>>
+                <option value="draft" <?php echo $status === QuoteStatus::Draft ? 'selected' : ''; ?>>
                     <?php esc_html_e('Concept', 'stride'); ?>
                 </option>
-                <option value="sent" <?php selected($status, QuoteStatus::Sent); ?>>
+                <option value="sent" <?php echo $status === QuoteStatus::Sent ? 'selected' : ''; ?>>
                     <?php esc_html_e('Verzonden', 'stride'); ?>
                 </option>
-                <option value="exported" <?php selected($status, QuoteStatus::Exported); ?>>
+                <option value="exported" <?php echo $status === QuoteStatus::Exported ? 'selected' : ''; ?>>
                     <?php esc_html_e('Geexporteerd', 'stride'); ?>
                 </option>
             </select>
