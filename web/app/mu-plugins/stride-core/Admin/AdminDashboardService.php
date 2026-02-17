@@ -1035,6 +1035,34 @@ class AdminDashboardService extends AbstractService
                 color: var(--stride-text-muted);
             }
 
+            /* Trajectory course list */
+            .stride-course-list {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .stride-course-item {
+                padding: 12px;
+                background: var(--stride-bg-subtle);
+                border-radius: 6px;
+            }
+
+            .stride-course-item-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+
+            .stride-course-item-title {
+                font-weight: 500;
+            }
+
+            /* Wide slide-over for trajectories */
+            .stride-slideover-wide {
+                width: 550px;
+            }
+
             .stride-amount {
                 font-variant-numeric: tabular-nums;
                 font-weight: 500;
@@ -1199,14 +1227,14 @@ class AdminDashboardService extends AbstractService
                         <a href="#/" class="stride-nav-item" :class="{ 'active': view === 'dashboard' }" @click.prevent="view = 'dashboard'">
                             Dashboard
                         </a>
+                        <a href="#/trajectories" class="stride-nav-item" :class="{ 'active': view === 'trajectories' }" @click.prevent="view = 'trajectories'">
+                            Trajecten
+                        </a>
                         <a href="#/editions" class="stride-nav-item" :class="{ 'active': view === 'editions' }" @click.prevent="view = 'editions'">
                             Editions
                         </a>
                         <a href="#/quotes" class="stride-nav-item" :class="{ 'active': view === 'quotes' }" @click.prevent="view = 'quotes'">
                             Quotes
-                        </a>
-                        <a href="#/trajectories" class="stride-nav-item" :class="{ 'active': view === 'trajectories' }" @click.prevent="view = 'trajectories'">
-                            Trajecten
                         </a>
                     </nav>
                 </div>
@@ -1838,12 +1866,11 @@ class AdminDashboardService extends AbstractService
                                                 <th>Ingeschreven</th>
                                                 <th>Prijs</th>
                                                 <th>Status</th>
-                                                <th></th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <template x-for="trajectory in trajectories" :key="trajectory.id">
-                                                <tr>
+                                                <tr @click="openTrajectory(trajectory)" class="stride-clickable">
                                                     <td>
                                                         <div class="stride-trajectory-name" x-text="trajectory.title"></div>
                                                         <div class="stride-trajectory-deadline" x-show="trajectory.enrollmentDeadline">
@@ -1866,11 +1893,6 @@ class AdminDashboardService extends AbstractService
                                                     <td>
                                                         <span class="stride-badge" :class="'stride-badge-' + trajectory.status" x-text="trajectory.statusLabel"></span>
                                                     </td>
-                                                    <td>
-                                                        <a :href="trajectory.editUrl" class="stride-btn stride-btn-sm stride-btn-outline">
-                                                            Bekijken
-                                                        </a>
-                                                    </td>
                                                 </tr>
                                             </template>
                                         </tbody>
@@ -1887,6 +1909,133 @@ class AdminDashboardService extends AbstractService
                                 </template>
                             </div>
                         </div>
+
+                        <!-- Trajectory Detail Slide-over -->
+                        <template x-if="selectedTrajectory">
+                            <div class="stride-slideover-backdrop" @click.self="selectedTrajectory = null">
+                                <div class="stride-slideover stride-slideover-wide">
+                                    <div class="stride-slideover-header">
+                                        <h3 x-text="selectedTrajectory.title"></h3>
+                                        <button class="stride-slideover-close" @click="selectedTrajectory = null">&times;</button>
+                                    </div>
+                                    <div class="stride-slideover-tabs">
+                                        <button class="stride-slideover-tab" :class="{ 'active': trajectoryTab === 'details' }" @click="trajectoryTab = 'details'">
+                                            Details
+                                        </button>
+                                        <button class="stride-slideover-tab" :class="{ 'active': trajectoryTab === 'courses' }" @click="trajectoryTab = 'courses'">
+                                            Cursussen
+                                        </button>
+                                        <button class="stride-slideover-tab" :class="{ 'active': trajectoryTab === 'students' }" @click="trajectoryTab = 'students'">
+                                            Studenten
+                                        </button>
+                                    </div>
+                                    <div class="stride-slideover-body">
+                                        <!-- Details Tab -->
+                                        <template x-if="trajectoryTab === 'details'">
+                                            <div class="stride-info-list">
+                                                <div class="stride-info-row">
+                                                    <span class="stride-info-label">Status</span>
+                                                    <span class="stride-badge" :class="'stride-badge-' + selectedTrajectory.status" x-text="selectedTrajectory.statusLabel"></span>
+                                                </div>
+                                                <div class="stride-info-row">
+                                                    <span class="stride-info-label">Modus</span>
+                                                    <span class="stride-badge stride-badge-info" x-text="selectedTrajectory.modeLabel"></span>
+                                                </div>
+                                                <div class="stride-info-row">
+                                                    <span class="stride-info-label">Capaciteit</span>
+                                                    <span x-text="selectedTrajectory.capacity > 0 ? selectedTrajectory.capacity + ' plaatsen' : 'Onbeperkt'"></span>
+                                                </div>
+                                                <div class="stride-info-row">
+                                                    <span class="stride-info-label">Ingeschreven</span>
+                                                    <span x-text="selectedTrajectory.enrolledCount + ' studenten'"></span>
+                                                </div>
+                                                <div class="stride-info-row stride-info-divider">
+                                                    <span class="stride-info-label">Prijs (lid)</span>
+                                                    <span class="stride-amount" x-text="'€ ' + selectedTrajectory.priceFormatted"></span>
+                                                </div>
+                                                <div class="stride-info-row" x-show="selectedTrajectory.priceNonMember > 0">
+                                                    <span class="stride-info-label">Prijs (niet-lid)</span>
+                                                    <span class="stride-amount" x-text="'€ ' + selectedTrajectory.priceNonMemberFormatted"></span>
+                                                </div>
+                                                <div class="stride-info-row stride-info-divider" x-show="selectedTrajectory.enrollmentDeadline">
+                                                    <span class="stride-info-label">Inschrijfdeadline</span>
+                                                    <span x-text="formatDate(selectedTrajectory.enrollmentDeadline)"></span>
+                                                </div>
+                                                <div class="stride-info-row" x-show="selectedTrajectory.choiceAvailableDate">
+                                                    <span class="stride-info-label">Keuzemoment start</span>
+                                                    <span x-text="formatDate(selectedTrajectory.choiceAvailableDate)"></span>
+                                                </div>
+                                                <div class="stride-info-row" x-show="selectedTrajectory.choiceDeadline">
+                                                    <span class="stride-info-label">Keuzemoment deadline</span>
+                                                    <span x-text="formatDate(selectedTrajectory.choiceDeadline)"></span>
+                                                </div>
+                                                <div class="stride-info-actions">
+                                                    <a :href="selectedTrajectory.editUrl" class="stride-btn stride-btn-primary">
+                                                        Bewerken in WP Admin
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </template>
+
+                                        <!-- Courses Tab -->
+                                        <template x-if="trajectoryTab === 'courses'">
+                                            <div>
+                                                <template x-if="selectedTrajectory.courses && selectedTrajectory.courses.length > 0">
+                                                    <div class="stride-course-list">
+                                                        <template x-for="(course, index) in selectedTrajectory.courses" :key="index">
+                                                            <div class="stride-course-item">
+                                                                <div class="stride-course-item-header">
+                                                                    <span class="stride-course-item-title" x-text="course.title || 'Edition #' + course.editionId"></span>
+                                                                    <span class="stride-badge" :class="course.type === 'required' ? 'stride-badge-primary' : 'stride-badge-info'" x-text="course.type === 'required' ? 'Verplicht' : 'Keuze'"></span>
+                                                                </div>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </template>
+                                                <template x-if="!selectedTrajectory.courses || selectedTrajectory.courses.length === 0">
+                                                    <div class="stride-empty-sm">Geen cursussen gekoppeld</div>
+                                                </template>
+                                            </div>
+                                        </template>
+
+                                        <!-- Students Tab -->
+                                        <template x-if="trajectoryTab === 'students'">
+                                            <div>
+                                                <template x-if="selectedTrajectory.enrolledUsers && selectedTrajectory.enrolledUsers.length > 0">
+                                                    <table class="stride-table stride-table-compact">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Naam</th>
+                                                                <th>Email</th>
+                                                                <th>Status</th>
+                                                                <th>Ingeschreven</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <template x-for="student in selectedTrajectory.enrolledUsers" :key="student.id">
+                                                                <tr>
+                                                                    <td x-text="student.name"></td>
+                                                                    <td>
+                                                                        <a :href="'mailto:' + student.email" class="stride-link" x-text="student.email"></a>
+                                                                    </td>
+                                                                    <td>
+                                                                        <span class="stride-badge" :class="'stride-badge-' + student.status" x-text="student.status"></span>
+                                                                    </td>
+                                                                    <td x-text="formatDate(student.enrolledAt)"></td>
+                                                                </tr>
+                                                            </template>
+                                                        </tbody>
+                                                    </table>
+                                                </template>
+                                                <template x-if="!selectedTrajectory.enrolledUsers || selectedTrajectory.enrolledUsers.length === 0">
+                                                    <div class="stride-empty-sm">Nog geen studenten ingeschreven</div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
                     </div>
                 </template>
             </div>
@@ -1950,6 +2099,8 @@ class AdminDashboardService extends AbstractService
                 trajectoryFilters: { search: '', status: '' },
                 trajectoryPage: 1,
                 trajectoryPages: 1,
+                selectedTrajectory: null,
+                trajectoryTab: 'details',
 
                 // Initialize
                 init() {
@@ -2268,6 +2419,11 @@ class AdminDashboardService extends AbstractService
                         console.error('Failed to load trajectories:', e);
                     }
                     this.trajectoriesLoading = false;
+                },
+
+                openTrajectory(trajectory) {
+                    this.selectedTrajectory = trajectory;
+                    this.trajectoryTab = 'details';
                 },
 
                 formatCurrency(amount) {
