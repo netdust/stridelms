@@ -38,6 +38,7 @@ return [
         \Stride\Modules\Invoicing\VoucherService::class,
         \Stride\Modules\Trajectory\TrajectoryService::class,
         \Stride\Modules\Trajectory\TrajectorySelectionService::class,
+        \Stride\Modules\Attendance\AttendanceService::class,
     ],
 
     /**
@@ -48,5 +49,6 @@ return [
         'enrollment' => [],
         'invoicing' => [],
         'trajectory' => [],
+        'attendance' => [],
     ],
 ];
