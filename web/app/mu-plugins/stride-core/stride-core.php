@@ -50,6 +50,14 @@ add_action('init', function (): void {
     }
 }, 1);
 
+// Create attendance table if missing
+add_action('init', function (): void {
+    if (!get_option('stride_attendance_table_created')) {
+        \Stride\Modules\Attendance\AttendanceTable::create();
+        update_option('stride_attendance_table_created', '1');
+    }
+}, 1);
+
 // Register DI bindings
 add_action('ntdst/core_ready', function () use ($config): void {
     // Register repositories first
