@@ -129,4 +129,12 @@ final class QuoteRepository extends AbstractRepository
     {
         return $this->model()->getMeta($quoteId, $field, $default);
     }
+
+    /**
+     * Update quote meta fields.
+     */
+    public function updateMeta(int $quoteId, array $data): bool
+    {
+        return $this->model()->updateMeta($quoteId, $data) !== false;
+    }
 }

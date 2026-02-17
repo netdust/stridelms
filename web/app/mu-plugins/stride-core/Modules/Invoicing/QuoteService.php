@@ -197,6 +197,69 @@ final class QuoteService extends AbstractService
     }
 
     /**
+     * Apply a voucher code to a draft quote.
+     */
+    public function applyVoucher(int $quoteId, string $voucherCode): bool|WP_Error
+    {
+        $quote = $this->repository->find($quoteId);
+
+        if (is_wp_error($quote)) {
+            return $quote;
+        }
+
+        $status = QuoteStatus::tryFrom($quote->status ?? '');
+
+        if ($status !== QuoteStatus::Draft) {
+            return new WP_Error('invalid_status', 'Alleen concept-offertes kunnen worden aangepast');
+        }
+
+        // Validate and get voucher through VoucherService
+        $voucherService = ntdst_get(VoucherService::class);
+        $voucher = $voucherService->validateVoucher($voucherCode, (int) ($quote->edition_id ?? 0));
+
+        if (is_wp_error($voucher)) {
+            return $voucher;
+        }
+
+        // Calculate discount
+        $subtotal = Money::cents((int) ($quote->subtotal ?? 0));
+        $discount = $voucherService->calculateDiscount($voucher, $subtotal);
+
+        // Recalculate totals
+        $newSubtotal = $subtotal;
+        $newDiscount = $discount;
+        $newTax = Money::cents((int) round(($newSubtotal->inCents() - $newDiscount->inCents()) * 0.21));
+        $newTotal = Money::cents($newSubtotal->inCents() - $newDiscount->inCents() + $newTax->inCents());
+
+        // Update quote
+        $result = $this->repository->updateMeta($quoteId, [
+            'voucher_code' => $voucherCode,
+            'discount' => $newDiscount->inCents(),
+            'tax' => $newTax->inCents(),
+            'total' => $newTotal->inCents(),
+        ]);
+
+        if (!$result) {
+            return new WP_Error('update_failed', 'Kon offerte niet bijwerken');
+        }
+
+        // Redeem the voucher
+        $redemption = $voucherService->redeemVoucher($voucherCode, (int) $quote->user_id, $quoteId);
+
+        if (is_wp_error($redemption)) {
+            return $redemption;
+        }
+
+        $this->dispatch('quote/voucher_applied', [
+            'quote_id' => $quoteId,
+            'voucher_code' => $voucherCode,
+            'discount' => $newDiscount->inCents(),
+        ]);
+
+        return true;
+    }
+
+    /**
      * Hydrate quote data with Money objects.
      *
      * @param array<string, mixed>|WP_Post $quote
