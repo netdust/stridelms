@@ -22,6 +22,7 @@ add_action('init', [\Stride\Modules\Edition\EditionCPT::class, 'register'], 5);
 add_action('init', [\Stride\Modules\Edition\SessionCPT::class, 'register'], 5);
 add_action('init', [\Stride\Modules\Invoicing\QuoteCPT::class, 'register'], 5);
 add_action('init', [\Stride\Modules\Invoicing\VoucherCPT::class, 'register'], 5);
+add_action('init', [\Stride\Modules\Trajectory\TrajectoryCPT::class, 'register'], 5);
 
 // Create custom tables on activation
 add_action('init', function (): void {
