@@ -33,6 +33,7 @@ return [
         \Stride\Modules\Edition\EditionService::class,
         \Stride\Modules\Enrollment\EnrollmentService::class,
         \Stride\Modules\Invoicing\QuoteService::class,
+        \Stride\Modules\Invoicing\VoucherService::class,
     ],
 
     /**
