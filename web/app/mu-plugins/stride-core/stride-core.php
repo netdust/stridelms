@@ -19,6 +19,7 @@ $config = require __DIR__ . '/plugin-config.php';
 
 // Register CPTs early
 add_action('init', [\Stride\Modules\Edition\EditionCPT::class, 'register'], 5);
+add_action('init', [\Stride\Modules\Invoicing\QuoteCPT::class, 'register'], 5);
 
 // Create custom tables on activation
 add_action('init', function (): void {
@@ -33,6 +34,7 @@ add_action('ntdst/core_ready', function () use ($config): void {
     // Register repositories first
     ntdst_set(\Stride\Modules\Edition\EditionRepository::class);
     ntdst_set(\Stride\Modules\Enrollment\RegistrationRepository::class);
+    ntdst_set(\Stride\Modules\Invoicing\QuoteRepository::class);
 
     // Register interface bindings
     foreach ($config['bindings'] as $interface => $implementation) {
@@ -51,4 +53,8 @@ add_action('ntdst/features_ready', function () use ($config): void {
     // Register shortcodes
     ntdst_set(\Stride\Modules\User\DashboardShortcode::class);
     ntdst_get(\Stride\Modules\User\DashboardShortcode::class);
+
+    // Register handlers
+    ntdst_set(\Stride\Handlers\EnrollmentQuoteHandler::class);
+    ntdst_get(\Stride\Handlers\EnrollmentQuoteHandler::class);
 });
