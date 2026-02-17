@@ -87,6 +87,10 @@ final class TrajectoryService extends AbstractService
             return $result;
         }
 
+        do_action('stride/trajectory/updated', [
+            'trajectory_id' => $trajectoryId,
+        ]);
+
         return true;
     }
 
