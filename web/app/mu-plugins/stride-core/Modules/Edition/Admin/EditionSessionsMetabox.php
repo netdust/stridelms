@@ -286,7 +286,7 @@ final class EditionSessionsMetabox
     {
         ?>
         <div class="stride-session-slots-config">
-            <h4><?php esc_html_e('Sessie Selectie', 'stride'); ?></h4>
+            <h4><?php esc_html_e('Sessie Slots', 'stride'); ?></h4>
             <p class="description">
                 <?php esc_html_e('Definieer tijdslots zodat deelnemers kunnen kiezen welke sessies ze volgen.', 'stride'); ?>
             </p>
