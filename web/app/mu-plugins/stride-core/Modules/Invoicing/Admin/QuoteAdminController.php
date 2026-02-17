@@ -62,6 +62,12 @@ final class QuoteAdminController extends AbstractService
         // Remove default editor
         remove_post_type_support(QuoteCPT::POST_TYPE, 'editor');
 
+        // Remove default metaboxes created by ntdst_data() field_groups
+        remove_meta_box('ntdst_quote_main', QuoteCPT::POST_TYPE, 'normal');
+        remove_meta_box('ntdst_quote_amounts', QuoteCPT::POST_TYPE, 'normal');
+        remove_meta_box('ntdst_quote_billing', QuoteCPT::POST_TYPE, 'normal');
+        remove_meta_box('ntdst_quote_meta', QuoteCPT::POST_TYPE, 'normal');
+
         // Main quote overview
         add_meta_box(
             'stride_quote_overview',
@@ -70,6 +76,16 @@ final class QuoteAdminController extends AbstractService
             QuoteCPT::POST_TYPE,
             'normal',
             'high'
+        );
+
+        // Notes metabox
+        add_meta_box(
+            'stride_quote_notes',
+            __('Notities', 'stride'),
+            [$this, 'renderNotesMetabox'],
+            QuoteCPT::POST_TYPE,
+            'normal',
+            'default'
         );
 
         // Status & actions sidebar
@@ -160,6 +176,79 @@ final class QuoteAdminController extends AbstractService
     {
         $metabox = new QuoteActionsMetabox($this->quoteService);
         $metabox->render($post);
+    }
+
+    public function renderNotesMetabox(WP_Post $post): void
+    {
+        $quote = $this->quoteService->getQuote($post->ID);
+
+        // For new quotes, show placeholder
+        if (is_wp_error($quote) || empty($quote['quote_number'])) {
+            echo '<p class="description">' . esc_html__('Sla de offerte eerst op om notities toe te voegen.', 'stride') . '</p>';
+            return;
+        }
+
+        $notes = $quote['notes'] ?? [];
+        if (is_string($notes)) {
+            $notes = json_decode($notes, true) ?: [];
+        }
+        ?>
+        <div class="stride-notes-section">
+            <div class="stride-notes-add">
+                <div class="stride-note-type-selector">
+                    <label>
+                        <input type="radio" name="stride_note_type" value="admin" checked>
+                        <span class="dashicons dashicons-shield"></span>
+                        <?php esc_html_e('Intern', 'stride'); ?>
+                    </label>
+                    <label>
+                        <input type="radio" name="stride_note_type" value="customer">
+                        <span class="dashicons dashicons-format-quote"></span>
+                        <?php esc_html_e('Klant', 'stride'); ?>
+                    </label>
+                </div>
+                <textarea id="stride-note-content" rows="3" placeholder="<?php esc_attr_e('Schrijf een notitie...', 'stride'); ?>"></textarea>
+                <button type="button" class="button" id="stride-add-note">
+                    <span class="dashicons dashicons-plus-alt2"></span>
+                    <?php esc_html_e('Notitie toevoegen', 'stride'); ?>
+                </button>
+            </div>
+
+            <div id="stride-notes-list" class="stride-notes-list">
+                <?php if (empty($notes)): ?>
+                    <div class="stride-empty-notes">
+                        <?php esc_html_e('Nog geen notities toegevoegd.', 'stride'); ?>
+                    </div>
+                <?php else: ?>
+                    <?php foreach ($notes as $index => $note): ?>
+                        <?php if (!empty($note['_deleted'])) continue; ?>
+                        <?php
+                        $isCustomer = ($note['type'] ?? 'admin') === 'customer';
+                        $typeClass = $isCustomer ? 'customer' : 'admin';
+                        $typeLabel = $isCustomer ? __('Klant', 'stride') : __('Intern', 'stride');
+                        $icon = $isCustomer ? 'format-quote' : 'shield';
+                        ?>
+                        <div class="stride-note-item" data-index="<?php echo esc_attr($index); ?>">
+                            <div class="stride-note-icon <?php echo esc_attr($typeClass); ?>">
+                                <span class="dashicons dashicons-<?php echo esc_attr($icon); ?>"></span>
+                            </div>
+                            <div class="stride-note-body">
+                                <div class="stride-note-meta">
+                                    <span class="author"><?php echo esc_html($note['author'] ?? __('Onbekend', 'stride')); ?></span>
+                                    <span class="type-badge <?php echo esc_attr($typeClass); ?>"><?php echo esc_html($typeLabel); ?></span>
+                                    <span class="date"><?php echo esc_html($note['date'] ?? ''); ?></span>
+                                </div>
+                                <div class="stride-note-content"><?php echo esc_html($note['content'] ?? ''); ?></div>
+                            </div>
+                            <span class="stride-note-delete dashicons dashicons-no-alt" title="<?php esc_attr_e('Verwijderen', 'stride'); ?>"></span>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+
+            <input type="hidden" id="stride_notes_data" name="ntdst_fields[notes]" value="<?php echo esc_attr(json_encode($notes)); ?>">
+        </div>
+        <?php
     }
 
     public function handleSave(int $postId, WP_Post $post): void

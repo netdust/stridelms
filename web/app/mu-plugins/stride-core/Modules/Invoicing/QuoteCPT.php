@@ -100,8 +100,12 @@ final class QuoteCPT
                 'type' => 'text',
                 'label' => 'PDF pad',
             ],
+            'locked' => [
+                'type' => 'bool',
+                'label' => 'Vergrendeld',
+            ],
             'notes' => [
-                'type' => 'text',
+                'type' => 'json',
                 'label' => 'Notities',
             ],
         ];
