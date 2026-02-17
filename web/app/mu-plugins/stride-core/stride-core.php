@@ -19,6 +19,7 @@ $config = require __DIR__ . '/plugin-config.php';
 
 // Register CPTs early
 add_action('init', [\Stride\Modules\Edition\EditionCPT::class, 'register'], 5);
+add_action('init', [\Stride\Modules\Edition\SessionCPT::class, 'register'], 5);
 add_action('init', [\Stride\Modules\Invoicing\QuoteCPT::class, 'register'], 5);
 add_action('init', [\Stride\Modules\Invoicing\VoucherCPT::class, 'register'], 5);
 
