@@ -103,6 +103,16 @@ final class EditionAdminController extends AbstractService
             'default'
         );
 
+        // Notes metabox
+        add_meta_box(
+            'stride_edition_notes',
+            __('Notities', 'stride'),
+            [$this, 'renderNotesMetabox'],
+            EditionCPT::POST_TYPE,
+            'normal',
+            'default'
+        );
+
         // Status & actions sidebar
         add_meta_box(
             'stride_edition_actions',
@@ -159,10 +169,12 @@ final class EditionAdminController extends AbstractService
                 true
             );
 
+            $currentUser = wp_get_current_user();
             wp_localize_script('stride-edition-admin', 'strideEditionAdmin', [
                 'ajaxurl' => admin_url('admin-ajax.php'),
                 'nonce' => wp_create_nonce('stride_edition_admin'),
                 'editionId' => $post ? $post->ID : 0,
+                'currentUser' => $currentUser->display_name ?: $currentUser->user_login,
                 'i18n' => [
                     'searchCourse' => __('Zoek cursus...', 'stride'),
                     'noResults' => __('Geen resultaten gevonden', 'stride'),
@@ -173,6 +185,13 @@ final class EditionAdminController extends AbstractService
                     'selectLesson' => __('Selecteer een les...', 'stride'),
                     'selectLessonOrQuiz' => __('Selecteer les of quiz...', 'stride'),
                     'noLessonsAvailable' => __('Geen lessen beschikbaar', 'stride'),
+                    // Notes i18n
+                    'enterNote' => __('Vul een notitie in.', 'stride'),
+                    'noNotes' => __('Nog geen notities toegevoegd.', 'stride'),
+                    'remove' => __('Verwijderen', 'stride'),
+                    'todo' => __('Todo', 'stride'),
+                    'email' => __('E-mail', 'stride'),
+                    'userinfo' => __('Info', 'stride'),
                 ],
             ]);
         }
@@ -200,6 +219,92 @@ final class EditionAdminController extends AbstractService
     {
         $metabox = new EditionActionsMetabox($this->editionService);
         $metabox->render($post);
+    }
+
+    public function renderNotesMetabox(WP_Post $post): void
+    {
+        // For new editions, show placeholder
+        if ($post->post_status === 'auto-draft') {
+            echo '<p class="description">' . esc_html__('Sla de editie eerst op om notities toe te voegen.', 'stride') . '</p>';
+            return;
+        }
+
+        $notes = $this->editionRepository->getField($post->ID, 'notes', []);
+        if (is_string($notes)) {
+            $notes = json_decode($notes, true) ?: [];
+        }
+
+        // Note types configuration
+        $noteTypes = [
+            'todo' => [
+                'label' => __('Todo', 'stride'),
+                'icon' => 'yes-alt',
+                'color' => 'todo',
+            ],
+            'email' => [
+                'label' => __('E-mail', 'stride'),
+                'icon' => 'email',
+                'color' => 'email',
+            ],
+            'userinfo' => [
+                'label' => __('Info', 'stride'),
+                'icon' => 'info-outline',
+                'color' => 'userinfo',
+            ],
+        ];
+        ?>
+        <!-- Notes Timeline -->
+        <div id="stride-notes-list" class="stride-notes-timeline">
+            <?php if (empty($notes)): ?>
+                <div class="stride-empty-notes">
+                    <?php esc_html_e('Nog geen notities toegevoegd.', 'stride'); ?>
+                </div>
+            <?php else: ?>
+                <?php foreach ($notes as $index => $note): ?>
+                    <?php if (!empty($note['_deleted'])) continue; ?>
+                    <?php
+                    $type = $note['type'] ?? 'userinfo';
+                    $typeConfig = $noteTypes[$type] ?? $noteTypes['userinfo'];
+                    ?>
+                    <div class="stride-note-item" data-index="<?php echo esc_attr($index); ?>">
+                        <div class="stride-note-icon <?php echo esc_attr($type); ?>">
+                            <span class="dashicons dashicons-<?php echo esc_attr($typeConfig['icon']); ?>"></span>
+                        </div>
+                        <div class="stride-note-body">
+                            <div class="stride-note-meta">
+                                <span class="author"><?php echo esc_html($note['author'] ?? __('Onbekend', 'stride')); ?></span>
+                                <span class="type-badge <?php echo esc_attr($type); ?>"><?php echo esc_html($typeConfig['label']); ?></span>
+                                <span class="date"><?php echo esc_html($note['date'] ?? ''); ?></span>
+                            </div>
+                            <div class="stride-note-content"><?php echo esc_html($note['content'] ?? ''); ?></div>
+                        </div>
+                        <span class="stride-note-delete dashicons dashicons-no-alt" title="<?php esc_attr_e('Verwijderen', 'stride'); ?>"></span>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+
+        <!-- Add Note Form -->
+        <div class="stride-add-note-form">
+            <textarea id="stride-note-content" placeholder="<?php esc_attr_e('Schrijf een notitie...', 'stride'); ?>"></textarea>
+            <div class="form-row">
+                <div class="type-selector">
+                    <?php foreach ($noteTypes as $typeKey => $typeConfig): ?>
+                        <label>
+                            <input type="radio" name="stride_note_type" value="<?php echo esc_attr($typeKey); ?>" <?php checked($typeKey, 'userinfo'); ?>>
+                            <span class="type-icon <?php echo esc_attr($typeKey); ?>"><span class="dashicons dashicons-<?php echo esc_attr($typeConfig['icon']); ?>"></span></span>
+                            <?php echo esc_html($typeConfig['label']); ?>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+                <button type="button" class="button" id="stride-add-note">
+                    <?php esc_html_e('Notitie toevoegen', 'stride'); ?>
+                </button>
+            </div>
+        </div>
+
+        <input type="hidden" id="stride_notes_data" name="ntdst_fields[notes]" value="<?php echo esc_attr(json_encode($notes)); ?>">
+        <?php
     }
 
     public function handleSave(int $postId, WP_Post $post): void
@@ -276,6 +381,26 @@ final class EditionAdminController extends AbstractService
         // Process selection deadline
         if (isset($fields['selection_deadline'])) {
             $updateData['selection_deadline'] = sanitize_text_field($fields['selection_deadline']);
+        }
+
+        // Process notes (stored as JSON)
+        if (isset($fields['notes'])) {
+            $notes = json_decode(stripslashes($fields['notes']), true);
+            if (is_array($notes)) {
+                // Filter out deleted notes and sanitize
+                $sanitizedNotes = [];
+                foreach ($notes as $note) {
+                    if (empty($note['_deleted'])) {
+                        $sanitizedNotes[] = [
+                            'type' => sanitize_key($note['type'] ?? 'userinfo'),
+                            'content' => sanitize_textarea_field($note['content'] ?? ''),
+                            'author' => sanitize_text_field($note['author'] ?? ''),
+                            'date' => sanitize_text_field($note['date'] ?? ''),
+                        ];
+                    }
+                }
+                $updateData['notes'] = $sanitizedNotes;
+            }
         }
 
         // Update if we have data

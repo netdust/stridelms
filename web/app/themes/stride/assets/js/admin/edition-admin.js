@@ -30,6 +30,7 @@
             this.initCompletionMode();
             this.initSlotManagement();
             this.initSessionTypeHandling();
+            this.initNotesManagement();
         },
 
         // Cache for loaded lessons
@@ -731,6 +732,134 @@
             if (currentValue && $select.find('option[value="' + currentValue + '"]').length) {
                 $select.val(currentValue);
             }
+        },
+
+        // ========================================
+        // NOTES MANAGEMENT
+        // ========================================
+
+        /**
+         * Initialize notes management
+         */
+        initNotesManagement: function() {
+            var self = this;
+            var notesData = [];
+
+            // Parse existing notes from hidden field
+            var existingNotes = $('#stride_notes_data').val();
+            if (existingNotes) {
+                try {
+                    notesData = JSON.parse(existingNotes);
+                } catch (e) {
+                    notesData = [];
+                }
+            }
+
+            // Add new note
+            $('#stride-add-note').on('click', function(e) {
+                e.preventDefault();
+
+                var content = $('#stride-note-content').val().trim();
+                if (!content) {
+                    var i18n = strideEditionAdmin.i18n || {};
+                    alert(i18n.enterNote || 'Vul een notitie in.');
+                    return;
+                }
+
+                var type = $('input[name="stride_note_type"]:checked').val() || 'userinfo';
+                var currentUser = strideEditionAdmin.currentUser || 'Admin';
+
+                var newNote = {
+                    type: type,
+                    content: content,
+                    author: currentUser,
+                    date: new Date().toISOString().slice(0, 19).replace('T', ' ')
+                };
+
+                notesData.unshift(newNote);
+                self.renderNotes(notesData);
+                self.updateNotesData(notesData);
+
+                // Clear input
+                $('#stride-note-content').val('');
+            });
+
+            // Delete note (delegated)
+            $(document).on('click', '.stride-note-delete', function(e) {
+                e.preventDefault();
+                var index = $(this).closest('.stride-note-item').data('index');
+                var i18n = strideEditionAdmin.i18n || {};
+
+                if (confirm(i18n.confirmDelete || 'Notitie verwijderen?')) {
+                    notesData[index]._deleted = true;
+                    $(this).closest('.stride-note-item').fadeOut(function() {
+                        $(this).remove();
+                    });
+                    self.updateNotesData(notesData);
+                }
+            });
+        },
+
+        /**
+         * Render notes list
+         */
+        renderNotes: function(notes) {
+            var self = this;
+            var $list = $('#stride-notes-list');
+            $list.empty();
+
+            var i18n = strideEditionAdmin.i18n || {};
+
+            if (!notes.length) {
+                $list.html('<div class="stride-empty-notes">' + (i18n.noNotes || 'Nog geen notities toegevoegd.') + '</div>');
+                return;
+            }
+
+            var noteTypes = {
+                'todo': { label: i18n.todo || 'Todo', icon: 'yes-alt' },
+                'email': { label: i18n.email || 'E-mail', icon: 'email' },
+                'userinfo': { label: i18n.userinfo || 'Info', icon: 'info-outline' }
+            };
+
+            notes.forEach(function(note, index) {
+                if (note._deleted) return;
+
+                var type = note.type || 'userinfo';
+                var typeConfig = noteTypes[type] || noteTypes['userinfo'];
+
+                var html = '<div class="stride-note-item" data-index="' + index + '">' +
+                    '<div class="stride-note-icon ' + type + '">' +
+                        '<span class="dashicons dashicons-' + typeConfig.icon + '"></span>' +
+                    '</div>' +
+                    '<div class="stride-note-body">' +
+                        '<div class="stride-note-meta">' +
+                            '<span class="author">' + (note.author || 'Onbekend') + '</span>' +
+                            '<span class="type-badge ' + type + '">' + typeConfig.label + '</span>' +
+                            '<span class="date">' + note.date + '</span>' +
+                        '</div>' +
+                        '<div class="stride-note-content">' + self.escapeHtml(note.content) + '</div>' +
+                    '</div>' +
+                    '<span class="stride-note-delete dashicons dashicons-no-alt" title="' + (i18n.remove || 'Verwijderen') + '"></span>' +
+                '</div>';
+
+                $list.append(html);
+            });
+        },
+
+        /**
+         * Update hidden notes data field
+         */
+        updateNotesData: function(notes) {
+            $('#stride_notes_data').val(JSON.stringify(notes));
+        },
+
+        /**
+         * Escape HTML to prevent XSS
+         */
+        escapeHtml: function(text) {
+            var div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         },
 
         // ========================================
