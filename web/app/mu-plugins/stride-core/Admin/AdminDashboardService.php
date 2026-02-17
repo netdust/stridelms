@@ -317,6 +317,194 @@ class AdminDashboardService extends AbstractService
                 padding: 48px;
                 color: var(--stride-text-muted);
             }
+
+            /* Header Layout */
+            .stride-header-left {
+                display: flex;
+                align-items: center;
+                gap: 32px;
+            }
+
+            .stride-header-right {
+                display: flex;
+                align-items: center;
+                gap: 16px;
+            }
+
+            /* Navigation */
+            .stride-nav {
+                display: flex;
+                gap: 4px;
+            }
+
+            .stride-nav-item {
+                padding: 8px 16px;
+                color: rgba(255,255,255,0.7);
+                text-decoration: none;
+                font-size: 14px;
+                font-weight: 500;
+                border-radius: 6px;
+                transition: all 0.15s ease;
+            }
+
+            .stride-nav-item:hover {
+                color: #fff;
+                background: rgba(255,255,255,0.1);
+            }
+
+            .stride-nav-item.active {
+                color: #fff;
+                background: rgba(255,255,255,0.2);
+            }
+
+            /* Buttons */
+            .stride-btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 16px;
+                font-size: 14px;
+                font-weight: 500;
+                border-radius: 6px;
+                text-decoration: none;
+                cursor: pointer;
+                transition: all 0.15s ease;
+                border: none;
+            }
+
+            .stride-btn-ghost {
+                background: rgba(255,255,255,0.15);
+                color: #fff;
+            }
+
+            .stride-btn-ghost:hover {
+                background: rgba(255,255,255,0.25);
+                color: #fff;
+            }
+
+            /* Content */
+            .stride-content {
+                flex: 1;
+                overflow-y: auto;
+                padding: 24px 32px;
+            }
+
+            /* Stats Grid */
+            .stride-stats {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 16px;
+                margin-bottom: 24px;
+            }
+
+            .stride-stat-card {
+                background: var(--stride-card);
+                border: 1px solid var(--stride-border);
+                border-radius: 12px;
+                padding: 20px;
+                display: flex;
+                align-items: center;
+                gap: 16px;
+            }
+
+            .stride-stat-icon {
+                width: 48px;
+                height: 48px;
+                border-radius: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .stride-stat-icon .dashicons {
+                font-size: 24px;
+                width: 24px;
+                height: 24px;
+            }
+
+            .stride-stat-icon.upcoming {
+                background: rgba(99, 102, 241, 0.1);
+                color: var(--stride-primary);
+            }
+
+            .stride-stat-icon.registrations {
+                background: rgba(16, 185, 129, 0.1);
+                color: var(--stride-success);
+            }
+
+            .stride-stat-icon.pending {
+                background: rgba(245, 158, 11, 0.1);
+                color: var(--stride-warning);
+            }
+
+            .stride-stat-icon.today {
+                background: rgba(59, 130, 246, 0.1);
+                color: var(--stride-info);
+            }
+
+            .stride-stat-value {
+                font-size: 28px;
+                font-weight: 700;
+                color: var(--stride-text);
+                line-height: 1;
+            }
+
+            .stride-stat-label {
+                font-size: 13px;
+                color: var(--stride-text-muted);
+                margin-top: 4px;
+            }
+
+            /* Quick Actions */
+            .stride-quick-actions {
+                display: flex;
+                gap: 12px;
+            }
+
+            .stride-quick-action {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 12px 20px;
+                background: var(--stride-bg);
+                border: 1px solid var(--stride-border);
+                border-radius: 8px;
+                color: var(--stride-text);
+                text-decoration: none;
+                font-weight: 500;
+                transition: all 0.15s ease;
+            }
+
+            .stride-quick-action:hover {
+                border-color: var(--stride-primary);
+                color: var(--stride-primary);
+            }
+
+            .stride-quick-action .dashicons {
+                font-size: 20px;
+                width: 20px;
+                height: 20px;
+            }
+
+            .stride-muted {
+                color: var(--stride-text-muted);
+            }
+
+            /* Responsive */
+            @media (max-width: 1200px) {
+                .stride-stats {
+                    grid-template-columns: repeat(2, 1fr);
+                }
+            }
+
+            @media (max-width: 768px) {
+                .stride-stats {
+                    grid-template-columns: 1fr;
+                }
+                .stride-nav {
+                    display: none;
+                }
+            }
         </style>';
     }
 
@@ -329,39 +517,127 @@ class AdminDashboardService extends AbstractService
         <div class="wrap stride-app" x-data="strideApp()">
             <!-- Header -->
             <header class="stride-header">
-                <h1>Stride</h1>
-                <div class="stride-user">
+                <div class="stride-header-left">
+                    <h1>Stride</h1>
+                    <nav class="stride-nav">
+                        <a href="#/" class="stride-nav-item" :class="{ 'active': view === 'dashboard' }" @click.prevent="view = 'dashboard'">
+                            Dashboard
+                        </a>
+                        <a href="#/editions" class="stride-nav-item" :class="{ 'active': view === 'editions' }" @click.prevent="view = 'editions'">
+                            Editions
+                        </a>
+                        <a href="#/quotes" class="stride-nav-item" :class="{ 'active': view === 'quotes' }" @click.prevent="view = 'quotes'">
+                            Quotes
+                        </a>
+                    </nav>
+                </div>
+                <div class="stride-header-right">
                     <span class="stride-user-name" x-text="user.name"></span>
-                    <a href="<?php echo esc_url(wp_logout_url(home_url())); ?>" class="stride-logout">
-                        Logout
+                    <a href="<?php echo esc_url(admin_url()); ?>" class="stride-btn stride-btn-ghost">
+                        WP Admin
                     </a>
                 </div>
             </header>
 
             <!-- Content -->
-            <div class="stride-content-wrapper">
-                <!-- Page Header -->
-                <div class="stride-page-header">
-                    <h2 class="stride-page-title">Dashboard</h2>
-                </div>
+            <div class="stride-content">
+                <!-- Dashboard View -->
+                <template x-if="view === 'dashboard'">
+                    <div>
+                        <div class="stride-page-header">
+                            <h2 class="stride-page-title">Dashboard</h2>
+                        </div>
 
-                <!-- Welcome Card -->
-                <div class="stride-card">
-                    <div class="stride-card-header">
-                        <h3 class="stride-card-title">Welcome to Stride</h3>
-                    </div>
-                    <div class="stride-card-body">
-                        <template x-if="loading">
-                            <div class="stride-loading">Loading...</div>
-                        </template>
-                        <template x-if="!loading">
-                            <div>
-                                <p>Hello, <strong x-text="user.name"></strong>!</p>
-                                <p>The Stride admin dashboard is ready. More features coming soon.</p>
+                        <!-- Stats Grid -->
+                        <div class="stride-stats">
+                            <div class="stride-stat-card">
+                                <div class="stride-stat-icon upcoming">
+                                    <span class="dashicons dashicons-calendar-alt"></span>
+                                </div>
+                                <div class="stride-stat-info">
+                                    <div class="stride-stat-value" x-text="stats.upcomingEditions">-</div>
+                                    <div class="stride-stat-label">Upcoming Editions</div>
+                                </div>
                             </div>
-                        </template>
+                            <div class="stride-stat-card">
+                                <div class="stride-stat-icon registrations">
+                                    <span class="dashicons dashicons-groups"></span>
+                                </div>
+                                <div class="stride-stat-info">
+                                    <div class="stride-stat-value" x-text="stats.totalRegistrations">-</div>
+                                    <div class="stride-stat-label">Total Registrations</div>
+                                </div>
+                            </div>
+                            <div class="stride-stat-card">
+                                <div class="stride-stat-icon pending">
+                                    <span class="dashicons dashicons-media-document"></span>
+                                </div>
+                                <div class="stride-stat-info">
+                                    <div class="stride-stat-value" x-text="stats.pendingQuotes">-</div>
+                                    <div class="stride-stat-label">Pending Quotes</div>
+                                </div>
+                            </div>
+                            <div class="stride-stat-card">
+                                <div class="stride-stat-icon today">
+                                    <span class="dashicons dashicons-clock"></span>
+                                </div>
+                                <div class="stride-stat-info">
+                                    <div class="stride-stat-value" x-text="stats.todaySessions">-</div>
+                                    <div class="stride-stat-label">Sessions Today</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quick Actions -->
+                        <div class="stride-card">
+                            <div class="stride-card-header">
+                                <h3 class="stride-card-title">Quick Actions</h3>
+                            </div>
+                            <div class="stride-card-body stride-quick-actions">
+                                <a href="#/editions" @click.prevent="view = 'editions'" class="stride-quick-action">
+                                    <span class="dashicons dashicons-calendar-alt"></span>
+                                    <span>View Editions</span>
+                                </a>
+                                <a href="<?php echo esc_url(admin_url('post-new.php?post_type=vad_edition')); ?>" class="stride-quick-action">
+                                    <span class="dashicons dashicons-plus-alt"></span>
+                                    <span>New Edition</span>
+                                </a>
+                                <a href="#/quotes" @click.prevent="view = 'quotes'" class="stride-quick-action">
+                                    <span class="dashicons dashicons-media-document"></span>
+                                    <span>View Quotes</span>
+                                </a>
+                            </div>
+                        </div>
                     </div>
-                </div>
+                </template>
+
+                <!-- Editions View -->
+                <template x-if="view === 'editions'">
+                    <div>
+                        <div class="stride-page-header">
+                            <h2 class="stride-page-title">Editions</h2>
+                        </div>
+                        <div class="stride-card">
+                            <div class="stride-card-body">
+                                <p class="stride-muted">Edition list will be added in Task 4.</p>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Quotes View -->
+                <template x-if="view === 'quotes'">
+                    <div>
+                        <div class="stride-page-header">
+                            <h2 class="stride-page-title">Quotes</h2>
+                        </div>
+                        <div class="stride-card">
+                            <div class="stride-card-body">
+                                <p class="stride-muted">Quote list will be added in Task 5.</p>
+                            </div>
+                        </div>
+                    </div>
+                </template>
             </div>
         </div>
         <?php
@@ -381,21 +657,44 @@ class AdminDashboardService extends AbstractService
         document.addEventListener('alpine:init', () => {
             Alpine.data('strideApp', () => ({
                 // State
-                loading: true,
                 user: StrideConfig.user,
+                view: 'dashboard',
+                loading: true,
+
+                // Stats
+                stats: {
+                    upcomingEditions: 0,
+                    totalRegistrations: 0,
+                    pendingQuotes: 0,
+                    todaySessions: 0
+                },
 
                 // Initialize
                 init() {
-                    this.loadData();
+                    this.parseHash();
+                    window.addEventListener('hashchange', () => this.parseHash());
+                    this.loadStats();
                 },
 
-                // Load data
-                async loadData() {
+                parseHash() {
+                    const hash = window.location.hash.replace('#/', '') || 'dashboard';
+                    this.view = hash;
+                },
+
+                async loadStats() {
                     this.loading = true;
-
-                    // Simulate initial load
-                    await new Promise(resolve => setTimeout(resolve, 300));
-
+                    try {
+                        const response = await fetch(`${StrideConfig.apiUrl}/admin/stats`, {
+                            headers: {
+                                'X-WP-Nonce': StrideConfig.nonce
+                            }
+                        });
+                        if (response.ok) {
+                            this.stats = await response.json();
+                        }
+                    } catch (e) {
+                        console.error('Failed to load stats:', e);
+                    }
                     this.loading = false;
                 }
             }));
