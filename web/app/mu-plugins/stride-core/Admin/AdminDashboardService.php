@@ -926,6 +926,42 @@ class AdminDashboardService extends AbstractService
                 font-weight: 500;
                 color: var(--stride-text-muted);
             }
+
+            /* Quote specific */
+            .stride-quote-number {
+                font-family: monospace;
+                font-weight: 500;
+            }
+
+            .stride-customer-name {
+                font-weight: 500;
+            }
+
+            .stride-customer-email {
+                font-size: 13px;
+                color: var(--stride-text-muted);
+            }
+
+            .stride-amount {
+                font-variant-numeric: tabular-nums;
+                font-weight: 500;
+            }
+
+            /* Quote status badges */
+            .stride-badge-draft {
+                background: rgba(100, 116, 139, 0.1);
+                color: var(--stride-text-muted);
+            }
+
+            .stride-badge-sent {
+                background: rgba(59, 130, 246, 0.1);
+                color: var(--stride-info);
+            }
+
+            .stride-badge-exported {
+                background: rgba(16, 185, 129, 0.1);
+                color: var(--stride-success);
+            }
         </style>';
     }
 
@@ -1270,9 +1306,84 @@ class AdminDashboardService extends AbstractService
                         <div class="stride-page-header">
                             <h2 class="stride-page-title">Quotes</h2>
                         </div>
+
+                        <!-- Filters -->
                         <div class="stride-card">
-                            <div class="stride-card-body">
-                                <p class="stride-muted">Quote list will be added in Task 5.</p>
+                            <div class="stride-filters">
+                                <div class="stride-filter-group">
+                                    <label class="stride-filter-label">Search</label>
+                                    <input type="text" class="stride-input" placeholder="Quote number or name..." x-model="quoteFilters.search" @input.debounce.300ms="loadQuotes()">
+                                </div>
+                                <div class="stride-filter-group">
+                                    <label class="stride-filter-label">Status</label>
+                                    <select class="stride-select" x-model="quoteFilters.status" @change="loadQuotes()">
+                                        <option value="">All Statuses</option>
+                                        <option value="draft">Draft</option>
+                                        <option value="sent">Sent</option>
+                                        <option value="exported">Exported</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Table -->
+                            <div class="stride-table-wrapper">
+                                <template x-if="quotesLoading">
+                                    <div class="stride-loading">Loading quotes...</div>
+                                </template>
+                                <template x-if="!quotesLoading && quotes.length === 0">
+                                    <div class="stride-empty">
+                                        <span class="dashicons dashicons-media-document stride-empty-icon"></span>
+                                        <p>No quotes found</p>
+                                    </div>
+                                </template>
+                                <template x-if="!quotesLoading && quotes.length > 0">
+                                    <table class="stride-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Quote #</th>
+                                                <th>Customer</th>
+                                                <th>Date</th>
+                                                <th>Total</th>
+                                                <th>Status</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="quote in quotes" :key="quote.id">
+                                                <tr>
+                                                    <td>
+                                                        <span class="stride-quote-number" x-text="quote.number"></span>
+                                                    </td>
+                                                    <td>
+                                                        <div class="stride-customer-name" x-text="quote.userName || 'Unknown'"></div>
+                                                        <div class="stride-customer-email" x-text="quote.userEmail || ''"></div>
+                                                    </td>
+                                                    <td x-text="formatDate(quote.date)"></td>
+                                                    <td>
+                                                        <span class="stride-amount" x-text="formatCurrency(quote.total)"></span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="stride-badge" :class="'stride-badge-' + quote.status" x-text="quote.status"></span>
+                                                    </td>
+                                                    <td>
+                                                        <a :href="quote.editUrl" class="stride-btn stride-btn-sm stride-btn-outline">
+                                                            View
+                                                        </a>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </template>
+
+                                <!-- Pagination -->
+                                <template x-if="quotePages > 1">
+                                    <div class="stride-pagination">
+                                        <button class="stride-page-btn" @click="quotePage--; loadQuotes()" :disabled="quotePage === 1">&laquo;</button>
+                                        <span class="stride-page-info">Page <span x-text="quotePage"></span> of <span x-text="quotePages"></span></span>
+                                        <button class="stride-page-btn" @click="quotePage++; loadQuotes()" :disabled="quotePage >= quotePages">&raquo;</button>
+                                    </div>
+                                </template>
                             </div>
                         </div>
                     </div>
@@ -1319,6 +1430,13 @@ class AdminDashboardService extends AbstractService
                 registrations: [],
                 registrationsLoading: false,
 
+                // Quotes state
+                quotes: [],
+                quotesLoading: false,
+                quoteFilters: { search: '', status: '' },
+                quotePage: 1,
+                quotePages: 1,
+
                 // Initialize
                 init() {
                     this.parseHash();
@@ -1333,6 +1451,8 @@ class AdminDashboardService extends AbstractService
                     // Load editions when switching to editions view
                     if (hash === 'editions' && this.editions.length === 0) {
                         this.loadEditions();
+                    } else if (hash === 'quotes' && this.quotes.length === 0) {
+                        this.loadQuotes();
                     }
                 },
 
@@ -1469,6 +1589,32 @@ class AdminDashboardService extends AbstractService
                     const date = new Date(dateStr);
                     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                     return `${date.getDate()} ${months[date.getMonth()]}`;
+                },
+
+                async loadQuotes() {
+                    this.quotesLoading = true;
+                    try {
+                        const params = new URLSearchParams({
+                            page: this.quotePage,
+                            search: this.quoteFilters.search,
+                            status: this.quoteFilters.status
+                        });
+                        const response = await fetch(`${StrideConfig.apiUrl}/admin/quotes?${params}`, {
+                            headers: { 'X-WP-Nonce': StrideConfig.nonce }
+                        });
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.quotes = data.items;
+                            this.quotePages = data.pages;
+                        }
+                    } catch (e) {
+                        console.error('Failed to load quotes:', e);
+                    }
+                    this.quotesLoading = false;
+                },
+
+                formatCurrency(amount) {
+                    return new Intl.NumberFormat('nl-BE', { style: 'currency', currency: 'EUR' }).format(amount || 0);
                 }
             }));
         });
