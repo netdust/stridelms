@@ -128,6 +128,7 @@ class StrideSeedCleaner {
     private function removeVouchers(): void {
         echo "Removing vouchers...\n";
 
+        // Remove vouchers marked with seed meta key
         $vouchers = get_posts([
             'post_type' => 'vad_voucher',
             'posts_per_page' => -1,
@@ -137,6 +138,26 @@ class StrideSeedCleaner {
         ]);
 
         foreach ($vouchers as $voucherId) {
+            wp_delete_post($voucherId, true);
+            $this->removed['vouchers']++;
+        }
+
+        // Also remove vouchers with TEST- prefix codes (backup cleanup)
+        $testVouchers = get_posts([
+            'post_type' => 'vad_voucher',
+            'posts_per_page' => -1,
+            'post_status' => 'any',
+            'meta_query' => [
+                [
+                    'key' => 'code',
+                    'value' => 'TEST-',
+                    'compare' => 'LIKE',
+                ],
+            ],
+            'fields' => 'ids',
+        ]);
+
+        foreach ($testVouchers as $voucherId) {
             wp_delete_post($voucherId, true);
             $this->removed['vouchers']++;
         }

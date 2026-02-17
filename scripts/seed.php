@@ -233,6 +233,36 @@ class StrideSeedData {
                 ],
             ],
 
+            // Hybrid course (in-person + online sessions)
+            [
+                'title' => 'Hybride Veiligheidstraining',
+                'type' => 'hybrid',
+                'editions' => [
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+4 weeks')),
+                        'end_date' => date('Y-m-d', strtotime('+5 weeks')),
+                        'price' => 550.00,
+                        'price_non_member' => 650.00,
+                        'capacity' => 15,
+                        'venue' => 'Utrecht / Online',
+                        'speakers' => 'Jan De Trainer',
+                        'status' => 'open',
+                        'sessions' => [
+                            // Day 1: In-person session
+                            ['time' => '09:00-17:00', 'offset' => 0, 'type' => FieldRegistry::SESSION_TYPE_IN_PERSON],
+                            // Online module 1 (linked to first lesson)
+                            ['time' => '00:00-23:59', 'offset' => 3, 'type' => FieldRegistry::SESSION_TYPE_ONLINE, 'lesson_index' => 0],
+                            // Online module 2 (linked to second lesson)
+                            ['time' => '00:00-23:59', 'offset' => 5, 'type' => FieldRegistry::SESSION_TYPE_ONLINE, 'lesson_index' => 1],
+                            // Day 2: In-person session
+                            ['time' => '09:00-17:00', 'offset' => 7, 'type' => FieldRegistry::SESSION_TYPE_IN_PERSON],
+                            // Assignment (linked to third lesson)
+                            ['time' => '00:00-23:59', 'offset' => 8, 'type' => FieldRegistry::SESSION_TYPE_ASSIGNMENT, 'lesson_index' => 2],
+                        ],
+                    ],
+                ],
+            ],
+
             // Online courses (no physical sessions)
             [
                 'title' => 'E-learning: Veiligheidsprotocollen',
@@ -367,17 +397,21 @@ class StrideSeedData {
             echo "  + Created course: {$courseData['title']} (ID: {$courseId})\n";
 
             // Create lessons for the course
-            $this->createLessonsForCourse($courseId, $courseData['title']);
+            $lessonIds = $this->createLessonsForCourse($courseId, $courseData['title']);
 
             // Create editions for this course
-            $this->createEditionsForCourse($courseId, $courseData);
+            $this->createEditionsForCourse($courseId, $courseData, $lessonIds);
         }
     }
 
     /**
      * Create editions and sessions for a course
+     *
+     * @param int $courseId Course ID
+     * @param array $courseData Course data including editions
+     * @param array $lessonIds Available lesson IDs for this course
      */
-    private function createEditionsForCourse(int $courseId, array $courseData): void {
+    private function createEditionsForCourse(int $courseId, array $courseData, array $lessonIds = []): void {
         if (!$this->editionService || empty($courseData['editions'])) {
             return;
         }
@@ -409,14 +443,18 @@ class StrideSeedData {
             echo "    + Created edition: {$editionData['start_date']} at {$editionData['venue']} (ID: {$editionId})\n";
 
             // Create sessions for this edition
-            $this->createSessionsForEdition($editionId, $editionData);
+            $this->createSessionsForEdition($editionId, $editionData, $lessonIds);
         }
     }
 
     /**
      * Create sessions for an edition
+     *
+     * @param int $editionId Edition ID
+     * @param array $editionData Edition data including sessions
+     * @param array $lessonIds Available lesson IDs for hybrid sessions
      */
-    private function createSessionsForEdition(int $editionId, array $editionData): void {
+    private function createSessionsForEdition(int $editionId, array $editionData, array $lessonIds = []): void {
         if (!$this->sessionService || empty($editionData['sessions'])) {
             return;
         }
@@ -430,13 +468,31 @@ class StrideSeedData {
             // Calculate date based on offset from start_date
             $sessionDate = date('Y-m-d', strtotime($editionData['start_date'] . " +{$sessionData['offset']} days"));
 
-            $sessionId = $this->sessionService->createSession([
+            // Determine session type and linked lessons
+            $sessionType = $sessionData['type'] ?? FieldRegistry::SESSION_TYPE_IN_PERSON;
+            $sessionLessonIds = [];
+
+            // For online/assignment types, link to specific lessons if provided
+            if (in_array($sessionType, [FieldRegistry::SESSION_TYPE_ONLINE, FieldRegistry::SESSION_TYPE_ASSIGNMENT])) {
+                if (!empty($sessionData['lesson_ids'])) {
+                    $sessionLessonIds = $sessionData['lesson_ids'];
+                } elseif (isset($sessionData['lesson_index']) && isset($lessonIds[$sessionData['lesson_index']])) {
+                    // Link to a specific lesson by index
+                    $sessionLessonIds = [$lessonIds[$sessionData['lesson_index']]];
+                }
+            }
+
+            $createData = [
                 'edition_id' => $editionId,
                 'date' => $sessionDate,
                 'start_time' => $startTime,
                 'end_time' => $endTime,
                 'location' => $editionData['venue'],
-            ]);
+                FieldRegistry::SESSION_TYPE => $sessionType,
+                FieldRegistry::SESSION_LESSON_IDS => $sessionLessonIds,
+            ];
+
+            $sessionId = $this->sessionService->createSession($createData);
 
             if (is_wp_error($sessionId)) {
                 echo "      ! Failed to create session: {$sessionId->get_error_message()}\n";
@@ -449,14 +505,23 @@ class StrideSeedData {
             $this->created['sessions'][] = $sessionId;
 
             $duration = $this->sessionService->getSessionDuration($sessionId);
-            echo "      + Created session: {$sessionDate} {$startTime}-{$endTime} ({$duration}h)\n";
+            $typeEmoji = match($sessionType) {
+                FieldRegistry::SESSION_TYPE_ONLINE => '💻',
+                FieldRegistry::SESSION_TYPE_ASSIGNMENT => '📝',
+                default => '🏢',
+            };
+            $lessonInfo = !empty($sessionLessonIds) ? ' (linked to ' . count($sessionLessonIds) . ' lessons)' : '';
+            echo "      + Created {$typeEmoji} session: {$sessionDate} {$startTime}-{$endTime} ({$duration}h){$lessonInfo}\n";
         }
     }
 
     /**
      * Create lessons for a course
+     *
+     * @return array Created lesson IDs
      */
-    private function createLessonsForCourse(int $courseId, string $courseTitle): void {
+    private function createLessonsForCourse(int $courseId, string $courseTitle): array {
+        $lessonIds = [];
         $lessons = [
             'Introductie en Overzicht',
             'Kernconcepten',
@@ -481,8 +546,27 @@ class StrideSeedData {
                 update_post_meta($lessonId, '_sfwd-lessons', [
                     'sfwd-lessons_course' => $courseId,
                 ]);
+
+                $lessonIds[] = $lessonId;
+                echo "      + Created lesson: {$lessonTitle} (ID: {$lessonId})\n";
             }
         }
+
+        // Set up LearnDash course steps (required for LD to recognize lesson-course association)
+        if (!empty($lessonIds) && class_exists('LDLMS_Factory_Post')) {
+            $courseStepsObj = LDLMS_Factory_Post::course_steps($courseId);
+            if ($courseStepsObj) {
+                // Build hierarchical steps array (lessons at top level, no topics/quizzes)
+                $steps = [];
+                foreach ($lessonIds as $lessonId) {
+                    $steps[$lessonId] = [];
+                }
+                $courseStepsObj->set_steps($steps);
+                echo "      + Linked " . count($lessonIds) . " lessons to course via course steps\n";
+            }
+        }
+
+        return $lessonIds;
     }
 
     /**
@@ -555,121 +639,97 @@ class StrideSeedData {
     }
 
     /**
-     * Create vouchers with different configurations
+     * Create vouchers with different configurations using VoucherService
      */
     private function createVouchers(): void {
         echo "\nCreating vouchers...\n";
 
+        // Use VoucherService if available (new architecture)
+        $voucherService = null;
+        if (function_exists('ntdst_get') && class_exists(\Stride\Modules\Invoicing\VoucherService::class)) {
+            $voucherService = ntdst_get(\Stride\Modules\Invoicing\VoucherService::class);
+        }
+
         $vouchers = [
             // Full discount (100% off)
             [
-                'code' => 'SEED-FREE-100',
-                'type' => 'single-use',
-                'discount_type' => 'full',
-                'discount_value' => 100,
-                'usage_limit' => 1,
+                'code' => 'TEST-FULL-FREE',
+                'discount_type' => \Stride\Domain\DiscountType::Full->value,
+                'discount_value' => 0,
+                'usage_limit' => 10,
+            ],
+            // Fixed amount discount (€50 in cents)
+            [
+                'code' => 'TEST-50-EURO',
+                'discount_type' => \Stride\Domain\DiscountType::Fixed->value,
+                'discount_value' => 5000, // €50 in cents
+                'usage_limit' => 5,
             ],
             // Percentage discount
             [
-                'code' => 'SEED-20PERCENT',
-                'type' => 'multi-use',
-                'discount_type' => 'percentage',
+                'code' => 'TEST-20-PERCENT',
+                'discount_type' => \Stride\Domain\DiscountType::Percentage->value,
                 'discount_value' => 20,
-                'usage_limit' => 50,
-            ],
-            // Fixed amount discount
-            [
-                'code' => 'SEED-50EURO',
-                'type' => 'multi-use',
-                'discount_type' => 'fixed',
-                'discount_value' => 50,
                 'usage_limit' => 100,
-            ],
-            // Member voucher (unlimited use)
-            [
-                'code' => 'SEED-MEMBER2024',
-                'type' => 'multi-use',
-                'discount_type' => 'percentage',
-                'discount_value' => 15,
-                'usage_limit' => 0, // Unlimited
-            ],
-            // Course-specific voucher
-            [
-                'code' => 'SEED-COURSE-ONLY',
-                'type' => 'multi-use',
-                'discount_type' => 'percentage',
-                'discount_value' => 25,
-                'usage_limit' => 20,
-                'item_type' => 'course',
-            ],
-            // Expired voucher
-            [
-                'code' => 'SEED-EXPIRED',
-                'type' => 'single-use',
-                'discount_type' => 'full',
-                'discount_value' => 100,
-                'usage_limit' => 1,
-                'valid_until' => date('Y-m-d', strtotime('-1 week')),
-                'status' => 'expired',
-            ],
-            // Exhausted voucher
-            [
-                'code' => 'SEED-USED-UP',
-                'type' => 'single-use',
-                'discount_type' => 'fixed',
-                'discount_value' => 30,
-                'usage_limit' => 1,
-                'used_count' => 1,
-                'status' => 'exhausted',
             ],
         ];
 
-        foreach ($vouchers as $voucherData) {
-            // Check if voucher code already exists
-            $existing = get_posts([
-                'post_type' => 'vad_voucher',
-                'meta_key' => '_voucher_code',
-                'meta_value' => $voucherData['code'],
-                'posts_per_page' => 1,
-            ]);
+        foreach ($vouchers as $data) {
+            if ($voucherService) {
+                // Use VoucherService (new architecture)
+                $existing = $voucherService->getVoucherByCode($data['code']);
+                if ($existing) {
+                    echo "  - Voucher {$data['code']} already exists, skipping\n";
+                    $this->created['vouchers'][] = $existing['id'];
+                    continue;
+                }
 
-            if (!empty($existing)) {
-                echo "  - Voucher '{$voucherData['code']}' already exists, skipping\n";
-                $this->created['vouchers'][] = $existing[0]->ID;
-                continue;
+                $result = $voucherService->createVoucher($data);
+                if (is_wp_error($result)) {
+                    echo "  ! ERROR creating voucher {$data['code']}: " . $result->get_error_message() . "\n";
+                } else {
+                    // Mark as seed data
+                    update_post_meta($result, self::SEED_META_KEY, true);
+                    $this->created['vouchers'][] = $result;
+                    echo "  + Created voucher: {$data['code']} (ID: {$result})\n";
+                }
+            } else {
+                // Fallback to direct post creation (legacy)
+                $existing = get_posts([
+                    'post_type' => 'vad_voucher',
+                    'meta_key' => 'code',
+                    'meta_value' => $data['code'],
+                    'posts_per_page' => 1,
+                ]);
+
+                if (!empty($existing)) {
+                    echo "  - Voucher '{$data['code']}' already exists, skipping\n";
+                    $this->created['vouchers'][] = $existing[0]->ID;
+                    continue;
+                }
+
+                $voucherId = wp_insert_post([
+                    'post_title' => $data['code'],
+                    'post_type' => 'vad_voucher',
+                    'post_status' => 'publish',
+                ]);
+
+                if (is_wp_error($voucherId)) {
+                    echo "  ! Failed to create voucher: {$voucherId->get_error_message()}\n";
+                    continue;
+                }
+
+                update_post_meta($voucherId, self::SEED_META_KEY, true);
+                update_post_meta($voucherId, 'code', $data['code']);
+                update_post_meta($voucherId, 'discount_type', $data['discount_type']);
+                update_post_meta($voucherId, 'discount_value', $data['discount_value']);
+                update_post_meta($voucherId, 'usage_limit', $data['usage_limit']);
+                update_post_meta($voucherId, 'used_count', 0);
+                update_post_meta($voucherId, 'status', 'active');
+
+                $this->created['vouchers'][] = $voucherId;
+                echo "  + Created voucher: {$data['code']} (ID: {$voucherId})\n";
             }
-
-            $voucherId = wp_insert_post([
-                'post_title' => 'Voucher: ' . $voucherData['code'],
-                'post_type' => 'vad_voucher',
-                'post_status' => 'publish',
-            ]);
-
-            if (is_wp_error($voucherId)) {
-                echo "  ! Failed to create voucher: {$voucherId->get_error_message()}\n";
-                continue;
-            }
-
-            update_post_meta($voucherId, self::SEED_META_KEY, true);
-            update_post_meta($voucherId, '_voucher_code', $voucherData['code']);
-            update_post_meta($voucherId, '_voucher_type', $voucherData['type']);
-            update_post_meta($voucherId, '_voucher_discount_type', $voucherData['discount_type']);
-            update_post_meta($voucherId, '_voucher_discount_value', $voucherData['discount_value']);
-            update_post_meta($voucherId, '_voucher_usage_limit', $voucherData['usage_limit']);
-            update_post_meta($voucherId, '_voucher_used_count', $voucherData['used_count'] ?? 0);
-            update_post_meta($voucherId, '_voucher_status', $voucherData['status'] ?? 'active');
-            update_post_meta($voucherId, '_voucher_valid_from', date('Y-m-d'));
-            update_post_meta($voucherId, '_voucher_valid_until', $voucherData['valid_until'] ?? date('Y-m-d', strtotime('+1 year')));
-
-            if (!empty($voucherData['item_type'])) {
-                update_post_meta($voucherId, '_voucher_item_type', $voucherData['item_type']);
-            }
-            if (!empty($voucherData['item_id'])) {
-                update_post_meta($voucherId, '_voucher_item_id', $voucherData['item_id']);
-            }
-
-            $this->created['vouchers'][] = $voucherId;
-            echo "  + Created voucher: {$voucherData['code']} (ID: {$voucherId})\n";
         }
     }
 
@@ -898,10 +958,9 @@ class StrideSeedData {
         echo "  - Students: seed_student1@seed.test through seed_student5@seed.test\n";
         echo "\n";
         echo "Voucher codes:\n";
-        echo "  - SEED-FREE-100 (100% off, single use)\n";
-        echo "  - SEED-20PERCENT (20% off, multi-use)\n";
-        echo "  - SEED-50EURO (EUR50 off, multi-use)\n";
-        echo "  - SEED-MEMBER2024 (15% off, unlimited)\n";
+        echo "  - TEST-FULL-FREE (100% off, 10 uses)\n";
+        echo "  - TEST-50-EURO (EUR50 off, 5 uses)\n";
+        echo "  - TEST-20-PERCENT (20% off, 100 uses)\n";
         echo "\n";
         echo "To remove seed data: ddev exec wp eval-file scripts/unseed.php --force\n";
     }
