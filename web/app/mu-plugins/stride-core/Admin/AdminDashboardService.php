@@ -512,10 +512,375 @@ class AdminDashboardService extends AbstractService
                 color: var(--stride-text-muted);
             }
 
+            /* ========================================
+               DASHBOARD SPECIFIC STYLES
+            ======================================== */
+
+            /* Extended stats grid for 6 cards */
+            .stride-stats {
+                grid-template-columns: repeat(6, 1fr);
+            }
+
+            .stride-stat-compare {
+                font-size: 11px;
+                color: var(--stride-text-muted);
+                font-weight: 400;
+            }
+
+            .stride-stat-icon.trajectories {
+                background: rgba(168, 85, 247, 0.1);
+                color: #a855f7;
+            }
+
+            .stride-stat-icon.week-trend {
+                background: rgba(100, 116, 139, 0.1);
+                color: var(--stride-text-muted);
+            }
+
+            .stride-stat-icon.week-trend.positive {
+                background: rgba(16, 185, 129, 0.1);
+                color: var(--stride-success);
+            }
+
+            .stride-stat-icon.week-trend.negative {
+                background: rgba(239, 68, 68, 0.1);
+                color: var(--stride-danger);
+            }
+
+            /* Alerts Section */
+            .stride-alerts-section {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                margin-bottom: 24px;
+            }
+
+            .stride-alert {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 12px 16px;
+                border-radius: 8px;
+                background: var(--stride-card);
+                border-left: 4px solid;
+            }
+
+            .stride-alert-almost_full {
+                border-color: #f59e0b;
+                background: rgba(245, 158, 11, 0.05);
+            }
+
+            .stride-alert-almost_full .dashicons {
+                color: #f59e0b;
+            }
+
+            .stride-alert-low_registration {
+                border-color: var(--stride-info);
+                background: rgba(59, 130, 246, 0.05);
+            }
+
+            .stride-alert-low_registration .dashicons {
+                color: var(--stride-info);
+            }
+
+            .stride-alert-content {
+                flex: 1;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+
+            .stride-alert-date {
+                color: var(--stride-text-muted);
+                font-size: 13px;
+            }
+
+            .stride-alert-message {
+                color: var(--stride-text-muted);
+                font-size: 13px;
+            }
+
+            .stride-alert-badge {
+                padding: 4px 10px;
+                border-radius: 12px;
+                font-size: 12px;
+                font-weight: 600;
+                background: var(--stride-bg-subtle);
+            }
+
+            .stride-alert-almost_full .stride-alert-badge {
+                background: rgba(245, 158, 11, 0.15);
+                color: #d97706;
+            }
+
+            .stride-alert-low_registration .stride-alert-badge {
+                background: rgba(59, 130, 246, 0.15);
+                color: var(--stride-info);
+            }
+
+            /* Dashboard Grid Layout */
+            .stride-dashboard-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 24px;
+            }
+
+            .stride-dashboard-col {
+                display: flex;
+                flex-direction: column;
+                gap: 24px;
+            }
+
+            .stride-card-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 16px 20px;
+                border-bottom: 1px solid var(--stride-border);
+            }
+
+            .stride-card-title {
+                margin: 0;
+                font-size: 15px;
+                font-weight: 600;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .stride-card-title .dashicons {
+                font-size: 18px;
+                width: 18px;
+                height: 18px;
+                color: var(--stride-text-muted);
+            }
+
+            .stride-card-link {
+                font-size: 13px;
+                color: var(--stride-primary);
+                text-decoration: none;
+            }
+
+            .stride-card-link:hover {
+                text-decoration: underline;
+            }
+
+            .stride-card-body {
+                padding: 16px 20px;
+            }
+
+            /* Today Sessions */
+            .stride-today-sessions {
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .stride-today-session {
+                display: flex;
+                gap: 16px;
+                padding: 12px;
+                background: var(--stride-bg-subtle);
+                border-radius: 8px;
+            }
+
+            .stride-session-time {
+                font-size: 14px;
+                font-weight: 600;
+                color: var(--stride-primary);
+                white-space: nowrap;
+                min-width: 100px;
+            }
+
+            .stride-session-info {
+                flex: 1;
+            }
+
+            .stride-session-title {
+                font-weight: 500;
+                margin-bottom: 4px;
+            }
+
+            .stride-session-meta {
+                font-size: 13px;
+                color: var(--stride-text-muted);
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            }
+
+            .stride-session-meta .dashicons {
+                font-size: 14px;
+                width: 14px;
+                height: 14px;
+            }
+
+            /* Upcoming Editions List */
+            .stride-upcoming-list {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .stride-upcoming-item {
+                display: flex;
+                gap: 16px;
+                padding: 12px;
+                background: var(--stride-bg-subtle);
+                border-radius: 8px;
+                cursor: pointer;
+                transition: all 0.15s ease;
+            }
+
+            .stride-upcoming-item:hover {
+                background: var(--stride-bg);
+                box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            }
+
+            .stride-upcoming-date {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                min-width: 50px;
+                padding: 8px;
+                background: var(--stride-card);
+                border-radius: 6px;
+                border: 1px solid var(--stride-border);
+            }
+
+            .stride-upcoming-day {
+                font-size: 20px;
+                font-weight: 700;
+                line-height: 1;
+            }
+
+            .stride-upcoming-month {
+                font-size: 11px;
+                text-transform: uppercase;
+                color: var(--stride-text-muted);
+                margin-top: 2px;
+            }
+
+            .stride-upcoming-info {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+            }
+
+            .stride-upcoming-title {
+                font-weight: 500;
+                margin-bottom: 4px;
+            }
+
+            .stride-upcoming-meta {
+                font-size: 13px;
+                color: var(--stride-text-muted);
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .stride-capacity-pill {
+                padding: 2px 8px;
+                border-radius: 10px;
+                font-size: 12px;
+                background: rgba(16, 185, 129, 0.1);
+                color: var(--stride-success);
+            }
+
+            .stride-capacity-pill.almost-full {
+                background: rgba(245, 158, 11, 0.1);
+                color: #d97706;
+            }
+
+            .stride-capacity-pill.full {
+                background: rgba(239, 68, 68, 0.1);
+                color: var(--stride-danger);
+            }
+
+            /* Activity Feed */
+            .stride-activity-feed {
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .stride-activity-item {
+                display: flex;
+                align-items: flex-start;
+                gap: 12px;
+            }
+
+            .stride-activity-avatar {
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                background: linear-gradient(135deg, var(--stride-primary), #8b5cf6);
+                color: white;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: 600;
+                font-size: 14px;
+                flex-shrink: 0;
+            }
+
+            .stride-activity-content {
+                flex: 1;
+                min-width: 0;
+            }
+
+            .stride-activity-text {
+                font-size: 14px;
+                line-height: 1.4;
+            }
+
+            .stride-activity-text strong {
+                font-weight: 500;
+            }
+
+            .stride-activity-time {
+                font-size: 12px;
+                color: var(--stride-text-muted);
+                margin-top: 2px;
+            }
+
+            /* Empty States */
+            .stride-empty-state-sm {
+                text-align: center;
+                padding: 24px;
+                color: var(--stride-text-muted);
+            }
+
+            .stride-empty-state-sm .dashicons {
+                font-size: 32px;
+                width: 32px;
+                height: 32px;
+                margin-bottom: 8px;
+                opacity: 0.5;
+            }
+
+            .stride-empty-state-sm p {
+                margin: 0;
+                font-size: 14px;
+            }
+
             /* Responsive */
+            @media (max-width: 1400px) {
+                .stride-stats {
+                    grid-template-columns: repeat(3, 1fr);
+                }
+            }
+
             @media (max-width: 1200px) {
                 .stride-stats {
                     grid-template-columns: repeat(2, 1fr);
+                }
+                .stride-dashboard-grid {
+                    grid-template-columns: 1fr;
                 }
             }
 
@@ -1263,7 +1628,7 @@ class AdminDashboardService extends AbstractService
                                 </div>
                                 <div class="stride-stat-info">
                                     <div class="stride-stat-value" x-text="stats.upcomingEditions">-</div>
-                                    <div class="stride-stat-label">Upcoming Editions</div>
+                                    <div class="stride-stat-label">Komende Editions</div>
                                 </div>
                             </div>
                             <div class="stride-stat-card">
@@ -1272,7 +1637,7 @@ class AdminDashboardService extends AbstractService
                                 </div>
                                 <div class="stride-stat-info">
                                     <div class="stride-stat-value" x-text="stats.totalRegistrations">-</div>
-                                    <div class="stride-stat-label">Total Registrations</div>
+                                    <div class="stride-stat-label">Actieve Inschrijvingen</div>
                                 </div>
                             </div>
                             <div class="stride-stat-card">
@@ -1281,7 +1646,7 @@ class AdminDashboardService extends AbstractService
                                 </div>
                                 <div class="stride-stat-info">
                                     <div class="stride-stat-value" x-text="stats.pendingQuotes">-</div>
-                                    <div class="stride-stat-label">Pending Quotes</div>
+                                    <div class="stride-stat-label">Openstaande Offertes</div>
                                 </div>
                             </div>
                             <div class="stride-stat-card">
@@ -1290,29 +1655,196 @@ class AdminDashboardService extends AbstractService
                                 </div>
                                 <div class="stride-stat-info">
                                     <div class="stride-stat-value" x-text="stats.todaySessions">-</div>
-                                    <div class="stride-stat-label">Sessions Today</div>
+                                    <div class="stride-stat-label">Sessies Vandaag</div>
+                                </div>
+                            </div>
+                            <div class="stride-stat-card">
+                                <div class="stride-stat-icon trajectories">
+                                    <span class="dashicons dashicons-networking"></span>
+                                </div>
+                                <div class="stride-stat-info">
+                                    <div class="stride-stat-value" x-text="stats.openTrajectories">-</div>
+                                    <div class="stride-stat-label">Open Trajecten</div>
+                                </div>
+                            </div>
+                            <div class="stride-stat-card">
+                                <div class="stride-stat-icon week-trend" :class="{ 'positive': stats.registrationsThisWeek >= stats.registrationsLastWeek, 'negative': stats.registrationsThisWeek < stats.registrationsLastWeek }">
+                                    <span class="dashicons" :class="stats.registrationsThisWeek >= stats.registrationsLastWeek ? 'dashicons-arrow-up-alt' : 'dashicons-arrow-down-alt'"></span>
+                                </div>
+                                <div class="stride-stat-info">
+                                    <div class="stride-stat-value" x-text="stats.registrationsThisWeek || 0">-</div>
+                                    <div class="stride-stat-label">Deze week <span class="stride-stat-compare" x-text="'(vorige: ' + (stats.registrationsLastWeek || 0) + ')'"></span></div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Quick Actions -->
-                        <div class="stride-card">
-                            <div class="stride-card-header">
-                                <h3 class="stride-card-title">Quick Actions</h3>
+                        <!-- Alerts Section -->
+                        <template x-if="stats.alerts && stats.alerts.length > 0">
+                            <div class="stride-alerts-section">
+                                <template x-for="alert in stats.alerts" :key="alert.editionId + alert.type">
+                                    <div class="stride-alert" :class="'stride-alert-' + alert.type">
+                                        <span class="dashicons" :class="alert.type === 'almost_full' ? 'dashicons-warning' : 'dashicons-info'"></span>
+                                        <div class="stride-alert-content">
+                                            <strong x-text="alert.editionTitle"></strong>
+                                            <span class="stride-alert-date" x-text="formatDate(alert.startDate)"></span>
+                                            <span class="stride-alert-message" x-text="alert.message"></span>
+                                        </div>
+                                        <div class="stride-alert-badge" x-text="alert.fillRate + '%'"></div>
+                                    </div>
+                                </template>
                             </div>
-                            <div class="stride-card-body stride-quick-actions">
-                                <a href="#/editions" @click.prevent="view = 'editions'" class="stride-quick-action">
-                                    <span class="dashicons dashicons-calendar-alt"></span>
-                                    <span>View Editions</span>
-                                </a>
-                                <a href="<?php echo esc_url(admin_url('post-new.php?post_type=vad_edition')); ?>" class="stride-quick-action">
-                                    <span class="dashicons dashicons-plus-alt"></span>
-                                    <span>New Edition</span>
-                                </a>
-                                <a href="#/quotes" @click.prevent="view = 'quotes'" class="stride-quick-action">
-                                    <span class="dashicons dashicons-media-document"></span>
-                                    <span>View Quotes</span>
-                                </a>
+                        </template>
+
+                        <!-- Two Column Layout -->
+                        <div class="stride-dashboard-grid">
+                            <!-- Left Column -->
+                            <div class="stride-dashboard-col">
+                                <!-- Today's Sessions -->
+                                <div class="stride-card">
+                                    <div class="stride-card-header">
+                                        <h3 class="stride-card-title">
+                                            <span class="dashicons dashicons-clock"></span>
+                                            Vandaag
+                                        </h3>
+                                    </div>
+                                    <div class="stride-card-body">
+                                        <template x-if="stats.todaySessionDetails && stats.todaySessionDetails.length > 0">
+                                            <div class="stride-today-sessions">
+                                                <template x-for="session in stats.todaySessionDetails" :key="session.id">
+                                                    <div class="stride-today-session">
+                                                        <div class="stride-session-time">
+                                                            <span x-text="session.startTime || '—'"></span>
+                                                            <span x-show="session.endTime"> - <span x-text="session.endTime"></span></span>
+                                                        </div>
+                                                        <div class="stride-session-info">
+                                                            <div class="stride-session-title" x-text="session.editionTitle || session.title"></div>
+                                                            <div class="stride-session-meta">
+                                                                <span class="dashicons dashicons-groups"></span>
+                                                                <span x-text="session.registeredCount + ' deelnemers'"></span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        <template x-if="!stats.todaySessionDetails || stats.todaySessionDetails.length === 0">
+                                            <div class="stride-empty-state-sm">
+                                                <span class="dashicons dashicons-calendar"></span>
+                                                <p>Geen sessies vandaag</p>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <!-- Upcoming Editions -->
+                                <div class="stride-card">
+                                    <div class="stride-card-header">
+                                        <h3 class="stride-card-title">
+                                            <span class="dashicons dashicons-calendar-alt"></span>
+                                            Komende Editions
+                                        </h3>
+                                        <a href="#/editions" @click.prevent="view = 'editions'" class="stride-card-link">Bekijk alle</a>
+                                    </div>
+                                    <div class="stride-card-body">
+                                        <template x-if="stats.upcomingEditionDetails && stats.upcomingEditionDetails.length > 0">
+                                            <div class="stride-upcoming-list">
+                                                <template x-for="edition in stats.upcomingEditionDetails" :key="edition.id">
+                                                    <div class="stride-upcoming-item" @click="view = 'editions'; $nextTick(() => openEdition(edition.id))">
+                                                        <div class="stride-upcoming-date">
+                                                            <div class="stride-upcoming-day" x-text="new Date(edition.startDate).getDate()"></div>
+                                                            <div class="stride-upcoming-month" x-text="new Date(edition.startDate).toLocaleDateString('nl-BE', { month: 'short' })"></div>
+                                                        </div>
+                                                        <div class="stride-upcoming-info">
+                                                            <div class="stride-upcoming-title" x-text="edition.title"></div>
+                                                            <div class="stride-upcoming-meta">
+                                                                <span x-text="edition.registeredCount + ' ingeschreven'"></span>
+                                                                <span x-show="edition.capacity > 0" class="stride-capacity-pill" :class="{ 'almost-full': edition.spotsLeft <= 3 && edition.spotsLeft > 0, 'full': edition.spotsLeft === 0 }">
+                                                                    <span x-show="edition.spotsLeft > 0" x-text="edition.spotsLeft + ' vrij'"></span>
+                                                                    <span x-show="edition.spotsLeft === 0">Volzet</span>
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        <template x-if="!stats.upcomingEditionDetails || stats.upcomingEditionDetails.length === 0">
+                                            <div class="stride-empty-state-sm">
+                                                <span class="dashicons dashicons-calendar-alt"></span>
+                                                <p>Geen komende editions</p>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Right Column -->
+                            <div class="stride-dashboard-col">
+                                <!-- Recent Registrations -->
+                                <div class="stride-card">
+                                    <div class="stride-card-header">
+                                        <h3 class="stride-card-title">
+                                            <span class="dashicons dashicons-groups"></span>
+                                            Recente Inschrijvingen
+                                        </h3>
+                                    </div>
+                                    <div class="stride-card-body">
+                                        <template x-if="stats.recentRegistrations && stats.recentRegistrations.length > 0">
+                                            <div class="stride-activity-feed">
+                                                <template x-for="reg in stats.recentRegistrations" :key="reg.id">
+                                                    <div class="stride-activity-item">
+                                                        <div class="stride-activity-avatar">
+                                                            <span x-text="reg.userName.charAt(0).toUpperCase()"></span>
+                                                        </div>
+                                                        <div class="stride-activity-content">
+                                                            <div class="stride-activity-text">
+                                                                <strong x-text="reg.userName"></strong>
+                                                                <span>schreef in voor</span>
+                                                                <strong x-text="reg.editionTitle"></strong>
+                                                            </div>
+                                                            <div class="stride-activity-time" x-text="formatRelativeTime(reg.createdAt)"></div>
+                                                        </div>
+                                                        <span class="stride-badge" :class="'stride-badge-' + reg.status" x-text="reg.status"></span>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        <template x-if="!stats.recentRegistrations || stats.recentRegistrations.length === 0">
+                                            <div class="stride-empty-state-sm">
+                                                <span class="dashicons dashicons-groups"></span>
+                                                <p>Geen recente inschrijvingen</p>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <!-- Quick Actions -->
+                                <div class="stride-card">
+                                    <div class="stride-card-header">
+                                        <h3 class="stride-card-title">
+                                            <span class="dashicons dashicons-admin-tools"></span>
+                                            Snelle Acties
+                                        </h3>
+                                    </div>
+                                    <div class="stride-card-body stride-quick-actions">
+                                        <a href="<?php echo esc_url(admin_url('post-new.php?post_type=vad_edition')); ?>" class="stride-quick-action">
+                                            <span class="dashicons dashicons-plus-alt"></span>
+                                            <span>Nieuwe Edition</span>
+                                        </a>
+                                        <a href="<?php echo esc_url(admin_url('post-new.php?post_type=vad_trajectory')); ?>" class="stride-quick-action">
+                                            <span class="dashicons dashicons-networking"></span>
+                                            <span>Nieuw Traject</span>
+                                        </a>
+                                        <a href="#/quotes" @click.prevent="view = 'quotes'" class="stride-quick-action">
+                                            <span class="dashicons dashicons-media-document"></span>
+                                            <span>Bekijk Offertes</span>
+                                        </a>
+                                        <a href="<?php echo esc_url(admin_url('users.php')); ?>" class="stride-quick-action">
+                                            <span class="dashicons dashicons-admin-users"></span>
+                                            <span>Gebruikers</span>
+                                        </a>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -2424,6 +2956,23 @@ class AdminDashboardService extends AbstractService
                 openTrajectory(trajectory) {
                     this.selectedTrajectory = trajectory;
                     this.trajectoryTab = 'details';
+                },
+
+                formatRelativeTime(dateStr) {
+                    if (!dateStr) return '';
+                    const date = new Date(dateStr);
+                    const now = new Date();
+                    const diffMs = now - date;
+                    const diffMins = Math.floor(diffMs / 60000);
+                    const diffHours = Math.floor(diffMs / 3600000);
+                    const diffDays = Math.floor(diffMs / 86400000);
+
+                    if (diffMins < 1) return 'Zojuist';
+                    if (diffMins < 60) return `${diffMins} min geleden`;
+                    if (diffHours < 24) return `${diffHours} uur geleden`;
+                    if (diffDays === 1) return 'Gisteren';
+                    if (diffDays < 7) return `${diffDays} dagen geleden`;
+                    return this.formatDate(dateStr);
                 },
 
                 formatCurrency(amount) {

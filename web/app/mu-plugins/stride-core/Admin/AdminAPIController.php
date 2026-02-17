@@ -295,12 +295,192 @@ final class AdminAPIController extends AbstractService
             'open'
         ));
 
+        // Today's sessions with details
+        $todaySessionDetails = [];
+        $sessions = $wpdb->get_results($wpdb->prepare(
+            "SELECT p.ID, p.post_title, pm_time.meta_value as start_time, pm_end.meta_value as end_time,
+                    pm_edition.meta_value as edition_id
+             FROM {$wpdb->posts} p
+             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = 'date'
+             LEFT JOIN {$wpdb->postmeta} pm_time ON p.ID = pm_time.post_id AND pm_time.meta_key = 'start_time'
+             LEFT JOIN {$wpdb->postmeta} pm_end ON p.ID = pm_end.post_id AND pm_end.meta_key = 'end_time'
+             LEFT JOIN {$wpdb->postmeta} pm_edition ON p.ID = pm_edition.post_id AND pm_edition.meta_key = 'edition_id'
+             WHERE p.post_type = %s AND p.post_status = 'publish'
+             AND pm_date.meta_value = %s
+             ORDER BY pm_time.meta_value ASC",
+            SessionCPT::POST_TYPE,
+            $today
+        ));
+
+        foreach ($sessions as $session) {
+            $editionId = (int) $session->edition_id;
+            $edition = $editionId > 0 ? get_post($editionId) : null;
+            $registeredCount = 0;
+            if ($editionId > 0 && RegistrationTable::exists()) {
+                $registeredCount = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$registrationTable} WHERE edition_id = %d AND status = 'confirmed'",
+                    $editionId
+                ));
+            }
+            $todaySessionDetails[] = [
+                'id' => $session->ID,
+                'title' => $session->post_title,
+                'editionTitle' => $edition ? $edition->post_title : '',
+                'startTime' => $session->start_time ?: '',
+                'endTime' => $session->end_time ?: '',
+                'registeredCount' => $registeredCount,
+            ];
+        }
+
+        // Upcoming editions (next 5)
+        $upcomingEditionDetails = [];
+        $upcomingList = $wpdb->get_results($wpdb->prepare(
+            "SELECT p.ID, p.post_title, pm_date.meta_value as start_date,
+                    pm_capacity.meta_value as capacity, pm_status.meta_value as status
+             FROM {$wpdb->posts} p
+             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = 'start_date'
+             LEFT JOIN {$wpdb->postmeta} pm_capacity ON p.ID = pm_capacity.post_id AND pm_capacity.meta_key = 'capacity'
+             LEFT JOIN {$wpdb->postmeta} pm_status ON p.ID = pm_status.post_id AND pm_status.meta_key = 'status'
+             WHERE p.post_type = %s AND p.post_status = 'publish'
+             AND pm_date.meta_value >= %s
+             ORDER BY pm_date.meta_value ASC
+             LIMIT 5",
+            EditionCPT::POST_TYPE,
+            $today
+        ));
+
+        foreach ($upcomingList as $ed) {
+            $editionId = (int) $ed->ID;
+            $capacity = (int) $ed->capacity;
+            $registeredCount = 0;
+            if (RegistrationTable::exists()) {
+                $registeredCount = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$registrationTable} WHERE edition_id = %d AND status = 'confirmed'",
+                    $editionId
+                ));
+            }
+            $upcomingEditionDetails[] = [
+                'id' => $editionId,
+                'title' => $ed->post_title,
+                'startDate' => $ed->start_date,
+                'status' => $ed->status ?: 'open',
+                'capacity' => $capacity,
+                'registeredCount' => $registeredCount,
+                'spotsLeft' => $capacity > 0 ? max(0, $capacity - $registeredCount) : null,
+            ];
+        }
+
+        // Recent registrations (last 7 days)
+        $recentRegistrations = [];
+        if (RegistrationTable::exists()) {
+            $weekAgo = date('Y-m-d H:i:s', strtotime('-7 days'));
+            $recentRegs = $wpdb->get_results($wpdb->prepare(
+                "SELECT r.id, r.user_id, r.edition_id, r.status, r.created_at
+                 FROM {$registrationTable} r
+                 WHERE r.created_at >= %s
+                 ORDER BY r.created_at DESC
+                 LIMIT 10",
+                $weekAgo
+            ));
+
+            foreach ($recentRegs as $reg) {
+                $user = get_userdata((int) $reg->user_id);
+                $edition = get_post((int) $reg->edition_id);
+                $recentRegistrations[] = [
+                    'id' => (int) $reg->id,
+                    'userName' => $user ? $user->display_name : 'Unknown',
+                    'userEmail' => $user ? $user->user_email : '',
+                    'editionTitle' => $edition ? $edition->post_title : 'Unknown',
+                    'status' => $reg->status,
+                    'createdAt' => $reg->created_at,
+                ];
+            }
+        }
+
+        // Registrations this week vs last week
+        $thisWeekStart = date('Y-m-d', strtotime('monday this week'));
+        $lastWeekStart = date('Y-m-d', strtotime('monday last week'));
+        $lastWeekEnd = date('Y-m-d', strtotime('sunday last week'));
+        $registrationsThisWeek = 0;
+        $registrationsLastWeek = 0;
+        if (RegistrationTable::exists()) {
+            $registrationsThisWeek = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$registrationTable} WHERE created_at >= %s",
+                $thisWeekStart
+            ));
+            $registrationsLastWeek = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$registrationTable} WHERE created_at >= %s AND created_at < %s",
+                $lastWeekStart,
+                $thisWeekStart
+            ));
+        }
+
+        // Alerts: editions almost full (>80%) or low registration (<30%) starting within 14 days
+        $alerts = [];
+        $twoWeeksFromNow = date('Y-m-d', strtotime('+14 days'));
+        $alertEditions = $wpdb->get_results($wpdb->prepare(
+            "SELECT p.ID, p.post_title, pm_date.meta_value as start_date,
+                    pm_capacity.meta_value as capacity
+             FROM {$wpdb->posts} p
+             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = 'start_date'
+             LEFT JOIN {$wpdb->postmeta} pm_capacity ON p.ID = pm_capacity.post_id AND pm_capacity.meta_key = 'capacity'
+             WHERE p.post_type = %s AND p.post_status = 'publish'
+             AND pm_date.meta_value >= %s AND pm_date.meta_value <= %s
+             ORDER BY pm_date.meta_value ASC",
+            EditionCPT::POST_TYPE,
+            $today,
+            $twoWeeksFromNow
+        ));
+
+        foreach ($alertEditions as $ed) {
+            $editionId = (int) $ed->ID;
+            $capacity = (int) $ed->capacity;
+            if ($capacity <= 0) {
+                continue; // Skip unlimited capacity editions
+            }
+            $registeredCount = 0;
+            if (RegistrationTable::exists()) {
+                $registeredCount = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$registrationTable} WHERE edition_id = %d AND status = 'confirmed'",
+                    $editionId
+                ));
+            }
+            $fillRate = ($registeredCount / $capacity) * 100;
+
+            if ($fillRate >= 80) {
+                $alerts[] = [
+                    'type' => 'almost_full',
+                    'editionId' => $editionId,
+                    'editionTitle' => $ed->post_title,
+                    'startDate' => $ed->start_date,
+                    'message' => sprintf('%d/%d plaatsen bezet', $registeredCount, $capacity),
+                    'fillRate' => round($fillRate),
+                ];
+            } elseif ($fillRate < 30) {
+                $alerts[] = [
+                    'type' => 'low_registration',
+                    'editionId' => $editionId,
+                    'editionTitle' => $ed->post_title,
+                    'startDate' => $ed->start_date,
+                    'message' => sprintf('Slechts %d/%d inschrijvingen', $registeredCount, $capacity),
+                    'fillRate' => round($fillRate),
+                ];
+            }
+        }
+
         return new WP_REST_Response([
             'upcomingEditions' => $upcomingEditions,
             'totalRegistrations' => $totalRegistrations,
             'pendingQuotes' => $pendingQuotes,
             'todaySessions' => $todaySessions,
             'openTrajectories' => $openTrajectories,
+            // New dashboard data
+            'todaySessionDetails' => $todaySessionDetails,
+            'upcomingEditionDetails' => $upcomingEditionDetails,
+            'recentRegistrations' => $recentRegistrations,
+            'registrationsThisWeek' => $registrationsThisWeek,
+            'registrationsLastWeek' => $registrationsLastWeek,
+            'alerts' => $alerts,
         ]);
     }
 
@@ -1156,19 +1336,38 @@ final class AdminAPIController extends AbstractService
             $courses = get_post_meta($trajectoryId, 'courses', true);
             $price = (int) get_post_meta($trajectoryId, 'price', true);
 
-            // Count courses
-            $courseCount = 0;
+            // Parse courses
+            $courseList = [];
             if (is_array($courses)) {
-                $courseCount = count($courses);
+                $courseList = $courses;
             } elseif (is_string($courses) && !empty($courses)) {
                 $decoded = json_decode($courses, true);
                 if (is_array($decoded)) {
-                    $courseCount = count($decoded);
+                    $courseList = $decoded;
                 }
             }
+            $courseCount = count($courseList);
 
-            // Count enrolled users (from trajectory_enrollments table if exists)
+            // Enrich courses with edition titles
+            $coursesWithDetails = [];
+            foreach ($courseList as $course) {
+                $courseData = [
+                    'editionId' => $course['edition_id'] ?? 0,
+                    'type' => $course['type'] ?? 'required',
+                    'title' => '',
+                ];
+                if ($courseData['editionId'] > 0) {
+                    $edition = get_post($courseData['editionId']);
+                    if ($edition) {
+                        $courseData['title'] = $edition->post_title;
+                    }
+                }
+                $coursesWithDetails[] = $courseData;
+            }
+
+            // Get enrolled users (from trajectory_enrollments table if exists)
             $enrolledCount = 0;
+            $enrolledUsers = [];
             $enrollmentTable = $wpdb->prefix . 'vad_trajectory_enrollments';
             $tableExists = $wpdb->get_var("SHOW TABLES LIKE '{$enrollmentTable}'") === $enrollmentTable;
             if ($tableExists) {
@@ -1176,7 +1375,31 @@ final class AdminAPIController extends AbstractService
                     "SELECT COUNT(*) FROM {$enrollmentTable} WHERE trajectory_id = %d",
                     $trajectoryId
                 ));
+
+                // Get enrolled users list
+                $enrollments = $wpdb->get_results($wpdb->prepare(
+                    "SELECT user_id, status, enrolled_at FROM {$enrollmentTable} WHERE trajectory_id = %d ORDER BY enrolled_at DESC LIMIT 50",
+                    $trajectoryId
+                ));
+
+                foreach ($enrollments as $enrollment) {
+                    $user = get_userdata((int) $enrollment->user_id);
+                    if ($user) {
+                        $enrolledUsers[] = [
+                            'id' => (int) $enrollment->user_id,
+                            'name' => $user->display_name,
+                            'email' => $user->user_email,
+                            'status' => $enrollment->status,
+                            'enrolledAt' => $enrollment->enrolled_at,
+                        ];
+                    }
+                }
             }
+
+            // Get additional meta
+            $priceNonMember = (float) get_post_meta($trajectoryId, 'price_non_member', true);
+            $choiceAvailableDate = get_post_meta($trajectoryId, 'choice_available_date', true);
+            $description = get_post_field('post_content', $trajectoryId);
 
             // Get status label
             $statusLabel = match ($trajectoryStatus) {
@@ -1198,6 +1421,7 @@ final class AdminAPIController extends AbstractService
             $items[] = [
                 'id' => $trajectoryId,
                 'title' => $trajectory->post_title,
+                'description' => wp_trim_words(wp_strip_all_tags($description), 30, '...'),
                 'status' => $trajectoryStatus ?: 'draft',
                 'statusLabel' => $statusLabel,
                 'mode' => $mode ?: 'cohort',
@@ -1205,9 +1429,14 @@ final class AdminAPIController extends AbstractService
                 'capacity' => $capacity,
                 'enrolledCount' => $enrolledCount,
                 'courseCount' => $courseCount,
+                'courses' => $coursesWithDetails,
+                'enrolledUsers' => $enrolledUsers,
                 'price' => $price,
-                'priceFormatted' => number_format($price / 100, 2, ',', '.'),
+                'priceFormatted' => number_format($price, 2, ',', '.'),
+                'priceNonMember' => $priceNonMember,
+                'priceNonMemberFormatted' => number_format($priceNonMember, 2, ',', '.'),
                 'enrollmentDeadline' => $enrollmentDeadline ?: null,
+                'choiceAvailableDate' => $choiceAvailableDate ?: null,
                 'choiceDeadline' => $choiceDeadline ?: null,
                 'editUrl' => admin_url("post.php?post={$trajectoryId}&action=edit"),
             ];
