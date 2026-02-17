@@ -30,7 +30,8 @@ final class EditionCPT
             'menu_icon' => 'dashicons-calendar-alt',
             'supports' => ['title'],
             'fields' => self::getFields(),
-            'field_groups' => self::getFieldGroups(),
+            // Disable auto-generated metabox - custom UI handled by EditionAdminController
+            'auto_metabox' => false,
         ]);
     }
 
@@ -89,25 +90,4 @@ final class EditionCPT
         ];
     }
 
-    private static function getFieldGroups(): array
-    {
-        return [
-            'edition_details' => [
-                'title' => 'Editie Details',
-                'fields' => ['course_id', 'start_date', 'end_date', 'capacity', 'venue', 'status'],
-            ],
-            'edition_pricing' => [
-                'title' => 'Prijzen',
-                'fields' => ['price', 'price_non_member'],
-            ],
-            'edition_info' => [
-                'title' => 'Extra Info',
-                'fields' => ['speakers'],
-            ],
-            'edition_sessions' => [
-                'title' => 'Sessie Selectie',
-                'fields' => ['selection_deadline', 'session_slots'],
-            ],
-        ];
-    }
 }

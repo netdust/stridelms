@@ -35,6 +35,7 @@ return [
         \Stride\Modules\Edition\EditionService::class,
         \Stride\Modules\Edition\SessionService::class,
         \Stride\Modules\Edition\SessionSelectionService::class,
+        \Stride\Modules\Edition\Admin\EditionAdminController::class,
         \Stride\Modules\Enrollment\EnrollmentService::class,
         \Stride\Modules\Invoicing\QuoteService::class,
         \Stride\Modules\Invoicing\VoucherService::class,

@@ -7,6 +7,10 @@
  * - Attendance tracking with cycling status
  * - Real-time capacity visualization
  *
+ * NOTE: Uses jQuery for WordPress admin compatibility. Consider Alpine.js
+ * refactor if building more complex admin UIs - dashboard uses Alpine for
+ * reactive state management. Select2 would need jQuery bridge regardless.
+ *
  * @package stride
  */
 

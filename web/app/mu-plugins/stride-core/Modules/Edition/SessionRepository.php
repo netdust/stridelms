@@ -131,4 +131,35 @@ final class SessionRepository extends AbstractRepository
 
         return parent::create($data);
     }
+
+    /**
+     * Update session with validation.
+     */
+    public function update(int $id, array $data): WP_Post|WP_Error
+    {
+        // Merge with existing data for validation
+        $existing = $this->find($id);
+        if (is_wp_error($existing)) {
+            return $existing;
+        }
+
+        $mergedData = array_merge([
+            'edition_id' => $this->getField($id, 'edition_id'),
+            'date' => $this->getField($id, 'date'),
+        ], $data);
+
+        $validation = $this->validate($mergedData);
+        if (is_wp_error($validation)) {
+            return $validation;
+        }
+
+        // Update title from date + time
+        if (isset($data['date']) || isset($data['start_time'])) {
+            $date = $data['date'] ?? $this->getField($id, 'date', '');
+            $startTime = $data['start_time'] ?? $this->getField($id, 'start_time', '');
+            $data['post_title'] = $date . ($startTime ? ' ' . $startTime : '');
+        }
+
+        return parent::update($id, $data);
+    }
 }

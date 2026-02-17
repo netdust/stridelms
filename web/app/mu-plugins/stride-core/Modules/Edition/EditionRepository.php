@@ -76,6 +76,14 @@ final class EditionRepository extends AbstractRepository
      */
     public function updateStatus(int $editionId, EditionStatus $status): void
     {
-        $this->model()->updateMeta($editionId, 'status', $status->value);
+        $this->model()->updateMetaBatch($editionId, ['status' => $status->value]);
+    }
+
+    /**
+     * Update edition meta fields.
+     */
+    public function updateMeta(int $editionId, array $data): bool
+    {
+        return $this->model()->updateMetaBatch($editionId, $data);
     }
 }
