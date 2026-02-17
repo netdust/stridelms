@@ -67,6 +67,7 @@ add_action('ntdst/core_ready', function () use ($config): void {
     ntdst_set(\Stride\Modules\Invoicing\QuoteRepository::class);
     ntdst_set(\Stride\Modules\Invoicing\VoucherRepository::class);
     ntdst_set(\Stride\Modules\Trajectory\TrajectoryRepository::class);
+    ntdst_set(\Stride\Modules\Attendance\AttendanceRepository::class);
 
     // Register interface bindings
     foreach ($config['bindings'] as $interface => $implementation) {
