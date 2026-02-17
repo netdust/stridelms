@@ -117,29 +117,46 @@ final class SessionSelectionService extends AbstractService
             return new WP_Error('deadline_passed', 'Selection deadline has passed');
         }
 
-        // Check capacity
-        if (!$this->hasCapacity($sessionId)) {
-            return new WP_Error('no_capacity', 'Session is full');
-        }
-
-        // Check not already registered
+        // Check not already registered (before transaction to fail fast)
         if ($this->isRegisteredForSession($userId, $sessionId)) {
             return new WP_Error('already_registered', 'Already registered for this session');
         }
 
-        // Insert registration
         global $wpdb;
         $table = SessionRegistrationTable::getTableName();
 
-        $result = $wpdb->insert($table, [
-            'registration_id' => $registrationId,
-            'session_id' => $sessionId,
-            'user_id' => $userId,
-            'status' => 'registered',
-            'registered_at' => current_time('mysql'),
-        ], ['%d', '%d', '%d', '%s', '%s']);
+        // Start transaction with locking to prevent race conditions
+        $wpdb->query('START TRANSACTION');
 
-        if ($result === false) {
+        try {
+            // Lock and re-check capacity
+            $registered = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$table} WHERE session_id = %d AND status = 'registered' FOR UPDATE",
+                $sessionId
+            ));
+
+            if ($session['capacity'] > 0 && $registered >= $session['capacity']) {
+                $wpdb->query('ROLLBACK');
+                return new WP_Error('no_capacity', 'Session is full');
+            }
+
+            // Insert registration
+            $result = $wpdb->insert($table, [
+                'registration_id' => $registrationId,
+                'session_id' => $sessionId,
+                'user_id' => $userId,
+                'status' => 'registered',
+                'registered_at' => current_time('mysql'),
+            ], ['%d', '%d', '%d', '%s', '%s']);
+
+            if ($result === false) {
+                $wpdb->query('ROLLBACK');
+                return new WP_Error('db_error', 'Failed to register for session');
+            }
+
+            $wpdb->query('COMMIT');
+        } catch (\Exception $e) {
+            $wpdb->query('ROLLBACK');
             return new WP_Error('db_error', 'Failed to register for session');
         }
 
@@ -179,14 +196,24 @@ final class SessionSelectionService extends AbstractService
             [
                 'user_id' => $userId,
                 'session_id' => $sessionId,
+                'status' => 'registered',
             ],
             ['%s', '%s'],
-            ['%d', '%d']
+            ['%d', '%d', '%s']
         );
 
         if ($result === false) {
             return new WP_Error('db_error', 'Failed to cancel session registration');
         }
+
+        if ($result === 0) {
+            return new WP_Error('not_registered', 'User is not registered for this session');
+        }
+
+        do_action('stride/session/user_cancelled', [
+            'user_id' => $userId,
+            'session_id' => $sessionId,
+        ]);
 
         return true;
     }
