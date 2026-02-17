@@ -26,10 +26,10 @@ if (defined('WP_ENV') && WP_ENV === 'production') {
     exit(1);
 }
 
-use ntdst\Stride\core\EditionService;
-use ntdst\Stride\core\SessionService;
-use ntdst\Stride\core\RegistrationRepository;
-use ntdst\Stride\FieldRegistry;
+use Stride\Modules\Edition\EditionService;
+use Stride\Modules\Edition\SessionService;
+use Stride\Modules\Enrollment\RegistrationRepository;
+use Stride\FieldRegistry;
 
 /**
  * Seed Data Generator

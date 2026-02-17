@@ -110,10 +110,12 @@ final class QuoteService extends AbstractService
 
     /**
      * Get quote by ID.
+     *
+     * @param bool $skipCache Set true after mutations to get fresh data
      */
-    public function getQuote(int $quoteId): array|WP_Error
+    public function getQuote(int $quoteId, bool $skipCache = false): array|WP_Error
     {
-        $result = $this->repository->find($quoteId);
+        $result = $this->repository->find($quoteId, $skipCache);
 
         if (is_wp_error($result)) {
             return $result;
@@ -207,7 +209,9 @@ final class QuoteService extends AbstractService
             return $quote;
         }
 
-        $status = QuoteStatus::tryFrom($quote->status ?? '');
+        // Get meta from dynamic property on WP_Post
+        $meta = $quote->meta ?? [];
+        $status = QuoteStatus::tryFrom($meta['status'] ?? '');
 
         if ($status !== QuoteStatus::Draft) {
             return new WP_Error('invalid_status', 'Alleen concept-offertes kunnen worden aangepast');
@@ -215,14 +219,16 @@ final class QuoteService extends AbstractService
 
         // Validate and get voucher through VoucherService
         $voucherService = ntdst_get(VoucherService::class);
-        $voucher = $voucherService->validateVoucher($voucherCode, (int) ($quote->edition_id ?? 0));
+        $editionId = (int) ($meta['edition_id'] ?? 0);
+        $voucher = $voucherService->validateVoucher($voucherCode, $editionId);
 
         if (is_wp_error($voucher)) {
             return $voucher;
         }
 
         // Calculate discount
-        $subtotal = Money::cents((int) ($quote->subtotal ?? 0));
+        $subtotalCents = (int) ($meta['subtotal'] ?? 0);
+        $subtotal = Money::cents($subtotalCents);
         $discount = $voucherService->calculateDiscount($voucher, $subtotal);
 
         // Recalculate totals
@@ -244,7 +250,8 @@ final class QuoteService extends AbstractService
         }
 
         // Redeem the voucher
-        $redemption = $voucherService->redeemVoucher($voucherCode, (int) $quote->user_id, $quoteId);
+        $userId = (int) ($meta['user_id'] ?? 0);
+        $redemption = $voucherService->redeemVoucher($voucherCode, $userId, $quoteId);
 
         if (is_wp_error($redemption)) {
             return $redemption;
@@ -267,11 +274,23 @@ final class QuoteService extends AbstractService
      */
     private function hydrateQuote(array|WP_Post $quote): array
     {
-        $data = is_array($quote) ? $quote : (array) $quote;
+        // Handle WP_Post with dynamically added meta/fields properties
+        if ($quote instanceof WP_Post) {
+            $data = (array) $quote;
 
-        // Flatten meta fields to top level if present
-        if (isset($data['meta']) && is_array($data['meta'])) {
-            $data = array_merge($data, $data['meta']);
+            // Access dynamic properties directly from the object
+            if (isset($quote->meta) && is_array($quote->meta)) {
+                $data = array_merge($data, $quote->meta);
+            } elseif (isset($quote->fields) && is_array($quote->fields)) {
+                $data = array_merge($data, $quote->fields);
+            }
+        } else {
+            $data = $quote;
+
+            // Flatten meta fields to top level if present
+            if (isset($data['meta']) && is_array($data['meta'])) {
+                $data = array_merge($data, $data['meta']);
+            }
         }
 
         // Convert cents to Money objects

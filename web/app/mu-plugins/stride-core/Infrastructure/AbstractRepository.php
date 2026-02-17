@@ -29,11 +29,11 @@ abstract class AbstractRepository implements RepositoryInterface
         return ntdst_data()->get($this->postType);
     }
 
-    public function find(int $id): WP_Post|WP_Error
+    public function find(int $id, bool $skipCache = false): WP_Post|WP_Error
     {
-        $post = $this->model()->find($id);
+        $post = $this->model()->find($id, $skipCache);
 
-        if ($post === null) {
+        if ($post === null || is_wp_error($post)) {
             return new WP_Error(
                 'not_found',
                 sprintf('%s with ID %d not found', $this->postType, $id)

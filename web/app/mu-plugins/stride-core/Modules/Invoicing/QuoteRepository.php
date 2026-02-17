@@ -135,6 +135,16 @@ final class QuoteRepository extends AbstractRepository
      */
     public function updateMeta(int $quoteId, array $data): bool
     {
-        return $this->model()->updateMeta($quoteId, $data) !== false;
+        foreach ($data as $key => $value) {
+            $result = $this->model()->updateMeta($quoteId, $key, $value);
+            if ($result === false || is_wp_error($result)) {
+                return false;
+            }
+        }
+
+        // Clear caches to ensure fresh data on next read
+        \NTDST_Data_Manager::clearCache($quoteId);
+
+        return true;
     }
 }
