@@ -77,10 +77,12 @@ class AdminDashboardService extends AbstractService
     {
         $screen = get_current_screen();
         if (!$screen) {
-            return isset($_GET['page']) && strpos($_GET['page'], self::MENU_SLUG) === 0;
+            $page = isset($_GET['page']) ? sanitize_text_field(wp_unslash($_GET['page'])) : '';
+
+            return $page === self::MENU_SLUG;
         }
 
-        return strpos($screen->id, self::MENU_SLUG) !== false;
+        return str_contains($screen->id, self::MENU_SLUG);
     }
 
     /**
@@ -88,7 +90,7 @@ class AdminDashboardService extends AbstractService
      */
     public function enqueueAssets(string $hook): void
     {
-        if (strpos($hook, self::MENU_SLUG) === false) {
+        if (!str_contains($hook, self::MENU_SLUG)) {
             return;
         }
 
