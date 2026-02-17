@@ -33,7 +33,8 @@ final class VoucherCPT
             'menu_icon' => 'dashicons-tickets-alt',
             'supports' => ['title'],
             'fields' => self::getFields(),
-            'field_groups' => self::getFieldGroups(),
+            // Disable auto-generated metabox - custom UI handled by VoucherAdminController
+            'auto_metabox' => false,
         ]);
     }
 

@@ -40,6 +40,7 @@ return [
         \Stride\Modules\Invoicing\QuoteService::class,
         \Stride\Modules\Invoicing\VoucherService::class,
         \Stride\Modules\Invoicing\Admin\QuoteAdminController::class,
+        \Stride\Modules\Invoicing\Admin\VoucherAdminController::class,
         \Stride\Modules\Trajectory\TrajectoryService::class,
         \Stride\Modules\Trajectory\TrajectorySelectionService::class,
         \Stride\Modules\Attendance\AttendanceService::class,
