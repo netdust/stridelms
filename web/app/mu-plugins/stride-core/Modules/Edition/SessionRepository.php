@@ -33,12 +33,26 @@ final class SessionRepository extends AbstractRepository
      */
     public function findByEdition(int $editionId): array
     {
-        return $this->model()
+        $sessions = $this->model()
             ->where('edition_id', $editionId)
-            ->orderBy('date', 'ASC')
-            ->orderBy('start_time', 'ASC')
             ->withMeta()
             ->get();
+
+        // Sort by date ASC, then start_time ASC
+        // Note: orderBy() doesn't work for meta fields, so we sort in PHP
+        usort($sessions, function ($a, $b) {
+            $dateA = $a['meta']['date'] ?? '';
+            $dateB = $b['meta']['date'] ?? '';
+            $dateCmp = strcmp($dateA, $dateB);
+            if ($dateCmp !== 0) {
+                return $dateCmp;
+            }
+            $timeA = $a['meta']['start_time'] ?? '';
+            $timeB = $b['meta']['start_time'] ?? '';
+            return strcmp($timeA, $timeB);
+        });
+
+        return $sessions;
     }
 
     /**
@@ -48,12 +62,26 @@ final class SessionRepository extends AbstractRepository
      */
     public function findBySlot(int $editionId, string $slot): array
     {
-        return $this->model()
+        $sessions = $this->model()
             ->where('edition_id', $editionId)
             ->where('slot', $slot)
-            ->orderBy('date', 'ASC')
             ->withMeta()
             ->get();
+
+        // Sort by date ASC, then start_time ASC
+        usort($sessions, function ($a, $b) {
+            $dateA = $a['meta']['date'] ?? '';
+            $dateB = $b['meta']['date'] ?? '';
+            $dateCmp = strcmp($dateA, $dateB);
+            if ($dateCmp !== 0) {
+                return $dateCmp;
+            }
+            $timeA = $a['meta']['start_time'] ?? '';
+            $timeB = $b['meta']['start_time'] ?? '';
+            return strcmp($timeA, $timeB);
+        });
+
+        return $sessions;
     }
 
     /**
