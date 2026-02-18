@@ -93,4 +93,7 @@ add_action('ntdst/features_ready', function () use ($config): void {
     // Register handlers
     ntdst_set(\Stride\Handlers\EnrollmentQuoteHandler::class);
     ntdst_get(\Stride\Handlers\EnrollmentQuoteHandler::class);
+
+    ntdst_set(\Stride\Handlers\ProfileHandler::class);
+    ntdst_get(\Stride\Handlers\ProfileHandler::class);
 });
