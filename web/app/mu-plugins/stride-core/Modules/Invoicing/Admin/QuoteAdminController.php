@@ -108,16 +108,16 @@ final class QuoteAdminController extends AbstractService
             return;
         }
 
-        // Select2 from CDN
+        // Select2 (locally hosted)
         wp_enqueue_style(
             'select2',
-            'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css',
+            get_stylesheet_directory_uri() . '/assets/vendor/select2/select2.min.css',
             [],
             '4.1.0'
         );
         wp_enqueue_script(
             'select2',
-            'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js',
+            get_stylesheet_directory_uri() . '/assets/vendor/select2/select2.min.js',
             ['jquery'],
             '4.1.0',
             true
