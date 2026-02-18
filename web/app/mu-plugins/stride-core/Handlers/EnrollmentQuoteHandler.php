@@ -25,17 +25,21 @@ final class EnrollmentQuoteHandler
     /**
      * Handle registration created event.
      *
-     * @param array{registration_id: int, user_id: int, edition_id: int} $data
+     * @param array{registration_id: int, user_id: int, edition_id: int, enrolled_by?: int|null} $data
      */
     public function onRegistrationCreated(array $data): void
     {
         $registrationId = $data['registration_id'] ?? 0;
         $userId = $data['user_id'] ?? 0;
         $editionId = $data['edition_id'] ?? 0;
+        $enrolledBy = $data['enrolled_by'] ?? null;
 
         if (!$registrationId || !$userId || !$editionId) {
             return;
         }
+
+        // For colleague enrollments, quote goes to the enrolling user (the one who pays)
+        $quoteUserId = $enrolledBy ?: $userId;
 
         // Check if quote already exists
         $existing = $this->quotes->getQuoteByRegistration($registrationId);
@@ -50,6 +54,7 @@ final class EnrollmentQuoteHandler
         }
 
         // Get price (check if member - simplified for now)
+        // Price is based on the attendee's membership status, not the enrolling user
         $price = $this->getEditionPrice($editionId, $userId);
 
         // Skip free editions
@@ -67,12 +72,12 @@ final class EnrollmentQuoteHandler
             ],
         ];
 
-        // Get user billing info (simplified - fetch from user meta)
-        $billing = $this->getUserBilling($userId);
+        // Get billing info for the user who pays (enrolling user for colleague enrollments)
+        $billing = $this->getUserBilling($quoteUserId);
 
-        // Create quote
+        // Create quote for the billing user
         $this->quotes->createQuote(
-            userId: $userId,
+            userId: $quoteUserId,
             registrationId: $registrationId,
             editionId: $editionId,
             items: $items,

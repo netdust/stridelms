@@ -60,10 +60,15 @@ final class EnrollmentService extends AbstractService
         // Check enrollment allowed
         $status = $this->editions->getStatus($editionId);
         if (!$status->allowsEnrollment()) {
+            // Distinguish between "full" and other closed reasons
+            if ($status === \Stride\Domain\EditionStatus::Full) {
+                return new WP_Error('edition_full', 'This edition is full');
+            }
+
             return new WP_Error('enrollment_closed', 'Enrollment is not open for this edition');
         }
 
-        // Check capacity
+        // Check capacity (redundant when status is correctly maintained, but defensive)
         if (!$this->editions->hasAvailableSpots($editionId)) {
             return new WP_Error('edition_full', 'This edition is full');
         }
@@ -99,6 +104,7 @@ final class EnrollmentService extends AbstractService
             'registration_id' => $registrationId,
             'user_id' => $userId,
             'edition_id' => $editionId,
+            'enrolled_by' => $options['enrolled_by'] ?? null,
         ]);
 
         return $registrationId;
