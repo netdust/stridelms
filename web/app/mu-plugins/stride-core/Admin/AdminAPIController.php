@@ -814,41 +814,59 @@ final class AdminAPIController extends AbstractService
 
         // Format items
         $items = [];
-        $registrationTable = RegistrationTable::getTableName();
+
+        // Batch fetch all data upfront
+        $sessionIds = array_map(fn($s) => (int) $s->session_id, $sessions);
+        $editionIds = array_unique(array_map(fn($s) => (int) $s->edition_id, $sessions));
+
+        // Batch fetch session meta
+        $sessionMeta = BatchQueryHelper::batchGetPostMeta($sessionIds, [
+            'start_time', 'end_time', 'location',
+        ]);
+
+        // Batch fetch edition meta
+        $editionMeta = BatchQueryHelper::batchGetPostMeta($editionIds, [
+            'venue', 'capacity', 'status', 'course_id',
+        ]);
+
+        // Batch fetch registration counts
+        $regCounts = RegistrationTable::exists()
+            ? BatchQueryHelper::batchGetRegistrationCounts($editionIds)
+            : [];
+
+        // Batch fetch course data
+        $courseIds = array_filter(array_map(fn($id) => (int) ($editionMeta[$id]['course_id'] ?? 0), $editionIds));
+        $courses = BatchQueryHelper::batchGetPosts($courseIds, 'sfwd-courses');
 
         foreach ($sessions as $session) {
             $sessionId = (int) $session->session_id;
             $editionId = (int) $session->edition_id;
             $sessionDate = $session->session_date;
 
-            // Get session times
-            $startTime = get_post_meta($sessionId, 'start_time', true);
-            $endTime = get_post_meta($sessionId, 'end_time', true);
-            $location = get_post_meta($sessionId, 'location', true);
+            // Get session meta from batch
+            $sMeta = $sessionMeta[$sessionId] ?? [];
+            $startTime = $sMeta['start_time'] ?? '';
+            $endTime = $sMeta['end_time'] ?? '';
+            $location = $sMeta['location'] ?? '';
 
-            // Get edition info
-            $venue = get_post_meta($editionId, 'venue', true);
-            $capacity = (int) get_post_meta($editionId, 'capacity', true);
-            $editionStatus = get_post_meta($editionId, 'status', true);
-            $courseId = (int) get_post_meta($editionId, 'course_id', true);
+            // Get edition meta from batch
+            $eMeta = $editionMeta[$editionId] ?? [];
+            $venue = $eMeta['venue'] ?? '';
+            $capacity = (int) ($eMeta['capacity'] ?? 0);
+            $editionStatus = $eMeta['status'] ?? '';
+            $courseId = (int) ($eMeta['course_id'] ?? 0);
 
-            // Get course title
+            // Get course title from batch
             $courseTitle = '';
             if ($courseId > 0) {
-                $course = get_post($courseId);
+                $course = $courses[$courseId] ?? null;
                 if ($course) {
                     $courseTitle = $course->post_title;
                 }
             }
 
-            // Count registrations
-            $registeredCount = 0;
-            if (RegistrationTable::exists()) {
-                $registeredCount = (int) $wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM {$registrationTable} WHERE edition_id = %d AND status = 'confirmed'",
-                    $editionId
-                ));
-            }
+            // Get registration count from batch
+            $registeredCount = $regCounts[$editionId] ?? 0;
 
             // Check if session is today/past
             $isToday = $sessionDate === $today;
