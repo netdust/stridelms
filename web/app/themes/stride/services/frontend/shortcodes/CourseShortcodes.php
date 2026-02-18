@@ -14,6 +14,8 @@ use stride\services\frontend\DashboardService;
  */
 final class CourseShortcodes
 {
+    use ShortcodeBase;
+
     private ?DashboardService $dashboardService;
 
     public function __construct(?DashboardService $dashboardService = null)
@@ -28,51 +30,6 @@ final class CourseShortcodes
     {
         add_shortcode('stride_course_catalog', [$this, 'renderCourseCatalog']);
         add_shortcode('stride_course_sidebar', [$this, 'renderCourseSidebar']);
-    }
-
-    /**
-     * Resolve service from DI container
-     */
-    private function resolveService(string $class): ?object
-    {
-        if (function_exists('ntdst_get')) {
-            try {
-                return ntdst_get($class);
-            } catch (\Exception $e) {
-                return null;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Get template path
-     */
-    private function getTemplatePath(string $template): string
-    {
-        return get_stylesheet_directory() . '/templates/' . $template;
-    }
-
-    /**
-     * Render a template with data
-     */
-    private function renderTemplate(string $template, array $data = []): string
-    {
-        $templatePath = $this->getTemplatePath($template);
-
-        if (!file_exists($templatePath)) {
-            if (current_user_can('manage_options')) {
-                return '<div class="uk-alert uk-alert-warning">Template not found: ' . esc_html($template) . '</div>';
-            }
-            return '';
-        }
-
-        // Extract data for template access
-        extract($data, EXTR_SKIP);
-
-        ob_start();
-        include $templatePath;
-        return ob_get_clean();
     }
 
     /**
