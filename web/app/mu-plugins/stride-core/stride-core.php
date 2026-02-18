@@ -96,4 +96,7 @@ add_action('ntdst/features_ready', function () use ($config): void {
 
     ntdst_set(\Stride\Handlers\ProfileHandler::class);
     ntdst_get(\Stride\Handlers\ProfileHandler::class);
+
+    ntdst_set(\Stride\Handlers\ICalHandler::class);
+    ntdst_get(\Stride\Handlers\ICalHandler::class);
 });
