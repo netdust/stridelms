@@ -176,6 +176,24 @@ add_action('wp_enqueue_scripts', function () {
     ]);
 }, 10);
 
+/**
+ * Enqueue LearnDash Focus Mode overrides
+ *
+ * Only loads on LearnDash content pages (courses, lessons, topics, quizzes)
+ * to apply Stride design system styling to Focus Mode.
+ */
+add_action('wp_enqueue_scripts', function () {
+    // Only load on LearnDash content
+    if (is_singular(['sfwd-courses', 'sfwd-lessons', 'sfwd-topic', 'sfwd-quiz'])) {
+        wp_enqueue_style(
+            'stride-focus-mode',
+            get_stylesheet_directory_uri() . '/assets/css/focus-mode.css',
+            ['stride-css'],
+            wp_get_theme()->get('Version')
+        );
+    }
+}, 20); // After other styles
+
 // ========================================
 // THEME ACTIVATION
 // ========================================
