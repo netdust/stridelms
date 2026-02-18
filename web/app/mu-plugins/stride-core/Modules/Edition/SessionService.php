@@ -170,6 +170,45 @@ final class SessionService extends AbstractService
         return $total;
     }
 
+    /**
+     * Get total duration for multiple sessions in hours.
+     *
+     * @param array<int> $sessionIds
+     */
+    public function getTotalDurationForSessions(array $sessionIds): float
+    {
+        if (empty($sessionIds)) {
+            return 0.0;
+        }
+
+        global $wpdb;
+
+        $placeholders = implode(',', array_fill(0, count($sessionIds), '%d'));
+
+        // Fetch start_time and end_time for all sessions in single query
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT pm_start.post_id, pm_start.meta_value as start_time, pm_end.meta_value as end_time
+             FROM {$wpdb->postmeta} pm_start
+             LEFT JOIN {$wpdb->postmeta} pm_end ON pm_start.post_id = pm_end.post_id AND pm_end.meta_key = 'end_time'
+             WHERE pm_start.post_id IN ({$placeholders})
+             AND pm_start.meta_key = 'start_time'",
+            ...$sessionIds
+        ));
+
+        $totalHours = 0.0;
+        foreach ($results as $row) {
+            if (!empty($row->start_time) && !empty($row->end_time)) {
+                $start = strtotime($row->start_time);
+                $end = strtotime($row->end_time);
+                if ($end > $start) {
+                    $totalHours += ($end - $start) / 3600;
+                }
+            }
+        }
+
+        return $totalHours;
+    }
+
     // === Helpers ===
 
     /**

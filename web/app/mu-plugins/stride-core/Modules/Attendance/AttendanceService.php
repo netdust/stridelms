@@ -230,16 +230,26 @@ final class AttendanceService extends AbstractService
     public function getHoursAttended(int $userId, int $editionId): float
     {
         $attendance = $this->repository->getByUserAndEdition($userId, $editionId);
-        $hours = 0.0;
 
+        if (empty($attendance)) {
+            return 0.0;
+        }
+
+        // Get all session IDs that count as attended
+        $sessionIds = [];
         foreach ($attendance as $record) {
             $status = AttendanceStatus::tryFrom($record->status);
             if ($status?->countsAsAttended()) {
-                $hours += $this->sessionService->getSessionDuration((int) $record->session_id);
+                $sessionIds[] = (int) $record->session_id;
             }
         }
 
-        return $hours;
+        if (empty($sessionIds)) {
+            return 0.0;
+        }
+
+        // Batch fetch session durations using a single query
+        return $this->sessionService->getTotalDurationForSessions($sessionIds);
     }
 
     /**
