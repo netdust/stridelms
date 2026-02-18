@@ -525,16 +525,27 @@ if (have_posts()) :
     color: #FFFFFF;
 }
 
-/* Tabs */
-.stride-tabs {
-    border-bottom: none;
-    margin-bottom: var(--stride-space-md);
+/* Tabs - override UIkit defaults */
+.stride-tabs.uk-tab {
+    margin-left: 0;
+    padding-left: 0;
+    border-bottom: none !important;
+}
+
+.stride-tabs.uk-tab::before {
+    display: none !important;  /* Remove UIkit's border line */
 }
 
 .stride-tabs > li > a {
     text-transform: uppercase;
     font-size: var(--stride-font-size-sm);
     font-weight: 600;
+    border-bottom: 2px solid transparent;
+    padding: var(--stride-space-sm) var(--stride-space-md);
+}
+
+.stride-tabs > li.uk-active > a {
+    border-bottom-color: var(--stride-primary);
 }
 
 /* Info List */
