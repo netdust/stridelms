@@ -1451,6 +1451,113 @@ h1, h2, h3, h4, h5, h6,
 }
 
 /* ========================================
+   STRIDE - PAGE HEADER
+   ======================================== */
+
+.stride-page-header {
+    margin-bottom: var(--stride-space-xl);
+}
+
+.stride-page-header__back {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--stride-space-xs);
+    font-size: var(--stride-font-size-sm);
+    color: var(--stride-text-muted);
+    margin-bottom: var(--stride-space-sm);
+    text-decoration: none;
+}
+
+.stride-page-header__back:hover {
+    color: var(--stride-primary);
+}
+
+.stride-page-header__title {
+    font-size: var(--stride-font-size-2xl);
+    font-weight: 600;
+    color: var(--stride-text);
+    margin: 0 0 var(--stride-space-xs);
+}
+
+.stride-page-header__subtitle {
+    font-size: var(--stride-font-size-base);
+    color: var(--stride-text-muted);
+    margin: 0;
+}
+
+/* ========================================
+   STRIDE - TABS
+   ======================================== */
+
+.stride-tabs {
+    background: var(--stride-surface);
+    border-radius: var(--stride-radius-lg);
+    padding: var(--stride-space-xs);
+    box-shadow: var(--stride-shadow-sm);
+    border: 1px solid var(--stride-border-light);
+}
+
+.stride-tabs > * > a {
+    display: flex;
+    align-items: center;
+    gap: var(--stride-space-sm);
+    padding: var(--stride-space-sm) var(--stride-space-md);
+    border-radius: var(--stride-radius-md);
+    font-weight: 500;
+}
+
+.stride-tabs__count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 var(--stride-space-xs);
+    background: var(--stride-secondary-light);
+    color: var(--stride-text-muted);
+    border-radius: var(--stride-radius-pill);
+    font-size: var(--stride-font-size-xs);
+    font-weight: 600;
+}
+
+.stride-tabs > .uk-active > a .stride-tabs__count {
+    background: rgba(255, 255, 255, 0.3);
+    color: #FFFFFF;
+}
+
+/* ========================================
+   STRIDE - EMPTY STATE VARIANTS
+   ======================================== */
+
+.stride-empty-state--compact {
+    padding: var(--stride-space-xl) var(--stride-space-lg);
+}
+
+.stride-empty-state--compact .stride-empty-state__icon {
+    width: 64px;
+    height: 64px;
+    margin-bottom: var(--stride-space-md);
+}
+
+.stride-empty-state--compact .stride-empty-state__title {
+    font-size: var(--stride-font-size-lg);
+    margin-bottom: var(--stride-space-xs);
+}
+
+.stride-empty-state--compact .stride-empty-state__description {
+    font-size: var(--stride-font-size-sm);
+    margin-bottom: 0;
+}
+
+/* ========================================
+   STRIDE - MY COURSES PAGE
+   ======================================== */
+
+.stride-my-courses {
+    padding-bottom: var(--stride-space-xl);
+}
+
+/* ========================================
    RESPONSIVE ADJUSTMENTS
    ======================================== */
 
