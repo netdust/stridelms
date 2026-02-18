@@ -61,6 +61,7 @@ final class VoucherAdminController extends AbstractService
         add_filter('manage_' . VoucherCPT::POST_TYPE . '_posts_columns', [$this, 'defineListColumns']);
         add_action('manage_' . VoucherCPT::POST_TYPE . '_posts_custom_column', [$this, 'renderListColumn'], 10, 2);
         add_filter('manage_edit-' . VoucherCPT::POST_TYPE . '_sortable_columns', [$this, 'defineSortableColumns']);
+        add_action('pre_get_posts', [$this, 'handleColumnSorting']);
     }
 
     public function registerMetaboxes(): void
@@ -607,5 +608,26 @@ final class VoucherAdminController extends AbstractService
         $columns['code'] = 'title';
         $columns['status'] = 'status';
         return $columns;
+    }
+
+    /**
+     * Handle sorting by custom meta columns.
+     */
+    public function handleColumnSorting(\WP_Query $query): void
+    {
+        if (!is_admin() || !$query->is_main_query()) {
+            return;
+        }
+
+        if ($query->get('post_type') !== VoucherCPT::POST_TYPE) {
+            return;
+        }
+
+        $orderby = $query->get('orderby');
+
+        if ($orderby === 'status') {
+            $query->set('meta_key', 'status');
+            $query->set('orderby', 'meta_value');
+        }
     }
 }

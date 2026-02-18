@@ -61,6 +61,7 @@ final class QuoteAdminController extends AbstractService
         add_filter('manage_' . QuoteCPT::POST_TYPE . '_posts_columns', [$this, 'defineListColumns']);
         add_action('manage_' . QuoteCPT::POST_TYPE . '_posts_custom_column', [$this, 'renderListColumn'], 10, 2);
         add_filter('manage_edit-' . QuoteCPT::POST_TYPE . '_sortable_columns', [$this, 'defineSortableColumns']);
+        add_action('pre_get_posts', [$this, 'handleColumnSorting']);
     }
 
     public function registerMetaboxes(): void
@@ -704,5 +705,29 @@ final class QuoteAdminController extends AbstractService
         $columns['valid_until'] = 'valid_until';
         $columns['date'] = 'date';
         return $columns;
+    }
+
+    /**
+     * Handle sorting by custom meta columns.
+     */
+    public function handleColumnSorting(\WP_Query $query): void
+    {
+        if (!is_admin() || !$query->is_main_query()) {
+            return;
+        }
+
+        if ($query->get('post_type') !== QuoteCPT::POST_TYPE) {
+            return;
+        }
+
+        $orderby = $query->get('orderby');
+
+        if ($orderby === 'quote_number') {
+            $query->set('meta_key', 'quote_number');
+            $query->set('orderby', 'meta_value');
+        } elseif ($orderby === 'valid_until') {
+            $query->set('meta_key', 'valid_until');
+            $query->set('orderby', 'meta_value');
+        }
     }
 }

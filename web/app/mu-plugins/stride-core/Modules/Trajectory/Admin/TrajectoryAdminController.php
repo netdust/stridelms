@@ -7,6 +7,7 @@ namespace Stride\Modules\Trajectory\Admin;
 use Stride\Domain\TrajectoryMode;
 use Stride\Domain\TrajectoryStatus;
 use Stride\Infrastructure\AbstractService;
+use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Trajectory\TrajectoryCPT;
 use Stride\Modules\Trajectory\TrajectoryRepository;
 use Stride\Modules\Trajectory\TrajectoryService;
@@ -32,6 +33,7 @@ final class TrajectoryAdminController extends AbstractService
         private readonly TrajectoryService $trajectoryService,
         private readonly TrajectoryRepository $repository,
         private readonly TrajectoryEnrollmentRepository $enrollmentRepository,
+        private readonly EditionService $editionService,
     ) {
         parent::__construct();
     }
@@ -69,6 +71,7 @@ final class TrajectoryAdminController extends AbstractService
         add_filter('manage_' . TrajectoryCPT::POST_TYPE . '_posts_columns', [$this, 'defineListColumns']);
         add_action('manage_' . TrajectoryCPT::POST_TYPE . '_posts_custom_column', [$this, 'renderListColumn'], 10, 2);
         add_filter('manage_edit-' . TrajectoryCPT::POST_TYPE . '_sortable_columns', [$this, 'defineSortableColumns']);
+        add_action('pre_get_posts', [$this, 'handleColumnSorting']);
     }
 
     public function registerMetaboxes(): void
@@ -483,8 +486,7 @@ final class TrajectoryAdminController extends AbstractService
 
         // For editions, add date and venue info
         if ($type === 'edition' && $editionId) {
-            $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
-            $editionPost = $editionService->getEdition($editionId);
+            $editionPost = $this->editionService->getEdition($editionId);
             if (!is_wp_error($editionPost)) {
                 $startDate = get_post_meta($editionId, '_stride_start_date', true);
                 $venue = get_post_meta($editionId, '_stride_venue', true);
@@ -946,8 +948,7 @@ final class TrajectoryAdminController extends AbstractService
         $results = [];
 
         // Group 1: Editions
-        $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
-        $editions = $editionService->getUpcomingEditions(50);
+        $editions = $this->editionService->getUpcomingEditions(50);
 
         $editionResults = [];
         foreach ($editions as $edition) {
@@ -1222,5 +1223,29 @@ final class TrajectoryAdminController extends AbstractService
         $columns['mode'] = 'mode';
         $columns['status'] = 'status';
         return $columns;
+    }
+
+    /**
+     * Handle sorting by custom meta columns.
+     */
+    public function handleColumnSorting(\WP_Query $query): void
+    {
+        if (!is_admin() || !$query->is_main_query()) {
+            return;
+        }
+
+        if ($query->get('post_type') !== TrajectoryCPT::POST_TYPE) {
+            return;
+        }
+
+        $orderby = $query->get('orderby');
+
+        if ($orderby === 'mode') {
+            $query->set('meta_key', 'mode');
+            $query->set('orderby', 'meta_value');
+        } elseif ($orderby === 'status') {
+            $query->set('meta_key', 'status');
+            $query->set('orderby', 'meta_value');
+        }
     }
 }

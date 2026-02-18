@@ -809,7 +809,7 @@ class StrideSeedData {
                     [
                         'type' => 'edition',
                         'id' => $editionId,
-                        'title' => $edition['title'] ?? 'Edition',
+                        'title' => get_the_title($editionId) ?: 'Edition',
                         'unit_price' => (int) ($price * 100), // Store in cents
                         'quantity' => 1,
                         'total' => (int) ($price * 100),
