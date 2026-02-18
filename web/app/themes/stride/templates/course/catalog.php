@@ -81,9 +81,14 @@ foreach ($editions as $edition) {
         continue;
     }
 
-    // Get course info
-    $courseId = (int) ($meta['course_id'] ?? 0);
-    $courseTitle = $courseId ? get_the_title($courseId) : ($edition['post_title'] ?? __('Onbekende cursus', 'stride'));
+    // Get course info via service (handles meta prefix correctly)
+    $courseId = $editionService->getCourseId($editionId);
+    $course = $courseId ? get_post($courseId) : null;
+    $courseTitle = $course ? $course->post_title : '';
+    // Fallback to edition title if course doesn't exist
+    if (!$courseTitle) {
+        $courseTitle = $meta['_ntdst_post_title'] ?? $edition['title'] ?? __('Onbekende cursus', 'stride');
+    }
 
     // Get thumbnail
     $thumbnail = $courseId ? get_the_post_thumbnail_url($courseId, 'stride_course_card') : null;
@@ -91,8 +96,8 @@ foreach ($editions as $edition) {
     // Determine type
     $type = stride_get_edition_type($sessionService, $editionId);
 
-    // Get dates
-    $startDate = $meta['start_date'] ?? '';
+    // Get dates (meta keys are prefixed)
+    $startDate = $meta['_ntdst_start_date'] ?? '';
 
     // Get pricing (member price)
     $price = $editionService->getPrice($editionId, true);
@@ -107,8 +112,8 @@ foreach ($editions as $edition) {
     $registered = $editionService->getRegisteredCount($editionId);
     $spotsLeft = max(0, $capacity - $registered);
 
-    // Venue/location
-    $venue = $meta['venue'] ?? '';
+    // Venue/location (meta keys are prefixed)
+    $venue = $meta['_ntdst_venue'] ?? '';
 
     $enrichedEditions[] = [
         'id' => $editionId,
