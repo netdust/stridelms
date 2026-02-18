@@ -165,14 +165,6 @@ add_action('wp_enqueue_scripts', function () {
         true
     );
 
-    // Stride Design System CSS (after UIkit)
-    wp_enqueue_style(
-        'stride-css',
-        get_stylesheet_directory_uri() . '/assets/css/stride.css',
-        ['uikit'],
-        wp_get_theme()->get('Version')
-    );
-
     // Stride custom JS (namespace setup only)
     wp_enqueue_script(
         'stride',
@@ -194,6 +186,20 @@ add_action('wp_enqueue_scripts', function () {
         ],
     ]);
 }, 10);
+
+/**
+ * Enqueue Stride CSS with high priority to load AFTER LearnDash
+ * Priority 99 ensures it loads last, overriding any plugin styles
+ */
+add_action('wp_enqueue_scripts', function () {
+    // Stride Design System CSS - load after all other styles
+    wp_enqueue_style(
+        'stride-css',
+        get_stylesheet_directory_uri() . '/assets/css/stride.css',
+        ['uikit'],
+        wp_get_theme()->get('Version')
+    );
+}, 99);
 
 /**
  * Enqueue LearnDash Focus Mode overrides
