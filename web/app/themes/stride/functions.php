@@ -193,11 +193,15 @@ add_action('wp_enqueue_scripts', function () {
  */
 add_action('wp_enqueue_scripts', function () {
     // Stride Design System CSS - load after all other styles
+    // Use filemtime for cache busting during development
+    $css_file = get_stylesheet_directory() . '/assets/css/stride.css';
+    $version = file_exists($css_file) ? filemtime($css_file) : wp_get_theme()->get('Version');
+
     wp_enqueue_style(
         'stride-css',
         get_stylesheet_directory_uri() . '/assets/css/stride.css',
         ['uikit'],
-        wp_get_theme()->get('Version')
+        $version
     );
 }, 99);
 
