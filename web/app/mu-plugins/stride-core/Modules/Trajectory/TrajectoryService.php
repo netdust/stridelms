@@ -284,8 +284,8 @@ final class TrajectoryService extends AbstractService
 
         return [
             'id' => (int) ($data['id'] ?? $data['ID'] ?? 0),
-            'title' => $data['post_title'] ?? '',
-            'description' => $data['post_content'] ?? '',
+            'title' => $data['title'] ?? $data['post_title'] ?? '',
+            'description' => $data['content'] ?? $data['post_content'] ?? '',
             'mode' => $mode->value,
             'mode_enum' => $mode,
             'status' => $status->value,

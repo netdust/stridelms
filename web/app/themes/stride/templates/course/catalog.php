@@ -112,6 +112,7 @@ foreach ($editions as $edition) {
 
     $enrichedEditions[] = [
         'id' => $editionId,
+        'url' => get_permalink($editionId),
         'course_id' => $courseId,
         'title' => $courseTitle,
         'thumbnail' => $thumbnail,
@@ -218,13 +219,9 @@ if ($currentFilter !== 'all') {
                         <!-- Card Body -->
                         <div class="stride-course-card__body">
                             <h3 class="stride-course-card__title">
-                                <?php if ($edition['course_id']) : ?>
-                                    <a href="<?php echo esc_url(get_permalink($edition['course_id'])); ?>">
-                                        <?php echo esc_html($edition['title']); ?>
-                                    </a>
-                                <?php else : ?>
+                                <a href="<?php echo esc_url($edition['url']); ?>">
                                     <?php echo esc_html($edition['title']); ?>
-                                <?php endif; ?>
+                                </a>
                             </h3>
 
                             <div class="stride-course-card__meta">
@@ -297,6 +294,13 @@ if ($currentFilter !== 'all') {
                                     </span>
                                 <?php endif; ?>
                             </div>
+                        </div>
+
+                        <!-- Card Action -->
+                        <div class="stride-course-card__action">
+                            <a href="<?php echo esc_url($edition['url']); ?>" class="uk-button uk-button-primary uk-width-1-1">
+                                <?php esc_html_e('Bekijk cursus', 'stride'); ?>
+                            </a>
                         </div>
                     </div>
                 </div>

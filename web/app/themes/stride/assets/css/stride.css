@@ -764,6 +764,15 @@ body {
     color: var(--stride-success);
 }
 
+.stride-course-card__action {
+    padding: var(--stride-space-md) var(--stride-space-lg);
+    border-top: 1px solid var(--stride-border-light);
+}
+
+.stride-course-card__action .uk-button {
+    border-radius: var(--stride-radius-md);
+}
+
 /* ========================================
    STRIDE - COURSE PLACEHOLDER
    ======================================== */

@@ -26,6 +26,7 @@ final class EditionCPT
                 'edit_item' => 'Editie bewerken',
             ],
             'public' => false,
+            'publicly_queryable' => true,
             'show_ui' => true,
             'show_in_menu' => 'stride-dashboard',
             'menu_icon' => 'dashicons-calendar-alt',
