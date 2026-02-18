@@ -636,43 +636,50 @@ final class AdminAPIController extends AbstractService
 
         // Format editions with meta
         $items = [];
-        $registrationTable = RegistrationTable::getTableName();
+
+        // Batch fetch all data upfront
+        $editionIds = array_map(fn($e) => (int) $e->ID, $editions);
+
+        // Batch fetch meta for all editions
+        $editionMeta = BatchQueryHelper::batchGetPostMeta($editionIds, [
+            'start_date', 'end_date', 'venue', 'capacity', 'status', 'course_id',
+        ]);
+
+        // Batch fetch registration counts
+        $regCounts = RegistrationTable::exists()
+            ? BatchQueryHelper::batchGetRegistrationCounts($editionIds)
+            : [];
+
+        // Batch fetch course data
+        $courseIds = array_filter(array_map(fn($id) => (int) ($editionMeta[$id]['course_id'] ?? 0), $editionIds));
+        $courses = BatchQueryHelper::batchGetPosts($courseIds, 'sfwd-courses');
+        $courseTags = BatchQueryHelper::batchGetCourseTags($courseIds);
 
         foreach ($editions as $edition) {
             $editionId = (int) $edition->ID;
+            $meta = $editionMeta[$editionId] ?? [];
 
-            // Get meta values
-            $startDate = get_post_meta($editionId, 'start_date', true);
-            $endDate = get_post_meta($editionId, 'end_date', true);
-            $venue = get_post_meta($editionId, 'venue', true);
-            $capacity = (int) get_post_meta($editionId, 'capacity', true);
-            $editionStatus = get_post_meta($editionId, 'status', true);
-            $courseId = (int) get_post_meta($editionId, 'course_id', true);
+            // Get meta values from batch
+            $startDate = $meta['start_date'] ?? '';
+            $endDate = $meta['end_date'] ?? '';
+            $venue = $meta['venue'] ?? '';
+            $capacity = (int) ($meta['capacity'] ?? 0);
+            $editionStatus = $meta['status'] ?? '';
+            $courseId = (int) ($meta['course_id'] ?? 0);
 
-            // Get course title and tags
+            // Get course data from batch
             $courseTitle = '';
-            $courseTags = [];
+            $courseTagList = [];
             if ($courseId > 0) {
-                $course = get_post($courseId);
+                $course = $courses[$courseId] ?? null;
                 if ($course) {
                     $courseTitle = $course->post_title;
                 }
-                $tags = wp_get_object_terms($courseId, 'ld_course_tag');
-                if (!is_wp_error($tags)) {
-                    foreach ($tags as $tag) {
-                        $courseTags[] = ['id' => $tag->term_id, 'name' => $tag->name];
-                    }
-                }
+                $courseTagList = $courseTags[$courseId] ?? [];
             }
 
-            // Count registrations
-            $registeredCount = 0;
-            if (RegistrationTable::exists()) {
-                $registeredCount = (int) $wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM {$registrationTable} WHERE edition_id = %d AND status = 'confirmed'",
-                    $editionId
-                ));
-            }
+            // Get registration count from batch
+            $registeredCount = $regCounts[$editionId] ?? 0;
 
             // Check if edition is today
             $isToday = $startDate === $today || ($startDate <= $today && $endDate >= $today);
@@ -684,7 +691,7 @@ final class AdminAPIController extends AbstractService
                 'course' => [
                     'id' => $courseId,
                     'title' => $courseTitle,
-                    'tags' => $courseTags,
+                    'tags' => $courseTagList,
                 ],
                 'startDate' => $startDate ?: null,
                 'endDate' => $endDate ?: null,
