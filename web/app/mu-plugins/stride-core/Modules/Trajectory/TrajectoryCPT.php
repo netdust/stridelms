@@ -26,6 +26,7 @@ final class TrajectoryCPT
                 'edit_item' => 'Traject bewerken',
             ],
             'public' => false,
+            'publicly_queryable' => true,
             'show_ui' => true,
             'show_in_menu' => 'stride-dashboard',
             'menu_icon' => 'dashicons-networking',
