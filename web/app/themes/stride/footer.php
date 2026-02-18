@@ -1,5 +1,12 @@
+    <?php
+    // Full-width templates handle their own layout
+    $full_width_templates = is_singular(['vad_edition', 'vad_trajectory']);
+
+    if (!$full_width_templates):
+    ?>
         </div><!-- .uk-container -->
     </main><!-- #content -->
+    <?php endif; ?>
 
     <!-- Desktop Footer (hidden on mobile) -->
     <footer id="colophon" class="stride-footer uk-visible@m">

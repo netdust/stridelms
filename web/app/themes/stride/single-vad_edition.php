@@ -16,9 +16,6 @@ use Stride\Modules\Enrollment\EnrollmentService;
 
 get_header();
 
-// Close header's container/main for full-width layout
-echo '</div></main>';
-
 // Get services
 $editionService = ntdst_get(EditionService::class);
 $sessionService = ntdst_get(SessionService::class);
@@ -727,9 +724,6 @@ if (have_posts()) :
 <?php
     endwhile;
 endif;
-
-// Reopen header's container/main for footer
-echo '<main id="content" class="stride-content"><div class="uk-container">';
 
 get_footer();
 ?>

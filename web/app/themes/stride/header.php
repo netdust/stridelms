@@ -19,5 +19,12 @@
     get_template_part('templates/shell/desktop-nav');
     ?>
 
+    <?php
+    // Full-width templates handle their own layout
+    $full_width_templates = is_singular(['vad_edition', 'vad_trajectory']);
+
+    if (!$full_width_templates):
+    ?>
     <main id="content" class="stride-content">
         <div class="uk-container uk-margin-top uk-margin-bottom">
+    <?php endif; ?>

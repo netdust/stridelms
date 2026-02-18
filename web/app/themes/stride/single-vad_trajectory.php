@@ -15,9 +15,6 @@ use Stride\Modules\Edition\EditionService;
 
 get_header();
 
-// Close header's container/main for full-width layout
-echo '</div></main>';
-
 // Get services
 $trajectoryService = ntdst_get(TrajectoryService::class);
 $editionService = ntdst_get(EditionService::class);
@@ -718,9 +715,4 @@ $heroImage = get_the_post_thumbnail_url($trajectoryId, 'large');
 }
 </style>
 
-<?php
-// Reopen header's container/main for footer
-echo '<main id="content" class="stride-content"><div class="uk-container">';
-
-get_footer();
-?>
+<?php get_footer(); ?>
