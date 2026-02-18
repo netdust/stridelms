@@ -1065,15 +1065,16 @@ final class AdminAPIController extends AbstractService
 
         $sessionIds = array_map(fn($s) => (int) $s->ID, $sessions);
 
+        // Batch fetch session meta
+        $sessionMeta = BatchQueryHelper::batchGetPostMeta($sessionIds, ['date', 'start_time']);
+
         $sessionItems = [];
         foreach ($sessionIds as $sessionId) {
-            $sessionDate = get_post_meta($sessionId, 'date', true);
-            $startTime = get_post_meta($sessionId, 'start_time', true);
-
+            $meta = $sessionMeta[$sessionId] ?? [];
             $sessionItems[] = [
                 'id' => $sessionId,
-                'date' => $sessionDate ?: null,
-                'startTime' => $startTime ?: null,
+                'date' => $meta['date'] ?: null,
+                'startTime' => $meta['start_time'] ?: null,
             ];
         }
 
@@ -1084,31 +1085,20 @@ final class AdminAPIController extends AbstractService
             $editionId
         ));
 
-        // Get attendance records if table exists
-        $attendanceByUser = [];
-        if (AttendanceTable::exists()) {
-            $attendanceTable = AttendanceTable::getTableName();
-            $attendanceRecords = $wpdb->get_results($wpdb->prepare(
-                "SELECT user_id, session_id, status FROM {$attendanceTable} WHERE edition_id = %d",
-                $editionId
-            ));
+        // Collect user IDs for batch fetch
+        $userIds = array_map(fn($r) => (int) $r->user_id, $registrations);
 
-            foreach ($attendanceRecords as $record) {
-                $userId = (int) $record->user_id;
-                $sessionId = (int) $record->session_id;
+        // Batch fetch users
+        $users = BatchQueryHelper::batchGetUsers($userIds);
 
-                if (!isset($attendanceByUser[$userId])) {
-                    $attendanceByUser[$userId] = [];
-                }
-                $attendanceByUser[$userId][$sessionId] = $record->status;
-            }
-        }
+        // Get attendance records if table exists (already optimized with batch)
+        $attendanceByUser = BatchQueryHelper::batchGetAttendance($editionId);
 
-        // Format registrations
+        // Format registrations with pre-fetched data
         $items = [];
         foreach ($registrations as $reg) {
             $userId = (int) $reg->user_id;
-            $user = get_userdata($userId);
+            $user = $users[$userId] ?? null;
 
             if (!$user) {
                 continue;
@@ -1273,42 +1263,66 @@ final class AdminAPIController extends AbstractService
             ...$params
         ));
 
-        // Format quotes with meta
+        // Collect quote IDs for batch queries
+        $quoteIds = array_map(fn($q) => (int) $q->ID, $quotes);
+
+        // Batch fetch all quote meta
+        $quoteMeta = BatchQueryHelper::batchGetPostMeta($quoteIds, [
+            '_quote_number', '_quote_status', '_quote_total', '_quote_subtotal',
+            '_quote_tax', '_quote_user_id', '_quote_item_id', '_quote_sent_at',
+            '_quote_valid_until', '_quote_items', '_quote_billing',
+        ]);
+
+        // Collect unique user IDs and edition IDs for batch fetch
+        $userIds = [];
+        $editionIds = [];
+        foreach ($quoteIds as $quoteId) {
+            $userId = (int) ($quoteMeta[$quoteId]['_quote_user_id'] ?? 0);
+            $editionId = (int) ($quoteMeta[$quoteId]['_quote_item_id'] ?? 0);
+            if ($userId > 0) {
+                $userIds[] = $userId;
+            }
+            if ($editionId > 0) {
+                $editionIds[] = $editionId;
+            }
+        }
+
+        // Batch fetch users and editions
+        $users = BatchQueryHelper::batchGetUsers(array_unique($userIds));
+        $editions = BatchQueryHelper::batchGetPosts(array_unique($editionIds), EditionCPT::POST_TYPE);
+
+        // Format quotes with pre-fetched data
         $items = [];
         foreach ($quotes as $quote) {
             $quoteId = (int) $quote->ID;
+            $meta = $quoteMeta[$quoteId] ?? [];
 
-            // Get meta values (using _quote_ prefix)
-            $quoteNumber = get_post_meta($quoteId, '_quote_number', true);
-            $quoteStatus = get_post_meta($quoteId, '_quote_status', true);
-            $quoteTotal = (float) get_post_meta($quoteId, '_quote_total', true);
-            $quoteSubtotal = (float) get_post_meta($quoteId, '_quote_subtotal', true);
-            $quoteTax = (float) get_post_meta($quoteId, '_quote_tax', true);
-            $userId = (int) get_post_meta($quoteId, '_quote_user_id', true);
-            $editionId = (int) get_post_meta($quoteId, '_quote_item_id', true);
-            $sentAt = get_post_meta($quoteId, '_quote_sent_at', true);
-            $validUntil = get_post_meta($quoteId, '_quote_valid_until', true);
-            $quoteItems = get_post_meta($quoteId, '_quote_items', true);
-            $billing = get_post_meta($quoteId, '_quote_billing', true);
+            $quoteNumber = $meta['_quote_number'] ?? '';
+            $quoteStatus = $meta['_quote_status'] ?? 'draft';
+            $quoteTotal = (float) ($meta['_quote_total'] ?? 0);
+            $quoteSubtotal = (float) ($meta['_quote_subtotal'] ?? 0);
+            $quoteTax = (float) ($meta['_quote_tax'] ?? 0);
+            $userId = (int) ($meta['_quote_user_id'] ?? 0);
+            $editionId = (int) ($meta['_quote_item_id'] ?? 0);
+            $sentAt = $meta['_quote_sent_at'] ?? '';
+            $validUntil = $meta['_quote_valid_until'] ?? '';
+            $quoteItems = $meta['_quote_items'] ?? [];
+            $billing = $meta['_quote_billing'] ?? [];
 
-            // Get user info
+            // Get user info from batch
             $userName = '';
             $userEmail = '';
-            if ($userId > 0) {
-                $user = get_userdata($userId);
-                if ($user) {
-                    $userName = $user->display_name;
-                    $userEmail = $user->user_email;
-                }
+            $user = $users[$userId] ?? null;
+            if ($user) {
+                $userName = $user->display_name;
+                $userEmail = $user->user_email;
             }
 
-            // Get edition info
+            // Get edition info from batch
             $editionTitle = '';
-            if ($editionId > 0) {
-                $edition = get_post($editionId);
-                if ($edition) {
-                    $editionTitle = $edition->post_title;
-                }
+            $edition = $editions[$editionId] ?? null;
+            if ($edition) {
+                $editionTitle = $edition->post_title;
             }
 
             // Get status label
