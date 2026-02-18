@@ -1437,7 +1437,7 @@ final class AdminAPIController extends AbstractService
 
         // Check if enrollment table exists (once)
         $enrollmentTable = $wpdb->prefix . 'vad_trajectory_enrollments';
-        $enrollmentTableExists = $wpdb->get_var("SHOW TABLES LIKE '{$enrollmentTable}'") === $enrollmentTable;
+        $enrollmentTableExists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $enrollmentTable)) === $enrollmentTable;
 
         // Collect all edition IDs from courses meta and all enrollments
         $allEditionIds = [];
