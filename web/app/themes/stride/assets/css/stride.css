@@ -1558,6 +1558,136 @@ h1, h2, h3, h4, h5, h6,
 }
 
 /* ========================================
+   STRIDE - MY QUOTES PAGE
+   ======================================== */
+
+.stride-my-quotes {
+    padding-bottom: var(--stride-space-xl);
+}
+
+.stride-quotes-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--stride-space-md);
+}
+
+/* Quote Card */
+.stride-quote-card {
+    border-radius: var(--stride-radius-lg);
+    overflow: hidden;
+}
+
+.stride-quote-card__body {
+    padding: var(--stride-space-lg);
+}
+
+.stride-quote-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--stride-space-sm);
+}
+
+.stride-quote-card__info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--stride-space-xs);
+}
+
+.stride-quote-card__number {
+    font-size: var(--stride-font-size-sm);
+    font-weight: 600;
+    color: var(--stride-text-muted);
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.stride-quote-card__date {
+    font-size: var(--stride-font-size-xs);
+    color: var(--stride-text-light);
+}
+
+.stride-quote-card__title {
+    font-size: var(--stride-font-size-lg);
+    font-weight: 600;
+    color: var(--stride-text);
+    margin: 0 0 var(--stride-space-md);
+    line-height: var(--stride-line-height-tight);
+}
+
+.stride-quote-card__footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: var(--stride-space-md);
+    border-top: 1px solid var(--stride-border-light);
+}
+
+.stride-quote-card__amount {
+    display: flex;
+    flex-direction: column;
+}
+
+.stride-quote-card__amount-label {
+    font-size: var(--stride-font-size-xs);
+    color: var(--stride-text-muted);
+    margin-bottom: var(--stride-space-xs);
+}
+
+.stride-quote-card__amount-value {
+    font-size: var(--stride-font-size-xl);
+    font-weight: 700;
+    color: var(--stride-text);
+}
+
+.stride-quote-card__actions {
+    display: flex;
+    gap: var(--stride-space-sm);
+}
+
+.stride-quote-card__notice {
+    display: flex;
+    align-items: center;
+    gap: var(--stride-space-sm);
+    margin-top: var(--stride-space-md);
+    padding: var(--stride-space-sm) var(--stride-space-md);
+    border-radius: var(--stride-radius-md);
+    font-size: var(--stride-font-size-sm);
+    font-weight: 500;
+}
+
+.stride-quote-card__notice--warning {
+    background-color: var(--stride-warning-light);
+    color: #8B6914;
+}
+
+.stride-quote-card__notice--danger {
+    background-color: var(--stride-danger-light);
+    color: var(--stride-danger-hover);
+}
+
+/* Responsive quote cards */
+@media (max-width: 639px) {
+    .stride-quote-card__body {
+        padding: var(--stride-space-md);
+    }
+
+    .stride-quote-card__footer {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--stride-space-md);
+    }
+
+    .stride-quote-card__actions {
+        justify-content: stretch;
+    }
+
+    .stride-quote-card__actions .uk-button {
+        flex: 1;
+        text-align: center;
+    }
+}
+
+/* ========================================
    RESPONSIVE ADJUSTMENTS
    ======================================== */
 
