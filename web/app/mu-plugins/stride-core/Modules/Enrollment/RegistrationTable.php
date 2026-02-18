@@ -39,6 +39,7 @@ final class RegistrationTable
             INDEX idx_user (user_id),
             INDEX idx_edition (edition_id),
             INDEX idx_status (status),
+            INDEX idx_edition_status (edition_id, status),
             UNIQUE KEY unique_user_edition (user_id, edition_id)
         ) {$charset};";
 
@@ -53,5 +54,28 @@ final class RegistrationTable
         $table = self::getTableName();
 
         return $wpdb->get_var("SHOW TABLES LIKE '{$table}'") === $table;
+    }
+
+    /**
+     * Add composite index for existing tables (migration).
+     */
+    public static function addCompositeIndexIfMissing(): void
+    {
+        global $wpdb;
+
+        $table = self::getTableName();
+
+        // Check if index exists
+        $indexExists = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM information_schema.statistics
+             WHERE table_schema = DATABASE()
+             AND table_name = %s
+             AND index_name = 'idx_edition_status'",
+            $table
+        ));
+
+        if (!$indexExists) {
+            $wpdb->query("ALTER TABLE {$table} ADD INDEX idx_edition_status (edition_id, status)");
+        }
     }
 }
