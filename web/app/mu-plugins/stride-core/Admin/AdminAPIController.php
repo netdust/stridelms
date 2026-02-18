@@ -7,6 +7,7 @@ namespace Stride\Admin;
 use Stride\Domain\AttendanceStatus;
 use Stride\Domain\QuoteStatus;
 use Stride\Infrastructure\AbstractService;
+use Stride\Infrastructure\BatchQueryHelper;
 use Stride\Modules\Attendance\AttendanceRepository;
 use Stride\Modules\Attendance\AttendanceTable;
 use Stride\Modules\Edition\EditionCPT;
@@ -235,12 +236,17 @@ final class AdminAPIController extends AbstractService
      * GET /admin/stats
      *
      * Dashboard statistics.
+     * Optimized to use batch queries and reduce N+1 patterns.
      */
     public function getStats(WP_REST_Request $request): WP_REST_Response
     {
         global $wpdb;
 
         $today = current_time('Y-m-d');
+        $registrationTable = RegistrationTable::getTableName();
+        $registrationTableExists = RegistrationTable::exists();
+
+        // === COUNT QUERIES (single query each, no N+1) ===
 
         // Upcoming editions count
         $upcomingEditions = (int) $wpdb->get_var($wpdb->prepare(
@@ -254,9 +260,8 @@ final class AdminAPIController extends AbstractService
         ));
 
         // Total active registrations
-        $registrationTable = RegistrationTable::getTableName();
         $totalRegistrations = 0;
-        if (RegistrationTable::exists()) {
+        if ($registrationTableExists) {
             $totalRegistrations = (int) $wpdb->get_var(
                 "SELECT COUNT(*) FROM {$registrationTable} WHERE status = 'confirmed'"
             );
@@ -273,7 +278,7 @@ final class AdminAPIController extends AbstractService
             QuoteStatus::Draft->value
         ));
 
-        // Sessions today
+        // Sessions today count
         $todaySessions = (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM {$wpdb->posts} p
              INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = %s
@@ -295,7 +300,8 @@ final class AdminAPIController extends AbstractService
             'open'
         ));
 
-        // Today's sessions with details
+        // === TODAY'S SESSIONS WITH DETAILS (batch fetch) ===
+
         $todaySessionDetails = [];
         $sessions = $wpdb->get_results($wpdb->prepare(
             "SELECT p.ID, p.post_title, pm_time.meta_value as start_time, pm_end.meta_value as end_time,
@@ -312,27 +318,40 @@ final class AdminAPIController extends AbstractService
             $today
         ));
 
-        foreach ($sessions as $session) {
-            $editionId = (int) $session->edition_id;
-            $edition = $editionId > 0 ? get_post($editionId) : null;
-            $registeredCount = 0;
-            if ($editionId > 0 && RegistrationTable::exists()) {
-                $registeredCount = (int) $wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM {$registrationTable} WHERE edition_id = %d AND status = 'confirmed'",
-                    $editionId
-                ));
+        if (!empty($sessions)) {
+            // Collect edition IDs for batch fetch
+            $sessionEditionIds = [];
+            foreach ($sessions as $session) {
+                $editionId = (int) $session->edition_id;
+                if ($editionId > 0) {
+                    $sessionEditionIds[] = $editionId;
+                }
             }
-            $todaySessionDetails[] = [
-                'id' => $session->ID,
-                'title' => $session->post_title,
-                'editionTitle' => $edition ? $edition->post_title : '',
-                'startTime' => $session->start_time ?: '',
-                'endTime' => $session->end_time ?: '',
-                'registeredCount' => $registeredCount,
-            ];
+
+            // Batch fetch editions and registration counts
+            $editionsMap = BatchQueryHelper::batchGetPosts($sessionEditionIds, EditionCPT::POST_TYPE);
+            $regCountsMap = $registrationTableExists
+                ? BatchQueryHelper::batchGetRegistrationCounts($sessionEditionIds)
+                : [];
+
+            foreach ($sessions as $session) {
+                $editionId = (int) $session->edition_id;
+                $edition = $editionsMap[$editionId] ?? null;
+                $registeredCount = $regCountsMap[$editionId] ?? 0;
+
+                $todaySessionDetails[] = [
+                    'id' => (int) $session->ID,
+                    'title' => $session->post_title,
+                    'editionTitle' => $edition ? $edition->post_title : '',
+                    'startTime' => $session->start_time ?: '',
+                    'endTime' => $session->end_time ?: '',
+                    'registeredCount' => $registeredCount,
+                ];
+            }
         }
 
-        // Upcoming editions (next 5)
+        // === UPCOMING EDITIONS (next 5, batch fetch registration counts) ===
+
         $upcomingEditionDetails = [];
         $upcomingList = $wpdb->get_results($wpdb->prepare(
             "SELECT p.ID, p.post_title, pm_date.meta_value as start_date,
@@ -349,31 +368,37 @@ final class AdminAPIController extends AbstractService
             $today
         ));
 
-        foreach ($upcomingList as $ed) {
-            $editionId = (int) $ed->ID;
-            $capacity = (int) $ed->capacity;
-            $registeredCount = 0;
-            if (RegistrationTable::exists()) {
-                $registeredCount = (int) $wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM {$registrationTable} WHERE edition_id = %d AND status = 'confirmed'",
-                    $editionId
-                ));
+        if (!empty($upcomingList)) {
+            // Collect edition IDs for batch fetch
+            $upcomingEditionIds = array_map(fn($ed) => (int) $ed->ID, $upcomingList);
+
+            // Batch fetch registration counts
+            $upcomingRegCounts = $registrationTableExists
+                ? BatchQueryHelper::batchGetRegistrationCounts($upcomingEditionIds)
+                : [];
+
+            foreach ($upcomingList as $ed) {
+                $editionId = (int) $ed->ID;
+                $capacity = (int) $ed->capacity;
+                $registeredCount = $upcomingRegCounts[$editionId] ?? 0;
+
+                $upcomingEditionDetails[] = [
+                    'id' => $editionId,
+                    'title' => $ed->post_title,
+                    'startDate' => $ed->start_date,
+                    'status' => $ed->status ?: 'open',
+                    'capacity' => $capacity,
+                    'registeredCount' => $registeredCount,
+                    'spotsLeft' => $capacity > 0 ? max(0, $capacity - $registeredCount) : null,
+                ];
             }
-            $upcomingEditionDetails[] = [
-                'id' => $editionId,
-                'title' => $ed->post_title,
-                'startDate' => $ed->start_date,
-                'status' => $ed->status ?: 'open',
-                'capacity' => $capacity,
-                'registeredCount' => $registeredCount,
-                'spotsLeft' => $capacity > 0 ? max(0, $capacity - $registeredCount) : null,
-            ];
         }
 
-        // Recent registrations (last 7 days)
+        // === RECENT REGISTRATIONS (last 7 days, batch fetch users and editions) ===
+
         $recentRegistrations = [];
-        if (RegistrationTable::exists()) {
-            $weekAgo = date('Y-m-d H:i:s', strtotime('-7 days'));
+        if ($registrationTableExists) {
+            $weekAgo = wp_date('Y-m-d H:i:s', strtotime('-7 days'));
             $recentRegs = $wpdb->get_results($wpdb->prepare(
                 "SELECT r.id, r.user_id, r.edition_id, r.status, r.created_at
                  FROM {$registrationTable} r
@@ -383,27 +408,45 @@ final class AdminAPIController extends AbstractService
                 $weekAgo
             ));
 
-            foreach ($recentRegs as $reg) {
-                $user = get_userdata((int) $reg->user_id);
-                $edition = get_post((int) $reg->edition_id);
-                $recentRegistrations[] = [
-                    'id' => (int) $reg->id,
-                    'userName' => $user ? $user->display_name : 'Unknown',
-                    'userEmail' => $user ? $user->user_email : '',
-                    'editionTitle' => $edition ? $edition->post_title : 'Unknown',
-                    'status' => $reg->status,
-                    'createdAt' => $reg->created_at,
-                ];
+            if (!empty($recentRegs)) {
+                // Collect IDs for batch fetch
+                $userIds = [];
+                $editionIds = [];
+                foreach ($recentRegs as $reg) {
+                    $userIds[] = (int) $reg->user_id;
+                    $editionIds[] = (int) $reg->edition_id;
+                }
+
+                // Batch fetch users and editions
+                $usersMap = BatchQueryHelper::batchGetUsers($userIds);
+                $editionsMap = BatchQueryHelper::batchGetPosts($editionIds, EditionCPT::POST_TYPE);
+
+                foreach ($recentRegs as $reg) {
+                    $userId = (int) $reg->user_id;
+                    $editionId = (int) $reg->edition_id;
+                    $user = $usersMap[$userId] ?? null;
+                    $edition = $editionsMap[$editionId] ?? null;
+
+                    $recentRegistrations[] = [
+                        'id' => (int) $reg->id,
+                        'userName' => $user ? $user->display_name : 'Unknown',
+                        'userEmail' => $user ? $user->user_email : '',
+                        'editionTitle' => $edition ? $edition->post_title : 'Unknown',
+                        'status' => $reg->status,
+                        'createdAt' => $reg->created_at,
+                    ];
+                }
             }
         }
 
-        // Registrations this week vs last week
-        $thisWeekStart = date('Y-m-d', strtotime('monday this week'));
-        $lastWeekStart = date('Y-m-d', strtotime('monday last week'));
-        $lastWeekEnd = date('Y-m-d', strtotime('sunday last week'));
+        // === REGISTRATIONS THIS WEEK VS LAST WEEK (single queries) ===
+
+        $thisWeekStart = wp_date('Y-m-d', strtotime('monday this week'));
+        $lastWeekStart = wp_date('Y-m-d', strtotime('monday last week'));
         $registrationsThisWeek = 0;
         $registrationsLastWeek = 0;
-        if (RegistrationTable::exists()) {
+
+        if ($registrationTableExists) {
             $registrationsThisWeek = (int) $wpdb->get_var($wpdb->prepare(
                 "SELECT COUNT(*) FROM {$registrationTable} WHERE created_at >= %s",
                 $thisWeekStart
@@ -415,9 +458,10 @@ final class AdminAPIController extends AbstractService
             ));
         }
 
-        // Alerts: editions almost full (>80%) or low registration (<30%) starting within 14 days
+        // === ALERTS (batch fetch registration counts) ===
+
         $alerts = [];
-        $twoWeeksFromNow = date('Y-m-d', strtotime('+14 days'));
+        $twoWeeksFromNow = wp_date('Y-m-d', strtotime('+14 days'));
         $alertEditions = $wpdb->get_results($wpdb->prepare(
             "SELECT p.ID, p.post_title, pm_date.meta_value as start_date,
                     pm_capacity.meta_value as capacity
@@ -432,39 +476,48 @@ final class AdminAPIController extends AbstractService
             $twoWeeksFromNow
         ));
 
-        foreach ($alertEditions as $ed) {
-            $editionId = (int) $ed->ID;
-            $capacity = (int) $ed->capacity;
-            if ($capacity <= 0) {
-                continue; // Skip unlimited capacity editions
+        if (!empty($alertEditions)) {
+            // Filter to only editions with capacity > 0, collect IDs
+            $alertEditionIds = [];
+            $alertEditionsFiltered = [];
+            foreach ($alertEditions as $ed) {
+                $capacity = (int) $ed->capacity;
+                if ($capacity > 0) {
+                    $alertEditionIds[] = (int) $ed->ID;
+                    $alertEditionsFiltered[] = $ed;
+                }
             }
-            $registeredCount = 0;
-            if (RegistrationTable::exists()) {
-                $registeredCount = (int) $wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM {$registrationTable} WHERE edition_id = %d AND status = 'confirmed'",
-                    $editionId
-                ));
-            }
-            $fillRate = ($registeredCount / $capacity) * 100;
 
-            if ($fillRate >= 80) {
-                $alerts[] = [
-                    'type' => 'almost_full',
-                    'editionId' => $editionId,
-                    'editionTitle' => $ed->post_title,
-                    'startDate' => $ed->start_date,
-                    'message' => sprintf('%d/%d plaatsen bezet', $registeredCount, $capacity),
-                    'fillRate' => round($fillRate),
-                ];
-            } elseif ($fillRate < 30) {
-                $alerts[] = [
-                    'type' => 'low_registration',
-                    'editionId' => $editionId,
-                    'editionTitle' => $ed->post_title,
-                    'startDate' => $ed->start_date,
-                    'message' => sprintf('Slechts %d/%d inschrijvingen', $registeredCount, $capacity),
-                    'fillRate' => round($fillRate),
-                ];
+            // Batch fetch registration counts
+            $alertRegCounts = $registrationTableExists
+                ? BatchQueryHelper::batchGetRegistrationCounts($alertEditionIds)
+                : [];
+
+            foreach ($alertEditionsFiltered as $ed) {
+                $editionId = (int) $ed->ID;
+                $capacity = (int) $ed->capacity;
+                $registeredCount = $alertRegCounts[$editionId] ?? 0;
+                $fillRate = ($registeredCount / $capacity) * 100;
+
+                if ($fillRate >= 80) {
+                    $alerts[] = [
+                        'type' => 'almost_full',
+                        'editionId' => $editionId,
+                        'editionTitle' => $ed->post_title,
+                        'startDate' => $ed->start_date,
+                        'message' => sprintf('%d/%d plaatsen bezet', $registeredCount, $capacity),
+                        'fillRate' => (int) round($fillRate),
+                    ];
+                } elseif ($fillRate < 30) {
+                    $alerts[] = [
+                        'type' => 'low_registration',
+                        'editionId' => $editionId,
+                        'editionTitle' => $ed->post_title,
+                        'startDate' => $ed->start_date,
+                        'message' => sprintf('Slechts %d/%d inschrijvingen', $registeredCount, $capacity),
+                        'fillRate' => (int) round($fillRate),
+                    ];
+                }
             }
         }
 
@@ -474,7 +527,7 @@ final class AdminAPIController extends AbstractService
             'pendingQuotes' => $pendingQuotes,
             'todaySessions' => $todaySessions,
             'openTrajectories' => $openTrajectories,
-            // New dashboard data
+            // Dashboard detail data
             'todaySessionDetails' => $todaySessionDetails,
             'upcomingEditionDetails' => $upcomingEditionDetails,
             'recentRegistrations' => $recentRegistrations,
