@@ -49,6 +49,6 @@ final class SessionRegistrationTable
 
         $table = self::getTableName();
 
-        return $wpdb->get_var("SHOW TABLES LIKE '{$table}'") === $table;
+        return $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table)) === $table;
     }
 }
