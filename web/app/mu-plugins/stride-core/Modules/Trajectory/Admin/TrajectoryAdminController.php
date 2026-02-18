@@ -16,11 +16,11 @@ use WP_Post;
 /**
  * Trajectory Admin Controller.
  *
- * Full admin interface for trajectory management:
- * - Tabbed UI (General/Courses/Deadlines/Enrollments)
- * - Course builder with required + elective groups
- * - Mode-dependent deadline settings
- * - Enrollment list with progress tracking
+ * Admin interface for trajectory management with separate metaboxes:
+ * - Details (general settings, deadlines)
+ * - Courses (course builder)
+ * - Enrollments
+ * - Sidebar (status & stats)
  */
 final class TrajectoryAdminController extends AbstractService
 {
@@ -71,14 +71,34 @@ final class TrajectoryAdminController extends AbstractService
         // Remove default editor
         remove_post_type_support(TrajectoryCPT::POST_TYPE, 'editor');
 
-        // Main tabbed metabox
+        // Main details metabox
         add_meta_box(
             'stride_trajectory_details',
-            __('Traject Instellingen', 'stride'),
-            [$this, 'renderMainMetabox'],
+            __('Traject Details', 'stride'),
+            [$this, 'renderDetailsMetabox'],
             TrajectoryCPT::POST_TYPE,
             'normal',
             'high'
+        );
+
+        // Courses metabox
+        add_meta_box(
+            'stride_trajectory_courses',
+            __('Cursussen', 'stride'),
+            [$this, 'renderCoursesMetabox'],
+            TrajectoryCPT::POST_TYPE,
+            'normal',
+            'default'
+        );
+
+        // Enrollments metabox
+        add_meta_box(
+            'stride_trajectory_enrollments',
+            __('Inschrijvingen', 'stride'),
+            [$this, 'renderEnrollmentsMetabox'],
+            TrajectoryCPT::POST_TYPE,
+            'normal',
+            'default'
         );
 
         // Sidebar
@@ -156,16 +176,14 @@ final class TrajectoryAdminController extends AbstractService
         }
     }
 
-    public function renderMainMetabox(WP_Post $post): void
+    public function renderDetailsMetabox(WP_Post $post): void
     {
         $trajectory = $this->trajectoryService->getTrajectory($post->ID);
         $isNew = !$trajectory;
 
-        // Default values for new trajectories
         if ($isNew) {
             $trajectory = [
                 'mode' => TrajectoryMode::Cohort->value,
-                'status' => TrajectoryStatus::Draft->value,
                 'description' => '',
                 'capacity' => 0,
                 'price' => 0,
@@ -181,133 +199,197 @@ final class TrajectoryAdminController extends AbstractService
 
         $currentMode = $trajectory['mode'] ?? TrajectoryMode::Cohort->value;
         $isCohort = $currentMode === TrajectoryMode::Cohort->value;
+        $priceDisplay = ($trajectory['price'] ?? 0) / 100;
+        $priceNonMemberDisplay = ($trajectory['price_non_member'] ?? 0) / 100;
 
         wp_nonce_field(self::NONCE_SAVE, self::NONCE_FIELD);
         ?>
-        <div class="stride-trajectory-admin">
-            <style>
-                .stride-trajectory-admin { padding: 0; }
-                .stride-tabs-nav { display: flex; gap: 0; border-bottom: 1px solid #c3c4c7; margin-bottom: 20px; }
-                .stride-tab { padding: 10px 16px; border: 1px solid transparent; border-bottom: none; background: none; cursor: pointer; font-size: 13px; color: #50575e; margin-bottom: -1px; }
-                .stride-tab:hover { color: #2271b1; }
-                .stride-tab.active { background: #fff; border-color: #c3c4c7; border-bottom-color: #fff; color: #1d2327; font-weight: 600; }
-                .stride-tab-content { display: none; }
-                .stride-tab-content.active { display: block; }
-                .stride-section { margin-bottom: 24px; }
-                .stride-section h4 { margin: 0 0 12px 0; font-size: 13px; color: #1d2327; font-weight: 600; }
-                .stride-field-row { display: flex; gap: 16px; margin-bottom: 16px; }
-                .stride-field-row.two-col > .stride-field { flex: 1; }
-                .stride-field { flex: 1; }
-                .stride-field.half { flex: 0.5; }
-                .stride-field label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: #1d2327; }
-                .stride-field input, .stride-field select, .stride-field textarea { width: 100%; padding: 6px 10px; }
-                .stride-field textarea { min-height: 80px; }
-                .stride-field .description { font-size: 11px; color: #646970; margin-top: 4px; }
-                .stride-cohort-only { display: <?php echo $isCohort ? 'block' : 'none'; ?>; }
-                .stride-self-paced-only { display: <?php echo $isCohort ? 'none' : 'block'; ?>; }
-                .mode-description { font-style: italic; }
-            </style>
+        <style>
+            .stride-trajectory-details { max-width: 700px; }
+            .stride-section { margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid #f0f0f1; }
+            .stride-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+            .stride-section h4 { margin: 0 0 12px 0; font-size: 13px; color: #1d2327; font-weight: 600; }
+            .stride-field-row { display: flex; gap: 16px; margin-bottom: 12px; }
+            .stride-field-row.two-col > .stride-field { flex: 1; }
+            .stride-field { flex: 1; }
+            .stride-field.half { flex: 0.5; }
+            .stride-field label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: #1d2327; }
+            .stride-field input, .stride-field select, .stride-field textarea { width: 100%; padding: 6px 10px; }
+            .stride-field textarea { min-height: 80px; }
+            .stride-field .description { font-size: 11px; color: #646970; margin-top: 4px; }
+            .stride-cohort-only { display: <?php echo $isCohort ? 'block' : 'none'; ?>; }
+            .stride-self-paced-only { display: <?php echo $isCohort ? 'none' : 'block'; ?>; }
+            .mode-description { font-style: italic; }
+            .stride-info-box { background: #f0f6fc; border-left: 4px solid #72aee6; padding: 12px 16px; margin: 12px 0; }
+            .stride-info-box p { margin: 0; }
+        </style>
 
-            <nav class="stride-tabs-nav">
-                <button type="button" class="stride-tab active" data-tab="algemeen"><?php esc_html_e('Algemeen', 'stride'); ?></button>
-                <button type="button" class="stride-tab" data-tab="cursussen"><?php esc_html_e('Cursussen', 'stride'); ?></button>
-                <button type="button" class="stride-tab" data-tab="deadlines"><?php esc_html_e('Deadlines', 'stride'); ?></button>
-                <button type="button" class="stride-tab" data-tab="inschrijvingen"><?php esc_html_e('Inschrijvingen', 'stride'); ?></button>
-            </nav>
+        <div class="stride-trajectory-details">
+            <!-- General Settings -->
+            <div class="stride-section">
+                <div class="stride-field-row">
+                    <div class="stride-field half">
+                        <label for="trajectory_mode"><?php esc_html_e('Modus', 'stride'); ?></label>
+                        <select id="trajectory_mode" name="ntdst_fields[mode]">
+                            <?php foreach (TrajectoryMode::cases() as $mode): ?>
+                            <option value="<?php echo esc_attr($mode->value); ?>" <?php selected($currentMode, $mode->value); ?>>
+                                <?php echo esc_html($mode->label()); ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <p class="description mode-description">
+                            <span class="mode-cohort" style="<?php echo $isCohort ? '' : 'display:none;'; ?>">
+                                <?php esc_html_e('Vaste groep volgt vooraf gekoppelde edities samen.', 'stride'); ?>
+                            </span>
+                            <span class="mode-self-paced" style="<?php echo $isCohort ? 'display:none;' : ''; ?>">
+                                <?php esc_html_e('Deelnemer kiest zelf edities en volgt eigen tempo.', 'stride'); ?>
+                            </span>
+                        </p>
+                    </div>
+                </div>
 
-            <!-- Tab 1: General -->
-            <div class="stride-tab-content active" data-tab="algemeen">
-                <?php $this->renderGeneralTab($trajectory, $isCohort); ?>
+                <div class="stride-field-row">
+                    <div class="stride-field">
+                        <label for="trajectory_description"><?php esc_html_e('Beschrijving', 'stride'); ?></label>
+                        <textarea id="trajectory_description" name="ntdst_fields[description]" placeholder="<?php esc_attr_e('Omschrijving van het traject...', 'stride'); ?>"><?php echo esc_textarea($trajectory['description'] ?? ''); ?></textarea>
+                    </div>
+                </div>
+
+                <div class="stride-field-row two-col">
+                    <div class="stride-field">
+                        <label for="trajectory_capacity"><?php esc_html_e('Capaciteit', 'stride'); ?></label>
+                        <input type="number" id="trajectory_capacity" name="ntdst_fields[capacity]"
+                               value="<?php echo esc_attr($trajectory['capacity'] ?? 0); ?>" min="0">
+                        <p class="description"><?php esc_html_e('0 = onbeperkt', 'stride'); ?></p>
+                    </div>
+                    <div class="stride-field"></div>
+                </div>
+
+                <div class="stride-field-row two-col">
+                    <div class="stride-field">
+                        <label for="trajectory_price"><?php esc_html_e('Prijs leden (€)', 'stride'); ?></label>
+                        <input type="number" id="trajectory_price" name="ntdst_fields[price]"
+                               value="<?php echo esc_attr($priceDisplay); ?>" min="0" step="0.01">
+                    </div>
+                    <div class="stride-field">
+                        <label for="trajectory_price_non_member"><?php esc_html_e('Prijs niet-leden (€)', 'stride'); ?></label>
+                        <input type="number" id="trajectory_price_non_member" name="ntdst_fields[price_non_member]"
+                               value="<?php echo esc_attr($priceNonMemberDisplay); ?>" min="0" step="0.01">
+                    </div>
+                </div>
             </div>
 
-            <!-- Tab 2: Courses -->
-            <div class="stride-tab-content" data-tab="cursussen">
-                <?php $this->renderCoursesTab($trajectory); ?>
+            <!-- Cohort Deadlines -->
+            <div class="stride-section stride-cohort-only">
+                <h4><?php esc_html_e('Deadlines', 'stride'); ?></h4>
+                <div class="stride-field-row">
+                    <div class="stride-field half">
+                        <label for="trajectory_enrollment_deadline"><?php esc_html_e('Inschrijvingsdeadline', 'stride'); ?></label>
+                        <input type="date" id="trajectory_enrollment_deadline" name="ntdst_fields[enrollment_deadline]"
+                               value="<?php echo esc_attr($trajectory['enrollment_deadline'] ?? ''); ?>">
+                    </div>
+                </div>
+                <div class="stride-field-row two-col">
+                    <div class="stride-field">
+                        <label for="trajectory_choice_available"><?php esc_html_e('Keuzes beschikbaar vanaf', 'stride'); ?></label>
+                        <input type="date" id="trajectory_choice_available" name="ntdst_fields[choice_available_date]"
+                               value="<?php echo esc_attr($trajectory['choice_available_date'] ?? ''); ?>">
+                    </div>
+                    <div class="stride-field">
+                        <label for="trajectory_choice_deadline"><?php esc_html_e('Keuzedeadline', 'stride'); ?></label>
+                        <input type="date" id="trajectory_choice_deadline" name="ntdst_fields[choice_deadline]"
+                               value="<?php echo esc_attr($trajectory['choice_deadline'] ?? ''); ?>">
+                    </div>
+                </div>
             </div>
 
-            <!-- Tab 3: Deadlines -->
-            <div class="stride-tab-content" data-tab="deadlines">
-                <?php $this->renderDeadlinesTab($trajectory, $isCohort); ?>
+            <!-- Self-Paced Deadline -->
+            <div class="stride-section stride-self-paced-only">
+                <h4><?php esc_html_e('Doorlooptijd', 'stride'); ?></h4>
+                <div class="stride-field-row">
+                    <div class="stride-field half">
+                        <label for="trajectory_deadline_months"><?php esc_html_e('Deadline (maanden)', 'stride'); ?></label>
+                        <input type="number" id="trajectory_deadline_months" name="ntdst_fields[deadline_months]"
+                               value="<?php echo esc_attr($trajectory['deadline_months'] ?? ''); ?>" min="0" step="1"
+                               placeholder="<?php esc_attr_e('bijv. 18', 'stride'); ?>">
+                        <p class="description"><?php esc_html_e('Aantal maanden vanaf inschrijving om traject te voltooien.', 'stride'); ?></p>
+                    </div>
+                </div>
             </div>
 
-            <!-- Tab 4: Enrollments -->
-            <div class="stride-tab-content" data-tab="inschrijvingen">
-                <?php $this->renderEnrollmentsTab($post); ?>
-            </div>
+            <!-- Linked Editions (Cohort only) -->
+            <?php $this->renderLinkedEditions($trajectory, $isCohort); ?>
         </div>
         <?php
     }
 
-    private function renderGeneralTab(array $trajectory, bool $isCohort): void
-    {
-        $currentMode = $trajectory['mode'] ?? TrajectoryMode::Cohort->value;
-        $priceDisplay = ($trajectory['price'] ?? 0) / 100;
-        $priceNonMemberDisplay = ($trajectory['price_non_member'] ?? 0) / 100;
-        ?>
-        <div class="stride-section">
-            <div class="stride-field-row">
-                <div class="stride-field">
-                    <label for="trajectory_mode"><?php esc_html_e('Modus', 'stride'); ?></label>
-                    <select id="trajectory_mode" name="ntdst_fields[mode]">
-                        <?php foreach (TrajectoryMode::cases() as $mode): ?>
-                        <option value="<?php echo esc_attr($mode->value); ?>" <?php selected($currentMode, $mode->value); ?>>
-                            <?php echo esc_html($mode->label()); ?>
-                        </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <p class="description mode-description">
-                        <span class="mode-cohort" style="<?php echo $isCohort ? '' : 'display:none;'; ?>">
-                            <?php esc_html_e('Vaste groep volgt vooraf gekoppelde edities samen.', 'stride'); ?>
-                        </span>
-                        <span class="mode-self-paced" style="<?php echo $isCohort ? 'display:none;' : ''; ?>">
-                            <?php esc_html_e('Deelnemer kiest zelf edities en volgt eigen tempo.', 'stride'); ?>
-                        </span>
-                    </p>
-                </div>
-            </div>
-
-            <div class="stride-field-row">
-                <div class="stride-field">
-                    <label for="trajectory_description"><?php esc_html_e('Beschrijving', 'stride'); ?></label>
-                    <textarea id="trajectory_description" name="ntdst_fields[description]" placeholder="<?php esc_attr_e('Omschrijving van het traject...', 'stride'); ?>"><?php echo esc_textarea($trajectory['description'] ?? ''); ?></textarea>
-                </div>
-            </div>
-
-            <div class="stride-field-row two-col">
-                <div class="stride-field">
-                    <label for="trajectory_capacity"><?php esc_html_e('Capaciteit', 'stride'); ?></label>
-                    <input type="number" id="trajectory_capacity" name="ntdst_fields[capacity]"
-                           value="<?php echo esc_attr($trajectory['capacity'] ?? 0); ?>" min="0">
-                    <p class="description"><?php esc_html_e('0 = onbeperkt', 'stride'); ?></p>
-                </div>
-                <div class="stride-field"></div>
-            </div>
-
-            <div class="stride-field-row two-col">
-                <div class="stride-field">
-                    <label for="trajectory_price"><?php esc_html_e('Prijs leden (€)', 'stride'); ?></label>
-                    <input type="number" id="trajectory_price" name="ntdst_fields[price]"
-                           value="<?php echo esc_attr($priceDisplay); ?>" min="0" step="0.01">
-                </div>
-                <div class="stride-field">
-                    <label for="trajectory_price_non_member"><?php esc_html_e('Prijs niet-leden (€)', 'stride'); ?></label>
-                    <input type="number" id="trajectory_price_non_member" name="ntdst_fields[price_non_member]"
-                           value="<?php echo esc_attr($priceNonMemberDisplay); ?>" min="0" step="0.01">
-                </div>
-            </div>
-        </div>
-        <?php
-    }
-
-    private function renderCoursesTab(array $trajectory): void
+    private function renderLinkedEditions(array $trajectory, bool $isCohort): void
     {
         $courses = $trajectory['courses'] ?? [];
+        $linkedEditions = $trajectory['linked_editions'] ?? [];
+        $courseIds = array_unique(array_filter(array_map(fn($c) => (int) ($c['course_id'] ?? 0), $courses)));
 
-        // Separate required and elective courses
+        $linkedMap = [];
+        foreach ($linkedEditions as $link) {
+            $linkedMap[(int) $link['course_id']] = (int) $link['edition_id'];
+        }
+
+        if (empty($courseIds)) {
+            return;
+        }
+        ?>
+        <div class="stride-section stride-cohort-only">
+            <h4><?php esc_html_e('Gekoppelde Edities', 'stride'); ?></h4>
+            <p class="description"><?php esc_html_e('Koppel elke cursus aan een specifieke editie voor dit cohort.', 'stride'); ?></p>
+
+            <table class="widefat striped" style="margin-top: 12px;">
+                <thead>
+                    <tr>
+                        <th><?php esc_html_e('Cursus', 'stride'); ?></th>
+                        <th><?php esc_html_e('Editie', 'stride'); ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($courseIds as $courseId): ?>
+                        <?php
+                        $courseTitle = get_the_title($courseId);
+                        $linkedEditionId = $linkedMap[$courseId] ?? 0;
+                        ?>
+                        <tr>
+                            <td>
+                                <?php echo esc_html($courseTitle ?: '#' . $courseId); ?>
+                                <input type="hidden" name="ntdst_fields[linked_editions][<?php echo esc_attr($courseId); ?>][course_id]"
+                                       value="<?php echo esc_attr($courseId); ?>">
+                            </td>
+                            <td>
+                                <select name="ntdst_fields[linked_editions][<?php echo esc_attr($courseId); ?>][edition_id]"
+                                        class="stride-edition-select"
+                                        data-course-id="<?php echo esc_attr($courseId); ?>"
+                                        style="width: 100%;">
+                                    <option value=""><?php esc_html_e('Selecteer editie...', 'stride'); ?></option>
+                                    <?php if ($linkedEditionId): ?>
+                                        <option value="<?php echo esc_attr($linkedEditionId); ?>" selected>
+                                            <?php echo esc_html(get_the_title($linkedEditionId) ?: '#' . $linkedEditionId); ?>
+                                        </option>
+                                    <?php endif; ?>
+                                </select>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <?php
+    }
+
+    public function renderCoursesMetabox(WP_Post $post): void
+    {
+        $trajectory = $this->trajectoryService->getTrajectory($post->ID);
+        $courses = $trajectory['courses'] ?? [];
+
         $requiredCourses = array_filter($courses, fn($c) => ($c['required'] ?? false) === true);
         $electiveCourses = array_filter($courses, fn($c) => ($c['required'] ?? false) === false);
 
-        // Group electives by group name
         $electiveGroups = [];
         foreach ($electiveCourses as $course) {
             $group = $course['group'] ?? 'Keuze';
@@ -323,7 +405,7 @@ final class TrajectoryAdminController extends AbstractService
         ?>
         <style>
             .stride-courses-section { margin-bottom: 24px; }
-            .stride-courses-section h4 { margin: 0 0 12px; display: flex; justify-content: space-between; align-items: center; }
+            .stride-courses-section h4 { margin: 0 0 12px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; }
             .stride-course-list { list-style: none; margin: 0; padding: 0; }
             .stride-course-item { display: flex; align-items: center; padding: 8px 12px; background: #f6f7f7; border: 1px solid #dcdcde; margin-bottom: 4px; border-radius: 3px; }
             .stride-course-item .course-title { flex: 1; }
@@ -336,6 +418,8 @@ final class TrajectoryAdminController extends AbstractService
             .stride-elective-group .group-header .stride-field { margin-bottom: 0; }
             .stride-elective-group .group-footer { display: flex; justify-content: flex-end; margin-top: 12px; }
             .stride-no-courses { color: #646970; font-style: italic; padding: 12px; background: #f6f7f7; border-radius: 3px; }
+            .stride-field label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: #1d2327; }
+            .stride-field input { padding: 6px 10px; }
         </style>
 
         <!-- Required Courses -->
@@ -383,7 +467,6 @@ final class TrajectoryAdminController extends AbstractService
             </div>
         </div>
 
-        <!-- Hidden template for new elective group (used by JS) -->
         <script type="text/template" id="stride-elective-group-template">
             <?php $this->renderElectiveGroup('__INDEX__', ['name' => '', 'pick_count' => 1, 'courses' => []]); ?>
         </script>
@@ -440,133 +523,8 @@ final class TrajectoryAdminController extends AbstractService
         <?php
     }
 
-    private function renderDeadlinesTab(array $trajectory, bool $isCohort): void
+    public function renderEnrollmentsMetabox(WP_Post $post): void
     {
-        $courses = $trajectory['courses'] ?? [];
-        $linkedEditions = $trajectory['linked_editions'] ?? [];
-
-        // Build linked editions map
-        $linkedMap = [];
-        foreach ($linkedEditions as $link) {
-            $linkedMap[(int) $link['course_id']] = (int) $link['edition_id'];
-        }
-
-        // Get all course IDs for edition lookup
-        $courseIds = array_unique(array_filter(array_map(fn($c) => (int) ($c['course_id'] ?? 0), $courses)));
-        ?>
-        <style>
-            .stride-deadlines-cohort, .stride-deadlines-self-paced { }
-            .stride-linked-editions table { margin-top: 12px; }
-            .stride-linked-editions th { text-align: left; }
-            .stride-info-box { background: #f0f6fc; border-left: 4px solid #72aee6; padding: 12px 16px; margin: 16px 0; }
-            .stride-info-box p { margin: 0; }
-        </style>
-
-        <!-- Cohort Mode Deadlines -->
-        <div class="stride-deadlines-cohort stride-cohort-only">
-            <div class="stride-section">
-                <h4><?php esc_html_e('Inschrijvingsperiode', 'stride'); ?></h4>
-                <div class="stride-field-row">
-                    <div class="stride-field half">
-                        <label for="trajectory_enrollment_deadline"><?php esc_html_e('Inschrijvingsdeadline', 'stride'); ?></label>
-                        <input type="date" id="trajectory_enrollment_deadline" name="ntdst_fields[enrollment_deadline]"
-                               value="<?php echo esc_attr($trajectory['enrollment_deadline'] ?? ''); ?>">
-                        <p class="description"><?php esc_html_e('Inschrijvingen sluiten na deze datum.', 'stride'); ?></p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="stride-section">
-                <h4><?php esc_html_e('Keuzeperiode', 'stride'); ?></h4>
-                <div class="stride-field-row two-col">
-                    <div class="stride-field">
-                        <label for="trajectory_choice_available"><?php esc_html_e('Keuzes beschikbaar vanaf', 'stride'); ?></label>
-                        <input type="date" id="trajectory_choice_available" name="ntdst_fields[choice_available_date]"
-                               value="<?php echo esc_attr($trajectory['choice_available_date'] ?? ''); ?>">
-                    </div>
-                    <div class="stride-field">
-                        <label for="trajectory_choice_deadline"><?php esc_html_e('Keuzedeadline', 'stride'); ?></label>
-                        <input type="date" id="trajectory_choice_deadline" name="ntdst_fields[choice_deadline]"
-                               value="<?php echo esc_attr($trajectory['choice_deadline'] ?? ''); ?>">
-                    </div>
-                </div>
-                <p class="description"><?php esc_html_e('Deelnemers kunnen keuzevakken selecteren tussen deze datums.', 'stride'); ?></p>
-            </div>
-
-            <div class="stride-section stride-linked-editions">
-                <h4><?php esc_html_e('Gekoppelde Edities', 'stride'); ?></h4>
-                <p class="description"><?php esc_html_e('Koppel elke cursus aan een specifieke editie voor dit cohort.', 'stride'); ?></p>
-
-                <?php if (empty($courseIds)): ?>
-                    <p class="stride-no-courses"><?php esc_html_e('Voeg eerst cursussen toe om edities te koppelen.', 'stride'); ?></p>
-                <?php else: ?>
-                    <table class="widefat striped">
-                        <thead>
-                            <tr>
-                                <th><?php esc_html_e('Cursus', 'stride'); ?></th>
-                                <th><?php esc_html_e('Editie', 'stride'); ?></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($courseIds as $courseId): ?>
-                                <?php
-                                $courseTitle = get_the_title($courseId);
-                                $linkedEditionId = $linkedMap[$courseId] ?? 0;
-                                ?>
-                                <tr>
-                                    <td>
-                                        <?php echo esc_html($courseTitle ?: '#' . $courseId); ?>
-                                        <input type="hidden" name="ntdst_fields[linked_editions][<?php echo esc_attr($courseId); ?>][course_id]"
-                                               value="<?php echo esc_attr($courseId); ?>">
-                                    </td>
-                                    <td>
-                                        <select name="ntdst_fields[linked_editions][<?php echo esc_attr($courseId); ?>][edition_id]"
-                                                class="stride-edition-select"
-                                                data-course-id="<?php echo esc_attr($courseId); ?>"
-                                                data-selected="<?php echo esc_attr($linkedEditionId); ?>"
-                                                style="width: 100%;">
-                                            <option value=""><?php esc_html_e('Selecteer editie...', 'stride'); ?></option>
-                                            <?php if ($linkedEditionId): ?>
-                                                <option value="<?php echo esc_attr($linkedEditionId); ?>" selected>
-                                                    <?php echo esc_html(get_the_title($linkedEditionId) ?: '#' . $linkedEditionId); ?>
-                                                </option>
-                                            <?php endif; ?>
-                                        </select>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                <?php endif; ?>
-            </div>
-        </div>
-
-        <!-- Self-Paced Mode Deadlines -->
-        <div class="stride-deadlines-self-paced stride-self-paced-only">
-            <div class="stride-section">
-                <h4><?php esc_html_e('Doorlooptijd', 'stride'); ?></h4>
-                <div class="stride-field-row">
-                    <div class="stride-field half">
-                        <label for="trajectory_deadline_months"><?php esc_html_e('Deadline (maanden)', 'stride'); ?></label>
-                        <input type="number" id="trajectory_deadline_months" name="ntdst_fields[deadline_months]"
-                               value="<?php echo esc_attr($trajectory['deadline_months'] ?? ''); ?>" min="0" step="1"
-                               placeholder="<?php esc_attr_e('bijv. 18', 'stride'); ?>">
-                        <p class="description"><?php esc_html_e('Aantal maanden vanaf inschrijving om traject te voltooien.', 'stride'); ?></p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="stride-info-box">
-                <p><strong><?php esc_html_e('Zelfgestuurd traject', 'stride'); ?></strong></p>
-                <p><?php esc_html_e('Bij zelfgestuurd kiezen deelnemers zelf hun edities. Geen gekoppelde edities nodig.', 'stride'); ?></p>
-            </div>
-        </div>
-        <?php
-    }
-
-    private function renderEnrollmentsTab(WP_Post $post): void
-    {
-        // For new trajectories, show placeholder
         if ($post->post_status === 'auto-draft') {
             echo '<p class="description">' . esc_html__('Sla het traject eerst op om inschrijvingen te zien.', 'stride') . '</p>';
             return;
@@ -630,9 +588,7 @@ final class TrajectoryAdminController extends AbstractService
                         $userName = $user ? ($user->display_name ?: $user->user_email) : __('Onbekend', 'stride');
                         $status = $enrollment['status'] ?? 'enrolled';
                         $enrolledAt = $enrollment['enrolled_at'] ?? '';
-
-                        // Calculate progress (simplified - would need actual progress tracking)
-                        $completedCourses = 0; // TODO: Get from actual progress data
+                        $completedCourses = 0;
                         $progressPercent = $totalCourses > 0 ? round(($completedCourses / $totalCourses) * 100) : 0;
 
                         $statusLabels = [
@@ -685,7 +641,6 @@ final class TrajectoryAdminController extends AbstractService
         $mode = TrajectoryMode::tryFrom($trajectory['mode'] ?? '') ?? TrajectoryMode::Cohort;
         $courseCount = count($trajectory['courses'] ?? []);
 
-        // Get enrollment stats
         $enrollments = $this->enrollmentRepository->findByTrajectory($post->ID);
         $activeCount = count(array_filter($enrollments, fn($e) => $e['status'] === 'enrolled'));
         $completedCount = count(array_filter($enrollments, fn($e) => $e['status'] === 'completed'));
@@ -769,18 +724,15 @@ final class TrajectoryAdminController extends AbstractService
 
     public function handleSave(int $postId, WP_Post $post): void
     {
-        // Verify nonce
         if (!isset($_POST[self::NONCE_FIELD]) ||
             !wp_verify_nonce($_POST[self::NONCE_FIELD], self::NONCE_SAVE)) {
             return;
         }
 
-        // Check autosave
         if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
             return;
         }
 
-        // Check permissions
         if (!current_user_can('edit_post', $postId)) {
             return;
         }
@@ -792,7 +744,6 @@ final class TrajectoryAdminController extends AbstractService
 
         $updateData = [];
 
-        // Mode
         if (isset($fields['mode'])) {
             $mode = sanitize_text_field($fields['mode']);
             if (TrajectoryMode::tryFrom($mode)) {
@@ -800,7 +751,6 @@ final class TrajectoryAdminController extends AbstractService
             }
         }
 
-        // Status
         if (isset($fields['status'])) {
             $status = sanitize_text_field($fields['status']);
             if (TrajectoryStatus::tryFrom($status)) {
@@ -808,17 +758,14 @@ final class TrajectoryAdminController extends AbstractService
             }
         }
 
-        // Description
         if (isset($fields['description'])) {
             $updateData['description'] = sanitize_textarea_field($fields['description']);
         }
 
-        // Capacity
         if (isset($fields['capacity'])) {
             $updateData['capacity'] = absint($fields['capacity']);
         }
 
-        // Prices (convert to cents)
         if (isset($fields['price'])) {
             $updateData['price'] = (int) round((float) $fields['price'] * 100);
         }
@@ -826,12 +773,10 @@ final class TrajectoryAdminController extends AbstractService
             $updateData['price_non_member'] = (int) round((float) $fields['price_non_member'] * 100);
         }
 
-        // Deadline months (self-paced)
         if (isset($fields['deadline_months'])) {
             $updateData['deadline_months'] = absint($fields['deadline_months']) ?: null;
         }
 
-        // Cohort deadlines
         if (isset($fields['enrollment_deadline'])) {
             $updateData['enrollment_deadline'] = sanitize_text_field($fields['enrollment_deadline']);
         }
@@ -842,23 +787,17 @@ final class TrajectoryAdminController extends AbstractService
             $updateData['choice_deadline'] = sanitize_text_field($fields['choice_deadline']);
         }
 
-        // Build courses array from required + elective groups
         $courses = [];
 
-        // Required courses
         if (!empty($fields['courses_required']) && is_array($fields['courses_required'])) {
             foreach ($fields['courses_required'] as $courseId) {
                 $courseId = absint($courseId);
                 if ($courseId > 0) {
-                    $courses[] = [
-                        'course_id' => $courseId,
-                        'required' => true,
-                    ];
+                    $courses[] = ['course_id' => $courseId, 'required' => true];
                 }
             }
         }
 
-        // Elective groups
         if (!empty($fields['elective_groups']) && is_array($fields['elective_groups'])) {
             foreach ($fields['elective_groups'] as $group) {
                 $groupName = sanitize_text_field($group['name'] ?? '');
@@ -882,23 +821,18 @@ final class TrajectoryAdminController extends AbstractService
 
         $updateData['courses'] = $courses;
 
-        // Linked editions
         if (!empty($fields['linked_editions']) && is_array($fields['linked_editions'])) {
             $linkedEditions = [];
             foreach ($fields['linked_editions'] as $link) {
                 $courseId = absint($link['course_id'] ?? 0);
                 $editionId = absint($link['edition_id'] ?? 0);
                 if ($courseId > 0 && $editionId > 0) {
-                    $linkedEditions[] = [
-                        'course_id' => $courseId,
-                        'edition_id' => $editionId,
-                    ];
+                    $linkedEditions[] = ['course_id' => $courseId, 'edition_id' => $editionId];
                 }
             }
             $updateData['linked_editions'] = $linkedEditions;
         }
 
-        // Update via repository
         if (!empty($updateData)) {
             $this->repository->update($postId, $updateData);
         }
@@ -930,10 +864,7 @@ final class TrajectoryAdminController extends AbstractService
         $results = [];
 
         foreach ($courses as $course) {
-            $results[] = [
-                'id' => $course->ID,
-                'text' => $course->post_title,
-            ];
+            $results[] = ['id' => $course->ID, 'text' => $course->post_title];
         }
 
         wp_send_json_success(['results' => $results]);
@@ -951,7 +882,6 @@ final class TrajectoryAdminController extends AbstractService
             return;
         }
 
-        // Get editions for this course via EditionService
         $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
         $editions = $editionService->getEditionsForCourse($courseId);
 
@@ -965,10 +895,7 @@ final class TrajectoryAdminController extends AbstractService
                 $label = '#' . $edition['id'];
             }
 
-            $results[] = [
-                'id' => $edition['id'],
-                'text' => $label,
-            ];
+            $results[] = ['id' => $edition['id'], 'text' => $label];
         }
 
         wp_send_json_success(['results' => $results]);
@@ -993,12 +920,10 @@ final class TrajectoryAdminController extends AbstractService
 
         $enrollments = $this->enrollmentRepository->findByTrajectory($trajectoryId);
 
-        // Filter by status
         if (!empty($status)) {
             $enrollments = array_filter($enrollments, fn($e) => $e['status'] === $status);
         }
 
-        // Filter by search
         if (!empty($search)) {
             $enrollments = array_filter($enrollments, function($e) use ($search) {
                 $user = get_userdata($e['user_id']);
@@ -1008,11 +933,9 @@ final class TrajectoryAdminController extends AbstractService
             });
         }
 
-        // Paginate
         $total = count($enrollments);
         $enrollments = array_slice($enrollments, ($page - 1) * $perPage, $perPage);
 
-        // Format for response
         $results = [];
         foreach ($enrollments as $enrollment) {
             $user = get_userdata($enrollment['user_id']);

@@ -2,7 +2,6 @@
  * Trajectory Admin Scripts
  *
  * Handles trajectory admin interactions:
- * - Tab navigation
  * - Mode switching (self-paced / cohort)
  * - Course builder (required + elective groups)
  * - Edition linking
@@ -16,7 +15,6 @@
     var groupIndex = 0;
 
     $(document).ready(function() {
-        initTabs();
         initModeToggle();
         initCourseSelects();
         initCourseBuilder();
@@ -25,31 +23,13 @@
     });
 
     /**
-     * Tab Navigation
-     */
-    function initTabs() {
-        $('.stride-tabs-nav .stride-tab').on('click', function(e) {
-            e.preventDefault();
-            var tab = $(this).data('tab');
-
-            // Update active tab
-            $('.stride-tabs-nav .stride-tab').removeClass('active');
-            $(this).addClass('active');
-
-            // Show tab content
-            $('.stride-tab-content').removeClass('active');
-            $('.stride-tab-content[data-tab="' + tab + '"]').addClass('active');
-        });
-    }
-
-    /**
      * Mode Toggle (Cohort/Self-paced)
      */
     function initModeToggle() {
         $('#trajectory_mode').on('change', function() {
             var isCohort = $(this).val() === 'cohort';
 
-            // Toggle visibility using CSS classes
+            // Toggle visibility
             $('.stride-cohort-only').toggle(isCohort);
             $('.stride-self-paced-only').toggle(!isCohort);
 
