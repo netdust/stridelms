@@ -14,7 +14,6 @@ use ntdst\Stride\core\ProgressEngine;
 use ntdst\Stride\invoicing\QuoteService;
 use ntdst\Stride\sync\UserDataSync;
 use ntdst\Stride\FieldRegistry;
-use WP_Error;
 use WP_Post;
 
 /**
@@ -101,11 +100,15 @@ class DashboardService implements \NTDST_Service_Meta
 
     /**
      * Register AJAX handlers
+     *
+     * Handlers are now in stride-core. Instantiate them to trigger
+     * their AJAX action registration.
      */
     public function registerAjaxHandlers(): void
     {
-        add_action('wp_ajax_stride_update_profile', [$this, 'handleProfileUpdate']);
-        add_action('wp_ajax_stride_download_ical', [$this, 'handleIcalDownload']);
+        // Handlers now in stride-core - instantiate to register their AJAX actions
+        ntdst_get(\Stride\Handlers\ProfileHandler::class);
+        ntdst_get(\Stride\Handlers\ICalHandler::class);
     }
 
     // ========================================
@@ -975,163 +978,6 @@ class DashboardService implements \NTDST_Service_Meta
             'last_name' => $user->last_name,
             'display_name' => $user->display_name,
         ], $syncedData);
-    }
-
-    /**
-     * Handle profile update AJAX request
-     */
-    public function handleProfileUpdate(): void
-    {
-        // Verify nonce
-        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'stride_frontend')) {
-            wp_send_json_error(['message' => __('Beveiligingsfout.', 'stride')], 403);
-        }
-
-        $userId = get_current_user_id();
-
-        if (!$userId) {
-            wp_send_json_error(['message' => __('Niet ingelogd.', 'stride')], 401);
-        }
-
-        // Sanitize input
-        $data = [
-            'first_name' => sanitize_text_field($_POST['first_name'] ?? ''),
-            'last_name' => sanitize_text_field($_POST['last_name'] ?? ''),
-            'phone' => sanitize_text_field($_POST['phone'] ?? ''),
-        ];
-
-        // Update WordPress user
-        $result = wp_update_user([
-            'ID' => $userId,
-            'first_name' => $data['first_name'],
-            'last_name' => $data['last_name'],
-            'display_name' => trim($data['first_name'] . ' ' . $data['last_name']),
-        ]);
-
-        if (is_wp_error($result)) {
-            wp_send_json_error(['message' => $result->get_error_message()], 500);
-        }
-
-        // Sync to other backends
-        if ($this->userDataSync) {
-            $this->userDataSync->setFields($userId, $data);
-        }
-
-        wp_send_json_success(['message' => __('Profiel bijgewerkt.', 'stride')]);
-    }
-
-    // ========================================
-    // ICAL DOWNLOADS
-    // ========================================
-
-    /**
-     * Handle iCal download AJAX request
-     */
-    public function handleIcalDownload(): void
-    {
-        $courseId = (int) ($_GET['course_id'] ?? 0);
-        $editionId = (int) ($_GET['edition_id'] ?? 0);
-        $sessionId = (int) ($_GET['session_id'] ?? 0);
-        $nonce = $_GET['nonce'] ?? '';
-
-        if (!wp_verify_nonce($nonce, 'stride_frontend')) {
-            wp_die(__('Beveiligingsfout.', 'stride'));
-        }
-
-        $userId = get_current_user_id();
-
-        // Verify user has access to this edition
-        if ($editionId && $this->registrationRepo) {
-            $registration = $this->registrationRepo->findByUserAndEdition($userId, $editionId);
-            if (!$registration || $registration['status'] !== RegistrationRepository::STATUS_CONFIRMED) {
-                wp_die(__('Geen toegang.', 'stride'));
-            }
-        } elseif ($courseId && $this->courseService && !$this->courseService->isUserEnrolled($userId, $courseId)) {
-            wp_die(__('Geen toegang.', 'stride'));
-        }
-
-        $icalService = stride_service(ICalService::class);
-
-        if ($icalService) {
-            // Use session-aware iCal if session ID provided
-            if ($sessionId) {
-                $icalService->downloadSessionEvent($sessionId);
-            } elseif ($editionId) {
-                $icalService->downloadEditionEvent($editionId);
-            } else {
-                $icalService->downloadCourseEvent($courseId);
-            }
-        } else {
-            // Fallback simple iCal generation
-            $this->generateSimpleIcal($courseId, $editionId, $sessionId);
-        }
-
-        exit;
-    }
-
-    /**
-     * Simple iCal generation fallback
-     */
-    private function generateSimpleIcal(int $courseId, int $editionId = 0, int $sessionId = 0): void
-    {
-        $title = get_the_title($courseId);
-        $startDate = null;
-        $location = null;
-
-        // Get data from session or edition
-        if ($sessionId && $this->sessionService) {
-            $session = $this->sessionService->getSession($sessionId);
-            if ($session) {
-                $startDate = strtotime($session['date'] . ' ' . ($session['start_time'] ?: '09:00'));
-                $location = $session['location'];
-            }
-        } elseif ($editionId && $this->editionService) {
-            $startDateStr = $this->editionService->getStartDate($editionId);
-            $startDate = $startDateStr ? strtotime($startDateStr) : null;
-            $location = $this->editionService->getVenue($editionId);
-        } elseif ($this->courseService) {
-            $startDate = $this->courseService->getStartDate($courseId);
-            $location = $this->courseService->getCourseAddress($courseId);
-        }
-
-        if (!$title || !$startDate) {
-            wp_die(__('Geen datum gevonden.', 'stride'));
-        }
-
-        $dtStart = gmdate('Ymd\THis\Z', $startDate);
-        $dtEnd = gmdate('Ymd\THis\Z', $startDate + 28800); // +8 hours default
-        $dtstamp = gmdate('Ymd\THis\Z');
-        $uid = 'stride-' . ($sessionId ?: $editionId ?: $courseId) . '@' . wp_parse_url(home_url(), PHP_URL_HOST);
-
-        $ical = "BEGIN:VCALENDAR\r\n";
-        $ical .= "VERSION:2.0\r\n";
-        $ical .= "PRODID:-//Stride LMS//NONSGML v1.0//NL\r\n";
-        $ical .= "METHOD:PUBLISH\r\n";
-        $ical .= "BEGIN:VEVENT\r\n";
-        $ical .= "UID:{$uid}\r\n";
-        $ical .= "DTSTAMP:{$dtstamp}\r\n";
-        $ical .= "DTSTART:{$dtStart}\r\n";
-        $ical .= "DTEND:{$dtEnd}\r\n";
-        $ical .= "SUMMARY:" . $this->escapeIcal($title) . "\r\n";
-        if ($location) {
-            $ical .= "LOCATION:" . $this->escapeIcal($location) . "\r\n";
-        }
-        $ical .= "URL:" . get_permalink($courseId) . "\r\n";
-        $ical .= "END:VEVENT\r\n";
-        $ical .= "END:VCALENDAR\r\n";
-
-        header('Content-Type: text/calendar; charset=utf-8');
-        header('Content-Disposition: attachment; filename="event-' . ($sessionId ?: $editionId ?: $courseId) . '.ics"');
-        echo $ical;
-    }
-
-    /**
-     * Escape text for iCal format
-     */
-    private function escapeIcal(string $text): string
-    {
-        $text = str_replace(['\\', ';', ',', "\n"], ['\\\\', '\\;', '\\,', '\\n'], $text);
-        return $text;
     }
 
     // ========================================
