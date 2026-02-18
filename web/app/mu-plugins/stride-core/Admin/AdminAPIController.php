@@ -1355,6 +1355,7 @@ final class AdminAPIController extends AbstractService
      * GET /admin/trajectories
      *
      * List trajectories with pagination, search, and status filtering.
+     * Optimized with batch queries to avoid N+1 patterns.
      */
     public function getTrajectories(WP_REST_Request $request): WP_REST_Response
     {
@@ -1393,28 +1394,131 @@ final class AdminAPIController extends AbstractService
         $params[] = $offset;
 
         $trajectories = $wpdb->get_results($wpdb->prepare(
-            "SELECT p.ID, p.post_title, p.post_date FROM {$wpdb->posts} p
+            "SELECT p.ID, p.post_title, p.post_date, p.post_content FROM {$wpdb->posts} p
              WHERE {$whereClause}
              ORDER BY p.post_date DESC
              LIMIT %d OFFSET %d",
             ...$params
         ));
 
-        // Format trajectories with meta
+        if (empty($trajectories)) {
+            return new WP_REST_Response([
+                'items' => [],
+                'total' => $total,
+                'page' => $page,
+                'perPage' => $perPage,
+                'totalPages' => (int) ceil($total / $perPage),
+            ]);
+        }
+
+        // === BATCH FETCH ALL DATA UPFRONT ===
+
+        $trajectoryIds = array_map(fn($t) => (int) $t->ID, $trajectories);
+
+        // Batch fetch trajectory meta
+        $trajectoryMeta = BatchQueryHelper::batchGetPostMeta($trajectoryIds, [
+            'status', 'mode', 'capacity', 'enrollment_deadline', 'choice_deadline',
+            'courses', 'price', 'price_non_member', 'choice_available_date',
+        ]);
+
+        // Check if enrollment table exists (once)
+        $enrollmentTable = $wpdb->prefix . 'vad_trajectory_enrollments';
+        $enrollmentTableExists = $wpdb->get_var("SHOW TABLES LIKE '{$enrollmentTable}'") === $enrollmentTable;
+
+        // Collect all edition IDs from courses meta and all enrollments
+        $allEditionIds = [];
+        $allEnrollments = []; // trajectoryId => enrollments
+        $enrollmentCounts = []; // trajectoryId => count
+
+        foreach ($trajectories as $trajectory) {
+            $trajectoryId = (int) $trajectory->ID;
+            $meta = $trajectoryMeta[$trajectoryId] ?? [];
+
+            // Parse courses to collect edition IDs
+            $courses = $meta['courses'] ?? null;
+            $courseList = [];
+            if (is_array($courses)) {
+                $courseList = $courses;
+            } elseif (is_string($courses) && !empty($courses)) {
+                $decoded = json_decode($courses, true);
+                if (is_array($decoded)) {
+                    $courseList = $decoded;
+                }
+            }
+
+            foreach ($courseList as $course) {
+                $editionId = (int) ($course['edition_id'] ?? 0);
+                if ($editionId > 0) {
+                    $allEditionIds[] = $editionId;
+                }
+            }
+        }
+
+        // Batch fetch enrollments for all trajectories
+        $allEnrollmentUserIds = [];
+        if ($enrollmentTableExists && !empty($trajectoryIds)) {
+            $placeholders = implode(',', array_fill(0, count($trajectoryIds), '%d'));
+
+            // Get enrollment counts
+            $countResults = $wpdb->get_results($wpdb->prepare(
+                "SELECT trajectory_id, COUNT(*) as count FROM {$enrollmentTable}
+                 WHERE trajectory_id IN ({$placeholders})
+                 GROUP BY trajectory_id",
+                ...$trajectoryIds
+            ));
+            foreach ($countResults as $row) {
+                $enrollmentCounts[(int) $row->trajectory_id] = (int) $row->count;
+            }
+
+            // Get enrollment details (limited to 50 per trajectory)
+            // Use a single query with ROW_NUMBER or just fetch all and limit in PHP
+            $enrollmentResults = $wpdb->get_results($wpdb->prepare(
+                "SELECT trajectory_id, user_id, status, enrolled_at FROM {$enrollmentTable}
+                 WHERE trajectory_id IN ({$placeholders})
+                 ORDER BY trajectory_id, enrolled_at DESC",
+                ...$trajectoryIds
+            ));
+
+            // Group by trajectory and limit to 50 per trajectory
+            $enrollmentsByTrajectory = [];
+            foreach ($enrollmentResults as $row) {
+                $trajectoryId = (int) $row->trajectory_id;
+                if (!isset($enrollmentsByTrajectory[$trajectoryId])) {
+                    $enrollmentsByTrajectory[$trajectoryId] = [];
+                }
+                if (count($enrollmentsByTrajectory[$trajectoryId]) < 50) {
+                    $enrollmentsByTrajectory[$trajectoryId][] = $row;
+                    $allEnrollmentUserIds[] = (int) $row->user_id;
+                }
+            }
+            $allEnrollments = $enrollmentsByTrajectory;
+        }
+
+        // Batch fetch editions for courses
+        $editionsMap = BatchQueryHelper::batchGetPosts($allEditionIds, EditionCPT::POST_TYPE);
+
+        // Batch fetch users for enrollments
+        $usersMap = BatchQueryHelper::batchGetUsers($allEnrollmentUserIds);
+
+        // === FORMAT TRAJECTORIES ===
+
         $items = [];
         foreach ($trajectories as $trajectory) {
             $trajectoryId = (int) $trajectory->ID;
+            $meta = $trajectoryMeta[$trajectoryId] ?? [];
 
-            // Get meta values
-            $trajectoryStatus = get_post_meta($trajectoryId, 'status', true);
-            $mode = get_post_meta($trajectoryId, 'mode', true);
-            $capacity = (int) get_post_meta($trajectoryId, 'capacity', true);
-            $enrollmentDeadline = get_post_meta($trajectoryId, 'enrollment_deadline', true);
-            $choiceDeadline = get_post_meta($trajectoryId, 'choice_deadline', true);
-            $courses = get_post_meta($trajectoryId, 'courses', true);
-            $price = (int) get_post_meta($trajectoryId, 'price', true);
+            // Get meta values from batch
+            $trajectoryStatus = $meta['status'] ?? '';
+            $mode = $meta['mode'] ?? '';
+            $capacity = (int) ($meta['capacity'] ?? 0);
+            $enrollmentDeadline = $meta['enrollment_deadline'] ?? '';
+            $choiceDeadline = $meta['choice_deadline'] ?? '';
+            $price = (int) ($meta['price'] ?? 0);
+            $priceNonMember = (float) ($meta['price_non_member'] ?? 0);
+            $choiceAvailableDate = $meta['choice_available_date'] ?? '';
 
             // Parse courses
+            $courses = $meta['courses'] ?? null;
             $courseList = [];
             if (is_array($courses)) {
                 $courseList = $courses;
@@ -1426,16 +1530,17 @@ final class AdminAPIController extends AbstractService
             }
             $courseCount = count($courseList);
 
-            // Enrich courses with edition titles
+            // Enrich courses with edition titles (using batch-fetched data)
             $coursesWithDetails = [];
             foreach ($courseList as $course) {
+                $editionId = (int) ($course['edition_id'] ?? 0);
                 $courseData = [
-                    'editionId' => $course['edition_id'] ?? 0,
+                    'editionId' => $editionId,
                     'type' => $course['type'] ?? 'required',
                     'title' => '',
                 ];
-                if ($courseData['editionId'] > 0) {
-                    $edition = get_post($courseData['editionId']);
+                if ($editionId > 0) {
+                    $edition = $editionsMap[$editionId] ?? null;
                     if ($edition) {
                         $courseData['title'] = $edition->post_title;
                     }
@@ -1443,41 +1548,27 @@ final class AdminAPIController extends AbstractService
                 $coursesWithDetails[] = $courseData;
             }
 
-            // Get enrolled users (from trajectory_enrollments table if exists)
-            $enrolledCount = 0;
+            // Get enrolled users (using batch-fetched data)
+            $enrolledCount = $enrollmentCounts[$trajectoryId] ?? 0;
             $enrolledUsers = [];
-            $enrollmentTable = $wpdb->prefix . 'vad_trajectory_enrollments';
-            $tableExists = $wpdb->get_var("SHOW TABLES LIKE '{$enrollmentTable}'") === $enrollmentTable;
-            if ($tableExists) {
-                $enrolledCount = (int) $wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM {$enrollmentTable} WHERE trajectory_id = %d",
-                    $trajectoryId
-                ));
+            $trajectoryEnrollments = $allEnrollments[$trajectoryId] ?? [];
 
-                // Get enrolled users list
-                $enrollments = $wpdb->get_results($wpdb->prepare(
-                    "SELECT user_id, status, enrolled_at FROM {$enrollmentTable} WHERE trajectory_id = %d ORDER BY enrolled_at DESC LIMIT 50",
-                    $trajectoryId
-                ));
-
-                foreach ($enrollments as $enrollment) {
-                    $user = get_userdata((int) $enrollment->user_id);
-                    if ($user) {
-                        $enrolledUsers[] = [
-                            'id' => (int) $enrollment->user_id,
-                            'name' => $user->display_name,
-                            'email' => $user->user_email,
-                            'status' => $enrollment->status,
-                            'enrolledAt' => $enrollment->enrolled_at,
-                        ];
-                    }
+            foreach ($trajectoryEnrollments as $enrollment) {
+                $userId = (int) $enrollment->user_id;
+                $user = $usersMap[$userId] ?? null;
+                if ($user) {
+                    $enrolledUsers[] = [
+                        'id' => $userId,
+                        'name' => $user->display_name,
+                        'email' => $user->user_email,
+                        'status' => $enrollment->status,
+                        'enrolledAt' => $enrollment->enrolled_at,
+                    ];
                 }
             }
 
-            // Get additional meta
-            $priceNonMember = (float) get_post_meta($trajectoryId, 'price_non_member', true);
-            $choiceAvailableDate = get_post_meta($trajectoryId, 'choice_available_date', true);
-            $description = get_post_field('post_content', $trajectoryId);
+            // Get description from already fetched post_content
+            $description = $trajectory->post_content;
 
             // Get status label
             $statusLabel = match ($trajectoryStatus) {
