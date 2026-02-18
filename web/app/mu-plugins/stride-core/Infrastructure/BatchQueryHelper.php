@@ -1,0 +1,231 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Stride\Infrastructure;
+
+/**
+ * Batch query utilities for performance optimization.
+ */
+final class BatchQueryHelper
+{
+    /**
+     * Batch fetch post meta for multiple post IDs.
+     *
+     * @param array<int> $postIds
+     * @param array<string> $metaKeys
+     * @return array<int, array<string, mixed>> Map of postId => [metaKey => value]
+     */
+    public static function batchGetPostMeta(array $postIds, array $metaKeys): array
+    {
+        if (empty($postIds) || empty($metaKeys)) {
+            return [];
+        }
+
+        global $wpdb;
+
+        $postIds = array_map('intval', array_unique($postIds));
+        $metaKeys = array_map('sanitize_key', $metaKeys);
+
+        $postPlaceholders = implode(',', array_fill(0, count($postIds), '%d'));
+        $keyPlaceholders = implode(',', array_fill(0, count($metaKeys), '%s'));
+
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT post_id, meta_key, meta_value
+             FROM {$wpdb->postmeta}
+             WHERE post_id IN ({$postPlaceholders})
+             AND meta_key IN ({$keyPlaceholders})",
+            ...array_merge($postIds, $metaKeys)
+        ));
+
+        $meta = [];
+        foreach ($postIds as $postId) {
+            $meta[$postId] = array_fill_keys($metaKeys, null);
+        }
+
+        foreach ($results as $row) {
+            $meta[(int) $row->post_id][$row->meta_key] = maybe_unserialize($row->meta_value);
+        }
+
+        return $meta;
+    }
+
+    /**
+     * Batch fetch registration counts for multiple edition IDs.
+     *
+     * @param array<int> $editionIds
+     * @return array<int, int> Map of editionId => count
+     */
+    public static function batchGetRegistrationCounts(array $editionIds): array
+    {
+        if (empty($editionIds)) {
+            return [];
+        }
+
+        global $wpdb;
+
+        $editionIds = array_map('intval', array_unique($editionIds));
+        $table = $wpdb->prefix . 'vad_registrations';
+
+        // Check table exists
+        if ($wpdb->get_var("SHOW TABLES LIKE '{$table}'") !== $table) {
+            return array_fill_keys($editionIds, 0);
+        }
+
+        $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
+
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT edition_id, COUNT(*) as count
+             FROM {$table}
+             WHERE edition_id IN ({$placeholders}) AND status = 'confirmed'
+             GROUP BY edition_id",
+            ...$editionIds
+        ));
+
+        $counts = array_fill_keys($editionIds, 0);
+        foreach ($results as $row) {
+            $counts[(int) $row->edition_id] = (int) $row->count;
+        }
+
+        return $counts;
+    }
+
+    /**
+     * Batch fetch user data for multiple user IDs.
+     *
+     * @param array<int> $userIds
+     * @return array<int, \WP_User|null> Map of userId => WP_User|null
+     */
+    public static function batchGetUsers(array $userIds): array
+    {
+        if (empty($userIds)) {
+            return [];
+        }
+
+        $userIds = array_map('intval', array_unique($userIds));
+
+        $users = get_users([
+            'include' => $userIds,
+            'fields' => 'all',
+        ]);
+
+        $userMap = array_fill_keys($userIds, null);
+        foreach ($users as $user) {
+            $userMap[$user->ID] = $user;
+        }
+
+        return $userMap;
+    }
+
+    /**
+     * Batch fetch posts by IDs.
+     *
+     * @param array<int> $postIds
+     * @param string $postType
+     * @return array<int, \WP_Post|null> Map of postId => WP_Post|null
+     */
+    public static function batchGetPosts(array $postIds, string $postType = ''): array
+    {
+        if (empty($postIds)) {
+            return [];
+        }
+
+        $postIds = array_map('intval', array_unique($postIds));
+
+        $args = [
+            'post__in' => $postIds,
+            'posts_per_page' => count($postIds),
+            'post_status' => 'any',
+            'orderby' => 'post__in',
+        ];
+
+        if ($postType) {
+            $args['post_type'] = $postType;
+        } else {
+            $args['post_type'] = 'any';
+        }
+
+        $posts = get_posts($args);
+
+        $postMap = array_fill_keys($postIds, null);
+        foreach ($posts as $post) {
+            $postMap[$post->ID] = $post;
+        }
+
+        return $postMap;
+    }
+
+    /**
+     * Batch fetch course tags for multiple course IDs.
+     *
+     * @param array<int> $courseIds
+     * @return array<int, array<array{id: int, name: string}>> Map of courseId => tags
+     */
+    public static function batchGetCourseTags(array $courseIds): array
+    {
+        if (empty($courseIds)) {
+            return [];
+        }
+
+        global $wpdb;
+
+        $courseIds = array_map('intval', array_unique($courseIds));
+        $placeholders = implode(',', array_fill(0, count($courseIds), '%d'));
+
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT tr.object_id as course_id, t.term_id, t.name
+             FROM {$wpdb->term_relationships} tr
+             INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id
+             INNER JOIN {$wpdb->terms} t ON tt.term_id = t.term_id
+             WHERE tr.object_id IN ({$placeholders})
+             AND tt.taxonomy = 'ld_course_tag'",
+            ...$courseIds
+        ));
+
+        $tags = array_fill_keys($courseIds, []);
+        foreach ($results as $row) {
+            $tags[(int) $row->course_id][] = [
+                'id' => (int) $row->term_id,
+                'name' => $row->name,
+            ];
+        }
+
+        return $tags;
+    }
+
+    /**
+     * Batch fetch attendance for an edition.
+     *
+     * @param int $editionId
+     * @return array<int, array<int, string>> Map of userId => [sessionId => status]
+     */
+    public static function batchGetAttendance(int $editionId): array
+    {
+        global $wpdb;
+
+        $table = $wpdb->prefix . 'vad_attendance';
+
+        // Check table exists
+        if ($wpdb->get_var("SHOW TABLES LIKE '{$table}'") !== $table) {
+            return [];
+        }
+
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT user_id, session_id, status FROM {$table} WHERE edition_id = %d",
+            $editionId
+        ));
+
+        $attendance = [];
+        foreach ($results as $row) {
+            $userId = (int) $row->user_id;
+            $sessionId = (int) $row->session_id;
+
+            if (!isset($attendance[$userId])) {
+                $attendance[$userId] = [];
+            }
+            $attendance[$userId][$sessionId] = $row->status;
+        }
+
+        return $attendance;
+    }
+}
