@@ -59,22 +59,32 @@ final class ICalHandler
 
         $sessionService = ntdst_get(SessionService::class);
         $editionService = ntdst_get(EditionService::class);
+        $registrationRepo = ntdst_get(RegistrationRepository::class);
 
         if ($sessionId) {
             // Single session
             $session = $sessionService->getSession($sessionId);
             if ($session) {
+                // Security: Verify user is enrolled in this session's edition
+                $registration = $registrationRepo->findByUserAndEdition($userId, (int) $session['edition_id']);
+                if (!$registration) {
+                    return $this->buildIcal([]); // Return empty calendar if not enrolled
+                }
                 $events[] = $this->sessionToEvent($session, $editionService);
             }
         } elseif ($editionId) {
+            // Security: Verify user is enrolled in this edition
+            $registration = $registrationRepo->findByUserAndEdition($userId, $editionId);
+            if (!$registration) {
+                return $this->buildIcal([]); // Return empty calendar if not enrolled
+            }
             // All sessions for edition
             $sessions = $sessionService->getSessionsForEdition($editionId);
             foreach ($sessions as $session) {
                 $events[] = $this->sessionToEvent($session, $editionService);
             }
         } else {
-            // All user's upcoming sessions
-            $registrationRepo = ntdst_get(RegistrationRepository::class);
+            // All user's upcoming sessions (already filtered by user's registrations)
             $registrations = $registrationRepo->findByUser($userId, 'confirmed');
 
             foreach ($registrations as $reg) {
@@ -136,6 +146,7 @@ final class ICalHandler
 
             $ical .= "BEGIN:VEVENT\r\n";
             $ical .= "UID:" . $event['uid'] . "\r\n";
+            $ical .= "DTSTAMP:" . gmdate('Ymd\THis\Z') . "\r\n";
             $ical .= "SUMMARY:" . $this->escapeIcal($event['summary']) . "\r\n";
             $ical .= "DTSTART:" . $this->formatIcalDate($event['start']) . "\r\n";
             if (!empty($event['end'])) {
