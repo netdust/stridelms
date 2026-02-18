@@ -26,7 +26,9 @@ if (defined('WP_ENV') && WP_ENV === 'production') {
     exit(1);
 }
 
+use Stride\Domain\RegistrationStatus;
 use Stride\Modules\Edition\EditionService;
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 
@@ -56,6 +58,7 @@ class StrideSeedData {
     private const SEED_META_KEY = '_stride_seed_data';
 
     private ?EditionService $editionService = null;
+    private ?EditionRepository $editionRepository = null;
     private ?SessionService $sessionService = null;
     private ?RegistrationRepository $regRepo = null;
 
@@ -80,6 +83,7 @@ class StrideSeedData {
     private function initServices(): void {
         if (function_exists('ntdst_get')) {
             $this->editionService = ntdst_get(EditionService::class);
+            $this->editionRepository = ntdst_get(EditionRepository::class);
             $this->sessionService = ntdst_get(SessionService::class);
             $this->regRepo = ntdst_get(RegistrationRepository::class);
         }
@@ -418,12 +422,19 @@ class StrideSeedData {
      * @param array $lessonIds Available lesson IDs for this course
      */
     private function createEditionsForCourse(int $courseId, array $courseData, array $lessonIds = []): void {
-        if (!$this->editionService || empty($courseData['editions'])) {
+        if (!$this->editionRepository || empty($courseData['editions'])) {
             return;
         }
 
         foreach ($courseData['editions'] as $editionData) {
-            $editionId = $this->editionService->createEdition([
+            // Get course title for edition post title
+            $courseTitle = get_the_title($courseId);
+            $postTitle = $courseTitle . ' - ' . $editionData['start_date'];
+
+            // Use EditionRepository::create() - returns WP_Post or WP_Error
+            $result = $this->editionRepository->create([
+                'post_title' => $postTitle,
+                'post_status' => 'publish',
                 'course_id' => $courseId,
                 'start_date' => $editionData['start_date'],
                 'end_date' => $editionData['end_date'],
@@ -433,14 +444,14 @@ class StrideSeedData {
                 'venue' => $editionData['venue'],
                 'speakers' => $editionData['speakers'] ?? '',
                 'status' => $editionData['status'],
-                'invoice_enabled' => true,
-                'certificate_enabled' => true,
             ]);
 
-            if (is_wp_error($editionId)) {
-                echo "    ! Failed to create edition: {$editionId->get_error_message()}\n";
+            if (is_wp_error($result)) {
+                echo "    ! Failed to create edition: {$result->get_error_message()}\n";
                 continue;
             }
+
+            $editionId = $result->ID;
 
             // Mark as seed data
             update_post_meta($editionId, self::SEED_META_KEY, true);
@@ -763,9 +774,9 @@ class StrideSeedData {
             $numQuotes = rand(1, 2);
             for ($i = 0; $i < $numQuotes; $i++) {
                 $editionId = $this->created['editions'][array_rand($this->created['editions'])];
-                $edition = $this->editionService ? $this->editionService->getEdition($editionId) : null;
                 $status = $statuses[array_rand($statuses)];
-                $price = (float) ($edition['price'] ?? 299.00);
+                // Get price from post meta (edition meta stores price directly)
+                $price = (float) (get_post_meta($editionId, 'price', true) ?: 299.00);
                 $tax = round($price * 0.21, 2);
                 $total = $price + $tax;
 
@@ -783,16 +794,15 @@ class StrideSeedData {
                 }
 
                 update_post_meta($quoteId, self::SEED_META_KEY, true);
-                update_post_meta($quoteId, '_quote_number', $quoteNumberFormatted);
-                update_post_meta($quoteId, '_quote_user_id', $userId);
-                update_post_meta($quoteId, '_quote_item_type', 'edition');
-                update_post_meta($quoteId, '_quote_item_id', $editionId);
-                update_post_meta($quoteId, '_quote_status', $status);
-                update_post_meta($quoteId, '_quote_subtotal', $price);
-                update_post_meta($quoteId, '_quote_tax', $tax);
-                update_post_meta($quoteId, '_quote_total', $total);
-                update_post_meta($quoteId, '_quote_valid_until', date('Y-m-d', strtotime('+30 days')));
-                update_post_meta($quoteId, '_quote_created_at', current_time('mysql'));
+                update_post_meta($quoteId, 'quote_number', $quoteNumberFormatted);
+                update_post_meta($quoteId, 'user_id', $userId);
+                update_post_meta($quoteId, 'edition_id', $editionId);
+                update_post_meta($quoteId, 'status', $status);
+                update_post_meta($quoteId, 'subtotal', (int) ($price * 100)); // Store in cents
+                update_post_meta($quoteId, 'tax', (int) ($tax * 100)); // Store in cents
+                update_post_meta($quoteId, 'total', (int) (($price + $tax) * 100)); // Store in cents
+                update_post_meta($quoteId, 'discount', 0);
+                update_post_meta($quoteId, 'valid_until', date('Y-m-d', strtotime('+30 days')));
 
                 // Items as JSON
                 $items = [
@@ -800,11 +810,12 @@ class StrideSeedData {
                         'type' => 'edition',
                         'id' => $editionId,
                         'title' => $edition['title'] ?? 'Edition',
-                        'price' => $price,
+                        'unit_price' => (int) ($price * 100), // Store in cents
                         'quantity' => 1,
+                        'total' => (int) ($price * 100),
                     ],
                 ];
-                update_post_meta($quoteId, '_quote_items', wp_json_encode($items));
+                update_post_meta($quoteId, 'items', wp_json_encode($items));
 
                 // Billing info
                 $billing = [
@@ -815,15 +826,14 @@ class StrideSeedData {
                     'city' => 'Amsterdam',
                     'postal_code' => '1234 AB',
                 ];
-                update_post_meta($quoteId, '_quote_billing', wp_json_encode($billing));
+                update_post_meta($quoteId, 'billing', wp_json_encode($billing));
 
                 // Status-specific fields
                 if ($status === 'sent' || $status === 'exported') {
-                    update_post_meta($quoteId, '_quote_sent_at', current_time('mysql'));
-                    update_post_meta($quoteId, '_quote_last_sent_to', $user->user_email);
+                    update_post_meta($quoteId, 'sent_at', current_time('mysql'));
                 }
                 if ($status === 'exported') {
-                    update_post_meta($quoteId, '_quote_exported_at', current_time('mysql'));
+                    update_post_meta($quoteId, 'locked', '1');
                 }
 
                 $this->created['quotes'][] = $quoteId;
@@ -858,8 +868,8 @@ class StrideSeedData {
 
             // Only use open editions
             $openEditions = array_filter($this->created['editions'], function($editionId) {
-                $edition = $this->editionService ? $this->editionService->getEdition($editionId) : null;
-                return $edition && ($edition['status'] ?? '') === 'open';
+                $status = get_post_meta($editionId, 'status', true);
+                return $status === 'open';
             });
 
             if (empty($openEditions)) {
@@ -877,10 +887,11 @@ class StrideSeedData {
                 $editionId = $openEditions[$key];
 
                 // Check if already registered
-                $userRegs = $this->regRepo->getByUser($userId);
+                $userRegs = $this->regRepo->findByUser($userId);
                 $alreadyRegistered = false;
                 foreach ($userRegs as $reg) {
-                    if (($reg['edition_id'] ?? 0) === $editionId) {
+                    // findByUser returns stdClass objects, access as object properties
+                    if (($reg->edition_id ?? 0) === $editionId) {
                         $alreadyRegistered = true;
                         break;
                     }
@@ -895,7 +906,7 @@ class StrideSeedData {
                 $registrationId = $this->regRepo->create([
                     'user_id' => $userId,
                     'edition_id' => $editionId,
-                    'status' => RegistrationRepository::STATUS_CONFIRMED,
+                    'status' => RegistrationStatus::Confirmed->value,
                     'enrollment_path' => $path,
                     'notes' => 'Seeded registration',
                 ]);
@@ -906,8 +917,8 @@ class StrideSeedData {
                 }
 
                 $this->created['registrations'][] = $registrationId;
-                $edition = $this->editionService->getEdition($editionId);
-                echo "  + Registered {$user->user_login} for edition {$editionId} ({$edition['title']})\n";
+                $editionTitle = get_the_title($editionId);
+                echo "  + Registered {$user->user_login} for edition {$editionId} ({$editionTitle})\n";
 
                 // Grant LearnDash access to the linked course
                 if ($this->editionService && function_exists('ld_update_course_access')) {

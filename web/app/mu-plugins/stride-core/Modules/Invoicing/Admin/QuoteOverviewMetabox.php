@@ -21,9 +21,15 @@ final class QuoteOverviewMetabox
 
     public function render(WP_Post $post): void
     {
+        // New posts (auto-draft) don't have a quote number yet
+        if ($post->post_status === 'auto-draft') {
+            $this->renderNewQuoteForm($post);
+            return;
+        }
+
         $quote = $this->quoteService->getQuote($post->ID);
 
-        // Handle new/unsaved quotes
+        // Handle failed retrieval or missing quote number
         if (is_wp_error($quote) || empty($quote['quote_number'])) {
             $this->renderNewQuoteForm($post);
             return;
@@ -35,9 +41,20 @@ final class QuoteOverviewMetabox
     private function renderExistingQuote(WP_Post $post, array $quote): void
     {
         $userId = (int) ($quote['user_id'] ?? 0);
-        $user = $userId ? get_userdata($userId) : null;
+        $user = $userId ? (get_userdata($userId) ?: null) : null;
+
+        // Handle billing - may be JSON string or array
         $billing = $quote['billing'] ?? [];
+        if (is_string($billing)) {
+            $billing = json_decode($billing, true) ?: [];
+        }
+
+        // Handle items - may be JSON string or array
         $items = $quote['items'] ?? [];
+        if (is_string($items)) {
+            $items = json_decode($items, true) ?: [];
+        }
+
         $isLocked = (bool) ($quote['locked'] ?? false);
         $isEditable = !$isLocked;
 

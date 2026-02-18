@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stride\Modules\Invoicing\Admin;
 
+use Stride\Domain\Money;
 use Stride\Domain\QuoteStatus;
 use Stride\Infrastructure\AbstractService;
 use Stride\Modules\Invoicing\QuoteCPT;
@@ -55,6 +56,11 @@ final class QuoteAdminController extends AbstractService
         add_action('save_post_' . QuoteCPT::POST_TYPE, [$this, 'handleSave'], 10, 2);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
         add_action('wp_ajax_stride_get_user_data', [$this, 'ajaxGetUserData']);
+
+        // Admin list columns
+        add_filter('manage_' . QuoteCPT::POST_TYPE . '_posts_columns', [$this, 'defineListColumns']);
+        add_action('manage_' . QuoteCPT::POST_TYPE . '_posts_custom_column', [$this, 'renderListColumn'], 10, 2);
+        add_filter('manage_edit-' . QuoteCPT::POST_TYPE . '_sortable_columns', [$this, 'defineSortableColumns']);
     }
 
     public function registerMetaboxes(): void
@@ -576,5 +582,127 @@ final class QuoteAdminController extends AbstractService
             'vat_number' => get_user_meta($userId, 'vat_number', true) ?: '',
             'gln_number' => get_user_meta($userId, 'gln_number', true) ?: '',
         ]);
+    }
+
+    // =========================================================================
+    // Admin List Columns
+    // =========================================================================
+
+    /**
+     * Define admin list columns.
+     *
+     * @param array<string, string> $columns
+     * @return array<string, string>
+     */
+    public function defineListColumns(array $columns): array
+    {
+        $newColumns = [];
+        $newColumns['cb'] = $columns['cb'] ?? '<input type="checkbox" />';
+        $newColumns['quote_number'] = __('Offerte Nr.', 'stride');
+        $newColumns['customer'] = __('Klant', 'stride');
+        $newColumns['total'] = __('Totaal', 'stride');
+        $newColumns['status'] = __('Status', 'stride');
+        $newColumns['valid_until'] = __('Geldig tot', 'stride');
+        $newColumns['date'] = __('Datum', 'stride');
+
+        return $newColumns;
+    }
+
+    /**
+     * Render admin list column content.
+     */
+    public function renderListColumn(string $column, int $postId): void
+    {
+        switch ($column) {
+            case 'quote_number':
+                $quoteNumber = get_post_meta($postId, 'quote_number', true);
+                $isLocked = (bool) get_post_meta($postId, 'locked', true);
+                if ($quoteNumber) {
+                    echo '<strong>' . esc_html($quoteNumber) . '</strong>';
+                    if ($isLocked) {
+                        echo ' <span class="dashicons dashicons-lock" style="color:#d63638;font-size:14px;" title="' . esc_attr__('Vergrendeld', 'stride') . '"></span>';
+                    }
+                } else {
+                    echo '<span style="color:#999;">' . __('Nieuw', 'stride') . '</span>';
+                }
+                break;
+
+            case 'customer':
+                $userId = (int) get_post_meta($postId, 'user_id', true);
+                if ($userId) {
+                    $user = get_userdata($userId);
+                    if ($user) {
+                        $editUrl = get_edit_user_link($userId);
+                        if ($editUrl) {
+                            echo '<a href="' . esc_url($editUrl) . '">' . esc_html($user->display_name) . '</a>';
+                        } else {
+                            echo esc_html($user->display_name);
+                        }
+                        echo '<br><span style="color:#666;font-size:12px;">' . esc_html($user->user_email) . '</span>';
+                    } else {
+                        echo '<span style="color:#999;">' . __('Verwijderd', 'stride') . '</span>';
+                    }
+                } else {
+                    echo '<span style="color:#999;">—</span>';
+                }
+                break;
+
+            case 'total':
+                $total = (int) get_post_meta($postId, 'total', true);
+                $discount = (int) get_post_meta($postId, 'discount', true);
+                echo '<strong>' . esc_html(Money::cents($total)->format()) . '</strong>';
+                if ($discount > 0) {
+                    echo '<br><span style="color:#00a32a;font-size:12px;">-' . esc_html(Money::cents($discount)->format()) . '</span>';
+                }
+                break;
+
+            case 'status':
+                $status = get_post_meta($postId, 'status', true) ?: 'draft';
+                $statusEnum = QuoteStatus::tryFrom($status) ?? QuoteStatus::Draft;
+                $config = $this->getStatusConfig($statusEnum);
+                echo '<span style="display:inline-block;padding:2px 8px;border-radius:3px;background:' . $config['bg'] . ';color:' . $config['color'] . ';font-size:12px;">';
+                echo esc_html($statusEnum->label());
+                echo '</span>';
+                break;
+
+            case 'valid_until':
+                $validUntil = get_post_meta($postId, 'valid_until', true);
+                if ($validUntil) {
+                    $isExpired = strtotime($validUntil) < time();
+                    $style = $isExpired ? 'color:#d63638;' : '';
+                    echo '<span style="' . $style . '">' . esc_html(date_i18n('j M Y', strtotime($validUntil))) . '</span>';
+                } else {
+                    echo '<span style="color:#999;">—</span>';
+                }
+                break;
+        }
+    }
+
+    /**
+     * Get status display configuration.
+     *
+     * @return array{color: string, bg: string}
+     */
+    private function getStatusConfig(QuoteStatus $status): array
+    {
+        return match ($status) {
+            QuoteStatus::Draft => ['color' => '#787c82', 'bg' => '#f0f0f1'],
+            QuoteStatus::Sent => ['color' => '#2271b1', 'bg' => '#e5f0f8'],
+            QuoteStatus::Exported => ['color' => '#00a32a', 'bg' => '#e6f4ea'],
+        };
+    }
+
+    /**
+     * Define sortable columns.
+     *
+     * @param array<string, string> $columns
+     * @return array<string, string>
+     */
+    public function defineSortableColumns(array $columns): array
+    {
+        $columns['quote_number'] = 'quote_number';
+        $columns['valid_until'] = 'valid_until';
+        $columns['date'] = 'date';
+        return $columns;
     }
 }

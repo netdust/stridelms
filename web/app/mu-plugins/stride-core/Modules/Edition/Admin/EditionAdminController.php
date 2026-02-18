@@ -71,6 +71,11 @@ final class EditionAdminController extends AbstractService
         // Attendance AJAX endpoints
         add_action('wp_ajax_stride_mark_attendance', [$this, 'ajaxMarkAttendance']);
         add_action('wp_ajax_stride_bulk_attendance', [$this, 'ajaxBulkAttendance']);
+
+        // Admin list columns
+        add_filter('manage_' . EditionCPT::POST_TYPE . '_posts_columns', [$this, 'defineListColumns']);
+        add_action('manage_' . EditionCPT::POST_TYPE . '_posts_custom_column', [$this, 'renderListColumn'], 10, 2);
+        add_filter('manage_edit-' . EditionCPT::POST_TYPE . '_sortable_columns', [$this, 'defineSortableColumns']);
     }
 
     public function registerMetaboxes(): void
@@ -784,5 +789,112 @@ final class EditionAdminController extends AbstractService
             'presentCount' => $presentCount,
             'totalCount' => $totalCount,
         ];
+    }
+
+    // =========================================================================
+    // Admin List Columns
+    // =========================================================================
+
+    /**
+     * Define admin list columns.
+     *
+     * @param array<string, string> $columns
+     * @return array<string, string>
+     */
+    public function defineListColumns(array $columns): array
+    {
+        $newColumns = [];
+        $newColumns['cb'] = $columns['cb'] ?? '<input type="checkbox" />';
+        $newColumns['title'] = __('Editie', 'stride');
+        $newColumns['course'] = __('Cursus', 'stride');
+        $newColumns['start_date'] = __('Startdatum', 'stride');
+        $newColumns['venue'] = __('Locatie', 'stride');
+        $newColumns['capacity'] = __('Capaciteit', 'stride');
+        $newColumns['status'] = __('Status', 'stride');
+
+        return $newColumns;
+    }
+
+    /**
+     * Render admin list column content.
+     */
+    public function renderListColumn(string $column, int $postId): void
+    {
+        switch ($column) {
+            case 'course':
+                $courseId = (int) get_post_meta($postId, 'course_id', true);
+                if ($courseId) {
+                    $courseTitle = get_the_title($courseId);
+                    $editUrl = get_edit_post_link($courseId);
+                    if ($editUrl) {
+                        echo '<a href="' . esc_url($editUrl) . '">' . esc_html($courseTitle) . '</a>';
+                    } else {
+                        echo esc_html($courseTitle);
+                    }
+                } else {
+                    echo '<span style="color:#999;">—</span>';
+                }
+                break;
+
+            case 'start_date':
+                $startDate = get_post_meta($postId, 'start_date', true);
+                $endDate = get_post_meta($postId, 'end_date', true);
+                if ($startDate) {
+                    echo esc_html(date_i18n('j M Y', strtotime($startDate)));
+                    if ($endDate && $endDate !== $startDate) {
+                        echo ' – ' . esc_html(date_i18n('j M Y', strtotime($endDate)));
+                    }
+                } else {
+                    echo '<span style="color:#999;">—</span>';
+                }
+                break;
+
+            case 'venue':
+                $venue = get_post_meta($postId, 'venue', true);
+                echo $venue ? esc_html($venue) : '<span style="color:#999;">—</span>';
+                break;
+
+            case 'capacity':
+                $capacity = (int) get_post_meta($postId, 'capacity', true);
+                $registrations = $this->editionService->getRegisteredCount($postId);
+
+                if ($capacity > 0) {
+                    $percentage = min(100, round(($registrations / $capacity) * 100));
+                    $color = $percentage >= 100 ? '#d63638' : ($percentage >= 80 ? '#dba617' : '#00a32a');
+                    echo '<span style="color:' . $color . ';font-weight:500;">' . $registrations . '/' . $capacity . '</span>';
+                } else {
+                    echo '<span>' . $registrations . '</span>';
+                }
+                break;
+
+            case 'status':
+                $status = get_post_meta($postId, 'status', true) ?: 'draft';
+                $statusLabels = [
+                    'draft' => ['label' => __('Concept', 'stride'), 'color' => '#787c82'],
+                    'open' => ['label' => __('Open', 'stride'), 'color' => '#00a32a'],
+                    'full' => ['label' => __('Vol', 'stride'), 'color' => '#dba617'],
+                    'closed' => ['label' => __('Gesloten', 'stride'), 'color' => '#d63638'],
+                    'cancelled' => ['label' => __('Geannuleerd', 'stride'), 'color' => '#d63638'],
+                    'completed' => ['label' => __('Afgerond', 'stride'), 'color' => '#2271b1'],
+                ];
+                $config = $statusLabels[$status] ?? ['label' => ucfirst($status), 'color' => '#787c82'];
+                echo '<span style="display:inline-block;padding:2px 8px;border-radius:3px;background:' . $config['color'] . '20;color:' . $config['color'] . ';font-size:12px;">';
+                echo esc_html($config['label']);
+                echo '</span>';
+                break;
+        }
+    }
+
+    /**
+     * Define sortable columns.
+     *
+     * @param array<string, string> $columns
+     * @return array<string, string>
+     */
+    public function defineSortableColumns(array $columns): array
+    {
+        $columns['start_date'] = 'start_date';
+        $columns['status'] = 'status';
+        return $columns;
     }
 }

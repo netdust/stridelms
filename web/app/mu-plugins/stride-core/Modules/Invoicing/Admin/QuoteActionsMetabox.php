@@ -41,7 +41,13 @@ final class QuoteActionsMetabox
         $isEditable = !$isLocked;
         $userId = (int) ($quote['user_id'] ?? 0);
         $user = $userId ? get_userdata($userId) : null;
+
+        // Handle billing - may be JSON string or array
         $billing = $quote['billing'] ?? [];
+        if (is_string($billing)) {
+            $billing = json_decode($billing, true) ?: [];
+        }
+
         $defaultEmail = $billing['email'] ?? ($user ? $user->user_email : '');
         $total = Money::cents((int) ($quote['total'] ?? 0));
         $discount = Money::cents((int) ($quote['discount'] ?? 0));

@@ -62,8 +62,13 @@ final class TrajectoryAdminController extends AbstractService
 
         // AJAX endpoints
         add_action('wp_ajax_stride_search_courses', [$this, 'ajaxSearchCourses']);
-        add_action('wp_ajax_stride_get_course_editions', [$this, 'ajaxGetCourseEditions']);
+        add_action('wp_ajax_stride_search_courses_editions', [$this, 'ajaxSearchCoursesAndEditions']);
         add_action('wp_ajax_stride_get_trajectory_enrollments', [$this, 'ajaxGetEnrollments']);
+
+        // Admin list columns
+        add_filter('manage_' . TrajectoryCPT::POST_TYPE . '_posts_columns', [$this, 'defineListColumns']);
+        add_action('manage_' . TrajectoryCPT::POST_TYPE . '_posts_custom_column', [$this, 'renderListColumn'], 10, 2);
+        add_filter('manage_edit-' . TrajectoryCPT::POST_TYPE . '_sortable_columns', [$this, 'defineSortableColumns']);
     }
 
     public function registerMetaboxes(): void
@@ -163,6 +168,7 @@ final class TrajectoryAdminController extends AbstractService
                 'trajectoryId' => $post ? $post->ID : 0,
                 'i18n' => [
                     'searchCourse' => __('Zoek cursus...', 'stride'),
+                    'searchCourseOrEdition' => __('Zoek cursus of editie...', 'stride'),
                     'selectEdition' => __('Selecteer editie...', 'stride'),
                     'noResults' => __('Geen resultaten gevonden', 'stride'),
                     'addGroup' => __('Nieuwe groep', 'stride'),
@@ -171,6 +177,8 @@ final class TrajectoryAdminController extends AbstractService
                     'remove' => __('Verwijderen', 'stride'),
                     'confirmDeleteGroup' => __('Weet je zeker dat je deze groep wilt verwijderen?', 'stride'),
                     'error' => __('Er ging iets mis.', 'stride'),
+                    'editionBadge' => __('Editie', 'stride'),
+                    'onlineBadge' => __('Online', 'stride'),
                 ],
             ]);
         }
@@ -193,7 +201,6 @@ final class TrajectoryAdminController extends AbstractService
                 'choice_available_date' => '',
                 'choice_deadline' => '',
                 'courses' => [],
-                'linked_editions' => [],
             ];
         }
 
@@ -201,8 +208,6 @@ final class TrajectoryAdminController extends AbstractService
         $isCohort = $currentMode === TrajectoryMode::Cohort->value;
         $priceDisplay = ($trajectory['price'] ?? 0) / 100;
         $priceNonMemberDisplay = ($trajectory['price_non_member'] ?? 0) / 100;
-        $hasCourses = !empty($trajectory['courses']);
-
         wp_nonce_field(self::NONCE_SAVE, self::NONCE_FIELD);
         ?>
         <style>
@@ -233,8 +238,8 @@ final class TrajectoryAdminController extends AbstractService
             <!-- Tab Navigation -->
             <div class="stride-tabs-nav">
                 <div class="stride-tab active" data-tab="general"><?php esc_html_e('Algemeen', 'stride'); ?></div>
+                <div class="stride-tab" data-tab="description"><?php esc_html_e('Beschrijving', 'stride'); ?></div>
                 <div class="stride-tab" data-tab="deadlines"><?php esc_html_e('Deadlines', 'stride'); ?></div>
-                <div class="stride-tab stride-cohort-only <?php echo $hasCourses ? '' : 'hidden'; ?>" data-tab="editions"><?php esc_html_e('Gekoppelde Edities', 'stride'); ?></div>
             </div>
 
             <!-- Tab: General -->
@@ -260,13 +265,6 @@ final class TrajectoryAdminController extends AbstractService
                     </div>
                 </div>
 
-                <div class="stride-field-row">
-                    <div class="stride-field">
-                        <label for="trajectory_description"><?php esc_html_e('Beschrijving', 'stride'); ?></label>
-                        <textarea id="trajectory_description" name="ntdst_fields[description]" placeholder="<?php esc_attr_e('Omschrijving van het traject...', 'stride'); ?>"><?php echo esc_textarea($trajectory['description'] ?? ''); ?></textarea>
-                    </div>
-                </div>
-
                 <div class="stride-field-row two-col">
                     <div class="stride-field">
                         <label for="trajectory_capacity"><?php esc_html_e('Capaciteit', 'stride'); ?></label>
@@ -289,6 +287,27 @@ final class TrajectoryAdminController extends AbstractService
                                value="<?php echo esc_attr($priceNonMemberDisplay); ?>" min="0" step="0.01">
                     </div>
                 </div>
+            </div>
+
+            <!-- Tab: Description -->
+            <div class="stride-tab-content" data-tab="description">
+                <?php
+                wp_editor(
+                    $trajectory['description'] ?? '',
+                    'trajectory_description',
+                    [
+                        'textarea_name' => 'ntdst_fields[description]',
+                        'textarea_rows' => 12,
+                        'media_buttons' => true,
+                        'teeny' => false,
+                        'quicktags' => true,
+                        'tinymce' => [
+                            'toolbar1' => 'formatselect,bold,italic,underline,bullist,numlist,link,unlink,wp_more,fullscreen',
+                            'toolbar2' => '',
+                        ],
+                    ]
+                );
+                ?>
             </div>
 
             <!-- Tab: Deadlines -->
@@ -329,69 +348,7 @@ final class TrajectoryAdminController extends AbstractService
                     </div>
                 </div>
             </div>
-
-            <!-- Tab: Linked Editions (Cohort only) -->
-            <div class="stride-tab-content" data-tab="editions">
-                <?php $this->renderLinkedEditionsContent($trajectory); ?>
-            </div>
         </div>
-        <?php
-    }
-
-    private function renderLinkedEditionsContent(array $trajectory): void
-    {
-        $courses = $trajectory['courses'] ?? [];
-        $linkedEditions = $trajectory['linked_editions'] ?? [];
-        $courseIds = array_unique(array_filter(array_map(fn($c) => (int) ($c['course_id'] ?? 0), $courses)));
-
-        $linkedMap = [];
-        foreach ($linkedEditions as $link) {
-            $linkedMap[(int) $link['course_id']] = (int) $link['edition_id'];
-        }
-
-        if (empty($courseIds)) {
-            echo '<p class="description">' . esc_html__('Voeg eerst cursussen toe in het Cursussen metabox.', 'stride') . '</p>';
-            return;
-        }
-        ?>
-        <p class="description" style="margin-bottom: 12px;"><?php esc_html_e('Koppel elke cursus aan een specifieke editie voor dit cohort.', 'stride'); ?></p>
-
-        <table class="widefat striped">
-            <thead>
-                <tr>
-                    <th><?php esc_html_e('Cursus', 'stride'); ?></th>
-                    <th><?php esc_html_e('Editie', 'stride'); ?></th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($courseIds as $courseId): ?>
-                    <?php
-                    $courseTitle = get_the_title($courseId);
-                    $linkedEditionId = $linkedMap[$courseId] ?? 0;
-                    ?>
-                    <tr>
-                        <td>
-                            <?php echo esc_html($courseTitle ?: '#' . $courseId); ?>
-                            <input type="hidden" name="ntdst_fields[linked_editions][<?php echo esc_attr($courseId); ?>][course_id]"
-                                   value="<?php echo esc_attr($courseId); ?>">
-                        </td>
-                        <td>
-                            <select name="ntdst_fields[linked_editions][<?php echo esc_attr($courseId); ?>][edition_id]"
-                                    class="stride-edition-select"
-                                    data-course-id="<?php echo esc_attr($courseId); ?>"
-                                    style="width: 100%;">
-                                <option value=""><?php esc_html_e('Selecteer editie...', 'stride'); ?></option>
-                                <?php if ($linkedEditionId): ?>
-                                    <option value="<?php echo esc_attr($linkedEditionId); ?>" selected>
-                                        <?php echo esc_html(get_the_title($linkedEditionId) ?: '#' . $linkedEditionId); ?>
-                                    </option>
-                                <?php endif; ?>
-                            </select>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
         <?php
     }
 
@@ -416,25 +373,6 @@ final class TrajectoryAdminController extends AbstractService
             $electiveGroups[$group]['courses'][] = $course;
         }
         ?>
-        <style>
-            .stride-courses-section { margin-bottom: 24px; }
-            .stride-courses-section h4 { margin: 0 0 12px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; }
-            .stride-course-list { list-style: none; margin: 0; padding: 0; }
-            .stride-course-item { display: flex; align-items: center; padding: 8px 12px; background: #f6f7f7; border: 1px solid #dcdcde; margin-bottom: 4px; border-radius: 3px; }
-            .stride-course-item .course-title { flex: 1; }
-            .stride-course-item .remove-course { color: #b32d2e; cursor: pointer; }
-            .stride-course-item .remove-course:hover { color: #a00; }
-            .stride-add-course { margin-top: 8px; display: flex; gap: 8px; }
-            .stride-add-course .select2-container { flex: 1; }
-            .stride-elective-group { border: 1px solid #c3c4c7; padding: 16px; margin-bottom: 16px; border-radius: 4px; background: #fafafa; }
-            .stride-elective-group .group-header { display: flex; gap: 12px; margin-bottom: 12px; align-items: flex-end; }
-            .stride-elective-group .group-header .stride-field { margin-bottom: 0; }
-            .stride-elective-group .group-footer { display: flex; justify-content: flex-end; margin-top: 12px; }
-            .stride-no-courses { color: #646970; font-style: italic; padding: 12px; background: #f6f7f7; border-radius: 3px; }
-            .stride-field label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: #1d2327; }
-            .stride-field input { padding: 6px 10px; }
-        </style>
-
         <!-- Required Courses -->
         <div class="stride-courses-section">
             <h4><?php esc_html_e('Verplichte Cursussen', 'stride'); ?></h4>
@@ -444,19 +382,14 @@ final class TrajectoryAdminController extends AbstractService
                     <li class="stride-no-courses"><?php esc_html_e('Nog geen verplichte cursussen toegevoegd.', 'stride'); ?></li>
                 <?php else: ?>
                     <?php foreach ($requiredCourses as $course): ?>
-                        <?php $courseTitle = get_the_title($course['course_id']); ?>
-                        <li class="stride-course-item" data-course-id="<?php echo esc_attr($course['course_id']); ?>">
-                            <span class="course-title"><?php echo esc_html($courseTitle ?: '#' . $course['course_id']); ?></span>
-                            <span class="remove-course dashicons dashicons-no-alt" title="<?php esc_attr_e('Verwijderen', 'stride'); ?>"></span>
-                            <input type="hidden" name="ntdst_fields[courses_required][]" value="<?php echo esc_attr($course['course_id']); ?>">
-                        </li>
+                        <?php echo $this->renderCourseItem($course, 'ntdst_fields[courses_required][]'); ?>
                     <?php endforeach; ?>
                 <?php endif; ?>
             </ul>
 
             <div class="stride-add-course">
-                <select id="stride-add-required-course" class="stride-course-select" style="width: 100%;">
-                    <option value=""><?php esc_html_e('Zoek cursus...', 'stride'); ?></option>
+                <select id="stride-add-required-course" class="stride-course-select stride-hybrid-select" style="width: 100%;">
+                    <option value=""><?php esc_html_e('Zoek cursus of editie...', 'stride'); ?></option>
                 </select>
                 <button type="button" class="button" id="stride-add-required-btn"><?php esc_html_e('Toevoegen', 'stride'); ?></button>
             </div>
@@ -510,19 +443,14 @@ final class TrajectoryAdminController extends AbstractService
                     <li class="stride-no-courses"><?php esc_html_e('Nog geen cursussen in deze groep.', 'stride'); ?></li>
                 <?php else: ?>
                     <?php foreach ($group['courses'] as $course): ?>
-                        <?php $courseTitle = get_the_title($course['course_id']); ?>
-                        <li class="stride-course-item" data-course-id="<?php echo esc_attr($course['course_id']); ?>">
-                            <span class="course-title"><?php echo esc_html($courseTitle ?: '#' . $course['course_id']); ?></span>
-                            <span class="remove-course dashicons dashicons-no-alt" title="<?php esc_attr_e('Verwijderen', 'stride'); ?>"></span>
-                            <input type="hidden" name="<?php echo esc_attr($namePrefix); ?>[courses][]" value="<?php echo esc_attr($course['course_id']); ?>">
-                        </li>
+                        <?php echo $this->renderCourseItem($course, $namePrefix . '[courses][]'); ?>
                     <?php endforeach; ?>
                 <?php endif; ?>
             </ul>
 
             <div class="stride-add-course">
-                <select class="stride-course-select stride-elective-course-select" style="width: 100%;">
-                    <option value=""><?php esc_html_e('Zoek cursus...', 'stride'); ?></option>
+                <select class="stride-course-select stride-hybrid-select stride-elective-course-select" style="width: 100%;">
+                    <option value=""><?php esc_html_e('Zoek cursus of editie...', 'stride'); ?></option>
                 </select>
                 <button type="button" class="button stride-add-elective-btn"><?php esc_html_e('Toevoegen', 'stride'); ?></button>
             </div>
@@ -534,6 +462,65 @@ final class TrajectoryAdminController extends AbstractService
             </div>
         </div>
         <?php
+    }
+
+    /**
+     * Render a single course/edition item with type indicator.
+     *
+     * @param array<string, mixed> $course Course data array
+     * @param string $inputName Hidden input field name
+     * @return string HTML for the course item
+     */
+    private function renderCourseItem(array $course, string $inputName): string
+    {
+        $type = $course['type'] ?? 'online';
+        $courseId = (int) ($course['course_id'] ?? 0);
+        $editionId = (int) ($course['edition_id'] ?? 0);
+
+        // Build display label
+        $courseTitle = $courseId ? get_the_title($courseId) : __('Onbekende cursus', 'stride');
+        $label = $courseTitle ?: '#' . $courseId;
+
+        // For editions, add date and venue info
+        if ($type === 'edition' && $editionId) {
+            $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
+            $editionPost = $editionService->getEdition($editionId);
+            if (!is_wp_error($editionPost)) {
+                $startDate = get_post_meta($editionId, '_stride_start_date', true);
+                $venue = get_post_meta($editionId, '_stride_venue', true);
+                if ($startDate) {
+                    $label .= ' - ' . date_i18n('d M Y', strtotime($startDate));
+                }
+                if ($venue) {
+                    $label .= ' - ' . $venue;
+                }
+            }
+        }
+
+        // Build JSON data for hidden input
+        $jsonData = json_encode([
+            'type' => $type,
+            'course_id' => $courseId,
+            'edition_id' => $type === 'edition' ? $editionId : null,
+        ], JSON_UNESCAPED_UNICODE);
+
+        // Type-specific styling
+        $typeClass = $type === 'edition' ? 'stride-item-edition' : 'stride-item-online';
+        $icon = $type === 'edition' ? 'calendar-alt' : 'laptop';
+        $badgeText = $type === 'edition' ? __('Editie', 'stride') : __('Online', 'stride');
+        $badgeClass = $type === 'edition' ? 'stride-badge-edition' : 'stride-badge-online';
+
+        ob_start();
+        ?>
+        <li class="stride-course-item <?php echo esc_attr($typeClass); ?>" data-course-id="<?php echo esc_attr($courseId); ?>" data-edition-id="<?php echo esc_attr($editionId); ?>" data-type="<?php echo esc_attr($type); ?>">
+            <span class="item-icon dashicons dashicons-<?php echo esc_attr($icon); ?>"></span>
+            <span class="course-title"><?php echo esc_html($label); ?></span>
+            <span class="item-badge <?php echo esc_attr($badgeClass); ?>"><?php echo esc_html($badgeText); ?></span>
+            <span class="remove-course dashicons dashicons-no-alt" title="<?php esc_attr_e('Verwijderen', 'stride'); ?>"></span>
+            <input type="hidden" name="<?php echo esc_attr($inputName); ?>" value="<?php echo esc_attr($jsonData); ?>">
+        </li>
+        <?php
+        return ob_get_clean();
     }
 
     public function renderEnrollmentsMetabox(WP_Post $post): void
@@ -613,8 +600,10 @@ final class TrajectoryAdminController extends AbstractService
                         ?>
                         <tr data-status="<?php echo esc_attr($status); ?>" data-name="<?php echo esc_attr(strtolower($userName)); ?>">
                             <td>
-                                <?php if ($user): ?>
-                                    <a href="<?php echo esc_url(get_edit_user_link($user->ID)); ?>"><?php echo esc_html($userName); ?></a>
+                                <?php
+                                $userEditUrl = $user ? get_edit_user_link($user->ID) : null;
+                                if ($userEditUrl): ?>
+                                    <a href="<?php echo esc_url($userEditUrl); ?>"><?php echo esc_html($userName); ?></a>
                                 <?php else: ?>
                                     <?php echo esc_html($userName); ?>
                                 <?php endif; ?>
@@ -802,53 +791,108 @@ final class TrajectoryAdminController extends AbstractService
 
         $courses = [];
 
+        // Process required courses (supports both JSON and legacy integer format)
         if (!empty($fields['courses_required']) && is_array($fields['courses_required'])) {
-            foreach ($fields['courses_required'] as $courseId) {
-                $courseId = absint($courseId);
-                if ($courseId > 0) {
-                    $courses[] = ['course_id' => $courseId, 'required' => true];
+            foreach ($fields['courses_required'] as $itemValue) {
+                $courseEntry = $this->parseCourseItemValue($itemValue);
+                if (!$courseEntry) {
+                    continue;
                 }
+
+                $courseEntry['required'] = true;
+                $courses[] = $courseEntry;
             }
         }
 
+        // Process elective groups (supports both JSON and legacy integer format)
         if (!empty($fields['elective_groups']) && is_array($fields['elective_groups'])) {
             foreach ($fields['elective_groups'] as $group) {
                 $groupName = sanitize_text_field($group['name'] ?? '');
                 $pickCount = absint($group['pick_count'] ?? 1);
 
-                if (!empty($groupName) && !empty($group['courses']) && is_array($group['courses'])) {
-                    foreach ($group['courses'] as $courseId) {
-                        $courseId = absint($courseId);
-                        if ($courseId > 0) {
-                            $courses[] = [
-                                'course_id' => $courseId,
-                                'required' => false,
-                                'group' => $groupName,
-                                'pick_count' => $pickCount,
-                            ];
-                        }
+                if (empty($groupName) || empty($group['courses']) || !is_array($group['courses'])) {
+                    continue;
+                }
+
+                foreach ($group['courses'] as $itemValue) {
+                    $courseEntry = $this->parseCourseItemValue($itemValue);
+                    if (!$courseEntry) {
+                        continue;
                     }
+
+                    $courseEntry['required'] = false;
+                    $courseEntry['group'] = $groupName;
+                    $courseEntry['pick_count'] = $pickCount;
+                    $courses[] = $courseEntry;
                 }
             }
         }
 
         $updateData['courses'] = $courses;
 
-        if (!empty($fields['linked_editions']) && is_array($fields['linked_editions'])) {
-            $linkedEditions = [];
-            foreach ($fields['linked_editions'] as $link) {
-                $courseId = absint($link['course_id'] ?? 0);
-                $editionId = absint($link['edition_id'] ?? 0);
-                if ($courseId > 0 && $editionId > 0) {
-                    $linkedEditions[] = ['course_id' => $courseId, 'edition_id' => $editionId];
-                }
-            }
-            $updateData['linked_editions'] = $linkedEditions;
-        }
-
         if (!empty($updateData)) {
             $this->repository->update($postId, $updateData);
         }
+    }
+
+    /**
+     * Parse a course item value from form submission.
+     *
+     * Supports both:
+     * - New JSON format: {"type":"edition","course_id":123,"edition_id":456}
+     * - Legacy integer format: 123 (treated as online course)
+     *
+     * @param string|int $value The form value
+     * @return array|null Parsed course entry or null if invalid
+     */
+    private function parseCourseItemValue(string|int $value): ?array
+    {
+        // Handle legacy integer format (plain course ID)
+        if (is_numeric($value)) {
+            $courseId = absint($value);
+            if ($courseId <= 0) {
+                return null;
+            }
+            return [
+                'type' => 'online',
+                'course_id' => $courseId,
+            ];
+        }
+
+        // WordPress adds slashes to POST data - remove them before JSON decode
+        $value = wp_unslash($value);
+
+        // Handle JSON format
+        $item = json_decode($value, true);
+        if (!is_array($item)) {
+            // If JSON decode fails, try to extract a numeric ID
+            $courseId = absint($value);
+            if ($courseId > 0) {
+                return [
+                    'type' => 'online',
+                    'course_id' => $courseId,
+                ];
+            }
+            return null;
+        }
+
+        $type = sanitize_text_field($item['type'] ?? 'online');
+        $courseId = absint($item['course_id'] ?? 0);
+
+        if ($courseId <= 0) {
+            return null;
+        }
+
+        $courseEntry = [
+            'type' => $type,
+            'course_id' => $courseId,
+        ];
+
+        if ($type === 'edition') {
+            $courseEntry['edition_id'] = absint($item['edition_id'] ?? 0);
+        }
+
+        return $courseEntry;
     }
 
     // === AJAX Endpoints ===
@@ -883,32 +927,94 @@ final class TrajectoryAdminController extends AbstractService
         wp_send_json_success(['results' => $results]);
     }
 
-    public function ajaxGetCourseEditions(): void
+    /**
+     * AJAX: Search for both editions and online courses.
+     *
+     * Returns grouped results in Select2 format:
+     * - Group "Edities": Upcoming editions with course name, date, venue
+     * - Group "Online Cursussen": LearnDash courses (content without scheduled editions)
+     *
+     * IDs are formatted as "edition:123" or "online:456" for client-side parsing.
+     */
+    public function ajaxSearchCoursesAndEditions(): void
     {
         if (!$this->verifyAjaxNonce()) {
             return;
         }
 
-        $courseId = absint($_POST['course_id'] ?? 0);
-        if (!$courseId) {
-            wp_send_json_error(['message' => 'Invalid course ID']);
-            return;
+        $search = sanitize_text_field($_POST['search'] ?? '');
+        $results = [];
+
+        // Group 1: Editions
+        $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
+        $editions = $editionService->getUpcomingEditions(50);
+
+        $editionResults = [];
+        foreach ($editions as $edition) {
+            $editionId = (int) $edition['id'];
+            $meta = $edition['meta'] ?? [];
+            $courseId = (int) ($meta['course_id'] ?? 0);
+            $courseTitle = $courseId ? get_the_title($courseId) : '';
+
+            // Build display text: "Course Name - 15 jan 2025 - Amsterdam"
+            $label = $courseTitle ?: __('Onbekende cursus', 'stride');
+
+            $startDate = $meta['start_date'] ?? '';
+            if (!empty($startDate)) {
+                $label .= ' - ' . date_i18n('d M Y', strtotime($startDate));
+            }
+
+            $venue = $meta['venue'] ?? '';
+            if (!empty($venue)) {
+                $label .= ' - ' . $venue;
+            }
+
+            // Filter by search term
+            if (!empty($search) && stripos($label, $search) === false) {
+                continue;
+            }
+
+            $editionResults[] = [
+                'id' => 'edition:' . $editionId . ':' . $courseId,
+                'text' => $label,
+            ];
         }
 
-        $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
-        $editions = $editionService->getEditionsForCourse($courseId);
+        if (!empty($editionResults)) {
+            $results[] = [
+                'text' => __('Edities', 'stride'),
+                'children' => $editionResults,
+            ];
+        }
 
-        $results = [];
-        foreach ($editions as $edition) {
-            $label = $edition['start_date'] ?? '';
-            if (!empty($edition['venue'])) {
-                $label .= ' - ' . $edition['venue'];
-            }
-            if (empty($label)) {
-                $label = '#' . $edition['id'];
-            }
+        // Group 2: Online courses (LearnDash courses)
+        $args = [
+            'post_type' => 'sfwd-courses',
+            'post_status' => 'publish',
+            'posts_per_page' => 30,
+            'orderby' => 'title',
+            'order' => 'ASC',
+        ];
 
-            $results[] = ['id' => $edition['id'], 'text' => $label];
+        if (!empty($search)) {
+            $args['s'] = $search;
+        }
+
+        $courses = get_posts($args);
+        $onlineResults = [];
+
+        foreach ($courses as $course) {
+            $onlineResults[] = [
+                'id' => 'online:' . $course->ID,
+                'text' => $course->post_title,
+            ];
+        }
+
+        if (!empty($onlineResults)) {
+            $results[] = [
+                'text' => __('Online Cursussen', 'stride'),
+                'children' => $onlineResults,
+            ];
         }
 
         wp_send_json_success(['results' => $results]);
@@ -982,5 +1088,139 @@ final class TrajectoryAdminController extends AbstractService
         }
 
         return true;
+    }
+
+    // =========================================================================
+    // Admin List Columns
+    // =========================================================================
+
+    /**
+     * Define admin list columns.
+     *
+     * @param array<string, string> $columns
+     * @return array<string, string>
+     */
+    public function defineListColumns(array $columns): array
+    {
+        $newColumns = [];
+        $newColumns['cb'] = $columns['cb'] ?? '<input type="checkbox" />';
+        $newColumns['title'] = __('Traject', 'stride');
+        $newColumns['mode'] = __('Modus', 'stride');
+        $newColumns['courses_count'] = __('Cursussen', 'stride');
+        $newColumns['enrollments'] = __('Inschrijvingen', 'stride');
+        $newColumns['status'] = __('Status', 'stride');
+        $newColumns['deadline'] = __('Deadline', 'stride');
+
+        return $newColumns;
+    }
+
+    /**
+     * Render admin list column content.
+     */
+    public function renderListColumn(string $column, int $postId): void
+    {
+        switch ($column) {
+            case 'mode':
+                $mode = get_post_meta($postId, 'mode', true) ?: 'self_paced';
+                $modeEnum = TrajectoryMode::tryFrom($mode) ?? TrajectoryMode::SelfPaced;
+                $icon = $modeEnum === TrajectoryMode::Cohort ? 'groups' : 'admin-users';
+                $color = $modeEnum === TrajectoryMode::Cohort ? '#2271b1' : '#00a32a';
+                echo '<span style="color:' . $color . ';">';
+                echo '<span class="dashicons dashicons-' . $icon . '" style="font-size:16px;vertical-align:text-bottom;"></span> ';
+                echo esc_html($modeEnum->label());
+                echo '</span>';
+                break;
+
+            case 'courses_count':
+                $courses = get_post_meta($postId, 'courses', true);
+                if (is_string($courses)) {
+                    $courses = json_decode($courses, true) ?: [];
+                }
+                $courses = is_array($courses) ? $courses : [];
+                $required = count(array_filter($courses, fn($c) => ($c['required'] ?? false)));
+                $elective = count($courses) - $required;
+
+                echo '<span title="' . esc_attr__('Verplicht', 'stride') . '">';
+                echo '<strong>' . $required . '</strong> ' . __('verplicht', 'stride');
+                echo '</span>';
+                if ($elective > 0) {
+                    echo '<br><span style="color:#666;" title="' . esc_attr__('Keuzevakken', 'stride') . '">';
+                    echo $elective . ' ' . __('keuze', 'stride');
+                    echo '</span>';
+                }
+                break;
+
+            case 'enrollments':
+                $capacity = (int) get_post_meta($postId, 'capacity', true);
+                $enrolledCount = $this->enrollmentRepository->countByTrajectory($postId);
+
+                if ($capacity > 0) {
+                    $percentage = min(100, round(($enrolledCount / $capacity) * 100));
+                    $color = $percentage >= 100 ? '#d63638' : ($percentage >= 80 ? '#dba617' : '#00a32a');
+                    echo '<span style="color:' . $color . ';font-weight:500;">' . $enrolledCount . '/' . $capacity . '</span>';
+                } else {
+                    echo '<span>' . $enrolledCount . '</span>';
+                }
+                break;
+
+            case 'status':
+                $status = get_post_meta($postId, 'status', true) ?: 'draft';
+                $statusEnum = TrajectoryStatus::tryFrom($status) ?? TrajectoryStatus::Draft;
+                $config = $this->getTrajectoryStatusConfig($statusEnum);
+                echo '<span style="display:inline-block;padding:2px 8px;border-radius:3px;background:' . $config['bg'] . ';color:' . $config['color'] . ';font-size:12px;">';
+                echo esc_html($statusEnum->label());
+                echo '</span>';
+                break;
+
+            case 'deadline':
+                $mode = get_post_meta($postId, 'mode', true) ?: 'self_paced';
+                if ($mode === 'cohort') {
+                    $enrollmentDeadline = get_post_meta($postId, 'enrollment_deadline', true);
+                    if ($enrollmentDeadline) {
+                        $isExpired = strtotime($enrollmentDeadline) < time();
+                        $style = $isExpired ? 'color:#d63638;' : '';
+                        echo '<span style="' . $style . '">' . esc_html(date_i18n('j M Y', strtotime($enrollmentDeadline))) . '</span>';
+                    } else {
+                        echo '<span style="color:#999;">—</span>';
+                    }
+                } else {
+                    $months = (int) get_post_meta($postId, 'deadline_months', true);
+                    if ($months > 0) {
+                        echo $months . ' ' . __('maanden', 'stride');
+                    } else {
+                        echo '<span style="color:#999;">' . __('Geen', 'stride') . '</span>';
+                    }
+                }
+                break;
+        }
+    }
+
+    /**
+     * Get trajectory status display configuration.
+     *
+     * @return array{color: string, bg: string}
+     */
+    private function getTrajectoryStatusConfig(TrajectoryStatus $status): array
+    {
+        return match ($status) {
+            TrajectoryStatus::Draft => ['color' => '#787c82', 'bg' => '#f0f0f1'],
+            TrajectoryStatus::Open => ['color' => '#00a32a', 'bg' => '#e6f4ea'],
+            TrajectoryStatus::InProgress => ['color' => '#2271b1', 'bg' => '#e5f0f8'],
+            TrajectoryStatus::Closed => ['color' => '#d63638', 'bg' => '#fcf0f1'],
+            TrajectoryStatus::Archived => ['color' => '#787c82', 'bg' => '#f0f0f1'],
+        };
+    }
+
+    /**
+     * Define sortable columns.
+     *
+     * @param array<string, string> $columns
+     * @return array<string, string>
+     */
+    public function defineSortableColumns(array $columns): array
+    {
+        $columns['mode'] = 'mode';
+        $columns['status'] = 'status';
+        return $columns;
     }
 }

@@ -24,7 +24,7 @@ if (defined('WP_ENV') && WP_ENV === 'production') {
     exit(1);
 }
 
-use ntdst\Stride\core\RegistrationRepository;
+use Stride\Modules\Enrollment\RegistrationRepository;
 
 /**
  * Seed Data Cleaner
@@ -170,15 +170,22 @@ class StrideSeedCleaner {
      */
     private function removeRegistrations(): void {
         echo "Removing registrations...\n";
+        global $wpdb;
+        $table = $wpdb->prefix . 'vad_registrations';
 
         // Get manifest to find registration IDs
         $manifest = get_option('stride_seed_manifest', []);
         $registrationIds = $manifest['registrations'] ?? [];
 
-        if (!empty($registrationIds) && $this->regRepo) {
-            foreach ($registrationIds as $regId) {
-                $this->regRepo->delete($regId);
-                $this->removed['registrations']++;
+        if (!empty($registrationIds)) {
+            $placeholders = implode(',', array_fill(0, count($registrationIds), '%d'));
+            // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $count = $wpdb->query($wpdb->prepare(
+                "DELETE FROM {$table} WHERE id IN ({$placeholders})",
+                $registrationIds
+            ));
+            if ($count > 0) {
+                $this->removed['registrations'] += $count;
             }
         }
 
@@ -191,9 +198,7 @@ class StrideSeedCleaner {
             'fields' => 'ids',
         ]);
 
-        if (!empty($seedEditions) && $this->regRepo) {
-            global $wpdb;
-            $table = $wpdb->prefix . 'vad_registrations';
+        if (!empty($seedEditions)) {
             $placeholders = implode(',', array_fill(0, count($seedEditions), '%d'));
 
             // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
