@@ -53,7 +53,7 @@ final class RegistrationTable
 
         $table = self::getTableName();
 
-        return $wpdb->get_var("SHOW TABLES LIKE '{$table}'") === $table;
+        return $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table)) === $table;
     }
 
     /**
@@ -75,6 +75,7 @@ final class RegistrationTable
         ));
 
         if (!$indexExists) {
+            // Table name from constant - safe from injection (identifiers can't use prepare())
             $wpdb->query("ALTER TABLE {$table} ADD INDEX idx_edition_status (edition_id, status)");
         }
     }
