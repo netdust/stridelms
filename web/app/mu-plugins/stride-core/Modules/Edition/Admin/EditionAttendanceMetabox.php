@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Stride\Modules\Edition\Admin;
 
 use Stride\Domain\SessionType;
+use Stride\Infrastructure\BatchQueryHelper;
+use Stride\Modules\Attendance\AttendanceRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionService;
 use WP_Post;
@@ -22,6 +24,7 @@ final class EditionAttendanceMetabox
     public function __construct(
         private readonly SessionService $sessionService,
         private readonly EditionService $editionService,
+        private readonly AttendanceRepository $attendanceRepository,
     ) {}
 
     public function render(WP_Post $post): void
@@ -69,9 +72,34 @@ final class EditionAttendanceMetabox
 
         // Re-index sessions array for consistent iteration
         $sessions = array_values($sessions);
+
+        // Batch fetch all data upfront to avoid N+1 queries
+        $userIds = array_column($registrations, 'user_id');
+        $userIds = array_map('intval', $userIds);
+
+        // Batch fetch users
+        $users = BatchQueryHelper::batchGetUsers($userIds);
+
+        // Batch fetch user meta (organisation)
+        global $wpdb;
+        $userOrgs = [];
+        if (!empty($userIds)) {
+            $userPlaceholders = implode(',', array_fill(0, count($userIds), '%d'));
+            $orgResults = $wpdb->get_results($wpdb->prepare(
+                "SELECT user_id, meta_value FROM {$wpdb->usermeta}
+                 WHERE user_id IN ({$userPlaceholders}) AND meta_key = 'organisation'",
+                ...$userIds
+            ));
+            foreach ($orgResults as $row) {
+                $userOrgs[(int) $row->user_id] = $row->meta_value;
+            }
+        }
+
+        // Batch fetch all attendance for this edition
+        $attendanceByUser = BatchQueryHelper::batchGetAttendance($post->ID);
         ?>
         <div class="stride-attendance-admin">
-            <div class="stride-attendance-table-wrapper">
+        <div class="stride-attendance-table-wrapper">
                 <table class="stride-attendance-table">
                     <thead>
                         <tr>
@@ -96,11 +124,11 @@ final class EditionAttendanceMetabox
                     <tbody>
                         <?php foreach ($registrations as $registration): ?>
                             <?php
-                            $userId = $registration['user_id'];
-                            $user = get_userdata($userId);
+                            $userId = (int) $registration['user_id'];
+                            $user = $users[$userId] ?? null;
                             if (!$user) continue;
 
-                            $organisation = get_user_meta($userId, 'organisation', true) ?: '';
+                            $organisation = $userOrgs[$userId] ?? '';
                             ?>
                             <tr data-user-id="<?php echo esc_attr($userId); ?>">
                                 <td class="column-name"><?php echo esc_html($user->display_name); ?></td>
@@ -108,7 +136,8 @@ final class EditionAttendanceMetabox
                                 <td class="column-org"><?php echo esc_html($organisation); ?></td>
                                 <?php foreach ($sessions as $session): ?>
                                     <?php
-                                    $status = get_user_meta($userId, "session_attendance_{$session['id']}", true) ?: 'unmarked';
+                                    $sessionId = (int) $session['id'];
+                                    $status = $attendanceByUser[$userId][$sessionId] ?? 'unmarked';
                                     ?>
                                     <td class="column-session">
                                         <button type="button"
@@ -128,7 +157,7 @@ final class EditionAttendanceMetabox
                             <td colspan="3" class="totals-label"><?php esc_html_e('Aanwezig', 'stride'); ?></td>
                             <?php foreach ($sessions as $session): ?>
                                 <?php
-                                $totals = $this->getSessionAttendanceTotals($session['id'], $registrations);
+                                $totals = $this->getSessionAttendanceTotalsFromBatch((int) $session['id'], $registrations, $attendanceByUser);
                                 ?>
                                 <td class="totals-cell" data-session-id="<?php echo esc_attr($session['id']); ?>">
                                     <span class="attendance-count"><?php echo esc_html($totals['present'] . '/' . $totals['total']); ?></span>
@@ -170,13 +199,22 @@ final class EditionAttendanceMetabox
         ), ARRAY_A) ?: [];
     }
 
-    private function getSessionAttendanceTotals(int $sessionId, array $registrations): array
+    /**
+     * Calculate attendance totals from pre-fetched batch data.
+     *
+     * @param int $sessionId
+     * @param array<array{user_id: int}> $registrations
+     * @param array<int, array<int, string>> $attendanceByUser Map of userId => [sessionId => status]
+     * @return array{present: int, total: int}
+     */
+    private function getSessionAttendanceTotalsFromBatch(int $sessionId, array $registrations, array $attendanceByUser): array
     {
         $present = 0;
         $total = count($registrations);
 
         foreach ($registrations as $registration) {
-            $status = get_user_meta($registration['user_id'], "session_attendance_{$sessionId}", true);
+            $userId = (int) $registration['user_id'];
+            $status = $attendanceByUser[$userId][$sessionId] ?? null;
             if ($status === 'present') {
                 $present++;
             }

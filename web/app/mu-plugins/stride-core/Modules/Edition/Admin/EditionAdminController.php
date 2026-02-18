@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Stride\Modules\Edition\Admin;
 
+use Stride\Domain\AttendanceStatus;
 use Stride\Domain\SessionType;
 use Stride\Infrastructure\AbstractService;
+use Stride\Modules\Attendance\AttendanceRepository;
 use Stride\Modules\Edition\EditionCPT;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
@@ -34,6 +36,7 @@ final class EditionAdminController extends AbstractService
         private readonly EditionRepository $editionRepository,
         private readonly SessionService $sessionService,
         private readonly SessionRepository $sessionRepository,
+        private readonly AttendanceRepository $attendanceRepository,
     ) {
         parent::__construct();
     }
@@ -222,7 +225,7 @@ final class EditionAdminController extends AbstractService
 
     public function renderAttendanceMetabox(WP_Post $post): void
     {
-        $metabox = new EditionAttendanceMetabox($this->sessionService, $this->editionService);
+        $metabox = new EditionAttendanceMetabox($this->sessionService, $this->editionService, $this->attendanceRepository);
         $metabox->render($post);
     }
 
@@ -549,23 +552,44 @@ final class EditionAdminController extends AbstractService
 
         $sessionId = absint($_POST['session_id'] ?? 0);
         $userId = absint($_POST['user_id'] ?? 0);
-        $status = sanitize_text_field($_POST['status'] ?? 'present');
+        $statusValue = sanitize_text_field($_POST['status'] ?? 'present');
 
         if (!$sessionId || !$userId) {
             wp_send_json_error(['message' => __('Ongeldige gegevens.', 'stride')], 400);
         }
 
-        // TODO: Implement attendance tracking via a dedicated service
-        // For now, store in user meta as session_attendance_{session_id}
+        // Validate status
         $validStatuses = ['unmarked', 'present', 'absent', 'excused'];
-        if (!in_array($status, $validStatuses, true)) {
-            $status = 'unmarked';
+        if (!in_array($statusValue, $validStatuses, true)) {
+            $statusValue = 'unmarked';
         }
 
-        if ($status === 'unmarked') {
-            delete_user_meta($userId, "session_attendance_{$sessionId}");
+        // Get session to find edition_id
+        $session = $this->sessionService->getSession($sessionId);
+        if (!$session) {
+            wp_send_json_error(['message' => __('Sessie niet gevonden.', 'stride')], 404);
+        }
+
+        $editionId = (int) $session['edition_id'];
+
+        if ($statusValue === 'unmarked') {
+            // Delete attendance record
+            $existing = $this->attendanceRepository->findBySessionAndUser($sessionId, $userId);
+            if ($existing) {
+                $this->attendanceRepository->delete((int) $existing->id);
+            }
         } else {
-            update_user_meta($userId, "session_attendance_{$sessionId}", $status);
+            // Record attendance using repository
+            $status = AttendanceStatus::tryFrom($statusValue);
+            if ($status) {
+                $this->attendanceRepository->record(
+                    $sessionId,
+                    $userId,
+                    $status,
+                    $editionId,
+                    get_current_user_id()
+                );
+            }
         }
 
         // Get totals for the session
@@ -590,13 +614,21 @@ final class EditionAdminController extends AbstractService
             wp_send_json_error(['message' => __('Sessie niet gevonden.', 'stride')], 404);
         }
 
-        // Get all registrations for this edition
-        $registrations = $this->getEditionRegistrations($session['edition_id']);
+        $editionId = (int) $session['edition_id'];
 
-        // Mark all as present
+        // Get all registrations for this edition
+        $registrations = $this->getEditionRegistrations($editionId);
+
+        // Mark all as present using repository
+        $currentUserId = get_current_user_id();
         foreach ($registrations as $registration) {
-            $userId = $registration['user_id'];
-            update_user_meta($userId, "session_attendance_{$sessionId}", 'present');
+            $this->attendanceRepository->record(
+                $sessionId,
+                (int) $registration['user_id'],
+                AttendanceStatus::Present,
+                $editionId,
+                $currentUserId
+            );
         }
 
         $totals = $this->getAttendanceTotals($sessionId);
@@ -777,14 +809,10 @@ final class EditionAdminController extends AbstractService
 
         $registrations = $this->getEditionRegistrations($session['edition_id']);
         $totalCount = count($registrations);
-        $presentCount = 0;
 
-        foreach ($registrations as $registration) {
-            $status = get_user_meta($registration['user_id'], "session_attendance_{$sessionId}", true);
-            if ($status === 'present') {
-                $presentCount++;
-            }
-        }
+        // Count present from attendance table
+        $presentUserIds = $this->attendanceRepository->getPresentUserIds($sessionId);
+        $presentCount = count($presentUserIds);
 
         return [
             'presentCount' => $presentCount,
