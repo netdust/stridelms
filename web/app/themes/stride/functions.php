@@ -107,22 +107,25 @@ add_action('after_setup_theme', function () use ($bootstrap) {
 
 /**
  * Enqueue frontend styles and scripts
+ *
+ * NOTE: This is a minimal setup. Frontend assets will be added
+ * when the frontend is properly implemented.
  */
 add_action('wp_enqueue_scripts', function () {
+    // Inter font from Google Fonts
+    wp_enqueue_style(
+        'stride-font-inter',
+        'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
+        [],
+        null
+    );
+
     // UIkit CSS
     wp_enqueue_style(
         'uikit',
         'https://cdn.jsdelivr.net/npm/uikit@3.21.6/dist/css/uikit.min.css',
-        [],
+        ['stride-font-inter'],
         '3.21.6'
-    );
-
-    // Stride custom styles
-    wp_enqueue_style(
-        'stride',
-        get_stylesheet_directory_uri() . '/assets/css/stride.css',
-        ['uikit'],
-        wp_get_theme()->get('Version')
     );
 
     // UIkit JS
@@ -143,7 +146,15 @@ add_action('wp_enqueue_scripts', function () {
         true
     );
 
-    // Stride custom JS
+    // Stride Design System CSS (after UIkit)
+    wp_enqueue_style(
+        'stride-css',
+        get_stylesheet_directory_uri() . '/assets/css/stride.css',
+        ['uikit'],
+        wp_get_theme()->get('Version')
+    );
+
+    // Stride custom JS (namespace setup only)
     wp_enqueue_script(
         'stride',
         get_stylesheet_directory_uri() . '/assets/js/stride.js',
