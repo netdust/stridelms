@@ -102,6 +102,25 @@ add_action('after_setup_theme', function () use ($bootstrap) {
 }, 15);
 
 // ========================================
+// PWA MANIFEST & META TAGS
+// ========================================
+
+/**
+ * Add PWA manifest and related meta tags
+ * Priority: 1 (very early in head)
+ */
+add_action('wp_head', function () {
+    ?>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#2D3E50">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Stride">
+    <link rel="apple-touch-icon" href="<?php echo esc_url(get_stylesheet_directory_uri()); ?>/assets/img/icon-180.png">
+    <?php
+}, 1);
+
+// ========================================
 // FRONTEND ASSETS
 // ========================================
 

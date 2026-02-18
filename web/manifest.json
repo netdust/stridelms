@@ -1,0 +1,38 @@
+{
+  "name": "Stride LMS",
+  "short_name": "Stride",
+  "description": "Stride LMS - Platform voor VAD opleidingen",
+  "start_url": "/mijn-account/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#2D3E50",
+  "background_color": "#FAFBFC",
+  "icons": [
+    {
+      "src": "/app/themes/stride/assets/img/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app/themes/stride/assets/img/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app/themes/stride/assets/img/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/app/themes/stride/assets/img/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["education", "productivity"],
+  "lang": "nl"
+}
