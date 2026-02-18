@@ -1,0 +1,250 @@
+<?php
+
+namespace Stride\Tests;
+
+use PHPUnit\Framework\TestCase as BaseTestCase;
+
+/**
+ * Base Test Case for Stride Tests
+ *
+ * Provides common functionality for all tests including:
+ * - Global state reset between tests
+ * - Test data factories
+ * - Assertion helpers for WordPress hooks
+ */
+abstract class TestCase extends BaseTestCase
+{
+    /**
+     * Set up before each test
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->resetGlobalState();
+    }
+
+    /**
+     * Tear down after each test
+     */
+    protected function tearDown(): void
+    {
+        $this->resetGlobalState();
+        parent::tearDown();
+    }
+
+    /**
+     * Reset all global test state
+     */
+    protected function resetGlobalState(): void
+    {
+        global $_test_user_meta, $_test_post_meta, $_test_actions, $_test_filters;
+        global $_test_action_calls, $_test_options, $_test_transients, $_test_container;
+        global $_test_users, $_test_posts;
+
+        $_test_user_meta = [];
+        $_test_post_meta = [];
+        $_test_actions = [];
+        $_test_filters = [];
+        $_test_action_calls = [];
+        $_test_options = [];
+        $_test_transients = [];
+        $_test_container = [];
+        $_test_users = [];
+        $_test_posts = [];
+    }
+
+    /**
+     * Create a test user
+     *
+     * @param array $data User data overrides
+     * @return object User object
+     */
+    protected function createUser(array $data = []): object
+    {
+        global $_test_users;
+
+        static $nextId = 1;
+
+        $defaults = [
+            'ID' => $nextId++,
+            'user_login' => 'testuser' . $nextId,
+            'user_email' => "testuser{$nextId}@example.com",
+            'first_name' => 'Test',
+            'last_name' => 'User',
+            'display_name' => 'Test User',
+        ];
+
+        $userData = array_merge($defaults, $data);
+        $user = (object) $userData;
+
+        $_test_users[$user->ID] = $user;
+
+        return $user;
+    }
+
+    /**
+     * Create a test course (LearnDash)
+     *
+     * @param array $data Course data overrides
+     * @return object Post object
+     */
+    protected function createCourse(array $data = []): object
+    {
+        global $_test_posts;
+
+        static $nextId = 1000;
+
+        $defaults = [
+            'ID' => $nextId++,
+            'post_type' => 'sfwd-courses',
+            'post_title' => 'Test Course',
+            'post_status' => 'publish',
+        ];
+
+        $courseData = array_merge($defaults, $data);
+        $course = (object) $courseData;
+
+        $_test_posts[$course->ID] = $course;
+
+        return $course;
+    }
+
+    /**
+     * Create a test group (LearnDash trajectory)
+     *
+     * @param array $data Group data overrides
+     * @return object Post object
+     */
+    protected function createGroup(array $data = []): object
+    {
+        global $_test_posts;
+
+        static $nextId = 2000;
+
+        $defaults = [
+            'ID' => $nextId++,
+            'post_type' => 'groups',
+            'post_title' => 'Test Trajectory',
+            'post_status' => 'publish',
+        ];
+
+        $groupData = array_merge($defaults, $data);
+        $group = (object) $groupData;
+
+        $_test_posts[$group->ID] = $group;
+
+        return $group;
+    }
+
+    /**
+     * Create a test quote
+     *
+     * @param array $data Quote data overrides
+     * @return object Post object
+     */
+    protected function createQuote(array $data = []): object
+    {
+        global $_test_posts;
+
+        static $nextId = 3000;
+
+        $defaults = [
+            'ID' => $nextId++,
+            'post_type' => 'vad_quote',
+            'post_title' => 'Quote-' . date('Ymd') . '-001',
+            'post_status' => 'publish',
+        ];
+
+        $quoteData = array_merge($defaults, $data);
+        $quote = (object) $quoteData;
+
+        $_test_posts[$quote->ID] = $quote;
+
+        return $quote;
+    }
+
+    /**
+     * Assert that a WordPress action was fired
+     *
+     * @param string $hook Hook name
+     * @param int|null $times Expected number of calls (null = at least once)
+     */
+    protected function assertActionFired(string $hook, ?int $times = null): void
+    {
+        global $_test_action_calls;
+
+        $calls = $_test_action_calls[$hook] ?? [];
+        $count = count($calls);
+
+        if ($times === null) {
+            $this->assertGreaterThan(0, $count, "Action '{$hook}' was not fired.");
+        } else {
+            $this->assertEquals($times, $count, "Action '{$hook}' was fired {$count} times, expected {$times}.");
+        }
+    }
+
+    /**
+     * Assert that a WordPress action was not fired
+     *
+     * @param string $hook Hook name
+     */
+    protected function assertActionNotFired(string $hook): void
+    {
+        global $_test_action_calls;
+
+        $calls = $_test_action_calls[$hook] ?? [];
+        $this->assertCount(0, $calls, "Action '{$hook}' should not have been fired.");
+    }
+
+    /**
+     * Get arguments from action calls
+     *
+     * @param string $hook Hook name
+     * @param int $callIndex Which call to get (0-indexed)
+     * @return array|null
+     */
+    protected function getActionArgs(string $hook, int $callIndex = 0): ?array
+    {
+        global $_test_action_calls;
+
+        return $_test_action_calls[$hook][$callIndex] ?? null;
+    }
+
+    /**
+     * Assert user meta equals expected value
+     *
+     * @param int $userId
+     * @param string $key
+     * @param mixed $expected
+     */
+    protected function assertUserMeta(int $userId, string $key, $expected): void
+    {
+        $actual = get_user_meta($userId, $key, true);
+        $this->assertEquals($expected, $actual, "User meta '{$key}' for user {$userId} does not match expected value.");
+    }
+
+    /**
+     * Assert post meta equals expected value
+     *
+     * @param int $postId
+     * @param string $key
+     * @param mixed $expected
+     */
+    protected function assertPostMeta(int $postId, string $key, $expected): void
+    {
+        $actual = get_post_meta($postId, $key, true);
+        $this->assertEquals($expected, $actual, "Post meta '{$key}' for post {$postId} does not match expected value.");
+    }
+
+    /**
+     * Register a service in the test container
+     *
+     * @param string $key
+     * @param object $service
+     */
+    protected function registerService(string $key, object $service): void
+    {
+        global $_test_container;
+        $_test_container[$key] = $service;
+    }
+}
