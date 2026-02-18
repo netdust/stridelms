@@ -527,14 +527,21 @@ if (have_posts()) :
 
 /* Tabs */
 .stride-tabs {
-    border-bottom: 2px solid var(--stride-border-light);
+    border-bottom: none;
+    margin-bottom: var(--stride-space-md);
+}
+
+.stride-tabs > li > a {
+    text-transform: uppercase;
+    font-size: var(--stride-font-size-sm);
+    font-weight: 600;
 }
 
 /* Info List */
 .stride-info-list {
     list-style: none;
     margin: 0;
-    padding: 0;
+    padding: var(--stride-space-md) var(--stride-space-lg) !important;
 }
 
 .stride-info-list__item {
