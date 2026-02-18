@@ -3,8 +3,7 @@
  *
  * Handles trajectory admin interactions:
  * - Mode switching (self-paced / cohort)
- * - Course builder (required + elective groups)
- * - Edition linking
+ * - Course builder with hybrid selection (editions + online courses)
  * - Enrollment filters
  *
  * @package stride
@@ -19,7 +18,6 @@
         initModeToggle();
         initCourseSelects();
         initCourseBuilder();
-        initEditionSelects();
         initEnrollmentFilters();
     });
 
@@ -56,30 +54,77 @@
             // Toggle mode descriptions
             $('.mode-cohort').toggle(isCohort);
             $('.mode-self-paced').toggle(!isCohort);
-
-            // Toggle Editions tab visibility (cohort only)
-            var $editionsTab = $('.stride-tab[data-tab="editions"]');
-            if (isCohort) {
-                $editionsTab.removeClass('hidden');
-            } else {
-                $editionsTab.addClass('hidden');
-                // If editions tab was active, switch to general
-                if ($editionsTab.hasClass('active')) {
-                    $('.stride-tab[data-tab="general"]').click();
-                }
-            }
         });
     }
 
     /**
-     * Course Select2 Dropdowns
+     * Course Select2 Dropdowns (Hybrid: Editions + Online Courses)
      */
     function initCourseSelects() {
-        function initSelect($el) {
-            if (!window.strideTrajectoryAdmin) {
-                return;
+        if (!window.strideTrajectoryAdmin) {
+            return;
+        }
+
+        /**
+         * Format option with icon for editions vs online courses
+         */
+        function formatCourseOption(option) {
+            if (!option.id) {
+                return option.text;
             }
 
+            var icon = 'dashicons-laptop';
+            var badgeClass = 'stride-badge-online';
+            var badgeText = strideTrajectoryAdmin.i18n.onlineBadge || 'Online';
+
+            if (option.id.indexOf('edition:') === 0) {
+                icon = 'dashicons-calendar-alt';
+                badgeClass = 'stride-badge-edition';
+                badgeText = strideTrajectoryAdmin.i18n.editionBadge || 'Editie';
+            }
+
+            var $result = $(
+                '<span class="stride-select-option">' +
+                '<span class="dashicons ' + icon + '" style="margin-right: 6px; color: #646970;"></span>' +
+                '<span>' + escapeHtml(option.text) + '</span>' +
+                '<span class="' + badgeClass + '" style="margin-left: 8px; font-size: 10px; padding: 1px 6px; border-radius: 3px;">' + badgeText + '</span>' +
+                '</span>'
+            );
+
+            return $result;
+        }
+
+        /**
+         * Initialize a hybrid select (editions + online courses)
+         */
+        function initHybridSelect($el) {
+            $el.select2({
+                ajax: {
+                    url: strideTrajectoryAdmin.ajaxUrl,
+                    dataType: 'json',
+                    delay: 250,
+                    data: function(params) {
+                        return {
+                            action: 'stride_search_courses_editions',
+                            nonce: strideTrajectoryAdmin.nonce,
+                            search: params.term || ''
+                        };
+                    },
+                    processResults: function(response) {
+                        return { results: response.data.results || [] };
+                    }
+                },
+                placeholder: strideTrajectoryAdmin.i18n.searchCourseOrEdition || 'Zoek cursus of editie...',
+                minimumInputLength: 0,
+                allowClear: true,
+                templateResult: formatCourseOption
+            });
+        }
+
+        /**
+         * Initialize a simple course select (online courses only, for backwards compat)
+         */
+        function initSimpleSelect($el) {
             $el.select2({
                 ajax: {
                     url: strideTrajectoryAdmin.ajaxUrl,
@@ -104,12 +149,21 @@
 
         // Init existing selects
         $('.stride-course-select').each(function() {
-            initSelect($(this));
+            var $el = $(this);
+            if ($el.hasClass('stride-hybrid-select')) {
+                initHybridSelect($el);
+            } else {
+                initSimpleSelect($el);
+            }
         });
 
         // Re-init when new groups are added
         $(document).on('stride:initCourseSelect', function(e, $el) {
-            initSelect($el);
+            if ($el.hasClass('stride-hybrid-select')) {
+                initHybridSelect($el);
+            } else {
+                initSimpleSelect($el);
+            }
         });
     }
 
@@ -120,16 +174,94 @@
         // Count existing groups
         groupIndex = $('.stride-elective-group').length;
 
+        /**
+         * Parse composite ID from hybrid select
+         * Format: "edition:editionId:courseId" or "online:courseId"
+         * Returns: { type: 'edition'|'online', courseId: number, editionId: number|null }
+         */
+        function parseCompositeId(compositeId) {
+            if (!compositeId) return null;
+
+            var parts = compositeId.split(':');
+            var type = parts[0];
+
+            if (type === 'edition' && parts.length >= 3) {
+                return {
+                    type: 'edition',
+                    editionId: parseInt(parts[1], 10),
+                    courseId: parseInt(parts[2], 10)
+                };
+            } else if (type === 'online' && parts.length >= 2) {
+                return {
+                    type: 'online',
+                    editionId: null,
+                    courseId: parseInt(parts[1], 10)
+                };
+            }
+
+            // Fallback for simple course ID (backwards compatibility)
+            var numericId = parseInt(compositeId, 10);
+            if (!isNaN(numericId)) {
+                return {
+                    type: 'online',
+                    editionId: null,
+                    courseId: numericId
+                };
+            }
+
+            return null;
+        }
+
+        /**
+         * Build course item HTML with type-specific styling
+         */
+        function buildCourseItemHtml(parsed, title, inputName) {
+            var typeClass = parsed.type === 'edition' ? 'stride-item-edition' : 'stride-item-online';
+            var icon = parsed.type === 'edition' ? 'calendar-alt' : 'laptop';
+            var badgeText = parsed.type === 'edition'
+                ? (strideTrajectoryAdmin.i18n.editionBadge || 'Editie')
+                : (strideTrajectoryAdmin.i18n.onlineBadge || 'Online');
+            var badgeClass = parsed.type === 'edition' ? 'stride-badge-edition' : 'stride-badge-online';
+
+            // Build JSON data for hidden input
+            var jsonData = JSON.stringify({
+                type: parsed.type,
+                course_id: parsed.courseId,
+                edition_id: parsed.editionId
+            });
+
+            // Build unique identifier for duplicate checking
+            var uniqueId = parsed.type === 'edition'
+                ? 'edition-' + parsed.editionId
+                : 'online-' + parsed.courseId;
+
+            return '<li class="stride-course-item ' + typeClass + '" data-course-id="' + parsed.courseId + '" data-edition-id="' + (parsed.editionId || '') + '" data-type="' + parsed.type + '" data-unique-id="' + uniqueId + '">' +
+                '<span class="item-icon dashicons dashicons-' + icon + '"></span>' +
+                '<span class="course-title">' + escapeHtml(title) + '</span>' +
+                '<span class="item-badge ' + badgeClass + '">' + badgeText + '</span>' +
+                '<span class="remove-course dashicons dashicons-no-alt" title="' + strideTrajectoryAdmin.i18n.remove + '"></span>' +
+                '<input type="hidden" name="' + inputName + '" value=\'' + jsonData.replace(/'/g, '&#39;') + '\'>' +
+                '</li>';
+        }
+
         // Add required course
         $('#stride-add-required-btn').on('click', function() {
             var $select = $('#stride-add-required-course');
-            var courseId = $select.val();
-            var courseTitle = $select.find('option:selected').text();
+            var compositeId = $select.val();
+            var title = $select.find('option:selected').text();
 
-            if (!courseId) return;
+            if (!compositeId) return;
+
+            var parsed = parseCompositeId(compositeId);
+            if (!parsed) return;
+
+            // Build unique identifier for duplicate checking
+            var uniqueId = parsed.type === 'edition'
+                ? 'edition-' + parsed.editionId
+                : 'online-' + parsed.courseId;
 
             // Check if already added
-            if ($('#stride-required-courses').find('[data-course-id="' + courseId + '"]').length) {
+            if ($('#stride-required-courses').find('[data-unique-id="' + uniqueId + '"]').length) {
                 return;
             }
 
@@ -137,12 +269,7 @@
             $('#stride-required-courses .stride-no-courses').remove();
 
             // Add course item
-            var html = '<li class="stride-course-item" data-course-id="' + courseId + '">' +
-                '<span class="course-title">' + escapeHtml(courseTitle) + '</span>' +
-                '<span class="remove-course dashicons dashicons-no-alt" title="' + strideTrajectoryAdmin.i18n.remove + '"></span>' +
-                '<input type="hidden" name="ntdst_fields[courses_required][]" value="' + courseId + '">' +
-                '</li>';
-
+            var html = buildCourseItemHtml(parsed, title, 'ntdst_fields[courses_required][]');
             $('#stride-required-courses').append(html);
             $select.val(null).trigger('change');
         });
@@ -168,26 +295,29 @@
         $(document).on('click', '.stride-add-elective-btn', function() {
             var $group = $(this).closest('.stride-elective-group');
             var $select = $group.find('.stride-elective-course-select');
-            var courseId = $select.val();
-            var courseTitle = $select.find('option:selected').text();
+            var compositeId = $select.val();
+            var title = $select.find('option:selected').text();
             var groupIdx = $group.data('group-index');
 
-            if (!courseId) return;
+            if (!compositeId) return;
+
+            var parsed = parseCompositeId(compositeId);
+            if (!parsed) return;
+
+            // Build unique identifier for duplicate checking
+            var uniqueId = parsed.type === 'edition'
+                ? 'edition-' + parsed.editionId
+                : 'online-' + parsed.courseId;
 
             // Check if already added
-            if ($group.find('[data-course-id="' + courseId + '"]').length) {
+            if ($group.find('[data-unique-id="' + uniqueId + '"]').length) {
                 return;
             }
 
             // Remove empty state
             $group.find('.stride-elective-course-list .stride-no-courses').remove();
 
-            var html = '<li class="stride-course-item" data-course-id="' + courseId + '">' +
-                '<span class="course-title">' + escapeHtml(courseTitle) + '</span>' +
-                '<span class="remove-course dashicons dashicons-no-alt" title="' + strideTrajectoryAdmin.i18n.remove + '"></span>' +
-                '<input type="hidden" name="ntdst_fields[elective_groups][' + groupIdx + '][courses][]" value="' + courseId + '">' +
-                '</li>';
-
+            var html = buildCourseItemHtml(parsed, title, 'ntdst_fields[elective_groups][' + groupIdx + '][courses][]');
             $group.find('.stride-elective-course-list').append(html);
             $select.val(null).trigger('change');
         });
@@ -202,39 +332,6 @@
             if (confirm(strideTrajectoryAdmin.i18n.confirmDeleteGroup)) {
                 $(this).closest('.stride-elective-group').remove();
             }
-        });
-    }
-
-    /**
-     * Edition Select2 for Cohort Linking
-     */
-    function initEditionSelects() {
-        if (!window.strideTrajectoryAdmin) {
-            return;
-        }
-
-        $('.stride-edition-select').each(function() {
-            var $select = $(this);
-            var courseId = $select.data('course-id');
-
-            $select.select2({
-                ajax: {
-                    url: strideTrajectoryAdmin.ajaxUrl,
-                    dataType: 'json',
-                    data: function() {
-                        return {
-                            action: 'stride_get_course_editions',
-                            nonce: strideTrajectoryAdmin.nonce,
-                            course_id: courseId
-                        };
-                    },
-                    processResults: function(response) {
-                        return { results: response.data.results || [] };
-                    }
-                },
-                placeholder: strideTrajectoryAdmin.i18n.selectEdition,
-                allowClear: true
-            });
         });
     }
 

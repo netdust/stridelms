@@ -64,7 +64,11 @@ $typeLabel = $isOnline ? __('Online', 'stride') : __('In-person', 'stride');
                                 </h2>
                             </div>
                             <div class="stride-article-content">
-                                <?php the_content(); ?>
+                                <?php
+                                // Use wpautop instead of the_content to avoid LearnDash adding widgets
+                                $content = get_the_content();
+                                echo wp_kses_post(wpautop($content));
+                                ?>
                             </div>
                         </div>
 

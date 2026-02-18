@@ -400,3 +400,4 @@ class Stride_UIkit_Nav_Walker extends Walker_Nav_Menu
         $output .= '</li>';
     }
 }
+
