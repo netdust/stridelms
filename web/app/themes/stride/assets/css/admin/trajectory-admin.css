@@ -218,6 +218,212 @@
     font-style: italic;
 }
 
+/* Course Builder - Enhanced */
+.stride-courses-section h4 {
+    margin: 0 0 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.stride-course-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.stride-course-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background: #f6f7f7;
+    border: 1px solid #dcdcde;
+    margin-bottom: 4px;
+    border-radius: 3px;
+}
+
+.stride-course-item .course-title {
+    flex: 1;
+}
+
+.stride-course-item .remove-course {
+    color: #b32d2e;
+    cursor: pointer;
+}
+
+.stride-course-item .remove-course:hover {
+    color: #a00;
+}
+
+.stride-add-course {
+    margin-top: 8px;
+    display: flex;
+    gap: 8px;
+}
+
+.stride-add-course .select2-container {
+    flex: 1;
+}
+
+.stride-elective-group {
+    border: 1px solid #c3c4c7;
+    padding: 16px;
+    margin-bottom: 16px;
+    border-radius: 4px;
+    background: #fafafa;
+}
+
+.stride-elective-group .group-header {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+    align-items: flex-end;
+}
+
+.stride-elective-group .group-header .stride-field {
+    margin-bottom: 0;
+}
+
+.stride-elective-group .group-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
+}
+
+.stride-no-courses {
+    color: #646970;
+    font-style: italic;
+    padding: 12px;
+    background: #f6f7f7;
+    border-radius: 3px;
+}
+
+/* Course Search Select2 */
+.stride-course-select {
+    min-width: 300px;
+}
+
+/* ==========================================================================
+   Enrollments Tab
+   ========================================================================== */
+
+.stride-enrollments-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.stride-enrollments-filters {
+    display: flex;
+    gap: 12px;
+}
+
+.stride-enrollments-filters input,
+.stride-enrollments-filters select {
+    padding: 4px 8px;
+}
+
+.stride-enrollment-count {
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.stride-progress-bar {
+    width: 100px;
+    height: 12px;
+    background: #dcdcde;
+    border-radius: 6px;
+    overflow: hidden;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.stride-progress-bar-fill {
+    height: 100%;
+    background: #00a32a;
+    transition: width 0.3s;
+}
+
+.stride-progress-text {
+    margin-left: 8px;
+    font-size: 11px;
+    color: #646970;
+}
+
+.stride-status-badge {
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.stride-status-enrolled {
+    background: #d4edda;
+    color: #155724;
+}
+
+.stride-status-completed {
+    background: #cce5ff;
+    color: #004085;
+}
+
+.stride-status-paused {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.stride-status-cancelled {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.stride-enrollments-empty {
+    text-align: center;
+    padding: 40px;
+    color: #646970;
+}
+
+/* ==========================================================================
+   Info Box
+   ========================================================================== */
+
+.stride-info-box {
+    background: #f0f6fc;
+    border-left: 4px solid #72aee6;
+    padding: 12px 16px;
+    margin: 16px 0;
+}
+
+.stride-info-box p {
+    margin: 0;
+}
+
+.stride-info-box p + p {
+    margin-top: 6px;
+}
+
+/* ==========================================================================
+   Select2 Overrides
+   ========================================================================== */
+
+.stride-trajectory-admin .select2-container {
+    min-width: 200px;
+}
+
+.stride-trajectory-admin .select2-container--default .select2-selection--single {
+    height: 32px;
+    border-color: #8c8f94;
+}
+
+.stride-trajectory-admin .select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 30px;
+}
+
+.stride-trajectory-admin .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 30px;
+}
+
 /* ==========================================================================
    Linked Editions
    ========================================================================== */

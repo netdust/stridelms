@@ -29,6 +29,7 @@ final class TrajectoryCPT
             'show_in_menu' => 'stride-dashboard',
             'menu_icon' => 'dashicons-networking',
             'supports' => ['title', 'editor'],
+            'auto_metabox' => false,
             'fields' => self::getFields(),
             'field_groups' => self::getFieldGroups(),
         ]);
@@ -77,6 +78,20 @@ final class TrajectoryCPT
             'price_non_member' => [
                 'type' => 'float',
                 'label' => 'Prijs (niet-leden)',
+            ],
+            'description' => [
+                'type' => 'text',
+                'label' => 'Beschrijving',
+            ],
+            'deadline_months' => [
+                'type' => 'int',
+                'label' => 'Deadline maanden',
+                'description' => 'Months to complete for self-paced mode',
+            ],
+            'linked_editions' => [
+                'type' => 'json',
+                'label' => 'Gekoppelde edities',
+                'description' => 'JSON array of course-edition mappings',
             ],
         ];
     }
