@@ -201,14 +201,21 @@ final class TrajectoryAdminController extends AbstractService
         $isCohort = $currentMode === TrajectoryMode::Cohort->value;
         $priceDisplay = ($trajectory['price'] ?? 0) / 100;
         $priceNonMemberDisplay = ($trajectory['price_non_member'] ?? 0) / 100;
+        $hasCourses = !empty($trajectory['courses']);
 
         wp_nonce_field(self::NONCE_SAVE, self::NONCE_FIELD);
         ?>
         <style>
             .stride-trajectory-details { max-width: 700px; }
-            .stride-section { margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid #f0f0f1; }
-            .stride-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-            .stride-section h4 { margin: 0 0 12px 0; font-size: 13px; color: #1d2327; font-weight: 600; }
+            .stride-tabs-nav { display: flex; gap: 0; border-bottom: 1px solid #c3c4c7; margin-bottom: 16px; }
+            .stride-tab { padding: 10px 18px; background: #f0f0f1; border: 1px solid #c3c4c7; border-bottom: none; margin-bottom: -1px; margin-right: -1px; cursor: pointer; font-size: 13px; font-weight: 500; color: #646970; transition: all 0.15s ease; }
+            .stride-tab:first-child { border-radius: 3px 0 0 0; }
+            .stride-tab:last-child { border-radius: 0 3px 0 0; margin-right: 0; }
+            .stride-tab:hover { background: #f6f7f7; color: #1d2327; }
+            .stride-tab.active { background: #fff; border-bottom-color: #fff; color: #1d2327; }
+            .stride-tab.hidden { display: none; }
+            .stride-tab-content { display: none; }
+            .stride-tab-content.active { display: block; }
             .stride-field-row { display: flex; gap: 16px; margin-bottom: 12px; }
             .stride-field-row.two-col > .stride-field { flex: 1; }
             .stride-field { flex: 1; }
@@ -220,13 +227,18 @@ final class TrajectoryAdminController extends AbstractService
             .stride-cohort-only { display: <?php echo $isCohort ? 'block' : 'none'; ?>; }
             .stride-self-paced-only { display: <?php echo $isCohort ? 'none' : 'block'; ?>; }
             .mode-description { font-style: italic; }
-            .stride-info-box { background: #f0f6fc; border-left: 4px solid #72aee6; padding: 12px 16px; margin: 12px 0; }
-            .stride-info-box p { margin: 0; }
         </style>
 
         <div class="stride-trajectory-details">
-            <!-- General Settings -->
-            <div class="stride-section">
+            <!-- Tab Navigation -->
+            <div class="stride-tabs-nav">
+                <div class="stride-tab active" data-tab="general"><?php esc_html_e('Algemeen', 'stride'); ?></div>
+                <div class="stride-tab" data-tab="deadlines"><?php esc_html_e('Deadlines', 'stride'); ?></div>
+                <div class="stride-tab stride-cohort-only <?php echo $hasCourses ? '' : 'hidden'; ?>" data-tab="editions"><?php esc_html_e('Gekoppelde Edities', 'stride'); ?></div>
+            </div>
+
+            <!-- Tab: General -->
+            <div class="stride-tab-content active" data-tab="general">
                 <div class="stride-field-row">
                     <div class="stride-field half">
                         <label for="trajectory_mode"><?php esc_html_e('Modus', 'stride'); ?></label>
@@ -279,51 +291,54 @@ final class TrajectoryAdminController extends AbstractService
                 </div>
             </div>
 
-            <!-- Cohort Deadlines -->
-            <div class="stride-section stride-cohort-only">
-                <h4><?php esc_html_e('Deadlines', 'stride'); ?></h4>
-                <div class="stride-field-row">
-                    <div class="stride-field half">
-                        <label for="trajectory_enrollment_deadline"><?php esc_html_e('Inschrijvingsdeadline', 'stride'); ?></label>
-                        <input type="date" id="trajectory_enrollment_deadline" name="ntdst_fields[enrollment_deadline]"
-                               value="<?php echo esc_attr($trajectory['enrollment_deadline'] ?? ''); ?>">
+            <!-- Tab: Deadlines -->
+            <div class="stride-tab-content" data-tab="deadlines">
+                <!-- Cohort Deadlines -->
+                <div class="stride-cohort-only">
+                    <div class="stride-field-row">
+                        <div class="stride-field half">
+                            <label for="trajectory_enrollment_deadline"><?php esc_html_e('Inschrijvingsdeadline', 'stride'); ?></label>
+                            <input type="date" id="trajectory_enrollment_deadline" name="ntdst_fields[enrollment_deadline]"
+                                   value="<?php echo esc_attr($trajectory['enrollment_deadline'] ?? ''); ?>">
+                        </div>
+                    </div>
+                    <div class="stride-field-row two-col">
+                        <div class="stride-field">
+                            <label for="trajectory_choice_available"><?php esc_html_e('Keuzes beschikbaar vanaf', 'stride'); ?></label>
+                            <input type="date" id="trajectory_choice_available" name="ntdst_fields[choice_available_date]"
+                                   value="<?php echo esc_attr($trajectory['choice_available_date'] ?? ''); ?>">
+                        </div>
+                        <div class="stride-field">
+                            <label for="trajectory_choice_deadline"><?php esc_html_e('Keuzedeadline', 'stride'); ?></label>
+                            <input type="date" id="trajectory_choice_deadline" name="ntdst_fields[choice_deadline]"
+                                   value="<?php echo esc_attr($trajectory['choice_deadline'] ?? ''); ?>">
+                        </div>
                     </div>
                 </div>
-                <div class="stride-field-row two-col">
-                    <div class="stride-field">
-                        <label for="trajectory_choice_available"><?php esc_html_e('Keuzes beschikbaar vanaf', 'stride'); ?></label>
-                        <input type="date" id="trajectory_choice_available" name="ntdst_fields[choice_available_date]"
-                               value="<?php echo esc_attr($trajectory['choice_available_date'] ?? ''); ?>">
-                    </div>
-                    <div class="stride-field">
-                        <label for="trajectory_choice_deadline"><?php esc_html_e('Keuzedeadline', 'stride'); ?></label>
-                        <input type="date" id="trajectory_choice_deadline" name="ntdst_fields[choice_deadline]"
-                               value="<?php echo esc_attr($trajectory['choice_deadline'] ?? ''); ?>">
+
+                <!-- Self-Paced Deadline -->
+                <div class="stride-self-paced-only">
+                    <div class="stride-field-row">
+                        <div class="stride-field half">
+                            <label for="trajectory_deadline_months"><?php esc_html_e('Deadline (maanden)', 'stride'); ?></label>
+                            <input type="number" id="trajectory_deadline_months" name="ntdst_fields[deadline_months]"
+                                   value="<?php echo esc_attr($trajectory['deadline_months'] ?? ''); ?>" min="0" step="1"
+                                   placeholder="<?php esc_attr_e('bijv. 18', 'stride'); ?>">
+                            <p class="description"><?php esc_html_e('Aantal maanden vanaf inschrijving om traject te voltooien.', 'stride'); ?></p>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Self-Paced Deadline -->
-            <div class="stride-section stride-self-paced-only">
-                <h4><?php esc_html_e('Doorlooptijd', 'stride'); ?></h4>
-                <div class="stride-field-row">
-                    <div class="stride-field half">
-                        <label for="trajectory_deadline_months"><?php esc_html_e('Deadline (maanden)', 'stride'); ?></label>
-                        <input type="number" id="trajectory_deadline_months" name="ntdst_fields[deadline_months]"
-                               value="<?php echo esc_attr($trajectory['deadline_months'] ?? ''); ?>" min="0" step="1"
-                               placeholder="<?php esc_attr_e('bijv. 18', 'stride'); ?>">
-                        <p class="description"><?php esc_html_e('Aantal maanden vanaf inschrijving om traject te voltooien.', 'stride'); ?></p>
-                    </div>
-                </div>
+            <!-- Tab: Linked Editions (Cohort only) -->
+            <div class="stride-tab-content" data-tab="editions">
+                <?php $this->renderLinkedEditionsContent($trajectory); ?>
             </div>
-
-            <!-- Linked Editions (Cohort only) -->
-            <?php $this->renderLinkedEditions($trajectory, $isCohort); ?>
         </div>
         <?php
     }
 
-    private function renderLinkedEditions(array $trajectory, bool $isCohort): void
+    private function renderLinkedEditionsContent(array $trajectory): void
     {
         $courses = $trajectory['courses'] ?? [];
         $linkedEditions = $trajectory['linked_editions'] ?? [];
@@ -335,50 +350,48 @@ final class TrajectoryAdminController extends AbstractService
         }
 
         if (empty($courseIds)) {
+            echo '<p class="description">' . esc_html__('Voeg eerst cursussen toe in het Cursussen metabox.', 'stride') . '</p>';
             return;
         }
         ?>
-        <div class="stride-section stride-cohort-only">
-            <h4><?php esc_html_e('Gekoppelde Edities', 'stride'); ?></h4>
-            <p class="description"><?php esc_html_e('Koppel elke cursus aan een specifieke editie voor dit cohort.', 'stride'); ?></p>
+        <p class="description" style="margin-bottom: 12px;"><?php esc_html_e('Koppel elke cursus aan een specifieke editie voor dit cohort.', 'stride'); ?></p>
 
-            <table class="widefat striped" style="margin-top: 12px;">
-                <thead>
+        <table class="widefat striped">
+            <thead>
+                <tr>
+                    <th><?php esc_html_e('Cursus', 'stride'); ?></th>
+                    <th><?php esc_html_e('Editie', 'stride'); ?></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($courseIds as $courseId): ?>
+                    <?php
+                    $courseTitle = get_the_title($courseId);
+                    $linkedEditionId = $linkedMap[$courseId] ?? 0;
+                    ?>
                     <tr>
-                        <th><?php esc_html_e('Cursus', 'stride'); ?></th>
-                        <th><?php esc_html_e('Editie', 'stride'); ?></th>
+                        <td>
+                            <?php echo esc_html($courseTitle ?: '#' . $courseId); ?>
+                            <input type="hidden" name="ntdst_fields[linked_editions][<?php echo esc_attr($courseId); ?>][course_id]"
+                                   value="<?php echo esc_attr($courseId); ?>">
+                        </td>
+                        <td>
+                            <select name="ntdst_fields[linked_editions][<?php echo esc_attr($courseId); ?>][edition_id]"
+                                    class="stride-edition-select"
+                                    data-course-id="<?php echo esc_attr($courseId); ?>"
+                                    style="width: 100%;">
+                                <option value=""><?php esc_html_e('Selecteer editie...', 'stride'); ?></option>
+                                <?php if ($linkedEditionId): ?>
+                                    <option value="<?php echo esc_attr($linkedEditionId); ?>" selected>
+                                        <?php echo esc_html(get_the_title($linkedEditionId) ?: '#' . $linkedEditionId); ?>
+                                    </option>
+                                <?php endif; ?>
+                            </select>
+                        </td>
                     </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($courseIds as $courseId): ?>
-                        <?php
-                        $courseTitle = get_the_title($courseId);
-                        $linkedEditionId = $linkedMap[$courseId] ?? 0;
-                        ?>
-                        <tr>
-                            <td>
-                                <?php echo esc_html($courseTitle ?: '#' . $courseId); ?>
-                                <input type="hidden" name="ntdst_fields[linked_editions][<?php echo esc_attr($courseId); ?>][course_id]"
-                                       value="<?php echo esc_attr($courseId); ?>">
-                            </td>
-                            <td>
-                                <select name="ntdst_fields[linked_editions][<?php echo esc_attr($courseId); ?>][edition_id]"
-                                        class="stride-edition-select"
-                                        data-course-id="<?php echo esc_attr($courseId); ?>"
-                                        style="width: 100%;">
-                                    <option value=""><?php esc_html_e('Selecteer editie...', 'stride'); ?></option>
-                                    <?php if ($linkedEditionId): ?>
-                                        <option value="<?php echo esc_attr($linkedEditionId); ?>" selected>
-                                            <?php echo esc_html(get_the_title($linkedEditionId) ?: '#' . $linkedEditionId); ?>
-                                        </option>
-                                    <?php endif; ?>
-                                </select>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
         <?php
     }
 

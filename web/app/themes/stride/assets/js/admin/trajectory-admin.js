@@ -15,6 +15,7 @@
     var groupIndex = 0;
 
     $(document).ready(function() {
+        initTabs();
         initModeToggle();
         initCourseSelects();
         initCourseBuilder();
@@ -23,19 +24,50 @@
     });
 
     /**
+     * Tab Navigation
+     */
+    function initTabs() {
+        $('.stride-trajectory-details').on('click', '.stride-tab:not(.hidden)', function() {
+            var $tab = $(this);
+            var tabId = $tab.data('tab');
+            var $container = $tab.closest('.stride-trajectory-details');
+
+            // Update tab states
+            $container.find('.stride-tab').removeClass('active');
+            $tab.addClass('active');
+
+            // Update content states
+            $container.find('.stride-tab-content').removeClass('active');
+            $container.find('.stride-tab-content[data-tab="' + tabId + '"]').addClass('active');
+        });
+    }
+
+    /**
      * Mode Toggle (Cohort/Self-paced)
      */
     function initModeToggle() {
         $('#trajectory_mode').on('change', function() {
             var isCohort = $(this).val() === 'cohort';
 
-            // Toggle visibility
+            // Toggle visibility of mode-specific content
             $('.stride-cohort-only').toggle(isCohort);
             $('.stride-self-paced-only').toggle(!isCohort);
 
             // Toggle mode descriptions
             $('.mode-cohort').toggle(isCohort);
             $('.mode-self-paced').toggle(!isCohort);
+
+            // Toggle Editions tab visibility (cohort only)
+            var $editionsTab = $('.stride-tab[data-tab="editions"]');
+            if (isCohort) {
+                $editionsTab.removeClass('hidden');
+            } else {
+                $editionsTab.addClass('hidden');
+                // If editions tab was active, switch to general
+                if ($editionsTab.hasClass('active')) {
+                    $('.stride-tab[data-tab="general"]').click();
+                }
+            }
         });
     }
 
