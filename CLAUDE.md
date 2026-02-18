@@ -28,8 +28,11 @@ Stride follows WordPress mu-plugin architecture with clear separation:
 
 | Location | Namespace | Purpose |
 |----------|-----------|---------|
-| `mu-plugins/stride-core/` | `ntdst\Stride\` | Business logic services |
+| `mu-plugins/stride-core/` | `Stride\` | Business logic (modules, domain) |
+| `mu-plugins/stride-core/Handlers/` | `Stride\Handlers\` | AJAX handlers |
+| `mu-plugins/stride-core/Admin/` | `Stride\Admin\` | Admin services |
 | `themes/stride/services/frontend/` | `stride\services\frontend` | Presentation services |
+| `themes/stride/services/frontend/shortcodes/` | `stride\services\frontend\shortcodes` | Shortcode classes |
 
 ---
 
@@ -122,7 +125,12 @@ stride/
 │   │   │       ├── core/               # EditionService, SessionService, CourseService, etc.
 │   │   │       ├── enrollment/         # EnrollmentService, FormSubmissionHandler
 │   │   │       ├── invoicing/          # QuoteService, VoucherService
-│   │   │       ├── handlers/           # EnrollmentQuoteHandler, QuoteUpdateHandler
+│   │   │       ├── Handlers/           # AJAX handlers (ProfileHandler, ICalHandler, etc.)
+│   │   │       ├── assets/
+│   │   │       │   ├── css/            # Admin CSS (admin-dashboard.css)
+│   │   │       │   └── js/             # Admin JS (admin-dashboard.js)
+│   │   │       ├── templates/
+│   │   │       │   └── admin/          # Admin templates (dashboard.php)
 │   │   │       ├── sync/               # UserDataSync
 │   │   │       ├── adapters/           # LearnDashAdapter, FluentCRMAdapter
 │   │   │       ├── contracts/          # Interfaces
@@ -136,7 +144,8 @@ stride/
 │   │           ├── functions.php        # Bootstrap lifecycle
 │   │           ├── theme-config.php     # Frontend services config
 │   │           ├── services/
-│   │           │   └── frontend/        # DashboardService, DashboardShortcodes, ICalService
+│   │           │   └── frontend/        # DashboardService, DashboardShortcodes
+│   │           │       └── shortcodes/  # Focused shortcode classes + ShortcodeBase trait
 │   │           └── templates/           # View templates
 │   │               ├── dashboard/
 │   │               ├── course/
@@ -216,6 +225,126 @@ ntdst_set(MyService::class, fn() => new MyService());
 
 // Theme helper (still works)
 stride_service(\ntdst\Stride\core\EditionService::class);
+```
+
+### Thin Handler Pattern (AJAX)
+
+Handlers in `stride-core/Handlers/` follow the thin handler pattern:
+- No constructor DI - use `ntdst_get()` inside methods
+- Register own AJAX actions in `init()` method
+- Validate input, delegate to services, return response
+
+```php
+<?php
+namespace Stride\Handlers;
+
+final class ProfileHandler
+{
+    public function __construct()
+    {
+        $this->init();
+    }
+
+    private function init(): void
+    {
+        add_action('wp_ajax_stride_update_profile', [$this, 'ajaxUpdateProfile']);
+    }
+
+    public function ajaxUpdateProfile(): void
+    {
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'stride_profile')) {
+            wp_send_json_error(['message' => __('Invalid token.', 'stride')]);
+        }
+
+        $result = $this->handleUpdateProfile($_POST);
+
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+
+        wp_send_json_success($result);
+    }
+
+    public function handleUpdateProfile(array $params): array|WP_Error
+    {
+        // Sanitize, validate, delegate to services
+        $service = ntdst_get(SomeService::class);
+        return $service->doWork($params);
+    }
+}
+```
+
+### Shortcode Classes Pattern
+
+Shortcodes in `themes/stride/services/frontend/shortcodes/` use focused classes with a shared trait:
+
+```php
+<?php
+namespace stride\services\frontend\shortcodes;
+
+use stride\services\frontend\DashboardService;
+
+final class CourseShortcodes
+{
+    use ShortcodeBase;  // Shared helpers: renderTemplate, requireLogin, resolveService
+
+    private ?DashboardService $dashboardService;
+
+    public function __construct(?DashboardService $dashboardService = null)
+    {
+        $this->dashboardService = $dashboardService ?? $this->resolveService(DashboardService::class);
+    }
+
+    public function register(): void
+    {
+        add_shortcode('stride_course_catalog', [$this, 'renderCourseCatalog']);
+        add_shortcode('stride_course_sidebar', [$this, 'renderCourseSidebar']);
+    }
+
+    public function renderCourseCatalog(array $atts = []): string
+    {
+        // Use $this->renderTemplate() from trait
+        return $this->renderTemplate('course/catalog.php', ['courses' => $data]);
+    }
+}
+```
+
+**Shortcode class organization:**
+| Class | Shortcodes |
+|-------|------------|
+| `UserDashboardShortcodes` | `stride_dashboard`, `stride_my_courses`, `stride_my_profile`, `stride_my_calendar` |
+| `CourseShortcodes` | `stride_course_catalog`, `stride_course_sidebar` |
+| `TrajectoryShortcodes` | `stride_my_trajectories`, `stride_trajectory`, `stride_trajectory_catalog` |
+| `QuoteShortcodes` | `stride_my_quotes`, `stride_quote_update` |
+| `EnrollmentShortcodes` | `stride_enrollment`, `stride_edition`, `stride_session_selection` |
+
+### External Assets Pattern (Admin)
+
+Admin CSS/JS/HTML extracted to external files in `stride-core/`:
+
+```
+stride-core/
+├── Admin/
+│   └── AdminDashboardService.php   # Slim orchestrator (~240 lines)
+├── assets/
+│   ├── css/admin-dashboard.css     # Extracted CSS
+│   └── js/admin-dashboard.js       # Extracted JS (Alpine.js)
+└── templates/
+    └── admin/dashboard.php         # Extracted HTML template
+```
+
+Load external assets using `dirname(__DIR__)` for path calculation:
+
+```php
+public function injectStyles(): void
+{
+    $cssPath = dirname(__DIR__) . '/assets/css/admin-dashboard.css';
+    if (file_exists($cssPath)) {
+        echo '<style id="stride-dashboard-styles">';
+        include $cssPath;
+        echo '</style>';
+    }
+}
 ```
 
 ---
