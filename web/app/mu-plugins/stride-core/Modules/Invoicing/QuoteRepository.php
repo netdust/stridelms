@@ -85,25 +85,36 @@ final class QuoteRepository extends AbstractRepository
     {
         $year = date('Y');
         $prefix = "OFF-{$year}-";
+        $cacheKey = 'stride_last_quote_number_' . $year;
 
-        // Find highest number for this year
-        global $wpdb;
-        $table = $wpdb->prefix . 'postmeta';
-        $postsTable = $wpdb->prefix . 'posts';
+        // Try to get from cache first
+        $lastNumber = get_transient($cacheKey);
 
-        $lastNumber = $wpdb->get_var($wpdb->prepare(
-            "SELECT MAX(CAST(SUBSTRING(meta_value, %d) AS UNSIGNED))
-             FROM {$table} pm
-             JOIN {$postsTable} p ON pm.post_id = p.ID
-             WHERE pm.meta_key = 'quote_number'
-             AND pm.meta_value LIKE %s
-             AND p.post_type = %s",
-            strlen($prefix) + 1,
-            $prefix . '%',
-            QuoteCPT::POST_TYPE
-        ));
+        if ($lastNumber === false) {
+            // Find highest number for this year
+            global $wpdb;
+            $table = $wpdb->prefix . 'postmeta';
+            $postsTable = $wpdb->prefix . 'posts';
 
-        $nextNumber = ((int) $lastNumber) + 1;
+            $lastNumber = $wpdb->get_var($wpdb->prepare(
+                "SELECT MAX(CAST(SUBSTRING(meta_value, %d) AS UNSIGNED))
+                 FROM {$table} pm
+                 JOIN {$postsTable} p ON pm.post_id = p.ID
+                 WHERE pm.meta_key = 'quote_number'
+                 AND pm.meta_value LIKE %s
+                 AND p.post_type = %s",
+                strlen($prefix) + 1,
+                $prefix . '%',
+                QuoteCPT::POST_TYPE
+            ));
+
+            $lastNumber = (int) $lastNumber;
+        }
+
+        $nextNumber = $lastNumber + 1;
+
+        // Update cache with new number (1 hour TTL)
+        set_transient($cacheKey, $nextNumber, HOUR_IN_SECONDS);
 
         return $prefix . str_pad((string) $nextNumber, 4, '0', STR_PAD_LEFT);
     }
