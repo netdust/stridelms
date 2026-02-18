@@ -12,11 +12,9 @@ if (!defined('ABSPATH')) {
     exit(1);
 }
 
-use ntdst\Stride\invoicing\QuoteService;
-use ntdst\Stride\invoicing\VoucherService;
-use ntdst\Stride\core\EditionService;
-use ntdst\Stride\core\SubscriberService;
-use ntdst\Stride\FieldRegistry;
+use Stride\Modules\Invoicing\QuoteService;
+use Stride\Modules\Invoicing\VoucherService;
+use Stride\Modules\Edition\EditionService;
 
 class StrideQuoteLifecycleTest
 {
@@ -57,6 +55,8 @@ class StrideQuoteLifecycleTest
             $this->testQuoteStatusTransitions();
             $this->testQuoteWithVoucher();
             $this->testBillingData();
+            $this->testQuoteLocking();
+            $this->testOGMPaymentReference();
         } catch (Exception $e) {
             echo "\n[FATAL] " . $e->getMessage() . "\n";
             echo $e->getTraceAsString() . "\n";
@@ -456,6 +456,163 @@ class StrideQuoteLifecycleTest
             isset($quote3['billing']),
             "D4. Billing address fallback chain (billing object exists)"
         );
+
+        echo "\n";
+    }
+
+    // ========================================
+    // E. QUOTE LOCKING (6 tests)
+    // ========================================
+
+    private function testQuoteLocking(): void
+    {
+        echo "E. Testing Quote Locking...\n";
+
+        // Create user and quote
+        $userId = $this->createTestUser('quote_lock_user_' . time());
+        $this->created['user_ids'][] = $userId;
+
+        $quoteId = $this->quoteService->createQuoteForItem(
+            $userId,
+            'edition',
+            $this->created['edition_id'],
+            []
+        );
+        $this->created['quote_ids'][] = $quoteId;
+        $quote = $this->quoteService->getQuote($quoteId);
+
+        // E1. Quote starts unlocked
+        $this->assert(
+            !$quote['locked'],
+            "E1. Quote starts unlocked"
+        );
+
+        // E2. canEditQuote returns true for unlocked quote
+        $canEdit = $this->quoteService->canEditQuote($quoteId);
+        $this->assert(
+            !is_wp_error($canEdit),
+            "E2. canEditQuote returns true for unlocked quote"
+        );
+
+        // E3. Lock quote manually
+        $lockResult = $this->quoteService->lockQuote($quoteId, 'test_lock');
+        $this->assert(
+            !is_wp_error($lockResult),
+            "E3. Lock quote manually succeeds"
+        );
+
+        $lockedQuote = $this->quoteService->getQuote($quoteId);
+        $this->assert(
+            $lockedQuote['locked'] === true,
+            "    - Quote is now locked"
+        );
+
+        // E4. Locked quote rejects updates (non-admin)
+        wp_set_current_user($userId); // Switch to non-admin user
+        $canEditLocked = $this->quoteService->canEditQuote($quoteId);
+        $this->assert(
+            is_wp_error($canEditLocked),
+            "E4. Locked quote rejects updates for non-admin"
+        );
+        wp_set_current_user(1); // Switch back to admin
+
+        // E5. Unlock quote (admin only)
+        $unlockResult = $this->quoteService->unlockQuote($quoteId);
+        $this->assert(
+            !is_wp_error($unlockResult),
+            "E5. Unlock quote succeeds for admin"
+        );
+
+        $unlockedQuote = $this->quoteService->getQuote($quoteId);
+        $this->assert(
+            $unlockedQuote['locked'] === false,
+            "    - Quote is now unlocked"
+        );
+
+        // E6. Locking adds note to audit trail
+        $notes = $lockedQuote['notes'] ?? [];
+        $hasLockNote = false;
+        foreach ($notes as $note) {
+            if (str_contains($note['message'] ?? '', 'vergrendeld')) {
+                $hasLockNote = true;
+                break;
+            }
+        }
+        $this->assert(
+            $hasLockNote,
+            "E6. Locking adds note to audit trail"
+        );
+
+        echo "\n";
+    }
+
+    // ========================================
+    // F. OGM PAYMENT REFERENCE (6 tests)
+    // ========================================
+
+    private function testOGMPaymentReference(): void
+    {
+        echo "F. Testing OGM Payment Reference...\n";
+
+        $generator = new OGMGenerator();
+
+        // F1. Generate OGM from quote number
+        $ogm = $generator->generate('OFF-2026-00123');
+        $this->assert(
+            !empty($ogm) && str_starts_with($ogm, '+++'),
+            "F1. Generate OGM from quote number (got: {$ogm})"
+        );
+
+        // F2. OGM has correct format +++NNN/NNNN/NNNCC+++
+        $formatMatch = preg_match('/^\+\+\+\d{3}\/\d{4}\/\d{5}\+\+\+$/', $ogm);
+        $this->assert(
+            $formatMatch === 1,
+            "F2. OGM has correct format (+++NNN/NNNN/NNNCC+++)"
+        );
+
+        // F3. Generated OGM passes validation
+        $isValid = $generator->validate($ogm);
+        $this->assert(
+            $isValid,
+            "F3. Generated OGM passes validation"
+        );
+
+        // F4. Invalid OGM fails validation
+        $invalidOgm = '+++123/4567/89099+++'; // Wrong check digits
+        $isInvalid = !$generator->validate($invalidOgm);
+        $this->assert(
+            $isInvalid,
+            "F4. Invalid OGM fails validation"
+        );
+
+        // F5. Quote includes payment reference
+        $userId = $this->createTestUser('quote_ogm_user_' . time());
+        $this->created['user_ids'][] = $userId;
+
+        $quoteId = $this->quoteService->createQuoteForItem(
+            $userId,
+            'edition',
+            $this->created['edition_id'],
+            []
+        );
+        $this->created['quote_ids'][] = $quoteId;
+        $quote = $this->quoteService->getQuote($quoteId);
+
+        $this->assert(
+            !empty($quote['payment_reference']),
+            "F5. Quote includes payment reference (got: " . ($quote['payment_reference'] ?? 'none') . ")"
+        );
+
+        // F6. Quote payment reference matches its number
+        if (!empty($quote['payment_reference']) && !empty($quote['number'])) {
+            $expectedOgm = $generator->generate($quote['number']);
+            $this->assert(
+                $quote['payment_reference'] === $expectedOgm,
+                "F6. Quote payment reference matches its number"
+            );
+        } else {
+            $this->assert(false, "F6. Quote payment reference matches its number (missing data)");
+        }
 
         echo "\n";
     }

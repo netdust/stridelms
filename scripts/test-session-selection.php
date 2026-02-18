@@ -213,6 +213,124 @@ try {
 
     echo PHP_EOL;
 
+    // === E. CONCURRENT REGISTRATION (RACE CONDITION) ===
+    echo "E. Concurrent Registration (Transaction Locking)..." . PHP_EOL;
+
+    // Create fresh session with capacity=1
+    $raceSessionId = $sessionService->createSession([
+        'edition_id' => $editionId,
+        'slot' => 'race_test',
+        'date' => date('Y-m-d', strtotime('+32 days')),
+        'start_time' => '09:00',
+        'end_time' => '12:00',
+        'type' => 'in_person',
+        'capacity' => 1,
+    ]);
+    $created['sessions'][] = $raceSessionId;
+
+    // Create two more users
+    $raceUser1 = wp_create_user('race_test1_' . time(), 'pass123', 'race1@test.local');
+    $raceUser2 = wp_create_user('race_test2_' . time(), 'pass123', 'race2@test.local');
+    $created['users'][] = $raceUser1;
+    $created['users'][] = $raceUser2;
+
+    $raceReg1 = $registrationRepo->create([
+        'user_id' => $raceUser1,
+        'edition_id' => $editionId,
+        'status' => 'confirmed',
+    ]);
+    $raceReg2 = $registrationRepo->create([
+        'user_id' => $raceUser2,
+        'edition_id' => $editionId,
+        'status' => 'confirmed',
+    ]);
+    $created['registrations'][] = $raceReg1;
+    $created['registrations'][] = $raceReg2;
+
+    // E1. Simulate concurrent registrations (sequential in test, verifies locking)
+    $result1 = $selectionService->registerForSession($raceReg1, $raceSessionId, $raceUser1);
+    $result2 = $selectionService->registerForSession($raceReg2, $raceSessionId, $raceUser2);
+
+    $successes = 0;
+    if ($result1 === true) $successes++;
+    if ($result2 === true) $successes++;
+
+    assert_test($successes === 1, 'E1. Exactly ONE concurrent registration succeeds');
+
+    // E2. Failed one has correct error
+    $failedResult = $result1 === true ? $result2 : $result1;
+    assert_test(
+        is_wp_error($failedResult) && $failedResult->get_error_code() === 'no_capacity',
+        'E2. Failed registration has no_capacity error'
+    );
+
+    echo PHP_EOL;
+
+    // === F. SLOT REQUIREMENTS VALIDATION ===
+    echo "F. Slot Requirements Validation..." . PHP_EOL;
+
+    // Create edition with slot requirements
+    $slotEditionId = $editionRepo->create([
+        'post_title' => 'Slot Test Edition ' . time(),
+        'course_id' => 1,
+        'start_date' => date('Y-m-d', strtotime('+40 days')),
+        'capacity' => 20,
+        'status' => 'open',
+    ])->ID;
+    $created['editions'][] = $slotEditionId;
+
+    // Configure required slots
+    $slots = [
+        ['slot' => 'morning', 'required' => true, 'pick_count' => 1],
+        ['slot' => 'afternoon', 'required' => true, 'pick_count' => 1],
+    ];
+    update_post_meta($slotEditionId, 'session_slots', json_encode($slots));
+
+    // Create sessions for each slot
+    $morningSession = $sessionService->createSession([
+        'edition_id' => $slotEditionId,
+        'slot' => 'morning',
+        'date' => date('Y-m-d', strtotime('+40 days')),
+        'start_time' => '09:00',
+        'end_time' => '12:00',
+        'type' => 'in_person',
+    ]);
+    $afternoonSession = $sessionService->createSession([
+        'edition_id' => $slotEditionId,
+        'slot' => 'afternoon',
+        'date' => date('Y-m-d', strtotime('+40 days')),
+        'start_time' => '13:00',
+        'end_time' => '17:00',
+        'type' => 'in_person',
+    ]);
+    $created['sessions'][] = $morningSession;
+    $created['sessions'][] = $afternoonSession;
+
+    // Create user and registration
+    $slotUserId = wp_create_user('slot_test_' . time(), 'pass123', 'slot@test.local');
+    $created['users'][] = $slotUserId;
+    $slotRegId = $registrationRepo->create([
+        'user_id' => $slotUserId,
+        'edition_id' => $slotEditionId,
+        'status' => 'confirmed',
+    ]);
+    $created['registrations'][] = $slotRegId;
+
+    // F1. Register for only morning slot
+    $selectionService->registerForSession($slotRegId, $morningSession, $slotUserId);
+    $validation = $selectionService->validateSelections($slotRegId, $slotEditionId);
+    assert_test(
+        is_wp_error($validation) && $validation->get_error_code() === 'incomplete_selection',
+        'F1. Validation fails with incomplete selections'
+    );
+
+    // F2. Register for afternoon slot too
+    $selectionService->registerForSession($slotRegId, $afternoonSession, $slotUserId);
+    $validation2 = $selectionService->validateSelections($slotRegId, $slotEditionId);
+    assert_test($validation2 === true, 'F2. Validation passes when all required slots filled');
+
+    echo PHP_EOL;
+
 } catch (Exception $e) {
     echo "[FATAL] " . $e->getMessage() . PHP_EOL;
     echo $e->getTraceAsString() . PHP_EOL;

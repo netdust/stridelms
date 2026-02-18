@@ -48,7 +48,7 @@ try {
     if (is_wp_error($editionId)) {
         throw new Exception('Failed to create edition: ' . $editionId->get_error_message());
     }
-    update_post_meta($editionId, 'price', 50000); // €500 in cents
+    update_post_meta($editionId, 'price', 500.00); // €500.00
     update_post_meta($editionId, 'status', 'open');
     $created['edition_id'] = $editionId;
     echo "   Created edition ID: {$editionId}" . PHP_EOL . PHP_EOL;
