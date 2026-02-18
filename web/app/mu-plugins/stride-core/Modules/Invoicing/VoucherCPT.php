@@ -19,6 +19,7 @@ final class VoucherCPT
     public static function register(): void
     {
         ntdst_data()->register(self::POST_TYPE, [
+            'meta_prefix' => '_ntdst_',
             'label' => 'Vouchers',
             'labels' => [
                 'name' => 'Vouchers',

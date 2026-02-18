@@ -279,16 +279,20 @@ final class QuoteService extends AbstractService
             $data = (array) $quote;
 
             // Access dynamic properties directly from the object
-            if (isset($quote->meta) && is_array($quote->meta)) {
-                $data = array_merge($data, $quote->meta);
-            } elseif (isset($quote->fields) && is_array($quote->fields)) {
+            // Prefer 'fields' (formatted/unprefixed) over 'meta' (raw/prefixed)
+            if (isset($quote->fields) && is_array($quote->fields)) {
                 $data = array_merge($data, $quote->fields);
+            } elseif (isset($quote->meta) && is_array($quote->meta)) {
+                $data = array_merge($data, $quote->meta);
             }
         } else {
             $data = $quote;
 
-            // Flatten meta fields to top level if present
-            if (isset($data['meta']) && is_array($data['meta'])) {
+            // Flatten fields to top level if present (NTDST_Data_Model returns formatted fields)
+            // Prefer 'fields' (formatted/unprefixed) over 'meta' for legacy batch query results
+            if (isset($data['fields']) && is_array($data['fields'])) {
+                $data = array_merge($data, $data['fields']);
+            } elseif (isset($data['meta']) && is_array($data['meta'])) {
                 $data = array_merge($data, $data['meta']);
             }
         }

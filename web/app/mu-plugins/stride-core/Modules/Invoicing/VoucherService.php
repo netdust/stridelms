@@ -275,8 +275,11 @@ final class VoucherService extends AbstractService
     {
         $data = is_array($voucher) ? $voucher : (array) $voucher;
 
-        // Flatten meta fields to top level if present
-        if (isset($data['meta']) && is_array($data['meta'])) {
+        // Flatten fields to top level if present (NTDST_Data_Model returns formatted fields)
+        // Use 'fields' first (formatted/unprefixed), fallback to 'meta' for legacy batch query results
+        if (isset($data['fields']) && is_array($data['fields'])) {
+            $data = array_merge($data, $data['fields']);
+        } elseif (isset($data['meta']) && is_array($data['meta'])) {
             $data = array_merge($data, $data['meta']);
         }
 

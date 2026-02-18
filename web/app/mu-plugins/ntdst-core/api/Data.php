@@ -18,15 +18,25 @@ class NTDST_Data_Model
     protected string $cache_group;
     protected array $sanitizers = [];
     protected array $validators = [];
+    protected string $meta_prefix = '';
 
-    public function __construct(string $post_type, array $schema = [], int $cache_time = 3600)
+    public function __construct(string $post_type, array $schema = [], int $cache_time = 3600, string $meta_prefix = '')
     {
         $this->post_type = $post_type;
         $this->schema = $schema;
         $this->cache_time = $cache_time;
         $this->cache_group = 'ntdst_' . $post_type;
+        $this->meta_prefix = $meta_prefix;
         $this->setupSanitizers();
         $this->setupValidators();
+    }
+
+    /**
+     * Get the meta prefix for this model
+     */
+    public function getMetaPrefix(): string
+    {
+        return $this->meta_prefix;
     }
 
     /**
@@ -447,7 +457,7 @@ class NTDST_Data_Model
      * Update meta value for a post - convenience method with automatic error handling
      *
      * @param int $id Post ID
-     * @param string $key Meta key
+     * @param string $key Meta key (unprefixed - prefix applied automatically)
      * @param mixed $value Meta value
      * @return bool|WP_Error True on success, WP_Error on failure
      */
@@ -471,8 +481,9 @@ class NTDST_Data_Model
             }
         }
 
-        // Update meta
-        $result = update_post_meta($id, $key, $value);
+        // Update meta with prefix
+        $metaKey = $this->prefixMetaKey($key);
+        $result = update_post_meta($id, $metaKey, $value);
 
         // Clear cache for this post
         $this->clearCache($id);
@@ -487,7 +498,7 @@ class NTDST_Data_Model
      * multiple fields to avoid repeated cache clearing and validation.
      *
      * @param int $id Post ID
-     * @param array<string, mixed> $data Associative array of key => value pairs
+     * @param array<string, mixed> $data Associative array of key => value pairs (unprefixed)
      * @return bool True if all updates succeeded, false if any failed
      */
     public function updateMetaBatch(int $id, array $data): bool
@@ -512,7 +523,8 @@ class NTDST_Data_Model
             // update_post_meta returns meta_id, true, or false
             // false can mean failure OR unchanged value (WordPress quirk)
             // We don't fail on unchanged values, only on actual errors
-            update_post_meta($id, $key, $value);
+            $metaKey = $this->prefixMetaKey($key);
+            update_post_meta($id, $metaKey, $value);
         }
 
         // Clear cache once after all updates
@@ -528,7 +540,7 @@ class NTDST_Data_Model
      * Delete meta value for a post - convenience method
      *
      * @param int $id Post ID
-     * @param string $key Meta key
+     * @param string $key Meta key (unprefixed - prefix applied automatically)
      * @return bool|WP_Error True on success, WP_Error on failure
      */
     public function deleteMeta(int $id, string $key)
@@ -539,8 +551,9 @@ class NTDST_Data_Model
             return new WP_Error('not_found', 'Post not found', ['status' => 404]);
         }
 
-        // Delete meta
-        $result = delete_post_meta($id, $key);
+        // Delete meta with prefix
+        $metaKey = $this->prefixMetaKey($key);
+        $result = delete_post_meta($id, $metaKey);
 
         // Clear cache for this post
         $this->clearCache($id);
@@ -598,14 +611,15 @@ class NTDST_Data_Model
             // Core WordPress field - add directly to query_args
             $this->query_args[$field] = $value;
         } else {
-            // Custom meta field - use meta_query
+            // Custom meta field - use meta_query with prefix
             if (!isset($this->query_args['meta_query'])) {
                 $this->query_args['meta_query'] = [];
             }
 
+            $metaKey = $this->prefixMetaKey($field);
             $this->query_args['meta_query'][] = is_array($value) && count($value) === 2
-                ? ['key' => $field, 'value' => $value[1], 'compare' => $value[0]]
-                : ['key' => $field, 'value' => $value];
+                ? ['key' => $metaKey, 'value' => $value[1], 'compare' => $value[0]]
+                : ['key' => $metaKey, 'value' => $value];
         }
 
         return $this;
@@ -628,13 +642,13 @@ class NTDST_Data_Model
             // For now, we'll add it with a special prefix to handle in getPostsFast if needed
             $this->query_args[$field . '__not'] = $value;
         } else {
-            // Custom meta field - use meta_query
+            // Custom meta field - use meta_query with prefix
             if (!isset($this->query_args['meta_query'])) {
                 $this->query_args['meta_query'] = [];
             }
 
             $this->query_args['meta_query'][] = [
-                'key' => $field,
+                'key' => $this->prefixMetaKey($field),
                 'value' => $value,
                 'compare' => '!='
             ];
@@ -658,13 +672,13 @@ class NTDST_Data_Model
         if ($field === 'ID') {
             $this->query_args['post__in'] = array_map('intval', $values);
         } else {
-            // For meta fields, use meta_query with IN comparison
+            // For meta fields, use meta_query with IN comparison and prefix
             if (!isset($this->query_args['meta_query'])) {
                 $this->query_args['meta_query'] = [];
             }
 
             $this->query_args['meta_query'][] = [
-                'key' => $field,
+                'key' => $this->prefixMetaKey($field),
                 'value' => $values,
                 'compare' => 'IN'
             ];
@@ -777,9 +791,10 @@ class NTDST_Data_Model
             $this->query_args['meta_query']['relation'] = 'OR';
         }
 
+        $metaKey = $this->prefixMetaKey($field);
         $this->query_args['meta_query'][] = is_array($value) && count($value) === 2
-            ? ['key' => $field, 'value' => $value[1], 'compare' => $value[0]]
-            : ['key' => $field, 'value' => $value];
+            ? ['key' => $metaKey, 'value' => $value[1], 'compare' => $value[0]]
+            : ['key' => $metaKey, 'value' => $value];
 
         return $this;
     }
@@ -1042,26 +1057,70 @@ class NTDST_Data_Model
      * Extract custom meta data from input
      *
      * Filters out WordPress post fields, keeping only meta fields.
+     * Applies meta_prefix if configured.
      * Note: Uses 'post_status' not 'status' since 'status' is commonly
      * used as a meta field name (e.g., order fulfillment status).
      */
     protected function extractMetaData(array $data): array
     {
-        return array_diff_key($data, array_flip(['title', 'content', 'excerpt', 'post_status']));
+        $meta = array_diff_key($data, array_flip(['title', 'content', 'excerpt', 'post_status']));
+
+        // Apply prefix if configured
+        if ($this->meta_prefix !== '') {
+            $prefixed = [];
+            foreach ($meta as $key => $value) {
+                $prefixed[$this->meta_prefix . $key] = $value;
+            }
+            return $prefixed;
+        }
+
+        return $meta;
+    }
+
+    /**
+     * Add meta prefix to a key
+     */
+    protected function prefixMetaKey(string $key): string
+    {
+        return $this->meta_prefix . $key;
+    }
+
+    /**
+     * Strip meta prefix from a key
+     */
+    protected function stripMetaPrefix(string $key): string
+    {
+        if ($this->meta_prefix !== '' && str_starts_with($key, $this->meta_prefix)) {
+            return substr($key, strlen($this->meta_prefix));
+        }
+        return $key;
     }
 
     /**
      * Format meta according to schema with sanitization
+     *
+     * Handles meta_prefix: looks up prefixed keys in raw meta,
+     * returns unprefixed keys in formatted result.
      */
     protected function formatMeta(array $meta): array
     {
         if (empty($this->schema)) {
+            // No schema - strip prefixes from all keys if prefix is set
+            if ($this->meta_prefix !== '') {
+                $unprefixed = [];
+                foreach ($meta as $key => $value) {
+                    $unprefixed[$this->stripMetaPrefix($key)] = $value;
+                }
+                return $unprefixed;
+            }
             return $meta;
         }
 
         $formatted = [];
         foreach ($this->schema as $field => $type_config) {
-            $value = $meta[$field] ?? null;
+            // Look up the prefixed key in meta, return unprefixed field name
+            $metaKey = $this->meta_prefix . $field;
+            $value = $meta[$metaKey] ?? $meta[$field] ?? null;
 
             // Extract type string from config array if needed
             $type = is_array($type_config) ? ($type_config['type'] ?? 'text') : $type_config;
@@ -1118,13 +1177,14 @@ class NTDST_Data_Manager
                 'public' => true,
                 'has_archive' => true,
                 'supports' => ['title', 'editor', 'thumbnail'],
-            ], array_diff_key($config, array_flip(['fields', 'cache_time', 'field_groups']))));
+            ], array_diff_key($config, array_flip(['fields', 'cache_time', 'field_groups', 'meta_prefix', 'auto_metabox']))));
         }
 
         $model = new NTDST_Data_Model(
             $name,
             $config['fields'] ?? [],
             $config['cache_time'] ?? 3600,
+            $config['meta_prefix'] ?? '',
         );
 
         self::$models[$name] = $model;

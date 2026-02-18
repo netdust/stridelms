@@ -16,6 +16,7 @@ final class TrajectoryCPT
     public static function register(): void
     {
         ntdst_data()->register(self::POST_TYPE, [
+            'meta_prefix' => '_ntdst_',
             'label' => 'Trajecten',
             'labels' => [
                 'name' => 'Trajecten',
