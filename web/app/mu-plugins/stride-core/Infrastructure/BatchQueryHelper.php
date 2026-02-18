@@ -44,6 +44,8 @@ final class BatchQueryHelper
         }
 
         foreach ($results as $row) {
+            // Note: maybe_unserialize follows WordPress core pattern for post meta.
+            // Data comes from database, not user input. Risk is controlled by DB write capabilities.
             $meta[(int) $row->post_id][$row->meta_key] = maybe_unserialize($row->meta_value);
         }
 
@@ -68,7 +70,7 @@ final class BatchQueryHelper
         $table = $wpdb->prefix . 'vad_registrations';
 
         // Check table exists
-        if ($wpdb->get_var("SHOW TABLES LIKE '{$table}'") !== $table) {
+        if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table)) !== $table) {
             return array_fill_keys($editionIds, 0);
         }
 
@@ -206,7 +208,7 @@ final class BatchQueryHelper
         $table = $wpdb->prefix . 'vad_attendance';
 
         // Check table exists
-        if ($wpdb->get_var("SHOW TABLES LIKE '{$table}'") !== $table) {
+        if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table)) !== $table) {
             return [];
         }
 
