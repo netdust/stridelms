@@ -21,16 +21,60 @@ final class QuoteRepository extends AbstractRepository
      */
     public function findByUser(int $userId, ?string $status = null): array
     {
-        $query = $this->model()
-            ->where('user_id', $userId)
-            ->where('post_status', 'publish')
-            ->orderBy('post_date', 'DESC');
+        $metaQuery = [
+            [
+                'key' => 'user_id',
+                'value' => $userId,
+                'compare' => '=',
+            ],
+        ];
 
         if ($status !== null) {
-            $query->where('status', $status);
+            $metaQuery[] = [
+                'key' => 'status',
+                'value' => $status,
+                'compare' => '=',
+            ];
         }
 
-        return $query->withMeta()->get();
+        $args = [
+            'post_type' => $this->postType,
+            'post_status' => 'publish',
+            'posts_per_page' => -1,
+            'orderby' => 'date',
+            'order' => 'DESC',
+            'meta_query' => $metaQuery,
+        ];
+
+        $query = new \WP_Query($args);
+        $results = [];
+
+        foreach ($query->posts as $post) {
+            $results[] = $this->hydratePost($post);
+        }
+
+        return $results;
+    }
+
+    /**
+     * Hydrate a post with its meta data.
+     */
+    private function hydratePost(\WP_Post $post): array
+    {
+        $meta = get_post_meta($post->ID);
+        $data = [
+            'id' => $post->ID,
+            'post_title' => $post->post_title,
+            'post_date' => $post->post_date,
+            'post_status' => $post->post_status,
+        ];
+
+        // Flatten meta arrays (WordPress stores as arrays)
+        foreach ($meta as $key => $values) {
+            $data[$key] = $values[0] ?? null;
+        }
+
+        return $data;
     }
 
     /**
