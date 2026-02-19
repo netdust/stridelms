@@ -51,20 +51,35 @@ foreach ($enrollments as $enrollment) {
     $totalSessions = count($sessions);
     $attendedCount = $attendanceService->countAttended($userId, $editionId);
 
-    // Get edition meta
-    $startDate = get_post_meta($editionId, '_vad_start_date', true);
-    $endDate = get_post_meta($editionId, '_vad_end_date', true);
-    $venue = get_post_meta($editionId, '_vad_venue', true);
-    $isOnline = get_post_meta($editionId, '_vad_is_online', true);
+    // Get edition meta (uses _ntdst_ prefix)
+    $startDate = get_post_meta($editionId, '_ntdst_start_date', true);
+    $endDate = get_post_meta($editionId, '_ntdst_end_date', true);
+    $venue = get_post_meta($editionId, '_ntdst_venue', true);
+
+    // Determine if online by checking session types
+    $isOnline = true; // Default to online (e-learning)
+    foreach ($sessions as $session) {
+        $sessionType = $session['type'] ?? 'online';
+        if (in_array($sessionType, ['in_person', 'webinar'], true)) {
+            $isOnline = false;
+            break;
+        }
+    }
 
     // Get course thumbnail
     $thumbnail = $courseId ? get_the_post_thumbnail_url($courseId, 'stride_course_card') : null;
+
+    // Determine URL: online courses go to LearnDash course page, in-person go to edition page
+    $url = $isOnline && $courseId
+        ? get_permalink($courseId)
+        : get_permalink($editionId);
 
     // Build course data
     $courseData = [
         'edition_id' => $editionId,
         'course_id' => $courseId,
         'title' => $courseTitle,
+        'url' => $url,
         'progress' => $progress,
         'is_complete' => $isComplete,
         'percentage' => $percentage,
@@ -253,8 +268,8 @@ function stride_render_course_card(array $course): void
             </div>
             <div class="stride-course-card__body">
                 <h3 class="stride-course-card__title">
-                    <?php if ($course['course_id']) : ?>
-                        <a href="<?php echo esc_url(get_permalink($course['course_id'])); ?>">
+                    <?php if ($course['url']) : ?>
+                        <a href="<?php echo esc_url($course['url']); ?>">
                             <?php echo esc_html($course['title']); ?>
                         </a>
                     <?php else : ?>
@@ -294,14 +309,35 @@ function stride_render_course_card(array $course): void
                 <?php endif; ?>
             </div>
 
-            <?php if ($course['course_id']) : ?>
+            <?php if ($course['url']) : ?>
                 <div class="stride-course-card__footer">
                     <?php if ($course['is_complete']) : ?>
-                        <a href="<?php echo esc_url(get_permalink($course['course_id'])); ?>" class="uk-button uk-button-default uk-button-small">
+                        <a href="<?php echo esc_url($course['url']); ?>" class="uk-button uk-button-default uk-button-small">
                             <?php esc_html_e('Bekijken', 'stride'); ?>
                         </a>
+                        <?php
+                        // Show certificate download if available
+                        if ($course['course_id']) :
+                            $lmsAdapter = ntdst_get(\Stride\Contracts\LMSAdapterInterface::class);
+                            $certificateLink = $lmsAdapter->getCertificateLink(
+                                get_current_user_id(),
+                                $course['course_id']
+                            );
+                            if ($certificateLink) :
+                        ?>
+                            <a href="<?php echo esc_url($certificateLink); ?>"
+                               target="_blank"
+                               class="uk-button uk-button-primary uk-button-small"
+                               title="<?php esc_attr_e('Download certificaat', 'stride'); ?>">
+                                <span uk-icon="icon: download; ratio: 0.8"></span>
+                                <?php esc_html_e('Certificaat', 'stride'); ?>
+                            </a>
+                        <?php
+                            endif;
+                        endif;
+                        ?>
                     <?php else : ?>
-                        <a href="<?php echo esc_url(get_permalink($course['course_id'])); ?>" class="uk-button uk-button-primary uk-button-small">
+                        <a href="<?php echo esc_url($course['url']); ?>" class="uk-button uk-button-primary uk-button-small">
                             <?php esc_html_e('Doorgaan', 'stride'); ?>
                         </a>
                     <?php endif; ?>
