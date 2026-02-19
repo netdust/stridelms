@@ -375,7 +375,7 @@ $profileNonce = wp_create_nonce('stride_profile');
         <div class="uk-grid uk-grid-small uk-child-width-1-1 uk-child-width-1-2@s" uk-grid>
             <!-- My Quotes -->
             <div>
-                <a href="<?php echo esc_url(home_url('/mijn-account/offertes/')); ?>" class="stride-link-card uk-card uk-card-default">
+                <a href="<?php echo esc_url(home_url('/mijn-account/mijn-offertes/')); ?>" class="stride-link-card uk-card uk-card-default">
                     <div class="stride-link-card__icon stride-link-card__icon--warning">
                         <span uk-icon="icon: file-text; ratio: 1.2"></span>
                     </div>
@@ -401,7 +401,7 @@ $profileNonce = wp_create_nonce('stride_profile');
 
             <!-- Certificates -->
             <div>
-                <a href="<?php echo esc_url(home_url('/mijn-account/cursussen/')); ?>" class="stride-link-card uk-card uk-card-default">
+                <a href="<?php echo esc_url(home_url('/mijn-account/mijn-cursussen/')); ?>" class="stride-link-card uk-card uk-card-default">
                     <div class="stride-link-card__icon stride-link-card__icon--success">
                         <span uk-icon="icon: certificate; ratio: 1.2"></span>
                     </div>
@@ -427,7 +427,7 @@ $profileNonce = wp_create_nonce('stride_profile');
 
             <!-- My Courses -->
             <div>
-                <a href="<?php echo esc_url(home_url('/mijn-account/cursussen/')); ?>" class="stride-link-card uk-card uk-card-default">
+                <a href="<?php echo esc_url(home_url('/mijn-account/mijn-cursussen/')); ?>" class="stride-link-card uk-card uk-card-default">
                     <div class="stride-link-card__icon stride-link-card__icon--primary">
                         <span uk-icon="icon: book; ratio: 1.2"></span>
                     </div>

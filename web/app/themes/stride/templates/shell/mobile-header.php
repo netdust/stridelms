@@ -31,7 +31,7 @@ defined('ABSPATH') || exit;
     <div class="stride-mobile-header__actions">
         <?php if (is_user_logged_in()) : ?>
             <?php $current_user = wp_get_current_user(); ?>
-            <a href="<?php echo esc_url(home_url('/mijn-account/profiel/')); ?>" class="stride-avatar stride-avatar--sm">
+            <a href="<?php echo esc_url(home_url('/mijn-account/mijn-profiel/')); ?>" class="stride-avatar stride-avatar--sm">
                 <?php echo get_avatar($current_user->ID, 32) ?: esc_html(strtoupper(substr($current_user->display_name, 0, 1))); ?>
             </a>
         <?php else : ?>

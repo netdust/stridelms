@@ -53,7 +53,7 @@ if (!$quoteId) {
         <div class="uk-alert uk-alert-danger">
             <?php esc_html_e('Geen offerte geselecteerd.', 'stride'); ?>
         </div>
-        <a href="<?php echo esc_url(home_url('/mijn-account/offertes/')); ?>" class="uk-button uk-button-default">
+        <a href="<?php echo esc_url(home_url('/mijn-account/mijn-offertes/')); ?>" class="uk-button uk-button-default">
             <?php esc_html_e('Terug naar mijn offertes', 'stride'); ?>
         </a>
     </div>
@@ -69,7 +69,7 @@ if (!$quote || is_wp_error($quote)) {
         <div class="uk-alert uk-alert-danger">
             <?php esc_html_e('Offerte niet gevonden.', 'stride'); ?>
         </div>
-        <a href="<?php echo esc_url(home_url('/mijn-account/offertes/')); ?>" class="uk-button uk-button-default">
+        <a href="<?php echo esc_url(home_url('/mijn-account/mijn-offertes/')); ?>" class="uk-button uk-button-default">
             <?php esc_html_e('Terug naar mijn offertes', 'stride'); ?>
         </a>
     </div>
@@ -85,7 +85,7 @@ if ($quoteUserId !== $userId && !current_user_can('manage_options')) {
         <div class="uk-alert uk-alert-danger">
             <?php esc_html_e('Je hebt geen toegang tot deze offerte.', 'stride'); ?>
         </div>
-        <a href="<?php echo esc_url(home_url('/mijn-account/offertes/')); ?>" class="uk-button uk-button-default">
+        <a href="<?php echo esc_url(home_url('/mijn-account/mijn-offertes/')); ?>" class="uk-button uk-button-default">
             <?php esc_html_e('Terug naar mijn offertes', 'stride'); ?>
         </a>
     </div>
@@ -125,7 +125,7 @@ $statusClass = match ($status) {
 <div class="stride-quote-detail uk-width-xlarge uk-margin-auto">
         <!-- Header -->
         <header class="stride-page-header uk-margin-bottom">
-            <a href="<?php echo esc_url(home_url('/mijn-account/offertes/')); ?>" class="stride-page-header__back">
+            <a href="<?php echo esc_url(home_url('/mijn-account/mijn-offertes/')); ?>" class="stride-page-header__back">
                 <span uk-icon="icon: arrow-left; ratio: 0.8"></span>
                 <?php esc_html_e('Mijn offertes', 'stride'); ?>
             </a>
@@ -318,7 +318,7 @@ $statusClass = match ($status) {
         <!-- Actions -->
         <div class="uk-flex uk-flex-between uk-flex-middle uk-flex-wrap" uk-grid>
             <div>
-                <a href="<?php echo esc_url(home_url('/mijn-account/offertes/')); ?>" class="uk-button uk-button-default">
+                <a href="<?php echo esc_url(home_url('/mijn-account/mijn-offertes/')); ?>" class="uk-button uk-button-default">
                     <span uk-icon="icon: arrow-left"></span>
                     <?php esc_html_e('Terug', 'stride'); ?>
                 </a>

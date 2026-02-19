@@ -70,18 +70,35 @@ foreach ($enrollments as $enrollment) {
         $completedCourses++;
     }
 
+    // Determine if online by checking session types
+    $isOnline = true; // Default to online (e-learning)
+    foreach ($sessions as $session) {
+        $sessionType = $session['type'] ?? 'online';
+        if (in_array($sessionType, ['in_person', 'webinar'], true)) {
+            $isOnline = false;
+            break;
+        }
+    }
+
+    // Determine URL: online courses go to LearnDash course page, in-person go to edition page
+    $url = $isOnline && $courseId
+        ? get_permalink($courseId)
+        : get_permalink($editionId);
+
     // Build course data
     $activeCourses[] = [
         'edition_id' => $editionId,
         'course_id' => $courseId,
         'title' => $courseTitle,
+        'url' => $url,
+        'is_online' => $isOnline,
         'progress' => $progress,
         'is_complete' => $isComplete,
         'percentage' => $percentage,
         'total_sessions' => $totalSessions,
         'attended' => $attendedCount,
         'start_date' => $edition instanceof \WP_Post
-            ? get_post_meta($editionId, '_vad_start_date', true)
+            ? get_post_meta($editionId, '_ntdst_start_date', true)
             : ($edition['start_date'] ?? ''),
     ];
 
@@ -251,7 +268,7 @@ $dutchMonths = [
         <section class="uk-margin-large-top">
             <div class="stride-section-title">
                 <span><?php esc_html_e('Mijn cursussen', 'stride'); ?></span>
-                <a href="<?php echo esc_url(home_url('/mijn-account/cursussen/')); ?>" class="stride-section-title__link">
+                <a href="<?php echo esc_url(home_url('/mijn-account/mijn-cursussen/')); ?>" class="stride-section-title__link">
                     <?php esc_html_e('Alles bekijken', 'stride'); ?>
                 </a>
             </div>
@@ -276,12 +293,16 @@ $dutchMonths = [
                                     <span class="stride-course-card__badge uk-label uk-label-success">
                                         <?php esc_html_e('Voltooid', 'stride'); ?>
                                     </span>
+                                <?php elseif ($course['is_online']) : ?>
+                                    <span class="stride-course-card__badge stride-label-soft-primary">
+                                        <?php esc_html_e('Online', 'stride'); ?>
+                                    </span>
                                 <?php endif; ?>
                             </div>
                             <div class="stride-course-card__body">
                                 <h3 class="stride-course-card__title">
-                                    <?php if ($course['course_id']) : ?>
-                                        <a href="<?php echo esc_url(get_permalink($course['course_id'])); ?>">
+                                    <?php if ($course['url']) : ?>
+                                        <a href="<?php echo esc_url($course['url']); ?>">
                                             <?php echo esc_html($course['title']); ?>
                                         </a>
                                     <?php else : ?>

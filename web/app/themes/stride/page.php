@@ -42,11 +42,11 @@ if ($isDashboardPage && $dashboardTemplate) {
     // Map page slugs to template files
     $templateMap = [
         'home' => 'templates/dashboard/home.php',
-        'cursussen' => 'templates/dashboard/courses.php',
-        'offertes' => 'templates/dashboard/quotes.php',
-        'profiel' => 'templates/dashboard/profile.php',
-        'agenda' => 'templates/dashboard/calendar.php',
-        'trajecten' => 'templates/dashboard/trajectories.php',
+        'mijn-cursussen' => 'templates/dashboard/courses.php',
+        'mijn-offertes' => 'templates/dashboard/quotes.php',
+        'mijn-profiel' => 'templates/dashboard/profile.php',
+        'mijn-agenda' => 'templates/dashboard/calendar.php',
+        'mijn-trajecten' => 'templates/dashboard/trajectories.php',
     ];
 
     $templateFile = $templateMap[$dashboardTemplate] ?? null;

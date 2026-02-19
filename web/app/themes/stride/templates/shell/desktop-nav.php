@@ -60,13 +60,13 @@ defined('ABSPATH') || exit;
                                     </a>
                                 </li>
                                 <li>
-                                    <a href="<?php echo esc_url(home_url('/mijn-account/cursussen/')); ?>">
+                                    <a href="<?php echo esc_url(home_url('/mijn-account/mijn-cursussen/')); ?>">
                                         <span uk-icon="icon: album; ratio: 0.9"></span>
                                         <?php esc_html_e('Mijn cursussen', 'stride'); ?>
                                     </a>
                                 </li>
                                 <li>
-                                    <a href="<?php echo esc_url(home_url('/mijn-account/offertes/')); ?>">
+                                    <a href="<?php echo esc_url(home_url('/mijn-account/mijn-offertes/')); ?>">
                                         <span uk-icon="icon: file-text; ratio: 0.9"></span>
                                         <?php esc_html_e('Mijn offertes', 'stride'); ?>
                                     </a>

@@ -66,7 +66,7 @@ final class QuoteUpdateHandler
         return [
             'success' => true,
             'message' => __('Offerte bijgewerkt.', 'stride'),
-            'redirect_url' => home_url('/mijn-account/offertes/'),
+            'redirect_url' => home_url('/mijn-account/mijn-offertes/'),
         ];
     }
 
@@ -142,7 +142,7 @@ final class QuoteUpdateHandler
         return [
             'success' => true,
             'message' => __('Inschrijving geannuleerd.', 'stride'),
-            'redirect_url' => home_url('/mijn-account/offertes/'),
+            'redirect_url' => home_url('/mijn-account/mijn-offertes/'),
         ];
     }
 

@@ -30,19 +30,19 @@ $nav_items = [
         'match' => '/cursussen/',
     ],
     [
-        'url'   => home_url('/mijn-account/trajecten/'),
+        'url'   => home_url('/mijn-account/mijn-trajecten/'),
         'icon'  => 'git-branch',
         'label' => __('Traject', 'stride'),
         'match' => '/trajecten/',
     ],
     [
-        'url'   => home_url('/mijn-account/agenda/'),
+        'url'   => home_url('/mijn-account/mijn-agenda/'),
         'icon'  => 'calendar',
         'label' => __('Agenda', 'stride'),
         'match' => '/agenda/',
     ],
     [
-        'url'   => home_url('/mijn-account/profiel/'),
+        'url'   => home_url('/mijn-account/mijn-profiel/'),
         'icon'  => 'user',
         'label' => __('Profiel', 'stride'),
         'match' => '/profiel/',
