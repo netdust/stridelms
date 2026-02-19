@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Terminal;
 
 /**
@@ -25,13 +24,11 @@ namespace StellarWP\Learndash\Stripe\Terminal;
 class Reader extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'terminal.reader';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
     use \StellarWP\Learndash\Stripe\ApiOperations\Delete;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
     use \StellarWP\Learndash\Stripe\ApiOperations\Update;
-
     const DEVICE_TYPE_BBPOS_CHIPPER2X = 'bbpos_chipper2x';
     const DEVICE_TYPE_BBPOS_WISEPAD3 = 'bbpos_wisepad3';
     const DEVICE_TYPE_BBPOS_WISEPOS_E = 'bbpos_wisepos_e';
@@ -39,10 +36,8 @@ class Reader extends \StellarWP\Learndash\Stripe\ApiResource
     const DEVICE_TYPE_SIMULATED_WISEPOS_E = 'simulated_wisepos_e';
     const DEVICE_TYPE_STRIPE_M2 = 'stripe_m2';
     const DEVICE_TYPE_VERIFONE_P400 = 'verifone_P400';
-
     const STATUS_OFFLINE = 'offline';
     const STATUS_ONLINE = 'online';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -56,10 +51,8 @@ class Reader extends \StellarWP\Learndash\Stripe\ApiResource
         $url = $this->instanceUrl() . '/cancel_action';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -73,10 +66,8 @@ class Reader extends \StellarWP\Learndash\Stripe\ApiResource
         $url = $this->instanceUrl() . '/process_payment_intent';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -90,10 +81,8 @@ class Reader extends \StellarWP\Learndash\Stripe\ApiResource
         $url = $this->instanceUrl() . '/process_setup_intent';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -107,10 +96,8 @@ class Reader extends \StellarWP\Learndash\Stripe\ApiResource
         $url = $this->instanceUrl() . '/refund_payment';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -124,7 +111,6 @@ class Reader extends \StellarWP\Learndash\Stripe\ApiResource
         $url = $this->instanceUrl() . '/set_reader_display';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
 }

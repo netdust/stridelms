@@ -68,7 +68,7 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 							array(
 								'html_title'   => '',
 								'group_id'     => $group_id,
-								'selected_ids' => learndash_group_enrolled_courses( $group_id, true ),
+								'selected_ids' => learndash_group_enrolled_courses( $group_id ),
 							)
 						);
 						$ld_binary_selector_group_courses->show();

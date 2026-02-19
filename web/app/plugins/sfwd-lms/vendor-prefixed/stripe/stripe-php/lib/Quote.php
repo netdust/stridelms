@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -47,20 +46,16 @@ namespace StellarWP\Learndash\Stripe;
 class Quote extends ApiResource
 {
     const OBJECT_NAME = 'quote';
-
-    use ApiOperations\All;
-    use ApiOperations\Create;
-    use ApiOperations\Retrieve;
-    use ApiOperations\Update;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Update;
     const COLLECTION_METHOD_CHARGE_AUTOMATICALLY = 'charge_automatically';
     const COLLECTION_METHOD_SEND_INVOICE = 'send_invoice';
-
     const STATUS_ACCEPTED = 'accepted';
     const STATUS_CANCELED = 'canceled';
     const STATUS_DRAFT = 'draft';
     const STATUS_OPEN = 'open';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -74,10 +69,8 @@ class Quote extends ApiResource
         $url = $this->instanceUrl() . '/accept';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -91,10 +84,8 @@ class Quote extends ApiResource
         $url = $this->instanceUrl() . '/cancel';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -108,10 +99,8 @@ class Quote extends ApiResource
         $url = $this->instanceUrl() . '/finalize';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param string $id
      * @param null|array $params
@@ -127,10 +116,8 @@ class Quote extends ApiResource
         list($response, $opts) = static::_staticRequest('get', $url, $params, $opts);
         $obj = \StellarWP\Learndash\Stripe\Util\Util::convertToStripeObject($response->json, $opts);
         $obj->setLastResponse($response);
-
         return $obj;
     }
-
     /**
      * @param string $id
      * @param null|array $params
@@ -146,10 +133,8 @@ class Quote extends ApiResource
         list($response, $opts) = static::_staticRequest('get', $url, $params, $opts);
         $obj = \StellarWP\Learndash\Stripe\Util\Util::convertToStripeObject($response->json, $opts);
         $obj->setLastResponse($response);
-
         return $obj;
     }
-
     /**
      * @param callable $readBodyChunkCallable
      * @param null|array $params

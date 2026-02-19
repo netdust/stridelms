@@ -68,8 +68,6 @@ if (
 
 			parent::__construct();
 
-			add_action( 'admin_notices', [ $this, 'display_admin_notices' ] );
-
 			// Remove the Save Options metabox.
 			add_filter(
 				'learndash_admin_settings_advanced_sections_with_hidden_metaboxes',
@@ -113,10 +111,13 @@ if (
 		 * Displays admin notices.
 		 *
 		 * @since 4.14.0
+		 * @deprecated 5.0.0
 		 *
 		 * @return void
 		 */
 		public function display_admin_notices(): void {
+			_deprecated_function( __METHOD__, '5.0.0' );
+
 			// Only show notices to admin users and on LD admin pages.
 			if (
 				! learndash_is_admin_user()

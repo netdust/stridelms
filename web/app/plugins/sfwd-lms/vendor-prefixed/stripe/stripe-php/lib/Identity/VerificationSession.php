@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Identity;
 
 /**
@@ -38,21 +37,17 @@ namespace StellarWP\Learndash\Stripe\Identity;
 class VerificationSession extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'identity.verification_session';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
     use \StellarWP\Learndash\Stripe\ApiOperations\Update;
-
     const STATUS_CANCELED = 'canceled';
     const STATUS_PROCESSING = 'processing';
     const STATUS_REQUIRES_INPUT = 'requires_input';
     const STATUS_VERIFIED = 'verified';
-
     const TYPE_DOCUMENT = 'document';
     const TYPE_ID_NUMBER = 'id_number';
     const TYPE_VERIFICATION_FLOW = 'verification_flow';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -66,10 +61,8 @@ class VerificationSession extends \StellarWP\Learndash\Stripe\ApiResource
         $url = $this->instanceUrl() . '/cancel';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -83,7 +76,6 @@ class VerificationSession extends \StellarWP\Learndash\Stripe\ApiResource
         $url = $this->instanceUrl() . '/redact';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
 }

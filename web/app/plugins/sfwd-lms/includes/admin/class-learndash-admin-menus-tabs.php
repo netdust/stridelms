@@ -2455,14 +2455,3 @@ $ld_admin_menus_tabs = Learndash_Admin_Menus_Tabs::get_instance(); // phpcs:igno
 function learndash_add_admin_tab_item( $menu_slug, $menu_item, $menu_priority ) {
 	Learndash_Admin_Menus_Tabs::get_instance()->add_admin_tab_item( $menu_slug, $menu_item, $menu_priority );
 }
-
-/**
- * Get current admin tabs set.
- *
- * @since 3.0.0
- *
- * @return array
- */
-function learndash_get_current_tabs_set() {
-	return Learndash_Admin_Menus_Tabs::get_instance()->learndash_admin_tabs();
-}

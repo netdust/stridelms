@@ -241,6 +241,7 @@ if ( ! defined( 'LEARNDASH_COURSE_FUNCTIONS_LEGACY' ) ) {
 	 * This define will be removed in a future release.
 	 *
 	 * @since 3.4.0
+	 * @deprecated 5.0.0 Not used anymore.
 	 *
 	 * @var bool $value {
 	 *    Only one of the following values.
@@ -475,10 +476,11 @@ if ( ! defined( 'LEARNDASH_LMS_DEFAULT_QUESTION_POINTS' ) ) {
 	 * Define LearnDash LMS - Set the default quiz question points.
 	 *
 	 * @since 2.1.6
+	 * @since 4.25.1 Changed from int to float.
 	 *
-	 * @var int $value Default is 1.
+	 * @var float $value Default is 1.0.
 	 */
-	define( 'LEARNDASH_LMS_DEFAULT_QUESTION_POINTS', 1 );
+	define( 'LEARNDASH_LMS_DEFAULT_QUESTION_POINTS', 1. );
 }
 
 if ( ! defined( 'LEARNDASH_LMS_DEFAULT_ANSWER_POINTS' ) ) {
@@ -762,7 +764,7 @@ if ( ! defined( 'LEARNDASH_QUIZ_RESUME_COOKIE_SEND_TIMER_DEFAULT' ) ) {
 	 *
 	 * @since 3.6.1
 	 *
-	 * @var int $value Default is 5.
+	 * @var int $value Default is 20.
 	 */
 	define( 'LEARNDASH_QUIZ_RESUME_COOKIE_SEND_TIMER_DEFAULT', 20 );
 }

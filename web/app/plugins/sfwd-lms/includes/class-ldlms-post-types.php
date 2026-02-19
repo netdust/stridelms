@@ -130,6 +130,46 @@ if ( ! class_exists( 'LDLMS_Post_Types' ) ) {
 		}
 
 		/**
+		 * Get available statuses for a specific post type.
+		 *
+		 * Note:
+		 * Some of these come from the global variables $learndash_course_statuses, $learndash_exam_challenge_statuses.
+		 * We want to move away from globals and have a single source of truth for statuses.
+		 *
+		 * @since 5.0.0
+		 *
+		 * @param string $post_type The post type to get statuses for.
+		 *
+		 * @return array<string,string>|null Array of statuses with keys and labels. Null if no statuses are found.
+		 */
+		public static function get_post_type_statuses( string $post_type ): ?array {
+			global $learndash_course_statuses, $learndash_exam_challenge_statuses;
+
+			switch ( $post_type ) {
+				case self::get_post_type_slug( self::COURSE ):
+					return $learndash_course_statuses;
+				case self::get_post_type_slug( self::TOPIC ):
+				case self::get_post_type_slug( self::LESSON ):
+					return [
+						'not-started' => esc_html__( 'Not Started', 'learndash' ),
+						'in-progress' => esc_html__( 'In Progress', 'learndash' ),
+						'completed'   => esc_html__( 'Completed', 'learndash' ),
+					];
+				case self::get_post_type_slug( self::QUIZ ):
+					return [
+						'not-started' => esc_html__( 'Not Started', 'learndash' ),
+						'in-progress' => esc_html__( 'In Progress', 'learndash' ),
+						'passed'      => esc_html__( 'Passed', 'learndash' ),
+						'failed'      => esc_html__( 'Failed', 'learndash' ),
+					];
+				case self::get_post_type_slug( self::EXAM ):
+					return $learndash_exam_challenge_statuses;
+				default:
+					return null;
+			}
+		}
+
+		/**
 		 * Get an array of all custom tables.
 		 *
 		 * @since 2.6.0

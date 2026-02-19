@@ -30,5 +30,6 @@ class Provider extends ServiceProvider {
 	public function register(): void {
 		$this->container->register( Stripe\Provider::class );
 		$this->container->register( Paypal\Provider::class );
+		$this->container->register( Paypal_Standard\Provider::class );
 	}
 }

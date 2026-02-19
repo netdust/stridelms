@@ -76,6 +76,8 @@ require_once __DIR__ . '/class-ld-settings-section-payments-defaults.php';
 // Payments sub-sections.
 require_once __DIR__ . '/settings-sections-payments/class-ld-settings-section-paypal-checkout.php';
 require_once __DIR__ . '/settings-sections-payments/class-ld-settings-section-paypal.php';
+require_once __DIR__ . '/settings-sections-payments/paypal/class-ld-settings-section-paypal-migration-how-to.php';
+require_once __DIR__ . '/settings-sections-payments/paypal/class-ld-settings-section-paypal-migration-subscriptions.php';
 require_once __DIR__ . '/settings-sections-payments/class-ld-settings-section-stripe-connect.php';
 require_once __DIR__ . '/settings-sections-payments/class-ld-settings-section-razorpay.php';
 

@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Tax;
 
 /**
@@ -19,12 +18,9 @@ namespace StellarWP\Learndash\Stripe\Tax;
 class Settings extends \StellarWP\Learndash\Stripe\SingletonApiResource
 {
     const OBJECT_NAME = 'tax.settings';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\SingletonRetrieve;
-
     const STATUS_ACTIVE = 'active';
     const STATUS_PENDING = 'pending';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -37,11 +33,9 @@ class Settings extends \StellarWP\Learndash\Stripe\SingletonApiResource
     {
         self::_validateParams($params);
         $url = '/v1/tax/settings';
-
         list($response, $opts) = static::_staticRequest('post', $url, $params, $opts);
         $obj = \StellarWP\Learndash\Stripe\Util\Util::convertToStripeObject($response->json, $opts);
         $obj->setLastResponse($response);
-
         return $obj;
     }
 }

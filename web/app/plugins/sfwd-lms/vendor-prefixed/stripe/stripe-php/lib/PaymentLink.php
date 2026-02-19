@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -48,26 +47,20 @@ namespace StellarWP\Learndash\Stripe;
 class PaymentLink extends ApiResource
 {
     const OBJECT_NAME = 'payment_link';
-
-    use ApiOperations\All;
-    use ApiOperations\Create;
-    use ApiOperations\Retrieve;
-    use ApiOperations\Update;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Update;
     const BILLING_ADDRESS_COLLECTION_AUTO = 'auto';
     const BILLING_ADDRESS_COLLECTION_REQUIRED = 'required';
-
     const CUSTOMER_CREATION_ALWAYS = 'always';
     const CUSTOMER_CREATION_IF_REQUIRED = 'if_required';
-
     const PAYMENT_METHOD_COLLECTION_ALWAYS = 'always';
     const PAYMENT_METHOD_COLLECTION_IF_REQUIRED = 'if_required';
-
     const SUBMIT_TYPE_AUTO = 'auto';
     const SUBMIT_TYPE_BOOK = 'book';
     const SUBMIT_TYPE_DONATE = 'donate';
     const SUBMIT_TYPE_PAY = 'pay';
-
     /**
      * @param string $id
      * @param null|array $params
@@ -83,7 +76,6 @@ class PaymentLink extends ApiResource
         list($response, $opts) = static::_staticRequest('get', $url, $params, $opts);
         $obj = \StellarWP\Learndash\Stripe\Util\Util::convertToStripeObject($response->json, $opts);
         $obj->setLastResponse($response);
-
         return $obj;
     }
 }

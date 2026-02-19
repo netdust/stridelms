@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -23,13 +22,10 @@ namespace StellarWP\Learndash\Stripe;
 class ApplicationFee extends ApiResource
 {
     const OBJECT_NAME = 'application_fee';
-
-    use ApiOperations\All;
-    use ApiOperations\NestedResource;
-    use ApiOperations\Retrieve;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\NestedResource;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
     const PATH_REFUNDS = '/refunds';
-
     /**
      * @param string $id the ID of the application fee on which to retrieve the application fee refunds
      * @param null|array $params
@@ -43,7 +39,6 @@ class ApplicationFee extends ApiResource
     {
         return self::_allNestedResources($id, static::PATH_REFUNDS, $params, $opts);
     }
-
     /**
      * @param string $id the ID of the application fee on which to create the application fee refund
      * @param null|array $params
@@ -57,7 +52,6 @@ class ApplicationFee extends ApiResource
     {
         return self::_createNestedResource($id, static::PATH_REFUNDS, $params, $opts);
     }
-
     /**
      * @param string $id the ID of the application fee to which the application fee refund belongs
      * @param string $refundId the ID of the application fee refund to retrieve
@@ -72,7 +66,6 @@ class ApplicationFee extends ApiResource
     {
         return self::_retrieveNestedResource($id, static::PATH_REFUNDS, $refundId, $params, $opts);
     }
-
     /**
      * @param string $id the ID of the application fee to which the application fee refund belongs
      * @param string $refundId the ID of the application fee refund to update

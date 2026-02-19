@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -29,19 +28,16 @@ namespace StellarWP\Learndash\Stripe;
 class TaxRate extends ApiResource
 {
     const OBJECT_NAME = 'tax_rate';
-
-    use ApiOperations\All;
-    use ApiOperations\Create;
-    use ApiOperations\Retrieve;
-    use ApiOperations\Update;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Update;
     const JURISDICTION_LEVEL_CITY = 'city';
     const JURISDICTION_LEVEL_COUNTRY = 'country';
     const JURISDICTION_LEVEL_COUNTY = 'county';
     const JURISDICTION_LEVEL_DISTRICT = 'district';
     const JURISDICTION_LEVEL_MULTIPLE = 'multiple';
     const JURISDICTION_LEVEL_STATE = 'state';
-
     const TAX_TYPE_AMUSEMENT_TAX = 'amusement_tax';
     const TAX_TYPE_COMMUNICATIONS_TAX = 'communications_tax';
     const TAX_TYPE_GST = 'gst';

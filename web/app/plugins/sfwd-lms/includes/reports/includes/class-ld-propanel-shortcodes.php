@@ -52,6 +52,32 @@ if ( ! class_exists( 'LearnDash_ProPanel_Shortcode' ) ) {
 			) {
 				if ( ( isset( $atts['widget'] ) ) && ( ! empty( $atts['widget'] ) ) ) {
 					switch ( $atts['widget'] ) {
+						case 'overview':
+							$title = __( 'LearnDash Reports Overview', 'learndash' );
+							break;
+
+						case 'filtering':
+							$title = __( 'LearnDash Report Filters', 'learndash' );
+							break;
+
+						case 'reporting':
+							$title = __( 'LearnDash Reporting', 'learndash' );
+							break;
+
+						case 'activity':
+							$title = __( 'LearnDash Activity', 'learndash' );
+							break;
+
+						case 'progress_chart':
+							$title = __( 'LearnDash Progress Chart', 'learndash' );
+							break;
+
+						default:
+							$title = '';
+							break;
+					}
+
+					switch ( $atts['widget'] ) {
 						case 'link':
 							$shortcode_url = add_query_arg( 'ld_propanel', '1' );
 							$shortcode_url = apply_filters( 'ld_propanel_shortcode_url', $shortcode_url );
@@ -98,6 +124,8 @@ if ( ! class_exists( 'LearnDash_ProPanel_Shortcode' ) ) {
 							// At this point we are a go to display something. so we load of the needed JS/CSS
 							$ld_propanel = LearnDash_ProPanel::get_instance();
 							$ld_propanel->scripts( true );
+
+							$content .= '<h2>' . esc_html( $title ) . '</h2>';
 
 							$content .= '<div id="ld-propanel-widget-' . $widget_key . '-' . esc_html( $atts['html_id'] ) . '" data-ld-widget-type="' . $widget_key . '" class="ld-propanel-widget ld-propanel-widget-' . $widget_key . ' ' . ld_propanel_get_widget_screen_type_class( $widget_key );
 
@@ -279,6 +307,8 @@ if ( ! class_exists( 'LearnDash_ProPanel_Shortcode' ) ) {
 									}
 								}
 							}
+
+							$content .= '<h2>' . esc_html( $title ) . '</h2>';
 
 							$content .= '<div id="ld-propanel-widget-' . $widget_key . '-' . esc_html( $atts['html_id'] ) . '" data-ld-widget-type="' . $widget_key . '" ';
 

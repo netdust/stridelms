@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Identity;
 
 /**
@@ -35,10 +34,8 @@ namespace StellarWP\Learndash\Stripe\Identity;
 class VerificationReport extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'identity.verification_report';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
-
     const TYPE_DOCUMENT = 'document';
     const TYPE_ID_NUMBER = 'id_number';
     const TYPE_VERIFICATION_FLOW = 'verification_flow';

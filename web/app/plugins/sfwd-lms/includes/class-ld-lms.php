@@ -248,12 +248,14 @@ if ( ! class_exists( 'SFWD_LMS' ) ) {
 		public function trigger_actions() {
 			global $learndash_course_statuses, $learndash_question_types, $learndash_exam_challenge_statuses;
 
+			// Not recommended anymore. Use Post_Type_Status mapper instead.
 			$learndash_course_statuses = array(
 				'not_started' => esc_html__( 'Not Started', 'learndash' ),
 				'in_progress' => esc_html__( 'In Progress', 'learndash' ),
 				'completed'   => esc_html__( 'Completed', 'learndash' ),
 			);
 
+			// Not recommended anymore. Use Question_Type enum instead.
 			$learndash_question_types = array(
 				'single'             => esc_html__( 'Single choice', 'learndash' ),
 				'multiple'           => esc_html__( 'Multiple choice', 'learndash' ),
@@ -265,6 +267,7 @@ if ( ! class_exists( 'SFWD_LMS' ) ) {
 				'essay'              => esc_html__( 'Essay / Open Answer', 'learndash' ),
 			);
 
+			// Not recommended anymore. Use Post_Type_Status mapper instead.
 			$learndash_exam_challenge_statuses = array(
 				'not_taken' => esc_html__( 'Not Taken', 'learndash' ),
 				'passed'    => esc_html__( 'Passed', 'learndash' ),
@@ -1852,8 +1855,8 @@ if ( ! class_exists( 'SFWD_LMS' ) ) {
 							'name'            => sprintf( esc_html_x( '%s Per Page', 'placeholder: Lessons', 'learndash' ), LearnDash_Custom_Label::get_label( 'lessons' ) ),
 							'type'            => 'select',
 							'initial_options' => array(
-								''       => esc_html__( 'Use Default', 'learndash' ) . ' ( ' . LearnDash_Settings_Section::get_section_setting( 'LearnDash_Settings_Section_Lessons_Display_Order', 'posts_per_page' ) . ' )',
-								'CUSTOM' => esc_html__( 'Custom', 'learndash' ),
+								''   => esc_html__( 'Use Default', 'learndash' ) . ' ( ' . LearnDash_Settings_Section::get_section_setting( 'LearnDash_Settings_Section_Lessons_Display_Order', 'posts_per_page' ) . ' )',
+								'on' => esc_html__( 'Custom', 'learndash' ),
 							),
 							'default'         => '',
 							// translators: placeholders: lessons, course.
@@ -2751,7 +2754,7 @@ if ( ! class_exists( 'SFWD_LMS' ) ) {
 					),
 					'has_archive'           => learndash_post_type_has_archive( 'groups' ),
 					'labels'                => $group_labels,
-					'capability_type'       => 'groups',
+					'capability_type'       => 'group',
 					'hierarchical'          => learndash_is_groups_hierarchical_enabled(),
 					'public'                => ( LearnDash_Settings_Section::get_section_setting( 'LearnDash_Settings_Groups_CPT', 'public' ) === 'yes' ) ? true : false,
 					'exclude_from_search'   => ( LearnDash_Settings_Section::get_section_setting( 'LearnDash_Settings_Groups_CPT', 'include_in_search' ) !== 'yes' ) ? true : false,
@@ -2920,12 +2923,14 @@ if ( ! class_exists( 'SFWD_LMS' ) ) {
 
 					// Quizzes.
 					'quiz_num'                  => false,
+					'quiz_paged'                => 1,
 					'quiz_filter_quiz'          => null,
 					'quiz_filter_course'        => null,
 					'quiz_filter_lesson'        => null,
 					'quiz_filter_topic'         => null,
 					'quiz_orderby'              => 'taken',
 					'quiz_order'                => 'DESC',
+					'quiz_offset'               => 0,
 				)
 			);
 
@@ -3278,7 +3283,7 @@ if ( ! class_exists( 'SFWD_LMS' ) ) {
 											$quiz_key = $quiz_attempt['time'] . '-' . $quiz_attempt['quiz'];
 										} elseif ( 'title' == $atts['quiz_orderby'] ) {
 											$quiz_key = $post_idx . '-' . $quiz_attempt['time'];
-										} elseif ( 'ID' == $atts['quiz_orderby'] ) {
+										} elseif ( 'id' === strtolower( $atts['quiz_orderby'] ) ) {
 											$quiz_key = str_pad( (string) $quiz_attempt['quiz'], 10, '0', STR_PAD_LEFT ) . '-' . $quiz_attempt['time'];
 										} elseif ( 'date' == $atts['quiz_orderby'] ) { // Quiz Post date.
 											$quiz_post = get_post( $quiz_attempt['quiz'] );
@@ -3305,7 +3310,7 @@ if ( ! class_exists( 'SFWD_LMS' ) ) {
 
 							$quizzes = $quizzes_tmp;
 
-							if ( 'DESC' == $atts['quiz_order'] ) {
+							if ( 'desc' === strtolower( $atts['quiz_order'] ) ) {
 								krsort( $quizzes );
 							} else {
 								ksort( $quizzes );
@@ -3324,13 +3329,19 @@ if ( ! class_exists( 'SFWD_LMS' ) ) {
 								/**
 								 * Filters paged query argument for quiz info.
 								 *
+								 * @since 2.5.4
+								 *
 								 * @param int $paged Number of Pages.
+								 *
+								 * @return int
 								 */
-								$quizzes_pager['paged']       = apply_filters( 'learndash_quiz_info_paged', 1 );
+								$quizzes_pager['paged']       = apply_filters( 'learndash_quiz_info_paged', $atts['quiz_paged'] );
 								$quizzes_pager['total_items'] = count( $quizzes );
 								$quizzes_pager['total_pages'] = ceil( count( $quizzes ) / $quizzes_per_page );
 
-								$quizzes = array_slice( $quizzes, ( $quizzes_pager['paged'] * $quizzes_per_page ) - $quizzes_per_page, $quizzes_per_page, false );
+								$quizzes_pager['offset'] = $atts['quiz_offset'];
+
+								$quizzes = array_slice( $quizzes, ( ( $quizzes_pager['paged'] - 1 ) * $quizzes_per_page ) + $quizzes_pager['offset'], $quizzes_per_page, false );
 							}
 						}
 					}
@@ -5464,10 +5475,9 @@ if ( ! class_exists( 'SFWD_LMS' ) ) {
 		 * @return void
 		 */
 		public function add_telemetry_modal( WP_Screen $current_screen ): void {
-			if (
-				(
-					! empty( $current_screen->post_type )
-					&& in_array( $current_screen->post_type, learndash_get_post_types(), true )
+			$should_show = (
+				! empty( $current_screen->post_type )
+				&& in_array( $current_screen->post_type, learndash_get_post_types(), true )
 				)
 				|| (
 					! empty( $current_screen->parent_file )
@@ -5479,37 +5489,50 @@ if ( ! class_exists( 'SFWD_LMS' ) ) {
 					&& false !== strpos( sanitize_text_field( wp_unslash( $_GET['page'] ) ), 'learndash' )
 					&& $_GET['page'] !== 'learndash-setup-wizard'
 					&& $_GET['page'] !== 'learndash-design-wizard'
-				)
-			) {
-				add_filter(
-					'stellarwp/telemetry/learndash/optin_args', // cspell:disable-line.
-					function( $args ) {
-						$args['plugin_logo']        = LEARNDASH_LMS_PLUGIN_URL . 'assets/images/logo_black.svg';
-						$args['plugin_logo_width']  = 205;
-						$args['plugin_logo_height'] = 33;
-						$args['plugin_logo_alt']    = 'LearnDash Logo';
-
-						$args['heading'] = esc_html__( 'We hope you love LearnDash.', 'learndash' );
-
-						$args['intro'] = sprintf(
-							// translators: placeholder: username.
-							esc_html__(
-								'Hi, %1$s! This is an invitation to help us improve LearnDash products by sharing product usage data with StellarWP. LearnDash is part of the StellarWP family of brands. If you opt-in we\'ll share some helpful WordPress and StellarWP product info with you from time to time. And if you skip this, that\'s okay! Our products will continue to work.',
-								'learndash'
-							),
-							$args['user_name']
-						);
-
-						$args['permissions_url'] = 'https://www.learndash.com/telemetry-tracking/';
-						$args['tos_url']         = 'https://www.learndash.com/terms-and-conditions/';
-
-						return $args;
-					}
 				);
 
-				// cspell:disable-next-line.
-				do_action( 'stellarwp/telemetry/learndash/optin' ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound,WordPress.NamingConventions.ValidHookName.UseUnderscores
+			/**
+			 * Whether to show the telemetry modal.
+			 *
+			 * @since 4.25.3
+			 *
+			 * @param bool      $should_show Whether to show the telemetry modal.
+			 * @param WP_Screen $current_screen Current screen.
+			 *
+			 * @return bool Whether to show the telemetry modal.
+			 */
+			if ( ! apply_filters( 'learndash_show_telemetry_modal', $should_show, $current_screen ) ) {
+				return;
 			}
+
+			add_filter(
+				'stellarwp/telemetry/learndash/optin_args', // cspell:disable-line.
+				function ( $args ) {
+					$args['plugin_logo']        = LEARNDASH_LMS_PLUGIN_URL . 'assets/images/logo_black.svg';
+					$args['plugin_logo_width']  = 205;
+					$args['plugin_logo_height'] = 33;
+					$args['plugin_logo_alt']    = 'LearnDash Logo';
+
+					$args['heading'] = esc_html__( 'We hope you love LearnDash.', 'learndash' );
+
+					$args['intro'] = sprintf(
+						// translators: placeholder: username.
+						esc_html__(
+							'Hi, %1$s! This is an invitation to help us improve LearnDash products by sharing product usage data with StellarWP. LearnDash is part of the StellarWP family of brands. If you opt-in we\'ll share some helpful WordPress and StellarWP product info with you from time to time. And if you skip this, that\'s okay! Our products will continue to work.',
+							'learndash'
+						),
+						$args['user_name']
+					);
+
+					$args['permissions_url'] = 'https://www.learndash.com/telemetry-tracking/';
+					$args['tos_url']         = 'https://www.learndash.com/terms-and-conditions/';
+
+					return $args;
+				}
+			);
+
+			// cspell:disable-next-line.
+			do_action( 'stellarwp/telemetry/learndash/optin' ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound,WordPress.NamingConventions.ValidHookName.UseUnderscores
 		}
 	}
 }

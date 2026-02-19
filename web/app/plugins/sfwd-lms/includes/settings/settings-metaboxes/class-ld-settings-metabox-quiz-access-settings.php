@@ -294,8 +294,11 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						'show_in_rest' => LearnDash_REST_API::enabled(),
 						'rest_args'    => array(
 							'schema' => array(
-								// translators: placeholder: Lesson.
-								'description' => esc_html__( 'Visible After X day(s)', 'learndash' ),
+								'description' => sprintf(
+									// translators: placeholder: course label.
+									__( 'Released X day(s) after %s enrollment', 'learndash' ),
+									learndash_get_custom_label_lower( 'course' )
+								),
 								'type'        => 'integer',
 								'default'     => 0,
 							),
@@ -319,8 +322,8 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						'rest_args'    => array(
 							'schema' => array(
 								// translators: placeholder: Lesson.
-								'description' => esc_html__( 'Visible After Specific Date (YYYY-MM-DD)', 'learndash' ),
-								'type'        => 'date',
+								'description' => esc_html__( 'Available after a specific date as a unix timestamp', 'learndash' ),
+								'type'        => 'integer',
 								'default'     => '',
 							),
 						),
@@ -433,16 +436,16 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						'show_in_rest' => LearnDash_REST_API::enabled(),
 						'rest_args'    => array(
 							'schema' => array(
-								'field_key'   => 'visible_type',
-								'description' => esc_html__( 'Available Release Schedule', 'learndash' ),
-								'type'        => 'string',
 								'default'     => '',
-								'required'    => false,
-								'enum'        => array(
+								'description' => esc_html__( 'Availability Release Schedule. Empty means immediately available, "visible_after" means available X days after enrollment, "visible_after_specific_date" means available on a specific date.', 'learndash' ),
+								'enum'        => [
 									'',
 									'visible_after',
 									'visible_after_specific_date',
-								),
+								],
+								'field_key'   => 'visible_type',
+								'required'    => false,
+								'type'        => 'string',
 							),
 						),
 					),
@@ -475,9 +478,14 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						'show_in_rest' => LearnDash_REST_API::enabled(),
 						'rest_args'    => [
 							'schema' => [
-								'field_key' => 'is_external',
-								'type'      => 'boolean',
-								'default'   => false,
+								'default'     => false,
+								'description' => sprintf(
+									// translators: placeholder: quiz label.
+									__( 'Whether the %s takes place in a virtual setting (e.g, Zoom) or in-person outside of LearnDash.', 'learndash' ),
+									learndash_get_custom_label_lower( 'quiz' )
+								),
+								'field_key'   => 'is_external',
+								'type'        => 'boolean',
 							],
 						],
 					],
@@ -494,9 +502,8 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 							'label'       => learndash_course_steps_map_external_type_to_label( 'virtual' ),
 							'description' => sprintf(
 								// translators: placeholder: quiz.
-								esc_html_x(
+								esc_html__(
 									'This %s takes place in a virtual setting (e.g, Zoom).',
-									'placeholder: quiz',
 									'learndash'
 								),
 								learndash_get_custom_label_lower( 'quiz' )
@@ -519,13 +526,18 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						'show_in_rest' => LearnDash_REST_API::enabled(),
 						'rest_args'    => [
 							'schema' => [
-								'field_key' => 'external_type',
-								'type'      => 'string',
-								'enum'      => [
+								'default'     => 'virtual',
+								'description' => sprintf(
+									// translators: placeholder: quiz.
+									__( 'The type of external %1$s. "virtual" means the %1$s takes place in a virtual setting (e.g, Zoom). "in-person" means the %1$s takes place in-person.', 'learndash' ),
+									learndash_get_custom_label_lower( 'quiz' )
+								),
+								'field_key'   => 'external_type',
+								'type'        => 'string',
+								'enum'        => [
 									'virtual',
 									'in-person',
 								],
-								'default'   => 'virtual',
 							],
 						],
 					],
@@ -567,13 +579,18 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						'show_in_rest' => LearnDash_REST_API::enabled(),
 						'rest_args'    => [
 							'schema' => [
-								'field_key' => 'external_require_attendance',
-								'type'      => 'string',
-								'enum'      => [
+								'default'     => '',
+								'description' => sprintf(
+									// translators: placeholder: quiz.
+									__( 'Whether attendance is required for the external %s.', 'learndash' ),
+									learndash_get_custom_label_lower( 'quiz' )
+								),
+								'field_key'   => 'external_require_attendance',
+								'type'        => 'string',
+								'enum'        => [
 									'',
 									'yes',
 								],
-								'default'   => '',
 							],
 						],
 					],
@@ -598,12 +615,18 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						'show_in_rest' => LearnDash_REST_API::enabled(),
 						'rest_args'    => array(
 							'schema' => array(
-								'field_key' => 'prerequisites',
-								'default'   => array(),
-								'type'      => 'array',
-								'items'     => array(
-									'type' => 'integer',
+								'default'     => [],
+								'description' => sprintf(
+									// translators: placeholder: quiz.
+									__( 'The %1$s prerequisites for this %1$s.', 'learndash' ),
+									learndash_get_custom_label_lower( 'quiz' )
 								),
+								'field_key'   => 'prerequisites',
+								'type'        => 'array',
+								'items'       => [
+									'type'        => 'integer',
+									'uniqueItems' => true,
+								],
 							),
 						),
 					),
@@ -634,10 +657,14 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						'show_in_rest' => LearnDash_REST_API::enabled(),
 						'rest_args'    => array(
 							'schema' => array(
-								'field_key' => 'registered_users_only',
-								esc_html__( 'Only Logged-in Users', 'learndash' ),
-								'type'      => 'boolean',
-								'default'   => false,
+								'default'     => false,
+								'description' => sprintf(
+									// translators: placeholder: quiz.
+									__( 'Only logged-in users can take this %s', 'learndash' ),
+									learndash_get_custom_label_lower( 'quiz' )
+								),
+								'field_key'   => 'registered_users_only',
+								'type'        => 'boolean',
 							),
 						),
 					),

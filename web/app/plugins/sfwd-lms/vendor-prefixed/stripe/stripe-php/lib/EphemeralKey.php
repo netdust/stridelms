@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -15,13 +14,10 @@ namespace StellarWP\Learndash\Stripe;
 class EphemeralKey extends ApiResource
 {
     const OBJECT_NAME = 'ephemeral_key';
-
-    use ApiOperations\Create {
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create {
         create as protected _create;
     }
-
-    use ApiOperations\Delete;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\Delete;
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -36,7 +32,6 @@ class EphemeralKey extends ApiResource
         if (!$opts || !isset($opts['stripe_version'])) {
             throw new Exception\InvalidArgumentException('stripe_version must be specified to create an ephemeral key');
         }
-
         return self::_create($params, $opts);
     }
 }

@@ -4,21 +4,20 @@ declare(strict_types=1);
 
 namespace Stride\Handlers;
 
-use Stride\Contracts\EditionQueryInterface;
 use Stride\Domain\Money;
 use Stride\Modules\Invoicing\QuoteService;
+use Stride\Modules\Invoicing\VoucherService;
 
 /**
  * Creates quotes when users enroll in editions.
  *
- * Listens for stride/registration/created event.
+ * Thin handler - listens for stride/registration/created event
+ * and delegates to QuoteService.
  */
 final class EnrollmentQuoteHandler
 {
-    public function __construct(
-        private readonly QuoteService $quotes,
-        private readonly EditionQueryInterface $editions,
-    ) {
+    public function __construct()
+    {
         add_action('stride/registration/created', [$this, 'onRegistrationCreated']);
     }
 
@@ -41,8 +40,10 @@ final class EnrollmentQuoteHandler
         // For colleague enrollments, quote goes to the enrolling user (the one who pays)
         $quoteUserId = $enrolledBy ?: $userId;
 
+        $quotes = ntdst_get(QuoteService::class);
+
         // Check if quote already exists
-        $existing = $this->quotes->getQuoteByRegistration($registrationId);
+        $existing = $quotes->getQuoteByRegistration($registrationId);
         if ($existing) {
             return;
         }
@@ -72,17 +73,45 @@ final class EnrollmentQuoteHandler
             ],
         ];
 
-        // Get billing info for the user who pays (enrolling user for colleague enrollments)
-        $billing = $this->getUserBilling($quoteUserId);
+        // Check for pending billing from enrollment form
+        $pendingBilling = $this->consumePendingBilling($quoteUserId, $editionId);
+        $billing = $pendingBilling ?: $this->getUserBilling($quoteUserId);
+
+        // Get voucher code and calculate discount if provided
+        $voucherCode = $pendingBilling['voucher_code'] ?? null;
+        $discount = null;
+
+        if ($voucherCode) {
+            $voucherService = ntdst_get(VoucherService::class);
+            $voucher = $voucherService->validateVoucher($voucherCode, $editionId);
+            if (!is_wp_error($voucher)) {
+                $discount = $voucherService->calculateDiscount($voucher, $price);
+            }
+        }
 
         // Create quote for the billing user
-        $this->quotes->createQuote(
+        $quotes->createQuote(
             userId: $quoteUserId,
             registrationId: $registrationId,
             editionId: $editionId,
             items: $items,
             billing: $billing,
+            voucherCode: $voucherCode,
+            discount: $discount,
         );
+    }
+
+    /**
+     * Consume pending billing data from enrollment form.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function consumePendingBilling(int $userId, int $editionId): ?array
+    {
+        $key = 'stride_pending_billing_' . $userId . '_' . $editionId;
+        $billing = get_transient($key);
+        delete_transient($key);
+        return $billing ?: null;
     }
 
     /**

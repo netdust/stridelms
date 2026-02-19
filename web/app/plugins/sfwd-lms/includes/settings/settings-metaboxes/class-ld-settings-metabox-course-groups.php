@@ -87,7 +87,7 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						array(
 							'html_title'            => '',
 							'course_id'             => $course_id,
-							'selected_ids'          => learndash_get_course_groups( $course_id, true ),
+							'selected_ids'          => learndash_get_course_groups( $course_id ),
 							'search_posts_per_page' => 100,
 						)
 					);

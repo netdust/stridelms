@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -35,27 +34,22 @@ namespace StellarWP\Learndash\Stripe;
 class Refund extends ApiResource
 {
     const OBJECT_NAME = 'refund';
-
-    use ApiOperations\All;
-    use ApiOperations\Create;
-    use ApiOperations\Retrieve;
-    use ApiOperations\Update;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Update;
     const FAILURE_REASON_EXPIRED_OR_CANCELED_CARD = 'expired_or_canceled_card';
     const FAILURE_REASON_LOST_OR_STOLEN_CARD = 'lost_or_stolen_card';
     const FAILURE_REASON_UNKNOWN = 'unknown';
-
     const REASON_DUPLICATE = 'duplicate';
     const REASON_EXPIRED_UNCAPTURED_CHARGE = 'expired_uncaptured_charge';
     const REASON_FRAUDULENT = 'fraudulent';
     const REASON_REQUESTED_BY_CUSTOMER = 'requested_by_customer';
-
     const STATUS_CANCELED = 'canceled';
     const STATUS_FAILED = 'failed';
     const STATUS_PENDING = 'pending';
     const STATUS_REQUIRES_ACTION = 'requires_action';
     const STATUS_SUCCEEDED = 'succeeded';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -69,7 +63,6 @@ class Refund extends ApiResource
         $url = $this->instanceUrl() . '/cancel';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
 }

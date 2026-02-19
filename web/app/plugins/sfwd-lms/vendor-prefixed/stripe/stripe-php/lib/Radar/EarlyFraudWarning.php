@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Radar;
 
 /**
@@ -22,10 +21,8 @@ namespace StellarWP\Learndash\Stripe\Radar;
 class EarlyFraudWarning extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'radar.early_fraud_warning';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
-
     const FRAUD_TYPE_CARD_NEVER_RECEIVED = 'card_never_received';
     const FRAUD_TYPE_FRAUDULENT_CARD_APPLICATION = 'fraudulent_card_application';
     const FRAUD_TYPE_MADE_WITH_COUNTERFEIT_CARD = 'made_with_counterfeit_card';

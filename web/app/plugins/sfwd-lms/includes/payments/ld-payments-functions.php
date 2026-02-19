@@ -22,17 +22,6 @@ const LEARNDASH_PRICE_TYPE_SUBSCRIBE = 'subscribe';
 require_once LEARNDASH_LMS_PLUGIN_DIR . 'includes/payments/class-learndash-payment-button.php';
 
 /**
- * Outputs the LearnDash global currency symbol.
- *
- * @since 4.1.0
- *
- * @return void
- */
-function learndash_the_currency_symbol(): void {
-	echo wp_kses_post( learndash_get_currency_symbol() );
-}
-
-/**
  * Gets the LearnDash global currency symbol.
  *
  * @since 4.1.0

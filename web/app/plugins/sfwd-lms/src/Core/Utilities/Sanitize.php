@@ -45,6 +45,30 @@ class Sanitize {
 	}
 
 	/**
+	 * Sanitizes a boolean value.
+	 *
+	 * @since 5.0.0
+	 *
+	 * @param scalar|null $value         The value to sanitize. Bools are returned directly, ints and floats are cast to bools, strings are checked for their content to determine if they are true or false. Null and empty strings return the default value.
+	 * @param bool        $default_value The default value to return if the value is null or an empty string. Defaults to false.
+	 *
+	 * @return bool
+	 */
+	public static function bool( $value, bool $default_value = false ): bool {
+		if (
+			$value === null
+			|| (
+				is_string( $value )
+				&& strlen( trim( $value ) ) === 0
+			)
+		) {
+			return $default_value;
+		}
+
+		return rest_sanitize_boolean( Cast::to_string( $value ) );
+	}
+
+	/**
 	 * Returns an array of allowed HTML tags for posts that includes SVG tags.
 	 *
 	 * @since 4.16.0

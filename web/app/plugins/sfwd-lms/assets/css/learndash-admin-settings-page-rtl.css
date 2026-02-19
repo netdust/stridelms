@@ -1550,6 +1550,10 @@ body[data-active-tab="learndash_quiz_builder"] .postbox-header .handle-actions .
 	margin-right: 10px;
 }
 
+#learndash_ai_integrations_openai_api_key_field .sfwd_option_input_note {
+	word-break: break-all;
+}
+
 #learndash_settings_terms_pages_terms_page_field,
 #learndash_settings_terms_pages_privacy_page_field {
 	border-right: 1px solid #CCC;

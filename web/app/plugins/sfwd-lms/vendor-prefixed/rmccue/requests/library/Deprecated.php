@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Backwards compatibility layer for Requests.
  *
@@ -11,9 +12,7 @@
  *
  * @deprecated 2.0.0 Use the PSR-4 class names instead.
  */
-
 if (class_exists('StellarWP\Learndash\WpOrg\Requests\Autoload') === false) {
-	require_once dirname(__DIR__) . '/src/Autoload.php';
+    require_once dirname(__DIR__) . '/src/Autoload.php';
 }
-
-StellarWP\Learndash\WpOrg\Requests\Autoload::register();
+\StellarWP\Learndash\WpOrg\Requests\Autoload::register();

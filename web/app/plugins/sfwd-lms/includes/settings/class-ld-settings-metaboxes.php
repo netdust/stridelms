@@ -9,7 +9,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use LearnDash\Core\Utilities\Cast;
 use LearnDash\Core\Validations\Validators\Validator;
+use StellarWP\Learndash\StellarWP\Arrays\Arr;
+
 
 if ( ! class_exists( 'LearnDash_Settings_Metabox' ) ) {
 	/**
@@ -835,6 +838,40 @@ if ( ! class_exists( 'LearnDash_Settings_Metabox' ) ) {
 		 */
 		public function get_settings_metabox_fields() {
 			return $this->setting_option_fields;
+		}
+
+		/**
+		 * Returns Settings Metabox Fields with sub fields for REST API.
+		 *
+		 * Returns a plain array of fields that includes sub fields as well (3rd level fields).
+		 * This is used by the REST API to expose all fields, including nested inline fields.
+		 *
+		 * @since 5.0.0
+		 *
+		 * @return array<string,mixed[]> Array of settings fields including sub fields.
+		 */
+		public function get_rest_api_fields(): array {
+			$fields = $this->get_settings_metabox_fields();
+
+			if ( ! empty( $this->settings_sub_option_fields ) ) {
+				foreach ( $this->settings_sub_option_fields as $fields_group ) {
+					foreach ( $fields_group as $field_name => $field ) {
+						$fields[ $field_name ] = $field;
+					}
+				}
+			}
+
+			// Filter out fields that are not marked as show_in_rest.
+			$fields = array_filter(
+				$fields,
+				function ( array $field ): bool {
+					return Cast::to_bool(
+						Arr::get( $field, 'args.rest.show_in_rest', false )
+					);
+				}
+			);
+
+			return $fields;
 		}
 
 		/**

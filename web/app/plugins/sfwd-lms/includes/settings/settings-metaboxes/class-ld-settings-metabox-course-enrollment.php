@@ -518,7 +518,7 @@ class LearnDash_Settings_Metabox_Course_Enrollment extends LearnDash_Settings_Me
 		];
 
 		if ( $this->_post instanceof WP_Post ) {
-			$course_groups = learndash_get_course_groups( $this->_post->ID, true );
+			$course_groups = learndash_get_course_groups( $this->_post->ID );
 			if ( ( ! empty( $course_groups ) ) && ( 'closed' !== $this->setting_option_values['course_price_type'] ) ) {
 				if ( 1 === count( $course_groups ) ) {
 					$alert_message = sprintf(

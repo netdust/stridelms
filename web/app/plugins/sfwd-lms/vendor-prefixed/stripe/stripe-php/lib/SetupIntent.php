@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -56,23 +55,19 @@ namespace StellarWP\Learndash\Stripe;
 class SetupIntent extends ApiResource
 {
     const OBJECT_NAME = 'setup_intent';
-
-    use ApiOperations\All;
-    use ApiOperations\Create;
-    use ApiOperations\Retrieve;
-    use ApiOperations\Update;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Update;
     const CANCELLATION_REASON_ABANDONED = 'abandoned';
     const CANCELLATION_REASON_DUPLICATE = 'duplicate';
     const CANCELLATION_REASON_REQUESTED_BY_CUSTOMER = 'requested_by_customer';
-
     const STATUS_CANCELED = 'canceled';
     const STATUS_PROCESSING = 'processing';
     const STATUS_REQUIRES_ACTION = 'requires_action';
     const STATUS_REQUIRES_CONFIRMATION = 'requires_confirmation';
     const STATUS_REQUIRES_PAYMENT_METHOD = 'requires_payment_method';
     const STATUS_SUCCEEDED = 'succeeded';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -86,10 +81,8 @@ class SetupIntent extends ApiResource
         $url = $this->instanceUrl() . '/cancel';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -103,10 +96,8 @@ class SetupIntent extends ApiResource
         $url = $this->instanceUrl() . '/confirm';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -120,7 +111,6 @@ class SetupIntent extends ApiResource
         $url = $this->instanceUrl() . '/verify_microdeposits';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
 }

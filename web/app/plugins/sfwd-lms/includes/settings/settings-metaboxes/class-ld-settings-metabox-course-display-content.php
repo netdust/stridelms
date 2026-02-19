@@ -93,7 +93,7 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 					$this->setting_option_values['course_lesson_per_page'] = '';
 				}
 
-				if ( 'CUSTOM' === $this->setting_option_values['course_lesson_per_page'] ) {
+				if ( $this->setting_option_values['course_lesson_per_page'] === 'on' ) {
 					$this->setting_option_values['course_lesson_per_page_custom'] = absint( $this->setting_option_values['course_lesson_per_page_custom'] );
 					$this->setting_option_values['course_topic_per_page_custom']  = absint( $this->setting_option_values['course_topic_per_page_custom'] );
 				} else {
@@ -225,7 +225,7 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						'rest_args'    => array(
 							'schema' => array(
 								'field_key'   => 'materials_enabled',
-								'description' => esc_html__( 'Materials Enabled', 'learndash' ),
+								'description' => esc_html__( 'Supplemental Materials Enabled', 'learndash' ),
 								'type'        => 'boolean',
 								'default'     => false,
 							),
@@ -247,26 +247,15 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						'show_in_rest' => LearnDash_REST_API::enabled(),
 						'rest_args'    => array(
 							'schema' => array(
-								'field_key'   => 'materials',
-								'description' => esc_html__( 'Materials', 'learndash' ),
-								'type'        => 'object',
-								'properties'  => array(
-									'raw'      => array(
-										'description' => 'Content for the object, as it exists in the database.',
-										'type'        => 'string',
-										'context'     => array( 'edit' ),
-									),
-									'rendered' => array(
-										'description' => 'HTML content for the object, transformed for display.',
-										'type'        => 'string',
-										'context'     => array( 'view', 'edit' ),
-										'readonly'    => true,
-									),
-								),
-								'arg_options' => array(
+								'arg_options' => [
 									'sanitize_callback' => null, // Note: sanitization performed in rest_pre_insert_filter().
 									'validate_callback' => null,
-								),
+								],
+								'default'     => '',
+								'description' => esc_html__( 'Supplemental Materials', 'learndash' ),
+								'field_key'   => 'materials',
+								'format'      => 'html',
+								'type'        => 'string',
 							),
 						),
 					),
@@ -342,11 +331,11 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						learndash_get_custom_label_lower( 'course' )
 					),
 					'options'             => array(
-						''       => esc_html__( 'Currently showing default pagination', 'learndash' ),
-						'CUSTOM' => '',
+						''   => esc_html__( 'Currently showing default pagination', 'learndash' ),
+						'on' => '',
 					),
 					'value'               => $this->setting_option_values['course_lesson_per_page'],
-					'child_section_state' => ( 'CUSTOM' === $this->setting_option_values['course_lesson_per_page'] ) ? 'open' : 'closed',
+					'child_section_state' => $this->setting_option_values['course_lesson_per_page'] === 'on' ? 'open' : 'closed',
 					'rest'                => array(
 						'show_in_rest' => LearnDash_REST_API::enabled(),
 						'rest_args'    => array(
@@ -580,7 +569,7 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 
 				/**
 				 * Check the Lessons Per Page set course_lesson_per_page/course_lesson_per_page_custom. If 'course_lesson_per_page' setting is
-				 * 'CUSTOM' then make sure 'course_lesson_per_page_custom' is not empty.
+				 * 'on' then make sure 'course_lesson_per_page_custom' is not empty.
 				 */
 				if ( ! isset( $settings_values['course_lesson_per_page'] ) ) {
 					$settings_values['course_lesson_per_page'] = '';

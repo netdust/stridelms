@@ -8,6 +8,7 @@ use Stride\Contracts\EditionQueryInterface;
 use Stride\Contracts\LMSAdapterInterface;
 use Stride\Domain\RegistrationStatus;
 use Stride\Infrastructure\AbstractService;
+use Stride\Modules\Edition\SessionSelectionService;
 use WP_Error;
 
 /**
@@ -21,6 +22,7 @@ final class EnrollmentService extends AbstractService
         private readonly RegistrationRepository $registrations,
         private readonly EditionQueryInterface $editions,
         private readonly LMSAdapterInterface $lms,
+        private readonly ?SessionSelectionService $sessionSelection = null,
     ) {
         parent::__construct();
     }
@@ -41,7 +43,8 @@ final class EnrollmentService extends AbstractService
 
     protected function init(): void
     {
-        // No hooks needed yet
+        // Instantiate enrollment form handler
+        ntdst_get(\Stride\Handlers\EnrollmentFormHandler::class);
     }
 
     /**
@@ -174,5 +177,190 @@ final class EnrollmentService extends AbstractService
     public function getRegistration(int $registrationId): \stdClass|WP_Error
     {
         return $this->registrations->find($registrationId);
+    }
+
+    /**
+     * Process enrollment from frontend form.
+     *
+     * @param array{
+     *   edition_id: int,
+     *   user_id: int,
+     *   enrollment_type: string,
+     *   first_name: string,
+     *   last_name: string,
+     *   email: string,
+     *   phone?: string,
+     *   company?: string,
+     *   vat_number?: string,
+     *   address?: string,
+     *   postal_code?: string,
+     *   city?: string,
+     *   gln_peppol?: string,
+     *   invoice_email?: string,
+     *   po_number?: string,
+     *   voucher_code?: string,
+     *   selected_sessions?: array<int>,
+     *   terms_accepted: bool,
+     * } $data
+     * @return array{registration_id: int, quote_id?: int, participant_id: int}|WP_Error
+     */
+    public function processEnrollment(array $data): array|WP_Error
+    {
+        $editionId = (int) ($data['edition_id'] ?? 0);
+        $currentUserId = (int) ($data['user_id'] ?? 0);
+        $enrollmentType = $data['enrollment_type'] ?? 'self';
+
+        // Determine participant and enrollment path
+        if ($enrollmentType === 'colleague') {
+            // Colleague enrollment: find or create user by email
+            $participantId = $this->resolveParticipant(
+                $data['email'],
+                $data['first_name'],
+                $data['last_name']
+            );
+
+            if (is_wp_error($participantId)) {
+                return $participantId;
+            }
+
+            $enrollmentPath = RegistrationRepository::PATH_COLLEAGUE;
+            $enrolledBy = $currentUserId;
+        } else {
+            // Self enrollment
+            $participantId = $currentUserId;
+            $enrollmentPath = RegistrationRepository::PATH_INDIVIDUAL;
+            $enrolledBy = null;
+
+            // Update current user's profile with form data
+            $this->updateUserProfile($currentUserId, $data);
+        }
+
+        // Store billing data for quote handler to use
+        $this->storePendingBilling($data, $enrolledBy ?: $participantId);
+
+        // Perform enrollment
+        $registrationId = $this->enroll($participantId, $editionId, [
+            'enrollment_path' => $enrollmentPath,
+            'enrolled_by' => $enrolledBy,
+            'voucher_code' => $data['voucher_code'] ?? null,
+        ]);
+
+        if (is_wp_error($registrationId)) {
+            return $registrationId;
+        }
+
+        // Handle session selection if provided
+        $selectedSessions = $data['selected_sessions'] ?? [];
+        if (!empty($selectedSessions) && $this->sessionSelection) {
+            foreach ($selectedSessions as $sessionId) {
+                $this->sessionSelection->registerForSession(
+                    $registrationId,
+                    (int) $sessionId,
+                    $participantId
+                );
+            }
+        }
+
+        // Get quote ID from registration (created by handler)
+        $quoteService = ntdst_get(\Stride\Modules\Invoicing\QuoteService::class);
+        $quote = $quoteService->getQuoteByRegistration($registrationId);
+
+        return [
+            'registration_id' => $registrationId,
+            'quote_id' => $quote['id'] ?? null,
+            'participant_id' => $participantId,
+        ];
+    }
+
+    /**
+     * Resolve participant user (find or create).
+     */
+    private function resolveParticipant(string $email, string $firstName, string $lastName): int|WP_Error
+    {
+        $user = get_user_by('email', $email);
+        if ($user) {
+            return $user->ID;
+        }
+
+        // Create new user
+        $username = sanitize_user(explode('@', $email)[0], true);
+        $counter = 1;
+        while (username_exists($username)) {
+            $username = sanitize_user(explode('@', $email)[0], true) . $counter;
+            $counter++;
+        }
+
+        $password = wp_generate_password(16, true, true);
+        $userId = wp_create_user($username, $password, $email);
+
+        if (is_wp_error($userId)) {
+            return $userId;
+        }
+
+        wp_update_user([
+            'ID' => $userId,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'display_name' => trim($firstName . ' ' . $lastName),
+        ]);
+
+        wp_new_user_notification($userId, null, 'both');
+
+        return $userId;
+    }
+
+    /**
+     * Update user profile with enrollment form data.
+     */
+    private function updateUserProfile(int $userId, array $data): void
+    {
+        $metaFields = [
+            'phone' => 'phone',
+            'company' => 'company',
+            'vat_number' => 'vat_number',
+            'address' => 'billing_address',
+            'postal_code' => 'billing_postal_code',
+            'city' => 'billing_city',
+            'gln_peppol' => 'gln_number',
+            'invoice_email' => 'invoice_email',
+        ];
+
+        foreach ($metaFields as $inputKey => $metaKey) {
+            if (!empty($data[$inputKey])) {
+                update_user_meta($userId, $metaKey, sanitize_text_field($data[$inputKey]));
+            }
+        }
+
+        // Update core user fields if provided
+        if (!empty($data['first_name']) || !empty($data['last_name'])) {
+            wp_update_user([
+                'ID' => $userId,
+                'first_name' => $data['first_name'] ?? '',
+                'last_name' => $data['last_name'] ?? '',
+            ]);
+        }
+    }
+
+    /**
+     * Store pending billing data for quote handler.
+     */
+    private function storePendingBilling(array $data, int $billingUserId): void
+    {
+        $billing = [
+            'name' => trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? '')),
+            'email' => ($data['invoice_email'] ?? '') ?: ($data['email'] ?? ''),
+            'company' => $data['company'] ?? '',
+            'address' => $data['address'] ?? '',
+            'postal_code' => $data['postal_code'] ?? '',
+            'city' => $data['city'] ?? '',
+            'vat_number' => $data['vat_number'] ?? '',
+            'gln_number' => $data['gln_peppol'] ?? '',
+            'po_number' => $data['po_number'] ?? '',
+            'voucher_code' => $data['voucher_code'] ?? '',
+        ];
+
+        // Store in transient keyed by billing user ID + edition
+        $key = 'stride_pending_billing_' . $billingUserId . '_' . $data['edition_id'];
+        set_transient($key, $billing, HOUR_IN_SECONDS);
     }
 }

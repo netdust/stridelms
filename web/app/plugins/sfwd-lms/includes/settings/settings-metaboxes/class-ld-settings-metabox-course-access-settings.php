@@ -20,7 +20,6 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 	 * @since 3.0.0
 	 */
 	class LearnDash_Settings_Metabox_Course_Access_Settings extends LearnDash_Settings_Metabox {
-
 		/**
 		 * Public constructor for class
 		 *
@@ -260,16 +259,6 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 					'value'   => $this->setting_option_values['course_prerequisite_enabled'] ?? '',
 					'default' => '',
 					'options' => [],
-					'rest'    => [
-						'show_in_rest' => LearnDash_REST_API::enabled(),
-						'rest_args'    => [
-							'schema' => [
-								'field_key' => 'prerequisite_enabled',
-								'type'      => 'boolean',
-								'default'   => false,
-							],
-						],
-					],
 				],
 				'course_prerequisite_compare' => [
 					'name'           => 'course_prerequisite_compare',
@@ -303,7 +292,7 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						'rest_args'    => [
 							'schema' => [
 								'field_key'   => 'prerequisite_compare',
-								'description' => 'Prerequisite Compare Mode.',
+								'description' => __( 'Prerequisite Compare Mode. "ALL" means all prerequisites must be completed. "ANY" means at least one prerequisite must be completed. Requires "requirements_for_enrollment" to be set to "course_prerequisite_enabled".', 'learndash' ),
 								'default'     => 'ANY',
 								'type'        => 'string',
 								'enum'        => [
@@ -337,7 +326,11 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						'rest_args'    => [
 							'schema' => [
 								'field_key'   => 'prerequisites',
-								'description' => 'Prerequisites.',
+								'description' => sprintf(
+									// Translators: placeholder: course label.
+									__( '%s prerequisites. Requires "requirements_for_enrollment" to be set to "course_prerequisite_enabled".', 'learndash' ),
+									learndash_get_custom_label( 'course' )
+								),
 								'default'     => [],
 								'type'        => 'array',
 								'items'       => [
@@ -393,9 +386,14 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						'show_in_rest' => LearnDash_REST_API::enabled(),
 						'rest_args'    => [
 							'schema' => [
-								'field_key' => 'points_access',
-								'type'      => 'float',
-								'default'   => 0.0,
+								'default'     => 0.0,
+								'description' => sprintf(
+									// Translators: placeholder: %1$s: course label.
+									esc_html_x( 'Number of %1$s points required to gain access to this %1$s.', 'placeholder: course.', 'learndash' ),
+									learndash_get_custom_label_lower( 'course' )
+								),
+								'field_key'   => 'points_access',
+								'type'        => 'number',
 							],
 						],
 					],
@@ -460,7 +458,12 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						'rest_args'    => [
 							'schema' => [
 								'field_key'   => 'requirements_for_enrollment',
-								'description' => 'Requirements for Enrollment.',
+								'description' => sprintf(
+									// Translators: placeholder: %1$s: courses plural label. %2$s: course singular label.
+									__( 'Requirements for Enrollment. Empty string means no restrictions and students have access without prerequisite restrictions. "course_prerequisite_enabled" means prerequisite %1$s must be completed first. "course_points_enabled" means a specific number of %2$s points are required for access.', 'learndash' ),
+									learndash_get_custom_label_lower( 'courses' ),
+									learndash_get_custom_label_lower( 'course' )
+								),
 								'default'     => '',
 								'type'        => 'string',
 								'enum'        => [
@@ -565,6 +568,17 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						learndash_get_custom_label_lower( 'course' ),
 						learndash_get_custom_label_lower( 'courses' )
 					),
+					'rest'      => [
+						'show_in_rest' => LearnDash_REST_API::enabled(),
+						'rest_args'    => [
+							'schema' => [
+								'default'     => '0',
+								'description' => esc_html__( "Start Date in RFC3339 format. IMPORTANT: LLMs must ALWAYS ask for the user's timezone if not explicitly provided - do not assume UTC. If the user does not specify a timezone, stop and ask them before proceeding. The user's timezone must be included with the date for accuracy (e.g., '2025-12-01T04:30:00-05:00' for EST). Setting this to '0' will clear the date.", 'learndash' ),
+								'example'     => '2025-01-15T14:30:00Z',
+								'type'        => 'string',
+							],
+						],
+					],
 				),
 				'course_end_date'               => array(
 					'name'      => 'course_end_date',
@@ -578,6 +592,17 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						learndash_get_custom_label_lower( 'course' ),
 						learndash_get_custom_label_lower( 'courses' )
 					),
+					'rest'      => [
+						'show_in_rest' => LearnDash_REST_API::enabled(),
+						'rest_args'    => [
+							'schema' => [
+								'default'     => '0',
+								'description' => esc_html__( "End Date in RFC3339 format. IMPORTANT: LLMs must ALWAYS ask for the user's timezone if not explicitly provided - do not assume UTC. If the user does not specify a timezone, stop and ask them before proceeding. The user's timezone must be included with the date for accuracy (e.g., '2025-12-01T04:30:00-05:00' for EST). Setting this to '0' will clear the date.", 'learndash' ),
+								'example'     => '2025-01-15T14:30:00Z',
+								'type'        => 'string',
+							],
+						],
+					],
 				),
 				'course_seats_limit'            => array(
 					'name'      => 'course_seats_limit',
@@ -600,6 +625,26 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						learndash_get_custom_label_lower( 'course' ),
 						learndash_get_custom_label_lower( 'courses' )
 					),
+					'rest'      => [
+						'show_in_rest' => LearnDash_REST_API::enabled(),
+						'rest_args'    => [
+							'schema' => [
+								'default'     => 0,
+								'type'        => 'integer',
+								'description' => sprintf(
+									// translators: placeholder: course, course, courses.
+									esc_html_x(
+										'Limits the number of students who can take your %1$s. When the limit is reached the %2$s can no longer be purchased or enrolled in. Admins can enroll students even if the limit is reached. It does not affect open %3$s. 0 means no limit.',
+										'placeholder: course, course, courses',
+										'learndash'
+									),
+									learndash_get_custom_label_lower( 'course' ),
+									learndash_get_custom_label_lower( 'course' ),
+									learndash_get_custom_label_lower( 'courses' )
+								),
+							],
+						],
+					],
 				),
 				'course_access_list_enabled'    => array(
 					'name'                => 'course_access_list_enabled',
@@ -866,7 +911,7 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 
 	add_filter(
 		'learndash_post_settings_metaboxes_init_' . learndash_get_post_type_slug( 'course' ),
-		function( $metaboxes = array() ) {
+		function ( $metaboxes = array() ) {
 			if ( ( ! isset( $metaboxes['LearnDash_Settings_Metabox_Course_Access_Settings'] ) ) && ( class_exists( 'LearnDash_Settings_Metabox_Course_Access_Settings' ) ) ) {
 				$metaboxes['LearnDash_Settings_Metabox_Course_Access_Settings'] = LearnDash_Settings_Metabox_Course_Access_Settings::add_metabox_instance();
 			}

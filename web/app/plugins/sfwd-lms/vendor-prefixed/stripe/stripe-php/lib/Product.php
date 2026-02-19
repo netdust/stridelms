@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -37,18 +36,15 @@ namespace StellarWP\Learndash\Stripe;
 class Product extends ApiResource
 {
     const OBJECT_NAME = 'product';
-
-    use ApiOperations\All;
-    use ApiOperations\Create;
-    use ApiOperations\Delete;
-    use ApiOperations\NestedResource;
-    use ApiOperations\Retrieve;
-    use ApiOperations\Search;
-    use ApiOperations\Update;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Delete;
+    use \StellarWP\Learndash\Stripe\ApiOperations\NestedResource;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Search;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Update;
     const TYPE_GOOD = 'good';
     const TYPE_SERVICE = 'service';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -60,12 +56,9 @@ class Product extends ApiResource
     public static function search($params = null, $opts = null)
     {
         $url = '/v1/products/search';
-
         return static::_requestPage($url, \StellarWP\Learndash\Stripe\SearchResult::class, $params, $opts);
     }
-
     const PATH_FEATURES = '/features';
-
     /**
      * @param string $id the ID of the product on which to retrieve the product features
      * @param null|array $params
@@ -79,7 +72,6 @@ class Product extends ApiResource
     {
         return self::_allNestedResources($id, static::PATH_FEATURES, $params, $opts);
     }
-
     /**
      * @param string $id the ID of the product on which to create the product feature
      * @param null|array $params
@@ -93,7 +85,6 @@ class Product extends ApiResource
     {
         return self::_createNestedResource($id, static::PATH_FEATURES, $params, $opts);
     }
-
     /**
      * @param string $id the ID of the product to which the product feature belongs
      * @param string $featureId the ID of the product feature to delete
@@ -108,7 +99,6 @@ class Product extends ApiResource
     {
         return self::_deleteNestedResource($id, static::PATH_FEATURES, $featureId, $params, $opts);
     }
-
     /**
      * @param string $id the ID of the product to which the product feature belongs
      * @param string $featureId the ID of the product feature to retrieve

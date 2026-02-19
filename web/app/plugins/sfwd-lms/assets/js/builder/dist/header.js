@@ -619,18 +619,18 @@ class PostTitle extends react__WEBPACK_IMPORTED_MODULE_0__.PureComponent {
       }
     }
   }
-
-  /**
-   * Render the post title component
-   */
   render() {
     const {
       original_post_title,
       post_title
     } = this.state;
+    const displayTitle = '' !== post_title ? post_title : original_post_title;
+
+    // Use WordPress's built-in safeHTML sanitization.
+    const safeTitle = wp.dom?.safeHTML?.(displayTitle) ?? '';
     return /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("h1", {
       dangerouslySetInnerHTML: {
-        __html: '' !== post_title ? post_title : original_post_title
+        __html: safeTitle
       }
     });
   }
@@ -660,6 +660,7 @@ function _objectSpread(target) { for (var i = 1; i < arguments.length; i++) { va
 function _defineProperty(obj, key, value) { key = _toPropertyKey(key); if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
 function _toPropertyKey(arg) { var key = _toPrimitive(arg, "string"); return typeof key === "symbol" ? key : String(key); }
 function _toPrimitive(input, hint) { if (typeof input !== "object" || input === null) return input; var prim = input[Symbol.toPrimitive]; if (prim !== undefined) { var res = prim.call(input, hint || "default"); if (typeof res !== "object") return res; throw new TypeError("@@toPrimitive must return a primitive value."); } return (hint === "string" ? String : Number)(input); }
+function _extends() { _extends = Object.assign ? Object.assign.bind() : function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; return _extends.apply(this, arguments); }
 /* eslint-disable @wordpress/no-global-event-listener */
 
 
@@ -785,6 +786,36 @@ class Tabs extends react__WEBPACK_IMPORTED_MODULE_0__.PureComponent {
       document.body.setAttribute('data-active-tab', currentTab);
     }
     document.addEventListener('mousedown', this.handleClickOutside);
+
+    /**
+     * WP 6.9+ compatibility fix.
+     * Subscribe to WordPress data store to continuously ensure metabox containers are not hidden.
+     */
+    if (typeof wp !== 'undefined' && wp.data && wp.data.subscribe) {
+      wp.data.subscribe(() => {
+        const preferencesStore = wp.data.select('core/preferences');
+        if (preferencesStore) {
+          try {
+            const isOpen = preferencesStore.get('core/edit-post', 'metaBoxesMainIsOpen');
+            if (!isOpen) {
+              // Ensure main metaboxes wrapper is not hidden.
+              const metaboxesWrapper = document.querySelector('.edit-post-layout__metaboxes[hidden]');
+              if (metaboxesWrapper) {
+                metaboxesWrapper.removeAttribute('hidden');
+              }
+
+              // Ensure metabox containers are not hidden.
+              const metaboxContainers = document.querySelectorAll('#normal-sortables[hidden], #advanced-sortables[hidden], #side-sortables[hidden]');
+              metaboxContainers.forEach(container => {
+                container.removeAttribute('hidden');
+              });
+            }
+          } catch (e) {
+            // Preferences store might not be available in all contexts.
+          }
+        }
+      });
+    }
   }
 
   /**
@@ -986,6 +1017,23 @@ class Tabs extends react__WEBPACK_IMPORTED_MODULE_0__.PureComponent {
         }
       }
     });
+
+    /**
+     * WP 6.9+ compatibility fix.
+     * Ensure that the metabox containers are not hidden.
+     */
+    const metaboxContainers = document.querySelectorAll('#normal-sortables, #advanced-sortables, #side-sortables');
+    metaboxContainers.forEach(container => {
+      if (container.hasAttribute('hidden')) {
+        container.removeAttribute('hidden');
+      }
+    });
+
+    // Also ensure the main metaboxes wrapper is not hidden.
+    const metaboxesWrapper = document.querySelector('.edit-post-layout__metaboxes');
+    if (metaboxesWrapper && metaboxesWrapper.hasAttribute('hidden')) {
+      metaboxesWrapper.removeAttribute('hidden');
+    }
   }
 
   /**
@@ -1001,8 +1049,26 @@ class Tabs extends react__WEBPACK_IMPORTED_MODULE_0__.PureComponent {
       popover,
       addNewEntityButton
     } = this.state;
+
+    // Convert button data object into data attributes
+    const getDataAttributes = btn => {
+      if (!btn.data) return {};
+      return Object.keys(btn.data).reduce((result, key) => {
+        if (typeof btn.data[key] === 'object') {
+          result[`data-${key}`] = JSON.stringify(btn.data[key]);
+        } else {
+          result[`data-${key}`] = btn.data[key];
+        }
+        return result;
+      }, {});
+    };
+
     // We don't want to access the buttons object directly so we avoid mutating it below.
     const buttons = this.props.data.buttons ? [...this.props.data.buttons] : [];
+
+    // Separate buttons based on collapsed property
+    const individualButtons = buttons.filter(button => button?.collapsed === false);
+    const collapsedButtons = buttons.filter(button => !individualButtons.includes(button));
     const currentTabObject = tabs.filter(tab => currentTab === tab.id)[0] || tabs[0];
     const hasActions = currentTabObject && 'actions' in currentTabObject && 0 !== currentTabObject.actions.length;
     const tabButtons = tabs.length > 1 ? /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", {
@@ -1018,7 +1084,7 @@ class Tabs extends react__WEBPACK_IMPORTED_MODULE_0__.PureComponent {
         'is-primary': tab.id === currentTab
       }),
       dangerouslySetInnerHTML: {
-        __html: tab.name
+        __html: wp.dom?.safeHTML?.(tab.name) ?? ''
       }
     }) : /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", {
       key: `tab-button-${index}`,
@@ -1031,13 +1097,13 @@ class Tabs extends react__WEBPACK_IMPORTED_MODULE_0__.PureComponent {
         'is-primary': tab.id === currentTab
       }),
       dangerouslySetInnerHTML: {
-        __html: tab.name
+        __html: wp.dom?.safeHTML?.(tab.name) ?? ''
       }
     }))) : null;
     if (0 !== tabs.length) {
       if (addNewEntityButton) {
         // Create a button object from the addNewEntityButton and place it at the beginning of the buttons array.
-        buttons.unshift({
+        collapsedButtons.unshift({
           text: addNewEntityButton.textContent,
           href: addNewEntityButton.href
         });
@@ -1047,8 +1113,20 @@ class Tabs extends react__WEBPACK_IMPORTED_MODULE_0__.PureComponent {
       }
       return /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement(react__WEBPACK_IMPORTED_MODULE_0__.Fragment, null, this.props.variant && tabButtons, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", {
         className: "ld-global-header-new-settings"
-      }, buttons && /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement(_common_split_button__WEBPACK_IMPORTED_MODULE_3__["default"], {
-        buttons: buttons
+      }, collapsedButtons.length > 0 && /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement(_common_split_button__WEBPACK_IMPORTED_MODULE_3__["default"], {
+        buttons: collapsedButtons
+      }), individualButtons.map((button, index) => {
+        const dataAttributes = getDataAttributes(button);
+        const ButtonTag = button?.href?.length > 0 ? 'a' : 'button';
+        const baseClassName = 'ld-global-header-button button button-primary button-small';
+        const className = `${baseClassName} ${button.class || ''}`.trim();
+        return /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement(ButtonTag, _extends({
+          key: `individual-button-${index}`,
+          href: button.href,
+          target: button.target,
+          className: className,
+          onClick: button.onClick
+        }, dataAttributes), button.text);
       }), hasActions && /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", {
         className: classnames__WEBPACK_IMPORTED_MODULE_4___default()('edit-post-header__settings', {
           [`edit-post-header__settings--${this.props.variant}`]: this.props.variant

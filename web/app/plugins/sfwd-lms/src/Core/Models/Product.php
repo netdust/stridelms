@@ -1176,7 +1176,7 @@ class Product extends Post {
 	}
 
 	/**
-	 * Returns the enrollment date for a user.
+	 * Returns the Course enrollment date for a user.
 	 *
 	 * @since 4.8.0
 	 *
@@ -1229,6 +1229,33 @@ class Product extends Post {
 		 * @return ?int The enrollment date timestamp or null if we can't find it.
 		 */
 		return apply_filters( 'learndash_model_product_user_enrollment_date', $enrollment_date, $this, $user_id );
+	}
+
+	/**
+	 * Sets the Course enrollment date for a user.
+	 *
+	 * @since 5.0.0
+	 *
+	 * @param WP_User|int $user  The user ID or object.
+	 * @param int         $timestamp The enrollment date timestamp.
+	 *
+	 * @return bool True if the enrollment date was set successfully, false otherwise.
+	 */
+	public function set_enrollment_date( $user, int $timestamp ): bool {
+		$user = $this->map_user( $user, true );
+
+		if ( empty( $user ) ) {
+			return false; // unexpected parameter: no user ID.
+		}
+
+		$user_id = $user instanceof WP_User ? $user->ID : $user;
+
+		if ( $this->is_post_type_by_key( LDLMS_Post_Types::COURSE ) ) {
+			$meta_key = 'learndash_course_' . $this->get_id() . '_enrolled_at';
+			return false !== update_user_meta( $user_id, $meta_key, $timestamp );
+		}
+
+		return false;
 	}
 
 	/**

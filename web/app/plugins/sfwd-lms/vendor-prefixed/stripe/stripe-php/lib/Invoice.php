@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -125,15 +124,13 @@ namespace StellarWP\Learndash\Stripe;
 class Invoice extends ApiResource
 {
     const OBJECT_NAME = 'invoice';
-
-    use ApiOperations\All;
-    use ApiOperations\Create;
-    use ApiOperations\Delete;
-    use ApiOperations\NestedResource;
-    use ApiOperations\Retrieve;
-    use ApiOperations\Search;
-    use ApiOperations\Update;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Delete;
+    use \StellarWP\Learndash\Stripe\ApiOperations\NestedResource;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Search;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Update;
     const BILLING_REASON_AUTOMATIC_PENDING_INVOICE_ITEM_INVOICE = 'automatic_pending_invoice_item_invoice';
     const BILLING_REASON_MANUAL = 'manual';
     const BILLING_REASON_QUOTE_ACCEPT = 'quote_accept';
@@ -143,23 +140,18 @@ class Invoice extends ApiResource
     const BILLING_REASON_SUBSCRIPTION_THRESHOLD = 'subscription_threshold';
     const BILLING_REASON_SUBSCRIPTION_UPDATE = 'subscription_update';
     const BILLING_REASON_UPCOMING = 'upcoming';
-
     const COLLECTION_METHOD_CHARGE_AUTOMATICALLY = 'charge_automatically';
     const COLLECTION_METHOD_SEND_INVOICE = 'send_invoice';
-
     const CUSTOMER_TAX_EXEMPT_EXEMPT = 'exempt';
     const CUSTOMER_TAX_EXEMPT_NONE = 'none';
     const CUSTOMER_TAX_EXEMPT_REVERSE = 'reverse';
-
     const STATUS_DRAFT = 'draft';
     const STATUS_OPEN = 'open';
     const STATUS_PAID = 'paid';
     const STATUS_UNCOLLECTIBLE = 'uncollectible';
     const STATUS_VOID = 'void';
-
     const BILLING_CHARGE_AUTOMATICALLY = 'charge_automatically';
     const BILLING_SEND_INVOICE = 'send_invoice';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -173,10 +165,8 @@ class Invoice extends ApiResource
         $url = $this->instanceUrl() . '/finalize';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -190,10 +180,8 @@ class Invoice extends ApiResource
         $url = $this->instanceUrl() . '/mark_uncollectible';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -207,10 +195,8 @@ class Invoice extends ApiResource
         $url = $this->instanceUrl() . '/pay';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -224,10 +210,8 @@ class Invoice extends ApiResource
         $url = $this->instanceUrl() . '/send';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -242,10 +226,8 @@ class Invoice extends ApiResource
         list($response, $opts) = static::_staticRequest('get', $url, $params, $opts);
         $obj = \StellarWP\Learndash\Stripe\Util\Util::convertToStripeObject($response->json, $opts);
         $obj->setLastResponse($response);
-
         return $obj;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -260,10 +242,8 @@ class Invoice extends ApiResource
         list($response, $opts) = static::_staticRequest('get', $url, $params, $opts);
         $obj = \StellarWP\Learndash\Stripe\Util\Util::convertToStripeObject($response->json, $opts);
         $obj->setLastResponse($response);
-
         return $obj;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -277,10 +257,8 @@ class Invoice extends ApiResource
         $url = $this->instanceUrl() . '/void';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -292,12 +270,9 @@ class Invoice extends ApiResource
     public static function search($params = null, $opts = null)
     {
         $url = '/v1/invoices/search';
-
         return static::_requestPage($url, \StellarWP\Learndash\Stripe\SearchResult::class, $params, $opts);
     }
-
     const PATH_LINES = '/lines';
-
     /**
      * @param string $id the ID of the invoice on which to retrieve the invoice line items
      * @param null|array $params

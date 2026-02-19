@@ -192,33 +192,51 @@ function learndash_is_sample( $post ) {
 	return false;
 }
 
-
-
 /**
  * Helper function for PHP output buffering.
  *
- * @todo not sure what this is preventing with a while looping
- *       counting to 10 and checking current buffer level
+ * Cleans nested output buffers down to a specified level. The loop counter
+ * prevents infinite loops by limiting iterations to 10, providing a safety
+ * mechanism in case of unexpected buffer handling issues.
+ *
+ * Example usage:
+ *
+ *     $initial_level = ob_get_level(); // Level 1.
+ *
+ *     ob_start();
+ *     echo 'Outer content';            // Level 2.
+ *
+ *     ob_start();
+ *     echo 'Middle content';           // Level 3.
+ *
+ *     ob_start();
+ *     echo 'Inner content';            // Level 4.
+ *
+ *     // Clean all buffers down to level 1 (return to initial level).
+ *     $content = learndash_ob_get_clean( $initial_level );
+ *     // Returns: 'Outer content' (the last/outermost buffer cleaned).
+ *
+ *     // Clean only down to level 2 (leave the outer buffer).
+ *     $content = learndash_ob_get_clean( 2 );
+ *     // Returns: 'Middle content' (the last buffer cleaned before stopping).
  *
  * @since 2.1.0
  *
- * @param int $level Optional. The level for output buffering. Default 0.
+ * @param int $level Optional. The target buffer level to stop at. Default 0 (clean all buffers).
  *
- * @return string Buffered output.
+ * @return string Content from the last (outermost) buffer that was cleaned, or empty string if no buffers were cleaned.
  */
 function learndash_ob_get_clean( $level = 0 ) {
 	$content = '';
 	$i       = 1;
 
 	while ( $i <= 10 && ob_get_level() > $level ) {
-		$i++;
+		++$i;
 		$content = ob_get_clean();
 	}
 
 	return $content;
 }
-
-
 
 /**
  * Redirects to the home page if the user lands on archive pages for lesson or quiz post types.
@@ -608,22 +626,6 @@ function learndash_get_timestamp_from_date_string( $date_string = '', $adjust_to
 	}
 
 	return $value_timestamp;
-}
-
-/**
- * Checks if the server is on Microsoft IIS.
- *
- * @since 2.1.0
- *
- * @return boolean Returns true if the server is on Microsoft IIS otherwise false.
- */
-function learndash_on_iis() {
-	$s_software = strtolower( $_SERVER['SERVER_SOFTWARE'] );
-	if ( strpos( $s_software, 'microsoft-iis' ) !== false ) {
-		return true;
-	} else {
-		return false;
-	}
 }
 
 /**
@@ -1256,27 +1258,6 @@ function learndash_get_total_post_count( $post_type = '' ) {
 }
 
 /**
- * Gets the posts count from the `WP_Query` post_type argument.
- *
- * @param array $query_args Optional. The `WP_Query` query arguments array. Default empty array.
- *
- * @return int Number of posts for a post type.
- */
-function learndash_check_query_post_type( $query_args = array() ) {
-	$total_post_count = 0;
-	if ( ( isset( $query_args['post_type'] ) ) && ( ! empty( $query_args['post_type'] ) ) ) {
-		if ( is_string( $query_args['post_type'] ) ) {
-			$total_post_count += learndash_get_total_post_count( $query_args['post_type'] );
-		} elseif ( is_array( $query_args['post_type'] ) ) {
-			foreach ( $query_args['post_type'] as $post_type ) {
-				$total_post_count += learndash_get_total_post_count( $query_args['post_type'] );
-			}
-		}
-	}
-
-	return $total_post_count;
-}
-/**
  * Converts the stored lesson timer value from the postmeta settings into number of total seconds.
  *
  * @param string|int $timer_time Optional. The lesson timer time. Default 0.
@@ -1310,46 +1291,6 @@ function learndash_convert_lesson_time_time( $timer_time = 0 ) {
 	}
 
 	return $timer_time;
-}
-
-/**
- * Updates the comment_status field for all the post of given post type.
- *
- * @global array $learndash_question_types
- *
- * @since 3.0.0
- *
- * @param string         $post_type      Optional. The post type slug. Default empty.
- * @param string|boolean $comment_status Optional. New comment status. Allowed values 'open' or 'closed'. Default false.
- */
-function learndash_update_posts_comment_status( $post_type = '', $comment_status = false ) {
-	global $learndash_question_types;
-
-	if ( ! empty( $post_type ) ) {
-		$ld_post_types = learndash_get_post_types();
-		if ( in_array( $post_type, $ld_post_types, true ) ) {
-			if ( in_array( $comment_status, array( 'open', 'closed' ), true ) ) {
-
-				/**
-				 * Filters whether to update comment status for any post type or not.
-				 *
-				 * @param boolean $update_comment_status Whether to Update comment status or not.
-				 * @param string  $post_type             Post type slug.
-				 * @param string  $comment_status        Status of comments.
-				 */
-				if ( apply_filters( 'learndash_update_posts_comment_status', true, $post_type, $comment_status ) ) {
-					global $wpdb;
-					$wpdb->query(
-						$wpdb->prepare(
-							'UPDATE wp_posts SET comment_status = %s WHERE post_type = %s',
-							$comment_status,
-							$post_type
-						)
-					);
-				}
-			}
-		}
-	}
 }
 
 /**
@@ -2120,54 +2061,6 @@ function learndash_stripe_addon_deprecation_notice() {
 }
 
 add_action( 'admin_notices', 'learndash_stripe_addon_deprecation_notice' );
-
-/**
- * Shows admin notice warning if Licensing & Management plugin is not activated.
- *
- * @since 4.6.0
- * @deprecated 4.18.0 -- This is now included in LearnDash - LMS.
- *
- * @return void
- */
-function learndash_hub_deactivated_notice() {
-	_deprecated_function( __FUNCTION__, '4.18.0' );
-
-	if (
-		learndash_is_learndash_hub_active()
-		|| ! current_user_can( 'administrator' )
-	) {
-		return;
-	}
-
-	if ( learndash_is_learndash_hub_installed() ) {
-		$activation_url = wp_nonce_url( admin_url( 'plugins.php?action=activate&plugin=' . LEARNDASH_HUB_PLUGIN_SLUG ), 'activate-plugin_' . LEARNDASH_HUB_PLUGIN_SLUG );
-
-		$message = sprintf(
-			// translators: %1$s: opening anchor tag, %2$s: closing anchor tag.
-			esc_html__( 'Important! The LearnDash Licensing & Management plugin is deactivated. Please %1$sclick here%2$s to activate the plugin to ensure your LearnDash license works correctly. ', 'learndash' ), // cspell: disable-line -- HTML link.
-			'<a href="' . $activation_url . '">',
-			'</a>'
-		);
-	} else {
-		$message = esc_html__( 'Important! The LearnDash Licensing & Management plugin is missing. Please install the plugin to ensure your LearnDash license works correctly. ', 'learndash' );
-	}
-
-	$class = 'notice notice-warning is-dismissible';
-	$title = __( 'LearnDash Licensing & Management', 'learndash' );
-	$links = __( '<a href="https://www.learndash.com/support/docs/core/learndash-licensing-and-management/">LearnDash Licensing Guide</a>', 'learndash' );
-
-	printf(
-		'<div class="%1$s">
-			<p><strong>%2$s</strong></p>
-			<p>%3$s</p>
-			<p>%4$s</p>
-		</div>',
-		esc_attr( $class ),
-		esc_html( $title ),
-		$message, // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Need to output HTML.
-		wp_kses_post( $links )
-	);
-}
 
 /**
  * Creates a cryptographic token tied to a specific action, user, user session, and window of time.

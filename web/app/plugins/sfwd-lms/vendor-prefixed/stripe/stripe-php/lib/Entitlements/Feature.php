@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Entitlements;
 
 /**
@@ -19,7 +18,6 @@ namespace StellarWP\Learndash\Stripe\Entitlements;
 class Feature extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'entitlements.feature';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;

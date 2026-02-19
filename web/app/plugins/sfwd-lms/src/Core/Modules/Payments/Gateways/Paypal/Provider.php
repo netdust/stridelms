@@ -174,6 +174,16 @@ class Provider extends ServiceProvider {
 			2
 		);
 
+		// Register the profile show saved cards filter.
+		add_filter(
+			'learndash_profile_show_saved_cards',
+			$this->container->callback(
+				Profile_Handler::class,
+				'show_saved_cards'
+			),
+			10
+		);
+
 		// Register profile payment method information filter.
 		add_filter(
 			'learndash_subscription_payment_method_information',

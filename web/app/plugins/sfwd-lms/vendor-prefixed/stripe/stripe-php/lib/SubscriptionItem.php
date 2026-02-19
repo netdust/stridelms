@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -23,16 +22,13 @@ namespace StellarWP\Learndash\Stripe;
 class SubscriptionItem extends ApiResource
 {
     const OBJECT_NAME = 'subscription_item';
-
-    use ApiOperations\All;
-    use ApiOperations\Create;
-    use ApiOperations\Delete;
-    use ApiOperations\NestedResource;
-    use ApiOperations\Retrieve;
-    use ApiOperations\Update;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Delete;
+    use \StellarWP\Learndash\Stripe\ApiOperations\NestedResource;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Update;
     const PATH_USAGE_RECORDS = '/usage_records';
-
     /**
      * @param string $id the ID of the subscription item on which to create the usage record
      * @param null|array $params
@@ -47,7 +43,6 @@ class SubscriptionItem extends ApiResource
         return self::_createNestedResource($id, static::PATH_USAGE_RECORDS, $params, $opts);
     }
     const PATH_USAGE_RECORD_SUMMARIES = '/usage_record_summaries';
-
     /**
      * @param string $id the ID of the subscription item on which to retrieve the usage record summaries
      * @param null|array $params

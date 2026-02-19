@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Terminal;
 
 /**
@@ -16,6 +15,5 @@ namespace StellarWP\Learndash\Stripe\Terminal;
 class ConnectionToken extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'terminal.connection_token';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
 }

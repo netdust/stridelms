@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Climate;
 
 /**
@@ -18,10 +17,8 @@ namespace StellarWP\Learndash\Stripe\Climate;
 class Supplier extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'climate.supplier';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
-
     const REMOVAL_PATHWAY_BIOMASS_CARBON_REMOVAL_AND_STORAGE = 'biomass_carbon_removal_and_storage';
     const REMOVAL_PATHWAY_DIRECT_AIR_CAPTURE = 'direct_air_capture';
     const REMOVAL_PATHWAY_ENHANCED_WEATHERING = 'enhanced_weathering';

@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Treasury;
 
 /**
@@ -28,15 +27,12 @@ namespace StellarWP\Learndash\Stripe\Treasury;
 class FinancialAccount extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'treasury.financial_account';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
     use \StellarWP\Learndash\Stripe\ApiOperations\Update;
-
     const STATUS_CLOSED = 'closed';
     const STATUS_OPEN = 'open';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -51,10 +47,8 @@ class FinancialAccount extends \StellarWP\Learndash\Stripe\ApiResource
         list($response, $opts) = $this->_request('get', $url, $params, $opts);
         $obj = \StellarWP\Learndash\Stripe\Util\Util::convertToStripeObject($response, $opts);
         $obj->setLastResponse($response);
-
         return $obj;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -68,7 +62,6 @@ class FinancialAccount extends \StellarWP\Learndash\Stripe\ApiResource
         $url = $this->instanceUrl() . '/features';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
 }

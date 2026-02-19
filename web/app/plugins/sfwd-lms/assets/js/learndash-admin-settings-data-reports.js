@@ -40,11 +40,9 @@ function learndash_data_reports_do_ajax( post_data, container ) {
 		dataType: 'json',
 		cache: false,
 		data: post_data,
-		complete: function() {
-			// Re-enable the buttons
-			jQuery( 'button.learndash-data-reports-button' ).prop( 'disabled', false );
-		},
 		error: function( jqXHR, textStatus, errorThrown ) {
+			// Re-enable the buttons.
+			jQuery( 'button.learndash-data-reports-button' ).prop( 'disabled', false );
 		},
 		success: function( reply_data ) {
 			if (
@@ -82,9 +80,12 @@ function learndash_data_reports_do_ajax( post_data, container ) {
 				post_data.data = reply_data.data;
 				learndash_data_reports_do_ajax( post_data, container );
 			} else if (
-					typeof reply_data.data.report_download_link !== 'undefined'
-					&& reply_data.data.report_download_link !== ''
-				) {
+				typeof reply_data.data.report_download_link !== 'undefined'
+				&& reply_data.data.report_download_link !== ''
+			) {
+				// Re-enable the buttons.
+				jQuery( 'button.learndash-data-reports-button' ).prop( 'disabled', false );
+
 				window.location.href = reply_data.data.report_download_link;
 			}
 		},

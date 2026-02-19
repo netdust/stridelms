@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Treasury;
 
 /**
@@ -31,16 +30,13 @@ namespace StellarWP\Learndash\Stripe\Treasury;
 class InboundTransfer extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'treasury.inbound_transfer';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
-
     const STATUS_CANCELED = 'canceled';
     const STATUS_FAILED = 'failed';
     const STATUS_PROCESSING = 'processing';
     const STATUS_SUCCEEDED = 'succeeded';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -54,7 +50,6 @@ class InboundTransfer extends \StellarWP\Learndash\Stripe\ApiResource
         $url = $this->instanceUrl() . '/cancel';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
 }

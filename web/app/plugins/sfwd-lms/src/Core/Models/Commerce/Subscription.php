@@ -98,6 +98,24 @@ class Subscription extends Product {
 	public static $meta_key_expired_date = 'expired_date';
 
 	/**
+	 * Meta key for the subscription retry count.
+	 *
+	 * @since 4.25.3
+	 *
+	 * @var string
+	 */
+	private const META_KEY_RETRY_COUNT = 'retry_count';
+
+	/**
+	 * Meta key for the subscription last retry timestamp.
+	 *
+	 * @since 4.25.3
+	 *
+	 * @var string
+	 */
+	private const META_KEY_LAST_RETRY_TIMESTAMP = 'last_retry_timestamp';
+
+	/**
 	 * Returns the subscription status based on the product.
 	 *
 	 * @since 4.25.0
@@ -126,15 +144,15 @@ class Subscription extends Product {
 	public function get_status_label(): string {
 		switch ( $this->get_status() ) {
 			case self::$status_active:
-				return __( 'Active', 'learndash' );
+				return _x( 'Active', 'Subscription status', 'learndash' );
 			case self::$status_canceled:
-				return __( 'Canceled', 'learndash' );
+				return _x( 'Canceled', 'Subscription status', 'learndash' );
 			case self::$status_expired:
-				return __( 'Expired', 'learndash' );
+				return _x( 'Expired', 'Subscription status', 'learndash' );
 			case self::$status_trial:
-				return __( 'Trial', 'learndash' );
+				return _x( 'Trial', 'Subscription status', 'learndash' );
 			default:
-				return __( 'Unknown', 'learndash' );
+				return _x( 'Unknown', 'Subscription status', 'learndash' );
 		}
 	}
 
@@ -212,10 +230,8 @@ class Subscription extends Product {
 
 		$this->set_status( self::$status_canceled );
 		$this->set_meta( self::$meta_key_next_payment_date, 0 );
-		$this->set_meta( self::$meta_key_cancellation_date, time() );
-		$this->set_meta( self::$meta_key_cancellation_reason, $reason );
 
-		return true;
+		return parent::cancel( $reason, $force_cancellation );
 	}
 
 	/**
@@ -238,6 +254,27 @@ class Subscription extends Product {
 	 */
 	public function get_expired_date(): ?int {
 		return Cast::to_int( $this->getAttribute( self::$meta_key_expired_date ) );
+	}
+
+	/**
+	 * Returns the cancellation reason description.
+	 *
+	 * @since 4.25.3
+	 *
+	 * @return string
+	 */
+	public function get_cancellation_reason_description(): string {
+		$cancellation_reason = $this->get_cancellation_reason();
+
+		if ( ! $cancellation_reason ) {
+			// Fallback to the default cancellation reason description.
+			return __( 'Subscription canceled', 'learndash' );
+		}
+
+		return $cancellation_reason->get_description(
+			__( 'Subscription', 'learndash' ),
+			$this->get_cancellation_user_id()
+		);
 	}
 
 	/**
@@ -589,5 +626,176 @@ class Subscription extends Product {
 
 			return;
 		}
+	}
+
+	/**
+	 * Returns the current retry count for the subscription.
+	 *
+	 * @since 4.25.3
+	 *
+	 * @return int
+	 */
+	public function get_retry_count(): int {
+		return Cast::to_int( $this->getAttribute( self::META_KEY_RETRY_COUNT ) );
+	}
+
+	/**
+	 * Increments the retry count for the subscription.
+	 *
+	 * @since 4.25.3
+	 *
+	 * @return int The new retry count.
+	 */
+	public function increment_retry_count(): int {
+		$current_count = $this->get_retry_count();
+		$new_count     = $current_count + 1;
+
+		$this->set_retry_count( $new_count );
+
+		return $new_count;
+	}
+
+	/**
+	 * Resets the retry count for the subscription.
+	 *
+	 * @since 4.25.3
+	 *
+	 * @return void
+	 */
+	public function reset_retry_count(): void {
+		$this->set_retry_count( 0 );
+		$this->set_meta( self::META_KEY_LAST_RETRY_TIMESTAMP, 0 );
+	}
+
+	/**
+	 * Returns the timestamp of the last retry attempt.
+	 *
+	 * @since 4.25.3
+	 *
+	 * @return int
+	 */
+	public function get_last_retry_timestamp(): int {
+		return Cast::to_int( $this->getAttribute( self::META_KEY_LAST_RETRY_TIMESTAMP ) );
+	}
+
+	/**
+	 * Sets the timestamp of the last retry attempt.
+	 *
+	 * @since 4.25.3
+	 *
+	 * @param int $timestamp The timestamp.
+	 *
+	 * @return void
+	 */
+	public function set_last_retry_timestamp( int $timestamp ): void {
+		$this->set_meta( self::META_KEY_LAST_RETRY_TIMESTAMP, $timestamp );
+	}
+
+	/**
+	 * Returns whether the subscription can be retried.
+	 *
+	 * @since 4.25.3
+	 *
+	 * @return bool
+	 */
+	public function can_be_retried(): bool {
+		$max_retries = $this->get_max_retries();
+
+		return $this->get_retry_count() < $max_retries;
+	}
+
+	/**
+	 * Returns the maximum number of retries allowed.
+	 *
+	 * @since 4.25.3
+	 *
+	 * @return int
+	 */
+	public function get_max_retries(): int {
+		/**
+		 * Filters the maximum number of retries allowed for failed payments.
+		 *
+		 * @since 4.25.3
+		 *
+		 * @param int          $max_retries  The maximum number of retries. Default 3.
+		 * @param Subscription $subscription The subscription instance.
+		 *
+		 * @return int The maximum number of retries.
+		 */
+		return apply_filters( 'learndash_subscription_max_retries', 3, $this );
+	}
+
+	/**
+	 * Returns the timestamp when the next retry should be attempted.
+	 *
+	 * @since 4.25.3
+	 *
+	 * @return int
+	 */
+	public function get_next_retry_timestamp(): int {
+		$retry_count = $this->get_retry_count();
+
+		if ( $retry_count === 0 ) {
+			return 0; // No retries attempted yet.
+		}
+
+		$intervals = $this->get_retry_intervals();
+		$interval  = $intervals[ $retry_count ] ?? 0;
+
+		if ( $interval === 0 ) {
+			return 0; // No more retries allowed.
+		}
+
+		$last_retry_timestamp = $this->get_last_retry_timestamp();
+
+		if ( $last_retry_timestamp === 0 ) {
+			return 0; // No last retry timestamp found.
+		}
+
+		return $last_retry_timestamp + $interval;
+	}
+
+	/**
+	 * Sets the retry count for the subscription.
+	 *
+	 * @since 4.25.3
+	 *
+	 * @param int $retry_count The retry count.
+	 *
+	 * @return void
+	 */
+	protected function set_retry_count( int $retry_count ): void {
+		$this->set_meta( self::META_KEY_RETRY_COUNT, $retry_count );
+	}
+
+	/**
+	 * Returns the retry intervals in seconds. Each index corresponds to how long we should wait until the next retry.
+	 *
+	 * Example: After the first retry, we wait 1 hour before trying again. After the second retry, we wait 5 days before trying again.
+	 *
+	 * @since 4.25.3
+	 *
+	 * @return array<int,int>
+	 */
+	protected function get_retry_intervals(): array {
+		/**
+		 * Filters the retry intervals for failed payments.
+		 *
+		 * @since 4.25.3
+		 *
+		 * @param array<int,int> $intervals    The retry intervals in seconds. Default [3600, 432000, 864000] (1 hour, 5 days, 10 days).
+		 * @param Subscription   $subscription The subscription instance.
+		 *
+		 * @return array<int,int> The retry intervals in seconds.
+		 */
+		return apply_filters(
+			'learndash_subscription_retry_intervals',
+			[
+				1 => HOUR_IN_SECONDS,     // 1 hour.
+				2 => DAY_IN_SECONDS * 5,  // 5 days.
+				3 => DAY_IN_SECONDS * 10, // 10 days.
+			],
+			$this
+		);
 	}
 }

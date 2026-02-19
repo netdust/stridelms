@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Issuing;
 
 /**
@@ -37,14 +36,11 @@ namespace StellarWP\Learndash\Stripe\Issuing;
 class Transaction extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'issuing.transaction';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
     use \StellarWP\Learndash\Stripe\ApiOperations\Update;
-
     const TYPE_CAPTURE = 'capture';
     const TYPE_REFUND = 'refund';
-
     const WALLET_APPLE_PAY = 'apple_pay';
     const WALLET_GOOGLE_PAY = 'google_pay';
     const WALLET_SAMSUNG_PAY = 'samsung_pay';

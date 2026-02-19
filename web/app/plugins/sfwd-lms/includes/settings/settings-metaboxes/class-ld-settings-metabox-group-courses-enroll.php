@@ -83,7 +83,7 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						}
 						$ld_auto_enroll_group_course_ids = array_map( 'absint', $ld_auto_enroll_group_course_ids );
 
-						$group_selected_ids = learndash_group_enrolled_courses( $group_id, true );
+						$group_selected_ids = learndash_group_enrolled_courses( $group_id );
 						if ( ! empty( $group_selected_ids ) ) {
 							$group_selected_ids              = array_map( 'absint', $group_selected_ids );
 							$ld_auto_enroll_group_course_ids = array_intersect( $ld_auto_enroll_group_course_ids, $group_selected_ids );
@@ -93,7 +93,7 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 							array(
 								'html_title'   => '',
 								'group_id'     => $group_id,
-								'included_ids' => learndash_group_enrolled_courses( $group_id, true ),
+								'included_ids' => learndash_group_enrolled_courses( $group_id ),
 								'selected_ids' => $ld_auto_enroll_group_course_ids,
 							)
 						);

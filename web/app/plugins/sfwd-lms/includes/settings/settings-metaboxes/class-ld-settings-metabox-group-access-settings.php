@@ -591,6 +591,17 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						esc_html_x( 'When does the %1$s start?', 'placeholder: group label', 'learndash' ),
 						learndash_get_custom_label_lower( 'group' )
 					),
+					'rest'      => [
+						'show_in_rest' => LearnDash_REST_API::enabled(),
+						'rest_args'    => [
+							'schema' => [
+								'default'     => '0',
+								'description' => esc_html__( "Start Date in RFC3339 format. IMPORTANT: LLMs must ALWAYS ask for the user's timezone if not explicitly provided - do not assume UTC. If the user does not specify a timezone, stop and ask them before proceeding. The user's timezone must be included with the date for accuracy (e.g., '2025-12-01T04:30:00-05:00' for EST). Setting this to '0' will clear the date.", 'learndash' ),
+								'example'     => '2025-01-15T14:30:00Z',
+								'type'        => 'string',
+							],
+						],
+					],
 				],
 				Group_Access_Settings::$field_end_date   => [
 					'name'      => Group_Access_Settings::$field_end_date,
@@ -603,6 +614,17 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						esc_html_x( 'When does the %1$s end?', 'placeholder: group label', 'learndash' ),
 						learndash_get_custom_label_lower( 'group' )
 					),
+					'rest'      => [
+						'show_in_rest' => LearnDash_REST_API::enabled(),
+						'rest_args'    => [
+							'schema' => [
+								'default'     => '0',
+								'description' => esc_html__( "End Date in RFC3339 format. IMPORTANT: LLMs must ALWAYS ask for the user's timezone if not explicitly provided - do not assume UTC. If the user does not specify a timezone, stop and ask them before proceeding. The user's timezone must be included with the date for accuracy (e.g., '2025-12-01T04:30:00-05:00' for EST). Setting this to '0' will clear the date.", 'learndash' ),
+								'example'     => '2025-01-15T14:30:00Z',
+								'type'        => 'string',
+							],
+						],
+					],
 				],
 				'group_seats_limit'                      => [
 					'name'      => 'group_seats_limit',
@@ -623,6 +645,22 @@ if ( ( class_exists( 'LearnDash_Settings_Metabox' ) ) && ( ! class_exists( 'Lear
 						),
 						learndash_get_custom_label_lower( 'group' )
 					),
+					'rest'      => [
+						'show_in_rest' => LearnDash_REST_API::enabled(),
+						'rest_args'    => [
+							'schema' => [
+								'default'     => 0,
+								'description' => esc_html(
+									sprintf(
+										// translators: placeholder: group label.
+										__( 'The maximum number of students allowed in the %s. 0 means no limit. Admins can enroll students even if the limit is reached.', 'learndash' ),
+										learndash_get_custom_label_lower( 'group' )
+									)
+								),
+								'type'        => 'integer',
+							],
+						],
+					],
 				],
 			);
 

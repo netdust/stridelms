@@ -21,7 +21,20 @@
 
     <?php
     // Full-width templates handle their own layout
-    $full_width_templates = is_singular(['vad_edition', 'vad_trajectory']);
+    // Check for: front page, edition/trajectory singles, and dashboard page templates
+    $page_template = is_page() ? get_page_template_slug() : '';
+    $custom_layout_templates = [
+        'page-mijn-account.php',
+        'page-mijn-cursussen.php',
+        'page-offertes.php',
+        'page-profiel.php',
+        'page-inschrijven.php',
+        'page-offerte.php',
+    ];
+
+    $full_width_templates = is_front_page()
+        || is_singular(['vad_edition', 'vad_trajectory'])
+        || in_array($page_template, $custom_layout_templates, true);
 
     if (!$full_width_templates):
     ?>

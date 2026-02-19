@@ -265,49 +265,6 @@ function learndash_load_admin_resources() {
 add_action( 'admin_enqueue_scripts', 'learndash_load_admin_resources' );
 
 /**
- * Outputs the Reports Page.
- *
- * @since 2.1.0
- */
-function learndash_lms_reports_page() {
-	?>
-		<div  id="learndash-reports"  class="wrap">
-			<h1><?php esc_html_e( 'User Reports', 'learndash' ); ?></h1>
-			<br>
-			<div class="sfwd_settings_left">
-				<div class=" " id="sfwd-learndash-reports_metabox">
-					<div class="inside">
-						<a class="button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=learndash-lms-reports&action=sfp_update_module&nonce-sfwd=' . esc_attr( wp_create_nonce( 'sfwd-nonce' ) ) . '&page_options=sfp_home_description&courses_export_submit=Export' ) ); ?>">
-						<?php
-						// translators: Export User Course Data Label.
-						printf( esc_html_x( 'Export User %s Data', 'Export User Course Data Label', 'learndash' ), LearnDash_Custom_Label::get_label( 'course' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Method escapes output
-						?>
-						</a>
-						<a class="button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=learndash-lms-reports&action=sfp_update_module&nonce-sfwd=' . esc_attr( wp_create_nonce( 'sfwd-nonce' ) ) . '&page_options=sfp_home_description&quiz_export_submit=Export' ) ); ?>">
-						<?php
-						printf(
-						// translators: Export Quiz Data Label.
-							esc_html_x( 'Export %s Data', 'Export Quiz Data Label', 'learndash' ),
-							LearnDash_Custom_Label::get_label( 'quiz' ) // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Method escapes output
-						);
-						?>
-						</a>
-						<?php
-							/**
-							 * Fires after report page buttons.
-							 *
-							 * @since 2.1.0
-							 */
-							do_action( 'learndash_report_page_buttons' );
-						?>
-					</div>
-				</div>
-			</div>
-		</div>
-	<?php
-}
-
-/**
  * Adds JavaScript code to the admin footer.
  *
  * @since 2.1.0

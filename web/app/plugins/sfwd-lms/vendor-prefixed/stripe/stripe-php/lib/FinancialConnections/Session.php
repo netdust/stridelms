@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\FinancialConnections;
 
 /**
@@ -21,7 +20,6 @@ namespace StellarWP\Learndash\Stripe\FinancialConnections;
 class Session extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'financial_connections.session';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
 }

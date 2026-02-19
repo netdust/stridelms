@@ -617,21 +617,6 @@ function learndash_activity_start_course( $user_id = 0, $course_id = 0, $start_t
 }
 
 /**
- * Set the course activity completed record.
- *
- * @since 3.5.0
- *
- * @param int $user_id       User ID.
- * @param int $course_id     Course ID.
- * @param int $complete_time Activity complete timestamp (GMT).
- *
- * @return object Instance of LDLMS_Model_Activity or null;
- */
-function learndash_activity_complete_course( $user_id = 0, $course_id = 0, $complete_time = 0 ) {
-	return learndash_activity_complete_step( $user_id, $course_id, $course_id, 'course', $complete_time );
-}
-
-/**
  * Set the lesson activity started record.
  *
  * @since 3.5.0
@@ -709,22 +694,6 @@ function learndash_activity_complete_topic( $user_id = 0, $course_id = 0, $topic
  */
 function learndash_activity_start_quiz( $user_id = 0, $course_id = 0, $quiz_id = 0, $start_time = 0 ) {
 	return learndash_activity_start_step( $user_id, $course_id, $quiz_id, 'quiz', $start_time );
-}
-
-/**
- * Set the quiz activity completed record.
- *
- * @since 3.5.0
- *
- * @param int $user_id       User ID.
- * @param int $course_id     Course ID.
- * @param int $quiz_id       Quiz ID.
- * @param int $complete_time Activity complete timestamp (GMT).
- *
- * @return object Instance of LDLMS_Model_Activity or null;
- */
-function learndash_activity_complete_quiz( $user_id = 0, $course_id = 0, $quiz_id = 0, $complete_time = 0 ) {
-	return learndash_activity_complete_step( $user_id, $course_id, $quiz_id, 'quiz', $complete_time );
 }
 
 /**

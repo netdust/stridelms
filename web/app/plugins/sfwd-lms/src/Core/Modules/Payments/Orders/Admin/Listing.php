@@ -708,6 +708,10 @@ class Listing {
 			LEFT JOIN {$wpdb->postmeta} ld_order_child_meta_gateway
 			ON ld_order_child_meta_gateway.post_id = ld_order_first_child.ld_order_first_child_id
 			AND ld_order_child_meta_gateway.meta_key = 'ld_payment_processor'
+			/* Be sure to include the zero price orders. */
+            LEFT JOIN {$wpdb->postmeta} ld_order_zero_meta_gateway
+            ON ld_order_zero_meta_gateway.post_id = ld_order_first_child.ld_order_first_child_id
+            AND ld_order_zero_meta_gateway.meta_key = 'is_zero_price'
 			";
 
 		// We grab a specific gateway if the user wants it. Otherwise, we grab all available gateways.
@@ -770,8 +774,9 @@ class Listing {
 	private function get_where_clauses_for_payment_processor(): string {
 		global $wpdb;
 
-		$where        = '';
-		$legacy_where = '';
+		$where = '';
+		// Be sure to include the zero price orders.
+		$inner_ors_where = ' OR ld_order_zero_meta_gateway.meta_value = "1"';
 
 		// We grab a specific gateway if the user wants it. Otherwise, we grab all available gateways.
 
@@ -792,7 +797,7 @@ class Listing {
 			// Join the legacy meta key value for PayPal.
 			$gateways[] = 'paypal';
 
-			$legacy_where .= ' OR ld_order_meta_gateway_legacy_paypal.meta_value IS NOT NULL';
+			$inner_ors_where .= ' OR ld_order_meta_gateway_legacy_paypal.meta_value IS NOT NULL';
 		}
 
 		// Stripe.
@@ -802,7 +807,7 @@ class Listing {
 			$gateways,
 			true
 		) ) {
-			$legacy_where .= ' OR ld_order_meta_gateway_legacy_stripe.meta_value IS NOT NULL';
+			$inner_ors_where .= ' OR ld_order_meta_gateway_legacy_stripe.meta_value IS NOT NULL';
 		}
 
 		$gateways_in = ! empty( $gateways )
@@ -822,7 +827,7 @@ class Listing {
 		$where .= "
 			AND (
 				ld_order_child_meta_gateway.meta_value IN ({$gateways_in})
-				{$legacy_where}
+				{$inner_ors_where}
 			)";
 
 		return $where;

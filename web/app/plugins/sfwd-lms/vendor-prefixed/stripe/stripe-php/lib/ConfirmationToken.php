@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -30,9 +29,7 @@ namespace StellarWP\Learndash\Stripe;
 class ConfirmationToken extends ApiResource
 {
     const OBJECT_NAME = 'confirmation_token';
-
-    use ApiOperations\Retrieve;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
     const SETUP_FUTURE_USAGE_OFF_SESSION = 'off_session';
     const SETUP_FUTURE_USAGE_ON_SESSION = 'on_session';
 }

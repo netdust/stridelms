@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -16,21 +15,17 @@ namespace StellarWP\Learndash\Stripe;
 class CashBalance extends ApiResource
 {
     const OBJECT_NAME = 'cash_balance';
-
     /**
      * @return string the API URL for this balance transaction
      */
     public function instanceUrl()
     {
         $customer = $this['customer'];
-        $customer = Util\Util::utf8($customer);
-
+        $customer = \StellarWP\Learndash\Stripe\Util\Util::utf8($customer);
         $base = Customer::classUrl();
         $customerExtn = \urlencode($customer);
-
         return "{$base}/{$customerExtn}/cash_balance";
     }
-
     /**
      * @param array|string $_id
      * @param null|array|string $_opts
@@ -39,13 +34,9 @@ class CashBalance extends ApiResource
      */
     public static function retrieve($_id, $_opts = null)
     {
-        $msg = 'Customer Cash Balance cannot be retrieved without a ' .
-               'customer ID. Retrieve a Customer Cash Balance using ' .
-               "`Customer::retrieveCashBalance('customer_id')`.";
-
+        $msg = 'Customer Cash Balance cannot be retrieved without a ' . 'customer ID. Retrieve a Customer Cash Balance using ' . "`Customer::retrieveCashBalance('customer_id')`.";
         throw new Exception\BadMethodCallException($msg);
     }
-
     /**
      * @param string $_id
      * @param null|array $_params
@@ -55,10 +46,7 @@ class CashBalance extends ApiResource
      */
     public static function update($_id, $_params = null, $_options = null)
     {
-        $msg = 'Customer Cash Balance cannot be updated without a ' .
-        'customer ID. Retrieve a Customer Cash Balance using ' .
-        "`Customer::updateCashBalance('customer_id')`.";
-
+        $msg = 'Customer Cash Balance cannot be updated without a ' . 'customer ID. Retrieve a Customer Cash Balance using ' . "`Customer::updateCashBalance('customer_id')`.";
         throw new Exception\BadMethodCallException($msg);
     }
 }

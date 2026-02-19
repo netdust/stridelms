@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Forwarding;
 
 /**
@@ -37,7 +36,6 @@ namespace StellarWP\Learndash\Stripe\Forwarding;
 class Request extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'forwarding.request';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;

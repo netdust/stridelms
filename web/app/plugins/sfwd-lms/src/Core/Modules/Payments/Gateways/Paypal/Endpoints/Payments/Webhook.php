@@ -11,6 +11,8 @@ namespace LearnDash\Core\Modules\Payments\Gateways\Paypal\Endpoints\Payments;
 
 use LearnDash\Core\Modules\REST\V1\Contracts\Endpoint;
 use LearnDash\Core\App;
+use LearnDash\Core\Enums\Commerce\Cancellation_Reason;
+use LearnDash\Core\Models\Commerce\Subscription;
 use LearnDash\Core\Modules\Payments\Gateways\Paypal\Payment_Gateway;
 use LearnDash\Core\Modules\Payments\Gateways\Paypal\Webhook_Client;
 use LearnDash\Core\Modules\Payments\Gateways\Paypal\Payment_Token;
@@ -138,6 +140,8 @@ class Webhook extends Endpoint {
 			case 'PAYMENT.CAPTURE.DENIED':
 			case 'PAYMENT.CAPTURE.REFUNDED':
 			case 'PAYMENT.CAPTURE.REVERSED':
+				$gateway->log_info( 'Event received: ' . $event_type );
+
 				$custom_data = $this->get_webhook_custom_data( $event_data, 'custom_id' );
 
 				if ( is_wp_error( $custom_data ) ) {
@@ -149,13 +153,12 @@ class Webhook extends Endpoint {
 					);
 				}
 
-				$failed_reason = sprintf(
-					// translators: %s: PayPal event type.
-					__( 'Cancelled by PayPal event "%s".', 'learndash' ),
-					$event_type
+				$gateway->process_failed_payment(
+					$custom_data['user_id'],
+					$custom_data['product_ids'],
+					Cancellation_Reason::REFUNDED()->getValue()
 				);
 
-				$gateway->process_failed_payment( $custom_data['user_id'], $custom_data['product_ids'], $failed_reason );
 				break;
 
 			case 'VAULT.PAYMENT-TOKEN.CREATED':
@@ -205,7 +208,8 @@ class Webhook extends Endpoint {
 	 *
 	 * @return array{
 	 *     type: string,
-	 *     properties: array<string,array<string,mixed>>,
+	 *     properties: array<string,array<string,mixed>>|object,
+	 *     required?: string[],
 	 * }
 	 */
 	public function get_request_schema( string $path, string $method ): array {
@@ -274,7 +278,7 @@ class Webhook extends Endpoint {
 				'callback'            => [ $this, 'handle_webhook' ],
 				'args'                => $this->get_endpoint_args(),
 				'permission_callback' => [ $this, 'check_permission' ],
-				'summary'             => __( 'Handle PayPal webhook event.', 'learndash' ),
+				'summary'             => __( 'Handle PayPal webhook event', 'learndash' ),
 				'description'         => __( 'Handles PayPal webhook notifications for payment events.', 'learndash' ),
 			],
 		];

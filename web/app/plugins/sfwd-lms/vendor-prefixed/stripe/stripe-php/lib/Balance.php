@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -28,6 +27,5 @@ namespace StellarWP\Learndash\Stripe;
 class Balance extends SingletonApiResource
 {
     const OBJECT_NAME = 'balance';
-
-    use ApiOperations\SingletonRetrieve;
+    use \StellarWP\Learndash\Stripe\ApiOperations\SingletonRetrieve;
 }

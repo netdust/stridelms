@@ -316,6 +316,7 @@ trait Request {
 				'Authorization' => sprintf( 'Bearer %s', $this->get_access_token() ),
 				'Content-Type'  => 'application/json',
 			],
+			'timeout' => MINUTE_IN_SECONDS,
 		];
 
 		if ( 'GET' !== $method ) {
@@ -342,10 +343,6 @@ trait Request {
 					? $body
 					: wp_json_encode( $body );
 			}
-		}
-
-		if ( ! empty( $args['timeout'] ) ) {
-			$args['timeout'] = MINUTE_IN_SECONDS;
 		}
 
 		return $args;

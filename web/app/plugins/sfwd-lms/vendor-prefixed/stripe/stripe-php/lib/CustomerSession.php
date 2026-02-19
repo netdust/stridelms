@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -19,6 +18,5 @@ namespace StellarWP\Learndash\Stripe;
 class CustomerSession extends ApiResource
 {
     const OBJECT_NAME = 'customer_session';
-
-    use ApiOperations\Create;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create;
 }

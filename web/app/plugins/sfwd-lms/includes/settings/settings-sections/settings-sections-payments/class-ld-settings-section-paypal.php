@@ -39,7 +39,7 @@ if ( ( class_exists( 'LearnDash_Settings_Section' ) ) && ( ! class_exists( 'Lear
 			$this->settings_section_key = 'settings_paypal';
 
 			// Section label/header.
-			$this->settings_section_label = esc_html__( 'PayPal Standard Settings', 'learndash' );
+			$this->settings_section_label = esc_html__( 'Settings - PayPal Standard', 'learndash' );
 
 			$this->reset_confirm_message = esc_html__( 'Are you sure want to reset the PayPal values?', 'learndash' );
 

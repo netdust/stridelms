@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -32,11 +31,9 @@ namespace StellarWP\Learndash\Stripe;
 class Dispute extends ApiResource
 {
     const OBJECT_NAME = 'dispute';
-
-    use ApiOperations\All;
-    use ApiOperations\Retrieve;
-    use ApiOperations\Update;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Update;
     const REASON_BANK_CANNOT_PROCESS = 'bank_cannot_process';
     const REASON_CHECK_RETURNED = 'check_returned';
     const REASON_CREDIT_NOT_PROCESSED = 'credit_not_processed';
@@ -51,7 +48,6 @@ class Dispute extends ApiResource
     const REASON_PRODUCT_UNACCEPTABLE = 'product_unacceptable';
     const REASON_SUBSCRIPTION_CANCELED = 'subscription_canceled';
     const REASON_UNRECOGNIZED = 'unrecognized';
-
     const STATUS_LOST = 'lost';
     const STATUS_NEEDS_RESPONSE = 'needs_response';
     const STATUS_UNDER_REVIEW = 'under_review';
@@ -59,7 +55,6 @@ class Dispute extends ApiResource
     const STATUS_WARNING_NEEDS_RESPONSE = 'warning_needs_response';
     const STATUS_WARNING_UNDER_REVIEW = 'warning_under_review';
     const STATUS_WON = 'won';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -73,7 +68,6 @@ class Dispute extends ApiResource
         $url = $this->instanceUrl() . '/close';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
 }

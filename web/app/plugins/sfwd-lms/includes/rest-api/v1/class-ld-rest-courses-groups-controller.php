@@ -410,7 +410,7 @@ if ( ( ! class_exists( 'LD_REST_Courses_Groups_Controller_V1' ) ) && ( class_exi
 			$args['post_type'] = $this->post_type;
 
 			$args['post__in'] = array( 0 );
-			$group_ids        = learndash_get_course_groups( $course_id, true );
+			$group_ids        = learndash_get_course_groups( $course_id );
 			if ( ! empty( $group_ids ) ) {
 				$args['post__in'] = $group_ids;
 			}

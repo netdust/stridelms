@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -60,12 +59,10 @@ namespace StellarWP\Learndash\Stripe;
 class PaymentMethod extends ApiResource
 {
     const OBJECT_NAME = 'payment_method';
-
-    use ApiOperations\All;
-    use ApiOperations\Create;
-    use ApiOperations\Retrieve;
-    use ApiOperations\Update;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Update;
     const TYPE_ACSS_DEBIT = 'acss_debit';
     const TYPE_AFFIRM = 'affirm';
     const TYPE_AFTERPAY_CLEARPAY = 'afterpay_clearpay';
@@ -102,7 +99,6 @@ class PaymentMethod extends ApiResource
     const TYPE_US_BANK_ACCOUNT = 'us_bank_account';
     const TYPE_WECHAT_PAY = 'wechat_pay';
     const TYPE_ZIP = 'zip';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -116,10 +112,8 @@ class PaymentMethod extends ApiResource
         $url = $this->instanceUrl() . '/attach';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -133,7 +127,6 @@ class PaymentMethod extends ApiResource
         $url = $this->instanceUrl() . '/detach';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
 }

@@ -126,9 +126,7 @@ if ( ! class_exists( 'Learndash_Admin_Settings_Data_Reports' ) ) {
 		 */
 		public function init_check_for_download_request() {
 			if ( isset( $_GET['ld-report-download'] ) ) {
-
 				if ( ( isset( $_GET['data-nonce'] ) ) && ( ! empty( $_GET['data-nonce'] ) ) && ( isset( $_GET['data-slug'] ) ) && ( ! empty( $_GET['data-slug'] ) ) ) {
-
 					if ( wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['data-nonce'] ) ), 'learndash-data-reports-' . sanitize_text_field( wp_unslash( $_GET['data-slug'] ) ) . '-' . get_current_user_id() ) ) {
 						$transient_key = sanitize_text_field( wp_unslash( $_GET['data-slug'] ) ) . '_' . sanitize_text_field( wp_unslash( $_GET['data-nonce'] ) );
 
@@ -322,9 +320,7 @@ if ( ! class_exists( 'Learndash_Admin_Settings_Data_Reports' ) ) {
 		 * @return array
 		 */
 		public function do_data_reports( $post_data = array(), $reply_data = array() ) {
-
 			$this->init_report_actions();
-
 			if ( ( isset( $post_data['slug'] ) ) && ( ! empty( $post_data['slug'] ) ) ) {
 				$post_data_slug = esc_attr( $post_data['slug'] );
 

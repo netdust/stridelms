@@ -1722,6 +1722,18 @@ if ('block' === window.learndash_builder_metaboxes.editor) {
         }
       }
     }
+
+    /**
+     * WP 6.9+ compatibility fix.
+     * Ensure that the Metaboxes section cannot be closed as it would
+     * hide the metaboxes in other tabs.
+     */
+    const preferencesStore = wp.data.select('core/preferences');
+    const isOpen = preferencesStore.get('core/edit-post', 'metaBoxesMainIsOpen');
+    const metaboxes = document.querySelector('.edit-post-layout__metaboxes');
+    if (!isOpen && metaboxes) {
+      metaboxes.removeAttribute('hidden');
+    }
   });
 
   // Reset the quiz template metabox field after saving a quiz template.

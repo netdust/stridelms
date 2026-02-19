@@ -329,6 +329,7 @@ class Assets {
 		if (
 			'ld-paypal-checkout-sdk-js' !== Arr::get( $attributes, 'id', '' )
 			&& 'ld-paypal-checkout-sdk-card-manager-js' !== Arr::get( $attributes, 'id', '' )
+			&& 'ld-paypal-checkout-sdk-migration-js' !== Arr::get( $attributes, 'id', '' )
 		) {
 			return $attributes;
 		}

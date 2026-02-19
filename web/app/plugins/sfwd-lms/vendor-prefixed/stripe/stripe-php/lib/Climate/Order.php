@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Climate;
 
 /**
@@ -34,22 +33,18 @@ namespace StellarWP\Learndash\Stripe\Climate;
 class Order extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'climate.order';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
     use \StellarWP\Learndash\Stripe\ApiOperations\Update;
-
     const CANCELLATION_REASON_EXPIRED = 'expired';
     const CANCELLATION_REASON_PRODUCT_UNAVAILABLE = 'product_unavailable';
     const CANCELLATION_REASON_REQUESTED = 'requested';
-
     const STATUS_AWAITING_FUNDS = 'awaiting_funds';
     const STATUS_CANCELED = 'canceled';
     const STATUS_CONFIRMED = 'confirmed';
     const STATUS_DELIVERED = 'delivered';
     const STATUS_OPEN = 'open';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -63,7 +58,6 @@ class Order extends \StellarWP\Learndash\Stripe\ApiResource
         $url = $this->instanceUrl() . '/cancel';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
 }

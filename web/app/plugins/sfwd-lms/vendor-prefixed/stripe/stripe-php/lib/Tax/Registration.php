@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Tax;
 
 /**
@@ -24,12 +23,10 @@ namespace StellarWP\Learndash\Stripe\Tax;
 class Registration extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'tax.registration';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
     use \StellarWP\Learndash\Stripe\ApiOperations\Update;
-
     const STATUS_ACTIVE = 'active';
     const STATUS_EXPIRED = 'expired';
     const STATUS_SCHEDULED = 'scheduled';

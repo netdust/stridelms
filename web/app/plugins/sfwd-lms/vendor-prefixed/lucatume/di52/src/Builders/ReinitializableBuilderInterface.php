@@ -1,16 +1,16 @@
 <?php
+
 /**
  * The API provided by a Builder that can be re-initialized.
  *
  * @package StellarWP\Learndash\lucatume\DI52\Builders
  */
-
 namespace StellarWP\Learndash\lucatume\DI52\Builders;
 
 /**
  * Interface ReinitializableBuilderInterface
  *
- * @package StellarWP\Learndash\lucatume\DI52\Builders
+ * @package \StellarWP\Learndash\lucatume\DI52\Builders
  */
 interface ReinitializableBuilderInterface
 {

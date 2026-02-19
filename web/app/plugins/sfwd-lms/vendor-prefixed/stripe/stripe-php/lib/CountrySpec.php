@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -24,7 +23,6 @@ namespace StellarWP\Learndash\Stripe;
 class CountrySpec extends ApiResource
 {
     const OBJECT_NAME = 'country_spec';
-
-    use ApiOperations\All;
-    use ApiOperations\Retrieve;
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
 }

@@ -474,7 +474,9 @@ class WpProQuiz_Controller_Question extends WpProQuiz_Controller_Controller {
 			}
 		}
 
-		$question_points = isset( $post['points'] ) ? $post['points'] : 0.;
+		$question_points = isset( $post['points'] )
+			? $post['points']
+			: LEARNDASH_LMS_DEFAULT_QUESTION_POINTS;
 
 		// 'Fill in the blank' question.
 

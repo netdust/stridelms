@@ -214,10 +214,6 @@ class Features {
 			'yes',
 		);
 		LearnDash_Settings_Section_General_Appearance::set_setting(
-			'course_enabled',
-			'yes',
-		);
-		LearnDash_Settings_Section_General_Appearance::set_setting(
 			'group_enabled',
 			'yes',
 		);

@@ -26,7 +26,10 @@ class Settings {
 	 * @return array<string,mixed>
 	 */
 	public function disable_custom_course_pagination( $settings_fields, string $settings_metabox_key ): array {
-		if ( $settings_metabox_key !== 'learndash-group-display-content-settings' ) {
+		if (
+			wp_is_serving_rest_request()
+			|| $settings_metabox_key !== 'learndash-group-display-content-settings'
+		) {
 			return $settings_fields;
 		}
 

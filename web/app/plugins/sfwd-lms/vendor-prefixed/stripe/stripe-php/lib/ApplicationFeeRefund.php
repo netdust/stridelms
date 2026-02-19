@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -23,11 +22,9 @@ namespace StellarWP\Learndash\Stripe;
 class ApplicationFeeRefund extends ApiResource
 {
     const OBJECT_NAME = 'fee_refund';
-
-    use ApiOperations\Update {
+    use \StellarWP\Learndash\Stripe\ApiOperations\Update {
         save as protected _save;
     }
-
     /**
      * @return string the API URL for this Stripe refund
      */
@@ -36,22 +33,15 @@ class ApplicationFeeRefund extends ApiResource
         $id = $this['id'];
         $fee = $this['fee'];
         if (!$id) {
-            throw new Exception\UnexpectedValueException(
-                'Could not determine which URL to request: ' .
-                "class instance has invalid ID: {$id}",
-                null
-            );
+            throw new Exception\UnexpectedValueException('Could not determine which URL to request: ' . "class instance has invalid ID: {$id}", null);
         }
-        $id = Util\Util::utf8($id);
-        $fee = Util\Util::utf8($fee);
-
+        $id = \StellarWP\Learndash\Stripe\Util\Util::utf8($id);
+        $fee = \StellarWP\Learndash\Stripe\Util\Util::utf8($fee);
         $base = ApplicationFee::classUrl();
         $feeExtn = \urlencode($fee);
         $extn = \urlencode($id);
-
         return "{$base}/{$feeExtn}/refunds/{$extn}";
     }
-
     /**
      * @param null|array|string $opts
      *

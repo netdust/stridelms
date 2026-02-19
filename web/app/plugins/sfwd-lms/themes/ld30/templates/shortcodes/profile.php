@@ -4,14 +4,15 @@
  *
  * Available Variables:
  *
- * @var int                    $user_id        Current User ID.
- * @var WP_User                $current_user   Currently logged in user object.
- * @var array<int>             $user_courses   Array of course ID's of the current user.
- * @var array<int, mixed>      $quiz_attempts  Array of quiz attempts of the current user.
- * @var array<string, mixed>   $shortcode_atts Array of values passed to shortcode.
+ * @var int                    $user_id          Current User ID.
+ * @var WP_User                $current_user     Currently logged in user object.
+ * @var array<int>             $user_courses     Array of course ID's of the current user.
+ * @var array<int, mixed>      $quiz_attempts    Array of quiz attempts of the current user.
+ * @var array<string, mixed>   $shortcode_atts   Array of values passed to shortcode.
+ * @var bool                   $show_saved_cards Whether to show the saved cards.
  *
  * @since 3.0.0
- * @version 4.25.0
+ * @version 4.25.3
  *
  * @package LearnDash\Templates\LD30
  */
@@ -296,19 +297,17 @@ endif; ?>
 					'subscriptions' => Subscription::find_by_user( Cast::to_int( $user_id ) ),
 				]
 			);
-		?>
 
-		<?php
-			$user = User::create_from_user( Cast::to_int( $user_id ) );
-		?>
+			if ( $show_saved_cards ) {
+				$user = User::create_from_user( Cast::to_int( $user_id ) );
 
-		<?php
-			Template::show_template(
-				'shortcodes/profile/saved-cards',
-				[
-					'cards' => $user->get_cards(),
-				]
-			);
+				Template::show_template(
+					'shortcodes/profile/saved-cards',
+					[
+						'cards' => $user->get_cards(),
+					]
+				);
+			}
 		?>
 	</div> <!--/#ld-profile-->
 

@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -41,28 +40,22 @@ namespace StellarWP\Learndash\Stripe;
 class Payout extends ApiResource
 {
     const OBJECT_NAME = 'payout';
-
-    use ApiOperations\All;
-    use ApiOperations\Create;
-    use ApiOperations\Retrieve;
-    use ApiOperations\Update;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Update;
     const METHOD_INSTANT = 'instant';
     const METHOD_STANDARD = 'standard';
-
     const RECONCILIATION_STATUS_COMPLETED = 'completed';
     const RECONCILIATION_STATUS_IN_PROGRESS = 'in_progress';
     const RECONCILIATION_STATUS_NOT_APPLICABLE = 'not_applicable';
-
     const STATUS_CANCELED = 'canceled';
     const STATUS_FAILED = 'failed';
     const STATUS_IN_TRANSIT = 'in_transit';
     const STATUS_PAID = 'paid';
     const STATUS_PENDING = 'pending';
-
     const TYPE_BANK_ACCOUNT = 'bank_account';
     const TYPE_CARD = 'card';
-
     const FAILURE_ACCOUNT_CLOSED = 'account_closed';
     const FAILURE_ACCOUNT_FROZEN = 'account_frozen';
     const FAILURE_BANK_ACCOUNT_RESTRICTED = 'bank_account_restricted';
@@ -78,7 +71,6 @@ class Payout extends ApiResource
     const FAILURE_INVALID_CURRENCY = 'invalid_currency';
     const FAILURE_NO_ACCOUNT = 'no_account';
     const FAILURE_UNSUPPORTED_CARD = 'unsupported_card';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -92,10 +84,8 @@ class Payout extends ApiResource
         $url = $this->instanceUrl() . '/cancel';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -109,7 +99,6 @@ class Payout extends ApiResource
         $url = $this->instanceUrl() . '/reverse';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
 }

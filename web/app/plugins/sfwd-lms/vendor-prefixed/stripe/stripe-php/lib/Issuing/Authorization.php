@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Issuing;
 
 /**
@@ -40,21 +39,17 @@ namespace StellarWP\Learndash\Stripe\Issuing;
 class Authorization extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'issuing.authorization';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
     use \StellarWP\Learndash\Stripe\ApiOperations\Update;
-
     const AUTHORIZATION_METHOD_CHIP = 'chip';
     const AUTHORIZATION_METHOD_CONTACTLESS = 'contactless';
     const AUTHORIZATION_METHOD_KEYED_IN = 'keyed_in';
     const AUTHORIZATION_METHOD_ONLINE = 'online';
     const AUTHORIZATION_METHOD_SWIPE = 'swipe';
-
     const STATUS_CLOSED = 'closed';
     const STATUS_PENDING = 'pending';
     const STATUS_REVERSED = 'reversed';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -68,10 +63,8 @@ class Authorization extends \StellarWP\Learndash\Stripe\ApiResource
         $url = $this->instanceUrl() . '/approve';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -85,7 +78,6 @@ class Authorization extends \StellarWP\Learndash\Stripe\ApiResource
         $url = $this->instanceUrl() . '/decline';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
 }

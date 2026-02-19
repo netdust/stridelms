@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="SshConfigs">
+    <configs>
+      <sshConfig host="78.47.33.234" id="a786c92f-d24c-4ade-a446-4b37822265ba" keyPath="\\wsl.localhost\Ubuntu\home\ntdst\.ssh\id_ed25519_ploi" port="22" nameFormat="DESCRIPTIVE" username="ploi" useOpenSSHConfig="true" />
+    </configs>
+  </component>
+</project>

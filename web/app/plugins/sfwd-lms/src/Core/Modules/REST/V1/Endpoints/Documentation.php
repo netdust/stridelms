@@ -13,6 +13,7 @@ use LearnDash\Core\App;
 use LearnDash\Core\Modules\REST\V1\Controller;
 use LearnDash\Core\Modules\REST\V1\Contracts\Endpoint;
 use LearnDash\Core\Modules\REST\V1\OpenAPI;
+use LearnDash\Core\Utilities\Sanitize;
 use WP_REST_Server;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -91,11 +92,13 @@ class Documentation extends Endpoint {
 	 *
 	 * @since 4.25.0
 	 *
-	 * @param WP_REST_Request<array<string,mixed>> $request The REST request object.
+	 * @param WP_REST_Request $request The request.
+	 *
+	 * @phpstan-param WP_REST_Request<array<string,mixed>> $request
 	 *
 	 * @return WP_REST_Response
 	 */
-	public function get_openapi_spec( $request ): WP_REST_Response {
+	public function get_openapi_spec( WP_REST_Request $request ): WP_REST_Response {
 		$controller = App::get( Controller::class );
 
 		if ( ! $controller instanceof Controller ) {
@@ -109,13 +112,28 @@ class Documentation extends Endpoint {
 			);
 		}
 
-		$spec = $controller->get_openapi_documentation();
+		// Get the trim parameter from the request.
+		$trim               = $request->get_param( 'trim' );
+		$default_trim_value = true;
+
+		if (
+			$trim !== null
+			&& ! is_scalar( $trim )
+		) {
+			$trim = $default_trim_value;
+		}
+
+		// Sanitize the trim parameter.
+		$trim = Sanitize::bool( $trim, $default_trim_value );
+
+		// Pass the trim context to the controller.
+		$spec = $controller->get_openapi_documentation( $trim );
 
 		// Add tags to the specification.
 		$spec['tags'] = OpenAPI::get_tags();
 
 		// Return raw OpenAPI spec without wrapper.
-		return new WP_REST_Response( $spec, 200 );
+		return new WP_REST_Response( $spec );
 	}
 
 	/**
@@ -134,7 +152,14 @@ class Documentation extends Endpoint {
 	public function get_request_schema( string $path, string $method ): array {
 		return [
 			'type'       => 'object',
-			'properties' => [],
+			'properties' => [
+				'trim' => [
+					'description' => __( 'Whether to trim documentation from the OpenAPI specification. This is used in cases where an older REST API endpoints may expose unnecessary documentation.', 'learndash' ),
+					'type'        => 'boolean',
+					'default'     => true,
+					'required'    => false,
+				],
+			],
 		];
 	}
 

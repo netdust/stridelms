@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -39,10 +38,8 @@ namespace StellarWP\Learndash\Stripe;
 class Token extends ApiResource
 {
     const OBJECT_NAME = 'token';
-
-    use ApiOperations\Create;
-    use ApiOperations\Retrieve;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
     const TYPE_ACCOUNT = 'account';
     const TYPE_BANK_ACCOUNT = 'bank_account';
     const TYPE_CARD = 'card';

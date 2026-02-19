@@ -398,7 +398,6 @@ if ( ! class_exists( 'LearnDash_Settings_Fields' ) ) {
 						if ( ( ! isset( $field['args']['input_show'] ) ) || ( true === $field['args']['input_show'] ) ) {
 							?>
 							<div class="sfwd_option_div">
-
 								<?php call_user_func( $field['args']['display_callback'], $field['args'] ); ?>
 
 								<?php

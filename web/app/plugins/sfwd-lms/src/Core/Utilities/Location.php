@@ -83,4 +83,100 @@ class Location {
 			$screen_id
 		);
 	}
+
+	/**
+	 * Determines if the current screen is the WordPress plugins page.
+	 *
+	 * @since 4.25.5
+	 *
+	 * @param string|null $screen_id The screen ID to check. If null, the current screen ID will be used.
+	 *
+	 * @return bool True if the current screen is the WordPress plugins page, false otherwise.
+	 */
+	public static function is_plugins_page( $screen_id = null ): bool {
+		if (
+			empty( $screen_id )
+			&& is_admin()
+			&& function_exists( 'get_current_screen' )
+		) {
+			$screen = get_current_screen();
+
+			if ( ! empty( $screen->id ) ) {
+				$screen_id = $screen->id;
+			}
+		}
+
+		$return = false;
+
+		if (
+			! empty( $screen_id )
+			&& $screen_id === 'plugins'
+		) {
+			$return = true;
+		}
+
+		/**
+		 * Filters whether the screen ID is the WordPress plugins page.
+		 *
+		 * @since 4.25.5
+		 *
+		 * @param bool        $return True if the screen ID is a WordPress plugins page, false otherwise.
+		 * @param string|null $screen The screen ID.
+		 *
+		 * @return bool True if the screen ID is a WordPress plugins page, false otherwise.
+		 */
+		return apply_filters(
+			'learndash_location_is_plugins_page',
+			$return,
+			$screen_id
+		);
+	}
+
+	/**
+	 * Determines if the current screen is the WordPress Dashboard -> Updates page.
+	 *
+	 * @since 4.25.5
+	 *
+	 * @param string|null $screen_id The screen ID to check. If null, the current screen ID will be used.
+	 *
+	 * @return bool True if the current screen is the WordPress Dashboard -> Updates page, false otherwise.
+	 */
+	public static function is_updates_page( $screen_id = null ): bool {
+		if (
+			empty( $screen_id )
+			&& is_admin()
+			&& function_exists( 'get_current_screen' )
+		) {
+			$screen = get_current_screen();
+
+			if ( ! empty( $screen->id ) ) {
+				$screen_id = $screen->id;
+			}
+		}
+
+		$return = false;
+
+		if (
+			! empty( $screen_id )
+			&& $screen_id === 'update-core'
+		) {
+			$return = true;
+		}
+
+		/**
+		 * Filters whether the screen ID is the WordPress Dashboard -> Updates page.
+		 *
+		 * @since 4.25.5
+		 *
+		 * @param bool        $return    True if the screen ID is the WordPress Dashboard -> Updates page, false otherwise.
+		 * @param string|null $screen_id The screen ID.
+		 *
+		 * @return bool True if the screen ID is the WordPress Dashboard -> Updates page, false otherwise.
+		 */
+		return apply_filters(
+			'learndash_location_is_updates_page',
+			$return,
+			$screen_id
+		);
+	}
 }

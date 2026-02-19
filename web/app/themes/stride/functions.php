@@ -121,6 +121,37 @@ add_action('wp_head', function () {
 }, 1);
 
 // ========================================
+// DEVELOPMENT: DISABLE BROWSER CACHING
+// ========================================
+
+/**
+ * Send no-cache headers in development environment
+ * This prevents the need for hard refresh during development
+ */
+if (defined('WP_DEBUG') && WP_DEBUG) {
+    add_action('send_headers', function () {
+        if (!is_admin()) {
+            header('Cache-Control: no-cache, no-store, must-revalidate');
+            header('Pragma: no-cache');
+            header('Expires: 0');
+        }
+    });
+}
+
+// ========================================
+// REMOVE WORDPRESS EMOJI SCRIPT
+// ========================================
+
+/**
+ * Remove WordPress emoji detection script (reduces inline JS)
+ * Modern browsers handle emojis natively, so this is rarely needed.
+ */
+remove_action('wp_head', 'print_emoji_detection_script', 7);
+remove_action('wp_print_styles', 'print_emoji_styles');
+remove_action('admin_print_scripts', 'print_emoji_detection_script');
+remove_action('admin_print_styles', 'print_emoji_styles');
+
+// ========================================
 // FRONTEND ASSETS
 // ========================================
 

@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -29,6 +28,5 @@ namespace StellarWP\Learndash\Stripe;
 class SetupAttempt extends ApiResource
 {
     const OBJECT_NAME = 'setup_attempt';
-
-    use ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
 }

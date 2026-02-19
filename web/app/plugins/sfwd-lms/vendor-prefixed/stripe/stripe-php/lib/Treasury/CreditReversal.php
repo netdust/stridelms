@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Treasury;
 
 /**
@@ -25,14 +24,11 @@ namespace StellarWP\Learndash\Stripe\Treasury;
 class CreditReversal extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'treasury.credit_reversal';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
-
     const NETWORK_ACH = 'ach';
     const NETWORK_STRIPE = 'stripe';
-
     const STATUS_CANCELED = 'canceled';
     const STATUS_POSTED = 'posted';
     const STATUS_PROCESSING = 'processing';

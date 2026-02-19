@@ -23,6 +23,32 @@ use WP_Error;
  */
 class Profile_Handler {
 	/**
+	 * Shows the saved cards.
+	 *
+	 * @since 4.25.3
+	 *
+	 * @param bool $show_saved_cards Whether to show the saved cards.
+	 *
+	 * @return bool Whether to show the saved cards.
+	 */
+	public function show_saved_cards( bool $show_saved_cards ): bool {
+		$settings = Payment_Gateway::get_settings();
+
+		if (
+			empty( $settings )
+			|| Cast::to_string( Arr::get( $settings, 'enabled', '' ) ) !== 'yes' // Stop if the PayPal Checkout gateway is not enabled.
+			|| ! Payment_Gateway::account_is_connected() // Stop if the PayPal account is not connected.
+			|| ! Cast::to_bool( Arr::get( $settings, 'merchant_account_verified', false ) ) // Stop if the PayPal account is not verified.
+			|| ! Cast::to_bool( Arr::get( $settings, 'merchant_account_is_ready', false ) ) // Stop if the PayPal account is not ready for payments.
+			|| ! Payment_Gateway::is_payment_method_card_active() // Stop if the payment method 'Credit Card' is not active.
+		) {
+			return $show_saved_cards;
+		}
+
+		return true;
+	}
+
+	/**
 	 * Gets the payment method information for PayPal payment tokens.
 	 *
 	 * @since 4.25.0

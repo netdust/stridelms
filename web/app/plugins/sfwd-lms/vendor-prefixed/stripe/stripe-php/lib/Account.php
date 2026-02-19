@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -39,49 +38,37 @@ namespace StellarWP\Learndash\Stripe;
 class Account extends ApiResource
 {
     const OBJECT_NAME = 'account';
-
-    use ApiOperations\All;
-    use ApiOperations\Create;
-    use ApiOperations\Delete;
-    use ApiOperations\NestedResource;
-    use ApiOperations\Update;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Delete;
+    use \StellarWP\Learndash\Stripe\ApiOperations\NestedResource;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Update;
     const BUSINESS_TYPE_COMPANY = 'company';
     const BUSINESS_TYPE_GOVERNMENT_ENTITY = 'government_entity';
     const BUSINESS_TYPE_INDIVIDUAL = 'individual';
     const BUSINESS_TYPE_NON_PROFIT = 'non_profit';
-
     const TYPE_CUSTOM = 'custom';
     const TYPE_EXPRESS = 'express';
     const TYPE_NONE = 'none';
     const TYPE_STANDARD = 'standard';
-
-    use ApiOperations\Retrieve {
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve {
         retrieve as protected _retrieve;
     }
-
     public static function getSavedNestedResources()
     {
         static $savedNestedResources = null;
         if (null === $savedNestedResources) {
-            $savedNestedResources = new Util\Set([
-                'external_account',
-                'bank_account',
-            ]);
+            $savedNestedResources = new Util\Set(['external_account', 'bank_account']);
         }
-
         return $savedNestedResources;
     }
-
     public function instanceUrl()
     {
         if (null === $this['id']) {
             return '/v1/account';
         }
-
         return parent::instanceUrl();
     }
-
     /**
      * @param null|array|string $id the ID of the account to retrieve, or an
      *     options array containing an `id` key
@@ -97,10 +84,8 @@ class Account extends ApiResource
             $opts = $id;
             $id = null;
         }
-
         return self::_retrieve($id, $opts);
     }
-
     public function serializeParameters($force = false)
     {
         $update = parent::serializeParameters($force);
@@ -115,14 +100,12 @@ class Account extends ApiResource
         }
         if (isset($this->_values['individual'])) {
             $individual = $this['individual'];
-            if (($individual instanceof Person) && !isset($update['individual'])) {
+            if ($individual instanceof Person && !isset($update['individual'])) {
                 $update['individual'] = $individual->serializeParameters($force);
             }
         }
-
         return $update;
     }
-
     private function serializeAdditionalOwners($legalEntity, $additionalOwners)
     {
         if (isset($legalEntity->_originalValues['additional_owners'])) {
@@ -130,28 +113,20 @@ class Account extends ApiResource
         } else {
             $originalValue = [];
         }
-        if (($originalValue) && (\count($originalValue) > \count($additionalOwners))) {
-            throw new Exception\InvalidArgumentException(
-                'You cannot delete an item from an array, you must instead set a new array'
-            );
+        if ($originalValue && \count($originalValue) > \count($additionalOwners)) {
+            throw new Exception\InvalidArgumentException('You cannot delete an item from an array, you must instead set a new array');
         }
-
         $updateArr = [];
         foreach ($additionalOwners as $i => $v) {
-            $update = ($v instanceof StripeObject) ? $v->serializeParameters() : $v;
-
+            $update = $v instanceof StripeObject ? $v->serializeParameters() : $v;
             if ([] !== $update) {
-                if (!$originalValue
-                    || !\array_key_exists($i, $originalValue)
-                    || ($update !== $legalEntity->serializeParamsValue($originalValue[$i], null, false, true))) {
+                if (!$originalValue || !\array_key_exists($i, $originalValue) || $update !== $legalEntity->serializeParamsValue($originalValue[$i], null, false, true)) {
                     $updateArr[$i] = $update;
                 }
             }
         }
-
         return $updateArr;
     }
-
     /**
      * @param null|array $clientId
      * @param null|array|string $opts
@@ -162,14 +137,9 @@ class Account extends ApiResource
      */
     public function deauthorize($clientId = null, $opts = null)
     {
-        $params = [
-            'client_id' => $clientId,
-            'stripe_user_id' => $this->id,
-        ];
-
+        $params = ['client_id' => $clientId, 'stripe_user_id' => $this->id];
         return OAuth::deauthorize($params, $opts);
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -183,12 +153,9 @@ class Account extends ApiResource
         $url = $this->instanceUrl() . '/reject';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     const PATH_CAPABILITIES = '/capabilities';
-
     /**
      * @param string $id the ID of the account on which to retrieve the capabilities
      * @param null|array $params
@@ -202,7 +169,6 @@ class Account extends ApiResource
     {
         return self::_allNestedResources($id, static::PATH_CAPABILITIES, $params, $opts);
     }
-
     /**
      * @param string $id the ID of the account to which the capability belongs
      * @param string $capabilityId the ID of the capability to retrieve
@@ -217,7 +183,6 @@ class Account extends ApiResource
     {
         return self::_retrieveNestedResource($id, static::PATH_CAPABILITIES, $capabilityId, $params, $opts);
     }
-
     /**
      * @param string $id the ID of the account to which the capability belongs
      * @param string $capabilityId the ID of the capability to update
@@ -233,7 +198,6 @@ class Account extends ApiResource
         return self::_updateNestedResource($id, static::PATH_CAPABILITIES, $capabilityId, $params, $opts);
     }
     const PATH_EXTERNAL_ACCOUNTS = '/external_accounts';
-
     /**
      * @param string $id the ID of the account on which to retrieve the external accounts
      * @param null|array $params
@@ -247,7 +211,6 @@ class Account extends ApiResource
     {
         return self::_allNestedResources($id, static::PATH_EXTERNAL_ACCOUNTS, $params, $opts);
     }
-
     /**
      * @param string $id the ID of the account on which to create the external account
      * @param null|array $params
@@ -261,7 +224,6 @@ class Account extends ApiResource
     {
         return self::_createNestedResource($id, static::PATH_EXTERNAL_ACCOUNTS, $params, $opts);
     }
-
     /**
      * @param string $id the ID of the account to which the external account belongs
      * @param string $externalAccountId the ID of the external account to delete
@@ -276,7 +238,6 @@ class Account extends ApiResource
     {
         return self::_deleteNestedResource($id, static::PATH_EXTERNAL_ACCOUNTS, $externalAccountId, $params, $opts);
     }
-
     /**
      * @param string $id the ID of the account to which the external account belongs
      * @param string $externalAccountId the ID of the external account to retrieve
@@ -291,7 +252,6 @@ class Account extends ApiResource
     {
         return self::_retrieveNestedResource($id, static::PATH_EXTERNAL_ACCOUNTS, $externalAccountId, $params, $opts);
     }
-
     /**
      * @param string $id the ID of the account to which the external account belongs
      * @param string $externalAccountId the ID of the external account to update
@@ -307,7 +267,6 @@ class Account extends ApiResource
         return self::_updateNestedResource($id, static::PATH_EXTERNAL_ACCOUNTS, $externalAccountId, $params, $opts);
     }
     const PATH_LOGIN_LINKS = '/login_links';
-
     /**
      * @param string $id the ID of the account on which to create the login link
      * @param null|array $params
@@ -322,7 +281,6 @@ class Account extends ApiResource
         return self::_createNestedResource($id, static::PATH_LOGIN_LINKS, $params, $opts);
     }
     const PATH_PERSONS = '/persons';
-
     /**
      * @param string $id the ID of the account on which to retrieve the persons
      * @param null|array $params
@@ -336,7 +294,6 @@ class Account extends ApiResource
     {
         return self::_allNestedResources($id, static::PATH_PERSONS, $params, $opts);
     }
-
     /**
      * @param string $id the ID of the account on which to create the person
      * @param null|array $params
@@ -350,7 +307,6 @@ class Account extends ApiResource
     {
         return self::_createNestedResource($id, static::PATH_PERSONS, $params, $opts);
     }
-
     /**
      * @param string $id the ID of the account to which the person belongs
      * @param string $personId the ID of the person to delete
@@ -365,7 +321,6 @@ class Account extends ApiResource
     {
         return self::_deleteNestedResource($id, static::PATH_PERSONS, $personId, $params, $opts);
     }
-
     /**
      * @param string $id the ID of the account to which the person belongs
      * @param string $personId the ID of the person to retrieve
@@ -380,7 +335,6 @@ class Account extends ApiResource
     {
         return self::_retrieveNestedResource($id, static::PATH_PERSONS, $personId, $params, $opts);
     }
-
     /**
      * @param string $id the ID of the account to which the person belongs
      * @param string $personId the ID of the person to update

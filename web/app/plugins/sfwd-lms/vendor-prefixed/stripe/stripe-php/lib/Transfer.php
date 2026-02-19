@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -37,19 +36,15 @@ namespace StellarWP\Learndash\Stripe;
 class Transfer extends ApiResource
 {
     const OBJECT_NAME = 'transfer';
-
-    use ApiOperations\All;
-    use ApiOperations\Create;
-    use ApiOperations\NestedResource;
-    use ApiOperations\Retrieve;
-    use ApiOperations\Update;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create;
+    use \StellarWP\Learndash\Stripe\ApiOperations\NestedResource;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Update;
     const SOURCE_TYPE_BANK_ACCOUNT = 'bank_account';
     const SOURCE_TYPE_CARD = 'card';
     const SOURCE_TYPE_FPX = 'fpx';
-
     const PATH_REVERSALS = '/reversals';
-
     /**
      * @param string $id the ID of the transfer on which to retrieve the transfer reversals
      * @param null|array $params
@@ -63,7 +58,6 @@ class Transfer extends ApiResource
     {
         return self::_allNestedResources($id, static::PATH_REVERSALS, $params, $opts);
     }
-
     /**
      * @param string $id the ID of the transfer on which to create the transfer reversal
      * @param null|array $params
@@ -77,7 +71,6 @@ class Transfer extends ApiResource
     {
         return self::_createNestedResource($id, static::PATH_REVERSALS, $params, $opts);
     }
-
     /**
      * @param string $id the ID of the transfer to which the transfer reversal belongs
      * @param string $reversalId the ID of the transfer reversal to retrieve
@@ -92,7 +85,6 @@ class Transfer extends ApiResource
     {
         return self::_retrieveNestedResource($id, static::PATH_REVERSALS, $reversalId, $params, $opts);
     }
-
     /**
      * @param string $id the ID of the transfer to which the transfer reversal belongs
      * @param string $reversalId the ID of the transfer reversal to update

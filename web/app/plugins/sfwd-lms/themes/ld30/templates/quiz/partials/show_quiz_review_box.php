@@ -3,7 +3,7 @@
  * Displays Quiz Review Box
  *
  * @since 4.22.1
- * @version 4.22.1
+ * @version 4.25.4
  *
  * Available Variables:
  *
@@ -22,6 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 <div class="wpProQuiz_reviewDiv" style="display: none;">
 	<?php
 		$quiz_view->showReviewQuestions( $question_count );
+		$quiz_view->showReviewLegend();
 		$quiz_view->showReviewButtons();
 	?>
 </div>

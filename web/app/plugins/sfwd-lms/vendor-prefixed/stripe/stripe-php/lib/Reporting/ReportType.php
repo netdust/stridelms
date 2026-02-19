@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Reporting;
 
 /**
@@ -27,7 +26,6 @@ namespace StellarWP\Learndash\Stripe\Reporting;
 class ReportType extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'reporting.report_type';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
 }

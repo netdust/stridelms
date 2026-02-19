@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -29,7 +28,6 @@ namespace StellarWP\Learndash\Stripe;
 class CustomerBalanceTransaction extends ApiResource
 {
     const OBJECT_NAME = 'customer_balance_transaction';
-
     const TYPE_ADJUSTMENT = 'adjustment';
     const TYPE_APPLIED_TO_INVOICE = 'applied_to_invoice';
     const TYPE_CREDIT_NOTE = 'credit_note';
@@ -38,9 +36,7 @@ class CustomerBalanceTransaction extends ApiResource
     const TYPE_INVOICE_TOO_LARGE = 'invoice_too_large';
     const TYPE_INVOICE_TOO_SMALL = 'invoice_too_small';
     const TYPE_UNSPENT_RECEIVER_CREDIT = 'unspent_receiver_credit';
-
     const TYPE_ADJUSTEMENT = 'adjustment';
-
     /**
      * @return string the API URL for this balance transaction
      */
@@ -49,21 +45,15 @@ class CustomerBalanceTransaction extends ApiResource
         $id = $this['id'];
         $customer = $this['customer'];
         if (!$id) {
-            throw new Exception\UnexpectedValueException(
-                "Could not determine which URL to request: class instance has invalid ID: {$id}",
-                null
-            );
+            throw new Exception\UnexpectedValueException("Could not determine which URL to request: class instance has invalid ID: {$id}", null);
         }
-        $id = Util\Util::utf8($id);
-        $customer = Util\Util::utf8($customer);
-
+        $id = \StellarWP\Learndash\Stripe\Util\Util::utf8($id);
+        $customer = \StellarWP\Learndash\Stripe\Util\Util::utf8($customer);
         $base = Customer::classUrl();
         $customerExtn = \urlencode($customer);
         $extn = \urlencode($id);
-
         return "{$base}/{$customerExtn}/balance_transactions/{$extn}";
     }
-
     /**
      * @param array|string $_id
      * @param null|array|string $_opts
@@ -72,14 +62,9 @@ class CustomerBalanceTransaction extends ApiResource
      */
     public static function retrieve($_id, $_opts = null)
     {
-        $msg = 'Customer Balance Transactions cannot be retrieved without a ' .
-               'customer ID. Retrieve a Customer Balance Transaction using ' .
-               "`Customer::retrieveBalanceTransaction('customer_id', " .
-               "'balance_transaction_id')`.";
-
+        $msg = 'Customer Balance Transactions cannot be retrieved without a ' . 'customer ID. Retrieve a Customer Balance Transaction using ' . "`Customer::retrieveBalanceTransaction('customer_id', " . "'balance_transaction_id')`.";
         throw new Exception\BadMethodCallException($msg);
     }
-
     /**
      * @param string $_id
      * @param null|array $_params
@@ -89,11 +74,7 @@ class CustomerBalanceTransaction extends ApiResource
      */
     public static function update($_id, $_params = null, $_options = null)
     {
-        $msg = 'Customer Balance Transactions cannot be updated without a ' .
-               'customer ID. Update a Customer Balance Transaction using ' .
-               "`Customer::updateBalanceTransaction('customer_id', " .
-               "'balance_transaction_id', \$updateParams)`.";
-
+        $msg = 'Customer Balance Transactions cannot be updated without a ' . 'customer ID. Update a Customer Balance Transaction using ' . "`Customer::updateBalanceTransaction('customer_id', " . "'balance_transaction_id', \$updateParams)`.";
         throw new Exception\BadMethodCallException($msg);
     }
 }

@@ -3511,7 +3511,7 @@ class NewEntity extends react__WEBPACK_IMPORTED_MODULE_0__.Component {
   handleChange(e) {
     e.preventDefault();
     this.setState({
-      value: e.target.value
+      value: wp.dom?.safeHTML?.(e.target.value) ?? ''
     });
   }
 
@@ -4085,7 +4085,7 @@ class NodeHeader extends react__WEBPACK_IMPORTED_MODULE_0__.Component {
       className: `${className} ${node.type}`
     }, data.labels[node.type].charAt(0)), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("h3", null, !showForm && !node.edit_link && 'section-heading' !== node.type && /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", null, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", {
       dangerouslySetInnerHTML: {
-        __html: node.post_title
+        __html: wp.dom?.safeHTML?.(node.post_title) ?? ''
       }
     })), !showForm && (!node.edit_link && 'section-heading' === node.type || node.edit_link) && /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", null, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", {
       className: "ld-button-reset",
@@ -4097,7 +4097,7 @@ class NodeHeader extends react__WEBPACK_IMPORTED_MODULE_0__.Component {
       }
     }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", {
       dangerouslySetInnerHTML: {
-        __html: node.post_title
+        __html: wp.dom?.safeHTML?.(node.post_title) ?? ''
       }
     }), node.post_status && 'publish' !== node.post_status && LearnDashData.post_statuses[node.post_status] && /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", {
       className: `ld-node-status ld-node-status-${node.post_status}`
@@ -4189,7 +4189,7 @@ class NodeHeader extends react__WEBPACK_IMPORTED_MODULE_0__.Component {
       }
     }, `${LearnDashData.i18n.remove}`))), 'sfwd-quiz' === LearnDashData.post_data.builder_post_type && !expanded && /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", null, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", {
       dangerouslySetInnerHTML: {
-        __html: LearnDashData.labels.questions_types[node.question_type]
+        __html: wp.dom?.safeHTML?.(LearnDashData.labels.questions_types[node.question_type]) ?? ''
       }
     }), points !== 0 && /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement(react__WEBPACK_IMPORTED_MODULE_0__.Fragment, null, ": ", points)), 'sfwd-quiz' === LearnDashData.post_data.builder_post_type && expanded && /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", {
       className: "ld-node-header__quiz-actions"
@@ -4202,7 +4202,7 @@ class NodeHeader extends react__WEBPACK_IMPORTED_MODULE_0__.Component {
       key: `type-${index}`,
       value: question_type[0],
       dangerouslySetInnerHTML: {
-        __html: question_type[1]
+        __html: wp.dom?.safeHTML?.(question_type[1]) ?? ''
       }
     }))), LearnDashData.labels.points && /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", null, !showPointsForm && 'assessment_answer' !== node.question_type && /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", {
       onClick: this.handleShowPointsForm,
@@ -5128,7 +5128,7 @@ class SidebarWidget extends react__WEBPACK_IMPORTED_MODULE_0__.Component {
     }), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("label", {
       htmlFor: `${this.props.type}-${contentItem.ID}`,
       dangerouslySetInnerHTML: {
-        __html: contentItem.post_title
+        __html: wp.dom?.safeHTML?.(contentItem.post_title) ?? ''
       }
     }), contentItem.post_status && 'publish' !== contentItem.post_status && LearnDashData.post_statuses[contentItem.post_status] && /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", {
       className: `ld-node-status ld-node-status-${contentItem.post_status}`
@@ -5144,7 +5144,7 @@ class SidebarWidget extends react__WEBPACK_IMPORTED_MODULE_0__.Component {
       className: "is-button is-primary components-button button button-primary"
     }, `${LearnDashData.i18n.add_element}`))))), 'search' === mode && list && 0 === list.length && /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", null, `${LearnDashData.i18n.nothing_found}`), !this.maybeShowForm() && /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", {
       dangerouslySetInnerHTML: {
-        __html: this.showAllOrNoElementAddedText(type, hasLesson, hasQuiz, hasQuestion)
+        __html: wp.dom?.safeHTML?.(this.showAllOrNoElementAddedText(type, hasLesson, hasQuiz, hasQuestion)) ?? ''
       }
     }), 'latest' === mode && latest_list && 0 !== latest_list.length && /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", {
       href: "#",
@@ -7307,7 +7307,7 @@ class QuestionContent extends react__WEBPACK_IMPORTED_MODULE_0__.PureComponent {
     }, `${LearnDashData.i18n.question_empty_edit}`)) : /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", {
       className: "ld__builder--edit-content-value",
       dangerouslySetInnerHTML: {
-        __html: content
+        __html: wp.dom?.safeHTML?.(content) ?? ''
       }
     }), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement(_common_icon__WEBPACK_IMPORTED_MODULE_3__["default"], {
       icon: "pencil"
@@ -7732,7 +7732,7 @@ const QuestionTypeClassic = _ref => {
   }, true === html ? /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", {
     className: `ld-answer-value ${correct ? '-correct' : ''}`,
     dangerouslySetInnerHTML: {
-      __html: '' === answer ? `${LearnDashData.i18n.edit_answer}` : answer
+      __html: wp.dom?.safeHTML?.('' === answer ? `${LearnDashData.i18n.edit_answer}` : answer) ?? ''
     }
   }) : /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", {
     className: `ld-answer-value ${correct ? '-correct' : ''}`
@@ -7795,7 +7795,7 @@ const QuestionTypeClassic = _ref => {
     }
   }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", {
     dangerouslySetInnerHTML: {
-      __html: (() => {
+      __html: wp.dom?.safeHTML?.((() => {
         switch (parseInt(index + 1, 10)) {
           case 1:
             return `${LearnDashData.i18n.correct} ${LearnDashData.i18n.correct_1st}`;
@@ -7806,7 +7806,7 @@ const QuestionTypeClassic = _ref => {
           default:
             return `${LearnDashData.i18n.correct} ${parseInt(index + 1, 10)}${LearnDashData.i18n.correct_nth}`;
         }
-      })()
+      })()) ?? ''
     }
   })), 'sort_answer' !== questionType && !showFormIndividual && /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", {
     className: "ld-radio-input-wrapper"
@@ -8093,7 +8093,7 @@ const QuestionTypeFree = _ref => {
     onClick: handleShowForm
   }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", null, `${LearnDashData.i18n.answer}`), '' === answer && /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", {
     dangerouslySetInnerHTML: {
-      __html: `${LearnDashData.i18n.edit_answer}`
+      __html: wp.dom?.safeHTML?.(`${LearnDashData.i18n.edit_answer}`) ?? ''
     }
   }), '' !== answer && /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("pre", null, answer), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement(_common_icon__WEBPACK_IMPORTED_MODULE_1__["default"], {
     icon: "pencil"
@@ -8183,14 +8183,14 @@ const QuestionTypeMatrix = _ref => {
   }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", {
     className: "ld-answer-value",
     dangerouslySetInnerHTML: {
-      __html: '' === answer ? `${LearnDashData.i18n.edit_matrix}` : answer
+      __html: wp.dom?.safeHTML?.('' === answer ? `${LearnDashData.i18n.edit_matrix}` : answer) ?? ''
     }
   }), '' !== sortString ? /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement(_common_icon__WEBPACK_IMPORTED_MODULE_2__["default"], {
     icon: "chevron-right"
   }) : '', /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", {
     className: "ld-answer-value",
     dangerouslySetInnerHTML: {
-      __html: sortString
+      __html: wp.dom?.safeHTML?.(sortString) ?? ''
     }
   }), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", {
     className: "edit"
@@ -8369,7 +8369,7 @@ const QuestionTypeRichtext = _ref => {
     key: `description-${i}`,
     className: "description",
     dangerouslySetInnerHTML: {
-      __html: description
+      __html: wp.dom?.safeHTML?.(description) ?? ''
     }
   })))), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", {
     className: "ld-answer-editor-actions"
@@ -8388,7 +8388,7 @@ const QuestionTypeRichtext = _ref => {
     onClick: handleShowForm
   }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", null, `${LearnDashData.i18n.answer}`), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", {
     dangerouslySetInnerHTML: {
-      __html: '' === answer ? `${LearnDashData.i18n.edit_answer}` : answer
+      __html: wp.dom?.safeHTML?.('' === answer ? `${LearnDashData.i18n.edit_answer}` : answer) ?? ''
     }
   }), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement(_common_icon__WEBPACK_IMPORTED_MODULE_2__["default"], {
     icon: "pencil"
@@ -8715,7 +8715,7 @@ class QuestionWorkspace extends react__WEBPACK_IMPORTED_MODULE_0__.Component {
       }), 'sort_answer' === question.question_type && LearnDashData.labels.questions_types_description.sort_answer && /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("p", {
         className: "description",
         dangerouslySetInnerHTML: {
-          __html: LearnDashData.labels.questions_types_description.sort_answer
+          __html: wp.dom?.safeHTML?.(LearnDashData.labels.questions_types_description.sort_answer) ?? ''
         }
       }), 'essay' !== question.question_type && 0 === questionAlerts.validAnswersCount && /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", {
         className: "ld__builder--edit-content-value"
@@ -8742,7 +8742,7 @@ class QuestionWorkspace extends react__WEBPACK_IMPORTED_MODULE_0__.Component {
       })), "\xA0", /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", {
         className: "warning",
         dangerouslySetInnerHTML: {
-          __html: LearnDashData.i18n.matrix_sort_answer_accessibility_warning_html
+          __html: wp.dom?.safeHTML?.(LearnDashData.i18n.matrix_sort_answer_accessibility_warning_html) ?? ''
         }
       })), question.answers && 0 !== question.answers.length && /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement(react_beautiful_dnd__WEBPACK_IMPORTED_MODULE_12__.Droppable, {
         droppableId: JSON.stringify({

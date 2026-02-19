@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Billing;
 
 /**
@@ -24,19 +23,15 @@ namespace StellarWP\Learndash\Stripe\Billing;
 class Meter extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'billing.meter';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
     use \StellarWP\Learndash\Stripe\ApiOperations\NestedResource;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
     use \StellarWP\Learndash\Stripe\ApiOperations\Update;
-
     const EVENT_TIME_WINDOW_DAY = 'day';
     const EVENT_TIME_WINDOW_HOUR = 'hour';
-
     const STATUS_ACTIVE = 'active';
     const STATUS_INACTIVE = 'inactive';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -50,10 +45,8 @@ class Meter extends \StellarWP\Learndash\Stripe\ApiResource
         $url = $this->instanceUrl() . '/deactivate';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -67,12 +60,9 @@ class Meter extends \StellarWP\Learndash\Stripe\ApiResource
         $url = $this->instanceUrl() . '/reactivate';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     const PATH_EVENT_SUMMARIES = '/event_summaries';
-
     /**
      * @param string $id the ID of the meter on which to retrieve the meter event summaries
      * @param null|array $params

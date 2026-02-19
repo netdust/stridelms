@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Apps;
 
 /**
@@ -28,10 +27,8 @@ namespace StellarWP\Learndash\Stripe\Apps;
 class Secret extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'apps.secret';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -46,10 +43,8 @@ class Secret extends \StellarWP\Learndash\Stripe\ApiResource
         list($response, $opts) = static::_staticRequest('post', $url, $params, $opts);
         $obj = \StellarWP\Learndash\Stripe\Util\Util::convertToStripeObject($response->json, $opts);
         $obj->setLastResponse($response);
-
         return $obj;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -64,7 +59,6 @@ class Secret extends \StellarWP\Learndash\Stripe\ApiResource
         list($response, $opts) = static::_staticRequest('get', $url, $params, $opts);
         $obj = \StellarWP\Learndash\Stripe\Util\Util::convertToStripeObject($response->json, $opts);
         $obj->setLastResponse($response);
-
         return $obj;
     }
 }

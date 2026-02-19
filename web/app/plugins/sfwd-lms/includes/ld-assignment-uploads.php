@@ -24,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 add_filter(
 	'the_content',
-	function( $content ): string {
+	static function ( $content ) {
 		global $post;
 
 		if (

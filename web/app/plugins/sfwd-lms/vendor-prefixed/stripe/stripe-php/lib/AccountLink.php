@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -18,6 +17,5 @@ namespace StellarWP\Learndash\Stripe;
 class AccountLink extends ApiResource
 {
     const OBJECT_NAME = 'account_link';
-
-    use ApiOperations\Create;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create;
 }

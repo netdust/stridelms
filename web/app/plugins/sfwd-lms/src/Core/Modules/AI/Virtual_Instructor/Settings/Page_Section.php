@@ -50,10 +50,11 @@ class Page_Section extends LearnDash_Settings_Section {
 	 * Default option values.
 	 *
 	 * @since 4.13.0
+	 * @since 5.0.0 Updated to protected.
 	 *
 	 * @var array<string, mixed>
 	 */
-	private $default_values;
+	protected $default_values = [];
 
 	/**
 	 * Constructor.

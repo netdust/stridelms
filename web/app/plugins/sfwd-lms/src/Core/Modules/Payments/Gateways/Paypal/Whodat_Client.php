@@ -251,7 +251,12 @@ class Whodat_Client {
 	protected function client_get( string $endpoint, array $args = [] ) {
 		$url = $this->get_api_url( $endpoint, $args );
 
-		$request = wp_remote_get( $url );
+		$request = wp_remote_get(
+			$url,
+			[
+				'timeout' => MINUTE_IN_SECONDS / 2, // 30 seconds.
+			]
+		);
 
 		if ( is_wp_error( $request ) ) {
 			return $request;
@@ -263,9 +268,11 @@ class Whodat_Client {
 		if ( ! is_array( $body ) ) {
 			return new WP_Error(
 				'whodat_client_error',
-				esc_html__( 'Invalid response.', 'learndash' ),
+				esc_html__( 'We encountered an unexpected error with the response. Please try again later or contact support if the issue persists.', 'learndash' ),
 				[
-					'status' => 502,
+					'status'        => 502,
+					'endpoint'      => $endpoint,
+					'response_body' => $body,
 				]
 			);
 		}
@@ -289,7 +296,8 @@ class Whodat_Client {
 		$request = wp_remote_post(
 			$url,
 			[
-				'body' => $args,
+				'body'    => $args,
+				'timeout' => MINUTE_IN_SECONDS / 2, // 30 seconds.
 			]
 		);
 
@@ -303,9 +311,11 @@ class Whodat_Client {
 		if ( ! is_array( $body ) ) {
 			return new WP_Error(
 				'whodat_client_error',
-				esc_html__( 'Invalid response.', 'learndash' ),
+				esc_html__( 'We encountered an unexpected error with the response. Please try again later or contact support if the issue persists.', 'learndash' ),
 				[
-					'status' => 502,
+					'status'        => 502,
+					'endpoint'      => $endpoint,
+					'response_body' => $body,
 				]
 			);
 		}

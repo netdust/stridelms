@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -39,29 +38,23 @@ namespace StellarWP\Learndash\Stripe;
 class Plan extends ApiResource
 {
     const OBJECT_NAME = 'plan';
-
-    use ApiOperations\All;
-    use ApiOperations\Create;
-    use ApiOperations\Delete;
-    use ApiOperations\Retrieve;
-    use ApiOperations\Update;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Delete;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Update;
     const AGGREGATE_USAGE_LAST_DURING_PERIOD = 'last_during_period';
     const AGGREGATE_USAGE_LAST_EVER = 'last_ever';
     const AGGREGATE_USAGE_MAX = 'max';
     const AGGREGATE_USAGE_SUM = 'sum';
-
     const BILLING_SCHEME_PER_UNIT = 'per_unit';
     const BILLING_SCHEME_TIERED = 'tiered';
-
     const INTERVAL_DAY = 'day';
     const INTERVAL_MONTH = 'month';
     const INTERVAL_WEEK = 'week';
     const INTERVAL_YEAR = 'year';
-
     const TIERS_MODE_GRADUATED = 'graduated';
     const TIERS_MODE_VOLUME = 'volume';
-
     const USAGE_TYPE_LICENSED = 'licensed';
     const USAGE_TYPE_METERED = 'metered';
 }

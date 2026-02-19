@@ -49,17 +49,3 @@ add_action(
 		require_once __DIR__ . '/src/controller/class-licensing-settings-section.php';
 	}
 );
-
-/**
- * LearnDash Hub Activate/Install function.
- *
- * @since 4.18.0
- * @deprecated 4.18.0 -- This function was never used.
- *
- * @param bool|null $network_wide Whether this is a network-wide installation. Defaults to null.
- *
- * @return void
- */
-function learndash_hub_install( $network_wide = null ) {
-	_deprecated_function( __METHOD__, '4.18.0' );
-}

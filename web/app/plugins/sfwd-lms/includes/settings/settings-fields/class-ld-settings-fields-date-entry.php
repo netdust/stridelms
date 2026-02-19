@@ -6,6 +6,8 @@
  * @package LearnDash\Settings\Field
  */
 
+use LearnDash\Core\Utilities\Cast;
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
@@ -193,7 +195,66 @@ if ( ( class_exists( 'LearnDash_Settings_Fields' ) ) && ( ! class_exists( 'Learn
 
 			return false;
 		}
-		// End of functions.
+
+		/**
+		 * Converts REST submit value to internal Settings Field acceptable value.
+		 * In this case, it needs to convert the value to a timestamp with an offset based on the site timezone.
+		 *
+		 * @since 5.0.0
+		 *
+		 * @param mixed                $val        Value from REST to be converted to internal value.
+		 * @param string               $key        Key field for value.
+		 * @param array<string, mixed> $field_args Array of field args.
+		 *
+		 * @return array{aa?: int, mm?: int, jj?: int, hh?: int, mn?: int} Expected array format representing year, month, day, hour, and minute. An empty array will clear the saved value.
+		 */
+		public function rest_value_to_field_value( $val = '', $key = '', $field_args = [] ) {
+			if ( empty( $val ) ) {
+				return [];
+			}
+
+			$val = Cast::to_string( $val );
+
+			$has_timezone = preg_match( '/[Zz]|[+-]\d{2}:?\d{2}$/', $val );
+
+			if ( $has_timezone ) {
+				// Convert to UTC, respecting the timezone offset.
+				$date = new DateTime( Cast::to_string( $val ) );
+				$val  = $date->setTimezone( new DateTimeZone( 'UTC' ) )->format( DATE_RFC3339 );
+
+				// Offset the timestamp based on the site timezone.
+				$unix_timestamp = Cast::to_int(
+					strtotime(
+						learndash_adjust_date_time_display(
+							Cast::to_int( rest_parse_date( $val ) ),
+							'Y-m-d H:i:s'
+						)
+					)
+				);
+			} else {
+				/**
+				 * If a timezone is not specified, we assume it is the site timezone.
+				 * rest_parse_date() will not attempt to convert a date to the site timezone, even without the second parameter set.
+				 *
+				 * We will set the second parameter in case this changes in the future.
+				 */
+				$unix_timestamp = Cast::to_int( rest_parse_date( $val, true ) );
+			}
+
+			$year   = intval( gmdate( 'Y', $unix_timestamp ) );
+			$month  = intval( gmdate( 'm', $unix_timestamp ) );
+			$day    = intval( gmdate( 'd', $unix_timestamp ) );
+			$hour   = intval( gmdate( 'H', $unix_timestamp ) );
+			$minute = intval( gmdate( 'i', $unix_timestamp ) );
+
+			return [
+				'aa' => $year,
+				'mm' => $month,
+				'jj' => $day,
+				'hh' => $hour,
+				'mn' => $minute,
+			];
+		}
 	}
 }
 add_action(

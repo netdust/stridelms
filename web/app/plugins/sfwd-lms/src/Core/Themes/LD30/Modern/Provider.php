@@ -55,6 +55,7 @@ class Provider extends ServiceProvider {
 			return;
 		}
 
+		$this->container->singleton( Features::class );
 		$this->container->register( Group\Provider::class );
 		$this->container->register( Course\Provider::class );
 		$this->container->register( Lesson\Provider::class );

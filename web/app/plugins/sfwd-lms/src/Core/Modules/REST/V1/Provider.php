@@ -9,6 +9,7 @@
 
 namespace LearnDash\Core\Modules\REST\V1;
 
+use LearnDash\Core\Modules\REST\V1\Manifest\Manifest_Generator;
 use StellarWP\Learndash\lucatume\DI52\ServiceProvider;
 
 /**
@@ -25,7 +26,23 @@ class Provider extends ServiceProvider {
 	 * @return void
 	 */
 	public function register(): void {
+		$this->register_manifest();
 		$this->hooks();
+	}
+
+	/**
+	 * Register manifest related container definitions.
+	 *
+	 * @since 5.0.0
+	 *
+	 * @return void
+	 */
+	private function register_manifest(): void {
+		$this->container->singleton( Manifest_Generator::class );
+
+		$this->container->when( Manifest_Generator::class )
+						->needs( '$spec' )
+						->give( static fn(): array => OpenAPI::get_base_spec() );
 	}
 
 	/**

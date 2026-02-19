@@ -17,7 +17,6 @@ if ( class_exists( 'LearnDash_Settings_Page' ) && ! class_exists( 'LearnDash_Set
 	 * @since 4.4.0
 	 */
 	class LearnDash_Settings_Page_Help extends LearnDash_Settings_Page {
-
 		/**
 		 * Public constructor for class
 		 *
@@ -31,15 +30,13 @@ if ( class_exists( 'LearnDash_Settings_Page' ) && ! class_exists( 'LearnDash_Set
 			$this->settings_tab_title    = esc_html__( 'Help', 'learndash' );
 			$this->settings_tab_priority = 100;
 
-			if ( ! learndash_cloud_is_enabled() ) {
-				add_filter( 'learndash_submenu', array( $this, 'submenu_item' ), 200 );
+			add_filter( 'learndash_submenu', array( $this, 'submenu_item' ), 200 );
 
-				add_filter( 'learndash_admin_tab_sets', array( $this, 'learndash_admin_tab_sets' ), 10, 3 );
-				add_filter( 'learndash_header_data', array( $this, 'admin_header' ), 40, 3 );
-				add_action( 'admin_head', array( $this, 'output_admin_inline_scripts' ) );
+			add_filter( 'learndash_admin_tab_sets', array( $this, 'learndash_admin_tab_sets' ), 10, 3 );
+			add_filter( 'learndash_header_data', array( $this, 'admin_header' ), 40, 3 );
+			add_action( 'admin_head', array( $this, 'output_admin_inline_scripts' ) );
 
-				parent::__construct();
-			}
+			parent::__construct();
 		}
 
 		/**
@@ -51,7 +48,7 @@ if ( class_exists( 'LearnDash_Settings_Page' ) && ! class_exists( 'LearnDash_Set
 		 *
 		 * @return array
 		 */
-		public function submenu_item( array $submenu ) : array {
+		public function submenu_item( array $submenu ): array {
 			if ( ! isset( $submenu[ $this->settings_page_id ] ) ) {
 				$submenu = array_merge(
 					$submenu,
@@ -80,7 +77,7 @@ if ( class_exists( 'LearnDash_Settings_Page' ) && ! class_exists( 'LearnDash_Set
 		 *
 		 * @return array
 		 */
-		public function admin_header( array $header_data = array(), string $menu_key = '', array $menu_items = array() ) : array {
+		public function admin_header( array $header_data = array(), string $menu_key = '', array $menu_items = array() ): array {
 			// Clear out $header_data if we are showing our page.
 			return $menu_key === $this->parent_menu_page_url ? array() : $header_data;
 		}
@@ -92,7 +89,7 @@ if ( class_exists( 'LearnDash_Settings_Page' ) && ! class_exists( 'LearnDash_Set
 		 *
 		 * @return void
 		 */
-		public function output_admin_inline_scripts() : void {
+		public function output_admin_inline_scripts(): void {
 			?>
             <?php // phpcs:ignore?>
             <?php if ( isset( $_GET['page'] ) && in_array( $_GET['page'], [ 'learndash-help' ], true ) ) : ?>
@@ -112,7 +109,7 @@ if ( class_exists( 'LearnDash_Settings_Page' ) && ! class_exists( 'LearnDash_Set
 		 *
 		 * @return string
 		 */
-		public function get_admin_page_title() : string {
+		public function get_admin_page_title(): string {
 			/** This filter is documented in includes/settings/class-ld-settings-pages.php */
 			return apply_filters( 'learndash_admin_page_title', '<h1>' . $this->settings_page_title . '</h1>' );
 		}
@@ -124,7 +121,7 @@ if ( class_exists( 'LearnDash_Settings_Page' ) && ! class_exists( 'LearnDash_Set
 		 *
 		 * @return void
 		 */
-		public static function enqueue_support_assets() : void {
+		public static function enqueue_support_assets(): void {
 			wp_enqueue_style(
 				'learndash-help',
 				LEARNDASH_LMS_PLUGIN_URL . '/assets/css/help.css',
@@ -149,8 +146,7 @@ if ( class_exists( 'LearnDash_Settings_Page' ) && ! class_exists( 'LearnDash_Set
 		 *
 		 * @return void
 		 */
-		public function load_settings_page() : void {
-
+		public function load_settings_page(): void {
 			global $learndash_assets_loaded;
 
 			self::enqueue_support_assets();
@@ -171,7 +167,7 @@ if ( class_exists( 'LearnDash_Settings_Page' ) && ! class_exists( 'LearnDash_Set
 		 *
 		 * @return array
 		 */
-		public function learndash_admin_tab_sets( array $tab_set = array(), string $tab_key = '', string $current_page_id = '' ) : array {
+		public function learndash_admin_tab_sets( array $tab_set = array(), string $tab_key = '', string $current_page_id = '' ): array {
 			if ( ( ! empty( $tab_set ) ) && ( ! empty( $tab_key ) ) && ( ! empty( $current_page_id ) ) ) {
 				if ( 'admin_page_learndash-help' === $current_page_id ) {
 					?>
@@ -189,7 +185,7 @@ if ( class_exists( 'LearnDash_Settings_Page' ) && ! class_exists( 'LearnDash_Set
 		 *
 		 * @return void
 		 */
-		public function show_settings_page() : void {
+		public function show_settings_page(): void {
 			$categories = self::get_categories();
 
 			SFWD_LMS::get_view(
@@ -209,7 +205,7 @@ if ( class_exists( 'LearnDash_Settings_Page' ) && ! class_exists( 'LearnDash_Set
 		 *
 		 * @return array<string, array{id: string, url: string, label: string, description: string, icon: string}>
 		 */
-		public static function get_categories() : array {
+		public static function get_categories(): array {
 			return [
 				'getting-started'     => [
 					'id'          => 'getting-started',
@@ -286,7 +282,7 @@ if ( class_exists( 'LearnDash_Settings_Page' ) && ! class_exists( 'LearnDash_Set
 		 *
 		 * @return array<string, string>
 		 */
-		public static function get_articles_categories( array $exclude_categories = array() ) : array {
+		public static function get_articles_categories( array $exclude_categories = array() ): array {
 			$categories = array(
 				'additional_resources' => __( 'Additional Resources', 'learndash' ),
 				'build_courses'        => __( 'Build Courses', 'learndash' ),
@@ -317,7 +313,7 @@ if ( class_exists( 'LearnDash_Settings_Page' ) && ! class_exists( 'LearnDash_Set
 		 *
 		 * @return array<int, array<string, array<int, string>|string>>
 		 */
-		public static function get_articles( string $category = null, array $exclude_categories = array() ) : array {
+		public static function get_articles( string $category = null, array $exclude_categories = array() ): array {
 			$articles = array(
 				array(
 					'type'       => 'vimeo_video',
@@ -460,7 +456,7 @@ if ( class_exists( 'LearnDash_Settings_Page' ) && ! class_exists( 'LearnDash_Set
 
 add_action(
 	'learndash_settings_pages_init',
-	function() {
+	function () {
 		LearnDash_Settings_Page_Help::add_page_instance();
 	}
 );

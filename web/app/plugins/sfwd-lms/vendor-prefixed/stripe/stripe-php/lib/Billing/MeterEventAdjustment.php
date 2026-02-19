@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Billing;
 
 /**
@@ -17,9 +16,7 @@ namespace StellarWP\Learndash\Stripe\Billing;
 class MeterEventAdjustment extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'billing.meter_event_adjustment';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
-
     const STATUS_COMPLETE = 'complete';
     const STATUS_PENDING = 'pending';
 }

@@ -238,7 +238,7 @@ class Capture extends Endpoint {
 				'permission_callback' => [ $this, 'check_permission' ],
 				'summary'             => sprintf(
 					// translators: %s: order label.
-					__( 'Capture a PayPal %s.', 'learndash' ),
+					__( 'Capture a PayPal %s', 'learndash' ),
 					learndash_get_custom_label_lower( 'order' )
 				),
 				'description'         => sprintf(

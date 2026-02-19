@@ -11,6 +11,7 @@
 
 namespace LearnDash\Core\Modules\Payments\Subscriptions;
 
+use LearnDash\Core\Enums\Commerce\Cancellation_Reason;
 use LearnDash\Core\Models\Commerce\Subscription as Subscription_Model;
 use LearnDash\Core\Utilities\Cast;
 use StellarWP\Learndash\StellarWP\SuperGlobals\SuperGlobals;
@@ -63,11 +64,11 @@ class Handler {
 
 		// Cancel the subscription.
 
-		$cancellation_reason = learndash_is_admin_user()
-			? __( 'Admin requested cancellation.', 'learndash' )
-			: __( 'Student requested cancellation.', 'learndash' );
-
-		$cancellation_result = $subscription->cancel( $cancellation_reason );
+		$cancellation_result = $subscription->cancel(
+			learndash_is_admin_user()
+				? Cancellation_Reason::CANCELED_BY_ADMIN()->getValue()
+				: Cancellation_Reason::CANCELED_BY_STUDENT()->getValue()
+		);
 
 		// Add a transient to display the result of the cancellation.
 

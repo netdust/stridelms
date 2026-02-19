@@ -189,5 +189,20 @@ trait License {
 		delete_site_option( $this->get_license_key_option_name() );
 		delete_site_option( $this->get_hub_email_option_name() );
 		delete_site_option( $this->get_license_status_option_name() );
+
+		if ( ! function_exists( 'WP_Filesystem' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/file.php';
+		}
+
+		WP_Filesystem();
+		global $wp_filesystem;
+
+		if ( $wp_filesystem->is_file( LEARNDASH_LMS_PLUGIN_DIR . '/auth-token.php' ) ) {
+			$wp_filesystem->delete( LEARNDASH_LMS_PLUGIN_DIR . '/auth-token.php' );
+		}
+
+		if ( $wp_filesystem->is_file( LEARNDASH_LMS_PLUGIN_DIR . '/auth-email.php' ) ) {
+			$wp_filesystem->delete( LEARNDASH_LMS_PLUGIN_DIR . '/auth-email.php' );
+		}
 	}
 }

@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Tax;
 
 /**
@@ -27,12 +26,9 @@ namespace StellarWP\Learndash\Stripe\Tax;
 class Transaction extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'tax.transaction';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
-
     const TYPE_REVERSAL = 'reversal';
     const TYPE_TRANSACTION = 'transaction';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -47,10 +43,8 @@ class Transaction extends \StellarWP\Learndash\Stripe\ApiResource
         list($response, $opts) = static::_staticRequest('post', $url, $params, $opts);
         $obj = \StellarWP\Learndash\Stripe\Util\Util::convertToStripeObject($response->json, $opts);
         $obj->setLastResponse($response);
-
         return $obj;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -65,10 +59,8 @@ class Transaction extends \StellarWP\Learndash\Stripe\ApiResource
         list($response, $opts) = static::_staticRequest('post', $url, $params, $opts);
         $obj = \StellarWP\Learndash\Stripe\Util\Util::convertToStripeObject($response->json, $opts);
         $obj->setLastResponse($response);
-
         return $obj;
     }
-
     /**
      * @param string $id
      * @param null|array $params
@@ -84,7 +76,6 @@ class Transaction extends \StellarWP\Learndash\Stripe\ApiResource
         list($response, $opts) = static::_staticRequest('get', $url, $params, $opts);
         $obj = \StellarWP\Learndash\Stripe\Util\Util::convertToStripeObject($response->json, $opts);
         $obj->setLastResponse($response);
-
         return $obj;
     }
 }

@@ -39,7 +39,14 @@ function learndash_mark_complete( $post, $atts = array() ) {
 		return '';
 	}
 
-	$bypass_course_limits_admin_users = learndash_can_user_bypass( $user_id, 'learndash_course_progression', $post->ID, $post );
+	$bypass_course_limits_admin_users = learndash_can_user_bypass(
+		$user_id,
+		'learndash_course_progression',
+		[
+			'step_id' => $post->ID,
+			'step'    => $post,
+		]
+	);
 
 	/**
 	 * Bypass prerequisites.
@@ -557,23 +564,6 @@ function learndash_get_step_completed_transient_data( $step_id, $course_id, $use
 }
 
 /**
- * Gets the course permalink.
- *
- * @since 2.1.0
- *
- * @param int|null $id Optional. The ID of the resource like course, topic, lesson, quiz, etc. Default null.
- *
- * @return string The course permalink.
- */
-function learndash_get_course_url( $id = null ) {
-	if ( empty( $id ) ) {
-		$id = learndash_get_course_id();
-	}
-
-	return get_permalink( $id );
-}
-
-/**
  * Redirects the user after quiz completion when a user clicks on the "continue" button.
  * It redirects to the next step if the quiz is completed otherwise redirects back to the quiz page.
  *
@@ -711,6 +701,7 @@ function learndash_get_previous( $post ) {
  *
  * @since 2.1.0
  * @since 4.11.0 Added the $force parameter.
+ * @since 5.0.0 Removed the option to use `learndash_process_mark_complete_legacy`.
  *
  * @param int|null $user_id       Optional. User ID. Default null.
  * @param int|null $postid        Optional. The ID of the resource like course, lesson, topic, etc. Default null.
@@ -722,10 +713,6 @@ function learndash_get_previous( $post ) {
  * @return bool Returns true if the meta is updated successfully, otherwise false.
  */
 function learndash_process_mark_complete( $user_id = null, $postid = null, $onlycalculate = false, $course_id = 0, $force = false ) {
-	if ( ( defined( 'LEARNDASH_COURSE_FUNCTIONS_LEGACY' ) ) && ( true === LEARNDASH_COURSE_FUNCTIONS_LEGACY ) ) {
-		return learndash_process_mark_complete_legacy( $user_id, $postid, $onlycalculate, $course_id );
-	}
-
 	if ( empty( $user_id ) ) {
 		if ( is_user_logged_in() ) {
 			$current_user = wp_get_current_user();
@@ -1186,6 +1173,7 @@ function learndash_is_quiz_notcomplete( $user_id = null, $quizzes = null, $retur
  * Gets the user's current course progress.
  *
  * @since 2.1.0
+ * @since 5.0.0 Removed the option to use `learndash_get_course_progress_legacy`.
  *
  * @param int|null $user_id   Optional. User ID. Default null.
  * @param int|null $postid    Optional. Post ID. Default null.
@@ -1194,10 +1182,6 @@ function learndash_is_quiz_notcomplete( $user_id = null, $quizzes = null, $retur
  * @return array An array of user's current course progress.
  */
 function learndash_get_course_progress( $user_id = null, $postid = null, $course_id = null ) {
-	if ( ( defined( 'LEARNDASH_COURSE_FUNCTIONS_LEGACY' ) ) && ( true === LEARNDASH_COURSE_FUNCTIONS_LEGACY ) ) {
-		return learndash_get_course_progress_legacy( $user_id, $postid, $course_id );
-	}
-
 	$user_id   = absint( $user_id );
 	$course_id = absint( $course_id );
 
@@ -1313,6 +1297,7 @@ function learndash_is_lesson_complete( $user_id = null, $lesson_id = 0, $course_
  * Checks if a lesson is not complete.
  *
  * @since 2.1.0
+ * @since 5.0.0 Removed the option to use `learndash_is_lesson_notcomplete_legacy`.
  *
  * @param int|null $user_id   Optional. User ID. Defaults to the current logged-in user. Default null.
  * @param array    $lessons   An array of lesson IDs.
@@ -1321,10 +1306,6 @@ function learndash_is_lesson_complete( $user_id = null, $lesson_id = 0, $course_
  * @return boolean Returns true if the lesson is not complete otherwise false.
  */
 function learndash_is_lesson_notcomplete( $user_id = null, $lessons = array(), $course_id = 0 ) {
-	if ( ( defined( 'LEARNDASH_COURSE_FUNCTIONS_LEGACY' ) ) && ( true === LEARNDASH_COURSE_FUNCTIONS_LEGACY ) ) {
-		return learndash_is_lesson_notcomplete_legacy( $user_id, $lessons, $course_id );
-	}
-
 	if ( empty( $user_id ) ) {
 		$current_user = wp_get_current_user();
 		$user_id      = $current_user->ID;
@@ -1360,6 +1341,7 @@ function learndash_is_lesson_notcomplete( $user_id = null, $lessons = array(), $
  *
  * @since 2.3.1
  * @since 3.2.0 Added $course_id
+ * @since 5.0.0 Removed the option to use `learndash_is_topic_notcomplete_legacy`.
  *
  * @param int $user_id  Optional. User ID. Defaults to the current logged-in user. Default null.
  * @param int $topic_id Topic ID.
@@ -1384,10 +1366,6 @@ function learndash_is_topic_complete( $user_id = null, $topic_id = 0, $course_id
  * @return boolean Returns true if the topic is not completed otherwise false.
  */
 function learndash_is_topic_notcomplete( $user_id = null, $topics = array(), $course_id = 0 ) {
-	if ( ( defined( 'LEARNDASH_COURSE_FUNCTIONS_LEGACY' ) ) && ( true === LEARNDASH_COURSE_FUNCTIONS_LEGACY ) ) {
-		return learndash_is_topic_notcomplete_legacy( $user_id, $topics, $course_id );
-	}
-
 	if ( empty( $user_id ) ) {
 		$current_user = wp_get_current_user();
 		$user_id      = $current_user->ID;
@@ -1429,6 +1407,7 @@ function learndash_is_topic_notcomplete( $user_id = null, $topics = array(), $co
  *
  * @since 2.1.0
  * @since 2.5.8 Added $return_slug parameter.
+ * @since 5.0.0 Removed the option to use `learndash_course_status_legacy`.
  *
  * @param int      $course_id   Course ID to get status.
  * @param int|null $user_id     Optional. User ID. Default null.
@@ -1439,9 +1418,6 @@ function learndash_is_topic_notcomplete( $user_id = null, $topics = array(), $co
 function learndash_course_status( $course_id, $user_id = null, $return_slug = false ) {
 	global $learndash_course_statuses;
 
-	if ( ( defined( 'LEARNDASH_COURSE_FUNCTIONS_LEGACY' ) ) && ( true === LEARNDASH_COURSE_FUNCTIONS_LEGACY ) ) {
-		return learndash_course_status_legacy( $course_id, $user_id, $return_slug );
-	}
 	$course_status_slug = '';
 
 	$course_id = absint( $course_id );
@@ -1546,6 +1522,7 @@ function learndash_course_status_label( $course_status_slug = '' ) {
  * Checks if the quiz is accessible to the user.
  *
  * @since 3.4.0
+ * @since 5.0.0 Removed the option to use `learndash_is_quiz_accessable_legacy`.
  *
  * @param int|null     $user_id $user_id  Optional. The ID of User to check.  Defaults to the current logged-in user. Default null.
  * @param WP_Post|null $post              Optional. The `WP_Post` quiz object. Default null.
@@ -1556,11 +1533,6 @@ function learndash_course_status_label( $course_status_slug = '' ) {
  *                          parameter is set to true it may return `WP_Post` object for incomplete step.
  */
 function learndash_is_quiz_accessable( $user_id = null, $post = null, $return_incomplete = false, $course_id = 0 ) {
-	// Allow using the legacy function in case of issues with new logic.
-	if ( ( defined( 'LEARNDASH_IS_QUIZ_ACCESSABLE_LEGACY' ) && ( LEARNDASH_IS_QUIZ_ACCESSABLE_LEGACY === true ) ) ) {
-		return learndash_is_quiz_accessable_legacy( $user_id, $post, $course_id );
-	}
-
 	if ( empty( $user_id ) ) {
 		$current_user = wp_get_current_user();
 
@@ -1585,7 +1557,16 @@ function learndash_is_quiz_accessable( $user_id = null, $post = null, $return_in
 		return 1;
 	}
 
-	$bypass_course_limits_admin_users = learndash_can_user_bypass( $user_id, 'learndash_quiz_accessable', $post, $course_id );
+	$bypass_course_limits_admin_users = learndash_can_user_bypass(
+		$user_id,
+		'learndash_quiz_accessable',
+		[
+			'course_id' => $course_id,
+			'step_id'   => $post->ID,
+			'step'      => $post,
+		]
+	);
+
 	if ( true === $bypass_course_limits_admin_users ) {
 		return 1;
 	}

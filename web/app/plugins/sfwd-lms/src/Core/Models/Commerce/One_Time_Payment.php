@@ -101,8 +101,7 @@ class One_Time_Payment extends Product {
 	 */
 	public function cancel( string $reason, bool $force_cancellation = false ): bool {
 		$this->set_status( self::$status_canceled );
-		$this->set_meta( self::$meta_key_cancellation_reason, $reason );
 
-		return true;
+		return parent::cancel( $reason, $force_cancellation );
 	}
 }

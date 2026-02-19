@@ -15,6 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use WP_Query;
 use LearnDash\Course_Grid\Utilities;
+use LearnDash\Course_Grid;
 
 /**
  * Course grid shortcode.
@@ -151,9 +152,12 @@ class LearnDash_Course_Grid extends Base {
 
 		$atts = $this->validate_atts_type( $atts );
 
+		// Enqueue skin assets for this shortcode instance.
+		Course_Grid::instance()->skins->handle_skin_assets( $atts );
+
 		$query_args = Utilities::build_posts_query_args( $atts );
 
-		// Query the posts
+		// Query the posts.
 		$query = new WP_Query( $query_args );
 
 		$posts         = $query->get_posts();

@@ -103,5 +103,14 @@ class Provider extends ServiceProvider {
 				'register_admin_notice'
 			)
 		);
+
+		// Register the subscription payment retry hook.
+		add_action(
+			'learndash_subscription_payment_retry',
+			$this->container->callback(
+				Processor::class,
+				'process_payment_retry'
+			)
+		);
 	}
 }

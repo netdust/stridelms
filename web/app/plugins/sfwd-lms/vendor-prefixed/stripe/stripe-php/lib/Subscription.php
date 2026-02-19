@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -58,16 +57,13 @@ namespace StellarWP\Learndash\Stripe;
 class Subscription extends ApiResource
 {
     const OBJECT_NAME = 'subscription';
-
-    use ApiOperations\All;
-    use ApiOperations\Create;
-    use ApiOperations\Retrieve;
-    use ApiOperations\Search;
-    use ApiOperations\Update;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Search;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Update;
     const COLLECTION_METHOD_CHARGE_AUTOMATICALLY = 'charge_automatically';
     const COLLECTION_METHOD_SEND_INVOICE = 'send_invoice';
-
     const STATUS_ACTIVE = 'active';
     const STATUS_CANCELED = 'canceled';
     const STATUS_INCOMPLETE = 'incomplete';
@@ -76,23 +72,17 @@ class Subscription extends ApiResource
     const STATUS_PAUSED = 'paused';
     const STATUS_TRIALING = 'trialing';
     const STATUS_UNPAID = 'unpaid';
-
-    use ApiOperations\Delete {
+    use \StellarWP\Learndash\Stripe\ApiOperations\Delete {
         delete as protected _delete;
-      }
-
+    }
     public static function getSavedNestedResources()
     {
         static $savedNestedResources = null;
         if (null === $savedNestedResources) {
-            $savedNestedResources = new Util\Set([
-                'source',
-            ]);
+            $savedNestedResources = new Util\Set(['source']);
         }
-
         return $savedNestedResources;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -106,19 +96,15 @@ class Subscription extends ApiResource
         $url = $this->instanceUrl() . '/discount';
         list($response, $opts) = $this->_request('delete', $url, $params, $opts);
         $this->refreshFrom(['discount' => null], $opts, true);
-
         return $this;
     }
-
     const PAYMENT_BEHAVIOR_ALLOW_INCOMPLETE = 'allow_incomplete';
     const PAYMENT_BEHAVIOR_DEFAULT_INCOMPLETE = 'default_incomplete';
     const PAYMENT_BEHAVIOR_ERROR_IF_INCOMPLETE = 'error_if_incomplete';
     const PAYMENT_BEHAVIOR_PENDING_IF_INCOMPLETE = 'pending_if_incomplete';
-
     const PRORATION_BEHAVIOR_ALWAYS_INVOICE = 'always_invoice';
     const PRORATION_BEHAVIOR_CREATE_PRORATIONS = 'create_prorations';
     const PRORATION_BEHAVIOR_NONE = 'none';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -132,10 +118,8 @@ class Subscription extends ApiResource
         $url = $this->instanceUrl();
         list($response, $opts) = $this->_request('delete', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -149,10 +133,8 @@ class Subscription extends ApiResource
         $url = $this->instanceUrl() . '/resume';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -164,7 +146,6 @@ class Subscription extends ApiResource
     public static function search($params = null, $opts = null)
     {
         $url = '/v1/subscriptions/search';
-
         return static::_requestPage($url, \StellarWP\Learndash\Stripe\SearchResult::class, $params, $opts);
     }
 }

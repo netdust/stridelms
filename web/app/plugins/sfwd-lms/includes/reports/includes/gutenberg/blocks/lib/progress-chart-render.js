@@ -108,6 +108,7 @@ export default function ProgressChart( props ) {
 		LoadingResponsePlaceholder = DefaultLoadingResponsePlaceholder,
 	} = props;
 
+	const blockRef = useRef();
 	const isMountedRef = useRef( true );
 	const [ showLoader, setShowLoader ] = useState( false );
 	const fetchRequestRef = useRef();
@@ -258,44 +259,38 @@ export default function ProgressChart( props ) {
 	}
 
 	function toggleDOM( fetchResponse, clientId ) {
-
 		const progressAllDefaultMessage = querySelectorAll( '#block-' + clientId + ' #proPanelProgressAllDefaultMessage');
-
 		const progressAllChart = querySelectorAll( '#block-' + clientId + ' #proPanelProgressAll' );
 
-		if ( typeof fetchResponse?.data?.all_progress?.data?.datasets !== 'undefined' && fetchResponse?.data?.all_progress?.data?.datasets.length > 0 ) {
-
-			progressAllDefaultMessage[0].style.display = 'none';
-
-		} else {
-
-			progressAllDefaultMessage[0].style.display = 'block';
-			progressAllChart[0].style.display = 'none';
-			progressAllChart[0].style.height = 0;
-			progressAllChart[0].style.width = 0;
-
+		if ( progressAllDefaultMessage.length > 0 && progressAllChart.length > 0 ) {
+			if ( typeof fetchResponse?.data?.all_progress?.data?.datasets !== 'undefined' && fetchResponse?.data?.all_progress?.data?.datasets.length > 0 ) {
+				progressAllDefaultMessage[0].style.display = 'none';
+			} else {
+				progressAllDefaultMessage[0].style.display = 'block';
+				progressAllChart[0].style.display = 'none';
+				progressAllChart[0].style.height = 0;
+				progressAllChart[0].style.width = 0;
+			}
 		}
 
 		const proPanelProgressInMotionDefaultMessage = querySelectorAll( '#block-' + clientId + ' #proPanelProgressInMotionDefaultMessage');
-
 		const proPanelProgressInMotionChart = querySelectorAll( '#block-' + clientId + ' #proPanelProgressInMotion' );
 
-		if ( typeof fetchResponse?.data?.all_percentages?.data?.datasets !== 'undefined' && fetchResponse?.data?.all_percentages?.data?.datasets.length > 0 ) {
-
-			proPanelProgressInMotionDefaultMessage[0].style.display = 'none';
-
-		} else {
-
-			proPanelProgressInMotionDefaultMessage[0].style.display = 'block';
-			proPanelProgressInMotionChart[0].style.display = 'none';
-			proPanelProgressInMotionChart[0].style.height = 0;
-			proPanelProgressInMotionChart[0].style.width = 0;
-
+		if ( proPanelProgressInMotionDefaultMessage.length > 0 && proPanelProgressInMotionChart.length > 0 ) {
+			if ( typeof fetchResponse?.data?.all_percentages?.data?.datasets !== 'undefined' && fetchResponse?.data?.all_percentages?.data?.datasets.length > 0 ) {
+				proPanelProgressInMotionDefaultMessage[0].style.display = 'none';
+			} else {
+				proPanelProgressInMotionDefaultMessage[0].style.display = 'block';
+				proPanelProgressInMotionChart[0].style.display = 'none';
+				proPanelProgressInMotionChart[0].style.height = 0;
+				proPanelProgressInMotionChart[0].style.width = 0;
+			}
 		}
 
-		const updatedResponse = querySelectorAll( '#block-' + attributes.clientId + ' .propanel-admin-row' )[0].outerHTML;
-
-		setResponse( updatedResponse );
+		const updatedResponseElements = querySelectorAll( '#block-' + attributes.clientId + ' .propanel-admin-row' );
+		if ( updatedResponseElements.length > 0 ) {
+			setResponse( updatedResponseElements[0].outerHTML );
+		}
 
 	}
 
@@ -344,36 +339,52 @@ export default function ProgressChart( props ) {
 	}
 
 	/**
-	 * Block Previews load within an iFrame. Even though they are on the same domain, document.querySelectorAll() cannot see within it normally.
-	 * This function will shorthand checking within iFrames as needed.
+	 * Get the correct document context from the block ref.
 	 *
-	 * @param   {string}  selector  Selector to search for
+	 * Blocks load within an iFrame in WP 6.9+, so we need to use the ownerDocument to ensure we're querying
+	 * the correct document context.
 	 *
-	 * @since 4.17.0
-	 * @return  {NodeList}          NodeList of found results
+	 * @since 4.25.7
+	 *
+	 * @return {Document|null} The document context
 	 */
-	function querySelectorAll( selector ) {
-
-		var element = document.querySelectorAll( selector );
-
-		// Account for Block Previews.
-		if ( typeof element[0] === 'undefined' ) {
-
-			element = document.querySelector( 'iframe' )?.contentDocument.body?.querySelectorAll( selector );
-
+	function getDocumentContext() {
+		if ( ! blockRef.current ) {
+			return null;
 		}
 
-		return element;
+		return blockRef.current.ownerDocument;
+	}
 
+	/**
+	 * Query selector within the correct document context.
+	 *
+	 * @since 4.17.0
+	 *
+	 * @param  {string} selector Selector to search for
+	 *
+	 * @return {NodeList} NodeList of found results
+	 */
+	function querySelectorAll( selector ) {
+		const doc = getDocumentContext();
+
+		if ( ! doc ) {
+			return [];
+		}
+
+		return doc.querySelectorAll( selector );
 	}
 
 	const debouncedFetchData = useDebounce( fetchData, 500 );
 
-	// When the component unmounts, set isMountedRef to false. This will
-	// let the async fetch callbacks know when to stop.
+	// When the component mounts, set isMountedRef to true.
+	// When it unmounts, set it to false. This will let the async fetch callbacks know when to stop.
 	useEffect(
-		() => () => {
-			isMountedRef.current = false;
+		() => {
+			isMountedRef.current = true;
+			return () => {
+				isMountedRef.current = false;
+			};
 		},
 		[]
 	);
@@ -408,17 +419,19 @@ export default function ProgressChart( props ) {
 	 * Waiting for this is necessary to ensure that we are drawing to the existing Canvas rather than one may be in the process of being overwritten.
 	 */
 	useEffect( () => {
-
-		if ( isLoading ) {
+		if ( isLoading || ! blockRef.current ) {
 			return;
 		}
 
 		if ( typeof chartData.data !== 'undefined' ) {
+			// Toggle DOM visibility first
+			toggleDOM( chartData, attributes.clientId );
+
+			// Then draw the charts
 			drawProgressAllChart( attributes.clientId );
 			drawProgressAllPercentagesChart( attributes.clientId );
 		}
-
-	}, [ response ] );
+	}, [ response, chartData, isLoading ] );
 
 	const hasResponse = !! response;
 	const hasEmptyResponse = response === '';
@@ -426,21 +439,35 @@ export default function ProgressChart( props ) {
 
 	if ( isLoading ) {
 		return (
-			<LoadingResponsePlaceholder { ...props } showLoader={ showLoader }>
-				{ hasResponse && (
-					<RawHTML className={ className }>{ response }</RawHTML>
-				) }
-			</LoadingResponsePlaceholder>
+			<div ref={ blockRef }>
+				<LoadingResponsePlaceholder { ...props } showLoader={ showLoader }>
+					{ hasResponse && (
+						<RawHTML className={ className }>{ response }</RawHTML>
+					) }
+				</LoadingResponsePlaceholder>
+			</div>
 		);
 	}
 
 	if ( hasEmptyResponse || ! hasResponse ) {
-		return <EmptyResponsePlaceholder { ...props } />;
+		return (
+			<div ref={ blockRef }>
+				<EmptyResponsePlaceholder { ...props } />
+			</div>
+		);
 	}
 
 	if ( hasError ) {
-		return <ErrorResponsePlaceholder response={ response } { ...props } />;
+		return (
+			<div ref={ blockRef }>
+				<ErrorResponsePlaceholder response={ response } { ...props } />
+			</div>
+		);
 	}
 
-	return <RawHTML className={ className }>{ response }</RawHTML>;
+	return (
+		<div ref={ blockRef }>
+			<RawHTML className={ className }>{ response }</RawHTML>
+		</div>
+	);
 }

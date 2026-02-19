@@ -307,31 +307,6 @@ function learndash_get_course_prerequisite( $course_id = 0 ) {
 }
 
 /**
- * Sets new prerequisites for a course.
- *
- * @since 2.4.4
- *
- * @param int   $course_id  Optional. ID of the course. Default 0.
- * @param array $course_pre Optional. An array of course prerequisites. Default empty array.
- *
- * @return boolean Returns true if update was successful otherwise false.
- */
-function learndash_set_course_prerequisite( $course_id = 0, $course_pre = array() ) {
-	if ( ! empty( $course_id ) ) {
-		if ( ( ! empty( $course_pre ) ) && ( is_array( $course_pre ) ) ) {
-			$course_pre = array_unique( $course_pre );
-		}
-
-		$transient_key        = 'learndash_course_pre_' . $course_id;
-		$course_pre_transient = LDLMS_Transients::delete( $transient_key );
-
-		return learndash_update_setting( $course_id, 'course_prerequisite', $course_pre );
-	}
-
-	return false;
-}
-
-/**
  * Checks whether the course prerequisites requirement for enrollment setting is enabled for a course.
  *
  * @since 2.4.0
@@ -382,29 +357,6 @@ function learndash_get_course_prerequisite_enabled( $course_id ) {
 	}
 
 	return false;
-}
-
-/**
- * Sets the status of whether the course prerequisite is enabled or disabled.
- *
- * @since 2.4.4
- *
- * @param int     $course_id The ID of the course.
- * @param boolean $enabled   Optional. The value is true to enable course prerequisites. Any other
- *                           value will disable course prerequisites. Default true.
- *
- * @return boolean Returns true if the status was updated successfully otherwise false.
- */
-function learndash_set_course_prerequisite_enabled( $course_id, $enabled = true ) {
-	if ( true === $enabled ) {
-		$enabled = 'on';
-	}
-
-	if ( 'on' !== $enabled ) {
-		$enabled = '';
-	}
-
-	return learndash_update_setting( $course_id, 'course_prerequisite_enabled', $enabled );
 }
 
 /**
@@ -676,23 +628,6 @@ function learndash_get_open_courses( $bypass_transient = false ) {
 }
 
 /**
- * Gets all the courses with the price type paynow.
- *
- * Logic for this query was taken from the `sfwd_lms_has_access_fn()` function.
- *
- * @global wpdb $wpdb WordPress database abstraction object.
- *
- * @since 2.3.0
- *
- * @param boolean $bypass_transient Optional. Whether to bypass the transient cache. Default false.
- *
- * @return array An array of course IDs.
- */
-function learndash_get_paynow_courses( $bypass_transient = false ) {
-	return learndash_get_posts_by_price_type( learndash_get_post_type_slug( 'course' ), 'paynow', $bypass_transient );
-}
-
-/**
  * Gets the list of users with expired course access from the user meta.
  *
  * @since 2.6.4
@@ -809,7 +744,7 @@ add_filter(
 function learndash_update_course_users_groups( $user_id, $course_id, $access_list, $remove ) {
 	if ( ( ! empty( $user_id ) ) && ( ! empty( $course_id ) ) && ( true !== (bool) $remove ) ) {
 
-		$groups = learndash_get_course_groups( $course_id, true );
+		$groups = learndash_get_course_groups( $course_id );
 		if ( ! empty( $groups ) ) {
 			foreach ( $groups as $group_id ) {
 				$ld_auto_enroll_group_courses = get_post_meta( $group_id, 'ld_auto_enroll_group_courses', true );
@@ -955,12 +890,16 @@ function learndash_get_course_lessons_per_page( $course_id = 0 ) {
 	// From the specific Course Settings > Custom Pagination.
 	if ( ! empty( $course_id ) ) {
 		$course_settings = learndash_get_setting( intval( $course_id ) );
-		if ( ( isset( $course_settings['course_lesson_per_page'] ) ) && ( 'CUSTOM' === $course_settings['course_lesson_per_page'] ) && ( isset( $course_settings['course_lesson_per_page_custom'] ) ) ) {
+		if (
+			isset( $course_settings['course_lesson_per_page'] )
+			&& $course_settings['course_lesson_per_page'] === 'on'
+			&& isset( $course_settings['course_lesson_per_page_custom'] )
+		) {
 			$course_lessons_per_page = $course_settings['course_lesson_per_page_custom'];
 		}
 	}
 
-	return absint( $course_lessons_per_page );
+	return absint( Cast::to_int( $course_lessons_per_page ) );
 }
 
 /**
@@ -1240,12 +1179,16 @@ function learndash_get_course_topics_per_page( $course_id = 0, $lesson_id = 0 ) 
 	// From the specific Course Settings > Custom Pagination.
 	if ( ! empty( $course_id ) ) {
 		$course_settings = learndash_get_setting( intval( $course_id ) );
-		if ( ( isset( $course_settings['course_lesson_per_page'] ) ) && ( 'CUSTOM' === $course_settings['course_lesson_per_page'] ) && ( isset( $course_settings['course_topic_per_page_custom'] ) ) ) {
-			$course_topics_per_page = absint( $course_settings['course_topic_per_page_custom'] );
+		if (
+			isset( $course_settings['course_lesson_per_page'] )
+			&& $course_settings['course_lesson_per_page'] === 'on'
+			&& isset( $course_settings['course_topic_per_page_custom'] )
+		) {
+			$course_topics_per_page = $course_settings['course_topic_per_page_custom'];
 		}
 	}
 
-	return $course_topics_per_page;
+	return absint( Cast::to_int( $course_topics_per_page ) );
 }
 
 /**
@@ -1304,56 +1247,30 @@ function learndash_get_last_active_course( $user_id = 0 ) {
 	return $last_course_id;
 }
 
-
 /**
- * Gets the user's last active step for a course.
+ * Checks if a user can bypass certain restrictions based on their role and settings.
  *
- * @since 3.1.4
+ * This function determines whether a user can bypass specific actions/restrictions
+ * (such as course progression, prerequisites, etc.) based on their role and
+ * corresponding settings. It checks:
  *
- * @param int $user_id   Optional. User ID. Default 0.
- * @param int $course_id Optional. Course ID. Default 0.
+ * 1. Admin users - Can bypass if they have admin role AND the setting
+ *    'bypass_course_limits_admin_users' is enabled in General > Admin User settings.
  *
- * @return int The last active course step ID.
- */
-function learndash_user_course_last_step( $user_id = 0, $course_id = 0 ) {
-	global $wpdb;
-
-	$last_course_step_id = 0;
-
-	if ( empty( $user_id ) ) {
-		$user_id = get_current_user_id();
-	}
-
-	if ( ! empty( $user_id ) ) {
-		if ( empty( $course_id ) ) {
-			$course_id = learndash_get_last_active_course( $user_id );
-		}
-		if ( ! empty( $course_id ) ) {
-			$query_result        = $wpdb->get_var(
-				$wpdb->prepare(
-					'SELECT user_activity_meta.activity_meta_value FROM ' . esc_sql( LDLMS_DB::get_table_name( 'user_activity' ) ) . ' as user_activity INNER JOIN ' . esc_sql( LDLMS_DB::get_table_name( 'user_activity_meta' ) ) . " as user_activity_meta ON user_activity.activity_id = user_activity_meta.activity_id WHERE user_activity.user_id=%d AND user_activity.post_id=%d AND user_activity.activity_type='course' AND user_activity_meta.activity_meta_key= 'steps_last_id' ORDER BY activity_updated DESC",
-					$user_id,
-					$course_id
-				)
-			);
-			$last_course_step_id = absint( $query_result );
-		}
-	}
-
-	return $last_course_step_id;
-}
-
-
-/**
- * Check if user can bypass action ($context).
+ * 2. Group Leaders - Can bypass if they have group leader role AND the setting
+ *    'bypass_course_limits' is enabled in Groups > Group Leader User settings.
+ *
+ * The function also provides a filter 'learndash_user_can_bypass' allowing
+ * custom logic to override the default behavior.
  *
  * @since 3.2.0
  *
- * @param int    $user_id User ID.
- * @param string $context The specific action to check for.
- * @param array  $args Optional array of args related to the
- * context. Typically starting with an step ID, Course ID, etc.
- * @return bool True if user can bypass. Otherwise false.
+ * @param int                  $user_id User ID. If 0 or empty, uses the current logged-in user ID. Default 0.
+ * @param string               $context The specific action to check for. Default 'learndash_course_progression'.
+ * @param array<string, mixed> $args    Optional array of args related to the context.
+ *                                      Typically includes step ID, Course ID, etc. Default empty array.
+ *
+ * @return bool True if user can bypass the specified context, false otherwise.
  */
 function learndash_can_user_bypass( $user_id = 0, $context = 'learndash_course_progression', $args = array() ) {
 	if ( empty( $user_id ) ) {

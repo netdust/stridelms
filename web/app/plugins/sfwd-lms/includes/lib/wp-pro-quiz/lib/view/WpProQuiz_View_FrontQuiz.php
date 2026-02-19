@@ -348,7 +348,9 @@ class WpProQuiz_View_FrontQuiz extends WpProQuiz_View_View {
 			$quiz_resume_enabled = (bool) learndash_get_setting( $quiz_post_id, 'quiz_resume' );
 			if ( true === $quiz_resume_enabled ) {
 				$quiz_resume_cookie_send_timer = (int) learndash_get_setting( $quiz_post_id, 'quiz_resume_cookie_send_timer' );
-				if ( LEARNDASH_QUIZ_RESUME_COOKIE_SEND_TIMER_MIN < $quiz_resume_cookie_send_timer ) {
+
+				// We don't want to allow the user to set the timer to less than the minimum.
+				if ( $quiz_resume_cookie_send_timer < LEARNDASH_QUIZ_RESUME_COOKIE_SEND_TIMER_MIN ) {
 					$quiz_resume_cookie_send_timer = LEARNDASH_QUIZ_RESUME_COOKIE_SEND_TIMER_MIN;
 				}
 				$quiz_resume_activity = LDLMS_User_Quiz_Resume::get_user_quiz_resume_activity( $user_id, $quiz_post_id, $course_id );
@@ -605,7 +607,9 @@ class WpProQuiz_View_FrontQuiz extends WpProQuiz_View_View {
 			$quiz_resume_enabled = (bool) learndash_get_setting( $quiz_post_id, 'quiz_resume' );
 			if ( true === $quiz_resume_enabled ) {
 				$quiz_resume_cookie_send_timer = (int) learndash_get_setting( $quiz_post_id, 'quiz_resume_cookie_send_timer' );
-				if ( LEARNDASH_QUIZ_RESUME_COOKIE_SEND_TIMER_MIN < $quiz_resume_cookie_send_timer ) {
+
+				// We don't want to allow the user to set the timer to less than the minimum.
+				if ( $quiz_resume_cookie_send_timer < LEARNDASH_QUIZ_RESUME_COOKIE_SEND_TIMER_MIN ) {
 					$quiz_resume_cookie_send_timer = LEARNDASH_QUIZ_RESUME_COOKIE_SEND_TIMER_MIN;
 				}
 				$quiz_resume_activity = LDLMS_User_Quiz_Resume::get_user_quiz_resume_activity( $user_id, $quiz_post_id, $course_id );

@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -15,7 +14,6 @@ namespace StellarWP\Learndash\Stripe;
 class TaxCode extends ApiResource
 {
     const OBJECT_NAME = 'tax_code';
-
-    use ApiOperations\All;
-    use ApiOperations\Retrieve;
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
 }

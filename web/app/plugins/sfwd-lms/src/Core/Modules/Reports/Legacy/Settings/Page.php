@@ -95,10 +95,11 @@ class Page extends LearnDash_Settings_Page {
 			$text = ! empty( $action['text'] ) ? $action['text'] : $action['slug'];
 
 			$this->buttons[] = [
-				'text'  => wp_strip_all_tags( $text ),
-				'class' => 'learndash-data-reports-button',
-				'icon'  => false,
-				'data'  => [
+				'text'      => wp_strip_all_tags( $text ),
+				'class'     => 'learndash-data-reports-button',
+				'icon'      => false,
+				'collapsed' => false,
+				'data'      => [
 					'nonce' => wp_create_nonce( 'learndash-data-reports-' . esc_attr( $action['slug'] ) . '-' . get_current_user_id() ),
 					'slug'  => esc_attr( $action['slug'] ),
 				],
@@ -149,6 +150,7 @@ class Page extends LearnDash_Settings_Page {
 		) {
 			$header_data['post_data']['builder_post_title'] = esc_html( $this->settings_page_title );
 		}
+		$this->set_header_buttons( $header_data );
 
 		return $header_data;
 	}

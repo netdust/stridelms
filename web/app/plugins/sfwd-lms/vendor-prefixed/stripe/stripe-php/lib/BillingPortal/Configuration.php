@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\BillingPortal;
 
 /**
@@ -24,7 +23,6 @@ namespace StellarWP\Learndash\Stripe\BillingPortal;
 class Configuration extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'billing_portal.configuration';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;

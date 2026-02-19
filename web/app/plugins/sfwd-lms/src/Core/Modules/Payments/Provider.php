@@ -32,6 +32,7 @@ class Provider extends ServiceProvider {
 		$this->container->register( Orders\Provider::class );
 		$this->container->register( Gateways\Provider::class );
 		$this->container->register( Subscriptions\Provider::class );
+		$this->container->register( Emails\Provider::class );
 
 		add_action(
 			'admin_enqueue_scripts',

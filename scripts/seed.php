@@ -4,15 +4,12 @@
  *
  * Run with: ddev exec wp eval-file scripts/seed.php
  *
- * Creates test data for development:
- * - Users with various roles
- * - LearnDash courses (content)
- * - Editions (scheduled offerings with pricing)
- * - Sessions (individual meeting days)
- * - Registrations (user enrollments)
- * - LearnDash groups (learning paths)
- * - Vouchers (all discount types)
- * - Quotes (all statuses)
+ * Creates comprehensive test data for frontend testing:
+ * - 10 courses (2 online, 8 in-person)
+ * - Various edition configurations (single/multiple editions, all statuses)
+ * - Sessions with different types (in_person, online, webinar, assignment)
+ * - 2 trajectories (cohort and self-paced) with courses
+ * - Registrations, quotes and vouchers
  */
 
 if (!defined('ABSPATH')) {
@@ -27,20 +24,23 @@ if (defined('WP_ENV') && WP_ENV === 'production') {
 }
 
 use Stride\Domain\RegistrationStatus;
+use Stride\Domain\SessionType;
+use Stride\Domain\TrajectoryMode;
+use Stride\Domain\TrajectoryStatus;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
+use Stride\Modules\Trajectory\TrajectoryService;
 
-// Session type constants (matching _vad_session_type meta values)
+// Session type constants
 const SESSION_TYPE_IN_PERSON = 'in_person';
 const SESSION_TYPE_ONLINE = 'online';
+const SESSION_TYPE_WEBINAR = 'webinar';
 const SESSION_TYPE_ASSIGNMENT = 'assignment';
-const SESSION_TYPE_FIELD = '_vad_session_type';
-const SESSION_LESSON_IDS_FIELD = '_vad_session_lesson_ids';
 
 /**
- * Seed Data Generator
+ * Comprehensive Seed Data Generator
  */
 class StrideSeedData {
 
@@ -50,7 +50,7 @@ class StrideSeedData {
         'editions' => [],
         'sessions' => [],
         'registrations' => [],
-        'groups' => [],
+        'trajectories' => [],
         'vouchers' => [],
         'quotes' => [],
     ];
@@ -61,66 +61,51 @@ class StrideSeedData {
     private ?EditionRepository $editionRepository = null;
     private ?SessionService $sessionService = null;
     private ?RegistrationRepository $regRepo = null;
+    private ?TrajectoryService $trajectoryService = null;
+
+    // Current admin user to subscribe
+    private int $adminUserId = 1;
 
     public function run(): void {
-        echo "\n=== Stride LMS Seed Data Generator ===\n\n";
+        echo "\n=== Stride LMS Comprehensive Seed ===\n\n";
 
         $this->initServices();
         $this->createUsers();
         $this->createCourses();
-        $this->createGroups();
+        $this->createTrajectories();
         $this->createVouchers();
-        $this->createQuotes();
-        $this->createEnrollments();
+        $this->createEnrollmentsAndQuotes();
 
         $this->saveSeedManifest();
         $this->printSummary();
     }
 
-    /**
-     * Initialize services
-     */
     private function initServices(): void {
         if (function_exists('ntdst_get')) {
             $this->editionService = ntdst_get(EditionService::class);
             $this->editionRepository = ntdst_get(EditionRepository::class);
             $this->sessionService = ntdst_get(SessionService::class);
             $this->regRepo = ntdst_get(RegistrationRepository::class);
+            $this->trajectoryService = ntdst_get(TrajectoryService::class);
         }
     }
 
-    /**
-     * Create test users with different roles
-     */
     private function createUsers(): void {
         echo "Creating users...\n";
 
         $users = [
-            // Admins
-            ['login' => 'seed_admin', 'email' => 'admin@seed.test', 'role' => 'administrator', 'first' => 'Admin', 'last' => 'Seed'],
-
-            // Group leaders (instructors)
-            ['login' => 'seed_instructor1', 'email' => 'instructor1@seed.test', 'role' => 'group_leader', 'first' => 'Jan', 'last' => 'De Trainer'],
-            ['login' => 'seed_instructor2', 'email' => 'instructor2@seed.test', 'role' => 'group_leader', 'first' => 'Marie', 'last' => 'Docent'],
-
-            // Regular students
-            ['login' => 'seed_student1', 'email' => 'student1@seed.test', 'role' => 'subscriber', 'first' => 'Pieter', 'last' => 'Janssen'],
-            ['login' => 'seed_student2', 'email' => 'student2@seed.test', 'role' => 'subscriber', 'first' => 'Anna', 'last' => 'De Vries'],
-            ['login' => 'seed_student3', 'email' => 'student3@seed.test', 'role' => 'subscriber', 'first' => 'Thomas', 'last' => 'Bakker'],
-            ['login' => 'seed_student4', 'email' => 'student4@seed.test', 'role' => 'subscriber', 'first' => 'Sophie', 'last' => 'Visser'],
-            ['login' => 'seed_student5', 'email' => 'student5@seed.test', 'role' => 'subscriber', 'first' => 'Lucas', 'last' => 'Smit'],
-
-            // Corporate users (from organizations)
-            ['login' => 'seed_corp1', 'email' => 'corp1@company-a.test', 'role' => 'subscriber', 'first' => 'Emma', 'last' => 'Corporate', 'company' => 'Company A BV'],
-            ['login' => 'seed_corp2', 'email' => 'corp2@company-a.test', 'role' => 'subscriber', 'first' => 'Noah', 'last' => 'Business', 'company' => 'Company A BV'],
-            ['login' => 'seed_corp3', 'email' => 'corp3@company-b.test', 'role' => 'subscriber', 'first' => 'Liam', 'last' => 'Enterprise', 'company' => 'Enterprise B NV'],
+            ['login' => 'seed_admin', 'email' => 'seed_admin@seed.test', 'role' => 'administrator', 'first' => 'Admin', 'last' => 'Seed'],
+            ['login' => 'seed_instructor', 'email' => 'instructor@seed.test', 'role' => 'group_leader', 'first' => 'Jan', 'last' => 'De Trainer'],
+            ['login' => 'seed_student1', 'email' => 'student1@seed.test', 'role' => 'subscriber', 'first' => 'Pieter', 'last' => 'Janssen', 'is_member' => true],
+            ['login' => 'seed_student2', 'email' => 'student2@seed.test', 'role' => 'subscriber', 'first' => 'Anna', 'last' => 'De Vries', 'is_member' => true],
+            ['login' => 'seed_student3', 'email' => 'student3@seed.test', 'role' => 'subscriber', 'first' => 'Thomas', 'last' => 'Bakker', 'is_member' => false],
         ];
 
         foreach ($users as $userData) {
             $existing = get_user_by('login', $userData['login']);
             if ($existing) {
-                echo "  - User {$userData['login']} already exists, skipping\n";
                 $this->created['users'][] = $existing->ID;
+                echo "  - User {$userData['login']} exists (ID: {$existing->ID})\n";
                 continue;
             }
 
@@ -135,26 +120,20 @@ class StrideSeedData {
             ]);
 
             if (is_wp_error($userId)) {
-                echo "  ! Failed to create {$userData['login']}: {$userId->get_error_message()}\n";
+                echo "  ! Failed: {$userId->get_error_message()}\n";
                 continue;
             }
 
-            // Mark as seed data
             update_user_meta($userId, self::SEED_META_KEY, true);
-
-            // Add company if specified
-            if (!empty($userData['company'])) {
-                update_user_meta($userId, 'company', $userData['company']);
+            if (isset($userData['is_member'])) {
+                update_user_meta($userId, 'is_vad_member', $userData['is_member']);
             }
 
             $this->created['users'][] = $userId;
-            echo "  + Created user: {$userData['login']} (ID: {$userId})\n";
+            echo "  + Created: {$userData['login']} (ID: {$userId})\n";
         }
     }
 
-    /**
-     * Create LearnDash courses with editions and sessions
-     */
     private function createCourses(): void {
         echo "\nCreating courses with editions and sessions...\n";
 
@@ -163,158 +142,152 @@ class StrideSeedData {
             return;
         }
 
+        // ===== COURSE DEFINITIONS =====
         $courses = [
-            // In-person courses with multiple editions
+            // === 1. SINGLE EDITION COURSE (in-person, 1 day) ===
             [
-                'title' => 'Basisopleiding Veilig Werken',
+                'title' => 'Motiverende Gespreksvoering',
+                'description' => 'Leer de technieken van motiverende gespreksvoering. Een praktijkgerichte cursus voor professionals die werken met cliënten in de verslavingszorg.',
                 'type' => 'in-person',
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+2 weeks')),
-                        'end_date' => date('Y-m-d', strtotime('+2 weeks +2 days')),
-                        'price' => 450.00,
-                        'price_non_member' => 520.00,
-                        'capacity' => 20,
-                        'venue' => 'Utrecht Centrum',
-                        'speakers' => 'Jan De Trainer',
+                        'price' => 295.00,
+                        'price_non_member' => 345.00,
+                        'capacity' => 16,
+                        'venue' => 'VAD Brussel',
+                        'speakers' => 'Dr. Marie De Vries',
                         'status' => 'open',
                         'sessions' => [
-                            ['time' => '09:00-12:30', 'offset' => 0],
-                            ['time' => '13:30-17:00', 'offset' => 0],
-                            ['time' => '09:00-17:00', 'offset' => 1],
-                            ['time' => '09:00-12:00', 'offset' => 2],
-                        ],
-                    ],
-                    [
-                        'start_date' => date('Y-m-d', strtotime('+1 month')),
-                        'end_date' => date('Y-m-d', strtotime('+1 month +2 days')),
-                        'price' => 450.00,
-                        'price_non_member' => 520.00,
-                        'capacity' => 20,
-                        'venue' => 'Amsterdam Zuid',
-                        'speakers' => 'Marie Docent',
-                        'status' => 'open',
-                        'sessions' => [
-                            ['time' => '09:00-12:30', 'offset' => 0],
-                            ['time' => '13:30-17:00', 'offset' => 0],
-                            ['time' => '09:00-17:00', 'offset' => 1],
-                            ['time' => '09:00-12:00', 'offset' => 2],
+                            ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => SESSION_TYPE_IN_PERSON],
                         ],
                     ],
                 ],
             ],
+
+            // === 2. MULTI-DAY COURSE (3 days, spread over weeks) ===
             [
-                'title' => 'Gevorderde Veiligheidstechnieken',
+                'title' => 'Cognitieve Gedragstherapie bij Verslaving',
+                'description' => 'Intensieve driedaagse cursus over CGT-technieken specifiek voor verslavingszorg. Inclusief casusbespreking en praktijkoefeningen.',
                 'type' => 'in-person',
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+3 weeks')),
-                        'end_date' => date('Y-m-d', strtotime('+3 weeks +1 day')),
-                        'price' => 650.00,
-                        'price_non_member' => 750.00,
-                        'capacity' => 15,
-                        'venue' => 'Rotterdam Centraal',
-                        'speakers' => 'Prof. Dr. Veilig',
+                        'price' => 695.00,
+                        'price_non_member' => 795.00,
+                        'capacity' => 12,
+                        'venue' => 'Conferentiecentrum Antwerpen',
+                        'speakers' => 'Prof. Jan Janssen, Dr. Els Peters',
                         'status' => 'open',
                         'sessions' => [
-                            ['time' => '09:00-17:00', 'offset' => 0],
-                            ['time' => '09:00-17:00', 'offset' => 1],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON],
+                            ['date_offset' => 7, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON],
+                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON],
                         ],
                     ],
-                ],
-            ],
-            [
-                'title' => 'Leidinggevende Veiligheid',
-                'type' => 'in-person',
-                'editions' => [
+                    // Second edition - almost full
                     [
-                        'start_date' => date('Y-m-d', strtotime('+6 weeks')),
-                        'end_date' => date('Y-m-d', strtotime('+6 weeks')),
-                        'price' => 850.00,
-                        'price_non_member' => 950.00,
+                        'start_date' => date('Y-m-d', strtotime('+2 months')),
+                        'price' => 695.00,
+                        'price_non_member' => 795.00,
                         'capacity' => 12,
-                        'venue' => 'Den Haag Business Center',
-                        'speakers' => 'Jan De Trainer, Marie Docent',
+                        'registered' => 10, // almost full
+                        'venue' => 'VAD Gent',
+                        'speakers' => 'Prof. Jan Janssen',
                         'status' => 'open',
                         'sessions' => [
-                            ['time' => '09:00-17:00', 'offset' => 0],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON],
+                            ['date_offset' => 7, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON],
+                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON],
                         ],
                     ],
                 ],
             ],
 
-            // Hybrid course (in-person + online sessions)
+            // === 3. HYBRID COURSE (in-person + online) ===
             [
-                'title' => 'Hybride Veiligheidstraining',
+                'title' => 'Dual Diagnose: Theorie en Praktijk',
+                'description' => 'Hybride cursus met zowel klassikale sessies als online modules. Leer omgaan met cliënten met een dubbele diagnose.',
                 'type' => 'hybrid',
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+4 weeks')),
-                        'end_date' => date('Y-m-d', strtotime('+5 weeks')),
                         'price' => 550.00,
                         'price_non_member' => 650.00,
-                        'capacity' => 15,
-                        'venue' => 'Utrecht / Online',
-                        'speakers' => 'Jan De Trainer',
+                        'capacity' => 20,
+                        'venue' => 'VAD Brussel + Online',
+                        'speakers' => 'Dr. Katrien Maes',
                         'status' => 'open',
                         'sessions' => [
-                            // Day 1: In-person session
-                            ['time' => '09:00-17:00', 'offset' => 0, 'type' => SESSION_TYPE_IN_PERSON],
-                            // Online module 1 (linked to first lesson)
-                            ['time' => '00:00-23:59', 'offset' => 3, 'type' => SESSION_TYPE_ONLINE, 'lesson_index' => 0],
-                            // Online module 2 (linked to second lesson)
-                            ['time' => '00:00-23:59', 'offset' => 5, 'type' => SESSION_TYPE_ONLINE, 'lesson_index' => 1],
-                            // Day 2: In-person session
-                            ['time' => '09:00-17:00', 'offset' => 7, 'type' => SESSION_TYPE_IN_PERSON],
-                            // Assignment (linked to third lesson)
-                            ['time' => '00:00-23:59', 'offset' => 8, 'type' => SESSION_TYPE_ASSIGNMENT, 'lesson_index' => 2],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'location' => 'VAD Brussel'],
+                            ['date_offset' => 3, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning module 1'],
+                            ['date_offset' => 7, 'start' => '14:00', 'end' => '16:00', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Live Q&A webinar'],
+                            ['date_offset' => 10, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning module 2'],
+                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'location' => 'VAD Brussel'],
                         ],
                     ],
                 ],
             ],
 
-            // Online courses (no physical sessions)
+            // === 4. WEBINAR SERIES ===
             [
-                'title' => 'E-learning: Veiligheidsprotocollen',
-                'type' => 'online',
+                'title' => 'Webinarreeks: Actuele Themas Verslavingszorg',
+                'description' => 'Reeks van 4 interactieve webinars over actuele onderwerpen in de verslavingszorg. Volg live of bekijk de opname achteraf.',
+                'type' => 'webinar',
                 'editions' => [
                     [
-                        'start_date' => date('Y-m-d'),
-                        'end_date' => date('Y-m-d', strtotime('+1 year')),
+                        'start_date' => date('Y-m-d', strtotime('+1 week')),
                         'price' => 150.00,
                         'price_non_member' => 180.00,
-                        'capacity' => 0, // Unlimited
-                        'venue' => 'Online',
+                        'capacity' => 100,
+                        'venue' => 'Online (Zoom)',
+                        'speakers' => 'Diverse sprekers',
                         'status' => 'open',
-                        'sessions' => [], // No sessions for e-learning
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 1: Gaming verslaving'],
+                            ['date_offset' => 7, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 2: Social media & jongeren'],
+                            ['date_offset' => 14, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 3: Medicatie en verslaving'],
+                            ['date_offset' => 21, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 4: Terugvalpreventie'],
+                        ],
                     ],
                 ],
             ],
+
+            // === 5. ONLINE SELF-PACED (e-learning) ===
             [
-                'title' => 'E-learning: EHBO Basis',
+                'title' => 'E-learning: Basiskennis Verslavingszorg',
+                'description' => 'Volledig online cursus die je in je eigen tempo volgt. Ideaal als introductie of opfrisser. Inclusief certificaat na afronding.',
                 'type' => 'online',
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d'),
                         'end_date' => date('Y-m-d', strtotime('+1 year')),
                         'price' => 99.00,
-                        'price_non_member' => 120.00,
-                        'capacity' => 0,
-                        'venue' => 'Online',
+                        'price_non_member' => 129.00,
+                        'capacity' => 0, // unlimited
+                        'venue' => 'Online (eigen tempo)',
                         'status' => 'open',
-                        'sessions' => [],
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'Module 1: Inleiding', 'optional' => false],
+                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'Module 2: Verslavingsmechanismen', 'optional' => false],
+                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'Module 3: Behandelmethoden', 'optional' => false],
+                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ASSIGNMENT, 'title' => 'Eindopdracht', 'optional' => false],
+                        ],
                     ],
                 ],
             ],
+
+            // === 6. ANOTHER ONLINE COURSE ===
             [
-                'title' => 'E-learning: Brandpreventie',
+                'title' => 'E-learning: Alcohol en Gezondheid',
+                'description' => 'Verdiepende online module over de effecten van alcohol. Met video-interviews, quizzen en praktijkcases.',
                 'type' => 'online',
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d'),
                         'end_date' => date('Y-m-d', strtotime('+1 year')),
-                        'price' => 125.00,
-                        'price_non_member' => 150.00,
+                        'price' => 79.00,
+                        'price_non_member' => 99.00,
                         'capacity' => 0,
                         'venue' => 'Online',
                         'status' => 'open',
@@ -323,39 +296,115 @@ class StrideSeedData {
                 ],
             ],
 
-            // Special status editions
+            // === 7. FULL EDITION (sold out) ===
             [
-                'title' => 'Verouderde Training',
+                'title' => 'Masterclass Crisisinterventie',
+                'description' => 'Intensieve masterclass voor ervaren professionals. Zeer populair - vaak snel vol!',
                 'type' => 'in-person',
                 'editions' => [
                     [
-                        'start_date' => date('Y-m-d', strtotime('+2 weeks')),
-                        'end_date' => date('Y-m-d', strtotime('+2 weeks')),
-                        'price' => 300.00,
-                        'price_non_member' => 350.00,
-                        'capacity' => 10,
-                        'venue' => 'Eindhoven',
-                        'status' => 'cancelled',
+                        'start_date' => date('Y-m-d', strtotime('+3 weeks')),
+                        'price' => 450.00,
+                        'price_non_member' => 525.00,
+                        'capacity' => 8,
+                        'registered' => 8, // FULL
+                        'venue' => 'VAD Brussel',
+                        'speakers' => 'Dr. Paul Verhaeghe',
+                        'status' => 'open',
                         'sessions' => [
-                            ['time' => '09:00-17:00', 'offset' => 0],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON],
+                        ],
+                    ],
+                    // Future edition with spots
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+3 months')),
+                        'price' => 450.00,
+                        'price_non_member' => 525.00,
+                        'capacity' => 8,
+                        'venue' => 'VAD Brussel',
+                        'speakers' => 'Dr. Paul Verhaeghe',
+                        'status' => 'open',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON],
                         ],
                     ],
                 ],
             ],
+
+            // === 8. CANCELLED EDITION ===
             [
-                'title' => 'Uitgestelde Workshop',
+                'title' => 'Workshop Mindfulness in Behandeling',
+                'description' => 'Praktische workshop over het integreren van mindfulness-technieken in de behandeling.',
                 'type' => 'in-person',
                 'editions' => [
                     [
-                        'start_date' => date('Y-m-d', strtotime('+4 weeks')),
-                        'end_date' => date('Y-m-d', strtotime('+4 weeks')),
-                        'price' => 400.00,
-                        'price_non_member' => 460.00,
-                        'capacity' => 8,
-                        'venue' => 'Groningen',
-                        'status' => 'postponed',
+                        'start_date' => date('Y-m-d', strtotime('+2 weeks')),
+                        'price' => 195.00,
+                        'price_non_member' => 225.00,
+                        'capacity' => 15,
+                        'venue' => 'VAD Leuven',
+                        'speakers' => 'Leen Smits',
+                        'status' => 'cancelled',
                         'sessions' => [
-                            ['time' => '10:00-16:00', 'offset' => 0],
+                            ['date_offset' => 0, 'start' => '13:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON],
+                        ],
+                    ],
+                    // New date available
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+6 weeks')),
+                        'price' => 195.00,
+                        'price_non_member' => 225.00,
+                        'capacity' => 15,
+                        'venue' => 'VAD Leuven',
+                        'speakers' => 'Leen Smits',
+                        'status' => 'open',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '13:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON],
+                        ],
+                    ],
+                ],
+            ],
+
+            // === 9. COURSE WITH OPTIONAL SESSIONS ===
+            [
+                'title' => 'Preventie in de Praktijk',
+                'description' => 'Cursus over preventieve interventies met optionele verdiepingsmodules.',
+                'type' => 'in-person',
+                'editions' => [
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+5 weeks')),
+                        'price' => 395.00,
+                        'price_non_member' => 450.00,
+                        'capacity' => 20,
+                        'venue' => 'VAD Brussel',
+                        'speakers' => 'Team VAD Preventie',
+                        'status' => 'open',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Basisprincipes', 'optional' => false],
+                            ['date_offset' => 1, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 2: Praktijkoefeningen', 'optional' => false],
+                            ['date_offset' => 7, 'start' => '09:00', 'end' => '12:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Verdieping: Jongeren', 'optional' => true],
+                            ['date_offset' => 7, 'start' => '13:00', 'end' => '16:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Verdieping: Ouderen', 'optional' => true],
+                        ],
+                    ],
+                ],
+            ],
+
+            // === 10. FREE COURSE ===
+            [
+                'title' => 'Introductie VAD Methodieken',
+                'description' => 'Gratis introductiecursus voor nieuwe medewerkers. Kennismaking met de werkwijze en methodieken van VAD.',
+                'type' => 'in-person',
+                'editions' => [
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+1 week')),
+                        'price' => 0.00,
+                        'price_non_member' => 0.00,
+                        'capacity' => 30,
+                        'venue' => 'VAD Brussel',
+                        'speakers' => 'Diverse VAD medewerkers',
+                        'status' => 'open',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '09:30', 'end' => '12:30', 'type' => SESSION_TYPE_IN_PERSON],
                         ],
                     ],
                 ],
@@ -363,600 +412,458 @@ class StrideSeedData {
         ];
 
         foreach ($courses as $courseData) {
-            // Check if course already exists
-            $existing = get_page_by_title($courseData['title'], OBJECT, 'sfwd-courses');
-            if ($existing) {
-                echo "  - Course '{$courseData['title']}' already exists, skipping\n";
-                $this->created['courses'][] = $existing->ID;
-
-                // Track existing editions for this course
-                if ($this->editionService) {
-                    $editions = $this->editionService->getEditionsForCourse($existing->ID);
-                    foreach ($editions as $edition) {
-                        $this->created['editions'][] = $edition['id'];
-                    }
-                }
-                continue;
-            }
-
-            $courseId = wp_insert_post([
-                'post_title' => $courseData['title'],
-                'post_type' => 'sfwd-courses',
-                'post_status' => 'publish',
-                'post_content' => $this->generateCourseContent($courseData),
-            ]);
-
-            if (is_wp_error($courseId)) {
-                echo "  ! Failed to create course: {$courseId->get_error_message()}\n";
-                continue;
-            }
-
-            // Mark as seed data
-            update_post_meta($courseId, self::SEED_META_KEY, true);
-
-            // LearnDash course settings (open for testing)
-            $courseSettings = [
-                'course_price_type' => 'open',
-            ];
-            update_post_meta($courseId, '_sfwd-courses', $courseSettings);
-
-            // Custom Stride meta
-            update_post_meta($courseId, '_course_type', $courseData['type']);
-
-            $this->created['courses'][] = $courseId;
-            echo "  + Created course: {$courseData['title']} (ID: {$courseId})\n";
-
-            // Create lessons for the course
-            $lessonIds = $this->createLessonsForCourse($courseId, $courseData['title']);
-
-            // Create editions for this course
-            $this->createEditionsForCourse($courseId, $courseData, $lessonIds);
+            $this->createCourseWithEditions($courseData);
         }
     }
 
-    /**
-     * Create editions and sessions for a course
-     *
-     * @param int $courseId Course ID
-     * @param array $courseData Course data including editions
-     * @param array $lessonIds Available lesson IDs for this course
-     */
-    private function createEditionsForCourse(int $courseId, array $courseData, array $lessonIds = []): void {
-        if (!$this->editionRepository || empty($courseData['editions'])) {
+    private function createCourseWithEditions(array $courseData): void {
+        // Check if exists
+        $existing = get_page_by_title($courseData['title'], OBJECT, 'sfwd-courses');
+        if ($existing) {
+            echo "  - Course '{$courseData['title']}' exists\n";
+            $this->created['courses'][] = $existing->ID;
             return;
         }
 
+        // Create course
+        $courseId = wp_insert_post([
+            'post_title' => $courseData['title'],
+            'post_type' => 'sfwd-courses',
+            'post_status' => 'publish',
+            'post_content' => $courseData['description'],
+        ]);
+
+        if (is_wp_error($courseId)) {
+            echo "  ! Failed: {$courseId->get_error_message()}\n";
+            return;
+        }
+
+        update_post_meta($courseId, self::SEED_META_KEY, true);
+        update_post_meta($courseId, '_sfwd-courses', ['course_price_type' => 'open']);
+        update_post_meta($courseId, '_course_type', $courseData['type']);
+
+        $this->created['courses'][] = $courseId;
+        echo "  + Course: {$courseData['title']} (ID: {$courseId})\n";
+
+        // Create lessons
+        $lessonIds = $this->createLessonsForCourse($courseId, $courseData['title']);
+
+        // Create editions
         foreach ($courseData['editions'] as $editionData) {
-            // Get course title for edition post title
-            $courseTitle = get_the_title($courseId);
-            $postTitle = $courseTitle . ' - ' . $editionData['start_date'];
-
-            // Use EditionRepository::create() - returns WP_Post or WP_Error
-            $result = $this->editionRepository->create([
-                'post_title' => $postTitle,
-                'post_status' => 'publish',
-                'course_id' => $courseId,
-                'start_date' => $editionData['start_date'],
-                'end_date' => $editionData['end_date'],
-                'price' => $editionData['price'],
-                'price_non_member' => $editionData['price_non_member'],
-                'capacity' => $editionData['capacity'],
-                'venue' => $editionData['venue'],
-                'speakers' => $editionData['speakers'] ?? '',
-                'status' => $editionData['status'],
-            ]);
-
-            if (is_wp_error($result)) {
-                echo "    ! Failed to create edition: {$result->get_error_message()}\n";
-                continue;
-            }
-
-            $editionId = $result->ID;
-
-            // Mark as seed data
-            update_post_meta($editionId, self::SEED_META_KEY, true);
-
-            $this->created['editions'][] = $editionId;
-            echo "    + Created edition: {$editionData['start_date']} at {$editionData['venue']} (ID: {$editionId})\n";
-
-            // Create sessions for this edition
-            $this->createSessionsForEdition($editionId, $editionData, $lessonIds);
+            $this->createEdition($courseId, $courseData['title'], $editionData);
         }
     }
 
-    /**
-     * Create sessions for an edition
-     *
-     * @param int $editionId Edition ID
-     * @param array $editionData Edition data including sessions
-     * @param array $lessonIds Available lesson IDs for hybrid sessions
-     */
-    private function createSessionsForEdition(int $editionId, array $editionData, array $lessonIds = []): void {
-        if (!$this->sessionService || empty($editionData['sessions'])) {
+    private function createEdition(int $courseId, string $courseTitle, array $data): void {
+        if (!$this->editionRepository) return;
+
+        $postTitle = $courseTitle . ' - ' . date('j M Y', strtotime($data['start_date']));
+        $endDate = $data['end_date'] ?? null;
+        if (!$endDate && !empty($data['sessions'])) {
+            $maxOffset = max(array_column($data['sessions'], 'date_offset'));
+            $endDate = date('Y-m-d', strtotime($data['start_date'] . " +{$maxOffset} days"));
+        }
+        $endDate = $endDate ?? $data['start_date'];
+
+        $result = $this->editionRepository->create([
+            'post_title' => $postTitle,
+            'post_status' => 'publish',
+            'course_id' => $courseId,
+            'start_date' => $data['start_date'],
+            'end_date' => $endDate,
+            'price' => $data['price'],
+            'price_non_member' => $data['price_non_member'],
+            'capacity' => $data['capacity'],
+            'venue' => $data['venue'],
+            'speakers' => $data['speakers'] ?? '',
+            'status' => $data['status'],
+        ]);
+
+        if (is_wp_error($result)) {
+            echo "    ! Edition failed: {$result->get_error_message()}\n";
             return;
         }
 
-        foreach ($editionData['sessions'] as $sessionData) {
-            // Parse time range
-            $times = explode('-', $sessionData['time']);
-            $startTime = trim($times[0]);
-            $endTime = trim($times[1] ?? '17:00');
+        $editionId = $result->ID;
+        update_post_meta($editionId, self::SEED_META_KEY, true);
 
-            // Calculate date based on offset from start_date
-            $sessionDate = date('Y-m-d', strtotime($editionData['start_date'] . " +{$sessionData['offset']} days"));
-
-            // Determine session type and linked lessons
-            $sessionType = $sessionData['type'] ?? SESSION_TYPE_IN_PERSON;
-            $sessionLessonIds = [];
-
-            // For online/assignment types, link to specific lessons if provided
-            if (in_array($sessionType, [SESSION_TYPE_ONLINE, SESSION_TYPE_ASSIGNMENT])) {
-                if (!empty($sessionData['lesson_ids'])) {
-                    $sessionLessonIds = $sessionData['lesson_ids'];
-                } elseif (isset($sessionData['lesson_index']) && isset($lessonIds[$sessionData['lesson_index']])) {
-                    // Link to a specific lesson by index
-                    $sessionLessonIds = [$lessonIds[$sessionData['lesson_index']]];
-                }
+        // Simulate registrations if specified
+        if (!empty($data['registered']) && $this->regRepo) {
+            for ($i = 0; $i < $data['registered']; $i++) {
+                // Create dummy registrations to fill capacity
+                global $wpdb;
+                $wpdb->insert(
+                    $wpdb->prefix . 'vad_registrations',
+                    [
+                        'user_id' => 0, // dummy
+                        'edition_id' => $editionId,
+                        'status' => 'confirmed',
+                        'enrollment_path' => 'individual',
+                        'notes' => 'Seed placeholder',
+                        'registered_at' => current_time('mysql'),
+                    ]
+                );
             }
+        }
 
-            $createData = [
-                'edition_id' => $editionId,
-                'date' => $sessionDate,
-                'start_time' => $startTime,
-                'end_time' => $endTime,
-                'location' => $editionData['venue'],
-                SESSION_TYPE_FIELD => $sessionType,
-                SESSION_LESSON_IDS_FIELD => $sessionLessonIds,
-            ];
+        $this->created['editions'][] = $editionId;
+        echo "    + Edition: {$data['start_date']} at {$data['venue']} (ID: {$editionId})\n";
 
-            $sessionId = $this->sessionService->createSession($createData);
-
-            if (is_wp_error($sessionId)) {
-                echo "      ! Failed to create session: {$sessionId->get_error_message()}\n";
-                continue;
-            }
-
-            // Mark as seed data
-            update_post_meta($sessionId, self::SEED_META_KEY, true);
-
-            $this->created['sessions'][] = $sessionId;
-
-            $duration = $this->sessionService->getSessionDuration($sessionId);
-            $typeEmoji = match($sessionType) {
-                SESSION_TYPE_ONLINE => '💻',
-                SESSION_TYPE_ASSIGNMENT => '📝',
-                default => '🏢',
-            };
-            $lessonInfo = !empty($sessionLessonIds) ? ' (linked to ' . count($sessionLessonIds) . ' lessons)' : '';
-            echo "      + Created {$typeEmoji} session: {$sessionDate} {$startTime}-{$endTime} ({$duration}h){$lessonInfo}\n";
+        // Create sessions
+        foreach ($data['sessions'] as $sessionData) {
+            $this->createSession($editionId, $data, $sessionData);
         }
     }
 
-    /**
-     * Create lessons for a course
-     *
-     * @return array Created lesson IDs
-     */
-    private function createLessonsForCourse(int $courseId, string $courseTitle): array {
-        $lessonIds = [];
-        $lessons = [
-            'Introductie en Overzicht',
-            'Kernconcepten',
-            'Praktische Toepassing',
-            'Evaluatie en Afronding',
+    private function createSession(int $editionId, array $editionData, array $sessionData): void {
+        if (!$this->sessionService) return;
+
+        $sessionDate = date('Y-m-d', strtotime($editionData['start_date'] . " +{$sessionData['date_offset']} days"));
+
+        $createData = [
+            'edition_id' => $editionId,
+            'date' => $sessionDate,
+            'start_time' => $sessionData['start'],
+            'end_time' => $sessionData['end'],
+            'type' => $sessionData['type'],
+            'location' => $sessionData['location'] ?? $editionData['venue'],
+            'optional' => $sessionData['optional'] ?? false,
         ];
 
-        foreach ($lessons as $index => $lessonTitle) {
+        if (!empty($sessionData['title'])) {
+            $createData['title'] = $sessionData['title'];
+        }
+
+        $sessionId = $this->sessionService->createSession($createData);
+
+        if (is_wp_error($sessionId)) {
+            echo "      ! Session failed: {$sessionId->get_error_message()}\n";
+            return;
+        }
+
+        update_post_meta($sessionId, self::SEED_META_KEY, true);
+        $this->created['sessions'][] = $sessionId;
+
+        $typeEmoji = match($sessionData['type']) {
+            SESSION_TYPE_ONLINE => '💻',
+            SESSION_TYPE_WEBINAR => '📹',
+            SESSION_TYPE_ASSIGNMENT => '📝',
+            default => '🏢',
+        };
+        $title = $sessionData['title'] ?? $sessionData['type'];
+        echo "      {$typeEmoji} {$sessionDate} {$sessionData['start']}-{$sessionData['end']}: {$title}\n";
+    }
+
+    private function createLessonsForCourse(int $courseId, string $courseTitle): array {
+        $lessonIds = [];
+        $lessons = ['Introductie', 'Theorie', 'Praktijk', 'Evaluatie'];
+
+        foreach ($lessons as $index => $title) {
             $lessonId = wp_insert_post([
-                'post_title' => $lessonTitle,
+                'post_title' => $title,
                 'post_type' => 'sfwd-lessons',
                 'post_status' => 'publish',
-                'post_content' => "Les content voor: {$lessonTitle}\n\nDit is onderdeel van de cursus: {$courseTitle}",
+                'post_content' => "Les: {$title} voor {$courseTitle}",
                 'menu_order' => $index + 1,
             ]);
 
             if (!is_wp_error($lessonId)) {
                 update_post_meta($lessonId, self::SEED_META_KEY, true);
                 update_post_meta($lessonId, 'course_id', $courseId);
-
-                // LearnDash lesson settings
-                update_post_meta($lessonId, '_sfwd-lessons', [
-                    'sfwd-lessons_course' => $courseId,
-                ]);
-
+                update_post_meta($lessonId, '_sfwd-lessons', ['sfwd-lessons_course' => $courseId]);
                 $lessonIds[] = $lessonId;
-                echo "      + Created lesson: {$lessonTitle} (ID: {$lessonId})\n";
             }
         }
 
-        // Set up LearnDash course steps (required for LD to recognize lesson-course association)
+        // Link lessons to course using LearnDash's expected structure
         if (!empty($lessonIds) && class_exists('LDLMS_Factory_Post')) {
             $courseStepsObj = LDLMS_Factory_Post::course_steps($courseId);
             if ($courseStepsObj) {
-                // Build hierarchical steps array (lessons at top level, no topics/quizzes)
-                $steps = [];
+                // LearnDash expects steps grouped by post type
+                $steps = ['sfwd-lessons' => []];
                 foreach ($lessonIds as $lessonId) {
-                    $steps[$lessonId] = [];
+                    $steps['sfwd-lessons'][$lessonId] = [];
                 }
                 $courseStepsObj->set_steps($steps);
-                echo "      + Linked " . count($lessonIds) . " lessons to course via course steps\n";
             }
         }
 
         return $lessonIds;
     }
 
-    /**
-     * Create LearnDash groups (trajectories/learning paths)
-     */
-    private function createGroups(): void {
-        echo "\nCreating groups (trajectories)...\n";
+    private function createTrajectories(): void {
+        echo "\nCreating trajectories...\n";
 
-        if (!defined('LEARNDASH_VERSION')) {
-            echo "  ! LearnDash not active, skipping groups\n";
+        if (!$this->trajectoryService) {
+            echo "  ! TrajectoryService not available\n";
             return;
         }
 
-        $groups = [
-            [
-                'title' => 'Traject: Veiligheidsspecialist',
-                'description' => 'Volledig leertraject om veiligheidsspecialist te worden.',
-                'price' => 1200.00,
-                'member_price' => 999.00,
-            ],
-            [
-                'title' => 'Traject: Teamleider Veiligheid',
-                'description' => 'Leertraject voor leidinggevenden in veiligheidsfuncties.',
-                'price' => 1800.00,
-                'member_price' => 1500.00,
-            ],
-            [
-                'title' => 'Traject: EHBO & Brandveiligheid',
-                'description' => 'Gecombineerd traject voor basis veiligheidscertificering.',
-                'price' => 350.00,
-                'member_price' => 280.00,
-            ],
+        if (count($this->created['courses']) < 6) {
+            echo "  ! Not enough courses for trajectories\n";
+            return;
+        }
+
+        $courseIds = $this->created['courses'];
+
+        // === COHORT TRAJECTORY ===
+        $cohortData = [
+            'post_title' => 'Traject Verslavingsspecialist',
+            'post_content' => 'Volledige opleiding tot verslavingsspecialist. Dit cohort-traject volg je samen met een vaste groep. Je voltooit alle verplichte cursussen en kiest 2 keuzecursussen.',
+            'mode' => TrajectoryMode::Cohort->value,
+            'status' => TrajectoryStatus::Open->value,
+            'enrollment_deadline' => date('Y-m-d', strtotime('+1 month')),
+            'choice_available_date' => date('Y-m-d', strtotime('+2 weeks')),
+            'choice_deadline' => date('Y-m-d', strtotime('+3 weeks')),
+            'capacity' => 15,
+            'price' => 1495.00,
+            'price_non_member' => 1795.00,
+            'courses' => json_encode([
+                ['course_id' => $courseIds[0], 'required' => true],
+                ['course_id' => $courseIds[1], 'required' => true],
+                ['course_id' => $courseIds[2], 'required' => true],
+                ['course_id' => $courseIds[3], 'required' => false, 'group' => 'Keuze (2)'],
+                ['course_id' => $courseIds[4], 'required' => false, 'group' => 'Keuze (2)'],
+                ['course_id' => $courseIds[5], 'required' => false, 'group' => 'Keuze (2)'],
+            ]),
         ];
 
-        foreach ($groups as $groupData) {
-            $existing = get_page_by_title($groupData['title'], OBJECT, 'groups');
-            if ($existing) {
-                echo "  - Group '{$groupData['title']}' already exists, skipping\n";
-                $this->created['groups'][] = $existing->ID;
-                continue;
-            }
+        $cohortId = $this->trajectoryService->createTrajectory($cohortData);
+        if (!is_wp_error($cohortId)) {
+            update_post_meta($cohortId, self::SEED_META_KEY, true);
+            $this->created['trajectories'][] = $cohortId;
+            echo "  + Cohort trajectory: Traject Verslavingsspecialist (ID: {$cohortId})\n";
+        } else {
+            echo "  ! Cohort trajectory failed: {$cohortId->get_error_message()}\n";
+        }
 
-            $groupId = wp_insert_post([
-                'post_title' => $groupData['title'],
-                'post_type' => 'groups',
-                'post_status' => 'publish',
-                'post_content' => $groupData['description'],
-            ]);
+        // === SELF-PACED TRAJECTORY ===
+        $selfPacedData = [
+            'post_title' => 'Traject Preventiewerker',
+            'post_content' => 'Flexibel traject voor preventiewerkers. Volg de cursussen in je eigen tempo, wanneer het jou uitkomt. Ideaal te combineren met je werk.',
+            'mode' => TrajectoryMode::SelfPaced->value,
+            'status' => TrajectoryStatus::Open->value,
+            'enrollment_deadline' => '', // no deadline
+            'capacity' => 0, // unlimited
+            'price' => 895.00,
+            'price_non_member' => 1095.00,
+            'courses' => json_encode([
+                ['course_id' => $courseIds[4], 'required' => true],
+                ['course_id' => $courseIds[5], 'required' => true],
+                ['course_id' => $courseIds[8], 'required' => true],
+                ['course_id' => $courseIds[9], 'required' => false, 'group' => 'Optioneel'],
+            ]),
+        ];
 
-            if (is_wp_error($groupId)) {
-                echo "  ! Failed to create group: {$groupId->get_error_message()}\n";
-                continue;
-            }
-
-            update_post_meta($groupId, self::SEED_META_KEY, true);
-            update_post_meta($groupId, '_group_price', $groupData['price']);
-            update_post_meta($groupId, '_group_member_price', $groupData['member_price']);
-
-            // Associate some courses with this group
-            if (!empty($this->created['courses']) && function_exists('ld_update_course_group_access')) {
-                $coursesToAssign = array_slice($this->created['courses'], 0, 3);
-                foreach ($coursesToAssign as $courseId) {
-                    ld_update_course_group_access($courseId, $groupId, false);
-                }
-            }
-
-            $this->created['groups'][] = $groupId;
-            echo "  + Created group: {$groupData['title']} (ID: {$groupId})\n";
+        $selfPacedId = $this->trajectoryService->createTrajectory($selfPacedData);
+        if (!is_wp_error($selfPacedId)) {
+            update_post_meta($selfPacedId, self::SEED_META_KEY, true);
+            $this->created['trajectories'][] = $selfPacedId;
+            echo "  + Self-paced trajectory: Traject Preventiewerker (ID: {$selfPacedId})\n";
+        } else {
+            echo "  ! Self-paced trajectory failed: {$selfPacedId->get_error_message()}\n";
         }
     }
 
-    /**
-     * Create vouchers with different configurations using VoucherService
-     */
     private function createVouchers(): void {
         echo "\nCreating vouchers...\n";
 
-        // Use VoucherService if available (new architecture)
         $voucherService = null;
         if (function_exists('ntdst_get') && class_exists(\Stride\Modules\Invoicing\VoucherService::class)) {
             $voucherService = ntdst_get(\Stride\Modules\Invoicing\VoucherService::class);
         }
 
         $vouchers = [
-            // Full discount (100% off)
-            [
-                'code' => 'TEST-FULL-FREE',
-                'discount_type' => \Stride\Domain\DiscountType::Full->value,
-                'discount_value' => 0,
-                'usage_limit' => 10,
-            ],
-            // Fixed amount discount (€50 in cents)
-            [
-                'code' => 'TEST-50-EURO',
-                'discount_type' => \Stride\Domain\DiscountType::Fixed->value,
-                'discount_value' => 5000, // €50 in cents
-                'usage_limit' => 5,
-            ],
-            // Percentage discount
-            [
-                'code' => 'TEST-20-PERCENT',
-                'discount_type' => \Stride\Domain\DiscountType::Percentage->value,
-                'discount_value' => 20,
-                'usage_limit' => 100,
-            ],
+            ['code' => 'WELKOM2026', 'discount_type' => 'percentage', 'discount_value' => 10, 'usage_limit' => 50],
+            ['code' => 'VAD-MEMBER', 'discount_type' => 'percentage', 'discount_value' => 15, 'usage_limit' => 100],
+            ['code' => 'GRATIS-INTRO', 'discount_type' => 'full', 'discount_value' => 0, 'usage_limit' => 5],
+            ['code' => 'KORTING50', 'discount_type' => 'fixed', 'discount_value' => 5000, 'usage_limit' => 20],
         ];
 
         foreach ($vouchers as $data) {
             if ($voucherService) {
-                // Use VoucherService (new architecture)
                 $existing = $voucherService->getVoucherByCode($data['code']);
                 if ($existing) {
-                    echo "  - Voucher {$data['code']} already exists, skipping\n";
                     $this->created['vouchers'][] = $existing['id'];
+                    echo "  - Voucher {$data['code']} exists\n";
                     continue;
                 }
 
                 $result = $voucherService->createVoucher($data);
-                if (is_wp_error($result)) {
-                    echo "  ! ERROR creating voucher {$data['code']}: " . $result->get_error_message() . "\n";
-                } else {
-                    // Mark as seed data
+                if (!is_wp_error($result)) {
                     update_post_meta($result, self::SEED_META_KEY, true);
                     $this->created['vouchers'][] = $result;
-                    echo "  + Created voucher: {$data['code']} (ID: {$result})\n";
+                    echo "  + Voucher: {$data['code']} (ID: {$result})\n";
                 }
             } else {
-                // Fallback to direct post creation (legacy)
-                $existing = get_posts([
-                    'post_type' => 'vad_voucher',
-                    'meta_key' => 'code',
-                    'meta_value' => $data['code'],
-                    'posts_per_page' => 1,
-                ]);
-
-                if (!empty($existing)) {
-                    echo "  - Voucher '{$data['code']}' already exists, skipping\n";
-                    $this->created['vouchers'][] = $existing[0]->ID;
-                    continue;
-                }
-
                 $voucherId = wp_insert_post([
                     'post_title' => $data['code'],
                     'post_type' => 'vad_voucher',
                     'post_status' => 'publish',
                 ]);
 
-                if (is_wp_error($voucherId)) {
-                    echo "  ! Failed to create voucher: {$voucherId->get_error_message()}\n";
-                    continue;
+                if (!is_wp_error($voucherId)) {
+                    update_post_meta($voucherId, self::SEED_META_KEY, true);
+                    update_post_meta($voucherId, 'code', $data['code']);
+                    update_post_meta($voucherId, 'discount_type', $data['discount_type']);
+                    update_post_meta($voucherId, 'discount_value', $data['discount_value']);
+                    update_post_meta($voucherId, 'usage_limit', $data['usage_limit']);
+                    update_post_meta($voucherId, 'used_count', 0);
+                    update_post_meta($voucherId, 'status', 'active');
+                    $this->created['vouchers'][] = $voucherId;
+                    echo "  + Voucher: {$data['code']} (ID: {$voucherId})\n";
                 }
-
-                update_post_meta($voucherId, self::SEED_META_KEY, true);
-                update_post_meta($voucherId, 'code', $data['code']);
-                update_post_meta($voucherId, 'discount_type', $data['discount_type']);
-                update_post_meta($voucherId, 'discount_value', $data['discount_value']);
-                update_post_meta($voucherId, 'usage_limit', $data['usage_limit']);
-                update_post_meta($voucherId, 'used_count', 0);
-                update_post_meta($voucherId, 'status', 'active');
-
-                $this->created['vouchers'][] = $voucherId;
-                echo "  + Created voucher: {$data['code']} (ID: {$voucherId})\n";
             }
         }
     }
 
-    /**
-     * Create quotes in various statuses
-     */
-    private function createQuotes(): void {
-        echo "\nCreating quotes...\n";
+    private function createEnrollmentsAndQuotes(): void {
+        echo "\nCreating enrollments and quotes for admin...\n";
 
-        if (empty($this->created['users']) || empty($this->created['editions'])) {
-            echo "  ! Need users and editions first, skipping quotes\n";
+        if (empty($this->created['editions'])) {
+            echo "  ! No editions available\n";
             return;
         }
 
-        $statuses = ['draft', 'draft', 'sent', 'sent', 'sent', 'exported', 'exported'];
-        $quoteNumber = 1;
-
-        foreach ($this->created['users'] as $userId) {
-            $user = get_user_by('ID', $userId);
-            if (!$user || strpos($user->user_login, 'seed_student') === false && strpos($user->user_login, 'seed_corp') === false) {
-                continue;
-            }
-
-            // Create 1-2 quotes per student
-            $numQuotes = rand(1, 2);
-            for ($i = 0; $i < $numQuotes; $i++) {
-                $editionId = $this->created['editions'][array_rand($this->created['editions'])];
-                $status = $statuses[array_rand($statuses)];
-                // Get price from post meta (edition meta stores price directly)
-                $price = (float) (get_post_meta($editionId, 'price', true) ?: 299.00);
-                $tax = round($price * 0.21, 2);
-                $total = $price + $tax;
-
-                $quoteNumberFormatted = sprintf('SEED-%04d', $quoteNumber);
-
-                $quoteId = wp_insert_post([
-                    'post_title' => "Quote {$quoteNumberFormatted} - {$user->display_name}",
-                    'post_type' => 'vad_quote',
-                    'post_status' => 'publish',
-                ]);
-
-                if (is_wp_error($quoteId)) {
-                    echo "  ! Failed to create quote: {$quoteId->get_error_message()}\n";
-                    continue;
-                }
-
-                update_post_meta($quoteId, self::SEED_META_KEY, true);
-                update_post_meta($quoteId, 'quote_number', $quoteNumberFormatted);
-                update_post_meta($quoteId, 'user_id', $userId);
-                update_post_meta($quoteId, 'edition_id', $editionId);
-                update_post_meta($quoteId, 'status', $status);
-                update_post_meta($quoteId, 'subtotal', (int) ($price * 100)); // Store in cents
-                update_post_meta($quoteId, 'tax', (int) ($tax * 100)); // Store in cents
-                update_post_meta($quoteId, 'total', (int) (($price + $tax) * 100)); // Store in cents
-                update_post_meta($quoteId, 'discount', 0);
-                update_post_meta($quoteId, 'valid_until', date('Y-m-d', strtotime('+30 days')));
-
-                // Items as JSON
-                $items = [
-                    [
-                        'type' => 'edition',
-                        'id' => $editionId,
-                        'title' => get_the_title($editionId) ?: 'Edition',
-                        'unit_price' => (int) ($price * 100), // Store in cents
-                        'quantity' => 1,
-                        'total' => (int) ($price * 100),
-                    ],
-                ];
-                update_post_meta($quoteId, 'items', wp_json_encode($items));
-
-                // Billing info
-                $billing = [
-                    'name' => $user->display_name,
-                    'email' => $user->user_email,
-                    'company' => get_user_meta($userId, 'company', true) ?: '',
-                    'address' => 'Teststraat 123',
-                    'city' => 'Amsterdam',
-                    'postal_code' => '1234 AB',
-                ];
-                update_post_meta($quoteId, 'billing', wp_json_encode($billing));
-
-                // Status-specific fields
-                if ($status === 'sent' || $status === 'exported') {
-                    update_post_meta($quoteId, 'sent_at', current_time('mysql'));
-                }
-                if ($status === 'exported') {
-                    update_post_meta($quoteId, 'locked', '1');
-                }
-
-                $this->created['quotes'][] = $quoteId;
-                echo "  + Created quote: {$quoteNumberFormatted} ({$status}) for {$user->user_login}\n";
-                $quoteNumber++;
+        // Get open editions (skip cancelled) - meta uses _ntdst_ prefix
+        $openEditions = [];
+        foreach ($this->created['editions'] as $editionId) {
+            $status = get_post_meta($editionId, '_ntdst_status', true);
+            if ($status === 'open') {
+                $openEditions[] = $editionId;
             }
         }
-    }
 
-    /**
-     * Create registrations (enrollments) via RegistrationRepository
-     */
-    private function createEnrollments(): void {
-        echo "\nCreating registrations...\n";
-
-        if (empty($this->created['users']) || empty($this->created['editions'])) {
-            echo "  ! Need users and editions first, skipping registrations\n";
+        if (empty($openEditions)) {
+            echo "  ! No open editions\n";
             return;
         }
 
-        if (!$this->regRepo) {
-            echo "  ! RegistrationRepository not available, skipping\n";
-            return;
-        }
+        // Enroll admin in first 3 editions
+        $enrollEditions = array_slice($openEditions, 0, 3);
 
-        // Enroll each student in 1-3 random editions
-        foreach ($this->created['users'] as $userId) {
-            $user = get_user_by('ID', $userId);
-            if (!$user || strpos($user->user_login, 'seed_student') === false && strpos($user->user_login, 'seed_corp') === false) {
-                continue;
-            }
-
-            // Only use open editions
-            $openEditions = array_filter($this->created['editions'], function($editionId) {
-                $status = get_post_meta($editionId, 'status', true);
-                return $status === 'open';
-            });
-
-            if (empty($openEditions)) {
-                continue;
-            }
-
-            $openEditions = array_values($openEditions);
-            $numEditions = rand(1, min(3, count($openEditions)));
-            $editionKeys = array_rand($openEditions, $numEditions);
-            if (!is_array($editionKeys)) {
-                $editionKeys = [$editionKeys];
-            }
-
-            foreach ($editionKeys as $key) {
-                $editionId = $openEditions[$key];
-
-                // Check if already registered
-                $userRegs = $this->regRepo->findByUser($userId);
-                $alreadyRegistered = false;
-                foreach ($userRegs as $reg) {
-                    // findByUser returns stdClass objects, access as object properties
-                    if (($reg->edition_id ?? 0) === $editionId) {
-                        $alreadyRegistered = true;
-                        break;
-                    }
-                }
-                if ($alreadyRegistered) {
-                    continue;
-                }
-
-                // Determine enrollment path (organization users still use individual path)
-                $path = RegistrationRepository::PATH_INDIVIDUAL;
-
-                $registrationId = $this->regRepo->create([
-                    'user_id' => $userId,
+        foreach ($enrollEditions as $editionId) {
+            // Create registration
+            if ($this->regRepo) {
+                $regId = $this->regRepo->create([
+                    'user_id' => $this->adminUserId,
                     'edition_id' => $editionId,
                     'status' => RegistrationStatus::Confirmed->value,
-                    'enrollment_path' => $path,
-                    'notes' => 'Seeded registration',
+                    'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
+                    'notes' => 'Seeded for admin testing',
                 ]);
 
-                if (is_wp_error($registrationId)) {
-                    echo "  ! Failed to create registration: {$registrationId->get_error_message()}\n";
-                    continue;
-                }
+                if (!is_wp_error($regId)) {
+                    $this->created['registrations'][] = $regId;
+                    echo "  + Registration for edition {$editionId}\n";
 
-                $this->created['registrations'][] = $registrationId;
-                $editionTitle = get_the_title($editionId);
-                echo "  + Registered {$user->user_login} for edition {$editionId} ({$editionTitle})\n";
-
-                // Grant LearnDash access to the linked course
-                if ($this->editionService && function_exists('ld_update_course_access')) {
-                    $courseId = $this->editionService->getCourseId($editionId);
-                    if ($courseId) {
-                        ld_update_course_access($userId, $courseId, false);
+                    // Grant LearnDash access
+                    if ($this->editionService && function_exists('ld_update_course_access')) {
+                        $courseId = $this->editionService->getCourseId($editionId);
+                        if ($courseId) {
+                            ld_update_course_access($this->adminUserId, $courseId, false);
+                        }
                     }
                 }
+            }
+
+            // Create quote
+            $this->createQuoteForEdition($editionId, $this->adminUserId);
+        }
+
+        // Also enroll seed students
+        foreach ($this->created['users'] as $userId) {
+            $user = get_user_by('ID', $userId);
+            if (!$user || strpos($user->user_login, 'seed_student') === false) {
+                continue;
+            }
+
+            // Enroll in 1-2 random editions
+            $randomEditions = array_rand(array_flip($openEditions), min(2, count($openEditions)));
+            if (!is_array($randomEditions)) $randomEditions = [$randomEditions];
+
+            foreach ($randomEditions as $editionId) {
+                if ($this->regRepo) {
+                    $regId = $this->regRepo->create([
+                        'user_id' => $userId,
+                        'edition_id' => $editionId,
+                        'status' => RegistrationStatus::Confirmed->value,
+                        'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
+                    ]);
+
+                    if (!is_wp_error($regId)) {
+                        $this->created['registrations'][] = $regId;
+                        echo "  + Registration: {$user->user_login} -> edition {$editionId}\n";
+                    }
+                }
+
+                // Create quote for student
+                $this->createQuoteForEdition($editionId, $userId);
             }
         }
     }
 
-    /**
-     * Generate course content/description
-     */
-    private function generateCourseContent(array $courseData): string {
-        $content = "<h2>{$courseData['title']}</h2>\n\n";
-        $content .= "<p>Dit is een {$courseData['type']} cursus.</p>\n\n";
+    private function createQuoteForEdition(int $editionId, int $userId): void {
+        $user = get_user_by('ID', $userId);
+        $price = (float) (get_post_meta($editionId, 'price', true) ?: 299.00);
+        $tax = round($price * 0.21, 2);
 
-        if ($courseData['type'] === 'in-person' && !empty($courseData['editions'])) {
-            $content .= "<h3>Beschikbare data</h3>\n";
-            $content .= "<p>Bekijk de beschikbare edities en schrijf je in via het inschrijfformulier.</p>\n";
+        $quoteNumber = sprintf('Q-%04d', rand(1000, 9999));
+        $statuses = ['draft', 'sent', 'exported'];
+        $status = $statuses[array_rand($statuses)];
+
+        $quoteId = wp_insert_post([
+            'post_title' => "Quote {$quoteNumber} - {$user->display_name}",
+            'post_type' => 'vad_quote',
+            'post_status' => 'publish',
+        ]);
+
+        if (is_wp_error($quoteId)) {
+            return;
         }
 
-        return $content;
+        update_post_meta($quoteId, self::SEED_META_KEY, true);
+        update_post_meta($quoteId, 'quote_number', $quoteNumber);
+        update_post_meta($quoteId, 'user_id', $userId);
+        update_post_meta($quoteId, 'edition_id', $editionId);
+        update_post_meta($quoteId, 'status', $status);
+        update_post_meta($quoteId, 'subtotal', (int) ($price * 100));
+        update_post_meta($quoteId, 'tax', (int) ($tax * 100));
+        update_post_meta($quoteId, 'total', (int) (($price + $tax) * 100));
+        update_post_meta($quoteId, 'valid_until', date('Y-m-d', strtotime('+30 days')));
+
+        $items = [[
+            'type' => 'edition',
+            'id' => $editionId,
+            'title' => get_the_title($editionId),
+            'unit_price' => (int) ($price * 100),
+            'quantity' => 1,
+            'total' => (int) ($price * 100),
+        ]];
+        update_post_meta($quoteId, 'items', wp_json_encode($items));
+
+        $billing = [
+            'name' => $user->display_name,
+            'email' => $user->user_email,
+        ];
+        update_post_meta($quoteId, 'billing', wp_json_encode($billing));
+
+        if ($status !== 'draft') {
+            update_post_meta($quoteId, 'sent_at', current_time('mysql'));
+        }
+        if ($status === 'exported') {
+            update_post_meta($quoteId, 'locked', '1');
+        }
+
+        $this->created['quotes'][] = $quoteId;
+        echo "  + Quote: {$quoteNumber} ({$status})\n";
     }
 
-    /**
-     * Save manifest of created data for cleanup
-     */
     private function saveSeedManifest(): void {
         update_option('stride_seed_manifest', $this->created);
         update_option('stride_seed_timestamp', current_time('mysql'));
     }
 
-    /**
-     * Print summary
-     */
     private function printSummary(): void {
         echo "\n=== Seed Complete ===\n\n";
         echo "Created:\n";
@@ -964,25 +871,18 @@ class StrideSeedData {
         echo "  - Courses: " . count($this->created['courses']) . "\n";
         echo "  - Editions: " . count($this->created['editions']) . "\n";
         echo "  - Sessions: " . count($this->created['sessions']) . "\n";
+        echo "  - Trajectories: " . count($this->created['trajectories']) . "\n";
         echo "  - Registrations: " . count($this->created['registrations']) . "\n";
-        echo "  - Groups: " . count($this->created['groups']) . "\n";
         echo "  - Vouchers: " . count($this->created['vouchers']) . "\n";
         echo "  - Quotes: " . count($this->created['quotes']) . "\n";
         echo "\n";
-        echo "Test credentials:\n";
-        echo "  - All seed users have password: seedpass123\n";
-        echo "  - Admin: seed_admin@seed.test\n";
-        echo "  - Students: seed_student1@seed.test through seed_student5@seed.test\n";
-        echo "\n";
-        echo "Voucher codes:\n";
-        echo "  - TEST-FULL-FREE (100% off, 10 uses)\n";
-        echo "  - TEST-50-EURO (EUR50 off, 5 uses)\n";
-        echo "  - TEST-20-PERCENT (20% off, 100 uses)\n";
-        echo "\n";
-        echo "To remove seed data: ddev exec wp eval-file scripts/unseed.php --force\n";
+        echo "Test credentials: seedpass123\n";
+        echo "Admin user (ID 1) enrolled in 3 courses with quotes.\n\n";
+        echo "Voucher codes: WELKOM2026, VAD-MEMBER, GRATIS-INTRO, KORTING50\n\n";
+        echo "To cleanup: ddev exec bash -c 'FORCE_UNSEED=1 wp eval-file scripts/unseed.php'\n";
     }
 }
 
-// Run the seeder
+// Run
 $seeder = new StrideSeedData();
 $seeder->run();

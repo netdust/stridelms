@@ -18,23 +18,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 // cspell:ignore childen .
 
 /**
- * Checks if the user has access to a course.
- *
- * @todo duplicate function, exists in other places
- *        check it's use and consolidate
- *
- * @since 2.1.0
- *
- * @param int      $course_id Course ID.
- * @param int|null $user_id   Optional. User ID. Default null.
- *
- * @return boolean Returns true if the user has access otherwise false.
- */
-function ld_course_check_user_access( $course_id, $user_id = null ) {
-	return sfwd_lms_has_access( $course_id, $user_id );
-}
-
-/**
  * Gets the array of courses that can be accessed by the user.
  *
  * @since 2.1.0
@@ -90,6 +73,7 @@ function sfwd_lms_has_access( $post_id, $user_id = null ) {
 
 /**
  * Checks whether a user has access to a course.
+ * Use sfwd_lms_has_access instead.
  *
  * @since 2.1.0
  *
@@ -764,7 +748,14 @@ function lesson_visible_after( string $content = '', $post = null ) {
 		return $content;
 	}
 
-	$bypass_course_limits_admin_users = learndash_can_user_bypass( $user_id, 'learndash_course_lesson_not_available', $post->ID, $post );
+	$bypass_course_limits_admin_users = learndash_can_user_bypass(
+		$user_id,
+		'learndash_course_lesson_not_available',
+		[
+			'step_id' => $post->ID,
+			'step'    => $post,
+		]
+	);
 
 	// For logged in users to allow an override filter.
 	/** This filter is documented in includes/course/ld-course-progress.php */
@@ -1061,7 +1052,16 @@ function learndash_course_step_available_date( int $step_id = 0, int $course_id 
 		}
 	}
 
-	if ( learndash_can_user_bypass( $user_id, 'learndash_course_lesson_not_available', $step_post->ID, $step_post ) ) {
+	if (
+		learndash_can_user_bypass(
+			$user_id,
+			'learndash_course_lesson_not_available',
+			[
+				'step_id' => $step_post->ID,
+				'step'    => $step_post,
+			]
+		)
+	) {
 		return $available_timestamp;
 	}
 

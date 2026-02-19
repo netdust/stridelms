@@ -51,8 +51,17 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 		}
 	}
 
+	/**
+	 * Adds or edits a quiz.
+	 *
+	 * @since 1.2.7
+	 *
+	 * @param array<string,mixed>|null $get  The GET parameters.
+	 * @param WP_Post|null             $post The POST parameters.
+	 *
+	 * @return void
+	 */
 	private function addEditQuiz( $get = null, $post = null ) {
-
 		if ( empty( $get ) ) {
 			$get = $_GET;
 		}
@@ -66,10 +75,8 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 			if ( ! current_user_can( 'wpProQuiz_edit_quiz' ) ) {
 				wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'learndash' ) );
 			}
-		} else {
-			if ( ! current_user_can( 'wpProQuiz_add_quiz' ) ) {
+		} elseif ( ! current_user_can( 'wpProQuiz_add_quiz' ) ) {
 				wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'learndash' ) );
-			}
 		}
 
 		$prerequisiteMapper = new WpProQuiz_Model_PrerequisiteMapper();
@@ -139,7 +146,6 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 			$quiz->setId( $quizId );
 
 			if ( $this->checkValidit( $this->_post ) ) {
-
 				$quiz->setText( 'AAZZAAZZ' ); // cspell:disable-line.
 
 				$quizMapper->save( $quiz );
@@ -164,9 +170,6 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 
 				$forms                = $formMapper->fetch( $quizId );
 				$prerequisiteQuizList = $prerequisiteMapper->fetchQuizIds( $quizId );
-
-			} else {
-				//WpProQuiz_View_View::admin_notices( sprintf( esc_html_x('%s title or %s description are not filled', 'Quiz title or quiz description are not filled', 'learndash'), LearnDash_Custom_Label::get_label( 'quiz' ), learndash_get_custom_label_lower( 'quiz' )));
 			}
 		} elseif ( $quizId ) {
 			$quiz                 = $quizMapper->fetch( $quizId );
@@ -213,10 +216,8 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 			if ( ! current_user_can( 'wpProQuiz_edit_quiz' ) ) {
 				wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'learndash' ) );
 			}
-		} else {
-			if ( ! current_user_can( 'wpProQuiz_add_quiz' ) ) {
+		} elseif ( ! current_user_can( 'wpProQuiz_add_quiz' ) ) {
 				wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'learndash' ) );
-			}
 		}
 
 		$prerequisiteMapper = new WpProQuiz_Model_PrerequisiteMapper();
@@ -302,7 +303,6 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 	}
 
 	private function getEditQuiz( $get = null, $post = null ) {
-
 		if ( empty( $get ) ) {
 			$get = $_GET;
 		}
@@ -389,12 +389,29 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 		}
 	}
 
+	/**
+	 * Checks if a quiz is locked.
+	 *
+	 * @since 1.2.7
+	 *
+	 * @param int $quizId The quiz ID.
+	 *
+	 * @return array<string,mixed>|null
+	 */
 	public function isLockQuiz( $quizId ) {
 		$quizId = (int) $this->_post['quizId'];
 		$userId = get_current_user_id();
 		$data   = array();
 
-		$bypass_course_limits_admin_users = learndash_can_user_bypass( $userId, 'learndash_quiz_lock', $quizId, $this->_post );
+		$bypass_course_limits_admin_users = learndash_can_user_bypass(
+			$userId,
+			'learndash_quiz_lock',
+			[
+				'step_id' => $quizId,
+				'step'    => $this->_post,
+			]
+		);
+
 		if ( true === $bypass_course_limits_admin_users ) {
 			return $data;
 		}
@@ -481,19 +498,6 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 					}
 				}
 				if ( ! empty( $post_quiz_ids ) ) {
-					// Commenting code as `$post_course_id` is not used.
-					// if ( ( isset( $this->_post['course_id'] ) ) && ( ! empty( $this->_post['course_id'] ) ) ) {
-					// 	$post_course_id = intval( $this->_post['course_id'] );
-					// } else {
-					// 	$post_course_id = 0;
-					// }
-					// $post_course_id = apply_filters(
-					//  'learndash_quiz_prerequisite_course_check',
-					//  $post_course_id,
-					//  $userId,
-					// 	$post_quiz_ids
-					// );
-
 					$post_quiz_ids = learndash_is_quiz_notcomplete( $userId, $post_quiz_ids, true, -1 );
 					if ( ! empty( $post_quiz_ids ) ) {
 						$quizIds = array_values( $post_quiz_ids );
@@ -558,7 +562,6 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 			$q = $qm->fetch( $quizId );
 
 			if ( $q->getId() > 0 ) {
-
 				$q->setQuizRunOnceTime( time() );
 
 				$qm->save( $q );
@@ -569,6 +572,13 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 		exit;
 	}
 
+	/**
+	 * Shows the quiz overview.
+	 *
+	 * @since 1.2.7
+	 *
+	 * @return void
+	 */
 	private function showAction() {
 		if ( ! current_user_can( 'wpProQuiz_show' ) ) {
 			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'learndash' ) );
@@ -576,15 +586,10 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 
 		$this->view = new WpProQuiz_View_QuizOverall();
 
-		// Removed per LEARNDASH-4602
-		//$m = new WpProQuiz_Model_QuizMapper();
-		//$this->view->quiz = $m->fetchAll();
-
 		$this->view->show();
 	}
 
 	private function editAction( $id ) {
-
 		if ( ! current_user_can( 'wpProQuiz_edit_quiz' ) ) {
 			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'learndash' ) );
 		}
@@ -609,7 +614,6 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 		}
 
 		if ( isset( $this->_post['submit'] ) ) {
-
 			if ( isset( $this->_post['resultGradeEnabled'] ) ) {
 				$this->_post['result_text'] = $this->filterResultTextGrade( $this->_post );
 			}
@@ -618,7 +622,6 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 			$quiz->setId( $id );
 
 			if ( $this->checkValidit( $this->_post ) ) {
-
 				$prerequisiteMapper = new WpProQuiz_Model_PrerequisiteMapper();
 
 				$prerequisiteMapper->delete( $id );
@@ -666,7 +669,6 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 	}
 
 	private function createAction() {
-
 		if ( ! current_user_can( 'wpProQuiz_add_quiz' ) ) {
 			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'learndash' ) );
 		}
@@ -682,7 +684,6 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 		$templateMapper = new WpProQuiz_Model_TemplateMapper();
 
 		if ( isset( $this->_post['submit'] ) ) {
-
 			if ( isset( $this->_post['resultGradeEnabled'] ) ) {
 				$this->_post['result_text'] = $this->filterResultTextGrade( $this->_post );
 			}
@@ -822,18 +823,44 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 		return $template;
 	}
 
+	/**
+	 * Handles the custom fields form submission for a quiz.
+	 *
+	 * @since 1.2.7
+	 *
+	 * @param int                 $quizId The quiz ID.
+	 * @param array<string,mixed> $post The POST parameters.
+	 *
+	 * @return bool
+	 */
 	private function formHandler( $quizId, $post ) {
+		// Verify if we already have processed custom fields for this quiz.
+
+		if (
+			isset( $post['custom_fields_forms'] )
+			&& is_array( $post['custom_fields_forms'] )
+			&& ! empty( $post['custom_fields_forms'] )
+		) {
+			// We already have processed custom fields for this quiz. Return signaling that we have custom fields.
+			return true;
+		}
+
 		if ( ! isset( $post['form'] ) ) {
 			return false;
 		}
 
 		$form = $post['form'];
 
-		unset( $form[0] );
-
-		if ( empty( $form ) ) {
+		if (
+			! is_array( $form )
+			|| empty( $form )
+		) {
 			return false;
 		}
+
+		// The first element is null as it's based on the header row.
+		// We need to ignore it.
+		unset( $form[0] );
 
 		$formMapper = new WpProQuiz_Model_FormMapper();
 
@@ -842,7 +869,6 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 		$sort      = 0;
 
 		foreach ( $form as $f ) {
-
 			if ( ( ! isset( $f['fieldname'] ) ) || ( empty( $f['fieldname'] ) ) ) {
 				continue;
 			}
@@ -889,7 +915,6 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 	}
 
 	private function checkValidit( $post ) {
-
 		if ( ( isset( $post['name'] ) ) && ( ! empty( $post['name'] ) ) && ( isset( $post['text'] ) ) && ( ! empty( $post['text'] ) ) ) {
 			return true;
 		}
@@ -935,6 +960,13 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 		}
 	}
 
+	/**
+	 * Handles the quiz completion.
+	 *
+	 * @since 1.2.7
+	 *
+	 * @return void
+	 */
 	public function completedQuiz() {
 		$lockMapper     = new WpProQuiz_Model_LockMapper();
 		$quizMapper     = new WpProQuiz_Model_QuizMapper();
@@ -1037,12 +1069,12 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 							if ( ! empty( $this->_post['course_id'] ) ) {
 								if ( ( isset( $v['course'] ) ) && ( ! empty( $v['course'] ) ) && ( absint( $v['course'] ) === absint( $this->_post['course_id'] ) ) ) {
 									// Count the number of time the student has taken the quiz where the course_id matches.
-									$attempts_count++;
+									++$attempts_count;
 								}
 							} elseif ( empty( $this->_post['course_id'] ) ) {
 								if ( ( isset( $v['course'] ) ) && ( empty( $v['course'] ) ) && ( absint( $v['course'] ) === absint( $this->_post['course_id'] ) ) ) {
 									// Count the number of time the student has taken the quiz where the course_id is zero.
-									$attempts_count++;
+									++$attempts_count;
 								}
 							}
 						}
@@ -1053,7 +1085,7 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 						// For logged in users to allow an override filter.
 						/** This filter is documented in includes/course/ld-course-progress.php */
 						$bypass_course_limits_admin_users = apply_filters( 'learndash_prerequities_bypass', $bypass_course_limits_admin_users, $userId, $this->_post['course_id'], $this->_post['quiz'] );
-						if ( true !== $bypass_course_limits_admin_users )  {
+						if ( true !== $bypass_course_limits_admin_users ) {
 							$lockIp = true;
 						}
 					}
@@ -1101,9 +1133,7 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 			}
 
 			if ( empty( $userId ) ) {
-
 				if ( ! $lockMapper->isLock( $this->_post['quizId'], $this->getIp(), $userId, WpProQuiz_Model_Lock::TYPE_QUIZ ) ) {
-
 					$lock = new WpProQuiz_Model_Lock();
 
 					$lock->setUserId( get_current_user_id() );
@@ -1173,7 +1203,7 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 			'$quizname'   => $quiz->getName(),
 			'$result'     => $result['result'] . '%',
 			'$points'     => $result['points'],
-			'$ip'         => '', //filter_var($_SERVER['REMOTE_ADDR'], FILTER_VALIDATE_IP),
+			'$ip'         => '',
 			'$categories' => empty( $result['cats'] ) ? '' : $this->setCategoryOverview( $result['cats'], $categories ),
 		);
 
@@ -1247,7 +1277,6 @@ class WpProQuiz_Controller_Quiz extends WpProQuiz_Controller_Controller {
 
 		if ( $quiz->getEmailNotification() == WpProQuiz_Model_Quiz::QUIZ_EMAIL_NOTE_ALL
 			|| ( get_current_user_id() > 0 && $quiz->getEmailNotification() == WpProQuiz_Model_Quiz::QUIZ_EMAIL_NOTE_REG_USER ) ) {
-
 			$admin_mail_message = str_replace( array_keys( $r ), $r, $email_settings['admin_mail_message'] );
 			$admin_mail_subject = str_replace( array_keys( $r ), $r, $email_settings['admin_mail_subject'] );
 

@@ -94,26 +94,13 @@ return [
     // ========================================
     // SERVICES CONFIGURATION
     // ========================================
-    // Note: Business logic services are now in the stride-core mu-plugin
-    // Theme only registers frontend/presentation services
+    // Note: Business logic services are in stride-core mu-plugin
+    // Frontend services will be added during frontend implementation
     'services' => [
-        // Frontend services (presentation layer only)
-        'core' => [
-            'stride\\services\\frontend\\DashboardService',
-            'stride\\services\\frontend\\DashboardShortcodes',
-            'stride\\services\\frontend\\ICalService',
-        ],
-
-        // No handlers in theme - all in plugin
+        'core' => [],
         'handlers' => [],
-
-        // No admin services in theme - all in plugin
         'admin' => [],
-
-        // No conditional services in theme
         'conditional' => [],
-
-        // Auto-discovery disabled - plugin handles service registration
         'auto_discover' => false,
         'discovery_paths' => [],
     ],

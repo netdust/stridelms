@@ -277,4 +277,46 @@ class Assignment extends Post {
 			$this
 		);
 	}
+
+	/**
+	 * Returns the course associated with the assignment.
+	 *
+	 * @since 5.0.0
+	 *
+	 * @return ?Models\Course The course associated with the assignment or null if not found.
+	 */
+	public function get_course(): ?Models\Course {
+		$course = Course::find(
+			Cast::to_int( $this->getAttribute( 'course_id' ) )
+		);
+
+		/**
+		 * Filters the course associated with the assignment.
+		 *
+		 * @since 5.0.0
+		 *
+		 * @param Models\Course|null $course     The course associated with the assignment or null if not found.
+		 * @param Assignment         $assignment Assignment model.
+		 *
+		 * @return Models\Course|null The course associated with the assignment or null if not found.
+		 */
+		return apply_filters(
+			'learndash_model_assignment_course',
+			$course,
+			$this
+		);
+	}
+
+	/**
+	 * Returns the ID of the course associated with the assignment. 0 if the assignment is not associated with a course or if the course is not found.
+	 *
+	 * @since 5.0.0
+	 *
+	 * @return int Course ID or 0 if the assignment is not associated with a course or if the course is not found.
+	 */
+	public function get_course_id(): int {
+		$course = $this->get_course();
+
+		return $course ? $course->get_id() : 0;
+	}
 }

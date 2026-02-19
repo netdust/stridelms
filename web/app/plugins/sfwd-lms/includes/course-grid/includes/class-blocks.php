@@ -56,7 +56,7 @@ class Blocks {
 	 * @return void
 	 */
 	public function init_blocks() {
-		add_action( 'enqueue_block_editor_assets', [ $this, 'enqueue_block_editor_assets' ], 20 );
+		add_action( 'enqueue_block_assets', [ $this, 'enqueue_block_editor_assets' ], 20 );
 
 		$blocks = [
 			'learndash_course_grid'        => 'LearnDash_Course_Grid',
@@ -77,6 +77,10 @@ class Blocks {
 	 * @return void
 	 */
 	public function enqueue_block_editor_assets() {
+		if ( ! is_admin() ) {
+			return;
+		}
+
 		$asset_file = include LEARNDASH_COURSE_GRID_PLUGIN_PATH . 'includes/gutenberg/assets/js/index.asset.php';
 
 		wp_register_script( 'learndash-course-grid-block-editor-helper', LEARNDASH_COURSE_GRID_PLUGIN_URL . 'assets/js/editor.js', [], LEARNDASH_VERSION, true );

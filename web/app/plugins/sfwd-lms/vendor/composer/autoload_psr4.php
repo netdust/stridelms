@@ -6,7 +6,5 @@ $vendorDir = dirname(__DIR__);
 $baseDir = dirname($vendorDir);
 
 return array(
-    'StellarWP\\FieldConditions\\' => array($vendorDir . '/stellarwp/field-conditions/src'),
-    'ScssPhp\\ScssPhp\\' => array($vendorDir . '/scssphp/scssphp/src'),
     'LearnDash\\Core\\' => array($baseDir . '/src/Core'),
 );

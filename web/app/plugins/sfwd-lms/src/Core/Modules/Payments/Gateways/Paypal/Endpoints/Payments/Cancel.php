@@ -219,7 +219,7 @@ class Cancel extends Endpoint {
 				'permission_callback' => [ $this, 'check_permission' ],
 				'summary'             => sprintf(
 					// translators: %s: order label.
-					__( 'Cancels a PayPal %s.', 'learndash' ),
+					__( 'Cancels a PayPal %s', 'learndash' ),
 					learndash_get_custom_label_lower( 'order' )
 				),
 				'description'         => sprintf(

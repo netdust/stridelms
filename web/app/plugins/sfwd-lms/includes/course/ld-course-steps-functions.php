@@ -19,6 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * For now excludes quizzes at lesson and topic level.
  *
  * @since 2.3.0
+ * @since 5.0.0 Removed the option to use `learndash_get_course_steps_legacy`.
  *
  * @param int   $course_id          Optional. The ID of the course. Default 0.
  * @param array $include_post_types Optional. An array of post types to include in course steps. Default array contains 'sfwd-lessons' and 'sfwd-topic'.
@@ -26,11 +27,6 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @return array An array of all course steps.
  */
 function learndash_get_course_steps( $course_id = 0, $include_post_types = array( 'sfwd-lessons', 'sfwd-topic' ) ) {
-
-	if ( ( defined( 'LEARNDASH_COURSE_FUNCTIONS_LEGACY' ) ) && ( true === LEARNDASH_COURSE_FUNCTIONS_LEGACY ) ) {
-		return learndash_get_course_steps_legacy( $course_id, $include_post_types );
-	}
-
 	// The steps array will hold all the individual step counts for each post_type.
 	$steps = array();
 
@@ -51,16 +47,13 @@ function learndash_get_course_steps( $course_id = 0, $include_post_types = array
  * Gets the total count of lessons and topics for a given course ID.
  *
  * @since 2.3.0
+ * @since 5.0.0 Removed the option to use `learndash_get_course_steps_count_legacy`.
  *
  * @param int $course_id Optional. The ID of the course. Default 0.
  *
  * @return int The count of the course steps.
  */
 function learndash_get_course_steps_count( $course_id = 0 ) {
-	if ( ( defined( 'LEARNDASH_COURSE_FUNCTIONS_LEGACY' ) ) && ( true === LEARNDASH_COURSE_FUNCTIONS_LEGACY ) ) {
-		return learndash_get_course_steps_count_legacy( $course_id );
-	}
-
 	return learndash_course_get_steps_count( $course_id );
 }
 
@@ -68,6 +61,7 @@ function learndash_get_course_steps_count( $course_id = 0 ) {
  * Gets the total completed steps for a given course progress array.
  *
  * @since 2.3.0
+ * @since 5.0.0 Removed the option to use `learndash_course_get_completed_steps_legacy`.
  *
  * @param int   $user_id         Optional. The ID of the user. Default 0.
  * @param int   $course_id       Optional. The ID of the course. Default 0.
@@ -76,10 +70,6 @@ function learndash_get_course_steps_count( $course_id = 0 ) {
  * @return int The count of completed course steps.
  */
 function learndash_course_get_completed_steps( $user_id = 0, $course_id = 0, $course_progress = array() ) {
-	if ( ( defined( 'LEARNDASH_COURSE_FUNCTIONS_LEGACY' ) ) && ( true === LEARNDASH_COURSE_FUNCTIONS_LEGACY ) ) {
-		return learndash_course_get_completed_steps_legacy( $user_id, $course_id, $course_progress );
-	}
-
 	$user_id   = absint( $user_id );
 	$course_id = absint( $course_id );
 
@@ -976,28 +966,6 @@ function learndash_get_step_post_status_slug( $post ) {
 	}
 
 	return '';
-}
-
-/**
- * Get single course step post status label.
- *
- * @since 4.0.0
- *
- * @param object $post WP_Post object.
- *
- * @return string
- */
-function learndash_get_step_post_status_label( $post ) {
-	$post_status_label = '';
-	if ( ( $post ) && ( is_a( $post, 'WP_Post' ) ) ) {
-		$post_status_slug = learndash_get_step_post_status_slug( $post );
-		$post_statuses    = learndash_get_step_post_statuses();
-		if ( isset( $post_statuses[ $post_status_slug ] ) ) {
-			$post_status_label = $post_statuses[ $post_status_slug ];
-		}
-	}
-
-	return $post_status_label;
 }
 
 /**

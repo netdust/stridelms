@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Issuing;
 
 /**
@@ -18,14 +17,11 @@ namespace StellarWP\Learndash\Stripe\Issuing;
 class PhysicalBundle extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'issuing.physical_bundle';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
-
     const STATUS_ACTIVE = 'active';
     const STATUS_INACTIVE = 'inactive';
     const STATUS_REVIEW = 'review';
-
     const TYPE_CUSTOM = 'custom';
     const TYPE_STANDARD = 'standard';
 }

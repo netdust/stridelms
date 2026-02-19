@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Climate;
 
 /**
@@ -21,7 +20,6 @@ namespace StellarWP\Learndash\Stripe\Climate;
 class Product extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'climate.product';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
 }

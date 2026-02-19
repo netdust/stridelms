@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -62,18 +61,15 @@ namespace StellarWP\Learndash\Stripe;
 class Charge extends ApiResource
 {
     const OBJECT_NAME = 'charge';
-
-    use ApiOperations\All;
-    use ApiOperations\Create;
-    use ApiOperations\NestedResource;
-    use ApiOperations\Retrieve;
-    use ApiOperations\Search;
-    use ApiOperations\Update;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create;
+    use \StellarWP\Learndash\Stripe\ApiOperations\NestedResource;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Search;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Update;
     const STATUS_FAILED = 'failed';
     const STATUS_PENDING = 'pending';
     const STATUS_SUCCEEDED = 'succeeded';
-
     /**
      * Possible string representations of decline codes.
      * These strings are applicable to the decline_code property of the \Stripe\Exception\CardException exception.
@@ -126,7 +122,6 @@ class Charge extends ApiResource
     const DECLINED_TRANSACTION_NOT_ALLOWED = 'transaction_not_allowed';
     const DECLINED_TRY_AGAIN_LATER = 'try_again_later';
     const DECLINED_WITHDRAWAL_COUNT_LIMIT_EXCEEDED = 'withdrawal_count_limit_exceeded';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -140,10 +135,8 @@ class Charge extends ApiResource
         $url = $this->instanceUrl() . '/capture';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -155,12 +148,9 @@ class Charge extends ApiResource
     public static function search($params = null, $opts = null)
     {
         $url = '/v1/charges/search';
-
         return static::_requestPage($url, \StellarWP\Learndash\Stripe\SearchResult::class, $params, $opts);
     }
-
     const PATH_REFUNDS = '/refunds';
-
     /**
      * @param string $id the ID of the charge on which to retrieve the refunds
      * @param null|array $params
@@ -174,7 +164,6 @@ class Charge extends ApiResource
     {
         return self::_allNestedResources($id, static::PATH_REFUNDS, $params, $opts);
     }
-
     /**
      * @param string $id the ID of the charge to which the refund belongs
      * @param string $refundId the ID of the refund to retrieve

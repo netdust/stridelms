@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\BillingPortal;
 
 /**
@@ -35,6 +34,5 @@ namespace StellarWP\Learndash\Stripe\BillingPortal;
 class Session extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'billing_portal.session';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
 }

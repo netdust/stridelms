@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -24,12 +23,10 @@ namespace StellarWP\Learndash\Stripe;
 class TaxId extends ApiResource
 {
     const OBJECT_NAME = 'tax_id';
-
-    use ApiOperations\All;
-    use ApiOperations\Create;
-    use ApiOperations\Delete;
-    use ApiOperations\Retrieve;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Delete;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
     const TYPE_AD_NRT = 'ad_nrt';
     const TYPE_AE_TRN = 'ae_trn';
     const TYPE_AR_CUIT = 'ar_cuit';
@@ -98,7 +95,6 @@ class TaxId extends ApiResource
     const TYPE_VE_RIF = 've_rif';
     const TYPE_VN_TIN = 'vn_tin';
     const TYPE_ZA_VAT = 'za_vat';
-
     const VERIFICATION_STATUS_PENDING = 'pending';
     const VERIFICATION_STATUS_UNAVAILABLE = 'unavailable';
     const VERIFICATION_STATUS_UNVERIFIED = 'unverified';

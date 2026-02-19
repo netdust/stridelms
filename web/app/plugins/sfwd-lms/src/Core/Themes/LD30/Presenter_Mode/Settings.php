@@ -85,7 +85,6 @@ class Settings {
 			'presenter_mode_enabled'       => [
 				'child_section_state' => $saved_options['presenter_mode_enabled'] ? 'open' : 'closed',
 				'label'               => esc_html__( 'Presenter Mode', 'learndash' ),
-				'label_badge'         => 'new',
 				'name'                => 'presenter_mode_enabled',
 				'options'             => [
 					''    => '',

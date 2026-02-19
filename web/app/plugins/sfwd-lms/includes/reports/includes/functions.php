@@ -36,38 +36,6 @@ function ld_propanel_get_template( $template_name ) {
 	return apply_filters( 'learndash_propanel_template', $template_path, $template_name );
 }
 
-/**
- * Set ProPanel Report Filename
- *
- * @param string $filename_part The base filename to be used
- *
- * @return array containing two keys
- *          'report_filename' as the server filename and path
- *          'report_url'  as the URL to download the file
- */
-function ls_propanel_set_report_filenames( $file_part = '' ) {
-	$files_info = array();
-
-	$path_part = 'ld_propanel';
-
-	if ( ! empty( $file_part ) ) {
-		$wp_upload_dir            = wp_upload_dir();
-		$wp_upload_dir['basedir'] = str_replace( '\\', '/', $wp_upload_dir['basedir'] );
-		$wp_upload_dir['basedir'] = trailingslashit( $wp_upload_dir['basedir'] );
-		$wp_upload_dir['baseurl'] = trailingslashit( $wp_upload_dir['baseurl'] );
-
-		if ( wp_mkdir_p( $wp_upload_dir['basedir'] . $path_part ) !== false ) {
-			// Just to ensure the directory is not readable
-			file_put_contents( $wp_upload_dir['basedir'] . $path_part . '/index.php', '// nothing to see here' );
-
-			$files_info['report_file'] = $wp_upload_dir['basedir'] . $path_part . '/' . $file_part;
-			$files_info['report_url']  = $wp_upload_dir['baseurl'] . $path_part . '/' . $file_part;
-		}
-	}
-
-	return $files_info;
-}
-
 function ld_propanel_get_pager_values() {
 	return (array) apply_filters( 'ld_propanel_per_page_array', array( 5, 10, 15, 25, 35, 50, 75, 100 ) );
 }

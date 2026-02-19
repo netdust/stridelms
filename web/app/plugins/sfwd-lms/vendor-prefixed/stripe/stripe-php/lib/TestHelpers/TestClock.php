@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\TestHelpers;
 
 /**
@@ -21,16 +20,13 @@ namespace StellarWP\Learndash\Stripe\TestHelpers;
 class TestClock extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'test_helpers.test_clock';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
     use \StellarWP\Learndash\Stripe\ApiOperations\Delete;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
-
     const STATUS_ADVANCING = 'advancing';
     const STATUS_INTERNAL_FAILURE = 'internal_failure';
     const STATUS_READY = 'ready';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -44,7 +40,6 @@ class TestClock extends \StellarWP\Learndash\Stripe\ApiResource
         $url = $this->instanceUrl() . '/advance';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
 }

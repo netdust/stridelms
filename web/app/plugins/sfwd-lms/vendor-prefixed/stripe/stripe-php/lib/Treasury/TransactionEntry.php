@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Treasury;
 
 /**
@@ -24,10 +23,8 @@ namespace StellarWP\Learndash\Stripe\Treasury;
 class TransactionEntry extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'treasury.transaction_entry';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
-
     const FLOW_TYPE_CREDIT_REVERSAL = 'credit_reversal';
     const FLOW_TYPE_DEBIT_REVERSAL = 'debit_reversal';
     const FLOW_TYPE_INBOUND_TRANSFER = 'inbound_transfer';
@@ -37,7 +34,6 @@ class TransactionEntry extends \StellarWP\Learndash\Stripe\ApiResource
     const FLOW_TYPE_OUTBOUND_TRANSFER = 'outbound_transfer';
     const FLOW_TYPE_RECEIVED_CREDIT = 'received_credit';
     const FLOW_TYPE_RECEIVED_DEBIT = 'received_debit';
-
     const TYPE_CREDIT_REVERSAL = 'credit_reversal';
     const TYPE_CREDIT_REVERSAL_POSTING = 'credit_reversal_posting';
     const TYPE_DEBIT_REVERSAL = 'debit_reversal';

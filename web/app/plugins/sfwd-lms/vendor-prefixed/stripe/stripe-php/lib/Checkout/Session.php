@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Checkout;
 
 /**
@@ -78,44 +77,33 @@ namespace StellarWP\Learndash\Stripe\Checkout;
 class Session extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'checkout.session';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
-
     const BILLING_ADDRESS_COLLECTION_AUTO = 'auto';
     const BILLING_ADDRESS_COLLECTION_REQUIRED = 'required';
-
     const CUSTOMER_CREATION_ALWAYS = 'always';
     const CUSTOMER_CREATION_IF_REQUIRED = 'if_required';
-
     const MODE_PAYMENT = 'payment';
     const MODE_SETUP = 'setup';
     const MODE_SUBSCRIPTION = 'subscription';
-
     const PAYMENT_METHOD_COLLECTION_ALWAYS = 'always';
     const PAYMENT_METHOD_COLLECTION_IF_REQUIRED = 'if_required';
-
     const PAYMENT_STATUS_NO_PAYMENT_REQUIRED = 'no_payment_required';
     const PAYMENT_STATUS_PAID = 'paid';
     const PAYMENT_STATUS_UNPAID = 'unpaid';
-
     const REDIRECT_ON_COMPLETION_ALWAYS = 'always';
     const REDIRECT_ON_COMPLETION_IF_REQUIRED = 'if_required';
     const REDIRECT_ON_COMPLETION_NEVER = 'never';
-
     const STATUS_COMPLETE = 'complete';
     const STATUS_EXPIRED = 'expired';
     const STATUS_OPEN = 'open';
-
     const SUBMIT_TYPE_AUTO = 'auto';
     const SUBMIT_TYPE_BOOK = 'book';
     const SUBMIT_TYPE_DONATE = 'donate';
     const SUBMIT_TYPE_PAY = 'pay';
-
     const UI_MODE_EMBEDDED = 'embedded';
     const UI_MODE_HOSTED = 'hosted';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -129,10 +117,8 @@ class Session extends \StellarWP\Learndash\Stripe\ApiResource
         $url = $this->instanceUrl() . '/expire';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param string $id
      * @param null|array $params
@@ -148,7 +134,6 @@ class Session extends \StellarWP\Learndash\Stripe\ApiResource
         list($response, $opts) = static::_staticRequest('get', $url, $params, $opts);
         $obj = \StellarWP\Learndash\Stripe\Util\Util::convertToStripeObject($response->json, $opts);
         $obj->setLastResponse($response);
-
         return $obj;
     }
 }

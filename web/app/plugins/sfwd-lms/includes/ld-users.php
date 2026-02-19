@@ -1525,24 +1525,3 @@ function learndash_get_expired_user_courses_from_meta( $user_id = 0 ) {
 	}
 	return $expired_user_course_ids;
 }
-
-/**
- * Utility function to check if users can register for the site.
- *
- * @since 3.6.0
- */
-function learndash_users_can_register() {
-	if ( is_multisite() ) {
-		$users_can_register = (bool) users_can_register_signup_filter();
-	} else {
-		$users_can_register = (bool) get_option( 'users_can_register' );
-	}
-
-	/**
-	 * Filter for users can register.
-	 *
-	 * @since 3.6.0
-	 * @param bool $users_can_register True if users can register.
-	 */
-	return (bool) apply_filters( 'learndash_users_can_register', $users_can_register );
-}

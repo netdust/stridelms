@@ -49,7 +49,13 @@ class OpenAPI {
 	 *
 	 * @since 4.25.0
 	 *
-	 * @return array<string,mixed>
+	 * @return array{
+	 *      openapi: string,
+	 *      info: array<string, mixed>,
+	 *      servers: list<array<string, mixed>>,
+	 *      paths: array{},
+	 *      components: array{schemas: array<string,array<string,mixed>>, securitySchemes: array<string,array<string,string>>}
+	 *  }
 	 */
 	public static function get_base_spec(): array {
 		return [
@@ -69,7 +75,7 @@ class OpenAPI {
 			],
 			'servers'    => [
 				[
-					'url'         => rest_url(),
+					'url'         => rtrim( rest_url(), '/' ),
 					'description' => __( 'LearnDash REST API Server', 'learndash' ),
 				],
 			],
@@ -122,29 +128,63 @@ class OpenAPI {
 					'required'   => [ 'success' ],
 				],
 				'ErrorResponse'   => [
-					'type'       => 'object',
-					'properties' => [
-						'success' => [
-							'type'        => 'boolean',
-							'description' => __( 'Indicates if the request was successful.', 'learndash' ),
-							'example'     => false,
-						],
-						'code'    => [
-							'type'        => 'string',
-							'description' => __( 'Error code.', 'learndash' ),
-							'example'     => 'rest_error',
-						],
-						'message' => [
-							'type'        => 'string',
-							'description' => __( 'Error message.', 'learndash' ),
-							'example'     => __( 'An error occurred.', 'learndash' ),
-						],
-						'data'    => [
+					'oneOf' => [
+						[
 							'type'        => 'object',
-							'description' => __( 'Optional error data.', 'learndash' ),
+							'description' => __( 'WordPress WP_Error format.', 'learndash' ),
+							'properties'  => [
+								'code'    => [
+									'type'        => 'string',
+									'description' => __( 'Error code.', 'learndash' ),
+									'example'     => 'rest_error',
+								],
+								'message' => [
+									'type'        => 'string',
+									'description' => __( 'Error message.', 'learndash' ),
+									'example'     => __( 'An error occurred.', 'learndash' ),
+								],
+								'data'    => [
+									'type'        => 'object',
+									'description' => __( 'Error data containing status and additional information.', 'learndash' ),
+									'properties'  => [
+										'status' => [
+											'type'        => 'integer',
+											'description' => __( 'HTTP status code.', 'learndash' ),
+											'example'     => 400,
+										],
+									],
+									'required'    => [ 'status' ],
+								],
+							],
+							'required'    => [ 'code', 'message', 'data' ],
+						],
+						[
+							'type'        => 'object',
+							'description' => __( 'WP_REST_Response format.', 'learndash' ),
+							'properties'  => [
+								'success' => [
+									'type'        => 'boolean',
+									'description' => __( 'Indicates if the request was successful.', 'learndash' ),
+									'example'     => false,
+								],
+								'code'    => [
+									'type'        => 'string',
+									'description' => __( 'Error code.', 'learndash' ),
+									'example'     => 'rest_error',
+								],
+								'message' => [
+									'type'        => 'string',
+									'description' => __( 'Error message.', 'learndash' ),
+									'example'     => __( 'An error occurred.', 'learndash' ),
+								],
+								'data'    => [
+									'type'        => 'object',
+									'description' => __( 'Optional error data.', 'learndash' ),
+								],
+							],
+							'required'    => [ 'success', 'code', 'message' ],
 						],
 					],
-					'required'   => [ 'success', 'code', 'message' ],
 				],
 			]
 		);

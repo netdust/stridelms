@@ -3,12 +3,13 @@
  * LearnDash LD30 Displays a user's profile quiz row.
  *
  * @since 3.0.0
- * @version 4.21.3
+ * @version 4.25.4
  *
  * @package LearnDash\Templates\LD30
  */
 
 use LearnDash\Core\Utilities\Cast;
+use StellarWP\Learndash\StellarWP\Arrays\Arr;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -44,7 +45,11 @@ if ( get_current_user_id() === absint( $user_id ) || learndash_is_admin_user() |
 		$quiz_attempt['statistic_ref_id'] = learndash_get_quiz_statistics_ref_for_quiz_attempt( $user_id, $quiz_attempt );
 	}
 
-	if ( isset( $quiz_attempt['statistic_ref_id'] ) && ! empty( $quiz_attempt['statistic_ref_id'] ) ) {
+	if (
+		! empty( $quiz_attempt['statistic_ref_id'] )
+		&& isset( $quiz_attempt['post'] )
+		&& $quiz_attempt['post'] instanceof WP_Post
+	) {
 		/** This filter is documented in themes/ld30/templates/quiz/partials/attempt.php */
 		if ( apply_filters( 'show_user_profile_quiz_statistics', get_post_meta( $quiz_attempt['post']->ID, '_viewProfileStatistics', true ), $user_id, $quiz_attempt, basename( __FILE__ ) ) ) {
 			$stats = sprintf(
@@ -173,9 +178,25 @@ $quiz_link = ! empty( $quiz_attempt['post']->ID ) ? learndash_get_step_permalink
 	</div> <!--/.ld-table-list-item-preview-->
 
 	<?php
-	$essays = ( isset( $quiz_attempt['graded'] ) && ! empty( $quiz_attempt['graded'] ) ? $quiz_attempt['graded'] : false );
+	$essays = (array) Arr::get( $quiz_attempt, 'graded', [] );
 
-	if ( $essays && ! empty( $essays ) ) :
+	// Filters out essays that are not in the `not_graded` or `graded` status.
+	$essays = array_filter( $essays, static function ( $essay ) {
+		if (
+			! is_array( $essay )
+			|| empty( $essay['post_id'] )
+		) {
+			return false;
+		}
+
+		return in_array(
+			get_post_status( Cast::to_int( $essay['post_id'] ) ),
+			[ 'not_graded', 'graded' ],
+			true
+		);
+	} );
+
+	if ( ! empty( $essays ) ) :
 		?>
 		<div
 			class="ld-table-list-item-expanded"
@@ -247,8 +268,14 @@ $quiz_link = ! empty( $quiz_attempt['post']->ID ) ? learndash_get_step_permalink
 				>
 					<?php
 					foreach ( $essays as $essay_array ) :
+						if (
+							! is_array( $essay_array )
+							|| empty( $essay_array['post_id'] )
+						) {
+							continue;
+						}
 
-						$essay = get_post( $essay_array['post_id'] );
+						$essay = get_post( Cast::to_int( $essay_array['post_id'] ) );
 
 						learndash_get_template_part(
 							'shortcodes/profile/essay-row.php',

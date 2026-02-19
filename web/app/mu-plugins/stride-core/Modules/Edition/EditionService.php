@@ -50,6 +50,12 @@ final class EditionService extends AbstractService implements EditionQueryInterf
     public function hasAvailableSpots(int $editionId): bool
     {
         $capacity = $this->getCapacity($editionId);
+
+        // Capacity 0 means unlimited (e.g., e-learning courses)
+        if ($capacity === 0) {
+            return true;
+        }
+
         $registered = $this->getRegisteredCount($editionId);
 
         return $registered < $capacity;
@@ -146,6 +152,14 @@ final class EditionService extends AbstractService implements EditionQueryInterf
         }
 
         return $this->hasAvailableSpots($editionId);
+    }
+
+    /**
+     * Alias for canEnroll for handler compatibility.
+     */
+    public function isEnrollmentOpen(int $editionId): bool
+    {
+        return $this->canEnroll($editionId);
     }
 
     // === Event Handlers ===

@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Tax;
 
 /**
@@ -27,9 +26,7 @@ namespace StellarWP\Learndash\Stripe\Tax;
 class Calculation extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'tax.calculation';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
-
     /**
      * @param string $id
      * @param null|array $params
@@ -45,7 +42,6 @@ class Calculation extends \StellarWP\Learndash\Stripe\ApiResource
         list($response, $opts) = static::_staticRequest('get', $url, $params, $opts);
         $obj = \StellarWP\Learndash\Stripe\Util\Util::convertToStripeObject($response->json, $opts);
         $obj->setLastResponse($response);
-
         return $obj;
     }
 }

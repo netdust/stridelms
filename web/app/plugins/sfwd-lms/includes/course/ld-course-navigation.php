@@ -523,6 +523,7 @@ function learndash_topic_dots( $lesson_id, $show_text = false, $type = 'dots', $
  * Gets the topics list for a lesson.
  *
  * @since 2.1.0
+ * @since 5.0.0 Removed the option to use `learndash_get_topic_list_legacy`.
  *
  * @param int|null $lesson_id The ID of the lesson to get topics.
  * @param int|null $course_id     Course ID.
@@ -530,10 +531,6 @@ function learndash_topic_dots( $lesson_id, $show_text = false, $type = 'dots', $
  * @return array An array of topics list.
  */
 function learndash_get_topic_list( $lesson_id = null, $course_id = null ) {
-	if ( ( defined( 'LEARNDASH_COURSE_FUNCTIONS_LEGACY' ) ) && ( true === LEARNDASH_COURSE_FUNCTIONS_LEGACY ) ) {
-		return learndash_get_topic_list_legacy( $lesson_id, $course_id );
-	}
-
 	$course_topics = array();
 
 	if ( empty( $course_id ) ) {
@@ -563,6 +560,7 @@ function learndash_get_topic_list( $lesson_id = null, $course_id = null ) {
  * @global WP_Post $post Global post object.
  *
  * @since 2.1.0
+ * @since 5.0.0 Removed the option to use `learndash_get_global_quiz_list_legacy`.
  *
  * @param int|null $id An ID of the resource.
  *
@@ -573,10 +571,6 @@ function learndash_get_global_quiz_list( $id = null ) {
 
 	$course_id = learndash_get_course_id( $id );
 	if ( ! empty( $course_id ) ) {
-		if ( ( defined( 'LEARNDASH_COURSE_FUNCTIONS_LEGACY' ) ) && ( true === LEARNDASH_COURSE_FUNCTIONS_LEGACY ) ) {
-			return learndash_get_global_quiz_list_legacy( $id );
-		}
-
 		$quizzes = learndash_course_get_quizzes( $course_id, $course_id );
 	}
 	return $quizzes;
@@ -586,6 +580,7 @@ function learndash_get_global_quiz_list( $id = null ) {
  * Gets the lesson list output for a course.
  *
  * @since 2.1.0
+ * @since 5.0.0 Removed the option to use `learndash_get_course_lessons_list_legacy`.
  *
  * @param int|WP_Post|null $course_id  Optional. The course ID or `WP_Post` object. Default null.
  * @param int|null         $user_id    Optional. User ID. Default null.
@@ -594,10 +589,6 @@ function learndash_get_global_quiz_list( $id = null ) {
  * @return array The lesson list array.
  */
 function learndash_get_course_lessons_list( $course_id = null, $user_id = null, $query_args = array() ) {
-	if ( ( defined( 'LEARNDASH_COURSE_FUNCTIONS_LEGACY' ) ) && ( true === LEARNDASH_COURSE_FUNCTIONS_LEGACY ) ) {
-		return learndash_get_course_lessons_list_legacy( $course_id, $user_id, $query_args );
-	}
-
 	$lessons = array();
 
 	if ( empty( $user_id ) ) {
@@ -746,17 +737,14 @@ function learndash_get_course_lessons_list( $course_id = null, $user_id = null, 
  * Gets the quiz list output for a course.
  *
  * @since 2.1.0
+ * @since 5.0.0 Removed the option to use `learndash_get_course_quiz_list_legacy`.
  *
  * @param int|WP_Post|null $course  Optional. The `WP_Post` course object or course ID. Default null.
  * @param int|null         $user_id Optional. User ID. Default null.
  *
- * @return array|string The quiz list HTML output.
+ * @return array{sno: int, id: int, post: WP_Post, permalink: string, class: string, status: string, sample: string, sub_title: string, ld_lesson_access_from: string}[] An array of quiz items.
  */
 function learndash_get_course_quiz_list( $course = null, $user_id = null ) {
-	if ( ( defined( 'LEARNDASH_COURSE_FUNCTIONS_LEGACY' ) ) && ( true === LEARNDASH_COURSE_FUNCTIONS_LEGACY ) ) {
-		return learndash_get_course_quiz_list_legacy( $course, $user_id );
-	}
-
 	$quizzes = array();
 
 	if ( is_a( $course, 'WP_Post' ) ) {
@@ -811,18 +799,15 @@ function learndash_get_course_quiz_list( $course = null, $user_id = null ) {
  * Gets the quiz list output for a lesson/topic.
  *
  * @since 2.1.0
+ * @since 5.0.0 Removed the option to use `learndash_get_lesson_quiz_list_legacy`.
  *
  * @param int|WP_Post $lesson    The `WP_Post` lesson/topic object or ID.
  * @param int|null    $user_id   Optional. User ID. Default null.
  * @param int|null    $course_id Optional. Course ID. Default null.
  *
- * @return array|string The lesson quiz list HTML output.
+ * @return array{sno: int, id: int, post: WP_Post, permalink: string, class: string, status: string, sample: string, sub_title: string, ld_lesson_access_from: string}[] An array of quiz items.
  */
 function learndash_get_lesson_quiz_list( $lesson, $user_id = null, $course_id = null ) {
-	if ( ( defined( 'LEARNDASH_COURSE_FUNCTIONS_LEGACY' ) ) && ( true === LEARNDASH_COURSE_FUNCTIONS_LEGACY ) ) {
-		return learndash_get_lesson_quiz_list_legacy( $lesson, $user_id, $course_id );
-	}
-
 	$quizzes   = array();
 	$lesson_id = 0;
 

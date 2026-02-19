@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Issuing;
 
 /**
@@ -35,25 +34,20 @@ namespace StellarWP\Learndash\Stripe\Issuing;
 class Card extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'issuing.card';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
     use \StellarWP\Learndash\Stripe\ApiOperations\Update;
-
     const CANCELLATION_REASON_DESIGN_REJECTED = 'design_rejected';
     const CANCELLATION_REASON_LOST = 'lost';
     const CANCELLATION_REASON_STOLEN = 'stolen';
-
     const REPLACEMENT_REASON_DAMAGED = 'damaged';
     const REPLACEMENT_REASON_EXPIRED = 'expired';
     const REPLACEMENT_REASON_LOST = 'lost';
     const REPLACEMENT_REASON_STOLEN = 'stolen';
-
     const STATUS_ACTIVE = 'active';
     const STATUS_CANCELED = 'canceled';
     const STATUS_INACTIVE = 'inactive';
-
     const TYPE_PHYSICAL = 'physical';
     const TYPE_VIRTUAL = 'virtual';
 }

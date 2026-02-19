@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -58,22 +57,18 @@ namespace StellarWP\Learndash\Stripe;
 class Source extends ApiResource
 {
     const OBJECT_NAME = 'source';
-
-    use ApiOperations\Create;
-    use ApiOperations\Retrieve;
-    use ApiOperations\Update;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Update;
     const FLOW_CODE_VERIFICATION = 'code_verification';
     const FLOW_NONE = 'none';
     const FLOW_RECEIVER = 'receiver';
     const FLOW_REDIRECT = 'redirect';
-
     const STATUS_CANCELED = 'canceled';
     const STATUS_CHARGEABLE = 'chargeable';
     const STATUS_CONSUMED = 'consumed';
     const STATUS_FAILED = 'failed';
     const STATUS_PENDING = 'pending';
-
     const TYPE_ACH_CREDIT_TRANSFER = 'ach_credit_transfer';
     const TYPE_ACH_DEBIT = 'ach_debit';
     const TYPE_ACSS_DEBIT = 'acss_debit';
@@ -93,12 +88,9 @@ class Source extends ApiResource
     const TYPE_SOFORT = 'sofort';
     const TYPE_THREE_D_SECURE = 'three_d_secure';
     const TYPE_WECHAT = 'wechat';
-
     const USAGE_REUSABLE = 'reusable';
     const USAGE_SINGLE_USE = 'single_use';
-
-    use ApiOperations\NestedResource;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\NestedResource;
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -111,33 +103,24 @@ class Source extends ApiResource
     public function detach($params = null, $opts = null)
     {
         self::_validateParams($params);
-
         $id = $this['id'];
         if (!$id) {
             $class = static::class;
-            $msg = "Could not determine which URL to request: {$class} instance "
-             . "has invalid ID: {$id}";
-
+            $msg = "Could not determine which URL to request: {$class} instance " . "has invalid ID: {$id}";
             throw new Exception\UnexpectedValueException($msg, null);
         }
-
         if ($this['customer']) {
             $base = Customer::classUrl();
-            $parentExtn = \urlencode(Util\Util::utf8($this['customer']));
-            $extn = \urlencode(Util\Util::utf8($id));
+            $parentExtn = \urlencode(\StellarWP\Learndash\Stripe\Util\Util::utf8($this['customer']));
+            $extn = \urlencode(\StellarWP\Learndash\Stripe\Util\Util::utf8($id));
             $url = "{$base}/{$parentExtn}/sources/{$extn}";
-
             list($response, $opts) = $this->_request('delete', $url, $params, $opts);
             $this->refreshFrom($response, $opts);
-
             return $this;
         }
-        $message = 'This source object does not appear to be currently attached '
-               . 'to a customer object.';
-
+        $message = 'This source object does not appear to be currently attached ' . 'to a customer object.';
         throw new Exception\UnexpectedValueException($message);
     }
-
     /**
      * @param string $id
      * @param null|array $params
@@ -153,10 +136,8 @@ class Source extends ApiResource
         list($response, $opts) = static::_staticRequest('get', $url, $params, $opts);
         $obj = \StellarWP\Learndash\Stripe\Util\Util::convertToStripeObject($response->json, $opts);
         $obj->setLastResponse($response);
-
         return $obj;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -170,7 +151,6 @@ class Source extends ApiResource
         $url = $this->instanceUrl() . '/verify';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
 }

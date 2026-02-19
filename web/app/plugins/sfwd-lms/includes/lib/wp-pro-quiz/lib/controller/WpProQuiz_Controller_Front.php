@@ -69,7 +69,7 @@ class WpProQuiz_Controller_Front {
 			wp_enqueue_script(
 				'wpProQuiz_front_javascript',
 				plugins_url( 'js/wpProQuiz_front' . learndash_min_asset() . '.js', WPPROQUIZ_FILE ),
-				[ 'jquery', 'jquery-ui-sortable', 'learndash-sortable-script' ],
+				[ 'jquery', 'jquery-ui-sortable', 'learndash-sortable-script', 'wp-i18n' ],
 				LEARNDASH_SCRIPT_VERSION_TOKEN,
 				$footer
 			);

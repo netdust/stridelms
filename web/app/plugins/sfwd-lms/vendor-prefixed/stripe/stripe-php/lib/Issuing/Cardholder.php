@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Issuing;
 
 /**
@@ -29,16 +28,13 @@ namespace StellarWP\Learndash\Stripe\Issuing;
 class Cardholder extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'issuing.cardholder';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
     use \StellarWP\Learndash\Stripe\ApiOperations\Update;
-
     const STATUS_ACTIVE = 'active';
     const STATUS_BLOCKED = 'blocked';
     const STATUS_INACTIVE = 'inactive';
-
     const TYPE_COMPANY = 'company';
     const TYPE_INDIVIDUAL = 'individual';
 }

@@ -85,7 +85,7 @@ var learnDashProPanel = jQuery( function ( $ ) {
 
 				if ( typeof widgetObjects['reporting'] !== 'undefined' ) {
 					var reportingContainer = $( '.propanel-reporting', widgetObjects['reporting'] );
-		
+
 					if ( currentFilters.type == 'group' ) {
 						loadTemplate( reportingContainer, 'group-reporting' );
 					} else if ( currentFilters.type == 'course' ) {
@@ -1056,7 +1056,7 @@ var learnDashProPanel = jQuery( function ( $ ) {
 				).done( ajaxCallback );
 
 				return response;
-			});	
+			});
 		} else {
 			return $.when(
 				$.ajax( ajaxData )
@@ -1168,14 +1168,14 @@ var learnDashProPanel = jQuery( function ( $ ) {
 
 	function downloadReporting(e) {
 		e.stopImmediatePropagation();
-		var data_template 	= $(e.target).attr('data-template');
-		var data_slug 		= $(e.target).attr('data-slug');
-		var data_nonce 		= $(e.target).attr('data-nonce');
-		var updateElement 	= e.target;
+		var data_template 	= $(e.currentTarget).attr('data-template');
+		var data_slug 		= $(e.currentTarget).attr('data-slug');
+		var data_nonce 		= $(e.currentTarget).attr('data-nonce');
+		var updateElement 	= e.currentTarget;
 
 		if ( typeof data_template !== 'undefined' ) {
 
-			jQuery(e.target).prop('disabled', true);
+			jQuery(e.currentTarget).prop('disabled', true);
 
 			var post_data = {
 				'init': 1,
@@ -1295,11 +1295,11 @@ var learnDashProPanel = jQuery( function ( $ ) {
 
 	function downloadActivity(e) {
 		e.stopImmediatePropagation();
-		var data_template 	= $(e.target).attr('data-template');
-		var data_slug 		= $(e.target).attr('data-slug');
-		var data_nonce 		= $(e.target).attr('data-nonce');
+		var data_template 	= $(e.currentTarget).attr('data-template');
+		var data_slug 		= $(e.currentTarget).attr('data-slug');
+		var data_nonce 		= $(e.currentTarget).attr('data-nonce');
 
-		var updateElement 	= e.target;
+		var updateElement 	= e.currentTarget;
 
 		// If we are NOT running under the Dashboard we need to get the filters data from the parent element in order to properly run the AJAX
 		if ( !jQuery('#dashboard-widgets').length ) {

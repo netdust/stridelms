@@ -39,7 +39,9 @@ final class QuoteService extends AbstractService
 
     protected function init(): void
     {
-        // No hooks needed - quote creation triggered by handler
+        // Instantiate quote-related handlers
+        ntdst_get(\Stride\Handlers\EnrollmentQuoteHandler::class);
+        ntdst_get(\Stride\Handlers\QuoteUpdateHandler::class);
     }
 
     /**

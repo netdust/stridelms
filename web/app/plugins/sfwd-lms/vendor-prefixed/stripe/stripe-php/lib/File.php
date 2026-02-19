@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -28,10 +27,8 @@ namespace StellarWP\Learndash\Stripe;
 class File extends ApiResource
 {
     const OBJECT_NAME = 'file';
-
-    use ApiOperations\All;
-    use ApiOperations\Retrieve;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
     const PURPOSE_ACCOUNT_REQUIREMENT = 'account_requirement';
     const PURPOSE_ADDITIONAL_VERIFICATION = 'additional_verification';
     const PURPOSE_BUSINESS_ICON = 'business_icon';
@@ -47,17 +44,14 @@ class File extends ApiResource
     const PURPOSE_SIGMA_SCHEDULED_QUERY = 'sigma_scheduled_query';
     const PURPOSE_TAX_DOCUMENT_USER_UPLOAD = 'tax_document_user_upload';
     const PURPOSE_TERMINAL_READER_SPLASHSCREEN = 'terminal_reader_splashscreen';
-
     // This resource can have two different object names. In latter API
     // versions, only `file` is used, but since stripe-php may be used with
     // any API version, we need to support deserializing the older
     // `file_upload` object into the same class.
     const OBJECT_NAME_ALT = 'file_upload';
-
-    use ApiOperations\Create {
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create {
         create as protected _create;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -75,7 +69,6 @@ class File extends ApiResource
         // Manually flatten params, otherwise curl's multipart encoder will
         // choke on nested arrays.
         $flatParams = \array_column(\StellarWP\Learndash\Stripe\Util\Util::flattenParams($params), 1, 0);
-
         return static::_create($flatParams, $opts);
     }
 }

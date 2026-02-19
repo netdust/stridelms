@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Sigma;
 
 /**
@@ -25,10 +24,8 @@ namespace StellarWP\Learndash\Stripe\Sigma;
 class ScheduledQueryRun extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'scheduled_query_run';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
-
     public static function classUrl()
     {
         return '/v1/sigma/scheduled_query_runs';

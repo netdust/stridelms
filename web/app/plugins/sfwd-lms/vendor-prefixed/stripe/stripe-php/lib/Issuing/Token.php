@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Issuing;
 
 /**
@@ -23,19 +22,15 @@ namespace StellarWP\Learndash\Stripe\Issuing;
 class Token extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'issuing.token';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
     use \StellarWP\Learndash\Stripe\ApiOperations\Update;
-
     const NETWORK_MASTERCARD = 'mastercard';
     const NETWORK_VISA = 'visa';
-
     const STATUS_ACTIVE = 'active';
     const STATUS_DELETED = 'deleted';
     const STATUS_REQUESTED = 'requested';
     const STATUS_SUSPENDED = 'suspended';
-
     const WALLET_PROVIDER_APPLE_PAY = 'apple_pay';
     const WALLET_PROVIDER_GOOGLE_PAY = 'google_pay';
     const WALLET_PROVIDER_SAMSUNG_PAY = 'samsung_pay';

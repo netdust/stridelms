@@ -13,6 +13,7 @@ import { registerBlockType } from '@wordpress/blocks';
 import {
 	InspectorControls,
 	InspectorAdvancedControls,
+	useBlockProps,
 } from '@wordpress/block-editor';
 import { Fragment } from '@wordpress/element';
 import {
@@ -24,6 +25,7 @@ import {
 	// eslint-disable-next-line no-unused-vars
 	Button,
 	BaseControl,
+	Disabled,
 } from '@wordpress/components';
 import ServerSideRender from '@wordpress/server-side-render';
 import FilterPanelBody from '../components/filter-panel-body.js';
@@ -56,6 +58,7 @@ registerBlockType( 'learndash/ld-course-grid', {
 	supports: {
 		customClassName: true,
 	},
+	apiVersion: 3,
 	attributes: {
 		// Query
 		post_type: {
@@ -350,6 +353,8 @@ registerBlockType( 'learndash/ld-course-grid', {
 			clientId,
 			setAttributes,
 		} = props;
+
+		const blockProps = useBlockProps();
 
 		if ( ! id || id === '' ) {
 			// eslint-disable-next-line camelcase
@@ -1525,7 +1530,14 @@ registerBlockType( 'learndash/ld-course-grid', {
 			} );
 		}
 
-		return [ inspectorControls, do_serverside_render( props.attributes ) ];
+		return (
+			<div { ...blockProps }>
+				{ inspectorControls }
+				<Disabled>
+					{ do_serverside_render( props.attributes ) }
+				</Disabled>
+			</div>
+		);
 	},
 
 	// eslint-disable-next-line no-unused-vars

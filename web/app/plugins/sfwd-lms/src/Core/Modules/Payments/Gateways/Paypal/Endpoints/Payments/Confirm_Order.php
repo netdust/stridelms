@@ -296,7 +296,7 @@ class Confirm_Order extends Endpoint {
 				'permission_callback' => [ $this, 'check_permission' ],
 				'summary'             => sprintf(
 					// translators: %s: order label.
-					__( 'Confirm a PayPal %s.', 'learndash' ),
+					__( 'Confirm a PayPal %s', 'learndash' ),
 					learndash_get_custom_label_lower( 'order' )
 				),
 				'description'         => sprintf(

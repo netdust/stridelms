@@ -345,19 +345,6 @@
   grid-gap: var(--ld-spacer-fixed-6);
   grid-template-areas: "header" "sidebar" "content";
   grid-template-columns: 1fr;
-  /**
-   * Positions any injected children from a hook to display
-   * after the content grid-area.
-   *
-   * This checks specifically whether the element is not the header,
-   * sidebar, or content elements and that they're not a script or style tag.
-   *
-   * Checking for script and style tags is important as otherwise
-   * they'll be rendered as text!
-   *
-   * It is possible that 3rd parties may need to make CSS adjustments for this
-   * to work well with their injected content, but this should cover most cases.
-   */
 }
 .ld-layout,
 .ld-layout * {
@@ -400,14 +387,31 @@
   grid-area: content;
   gap: var(--ld-spacer-6);
 }
+.ld-layout {
+  /**
+   * Positions any injected children from a hook to display
+   * after the content grid-area.
+   *
+   * This checks specifically whether the element is not the header,
+   * sidebar, or content elements and that they're not a script or style tag.
+   *
+   * Checking for script and style tags is important as otherwise
+   * they'll be rendered as text!
+   *
+   * It is possible that 3rd parties may need to make CSS adjustments for this
+   * to work well with their injected content, but this should cover most cases.
+   */
+}
 .ld-layout > *:not(.ld-layout__header):not(.ld-layout__sidebar):not(.ld-layout__content):not(script):not(style) {
   display: flex;
   flex-direction: column;
   grid-column: 1/2;
-  grid-row-start: span 1;
 }
 .ld-layout--no-sidebar .ld-layout > *:not(.ld-layout__header):not(.ld-layout__sidebar):not(.ld-layout__content):not(script):not(style) {
   grid-column: 1/-1;
+}
+.ld-layout > *:not(.ld-layout__header):not(.ld-layout__sidebar):not(.ld-layout__content):not(script):not(style) {
+  grid-row-start: span 1;
 }
 
 .ld-form .ld-form__field {
@@ -849,10 +853,6 @@
   gap: var(--ld-spacer-fixed-1);
   padding: var(--ld-spacer-2) var(--ld-spacer-fixed-0) var(--ld-spacer-1) var(--ld-spacer-fixed-0);
   position: relative;
-  /**
-   * Hover styles come first as Hovering over an active item
-   * should keep the active styles.
-   */
 }
 .ld-breakpoint--small .ld-tab-bar__tab {
   padding: var(--ld-spacer-1) var(--ld-spacer-fixed-1) var(--ld-spacer-2) var(--ld-spacer-fixed-0);
@@ -882,6 +882,12 @@
 }
 .ld-tab-bar__tab:hover .ld-svgicon, .ld-tab-bar__tab:focus .ld-svgicon, .ld-tab-bar__tab:focus-visible .ld-svgicon, .ld-tab-bar__tab[aria-selected=true] .ld-svgicon {
   color: inherit;
+}
+.ld-tab-bar__tab {
+  /**
+   * Hover styles come first as Hovering over an active item
+   * should keep the active styles.
+   */
 }
 .ld-tab-bar__tab:hover {
   background-color: unset;
@@ -1589,6 +1595,11 @@
   display: flex;
   flex-direction: column;
   gap: var(--ld-spacer-2);
+}
+.ld-enrollment__join form {
+  margin: 0;
+}
+.ld-enrollment__join {
   /**
    * Some themes, like Kadence, may style both
    * .button and input[type="submit"] at the same time,
@@ -1596,20 +1607,6 @@
    *
    * Nesting the selector like this ensures that
    * we're specific enough to override theme styles.
-   */
-}
-.ld-enrollment__join form {
-  margin: 0;
-}
-.ld-enrollment__join .ld-enrollment__join-button {
-  /**
-   * We are intentionally using a screen width breakpoint here.
-   *
-   * This is because we cannot be sure what container size this
-   * mixin will be used in ahead of time.
-   *
-   * We have decided to handle mobile vs desktop button styles based on
-   * screen width rather than container width globally.
    */
 }
 .ld-enrollment__join .ld-enrollment__join-button, .ld-enrollment__join .ld-enrollment__join-button:active, .ld-enrollment__join .ld-enrollment__join-button:focus-visible, .ld-enrollment__join .ld-enrollment__join-button:focus-within, .ld-enrollment__join .ld-enrollment__join-button:focus, .ld-enrollment__join .ld-enrollment__join-button:hover {
@@ -1639,6 +1636,17 @@
   white-space: normal;
   width: auto;
   word-break: normal;
+}
+.ld-enrollment__join .ld-enrollment__join-button {
+  /**
+   * We are intentionally using a screen width breakpoint here.
+   *
+   * This is because we cannot be sure what container size this
+   * mixin will be used in ahead of time.
+   *
+   * We have decided to handle mobile vs desktop button styles based on
+   * screen width rather than container width globally.
+   */
 }
 @media (min-width: 720px) {
   .ld-enrollment__join .ld-enrollment__join-button, .ld-enrollment__join .ld-enrollment__join-button:active, .ld-enrollment__join .ld-enrollment__join-button:focus-visible, .ld-enrollment__join .ld-enrollment__join-button:focus-within, .ld-enrollment__join .ld-enrollment__join-button:focus, .ld-enrollment__join .ld-enrollment__join-button:hover {
@@ -1749,22 +1757,6 @@
 .ld-accordion {
   display: flex;
   flex-direction: column;
-  /**
-   * Ensures that we cannot tab into a collapsed accordion.
-   *
-   * This happens because [hidden] is a browser-level style
-   * and is considered very low specificity.
-   *
-   * If we force it to be display: none, it looks the same
-   * and ensures that we cannot tab into the hidden content even
-   * if the container is normally something like display: flex.
-   *
-   * https://css-tricks.com/the-hidden-attribute-is-visibly-weak/
-   */
-  /**
-   * TODO: If this gets added to the global button styles, we should
-   * switch to using mixins here.
-   */
 }
 .ld-accordion__header {
   align-items: flex-start;
@@ -1794,6 +1786,20 @@
 .ld-accordion__section, .ld-accordion__item-steps {
   gap: var(--ld-spacer-2);
 }
+.ld-accordion {
+  /**
+   * Ensures that we cannot tab into a collapsed accordion.
+   *
+   * This happens because [hidden] is a browser-level style
+   * and is considered very low specificity.
+   *
+   * If we force it to be display: none, it looks the same
+   * and ensures that we cannot tab into the hidden content even
+   * if the container is normally something like display: flex.
+   *
+   * https://css-tricks.com/the-hidden-attribute-is-visibly-weak/
+   */
+}
 .ld-accordion__item-steps[hidden=hidden] {
   display: none;
 }
@@ -1814,10 +1820,6 @@
   overflow: hidden;
   position: relative;
   transition: all 0.3s ease;
-  /**
-   * Kept for backwards compatibility with LD30 Modern templates
-   * from before 4.21.3.
-   */
 }
 .ld-accordion__item-steps.ld-expanded {
   /**
@@ -1825,6 +1827,12 @@
    * outside the collapsible element.
    */
   overflow: visible;
+}
+.ld-accordion__item-steps {
+  /**
+   * Kept for backwards compatibility with LD30 Modern templates
+   * from before 4.21.3.
+   */
 }
 .ld-accordion__item-steps [data-ld-tooltip-text] {
   /**
@@ -1856,6 +1864,12 @@
    * interfere with how height and overflow are calculated.
    */
   padding: var(--ld-spacer-2) 0;
+}
+.ld-accordion {
+  /**
+   * TODO: If this gets added to the global button styles, we should
+   * switch to using mixins here.
+   */
 }
 .ld-accordion__expand-button, .ld-accordion__expand-button:hover, .ld-accordion__expand-button:focus {
   all: unset;
@@ -1934,13 +1948,15 @@
   line-height: var(--ld-typography-desktop-caption-height);
   padding: var(--ld-spacer-2) var(--ld-spacer-fixed-5);
   text-transform: uppercase;
+}
+.ld-accordion.ld-breakpoint--small .ld-accordion__item .ld-accordion__expand-button {
+  padding: var(--ld-spacer-2) var(--ld-spacer-fixed-2) var(--ld-spacer-2) var(--ld-spacer-fixed-5);
+}
+.ld-accordion__item .ld-accordion__expand-button {
   /**
    * On mobile, always hide the Expand/Collapse text visually.
    * Screen readers can always see it when styled this way.
    */
-}
-.ld-accordion.ld-breakpoint--small .ld-accordion__item .ld-accordion__expand-button {
-  padding: var(--ld-spacer-2) var(--ld-spacer-fixed-2) var(--ld-spacer-2) var(--ld-spacer-fixed-5);
 }
 .ld-accordion__item .ld-accordion__expand-button .ld-accordion__expand-button-text {
   border: 0;
@@ -1976,6 +1992,9 @@
   top: var(--ld-spacer-0);
   width: 1px;
 }
+.ld-accordion.ld-breakpoint--small .ld-accordion__item--lesson, .ld-accordion.ld-breakpoint--small .ld-accordion__item--topic {
+  grid-template-columns: auto minmax(160px, min-content);
+}
 .ld-accordion.ld-breakpoint--small .ld-accordion__item {
   /**
    * On Desktop, show the Expand/Collapse text:
@@ -1984,9 +2003,6 @@
    * 2. The user is focused somewhere within the Lesson.
    * 3. The Lesson is expanded.
    */
-}
-.ld-accordion.ld-breakpoint--small .ld-accordion__item--lesson, .ld-accordion.ld-breakpoint--small .ld-accordion__item--topic {
-  grid-template-columns: auto minmax(160px, min-content);
 }
 .ld-accordion.ld-breakpoint--small .ld-accordion__item:hover .ld-accordion__expand-button .ld-accordion__expand-button-text, .ld-accordion.ld-breakpoint--small .ld-accordion__item:focus-within .ld-accordion__expand-button .ld-accordion__expand-button-text {
   clip: auto;
@@ -2015,13 +2031,15 @@
 }
 .ld-accordion__item-header--lesson, .ld-accordion__item-header--topic, .ld-accordion__item-header--quiz {
   position: relative;
+}
+.ld-accordion.ld-breakpoint--small .ld-accordion__item-header--lesson, .ld-accordion.ld-breakpoint--small .ld-accordion__item-header--topic, .ld-accordion.ld-breakpoint--small .ld-accordion__item-header--quiz {
+  position: inherit;
+}
+.ld-accordion__item-header--lesson, .ld-accordion__item-header--topic, .ld-accordion__item-header--quiz {
   /**
    * Kept for backwards compatibility with LD30 Modern templates
    * from before 4.21.3.
    */
-}
-.ld-accordion.ld-breakpoint--small .ld-accordion__item-header--lesson, .ld-accordion.ld-breakpoint--small .ld-accordion__item-header--topic, .ld-accordion.ld-breakpoint--small .ld-accordion__item-header--quiz {
-  position: inherit;
 }
 .ld-accordion__item-header--lesson [data-ld-tooltip-text], .ld-accordion__item-header--topic [data-ld-tooltip-text], .ld-accordion__item-header--quiz [data-ld-tooltip-text] {
   /**
@@ -2051,13 +2069,15 @@
 }
 .ld-accordion__item-header--lesson, .ld-accordion__item-header--topic {
   padding: var(--ld-spacer-1) 0 var(--ld-spacer-fixed-1) var(--ld-spacer-2);
+}
+.ld-accordion.ld-breakpoint--small .ld-accordion__item-header--lesson, .ld-accordion.ld-breakpoint--small .ld-accordion__item-header--topic {
+  padding: var(--ld-spacer-2) var(--ld-spacer-fixed-2) var(--ld-spacer-1) var(--ld-spacer-fixed-2);
+}
+.ld-accordion__item-header--lesson, .ld-accordion__item-header--topic {
   /**
    * Kept for backwards compatibility with LD30 Modern templates
    * from before 4.21.3.
    */
-}
-.ld-accordion.ld-breakpoint--small .ld-accordion__item-header--lesson, .ld-accordion.ld-breakpoint--small .ld-accordion__item-header--topic {
-  padding: var(--ld-spacer-2) var(--ld-spacer-fixed-2) var(--ld-spacer-1) var(--ld-spacer-fixed-2);
 }
 .ld-accordion__item-header--lesson [data-ld-tooltip-text]::after, .ld-accordion__item-header--topic [data-ld-tooltip-text]::after {
   /**
@@ -2090,13 +2110,6 @@
   font-size: var(--ld-typography-desktop-h6-size);
   grid-area: title;
   line-height: var(--ld-typography-desktop-h6-height);
-  /**
-   * Item Title Tooltips, specifically,
-   * need to use styling closer to the default Tooltip styling.
-   *
-   * Kept for backwards compatibility with LD30 Modern templates
-   * from before 4.21.3.
-   */
 }
 .ld-accordion__item-title:is(a):hover, .ld-accordion__item-title:is(a):focus {
   color: var(--ld-color-brand-primary);
@@ -2105,11 +2118,25 @@
 .ld-accordion__item-title:is(a):focus {
   outline: solid 2px var(--ld-color-brand-primary);
 }
+.ld-accordion__item-title {
+  /**
+   * Item Title Tooltips, specifically,
+   * need to use styling closer to the default Tooltip styling.
+   *
+   * Kept for backwards compatibility with LD30 Modern templates
+   * from before 4.21.3.
+   */
+}
 .ld-accordion__item-title[data-ld-tooltip-text] {
   position: relative;
 }
 .ld-accordion__item-title[data-ld-tooltip-text]::after {
   left: 0;
+}
+.ld-accordion.ld-breakpoint--small .ld-accordion__item-title[data-ld-tooltip-text]::after {
+  left: 0;
+}
+.ld-accordion__item-title[data-ld-tooltip-text]::after {
   /**
    * To account for issues with positioning if the
    * tooltip spills to a second line, we need calculate
@@ -2117,9 +2144,6 @@
    * than 100% of the container.
    */
   transform: translate(-1%, min(24px + var(--ld-spacer-1), 100%));
-}
-.ld-accordion.ld-breakpoint--small .ld-accordion__item-title[data-ld-tooltip-text]::after {
-  left: 0;
 }
 .ld-accordion.ld-breakpoint--small .ld-accordion__item-title[data-ld-tooltip-text]::after {
   transform: translate(0, min(24px + var(--ld-spacer-1), 100%));
@@ -2217,11 +2241,13 @@
    * Kept for backwards compatibility with LD30 Modern templates
    * from before 4.21.3.
    */
-  opacity: 1;
-  position: relative;
 }
 .ld-accordion.ld-breakpoint--small .ld-accordion__item-attribute-label--collapsible[data-ld-tooltip-text] {
   display: inline-block;
+}
+.ld-accordion.ld-breakpoint--small .ld-accordion__item-attribute-label--collapsible {
+  opacity: 1;
+  position: relative;
 }
 .ld-accordion__pagination {
   color: var(--ld-color-system-body-text);
@@ -2335,13 +2361,15 @@
   display: flex;
   gap: var(--ld-spacer-0) var(--ld-spacer-fixed-0);
   padding: var(--ld-spacer-2) var(--ld-spacer-fixed-1);
+}
+.ld-breakpoint--small .ld-alert.ld-alert--modern {
+  padding: var(--ld-spacer-3) var(--ld-spacer-fixed-3);
+}
+.ld-alert.ld-alert--modern {
   /**
    * We need to style the alert types in this way due to the
    * LD30 Classic override above.
    */
-}
-.ld-breakpoint--small .ld-alert.ld-alert--modern {
-  padding: var(--ld-spacer-3) var(--ld-spacer-fixed-3);
 }
 .ld-alert.ld-alert--modern.ld-alert--info {
   background-color: var(--ld-color-semantic-alert-success-background);
@@ -2427,17 +2455,6 @@
 .ld-breakpoint--small .ld-alert--action-button .ld-alert__message {
   margin-top: 0.3125rem;
 }
-.ld-alert__button {
-  /**
-   * We are intentionally using a screen width breakpoint here.
-   *
-   * This is because we cannot be sure what container size this
-   * mixin will be used in ahead of time.
-   *
-   * We have decided to handle mobile vs desktop button styles based on
-   * screen width rather than container width globally.
-   */
-}
 .ld-alert__button, .ld-alert__button:active, .ld-alert__button:focus-visible, .ld-alert__button:focus-within, .ld-alert__button:focus, .ld-alert__button:hover {
   all: unset;
   align-items: center;
@@ -2465,6 +2482,17 @@
   white-space: normal;
   width: auto;
   word-break: normal;
+}
+.ld-alert__button {
+  /**
+   * We are intentionally using a screen width breakpoint here.
+   *
+   * This is because we cannot be sure what container size this
+   * mixin will be used in ahead of time.
+   *
+   * We have decided to handle mobile vs desktop button styles based on
+   * screen width rather than container width globally.
+   */
 }
 @media (min-width: 720px) {
   .ld-alert__button, .ld-alert__button:active, .ld-alert__button:focus-visible, .ld-alert__button:focus-within, .ld-alert__button:focus, .ld-alert__button:hover {
@@ -2524,12 +2552,6 @@
   text-decoration: none;
 }
 
-.ld-breadcrumbs {
-  /**
-   * This has to be a nested selector to override the majority of the default
-   * theme styles.
-   */
-}
 .ld-breadcrumbs.ld-breadcrumbs--modern {
   all: unset;
   border-bottom: 1px solid var(--ld-color-system-border);
@@ -2537,6 +2559,12 @@
   font-weight: var(--ld-typography-font-weight-regular);
   line-height: var(--ld-typography-desktop-body-small-height);
   padding: var(--ld-spacer-fixed-1) 0;
+}
+.ld-breadcrumbs {
+  /**
+   * This has to be a nested selector to override the majority of the default
+   * theme styles.
+   */
 }
 .ld-breadcrumbs > .ld-breadcrumbs__items {
   all: unset;
@@ -2608,14 +2636,6 @@
   pointer-events: none;
 }
 
-.ld-assignments {
-  /**
-   * Visually hide the input but keep it accessible to screen readers.
-   *
-   * Using .screen-reader-text here results in an issue where the
-   * input becomes visible on focus.
-   */
-}
 .ld-assignments__header {
   display: flex;
   flex-direction: column;
@@ -2708,17 +2728,6 @@
   flex-wrap: nowrap;
   gap: var(--ld-spacer-5) var(--ld-spacer-fixed-5);
 }
-.ld-assignments__list-item-action {
-  /**
-   * We are intentionally using a screen width breakpoint here.
-   *
-   * This is because we cannot be sure what container size this
-   * mixin will be used in ahead of time.
-   *
-   * We have decided to handle mobile vs desktop button styles based on
-   * screen width rather than container width globally.
-   */
-}
 .ld-assignments__list-item-action, .ld-assignments__list-item-action:active, .ld-assignments__list-item-action:focus-visible, .ld-assignments__list-item-action:focus-within, .ld-assignments__list-item-action:focus, .ld-assignments__list-item-action:hover {
   all: unset;
   align-items: center;
@@ -2746,6 +2755,17 @@
   white-space: normal;
   width: auto;
   word-break: normal;
+}
+.ld-assignments__list-item-action {
+  /**
+   * We are intentionally using a screen width breakpoint here.
+   *
+   * This is because we cannot be sure what container size this
+   * mixin will be used in ahead of time.
+   *
+   * We have decided to handle mobile vs desktop button styles based on
+   * screen width rather than container width globally.
+   */
 }
 @media (min-width: 720px) {
   .ld-assignments__list-item-action, .ld-assignments__list-item-action:active, .ld-assignments__list-item-action:focus-visible, .ld-assignments__list-item-action:focus-within, .ld-assignments__list-item-action:focus, .ld-assignments__list-item-action:hover {
@@ -2900,6 +2920,14 @@
   gap: 0 var(--ld-spacer-fixed-0);
   line-height: var(--ld-typography-desktop-caption-height);
 }
+.ld-assignments {
+  /**
+   * Visually hide the input but keep it accessible to screen readers.
+   *
+   * Using .screen-reader-text here results in an issue where the
+   * input becomes visible on focus.
+   */
+}
 .ld-assignments__upload-form-file-input {
   bottom: 0;
   cursor: pointer;
@@ -2912,26 +2940,6 @@
 }
 .ld-assignments__upload-form-file-input:focus {
   outline: none;
-}
-.ld-assignments__upload-form-submit {
-  /**
-   * We are intentionally using a screen width breakpoint here.
-   *
-   * This is because we cannot be sure what container size this
-   * mixin will be used in ahead of time.
-   *
-   * We have decided to handle mobile vs desktop button styles based on
-   * screen width rather than container width globally.
-   */
-  /**
-   * We are intentionally using a screen width breakpoint here.
-   *
-   * This is because this we cannot be sure what container size this
-   * mixin will be used in ahead of time.
-   *
-   * We have decided to handle mobile vs desktop button styles based on
-   * screen width rather than container width globally.
-   */
 }
 .ld-assignments__upload-form-submit, .ld-assignments__upload-form-submit:active, .ld-assignments__upload-form-submit:focus-visible, .ld-assignments__upload-form-submit:focus-within, .ld-assignments__upload-form-submit:focus, .ld-assignments__upload-form-submit:hover {
   all: unset;
@@ -2960,6 +2968,17 @@
   white-space: normal;
   width: auto;
   word-break: normal;
+}
+.ld-assignments__upload-form-submit {
+  /**
+   * We are intentionally using a screen width breakpoint here.
+   *
+   * This is because we cannot be sure what container size this
+   * mixin will be used in ahead of time.
+   *
+   * We have decided to handle mobile vs desktop button styles based on
+   * screen width rather than container width globally.
+   */
 }
 @media (min-width: 720px) {
   .ld-assignments__upload-form-submit, .ld-assignments__upload-form-submit:active, .ld-assignments__upload-form-submit:focus-visible, .ld-assignments__upload-form-submit:focus-within, .ld-assignments__upload-form-submit:focus, .ld-assignments__upload-form-submit:hover {
@@ -3008,6 +3027,17 @@
 }
 .ld-assignments__upload-form-submit, .ld-assignments__upload-form-submit:active, .ld-assignments__upload-form-submit:focus-visible, .ld-assignments__upload-form-submit:focus-within, .ld-assignments__upload-form-submit:focus, .ld-assignments__upload-form-submit:hover {
   padding-right: var(--ld-spacer-fixed-2);
+}
+.ld-assignments__upload-form-submit {
+  /**
+   * We are intentionally using a screen width breakpoint here.
+   *
+   * This is because this we cannot be sure what container size this
+   * mixin will be used in ahead of time.
+   *
+   * We have decided to handle mobile vs desktop button styles based on
+   * screen width rather than container width globally.
+   */
 }
 @media (min-width: 720px) {
   .ld-assignments__upload-form-submit, .ld-assignments__upload-form-submit:active, .ld-assignments__upload-form-submit:focus-visible, .ld-assignments__upload-form-submit:focus-within, .ld-assignments__upload-form-submit:focus, .ld-assignments__upload-form-submit:hover {
@@ -3104,7 +3134,6 @@
   grid-template-areas: "progress progress" "previous next" "back-to-course back-to-course";
   justify-content: space-between;
   padding: var(--ld-spacer-2) 0;
-  /* stylelint-disable-next-line selector-class-pattern -- Existing class. */
 }
 .ld-navigation__progress {
   align-items: flex-start;
@@ -3128,17 +3157,6 @@
 }
 .ld-navigation__label--long {
   display: none;
-}
-.ld-navigation__previous-link, .ld-navigation__next-link, .ld-navigation__back-to-course-link {
-  /**
-   * We are intentionally using a screen width breakpoint here.
-   *
-   * This is because we cannot be sure what container size this
-   * mixin will be used in ahead of time.
-   *
-   * We have decided to handle mobile vs desktop button styles based on
-   * screen width rather than container width globally.
-   */
 }
 .ld-navigation__previous-link, .ld-navigation__previous-link:active, .ld-navigation__previous-link:focus-visible, .ld-navigation__previous-link:focus-within, .ld-navigation__previous-link:focus, .ld-navigation__previous-link:hover, .ld-navigation__next-link, .ld-navigation__next-link:active, .ld-navigation__next-link:focus-visible, .ld-navigation__next-link:focus-within, .ld-navigation__next-link:focus, .ld-navigation__next-link:hover, .ld-navigation__back-to-course-link, .ld-navigation__back-to-course-link:active, .ld-navigation__back-to-course-link:focus-visible, .ld-navigation__back-to-course-link:focus-within, .ld-navigation__back-to-course-link:focus, .ld-navigation__back-to-course-link:hover {
   all: unset;
@@ -3167,6 +3185,17 @@
   white-space: normal;
   width: auto;
   word-break: normal;
+}
+.ld-navigation__previous-link, .ld-navigation__next-link, .ld-navigation__back-to-course-link {
+  /**
+   * We are intentionally using a screen width breakpoint here.
+   *
+   * This is because we cannot be sure what container size this
+   * mixin will be used in ahead of time.
+   *
+   * We have decided to handle mobile vs desktop button styles based on
+   * screen width rather than container width globally.
+   */
 }
 @media (min-width: 720px) {
   .ld-navigation__previous-link, .ld-navigation__previous-link:active, .ld-navigation__previous-link:focus-visible, .ld-navigation__previous-link:focus-within, .ld-navigation__previous-link:focus, .ld-navigation__previous-link:hover, .ld-navigation__next-link, .ld-navigation__next-link:active, .ld-navigation__next-link:focus-visible, .ld-navigation__next-link:focus-within, .ld-navigation__next-link:focus, .ld-navigation__next-link:hover, .ld-navigation__back-to-course-link, .ld-navigation__back-to-course-link:active, .ld-navigation__back-to-course-link:focus-visible, .ld-navigation__back-to-course-link:focus-within, .ld-navigation__back-to-course-link:focus, .ld-navigation__back-to-course-link:hover {
@@ -3210,6 +3239,9 @@
 .ld-navigation__previous-link:disabled:hover, .ld-navigation__previous-link[aria-disabled=true]:hover, .ld-navigation__next-link:disabled:hover, .ld-navigation__next-link[aria-disabled=true]:hover, .ld-navigation__back-to-course-link:disabled:hover, .ld-navigation__back-to-course-link[aria-disabled=true]:hover {
   background-color: var(--ld-color-system-light-2);
 }
+.ld-navigation__previous-link, .ld-navigation__previous-link:active, .ld-navigation__previous-link:focus-visible, .ld-navigation__previous-link:focus-within, .ld-navigation__previous-link:focus, .ld-navigation__previous-link:hover, .ld-navigation__back-to-course-link, .ld-navigation__back-to-course-link:active, .ld-navigation__back-to-course-link:focus-visible, .ld-navigation__back-to-course-link:focus-within, .ld-navigation__back-to-course-link:focus, .ld-navigation__back-to-course-link:hover {
+  padding-left: var(--ld-spacer-fixed-2);
+}
 .ld-navigation__previous-link, .ld-navigation__back-to-course-link {
   /**
    * We are intentionally using a screen width breakpoint here.
@@ -3221,13 +3253,13 @@
    * screen width rather than container width globally.
    */
 }
-.ld-navigation__previous-link, .ld-navigation__previous-link:active, .ld-navigation__previous-link:focus-visible, .ld-navigation__previous-link:focus-within, .ld-navigation__previous-link:focus, .ld-navigation__previous-link:hover, .ld-navigation__back-to-course-link, .ld-navigation__back-to-course-link:active, .ld-navigation__back-to-course-link:focus-visible, .ld-navigation__back-to-course-link:focus-within, .ld-navigation__back-to-course-link:focus, .ld-navigation__back-to-course-link:hover {
-  padding-left: var(--ld-spacer-fixed-2);
-}
 @media (min-width: 720px) {
   .ld-navigation__previous-link, .ld-navigation__previous-link:active, .ld-navigation__previous-link:focus-visible, .ld-navigation__previous-link:focus-within, .ld-navigation__previous-link:focus, .ld-navigation__previous-link:hover, .ld-navigation__back-to-course-link, .ld-navigation__back-to-course-link:active, .ld-navigation__back-to-course-link:focus-visible, .ld-navigation__back-to-course-link:focus-within, .ld-navigation__back-to-course-link:focus, .ld-navigation__back-to-course-link:hover {
     padding-left: var(--ld-spacer-fixed-3);
   }
+}
+.ld-navigation__next-link, .ld-navigation__next-link:active, .ld-navigation__next-link:focus-visible, .ld-navigation__next-link:focus-within, .ld-navigation__next-link:focus, .ld-navigation__next-link:hover {
+  padding-right: var(--ld-spacer-fixed-2);
 }
 .ld-navigation__next-link {
   /**
@@ -3240,24 +3272,10 @@
    * screen width rather than container width globally.
    */
 }
-.ld-navigation__next-link, .ld-navigation__next-link:active, .ld-navigation__next-link:focus-visible, .ld-navigation__next-link:focus-within, .ld-navigation__next-link:focus, .ld-navigation__next-link:hover {
-  padding-right: var(--ld-spacer-fixed-2);
-}
 @media (min-width: 720px) {
   .ld-navigation__next-link, .ld-navigation__next-link:active, .ld-navigation__next-link:focus-visible, .ld-navigation__next-link:focus-within, .ld-navigation__next-link:focus, .ld-navigation__next-link:hover {
     padding-right: var(--ld-spacer-fixed-3);
   }
-}
-.ld-navigation__next-link--just-completed, .ld-navigation__next-link--no-user {
-  /**
-   * We are intentionally using a screen width breakpoint here.
-   *
-   * This is because we cannot be sure what container size this
-   * mixin will be used in ahead of time.
-   *
-   * We have decided to handle mobile vs desktop button styles based on
-   * screen width rather than container width globally.
-   */
 }
 .ld-navigation__next-link--just-completed, .ld-navigation__next-link--just-completed:active, .ld-navigation__next-link--just-completed:focus-visible, .ld-navigation__next-link--just-completed:focus-within, .ld-navigation__next-link--just-completed:focus, .ld-navigation__next-link--just-completed:hover, .ld-navigation__next-link--no-user, .ld-navigation__next-link--no-user:active, .ld-navigation__next-link--no-user:focus-visible, .ld-navigation__next-link--no-user:focus-within, .ld-navigation__next-link--no-user:focus, .ld-navigation__next-link--no-user:hover {
   all: unset;
@@ -3286,6 +3304,17 @@
   white-space: normal;
   width: auto;
   word-break: normal;
+}
+.ld-navigation__next-link--just-completed, .ld-navigation__next-link--no-user {
+  /**
+   * We are intentionally using a screen width breakpoint here.
+   *
+   * This is because we cannot be sure what container size this
+   * mixin will be used in ahead of time.
+   *
+   * We have decided to handle mobile vs desktop button styles based on
+   * screen width rather than container width globally.
+   */
 }
 @media (min-width: 720px) {
   .ld-navigation__next-link--just-completed, .ld-navigation__next-link--just-completed:active, .ld-navigation__next-link--just-completed:focus-visible, .ld-navigation__next-link--just-completed:focus-within, .ld-navigation__next-link--just-completed:focus, .ld-navigation__next-link--just-completed:hover, .ld-navigation__next-link--no-user, .ld-navigation__next-link--no-user:active, .ld-navigation__next-link--no-user:focus-visible, .ld-navigation__next-link--no-user:focus-within, .ld-navigation__next-link--no-user:focus, .ld-navigation__next-link--no-user:hover {
@@ -3317,26 +3346,6 @@
 .ld-navigation__next-link--just-completed:focus:hover, .ld-navigation__next-link--no-user:focus:hover {
   outline-color: var(--ld-color-button-bg-hover);
 }
-.ld-navigation__progress-mark-complete-button {
-  /**
-   * We are intentionally using a screen width breakpoint here.
-   *
-   * This is because we cannot be sure what container size this
-   * mixin will be used in ahead of time.
-   *
-   * We have decided to handle mobile vs desktop button styles based on
-   * screen width rather than container width globally.
-   */
-  /**
-   * We are intentionally using a screen width breakpoint here.
-   *
-   * This is because this we cannot be sure what container size this
-   * mixin will be used in ahead of time.
-   *
-   * We have decided to handle mobile vs desktop button styles based on
-   * screen width rather than container width globally.
-   */
-}
 .ld-navigation__progress-mark-complete-button, .ld-navigation__progress-mark-complete-button:active, .ld-navigation__progress-mark-complete-button:focus-visible, .ld-navigation__progress-mark-complete-button:focus-within, .ld-navigation__progress-mark-complete-button:focus, .ld-navigation__progress-mark-complete-button:hover {
   all: unset;
   align-items: center;
@@ -3364,6 +3373,17 @@
   white-space: normal;
   width: auto;
   word-break: normal;
+}
+.ld-navigation__progress-mark-complete-button {
+  /**
+   * We are intentionally using a screen width breakpoint here.
+   *
+   * This is because we cannot be sure what container size this
+   * mixin will be used in ahead of time.
+   *
+   * We have decided to handle mobile vs desktop button styles based on
+   * screen width rather than container width globally.
+   */
 }
 @media (min-width: 720px) {
   .ld-navigation__progress-mark-complete-button, .ld-navigation__progress-mark-complete-button:active, .ld-navigation__progress-mark-complete-button:focus-visible, .ld-navigation__progress-mark-complete-button:focus-within, .ld-navigation__progress-mark-complete-button:focus, .ld-navigation__progress-mark-complete-button:hover {
@@ -3397,6 +3417,17 @@
 }
 .ld-navigation__progress-mark-complete-button, .ld-navigation__progress-mark-complete-button:active, .ld-navigation__progress-mark-complete-button:focus-visible, .ld-navigation__progress-mark-complete-button:focus-within, .ld-navigation__progress-mark-complete-button:focus, .ld-navigation__progress-mark-complete-button:hover {
   padding-left: var(--ld-spacer-fixed-2);
+}
+.ld-navigation__progress-mark-complete-button {
+  /**
+   * We are intentionally using a screen width breakpoint here.
+   *
+   * This is because this we cannot be sure what container size this
+   * mixin will be used in ahead of time.
+   *
+   * We have decided to handle mobile vs desktop button styles based on
+   * screen width rather than container width globally.
+   */
 }
 @media (min-width: 720px) {
   .ld-navigation__progress-mark-complete-button, .ld-navigation__progress-mark-complete-button:active, .ld-navigation__progress-mark-complete-button:focus-visible, .ld-navigation__progress-mark-complete-button:focus-within, .ld-navigation__progress-mark-complete-button:focus, .ld-navigation__progress-mark-complete-button:hover {
@@ -3457,6 +3488,9 @@
 }
 .ld-navigation__progress-timer-label {
   font-weight: var(--ld-typography-font-weight-bold);
+}
+.ld-navigation {
+  /* stylelint-disable-next-line selector-class-pattern -- Existing class. */
 }
 .ld-navigation .learndash_timer {
   background-color: var(--ld-color-primitives-grey-100);
@@ -3533,12 +3567,6 @@
   row-gap: var(--ld-spacer-6);
   margin-bottom: var(--ld-spacer-6);
 }
-.learndash-course-grid--modern .items-wrapper .grid-3 {
-  /**
-   * To replicate grid_height_equal, we need to ensure the post and
-   * content elements are flex containers with a height of 100%.
-   */
-}
 .learndash-course-grid--modern .items-wrapper .grid-3 .post {
   border-radius: var(--ld-border-radius);
   border: 1px solid var(--ld-color-system-border);
@@ -3556,13 +3584,6 @@
   flex-direction: column;
   padding: var(--ld-spacer-fixed-4) var(--ld-spacer-4) var(--ld-spacer-fixed-8) var(--ld-spacer-4);
   gap: var(--ld-spacer-7);
-  /**
-   * Replicate grid_height_equal, but align the content to the top
-   * instead of the bottom.
-   */
-  /**
-   * However, if it is a button, we should align it to the bottom.
-   */
 }
 .learndash-course-grid--modern .items-wrapper .grid-3 .content .button {
   /**
@@ -3575,17 +3596,6 @@
   all: unset;
   align-self: center;
   display: flex;
-}
-.learndash-course-grid--modern .items-wrapper .grid-3 .content .button a {
-  /**
-   * We are intentionally using a screen width breakpoint here.
-   *
-   * This is because we cannot be sure what container size this
-   * mixin will be used in ahead of time.
-   *
-   * We have decided to handle mobile vs desktop button styles based on
-   * screen width rather than container width globally.
-   */
 }
 .learndash-course-grid--modern .items-wrapper .grid-3 .content .button a, .learndash-course-grid--modern .items-wrapper .grid-3 .content .button a:active, .learndash-course-grid--modern .items-wrapper .grid-3 .content .button a:focus-visible, .learndash-course-grid--modern .items-wrapper .grid-3 .content .button a:focus-within, .learndash-course-grid--modern .items-wrapper .grid-3 .content .button a:focus, .learndash-course-grid--modern .items-wrapper .grid-3 .content .button a:hover {
   all: unset;
@@ -3614,6 +3624,17 @@
   white-space: normal;
   width: auto;
   word-break: normal;
+}
+.learndash-course-grid--modern .items-wrapper .grid-3 .content .button a {
+  /**
+   * We are intentionally using a screen width breakpoint here.
+   *
+   * This is because we cannot be sure what container size this
+   * mixin will be used in ahead of time.
+   *
+   * We have decided to handle mobile vs desktop button styles based on
+   * screen width rather than container width globally.
+   */
 }
 @media (min-width: 720px) {
   .learndash-course-grid--modern .items-wrapper .grid-3 .content .button a, .learndash-course-grid--modern .items-wrapper .grid-3 .content .button a:active, .learndash-course-grid--modern .items-wrapper .grid-3 .content .button a:focus-visible, .learndash-course-grid--modern .items-wrapper .grid-3 .content .button a:focus-within, .learndash-course-grid--modern .items-wrapper .grid-3 .content .button a:focus, .learndash-course-grid--modern .items-wrapper .grid-3 .content .button a:hover {
@@ -3661,11 +3682,28 @@
 .learndash-course-grid--modern .items-wrapper .grid-3 .content .ld-progress {
   margin: 0;
 }
+.learndash-course-grid--modern .items-wrapper .grid-3 .content {
+  /**
+   * Replicate grid_height_equal, but align the content to the top
+   * instead of the bottom.
+   */
+}
 .learndash-course-grid--modern .items-wrapper .grid-3 .content > *:not(.button):last-child {
   margin-bottom: auto;
 }
+.learndash-course-grid--modern .items-wrapper .grid-3 .content {
+  /**
+   * However, if it is a button, we should align it to the bottom.
+   */
+}
 .learndash-course-grid--modern .items-wrapper .grid-3 .content > .button:last-child {
   margin-top: auto;
+}
+.learndash-course-grid--modern .items-wrapper .grid-3 {
+  /**
+   * To replicate grid_height_equal, we need to ensure the post and
+   * content elements are flex containers with a height of 100%.
+   */
 }
 .learndash-course-grid--modern .items-wrapper .grid-3 .post,
 .learndash-course-grid--modern .items-wrapper .grid-3 .content {
@@ -3675,17 +3713,6 @@
 }
 .learndash-course-grid--modern .pagination {
   overflow: initial;
-}
-.learndash-course-grid--modern .pagination .load-more {
-  /**
-   * We are intentionally using a screen width breakpoint here.
-   *
-   * This is because we cannot be sure what container size this
-   * mixin will be used in ahead of time.
-   *
-   * We have decided to handle mobile vs desktop button styles based on
-   * screen width rather than container width globally.
-   */
 }
 .learndash-course-grid--modern .pagination .load-more, .learndash-course-grid--modern .pagination .load-more:active, .learndash-course-grid--modern .pagination .load-more:focus-visible, .learndash-course-grid--modern .pagination .load-more:focus-within, .learndash-course-grid--modern .pagination .load-more:focus, .learndash-course-grid--modern .pagination .load-more:hover {
   all: unset;
@@ -3714,6 +3741,17 @@
   white-space: normal;
   width: auto;
   word-break: normal;
+}
+.learndash-course-grid--modern .pagination .load-more {
+  /**
+   * We are intentionally using a screen width breakpoint here.
+   *
+   * This is because we cannot be sure what container size this
+   * mixin will be used in ahead of time.
+   *
+   * We have decided to handle mobile vs desktop button styles based on
+   * screen width rather than container width globally.
+   */
 }
 @media (min-width: 720px) {
   .learndash-course-grid--modern .pagination .load-more, .learndash-course-grid--modern .pagination .load-more:active, .learndash-course-grid--modern .pagination .load-more:focus-visible, .learndash-course-grid--modern .pagination .load-more:focus-within, .learndash-course-grid--modern .pagination .load-more:focus, .learndash-course-grid--modern .pagination .load-more:hover {

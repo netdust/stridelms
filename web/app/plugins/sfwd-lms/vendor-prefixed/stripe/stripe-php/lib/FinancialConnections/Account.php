@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\FinancialConnections;
 
 /**
@@ -30,26 +29,21 @@ namespace StellarWP\Learndash\Stripe\FinancialConnections;
 class Account extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'financial_connections.account';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
-
     const CATEGORY_CASH = 'cash';
     const CATEGORY_CREDIT = 'credit';
     const CATEGORY_INVESTMENT = 'investment';
     const CATEGORY_OTHER = 'other';
-
     const STATUS_ACTIVE = 'active';
     const STATUS_DISCONNECTED = 'disconnected';
     const STATUS_INACTIVE = 'inactive';
-
     const SUBCATEGORY_CHECKING = 'checking';
     const SUBCATEGORY_CREDIT_CARD = 'credit_card';
     const SUBCATEGORY_LINE_OF_CREDIT = 'line_of_credit';
     const SUBCATEGORY_MORTGAGE = 'mortgage';
     const SUBCATEGORY_OTHER = 'other';
     const SUBCATEGORY_SAVINGS = 'savings';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -63,10 +57,8 @@ class Account extends \StellarWP\Learndash\Stripe\ApiResource
         $url = $this->instanceUrl() . '/disconnect';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param string $id
      * @param null|array $params
@@ -82,10 +74,8 @@ class Account extends \StellarWP\Learndash\Stripe\ApiResource
         list($response, $opts) = static::_staticRequest('get', $url, $params, $opts);
         $obj = \StellarWP\Learndash\Stripe\Util\Util::convertToStripeObject($response->json, $opts);
         $obj->setLastResponse($response);
-
         return $obj;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -99,10 +89,8 @@ class Account extends \StellarWP\Learndash\Stripe\ApiResource
         $url = $this->instanceUrl() . '/refresh';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -116,10 +104,8 @@ class Account extends \StellarWP\Learndash\Stripe\ApiResource
         $url = $this->instanceUrl() . '/subscribe';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -133,7 +119,6 @@ class Account extends \StellarWP\Learndash\Stripe\ApiResource
         $url = $this->instanceUrl() . '/unsubscribe';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
 }

@@ -192,7 +192,7 @@ class LearnDash_Settings_Metabox_Course_Completion_Awards extends LearnDash_Sett
 					'rest_args'    => [
 						'schema' => [
 							'field_key' => 'points_amount',
-							'type'      => 'float',
+							'type'      => 'number',
 							'default'   => 0.0,
 						],
 					],

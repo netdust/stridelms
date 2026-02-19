@@ -3,7 +3,7 @@
  * View: Profile Saved Cards.
  *
  * @since 4.25.0
- * @version 4.25.0
+ * @version 4.25.3
  *
  * @var Card[]   $cards The saved cards.
  * @var Template $this  Current Instance of template engine rendering this template.
@@ -28,7 +28,6 @@ use LearnDash\Core\Template\Template;
 	<?php $this->template( 'shortcodes/profile/saved-cards/list' ); ?>
 
 	<?php $this->template( 'shortcodes/profile/saved-cards/actions' ); ?>
-</div>
 </div>
 <?php
 $this->template( 'components/breakpoints', [ 'is_initial_load' => true ] );

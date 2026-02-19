@@ -65,5 +65,14 @@ class Provider extends ServiceProvider {
 				'hide_stripe_connect_banner'
 			)
 		);
+
+		// Hide the telemetry modal on PayPal onboarding via setup wizard.
+		add_filter(
+			'learndash_show_telemetry_modal',
+			$this->container->callback(
+				Admin::class,
+				'hide_telemetry_modal_on_paypal_onboarding_via_setup_wizard'
+			)
+		);
 	}
 }

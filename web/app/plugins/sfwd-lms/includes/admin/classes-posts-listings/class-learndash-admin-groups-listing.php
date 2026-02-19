@@ -281,7 +281,7 @@ if ( ( class_exists( 'Learndash_Admin_Posts_Listing' ) ) && ( ! class_exists( 'L
 		 */
 		protected function selector_filter_for_group_course( $q_vars = array(), $selector = array() ) {
 			if ( ( isset( $selector['selected'] ) ) && ( ! empty( $selector['selected'] ) ) ) {
-				$course_group_ids = learndash_get_course_groups( absint( $selector['selected'] ), true );
+				$course_group_ids = learndash_get_course_groups( absint( $selector['selected'] ) );
 				if ( ! empty( $course_group_ids ) ) {
 					if ( ! isset( $q_vars['post__in'] ) ) {
 						$q_vars['post__in'] = array();

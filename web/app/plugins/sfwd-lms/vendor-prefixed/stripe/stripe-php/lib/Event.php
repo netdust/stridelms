@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -53,10 +52,8 @@ namespace StellarWP\Learndash\Stripe;
 class Event extends ApiResource
 {
     const OBJECT_NAME = 'event';
-
-    use ApiOperations\All;
-    use ApiOperations\Retrieve;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
     const ACCOUNT_APPLICATION_AUTHORIZED = 'account.application.authorized';
     const ACCOUNT_APPLICATION_DEAUTHORIZED = 'account.application.deauthorized';
     const ACCOUNT_EXTERNAL_ACCOUNT_CREATED = 'account.external_account.created';
@@ -291,7 +288,6 @@ class Event extends ApiResource
     const TREASURY_RECEIVED_CREDIT_FAILED = 'treasury.received_credit.failed';
     const TREASURY_RECEIVED_CREDIT_SUCCEEDED = 'treasury.received_credit.succeeded';
     const TREASURY_RECEIVED_DEBIT_CREATED = 'treasury.received_debit.created';
-
     const TYPE_ACCOUNT_APPLICATION_AUTHORIZED = 'account.application.authorized';
     const TYPE_ACCOUNT_APPLICATION_DEAUTHORIZED = 'account.application.deauthorized';
     const TYPE_ACCOUNT_EXTERNAL_ACCOUNT_CREATED = 'account.external_account.created';

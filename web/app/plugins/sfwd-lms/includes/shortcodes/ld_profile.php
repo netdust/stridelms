@@ -201,6 +201,18 @@ function learndash_profile( $atts = array(), $content = '', $shortcode_slug = 'l
 	$learndash_shortcode_used = true;
 
 	/**
+	 * Filters whether to show the saved cards in the profile.
+	 *
+	 * @since 4.25.3
+	 *
+	 * @param bool                $show_saved_cards Whether to show the saved cards.
+	 * @param array<string,mixed> $atts             Shortcode attributes.
+	 *
+	 * @return bool Whether to show the saved cards.
+	 */
+	$show_saved_cards = apply_filters( 'learndash_profile_show_saved_cards', false, $atts );
+
+	/**
 	 * Action before the profile shortcode template is rendered.
 	 *
 	 * @since 4.25.0
@@ -213,12 +225,13 @@ function learndash_profile( $atts = array(), $content = '', $shortcode_slug = 'l
 	return SFWD_LMS::get_template(
 		'profile',
 		array(
-			'user_id'        => $atts['user_id'],
-			'quiz_attempts'  => $quiz_attempts,
-			'current_user'   => $current_user,
-			'user_courses'   => $user_courses,
-			'shortcode_atts' => $atts,
-			'profile_pager'  => $profile_pager,
+			'user_id'          => $atts['user_id'],
+			'quiz_attempts'    => $quiz_attempts,
+			'current_user'     => $current_user,
+			'user_courses'     => $user_courses,
+			'shortcode_atts'   => $atts,
+			'profile_pager'    => $profile_pager,
+			'show_saved_cards' => $show_saved_cards,
 		)
 	);
 }

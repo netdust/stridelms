@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Radar;
 
 /**
@@ -20,7 +19,6 @@ namespace StellarWP\Learndash\Stripe\Radar;
 class ValueListItem extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'radar.value_list_item';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
     use \StellarWP\Learndash\Stripe\ApiOperations\Delete;

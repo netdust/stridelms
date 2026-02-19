@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -24,12 +23,10 @@ namespace StellarWP\Learndash\Stripe;
 class PaymentMethodDomain extends ApiResource
 {
     const OBJECT_NAME = 'payment_method_domain';
-
-    use ApiOperations\All;
-    use ApiOperations\Create;
-    use ApiOperations\Retrieve;
-    use ApiOperations\Update;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Create;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Update;
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -43,7 +40,6 @@ class PaymentMethodDomain extends ApiResource
         $url = $this->instanceUrl() . '/validate';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
 }

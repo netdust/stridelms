@@ -116,7 +116,7 @@ if ( ( ! class_exists( 'LD_REST_Courses_Controller_V2' ) ) && ( class_exists( 'L
 				foreach ( $this->metaboxes as $metabox ) {
 					$metabox->load_settings_values();
 					$metabox->load_settings_fields();
-					$this->register_rest_fields( $metabox->get_settings_metabox_fields(), $metabox );
+					$this->register_rest_fields( $metabox->get_rest_api_fields(), $metabox );
 				}
 			}
 		}

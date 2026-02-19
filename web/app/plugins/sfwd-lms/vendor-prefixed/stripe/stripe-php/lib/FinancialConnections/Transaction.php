@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\FinancialConnections;
 
 /**
@@ -23,10 +22,8 @@ namespace StellarWP\Learndash\Stripe\FinancialConnections;
 class Transaction extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'financial_connections.transaction';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
-
     const STATUS_PENDING = 'pending';
     const STATUS_POSTED = 'posted';
     const STATUS_VOID = 'void';

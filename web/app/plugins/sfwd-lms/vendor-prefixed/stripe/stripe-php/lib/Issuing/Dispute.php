@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Issuing;
 
 /**
@@ -25,18 +24,15 @@ namespace StellarWP\Learndash\Stripe\Issuing;
 class Dispute extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'issuing.dispute';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
     use \StellarWP\Learndash\Stripe\ApiOperations\Update;
-
     const STATUS_EXPIRED = 'expired';
     const STATUS_LOST = 'lost';
     const STATUS_SUBMITTED = 'submitted';
     const STATUS_UNSUBMITTED = 'unsubmitted';
     const STATUS_WON = 'won';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -50,7 +46,6 @@ class Dispute extends \StellarWP\Learndash\Stripe\ApiResource
         $url = $this->instanceUrl() . '/submit';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
 }

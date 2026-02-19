@@ -3,7 +3,7 @@
  * View: Topic Content.
  *
  * @since 4.24.0
- * @version 4.24.0
+ * @version 4.25.8
  *
  * @var bool     $is_content_visible Whether the content is visible.
  * @var Topic    $topic              The topic model.
@@ -35,4 +35,4 @@ if ( ! $is_content_visible ) {
 	?>
 
 	<?php $this->template( 'modern/topic/navigation' ); ?>
-</div>
+</main>

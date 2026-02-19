@@ -122,51 +122,6 @@ function learndash_get_breadcrumbs( $post = null, $args = false ) {
 }
 
 /**
- * Gets the essays from a specific quiz attempt - DEPRECATED
- *
- * Look up all the essay responses from a particular quiz attempt
- *
- * @since 3.0.0
- *
- * @deprecated
- *
- * @param int|null $attempt_id Post ID.
- * @param int|null $user_id    User ID.
- *
- * @return array|boolean An array of essay post IDs.
- */
-function learndash_get_essays_by_quiz_attempt( $attempt_id = null, $user_id = null ) {
-	// Fail gracefully.
-	if ( null === $attempt_id ) {
-		return false;
-	}
-
-	if ( null === $user_id ) {
-		$user    = wp_get_current_user();
-		$user_id = $user->ID;
-	}
-
-	$quiz_attempts = get_user_meta( $user_id, '_sfwd-quizzes', true );
-	$essays        = array();
-
-	if ( ! $quiz_attempts || empty( $quiz_attempts ) ) {
-		return false;
-	}
-
-	foreach ( $quiz_attempts as $attempt ) {
-		if ( $attempt['quiz'] != $attempt_id || ! isset( $attempt['graded'] ) ) {
-			continue;
-		}
-
-		foreach ( $attempt['graded'] as $essay ) {
-			$essays[] = $essay['post_id'];
-		}
-	}
-
-	return $essays;
-}
-
-/**
  * Gets the essay details.
  *
  * Returns details about essay such as points details and status.
@@ -214,62 +169,6 @@ function learndash_get_essay_details( $post_id = null ) {
 	}
 
 	return $details;
-}
-
-/**
- * Gets the current lesson progress.
- *
- * Returns stats about a user's current progress within a lesson.
- *
- * @since 3.0.0
- *
- * @param array|null $topics An array of the topic of the lessons, contextualized for the user's progress.
- *
- * @return array An array of stats including percentage, completed and total
- */
-function learndash_get_lesson_progress( $topics = null ) {
-	/**
-	 * Filters default values for lesson progress.
-	 *
-	 * @since 3.0.0
-	 *
-	 * @param array $lesson_progress_defaults Default values for lesson progress.
-	 */
-	$progress = apply_filters(
-		'learndash_get_lesson_progress_defaults',
-		array(
-			'percentage' => 0,
-			'completed'  => 0,
-			'total'      => 0,
-		)
-	);
-
-	// Fail gracefully, return zero's.
-	if ( null === $topics || empty( $topics ) ) {
-		return $progress;
-	}
-
-	foreach ( $topics as $key => $topic ) {
-		++$progress['total'];
-
-		if ( ! empty( $topic->completed ) ) {
-			++$progress['completed'];
-		}
-	}
-
-	if ( 0 === ! $progress['completed'] ) {
-		$progress['percentage'] = floor( $progress['completed'] / $progress['total'] * 100 );
-	}
-
-	/**
-	 * Filters LearnDash lesson progress.
-	 *
-	 * @since 3.0.0
-	 *
-	 * @param array $progress An Associative array of lesson progress with keys total, completed and percentage.
-	 * @param array $topics   An array of the topics of the lessons.
-	 */
-	return apply_filters( 'learndash_get_lesson_progress', $progress, $topics );
 }
 
 /**
@@ -329,57 +228,6 @@ function learndash_is_item_complete( $post = null, $user_id = null, $course_id =
 	 * @param int  $course_id Course ID.
 	 */
 	return apply_filters( 'learndash_is_item_complete', $complete, $user_id, $post->ID, $course_id );
-}
-
-/**
- * Gets a label for the content type by post type.
- *
- * Universal function for simpler template logic and reusable templates
- *
- * @since 3.0.0
- *
- * @param string $post_type The post type slug to check.
- * @param array  $args      An array of arguments used to get the content label.
- *
- * @return string The label for the content type based on user settings
- */
-function learndash_get_content_label( $post_type = null, $args = null ) {
-	if ( $args ) {
-		extract( $args ); // phpcs:ignore WordPress.PHP.DontExtract.extract_extract -- Bad idea, but better keep it for now.
-	}
-
-	$post_type = ( null === $post_type ? get_post_type() : $post_type );
-	$label     = '';
-
-	switch ( $post_type ) {
-		case ( 'sfwd-courses' ):
-			$label = LearnDash_Custom_Label::get_label( 'course' );
-			break;
-		case ( 'sfwd-lessons' ):
-			if ( isset( $parent ) ) {
-				$label = LearnDash_Custom_Label::get_label( 'course' );
-			} else {
-				$label = LearnDash_Custom_Label::get_label( 'lesson' );
-			}
-			break;
-		case ( 'sfwd-topic' ):
-			if ( isset( $parent ) ) {
-				$label = LearnDash_Custom_Label::get_label( 'lesson' );
-			} else {
-				$label = LearnDash_Custom_Label::get_label( 'topic' );
-			}
-			break;
-	}
-
-	/**
-	 * Filters label for the content type by post type. Used to override label settings set by the user.
-	 *
-	 * @since 3.0.0
-	 *
-	 * @param string $label     Label for the content type
-	 * @param string $post_type Post type
-	 */
-	return apply_filters( 'learndash_get_content_label', $label, $post_type );
 }
 
 /**
@@ -653,37 +501,6 @@ function learndash_quiz_row_classes( $quiz = null, $context = 'course' ) {
 	 * @return array{wrapper: string, preview: string, anchor: string}
 	 */
 	return apply_filters( 'learndash_quiz_row_classes', $classes, $quiz, $context );
-}
-
-/**
- * Gets the Lesson attributes.
- *
- * Populates an array of attributes about a lesson, if it's a sample or if it isn't currently available
- *
- * @since 3.0.0
- *
- * @param array $lesson Lesson details array.
- *
- * @return array Attributes including label, icon and class name.
- */
-function learndash_get_lesson_attributes( $lesson = null ) {
-	$attributes = array();
-
-	if ( ( isset( $lesson['post'] ) ) && ( is_a( $lesson['post'], 'WP_Post' ) ) && ( learndash_get_post_type_slug( 'lesson' ) === $lesson['post']->post_type ) ) {
-		$attributes = learndash_get_course_step_attributes( $lesson['post']->ID );
-
-		/**
-		 * Filters attributes of a lesson. Used to modify details about a lesson like label, icon and class name.
-		 *
-		 * @since 3.0.0
-		 *
-		 * @param array   $attributes Array of lesson attributes.
-		 * @param WP_Post $lesson     The lesson post object.
-		 */
-		return apply_filters( 'learndash_lesson_attributes', $attributes, $lesson['post'] );
-	}
-
-	return $attributes;
 }
 
 /**
@@ -976,21 +793,6 @@ function learndash_status_bubble( $status = 'incomplete', $context = null, $echo
 	} else {
 		return $bubble;
 	}
-}
-
-/**
- * Looks like it was never used. Should be deprecated I guess.
- */
-function learndash_test_admin_icon() {
-	?>
-	<style type="text/css">
-		#adminmenu #toplevel_page_learndash-lms div.wp-menu-image:before {
-			background: url('<?php echo esc_url( LEARNDASH_LMS_PLUGIN_URL . '/themes/ld30/assets/iconfont/admin-icons/browser-checkmark.svg' ); ?>') center center no-repeat;
-			content: '';
-			opacity: 0.7;
-		}
-	</style>
-	<?php
 }
 
 /**
@@ -1326,15 +1128,19 @@ function learndash_30_template_assets() {
 	}
 }
 
-add_action( 'enqueue_block_editor_assets', 'learndash_30_editor_scripts' );
+add_action( 'enqueue_block_assets', 'learndash_30_editor_scripts' );
 /**
  * Enqueues the ld30 theme editor scripts.
  *
- * Fires on `enqueue_block_editor_assets` hook.
+ * Fires on `enqueue_block_assets` hook.
  *
  * @since 3.0.0
  */
 function learndash_30_editor_scripts() {
+	if ( ! is_admin() ) {
+		return;
+	}
+
 	learndash_30_template_assets();
 }
 
@@ -2666,182 +2472,6 @@ function learndash_30_custom_body_classes( $classes ) {
 	}
 
 	return $classes;
-}
-
-/**
- * Checks whether a post can be marked as complete or not in focus mode.
- *
- * @since 3.0.0
- * @deprecated 4.0.3 Use `learndash_can_complete_step()` instead.
- *
- * @param int|WP_Post|null $post      `WP_Post` object or post ID. Default to global $post.
- * @param int|null         $course_id Course ID.
- *
- * @return boolean Whether a post can be marked as complete.
- */
-function learndash_30_focus_mode_can_complete( $post = null, $course_id = null ) {
-	if ( null === $post ) {
-		global $post;
-	}
-
-	if ( is_int( $post ) ) {
-		$post = get_post( $post ); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- I suppose it's what they wanted.
-	}
-
-	if ( ! $course_id ) {
-		$course_id = learndash_get_course_id( $course_id );
-	}
-
-	// Shouldn't appear regardless if this is a quiz.
-	if ( get_post_type( $post ) == 'sfwd-quiz' ) {
-		return false;
-	}
-
-	$complete_button = learndash_mark_complete( $post );
-
-	// If the complete button returns empty, also just return false.
-	if ( empty( $complete_button ) ) {
-		return false;
-	}
-
-	// Check if has any outstanding quizzes.
-	$quizzes = learndash_get_lesson_quiz_list( $post->ID, get_current_user_id(), $course_id );
-
-	// If there is a quiz then the quiz is the mark complete.
-	if ( $quizzes ) {
-		return false;
-	}
-
-	return true;
-}
-
-/**
- * Deprecated
- *
- * @deprecated
- *
- * @param string $html    Html.
- * @param string $url     Url.
- * @param string $attr    Attr.
- * @param int    $post_id Post ID.
- *
- * @return false|mixed|string
- */
-function learndash_30_responsive_videos( $html, $url, $attr, $post_id ) {
-	/** This filter is documented in themes/ld30/includes/helpers.php */
-	$responsive_video = apply_filters( 'learndash_30_responsive_video', LearnDash_Settings_Section::get_section_setting( 'LearnDash_Settings_Theme_LD30', 'responsive_video_enabled' ) );
-
-	if ( ! isset( $responsive_video ) || 'yes' !== $responsive_video ) {
-		return false;
-	}
-
-	/**
-	 * Filters Responsive video supported post types.
-	 *
-	 * @param array $post_types Array of supported post type.
-	 */
-	$post_types = apply_filters(
-		'learndash_responsive_video_post_types',
-		array(
-			'sfwd-courses',
-			'sfwd-lessons',
-			'sfwd-topic',
-			'sfwd-quiz',
-			'sfwd-assignments',
-		)
-	);
-
-	if ( ! in_array( get_post_type( $post_id ), $post_types, true ) ) {
-		return $html;
-	}
-
-	/**
-	 * Filters responsive video domains. Used to modify the supported domains for the responsive video.
-	 *
-	 * @since 3.0.0
-	 *
-	 * @param array $video_domains Array of video domains to support responsive video.
-	 */
-	$matches = apply_filters(
-		'learndash_responsive_video_domains',
-		array(
-			'youtube.com',
-			'vimeo.com',
-		)
-	);
-
-	foreach ( $matches as $match ) {
-		if ( strpos( $url, $match ) !== false ) {
-			return '<div class="ld-resp-video">' . $html . '</div>';
-		}
-	}
-
-	return $html;
-}
-
-/**
- * Gets the certificate count for a user.
- *
- * @since 3.0.0
- *
- * @param WP_User|int|null $user `WP_User` object or user ID. Defaults to current logged in user.
- *
- * @return int|false Returns users certificate count.
- */
-function learndash_get_certificate_count( $user = null ) {
-	if ( null === $user ) {
-		$user = wp_get_current_user();
-	}
-
-	if ( is_int( $user ) ) {
-		$user = get_user_by( 'id', $user );
-	}
-
-	if ( ! $user ) {
-		return false;
-	}
-
-	$certificates = 0;
-
-	$course_ids = learndash_user_get_enrolled_courses( $user->ID, array(), true );
-
-	if ( ! empty( $course_ids ) ) {
-		// Filter out the courses that don't have a certificate.
-		$course_ids = DB::get_col(
-			DB::table( 'postmeta' )
-				->select( 'post_id' )
-				->whereIn( 'post_id', $course_ids )
-				->where( 'meta_key', '_ld_certificate' )
-				->where( 'meta_value', '0', '>' )
-				->getSQL()
-		);
-
-		foreach ( $course_ids as $course_id ) {
-			$link = learndash_get_course_certificate_link(
-				Cast::to_int( $course_id ),
-				$user->ID
-			);
-
-			if ( ! empty( $link ) ) {
-				++$certificates;
-			}
-		}
-	}
-
-	$quizzes = get_user_meta( $user->ID, '_sfwd-quizzes', true );
-
-	if (
-		is_array( $quizzes )
-		&& ! empty( $quizzes )
-	) {
-		foreach ( $quizzes as $quiz_attempt ) {
-			if ( isset( $quiz_attempt['certificate']['certificateLink'] ) ) {
-				++$certificates;
-			}
-		}
-	}
-
-	return $certificates;
 }
 
 /**

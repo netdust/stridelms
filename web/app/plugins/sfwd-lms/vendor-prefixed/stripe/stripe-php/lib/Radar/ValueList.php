@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Radar;
 
 /**
@@ -23,13 +22,11 @@ namespace StellarWP\Learndash\Stripe\Radar;
 class ValueList extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'radar.value_list';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
     use \StellarWP\Learndash\Stripe\ApiOperations\Delete;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
     use \StellarWP\Learndash\Stripe\ApiOperations\Update;
-
     const ITEM_TYPE_CARD_BIN = 'card_bin';
     const ITEM_TYPE_CARD_FINGERPRINT = 'card_fingerprint';
     const ITEM_TYPE_CASE_SENSITIVE_STRING = 'case_sensitive_string';

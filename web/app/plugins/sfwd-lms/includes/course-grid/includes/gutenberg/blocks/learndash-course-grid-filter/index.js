@@ -14,6 +14,7 @@ import {
 	InspectorControls,
 	// eslint-disable-next-line no-unused-vars
 	InspectorAdvancedControls,
+	useBlockProps,
 } from '@wordpress/block-editor';
 import { Fragment } from '@wordpress/element';
 import {
@@ -30,6 +31,7 @@ import {
 	ColorIndicator,
 	// eslint-disable-next-line no-unused-vars
 	BaseControl,
+	Disabled,
 } from '@wordpress/components';
 import ServerSideRender from '@wordpress/server-side-render';
 import FilterPanelBody from '../components/filter-panel-body.js';
@@ -42,6 +44,7 @@ registerBlockType( 'learndash/ld-course-grid-filter', {
 	supports: {
 		customClassName: false,
 	},
+	apiVersion: 3,
 	attributes: {
 		course_grid_id: {
 			type: 'string',
@@ -90,6 +93,8 @@ registerBlockType( 'learndash/ld-course-grid-filter', {
 			},
 			setAttributes,
 		} = props;
+
+		const blockProps = useBlockProps();
 
 		// eslint-disable-next-line camelcase, no-unused-vars
 		const taxonomies_options =
@@ -154,7 +159,14 @@ registerBlockType( 'learndash/ld-course-grid-filter', {
 			);
 		}
 
-		return [ inspectorControls, do_serverside_render( props.attributes ) ];
+		return (
+			<div { ...blockProps }>
+				{ inspectorControls }
+				<Disabled>
+					{ do_serverside_render( props.attributes ) }
+				</Disabled>
+			</div>
+		);
 	},
 
 	// eslint-disable-next-line no-unused-vars

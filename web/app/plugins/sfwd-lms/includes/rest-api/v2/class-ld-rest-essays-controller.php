@@ -16,7 +16,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ( ! class_exists( 'LD_REST_Essays_Controller_V2' ) ) && ( class_exists( 'LD_REST_Posts_Controller_V2' ) ) ) {
-
 	/**
 	 * Class LearnDash REST API V2 Essays Post Controller.
 	 *
@@ -24,7 +23,6 @@ if ( ( ! class_exists( 'LD_REST_Essays_Controller_V2' ) ) && ( class_exists( 'LD
 	 * @uses LD_REST_Posts_Controller_V2
 	 */
 	class LD_REST_Essays_Controller_V2 extends LD_REST_Posts_Controller_V2 /* phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedClassFound */ {
-
 		/**
 		 * LearnDash course steps object
 		 *
@@ -53,8 +51,8 @@ if ( ( ! class_exists( 'LD_REST_Essays_Controller_V2' ) ) && ( class_exists( 'LD
 			$this->post_type = $post_type;
 			$this->metaboxes = array();
 
-			$this->route_methods_singular   = array( WP_REST_Server::READABLE, WP_REST_Server::EDITABLE );
-			$this->route_methods_collection = array( WP_REST_Server::READABLE, WP_REST_Server::EDITABLE, WP_REST_Server::DELETABLE );
+			$this->route_methods_singular   = [ WP_REST_Server::READABLE, WP_REST_Server::EDITABLE ];
+			$this->route_methods_collection = [ WP_REST_Server::READABLE ];
 
 			parent::__construct( $this->post_type );
 
@@ -84,7 +82,6 @@ if ( ( ! class_exists( 'LD_REST_Essays_Controller_V2' ) ) && ( class_exists( 'LD
 		 * @since 3.3.0
 		 */
 		protected function register_fields() {
-
 			register_rest_field(
 				$this->post_type,
 				'course',
@@ -196,7 +193,6 @@ if ( ( ! class_exists( 'LD_REST_Essays_Controller_V2' ) ) && ( class_exists( 'LD
 			$this->register_fields_metabox();
 
 			do_action( 'learndash_rest_register_fields', $this->post_type, $this );
-
 		}
 
 		/**
@@ -207,7 +203,6 @@ if ( ( ! class_exists( 'LD_REST_Essays_Controller_V2' ) ) && ( class_exists( 'LD
 		 * @return array
 		 */
 		public function get_public_item_schema() {
-
 			$schema = parent::get_public_item_schema();
 
 			$schema['title'] = 'essay';
@@ -304,7 +299,6 @@ if ( ( ! class_exists( 'LD_REST_Essays_Controller_V2' ) ) && ( class_exists( 'LD
 			);
 
 			if ( is_user_logged_in() ) {
-
 				$filters['status'] = $request['status'];
 				$filters['status'] = array_intersect( array( 'graded', 'not_graded' ), $request['status'] );
 				if ( empty( $filters['status'] ) ) {
@@ -315,19 +309,23 @@ if ( ( ! class_exists( 'LD_REST_Essays_Controller_V2' ) ) && ( class_exists( 'LD
 				$filters['course_id'] = $request['course'];
 				$filters['course_id'] = absint( $filters['course_id'] );
 
-				if ( ! empty( $filters['course_id'] ) ) {
 					$filters['lesson_id'] = $request['lesson'];
 					$filters['lesson_id'] = absint( $filters['lesson_id'] );
 
 					$filters['topic_id'] = $request['topic'];
 					$filters['topic_id'] = absint( $filters['topic_id'] );
 
-					if ( ( ! empty( $filters['topic_id'] ) ) && ( learndash_get_post_type_slug( 'topic' ) === get_post_type( $filters['topic_id'] ) ) ) {
-						$filters['lesson_id'] = absint( $filters['topic_id'] );
-					}
+				if (
+					! empty( $filters['topic_id'] )
+					&& learndash_get_post_type_slug( 'topic' ) === get_post_type( $filters['topic_id'] )
+				) {
+					$filters['lesson_id'] = absint( $filters['topic_id'] );
 				}
 
-				if ( current_user_can( 'edit_others_essays' ) ) {
+				if (
+					! learndash_is_admin_user() // Admin can access all essays.
+					&& current_user_can( 'edit_others_essays' )
+				) {
 					if ( learndash_is_group_leader_user() ) {
 						$gl_course_ids = array();
 						$gl_user_ids   = array();
@@ -387,22 +385,22 @@ if ( ( ! class_exists( 'LD_REST_Essays_Controller_V2' ) ) && ( class_exists( 'LD
 					'value'   => $filters['course_id'],
 					'compare' => is_array( $filters['course_id'] ) ? 'IN' : '=',
 				);
+			}
 
-				if ( ! empty( $filters['lesson_id'] ) ) {
-					$meta_query[] = array(
-						'key'     => 'lesson_id',
-						'value'   => $filters['lesson_id'],
-						'compare' => is_array( $filters['lesson_id'] ) ? 'IN' : '=',
-					);
-				}
+			if ( ! empty( $filters['lesson_id'] ) ) {
+				$meta_query[] = array(
+					'key'     => 'lesson_id',
+					'value'   => $filters['lesson_id'],
+					'compare' => is_array( $filters['lesson_id'] ) ? 'IN' : '=',
+				);
+			}
 
-				if ( ! empty( $filters['topic_id'] ) ) {
-					$meta_query[] = array(
-						'key'     => 'lesson_id',
-						'value'   => $filters['topic_id'],
-						'compare' => is_array( $filters['topic_id'] ) ? 'IN' : '=',
-					);
-				}
+			if ( ! empty( $filters['topic_id'] ) ) {
+				$meta_query[] = array(
+					'key'     => 'lesson_id',
+					'value'   => $filters['topic_id'],
+					'compare' => is_array( $filters['topic_id'] ) ? 'IN' : '=',
+				);
 			}
 
 			if ( ! empty( $meta_query ) ) {
@@ -440,7 +438,6 @@ if ( ( ! class_exists( 'LD_REST_Essays_Controller_V2' ) ) && ( class_exists( 'LD
 				$request_route = $request->get_route();
 
 				if ( ( ! empty( $request_route ) ) && ( strpos( $request_route, $base ) !== false ) ) {
-
 					$links = array();
 
 					$current_links = $response->get_links();
@@ -571,7 +568,6 @@ if ( ( ! class_exists( 'LD_REST_Essays_Controller_V2' ) ) && ( class_exists( 'LD
 		 * @param string          $post_type  Post Type for request.
 		 */
 		public function get_rest_settings_field_value( array $postdata, $field_name, WP_REST_Request $request, $post_type ) {
-
 			if ( ( isset( $postdata['id'] ) ) && ( ! empty( $postdata['id'] ) ) && ( $post_type == $this->post_type ) ) {
 				$field_value = '';
 
@@ -581,6 +577,7 @@ if ( ( ! class_exists( 'LD_REST_Essays_Controller_V2' ) ) && ( class_exists( 'LD
 
 				$quiz_id     = get_post_meta( $postdata['id'], 'quiz_id', true );
 				$question_id = get_post_meta( $postdata['id'], 'question_id', true );
+				$question    = null;
 
 				if ( ! empty( $quiz_id ) ) {
 					$question_mapper = new WpProQuiz_Model_QuestionMapper();
@@ -667,7 +664,6 @@ if ( ( ! class_exists( 'LD_REST_Essays_Controller_V2' ) ) && ( class_exists( 'LD
 
 			if ( ! empty( $post_id ) ) {
 				if ( ! isset( $this->essay_post_data[ $post_id ] ) ) {
-
 					$course_id = (int) get_post_meta( $post_id, 'course_id', true );
 					$lesson_id = (int) get_post_meta( $post_id, 'lesson_id', true );
 
@@ -714,7 +710,6 @@ if ( ( ! class_exists( 'LD_REST_Essays_Controller_V2' ) ) && ( class_exists( 'LD
 		 */
 		public function update_rest_settings_field_value( $post_value, WP_Post $post, $field_name, WP_REST_Request $request, $post_type ) {
 			if ( ( is_a( $post, 'WP_Post' ) ) && ( $post->post_type == $this->post_type ) ) {
-
 				switch ( $field_name ) {
 					case 'points_awarded':
 						$quiz_id     = get_post_meta( $post->ID, 'quiz_id', true );

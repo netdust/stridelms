@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe;
 
 /**
@@ -28,19 +27,15 @@ namespace StellarWP\Learndash\Stripe;
 class Review extends ApiResource
 {
     const OBJECT_NAME = 'review';
-
-    use ApiOperations\All;
-    use ApiOperations\Retrieve;
-
+    use \StellarWP\Learndash\Stripe\ApiOperations\All;
+    use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
     const CLOSED_REASON_APPROVED = 'approved';
     const CLOSED_REASON_DISPUTED = 'disputed';
     const CLOSED_REASON_REDACTED = 'redacted';
     const CLOSED_REASON_REFUNDED = 'refunded';
     const CLOSED_REASON_REFUNDED_AS_FRAUD = 'refunded_as_fraud';
-
     const OPENED_REASON_MANUAL = 'manual';
     const OPENED_REASON_RULE = 'rule';
-
     /**
      * Possible string representations of the current, the opening or the closure reason of the review.
      * Not all of these enumeration apply to all of the ´reason´ fields. Please consult the Review object to
@@ -54,7 +49,6 @@ class Review extends ApiResource
     const REASON_REFUNDED = 'refunded';
     const REASON_REFUNDED_AS_FRAUD = 'refunded_as_fraud';
     const REASON_RULE = 'rule';
-
     /**
      * @param null|array $params
      * @param null|array|string $opts
@@ -68,7 +62,6 @@ class Review extends ApiResource
         $url = $this->instanceUrl() . '/approve';
         list($response, $opts) = $this->_request('post', $url, $params, $opts);
         $this->refreshFrom($response, $opts);
-
         return $this;
     }
 }

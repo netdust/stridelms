@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Terminal;
 
 /**
@@ -20,7 +19,6 @@ namespace StellarWP\Learndash\Stripe\Terminal;
 class Location extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'terminal.location';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Create;
     use \StellarWP\Learndash\Stripe\ApiOperations\Delete;

@@ -238,7 +238,7 @@ class Cards extends Endpoint {
 				'callback'            => [ $this, 'handle_list_cards' ],
 				'args'                => $this->get_endpoint_args(),
 				'permission_callback' => [ $this, 'check_permission' ],
-				'summary'             => __( 'List PayPal payment cards.', 'learndash' ),
+				'summary'             => __( 'List PayPal payment cards', 'learndash' ),
 				'description'         => __( 'Retrieves the list of saved payment cards for a user.', 'learndash' ),
 			],
 		];

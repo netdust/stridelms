@@ -12,6 +12,7 @@
 namespace LearnDash\Core\Modules\Payments\Subscriptions;
 
 use LearnDash\Core\Models\Commerce\Subscription;
+use LearnDash\Core\Modules\Payments\Subscriptions\Retry_Scheduler;
 use WP_User;
 
 /**
@@ -109,6 +110,33 @@ class Processor {
 	}
 
 	/**
+	 * Process a payment retry for a specific subscription.
+	 *
+	 * @since 4.25.3
+	 *
+	 * @param int $subscription_id The subscription ID.
+	 *
+	 * @return void
+	 */
+	public function process_payment_retry( int $subscription_id ): void {
+		$subscription = Subscription::find( $subscription_id );
+
+		if ( ! $subscription ) {
+			$this->log_error( 'Subscription not found for retry: ' . $subscription_id );
+			return;
+		}
+
+		$this->log_info( 'Processing scheduled payment retry for subscription ID[' . $subscription_id . ']' );
+
+		// Process the payment through the gateway.
+		$this->process_payment_through_gateway(
+			$subscription,
+			$subscription->get_user(),
+			$subscription->get_gateway_name()
+		);
+	}
+
+	/**
 	 * Process the subscription through the payment gateway.
 	 *
 	 * @since 4.25.0
@@ -145,6 +173,13 @@ class Processor {
 
 		$subscription->maybe_expire();
 
+		// Bail if the subscription is expired.
+
+		if ( $subscription->is_expired() ) {
+			$this->log_info( 'Subscription has been expired: ' . $subscription->get_id() );
+			return;
+		}
+
 		/**
 		 * Fires to process a subscription payment with a specific gateway.
 		 *
@@ -168,8 +203,11 @@ class Processor {
 		if ( $result ) {
 			$this->log_info( 'Payment processing successful for subscription: ' . $subscription->get_id() );
 
-			// Calculate the next payment date.
+			// Reset retry count and cancel any scheduled retries on successful payment.
+			$subscription->reset_retry_count();
+			Retry_Scheduler::cancel_retry( $subscription );
 
+			// Calculate the next payment date.
 			$subscription->calculate_next_payment_date();
 
 			/**

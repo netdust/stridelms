@@ -16,6 +16,9 @@ use LearnDash\Core\Utilities\Cast;
 use StellarWP\Learndash\StellarWP\SuperGlobals\SuperGlobals;
 use StellarWP\Learndash\StellarWP\AdminNotices\AdminNotices;
 use StellarWP\Learndash\StellarWP\AdminNotices\AdminNotice;
+use LearnDash\Core\Modules\Payments\Gateways\Paypal\Payment_Gateway;
+use StellarWP\Learndash\StellarWP\Arrays\Arr;
+use LearnDash\Core\Modules\Payments\Gateways\Paypal_Standard\Migration\User_Data as Migration_User_Data;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -311,6 +314,12 @@ if ( ! class_exists( 'Learndash_Paypal_IPN_Gateway' ) && class_exists( 'Learndas
 				10,
 				2
 			);
+			add_action(
+				'learndash_settings_page_before_form',
+				[ $this, 'show_migration_warning' ],
+				10,
+				2
+			);
 		}
 
 		/**
@@ -344,10 +353,72 @@ if ( ! class_exists( 'Learndash_Paypal_IPN_Gateway' ) && class_exists( 'Learndas
 					function () use ( $setting_screen_id, $setting_page_id ) {
 						$section = Cast::to_string( SuperGlobals::get_get_var( 'section-payment', '' ) );
 
+						// Get PayPal Checkout settings to check if it's enabled.
+						$paypal_checkout_settings = Payment_Gateway::get_settings();
+
 						// Only show the warning on the Payments page or the PayPal Standard settings page.
 						return $setting_screen_id === 'admin_page_learndash_lms_payments'
 							&& $setting_page_id === 'learndash_lms_payments'
-							&& in_array( $section, [ 'settings_paypal', '' ], true );
+							&& in_array( $section, [ 'settings_paypal', '' ], true )
+							&& ! Cast::to_bool( Arr::get( $paypal_checkout_settings, 'enabled', false ) );
+					}
+				);
+
+			AdminNotices::render( $notice );
+		}
+
+		/**
+		 * Show migration warning.
+		 *
+		 * @since 4.25.3
+		 *
+		 * @param string $setting_screen_id Settings screen ID.
+		 * @param string $setting_page_id   Settings page ID.
+		 *
+		 * @return void
+		 */
+		public function show_migration_warning( string $setting_screen_id, string $setting_page_id ): void {
+			$content = sprintf(
+				'<strong>%s</strong><br /> %s',
+				__( 'PayPal is sunsetting PayPal Standard at the end of 2026, so it\'s important to migrate affected subscriptions before then to prevent service interruptions.', 'learndash' ),
+				sprintf(
+					// translators: 1: Course label. 2: Group label. 3: Link to the Migration Guide.
+					__( 'Below is a list of users with subscriptions using the legacy PayPal Standard gateway for %1$s or %2$s access. Use the %3$s with full instructions on how to use the shortcode and direct users through the process, including page and email content templates.', 'learndash' ),
+					learndash_get_custom_label( 'course' ),
+					learndash_get_custom_label( 'group' ),
+					'<a href="https://go.learndash.com/paypal-migration/" target="_blank">' . __( 'Migration Guide', 'learndash' ) . '</a>'
+				)
+			);
+
+			$notice = new AdminNotice(
+				'learndash_paypal_ipn_gateway_migration_warning',
+				wp_kses(
+					$content,
+					[
+						'strong' => [],
+						'br'     => [],
+						'a'      => [
+							'href'   => [],
+							'target' => [],
+						],
+					],
+				)
+			);
+
+			$notice->notDismissible()
+				->asWarning()
+				->alternateStyles()
+				->inline()
+				->autoParagraph()
+				->on( 'admin.php?page=learndash_lms_payments' )
+				->when(
+					function () use ( $setting_screen_id, $setting_page_id ) {
+						$section = Cast::to_string( SuperGlobals::get_get_var( 'section-payment', '' ) );
+
+						// Only show the warning on the PayPal Standard settings page.
+						return $setting_screen_id === 'admin_page_learndash_lms_payments'
+							&& $setting_page_id === 'learndash_lms_payments'
+							&& $section === 'settings_paypal';
 					}
 				);
 
@@ -598,6 +669,8 @@ if ( ! class_exists( 'Learndash_Paypal_IPN_Gateway' ) && class_exists( 'Learndas
 
 			$this->process_webhook_data_validation();
 
+			$this->process_webhook_cancel_subscription_listener();
+
 			$this->process_webhook_data();
 
 			if ( ! empty( $this->transaction_data['post_id'] ) ) {
@@ -810,6 +883,16 @@ if ( ! class_exists( 'Learndash_Paypal_IPN_Gateway' ) && class_exists( 'Learndas
 		 * @return bool
 		 */
 		private function verify_user_purchase_hash(): bool {
+			$txn_type = $this->transaction_data['txn_type'] ?? '';
+
+			// We don't need to validate the nonce for canceled transactions.
+			if (
+				$this->webhook_action === self::RETURN_ACTION_NAME_NOTIFY
+				&& in_array( $txn_type, [ 'subscr_cancel', 'subscr_eot', 'subscr_failed' ], true )
+			) {
+				return true;
+			}
+
 			/**
 			 * Note we can't use wp_nonce_verify() here because it uses the user_id and time() as
 			 * part of the calculation logic. So we stored the nonce in the transient and
@@ -1195,6 +1278,7 @@ if ( ! class_exists( 'Learndash_Paypal_IPN_Gateway' ) && class_exists( 'Learndas
 						// We should return 200 to PayPal to avoid multiple retries of the same IPN message that is not processed.
 						$this->exit( '', true, $message, 200 );
 					}
+
 					break;
 
 				default:
@@ -1330,6 +1414,68 @@ if ( ! class_exists( 'Learndash_Paypal_IPN_Gateway' ) && class_exists( 'Learndas
 
 			$this->ipn_validate_customer_data();
 			$this->ipn_validate_receiver_data();
+		}
+
+		/**
+		 * Process the IPN cancel subscription listener.
+		 *
+		 * This function will revoke the user access when the subscription is cancelled, expired, or failed.
+		 *
+		 * @since 4.25.3
+		 *
+		 * @return void
+		 */
+		private function process_webhook_cancel_subscription_listener(): void {
+			$txn_type = $this->transaction_data['txn_type'] ?? '';
+
+			if ( ! in_array( $txn_type, [ 'subscr_cancel', 'subscr_eot', 'subscr_failed' ], true ) ) {
+				return;
+			}
+
+			$type = $txn_type === 'subscr_cancel'
+				? 'canceled'
+				: (
+					$txn_type === 'subscr_eot'
+						? 'expired'
+						: 'failed'
+				);
+
+			$message = sprintf(
+				'Subscription %s %s for course/group ID: %s',
+				$this->transaction_data['subscr_id'] ?? '',
+				$type,
+				$this->transaction_data['item_number'] ?? ''
+			);
+
+			$this->log_info( $message );
+
+			$this->products = isset( $this->transaction_data['item_number'] ) ?
+				Product::find_many( [ $this->transaction_data['item_number'] ] )
+				: [];
+
+			if ( isset( $this->transaction_data['custom'] ) ) {
+				$user = get_user_by( 'id', Cast::to_int( $this->transaction_data['custom'] ) );
+
+				if ( $user instanceof WP_User ) {
+					$this->user = $user;
+				}
+			}
+
+			// We should skip the revoke access process if it's a migrated subscription.
+			if (
+				$this->user instanceof WP_User
+				&& Migration_User_Data::has_migrated_products( $this->user->ID, $this->products, $this->is_test_mode() )
+			) {
+				$this->log_info( 'Subscription is a migrated subscription. Skipping the revoke access process.' );
+
+				$this->exit( '', false, 'Migrated subscription. Skipping the revoke access process.', 200 );
+				return;
+			}
+
+			// Revoke access.
+			$this->revoke_access();
+
+			$this->exit( '', false, 'Subscription cancelled.', 200 );
 		}
 
 		/**

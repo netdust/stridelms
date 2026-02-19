@@ -5568,6 +5568,7 @@ function _arrayWithHoles(arr) { if (Array.isArray(arr)) return arr; }
 
 var __ = wp.i18n.__;
 var Step3 = function Step3() {
+  var _ref2, _window$wp, _window$wp$dom, _window$wp$dom$safeHT, _window$ldSetupWizard, _window$ldSetupWizard2;
   var setup = (0,react__WEBPACK_IMPORTED_MODULE_0__.useContext)(_data_setup_context__WEBPACK_IMPORTED_MODULE_1__["default"]);
   var _useState = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)(setup.data.charge),
     _useState2 = _slicedToArray(_useState, 2),
@@ -5691,7 +5692,7 @@ var Step3 = function Step3() {
   }, __('Connected', 'learndash')), chargeMethod === "stripe" && /*#__PURE__*/React.createElement("p", {
     className: "mt-4 font-normal text-left",
     dangerouslySetInnerHTML: {
-      __html: ldSetupWizard.data.stripe_webhook_notice
+      __html: (_ref2 = typeof window !== 'undefined' && ((_window$wp = window.wp) === null || _window$wp === void 0 ? void 0 : (_window$wp$dom = _window$wp.dom) === null || _window$wp$dom === void 0 ? void 0 : (_window$wp$dom$safeHT = _window$wp$dom.safeHTML) === null || _window$wp$dom$safeHT === void 0 ? void 0 : _window$wp$dom$safeHT.call(_window$wp$dom, (_window$ldSetupWizard = window.ldSetupWizard) === null || _window$ldSetupWizard === void 0 ? void 0 : (_window$ldSetupWizard2 = _window$ldSetupWizard.data) === null || _window$ldSetupWizard2 === void 0 ? void 0 : _window$ldSetupWizard2.stripe_webhook_notice))) !== null && _ref2 !== void 0 ? _ref2 : ''
     }
   })))), /*#__PURE__*/React.createElement("input", {
     type: "radio",

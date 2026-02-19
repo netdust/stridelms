@@ -1,7 +1,6 @@
 <?php
 
 // File generated from our OpenAPI spec
-
 namespace StellarWP\Learndash\Stripe\Treasury;
 
 /**
@@ -27,19 +26,15 @@ namespace StellarWP\Learndash\Stripe\Treasury;
 class ReceivedDebit extends \StellarWP\Learndash\Stripe\ApiResource
 {
     const OBJECT_NAME = 'treasury.received_debit';
-
     use \StellarWP\Learndash\Stripe\ApiOperations\All;
     use \StellarWP\Learndash\Stripe\ApiOperations\Retrieve;
-
     const FAILURE_CODE_ACCOUNT_CLOSED = 'account_closed';
     const FAILURE_CODE_ACCOUNT_FROZEN = 'account_frozen';
     const FAILURE_CODE_INSUFFICIENT_FUNDS = 'insufficient_funds';
     const FAILURE_CODE_OTHER = 'other';
-
     const NETWORK_ACH = 'ach';
     const NETWORK_CARD = 'card';
     const NETWORK_STRIPE = 'stripe';
-
     const STATUS_FAILED = 'failed';
     const STATUS_SUCCEEDED = 'succeeded';
 }

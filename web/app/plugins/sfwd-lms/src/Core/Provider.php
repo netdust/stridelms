@@ -43,6 +43,8 @@ class Provider extends ServiceProvider {
 
 		$this->container->register( Themes\Provider::class );
 
+		$this->container->register( Mcp\Provider::class );
+
 		// Initialize our version tracking.
 		// Register this late, so our other providers have an opportunity to hook into these changes.
 		Version_Tracker::sync_version( learndash_sanitize_version_string( LEARNDASH_VERSION ) );

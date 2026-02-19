@@ -52,7 +52,7 @@ class Skins {
 		$this->register_cards();
 
 		add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_skin_assets' ] );
-		add_action( 'enqueue_block_editor_assets', [ $this, 'enqueue_editor_skin_assets' ] );
+		add_action( 'enqueue_block_assets', [ $this, 'enqueue_editor_skin_assets' ] );
 	}
 
 	/**
@@ -406,7 +406,16 @@ class Skins {
 	public function parse_block_tags( $content ) {
 		$block_tags = [];
 
-		preg_match( '/<!--.*?(\{.*?\}).*?\/-->/', $content, $matches );
+		/**
+		 * Extract JSON attributes from Gutenberg block comments. Will match on any block.
+		 *
+		 * Examples:
+		 *
+		 * <!-- wp:learndash/ld-course-grid {"skin":"grid","card":"grid-1"} -->
+		 * <!-- wp:learndash/ld-course-grid {"columns":3,"skin":"masonry"} -->
+		 * <!-- wp:learndash/ld-course-grid {"id":"my-grid","skin":"list"} -->
+		 */
+		preg_match( '/<!--.*?(\{.*?\}).*?-->/', $content, $matches );
 
 		if ( ! empty( $matches[1] ) ) {
 			$block_tags = json_decode( $matches[1], true );
@@ -425,6 +434,15 @@ class Skins {
 	 * @return array[]|mixed
 	 */
 	public function parse_shortcode_tags( $content ) {
+		/**
+		 * Extract key-value pairs from shortcode attributes.
+		 *
+		 * Examples:
+		 *
+		 * [learndash_course_grid skin="grid" card="grid-1"]
+		 * [learndash_course_grid columns=3 skin='masonry']
+		 * [learndash_course_grid id="my-grid" skin="list" per_page=6]
+		 */
 		preg_match_all( '/\s(.*?)=(.*?)(?=\s|\])/', $content, $matches );
 
 		$returned_matches = [];
@@ -451,6 +469,7 @@ class Skins {
 	 * @return array<string, array> Parsed data including course grids, skins, and cards.
 	 */
 	public function parse_content_shortcodes( $content, $args = [] ) {
+		// phpcs:ignore WordPress.PHP.DontExtract.extract_extract -- Extract was used historically, do not change.
 		extract( $args );
 
 		if ( ! isset( $course_grids ) ) {
@@ -465,6 +484,15 @@ class Skins {
 			$cards = [];
 		}
 
+		/**
+		 * Find all learndash_course_grid shortcode instances in content.
+		 *
+		 * Examples:
+		 *
+		 * [learndash_course_grid skin="grid" card="grid-1"]
+		 * [learndash_course_grid columns=3 skin='masonry' per_page=6]
+		 * [learndash_course_grid id="my-grid" skin="list"]
+		 */
 		preg_match_all( '/\[learndash_course_grid.*?\]/', $content, $matches );
 
 		foreach ( $matches[0] as $match ) {
@@ -508,9 +536,19 @@ class Skins {
 	 * @return array<string, array> Parsed data including course grids, skins, and cards.
 	 */
 	public function parse_content_blocks( $content, $args ) {
+		// phpcs:ignore WordPress.PHP.DontExtract.extract_extract -- Extract was used historically, do not change.
 		extract( $args );
 
-		preg_match_all( '/<\!-- wp:learndash\/ld-course-grid.*?\/-->/', $content, $matches );
+		/**
+		 * Find all learndash/ld-course-grid Gutenberg block instances in content.
+		 *
+		 * Examples:
+		 *
+		 * <!-- wp:learndash/ld-course-grid {"skin":"grid","card":"grid-1"} -->
+		 * <!-- wp:learndash/ld-course-grid {"columns":3,"skin":"masonry"} -->
+		 * <!-- wp:learndash/ld-course-grid {"id":"my-grid","skin":"list"} -->
+		 */
+		preg_match_all( '/<\!-- wp:learndash\/ld-course-grid.*?-->/', $content, $matches );
 
 		foreach ( $matches[0] as $match ) {
 			$block_tags = $this->parse_block_tags( $match );
@@ -537,26 +575,31 @@ class Skins {
 	 * Enqueues skin assets.
 	 *
 	 * @since 4.21.4
+	 * @since 4.25.6 Moved asset loading logic to handle_skin_assets().
 	 *
 	 * @return void
 	 */
 	public function enqueue_skin_assets() {
 		global $post;
 
+		// Initialize shortcode attributes as separate variables.
 		$skins        = [];
 		$cards        = [];
 		$course_grids = [];
 		$legacy_v1    = false;
 
-		// Check widget content to load course grid assets
+		// Handle content string parsing (original logic).
+		$content = $post ? $post->post_content : '';
+
+		// Check widget content to load course grid assets.
 		$widgets = wp_get_sidebars_widgets();
 
-		foreach ( $widgets as $sidebar => $widgets ) {
+		foreach ( $widgets as $sidebar => $widgets_list ) {
 			if ( $sidebar === 'wp_inactive_widgets' ) {
 				continue;
 			}
 
-			foreach ( $widgets as $widget ) {
+			foreach ( $widgets_list as $widget ) {
 				$widget_id = _get_widget_id_base( $widget );
 
 				preg_match( '/-([0-9]+)$/', $widget, $widget_matches );
@@ -568,46 +611,105 @@ class Skins {
 
 				$widget_options = get_option( 'widget_' . $widget_id );
 
-				if ( ! empty( $widget_options[ $widget_number ]['content'] ) && has_shortcode( $widget_options[ $widget_number ]['content'], 'learndash_course_grid' ) ) {
+				if (
+					! empty( $widget_options[ $widget_number ]['content'] )
+					&& has_shortcode( $widget_options[ $widget_number ]['content'], 'learndash_course_grid' )
+				) {
 					$args = $this->parse_content_shortcodes( $widget_options[ $widget_number ]['content'], compact( 'skins', 'course_grids', 'cards' ) );
+					// phpcs:ignore WordPress.PHP.DontExtract.extract_extract -- Extract was used historically, do not change.
 					extract( $args );
 				}
 
-				if ( ! empty( $widget_options[ $widget_number ]['content'] ) && strpos( $widget_options[ $widget_number ]['content'], '<!-- wp:learndash/ld-course-grid' ) !== false ) {
+				if (
+					! empty( $widget_options[ $widget_number ]['content'] )
+					&& strpos( $widget_options[ $widget_number ]['content'], '<!-- wp:learndash/ld-course-grid' ) !== false
+				) {
 					$args = $this->parse_content_blocks( $widget_options[ $widget_number ]['content'], compact( 'skins', 'course_grids', 'cards' ) );
+					// phpcs:ignore WordPress.PHP.DontExtract.extract_extract -- Extract was used historically, do not change.
 					extract( $args );
 				}
 
-				if ( ! empty( $widget_options[ $widget_number ]['content'] ) && $this->has_legacy_v1( $widget_options[ $widget_number ]['content'] ) ) {
+				if (
+					! empty( $widget_options[ $widget_number ]['content'] )
+					&& $this->has_legacy_v1( $widget_options[ $widget_number ]['content'] )
+				) {
 					$legacy_v1 = true;
 				}
 			}
 		}
 
-		// Check and load legacy v1 skin assets
-		if (
-			$post && $this->has_legacy_v1( $post->post_content )
-		) {
-			$legacy_v1 = true;
+		// Parse the provided content string if it contains course grids.
+		if ( ! empty( $content ) ) {
+			if ( $this->has_legacy_v1( $content ) ) {
+				$legacy_v1 = true;
+			}
+
+			if ( has_shortcode( $content, 'learndash_course_grid' ) ) {
+				$args = $this->parse_content_shortcodes( $content, compact( 'skins', 'course_grids', 'cards' ) );
+				// phpcs:ignore WordPress.PHP.DontExtract.extract_extract -- Extract was used historically, do not change.
+				extract( $args );
+			}
+
+			if ( strpos( $content, '<!-- wp:learndash/ld-course-grid' ) !== false ) {
+				$args = $this->parse_content_blocks( $content, compact( 'skins', 'course_grids', 'cards' ) );
+				// phpcs:ignore WordPress.PHP.DontExtract.extract_extract -- Extract was used historically, do not change.
+				extract( $args );
+			}
 		}
 
-		if ( $legacy_v1 ) {
+		// Handle legacy v1 shortcodes that don't have explicit skin/card attributes.
+		if (
+			$legacy_v1
+			&& empty( $skins ) // @phpstan-ignore-line  -- This skins var is potentially extracted from the args above.
+		) {
+			$skins[] = 'grid';
+			$cards[] = 'grid-1';
+		}
+
+		$this->handle_skin_assets(
+			[
+				'skins'        => $skins,
+				'cards'        => $cards,
+				'course_grids' => $course_grids,
+			],
+			$legacy_v1
+		);
+	}
+
+	/**
+	 * Handles skin assets for either shortcode attributes or content string.
+	 *
+	 * @since 4.25.6
+	 *
+	 * @param array{skin?: string, skins?: array<int, string>, skins?: array<int, string>, card?: string,cards?: array<int, string>, course_grids?: array<int, array<string, mixed>>,} $atts         Shortcode attributes array.
+	 * @param bool                                                                                                                                                                     $is_legacy_v1 Whether the content is legacy v1.
+	 *
+	 * @return void
+	 */
+	public function handle_skin_assets( $atts, $is_legacy_v1 = false ) {
+		// This is only used for a filter below. Do not rely on it for parsing.
+		global $post;
+
+		$skins        = $atts['skins'] ?? [];
+		$cards        = $atts['cards'] ?? [];
+		$course_grids = $atts['course_grids'] ?? [];
+		$legacy_v1    = $is_legacy_v1;
+
+		// Handle shortcode attributes array.
+		$skin = $atts['skin'] ?? 'grid';
+		$card = $atts['card'] ?? 'grid-1';
+
+		$skins[] = $skin;
+		$cards[] = $card;
+
+		// Load legacy v1 skin assets if needed.
+		if ( $is_legacy_v1 ) {
 			$skin       = 'legacy-v1';
 			$style_file = Utilities::get_skin_style( $skin );
 
 			if ( $style_file ) {
 				wp_enqueue_style( 'learndash-course-grid-skin-' . $skin, $style_file, [], LEARNDASH_VERSION );
 			}
-		}
-
-		if ( $post && has_shortcode( $post->post_content, 'learndash_course_grid' ) ) {
-			$args = $this->parse_content_shortcodes( $post->post_content, compact( 'skins', 'course_grids', 'cards' ) );
-			extract( $args );
-		}
-
-		if ( $post && strpos( $post->post_content, '<!-- wp:learndash/ld-course-grid' ) !== false ) {
-			$args = $this->parse_content_blocks( $post->post_content, compact( 'skins', 'course_grids', 'cards' ) );
-			extract( $args );
 		}
 
 		/**
@@ -633,50 +735,48 @@ class Skins {
 			}
 		}
 
-		if ( ! empty( $skins ) && is_array( $skins ) ) {
-			$skins = array_unique( $skins );
+		$skins = array_unique( $skins );
 
-			foreach ( $skins as $skin ) {
-				// Register dependencies
-				$skin_args           = $this->get_skin( $skin );
-				$script_dependencies = $skin_args['script_dependencies'] ?? [];
-				$style_dependencies  = $skin_args['style_dependencies'] ?? [];
+		foreach ( $skins as $skin ) {
+			// Register dependencies.
+			$skin_args           = $this->get_skin( $skin );
+			$script_dependencies = $skin_args['script_dependencies'] ?? [];
+			$style_dependencies  = $skin_args['style_dependencies'] ?? [];
 
-				$script_keys = array_keys( $script_dependencies );
-				$script_keys = array_map(
-					function ( $id ) {
-						return 'learndash-course-grid-' . $id;
-					},
-					$script_keys
-				);
+			$script_keys = array_keys( $script_dependencies );
+			$script_keys = array_map(
+				function ( $id ) {
+					return 'learndash-course-grid-' . $id;
+				},
+				$script_keys
+			);
 
-				$style_keys = array_keys( $style_dependencies );
-				$style_keys = array_map(
-					function ( $id ) {
-						return 'learndash-course-grid-' . $id;
-					},
-					$style_keys
-				);
+			$style_keys = array_keys( $style_dependencies );
+			$style_keys = array_map(
+				function ( $id ) {
+					return 'learndash-course-grid-' . $id;
+				},
+				$style_keys
+			);
 
-				foreach ( $script_dependencies as $id => $script ) {
-					wp_register_script( 'learndash-course-grid-' . $id, $script['url'], [], $script['version'], true );
-				}
+			foreach ( $script_dependencies as $id => $script ) {
+				wp_register_script( 'learndash-course-grid-' . $id, $script['url'], [], $script['version'], true );
+			}
 
-				foreach ( $style_dependencies as $id => $style ) {
-					wp_register_style( 'learndash-course-grid-' . $id, $style['url'], [], $style['version'] );
-				}
+			foreach ( $style_dependencies as $id => $style ) {
+				wp_register_style( 'learndash-course-grid-' . $id, $style['url'], [], $style['version'] );
+			}
 
-				$style_file = Utilities::get_skin_style( $skin );
+			$style_file = Utilities::get_skin_style( $skin );
 
-				if ( $style_file ) {
-					wp_enqueue_style( 'learndash-course-grid-skin-' . $skin, $style_file, $style_keys, LEARNDASH_VERSION );
-				}
+			if ( $style_file ) {
+				wp_enqueue_style( 'learndash-course-grid-skin-' . $skin, $style_file, $style_keys, LEARNDASH_VERSION );
+			}
 
-				$script_file = Utilities::get_skin_script( $skin );
+			$script_file = Utilities::get_skin_script( $skin );
 
-				if ( $script_file ) {
-					wp_enqueue_script( 'learndash-course-grid-skin-' . $skin, $script_file, $script_keys, LEARNDASH_VERSION, true );
-				}
+			if ( $script_file ) {
+				wp_enqueue_script( 'learndash-course-grid-skin-' . $skin, $script_file, $script_keys, LEARNDASH_VERSION, true );
 			}
 
 			$this->enqueue_general_assets();
@@ -684,62 +784,64 @@ class Skins {
 			$this->enqueue_filter_assets();
 		}
 
-		if ( ! empty( $cards ) && is_array( $cards ) ) {
-			$cards = array_unique( $cards );
+		$cards = array_unique( $cards );
 
-			foreach ( $cards as $card ) {
-				// Register dependencies
-				$card_args           = $this->get_card( $card );
-				$script_dependencies = $card_args['script_dependencies'] ?? [];
-				$style_dependencies  = $card_args['style_dependencies'] ?? [];
+		foreach ( $cards as $card ) {
+			// Register dependencies.
+			$card_args           = $this->get_card( $card );
+			$script_dependencies = $card_args['script_dependencies'] ?? [];
+			$style_dependencies  = $card_args['style_dependencies'] ?? [];
 
-				$script_keys = array_keys( $script_dependencies );
-				$script_keys = array_map(
-					function ( $id ) {
-						return 'learndash-course-grid-' . $id;
-					},
-					$script_keys
-				);
+			$script_keys = array_keys( $script_dependencies );
+			$script_keys = array_map(
+				function ( $id ) {
+					return 'learndash-course-grid-' . $id;
+				},
+				$script_keys
+			);
 
-				$style_keys = array_keys( $style_dependencies );
-				$style_keys = array_map(
-					function ( $id ) {
-						return 'learndash-course-grid-' . $id;
-					},
-					$style_keys
-				);
+			$style_keys = array_keys( $style_dependencies );
+			$style_keys = array_map(
+				function ( $id ) {
+					return 'learndash-course-grid-' . $id;
+				},
+				$style_keys
+			);
 
-				foreach ( $script_dependencies as $id => $script ) {
-					wp_register_script( 'learndash-course-grid-' . $id, $script['url'], [], $script['version'], true );
-				}
+			foreach ( $script_dependencies as $id => $script ) {
+				wp_register_script( 'learndash-course-grid-' . $id, $script['url'], [], $script['version'], true );
+			}
 
-				foreach ( $style_dependencies as $id => $style ) {
-					wp_register_style( 'learndash-course-grid-' . $id, $style['url'], [], $style['version'] );
-				}
+			foreach ( $style_dependencies as $id => $style ) {
+				wp_register_style( 'learndash-course-grid-' . $id, $style['url'], [], $style['version'] );
+			}
 
-				$style_file = Utilities::get_card_style( $card );
+			$style_file = Utilities::get_card_style( $card );
 
-				if ( $style_file ) {
-					wp_enqueue_style( 'learndash-course-grid-card-' . $card, $style_file, $style_keys, LEARNDASH_VERSION );
-				}
+			if ( $style_file ) {
+				wp_enqueue_style( 'learndash-course-grid-card-' . $card, $style_file, $style_keys, LEARNDASH_VERSION );
+			}
 
-				$script_file = Utilities::get_card_script( $card );
+			$script_file = Utilities::get_card_script( $card );
 
-				if ( $script_file ) {
-					wp_enqueue_script( 'learndash-course-grid-card-' . $card, $script_file, $script_keys, LEARNDASH_VERSION, true );
-				}
+			if ( $script_file ) {
+				wp_enqueue_script( 'learndash-course-grid-card-' . $card, $script_file, $script_keys, LEARNDASH_VERSION, true );
 			}
 		}
 
-		if ( ! empty( $course_grids ) && is_array( $course_grids ) ) {
+		if (
+			! empty( $course_grids )
+			&& is_array( $course_grids )
+		) {
 			/**
 			 * Prints scripts or data in the head tag on the front end.
 			 */
 			add_action(
-				'wp_head',
+				'wp_footer',
 				function () use ( $course_grids ) {
 					$this->enqueue_custom_assets( $course_grids );
-				}
+				},
+				100
 			);
 		}
 
@@ -759,6 +861,10 @@ class Skins {
 	 * @return void
 	 */
 	public function enqueue_editor_skin_assets() {
+		if ( ! is_admin() ) {
+			return;
+		}
+
 		global $post;
 
 		$skins = $this->get_skins();
@@ -888,19 +994,50 @@ class Skins {
 	 * @return bool True if v1 widget exists, false otherwise.
 	 */
 	public function has_legacy_v1( $content ) {
-		if ( (
+		/**
+		 * Check for legacy v1 shortcodes that don't have course_grid="false".
+		 *
+		 * Examples:
+		 *
+		 * [ld_course_list]
+		 * [ld_lesson_list]
+		 * [ld_quiz_list]
+		 */
+		$has_legacy_shortcode = (
 			preg_match( '/\[ld_.*?_list/', $content )
 			&& ! preg_match( '/\[ld_.*?_list.*?course_grid=(?:"|\')*false(?:"|\')*/', $content )
-		) || (
+		);
+
+		/**
+		 * Check for legacy v1 blocks that don't have course_grid":false.
+		 *
+		 * Examples:
+		 *
+		 * <!-- wp:learndash/ld-course-list -->
+		 * <!-- wp:learndash/ld-lesson-list -->
+		 * <!-- wp:learndash/ld-quiz-list -->
+		 */
+		$has_legacy_block = (
 			preg_match( '/<!-- wp:learndash\/ld-.*?-list/', $content )
 			&& ! preg_match( '/<!-- wp:learndash\/ld-.*?-list.*?course_grid":false/', $content )
-		) || (
+		);
+
+		/**
+		 * Check for explicit legacy v1 comment marker.
+		 *
+		 * Example:
+		 *
+		 * <!-- LearnDash Course Grid v1 -->
+		 */
+		$has_legacy_comment = (
 			strpos( $content, '<!-- LearnDash Course Grid v1 -->' ) !== false
-		) ) {
-			return true;
-		} else {
-			return false;
-		}
+		);
+
+		return (
+			$has_legacy_shortcode
+			|| $has_legacy_block
+			|| $has_legacy_comment
+		);
 	}
 
 	/**

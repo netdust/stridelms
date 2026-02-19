@@ -15,6 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use LearnDash\Core\Models\Assignment;
 use LearnDash\Core\Utilities\Cast;
 
 if ( ( ! class_exists( 'LD_REST_Assignments_Controller_V2' ) ) && ( class_exists( 'LD_REST_Posts_Controller_V2' ) ) ) {
@@ -259,21 +260,52 @@ if ( ( ! class_exists( 'LD_REST_Assignments_Controller_V2' ) ) && ( class_exists
 		 *
 		 * @since 3.3.0
 		 * @since 4.10.3 Only admins can access it.
+		 * @since 5.0.0 Only logged-in users can access it. Results are filtered based on the logged in user's permissions.
 		 *
-		 * @param object $request  WP_REST_Request instance.
+		 * @param WP_REST_Request<array<string,mixed>> $request WP_REST_Request instance.
 		 *
-		 * @return bool|WP_Error True if the request has read access for the item, WP_Error object otherwise.
+		 * @return true|WP_Error True if the request has read access for the item, WP_Error object otherwise.
 		 */
 		public function get_item_permissions_check( $request ) {
-			if ( learndash_is_admin_user() ) {
-				return true;
+			if ( ! is_user_logged_in() ) {
+				return new WP_Error(
+					'learndash_rest_cannot_view',
+					esc_html__( 'Sorry, you are not allowed to view this item.', 'learndash' ),
+					[ 'status' => rest_authorization_required_code() ]
+				);
 			}
 
-			return new WP_Error(
-				'ld_rest_cannot_view',
-				esc_html__( 'Sorry, you are not allowed to view this item.', 'learndash' ),
-				[ 'status' => rest_authorization_required_code() ]
-			);
+			$assignment_id   = Cast::to_int( $request->get_param( 'id' ) );
+			$assignment_post = get_post( $assignment_id );
+
+			// If the Assignment does not exist, return an error.
+			if (
+				empty( $assignment_post )
+				|| ! $assignment_post instanceof WP_Post
+				|| $assignment_post->post_type !== learndash_get_post_type_slug( LDLMS_Post_Types::ASSIGNMENT )
+			) {
+				return new WP_Error(
+					'learndash_rest_post_invalid_id',
+					sprintf(
+						// translators: placeholder: Assignment label.
+						esc_html__( 'Invalid %s ID.', 'learndash' ),
+						learndash_get_custom_label( 'assignment' )
+					),
+					[ 'status' => 404 ]
+				);
+			}
+
+			$can_view = $this->can_view_assignment( Assignment::create_from_post( $assignment_post ) );
+
+			if ( ! $can_view ) {
+				return new WP_Error(
+					'learndash_rest_cannot_view',
+					esc_html__( 'Sorry, you are not allowed to view this item.', 'learndash' ),
+					[ 'status' => rest_authorization_required_code() ]
+				);
+			}
+
+			return true;
 		}
 
 		/**
@@ -281,18 +313,19 @@ if ( ( ! class_exists( 'LD_REST_Assignments_Controller_V2' ) ) && ( class_exists
 		 *
 		 * @since 3.3.0
 		 * @since 4.10.3 Only admins can access it.
+		 * @since 5.0.0 Only logged-in users can access it. Results are filtered by permissions in the rest_query_filter() method.
 		 *
 		 * @param object $request  WP_REST_Request instance.
 		 *
-		 * @return bool|WP_Error True if the request has read access for the item, WP_Error object otherwise.
+		 * @return true|WP_Error True if the request has read access for the item, WP_Error object otherwise.
 		 */
 		public function get_items_permissions_check( $request ) {
-			if ( learndash_is_admin_user() ) {
+			if ( is_user_logged_in() ) {
 				return true;
 			}
 
 			return new WP_Error(
-				'ld_rest_cannot_view',
+				'learndash_rest_cannot_view',
 				esc_html__( 'Sorry, you are not allowed to view this item.', 'learndash' ),
 				[ 'status' => rest_authorization_required_code() ]
 			);
@@ -303,8 +336,8 @@ if ( ( ! class_exists( 'LD_REST_Assignments_Controller_V2' ) ) && ( class_exists
 		 *
 		 * @since 3.3.0
 		 *
-		 * @param array           $query_args Key value array of query var to query value.
-		 * @param WP_REST_Request $request    The request used.
+		 * @param array<string,mixed>                  $query_args Key value array of query var to query value.
+		 * @param WP_REST_Request<array<string,mixed>> $request    The request used.
 		 *
 		 * @return array Key value array of query var to query value.
 		 */
@@ -323,75 +356,116 @@ if ( ( ! class_exists( 'LD_REST_Assignments_Controller_V2' ) ) && ( class_exists
 				'topic_id'  => 0,
 			);
 
-			if ( is_user_logged_in() ) {
-
+			if ( current_user_can( 'edit_others_assignments' ) ) {
 				$filters['course_id'] = $request['course'];
-				$filters['course_id'] = absint( $filters['course_id'] );
+				$filters['course_id'] = absint( Cast::to_int( $filters['course_id'] ) );
 
 				if ( ! empty( $filters['course_id'] ) ) {
 					$filters['lesson_id'] = $request['lesson'];
-					$filters['lesson_id'] = absint( $filters['lesson_id'] );
+					$filters['lesson_id'] = absint( Cast::to_int( $filters['lesson_id'] ) );
 
 					$filters['topic_id'] = $request['topic'];
-					$filters['topic_id'] = absint( $filters['topic_id'] );
+					$filters['topic_id'] = absint( Cast::to_int( $filters['topic_id'] ) );
 
 					if ( ( ! empty( $filters['topic_id'] ) ) && ( learndash_get_post_type_slug( 'topic' ) === get_post_type( $filters['topic_id'] ) ) ) {
 						$filters['lesson_id'] = absint( $filters['topic_id'] );
 					}
 				}
 
-				if ( current_user_can( 'edit_others_assignments' ) ) {
-					if ( learndash_is_group_leader_user() ) {
-						$gl_course_ids = array();
-						$gl_user_ids   = array();
+				if ( learndash_is_group_leader_user() ) {
+					$group_leader_course_ids  = [];
+					$valid_user_ids           = [ get_current_user_id() ]; // Default to the Group Leader's ID.
 
-						$gl_group_ids = learndash_get_administrators_group_ids( get_current_user_id() );
-						if ( ! empty( $gl_group_ids ) ) {
-							foreach ( $gl_group_ids as $group_id ) {
-								$course_ids = learndash_group_enrolled_courses( $group_id );
-								if ( ! empty( $course_ids ) ) {
-									$gl_course_ids = array_merge( $gl_course_ids, $course_ids );
-								}
+					$authors = $request->get_param( 'author' );
 
-								$user_ids = learndash_get_groups_user_ids( $group_id );
-								if ( ! empty( $user_ids ) ) {
-									$gl_user_ids = array_merge( $gl_user_ids, $user_ids );
-								}
+					if ( ! is_array( $authors ) ) {
+						$authors = [ $authors ];
+					}
+
+					if ( empty( array_filter( $authors ) ) ) {
+						$authors = [];
+					}
+
+					$authors = array_map(
+						'absint',
+						array_map(
+							[
+								Cast::class,
+								'to_int',
+							],
+							$authors
+						)
+					);
+
+					$group_leader_group_ids = learndash_get_administrators_group_ids( get_current_user_id() );
+					if ( ! empty( $group_leader_group_ids ) ) {
+						foreach ( $group_leader_group_ids as $group_id ) {
+							$course_ids = learndash_group_enrolled_courses( $group_id );
+							if ( ! empty( $course_ids ) ) {
+								$group_leader_course_ids = array_merge( $group_leader_course_ids, $course_ids );
 							}
-						}
 
-						if ( ( ! empty( $gl_course_ids ) ) && ( ! empty( $gl_user_ids ) ) ) {
-							$gl_course_ids = array_map( 'absint', $gl_course_ids );
-							$gl_user_ids   = array_map( 'absint', $gl_user_ids );
-
-							if ( ! empty( $filters['course_id'] ) ) {
-								if ( ! in_array( $filters['course_id'], $gl_course_ids, true ) ) {
-									$query_args['post__in'] = array( 0 );
-								} else {
-									$filters['course_id'] = $gl_course_ids;
-								}
-							} else {
-								$filters['course_id'] = $gl_course_ids;
-							}
-
-							$query_args['author__in'] = $gl_user_ids;
-						} else {
-							$query_args['post__in'] = array( 0 );
-						}
-					} else {
-						$query_args['author__in'] = array( get_current_user_id() );
-
-						if ( ! empty( $filters['course_id'] ) ) {
-							$user_group_ids = learndash_get_users_group_ids( get_current_user_id(), true );
-							$user_group_ids = array_map( 'absint', $user_group_ids );
-							if ( ( empty( $user_group_ids ) ) || ( ! in_array( $filters['course_id'], $user_group_ids, true ) ) ) {
-								$query_args['post__in'] = array( 0 );
+							$user_ids = learndash_get_groups_user_ids( $group_id );
+							if ( ! empty( $user_ids ) ) {
+								$valid_user_ids = array_merge( $valid_user_ids, $user_ids );
 							}
 						}
 					}
+
+					/**
+					 * If an Author is specified, filter the Assignments by the specified Author IDs but only
+					 * if they are in the Group Leader's groups or it is the Group Leader's ID.
+					 */
+					if ( ! empty( $authors ) ) {
+						$valid_user_ids = array_values( array_intersect( $valid_user_ids, $authors ) );
+					}
+
+					if (
+						! empty( $group_leader_course_ids )
+						&& ! empty( $valid_user_ids )
+					) {
+						$group_leader_course_ids = array_map( 'absint', $group_leader_course_ids );
+						$valid_user_ids          = array_map( 'absint', $valid_user_ids );
+
+						if ( ! empty( $filters['course_id'] ) ) {
+							if ( ! in_array( $filters['course_id'], $group_leader_course_ids, true ) ) {
+								$query_args['post__in'] = [ 0 ];
+							}
+						} else {
+							$filters['course_id'] = $group_leader_course_ids;
+						}
+
+						$query_args['author__in'] = $valid_user_ids;
+					} else {
+						$query_args['post__in'] = [ 0 ];
+					}
 				}
 			} else {
-				$query_args['post__in'] = array( 0 );
+				// If the logged-in user cannot edit others' Assignments, they should only see their own Assignments.
+				$query_args['author__in'] = [ get_current_user_id() ];
+
+				$course_id = Cast::to_int( $request->get_param( 'course' ) );
+
+				if ( $course_id > 0 ) {
+					$filters['course_id'] = $course_id;
+				}
+
+				$user_course_ids = learndash_user_get_enrolled_courses( get_current_user_id() );
+				$user_course_ids = array_map( 'absint', $user_course_ids );
+
+				/**
+				 * If the user is not enrolled in Courses or the set Course ID is not in the user's
+				 * enrolled Courses, filter to exclude all Assignments.
+				 */
+				if (
+					empty( $user_course_ids )
+					|| (
+						$course_id > 0
+						&& ! in_array( $course_id, $user_course_ids, true )
+					)
+				) {
+					$query_args['post__in'] = [ 0 ];
+				}
 			}
 
 			if ( ! empty( $filters['course_id'] ) ) {
@@ -565,6 +639,41 @@ if ( ( ! class_exists( 'LD_REST_Assignments_Controller_V2' ) ) && ( class_exists
 						'default'     => 0,
 						'context'     => array( 'view' ),
 						'required'    => false,
+					);
+				}
+
+				if ( ! isset( $query_params['topic'] ) ) {
+					$query_params['topic'] = array(
+						'description' => sprintf(
+							// translators: placeholder: Topic.
+							esc_html_x( 'Filter by %s ID', 'placeholder: Lesson', 'learndash' ),
+							LearnDash_Custom_Label::get_label( 'topic' )
+						),
+						'type'        => 'integer',
+						'default'     => 0,
+						'context'     => array( 'view' ),
+						'required'    => false,
+					);
+				}
+
+				if ( ! isset( $query_params['approved_status'] ) ) {
+					$query_params['approved_status'] = array(
+						'context'     => [ 'view' ],
+						'default'     => '',
+						'description' => sprintf(
+							// translators: placeholder: %1$s: Assignment label, %2$s: Assignments label lowercase.
+							__( 'Filter by %1$s Approved Status. "approved" will show only approved %2$s, "not_approved" will show only not approved %2$s, "" will show all %2$s.', 'learndash' ),
+							learndash_get_custom_label( 'assignment' ),
+							learndash_get_custom_label_lower( 'assignments' ),
+						),
+						'example'     => 'approved',
+						'required'    => false,
+						'type'        => 'string',
+						'enum'        => [
+							'',
+							'approved',
+							'not_approved',
+						],
 					);
 				}
 			}
@@ -746,11 +855,13 @@ if ( ( ! class_exists( 'LD_REST_Assignments_Controller_V2' ) ) && ( class_exists
 
 					case 'points_awarded':
 						if ( learndash_assignment_is_points_enabled( $post->ID ) ) {
-							$max_points     = absint( learndash_get_setting( $lesson_id, 'lesson_assignment_points_amount' ) );
-							$points_awarded = absint( $post_value );
+							$max_points     = absint( Cast::to_int( learndash_get_setting( $lesson_id, 'lesson_assignment_points_amount' ) ) );
+							$points_awarded = absint( Cast::to_int( $post_value ) );
+
 							if ( $points_awarded > $max_points ) {
 								$points_awarded = $max_points;
 							}
+
 							update_post_meta( $post->ID, 'points', $points_awarded );
 						}
 						break;
@@ -783,21 +894,151 @@ if ( ( ! class_exists( 'LD_REST_Assignments_Controller_V2' ) ) && ( class_exists
 		 * Checks if a given request has access to update a post.
 		 *
 		 * @since 4.10.3
+		 * @since 5.0.0 Admins and Group Leaders can now update assignments.
 		 *
 		 * @param WP_REST_Request $request Full details about the request.
 		 *
 		 * @return true|WP_Error True if the request has access to update the item, WP_Error object otherwise.
 		 */
 		public function update_item_permissions_check( $request ) {
-			if ( learndash_is_admin_user() ) {
-				return parent::update_item_permissions_check( $request );
+			$assignment_id   = Cast::to_int( $request->get_param( 'id' ) );
+			$assignment_post = get_post( $assignment_id );
+
+			// If the Assignment does not exist, return an error.
+			if (
+				empty( $assignment_post )
+				|| ! $assignment_post instanceof WP_Post
+				|| $assignment_post->post_type !== learndash_get_post_type_slug( LDLMS_Post_Types::ASSIGNMENT )
+			) {
+				return new WP_Error(
+					'learndash_rest_post_invalid_id',
+					sprintf(
+						// translators: placeholder: Assignment label.
+						esc_html__( 'Invalid %s ID.', 'learndash' ),
+						learndash_get_custom_label( 'assignment' )
+					),
+					[ 'status' => 404 ]
+				);
 			}
 
-			return new WP_Error(
-				'rest_cannot_edit',
-				__( 'Sorry, you are not allowed to edit this post.', 'learndash' ),
-				[ 'status' => rest_authorization_required_code() ]
-			);
+			$assignment = Assignment::create_from_post( $assignment_post );
+
+			// Non-admins cannot update their own assignments.
+			if (
+				! learndash_is_admin_user( get_current_user_id() )
+				&& $assignment->get_post_author_id() === get_current_user_id()
+			) {
+				return new WP_Error(
+					'learndash_rest_cannot_edit',
+					esc_html__( 'Sorry, you are not allowed to edit this post.', 'learndash' ),
+					[ 'status' => rest_authorization_required_code() ]
+				);
+			}
+
+			$can_view = $this->can_view_assignment( $assignment );
+
+			if ( ! $can_view ) {
+				return new WP_Error(
+					'learndash_rest_cannot_edit',
+					esc_html__( 'Sorry, you are not allowed to edit this post.', 'learndash' ),
+					[ 'status' => rest_authorization_required_code() ]
+				);
+			}
+
+			return true;
+		}
+
+		/**
+		 * Checks if a given user can view an assignment.
+		 *
+		 * @since 5.0.0
+		 *
+		 * @param Assignment $assignment Assignment model.
+		 * @param ?int       $user_id    User ID. If null, the current user will be used.
+		 *
+		 * @return bool
+		 */
+		private function can_view_assignment( Assignment $assignment, ?int $user_id = null ): bool {
+			if (
+				$user_id === null
+				|| $user_id <= 0
+			) {
+				$user_id = get_current_user_id();
+			}
+
+			if ( ! $user_id ) {
+				return false;
+			}
+
+			if (
+				$assignment->get_post_author_id() === $user_id // Assignment owners can view their own assignments.
+				|| learndash_is_admin_user( $user_id ) // Admins can view all assignments.
+			) {
+				return true;
+			}
+
+			// Group Leaders can view assignments submitted by users in their groups.
+			if ( learndash_is_group_leader_user() ) {
+				$group_leader_group_ids  = learndash_get_administrators_group_ids( $user_id );
+				$group_leader_course_ids = [];
+				$group_leader_user_ids   = [];
+
+				foreach ( $group_leader_group_ids as $group_id ) {
+					$group_leader_course_ids = array_unique(
+						array_merge(
+							$group_leader_course_ids,
+							learndash_group_enrolled_courses( $group_id )
+						)
+					);
+
+					$group_leader_user_ids = array_unique(
+						array_merge(
+							$group_leader_user_ids,
+							learndash_get_groups_user_ids( $group_id )
+						)
+					);
+				}
+
+				// If this Group Leader has no Users or Courses in its Groups, they cannot view any assignments.
+				if (
+					empty( $group_leader_user_ids )
+					|| empty( $group_leader_course_ids )
+				) {
+					return false;
+				}
+
+				$assignment_course_id = $assignment->get_course_id();
+
+				// If the Assignment was not created in a Course that the Group Leader has access to, they cannot view it.
+				if (
+					$assignment_course_id > 0
+					&& ! in_array(
+						$assignment_course_id,
+						$group_leader_course_ids,
+						true
+					)
+				) {
+					return false;
+				}
+
+				// If the Assignment was created by a user in the Group Leader's Groups, they can view it.
+				if (
+					! in_array(
+						$assignment->get_post_author_id(),
+						$group_leader_user_ids,
+						true
+					)
+				) {
+					return false;
+				}
+			}
+
+			// After all other checks, if the user can edit others' assignments, they can view the assignment.
+			if ( current_user_can( 'edit_others_assignments' ) ) {
+				return true;
+			}
+
+			return false;
 		}
 	}
 }

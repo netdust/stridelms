@@ -30,7 +30,7 @@ namespace StellarWP\Learndash\Stripe;
  *    dashboard.
  * @property SetupIntent $setup_intent The SetupIntent object for errors
  *    returned on a request involving a SetupIntent.
- * @property StripeObject $source The source object for errors returned on a
+ * @property \StripeObject $source The source object for errors returned on a
  *    request involving a source.
  * @property string $type The type of error returned. One of `api_error`,
  *   `card_error`, `idempotency_error`, or `invalid_request_error`.
@@ -211,7 +211,6 @@ class ErrorObject extends StripeObject
     const CODE_TRANSFERS_NOT_ALLOWED = 'transfers_not_allowed';
     const CODE_URL_INVALID = 'url_invalid';
     // The end of the section generated from our OpenAPI spec
-
     /**
      * Refreshes this object using the provided values.
      *
@@ -224,19 +223,7 @@ class ErrorObject extends StripeObject
         // Unlike most other API resources, the API will omit attributes in
         // error objects when they have a null value. We manually set default
         // values here to facilitate generic error handling.
-        $values = \array_merge([
-            'charge' => null,
-            'code' => null,
-            'decline_code' => null,
-            'doc_url' => null,
-            'message' => null,
-            'param' => null,
-            'payment_intent' => null,
-            'payment_method' => null,
-            'setup_intent' => null,
-            'source' => null,
-            'type' => null,
-        ], $values);
+        $values = \array_merge(['charge' => null, 'code' => null, 'decline_code' => null, 'doc_url' => null, 'message' => null, 'param' => null, 'payment_intent' => null, 'payment_method' => null, 'setup_intent' => null, 'source' => null, 'type' => null], $values);
         parent::refreshFrom($values, $opts, $partial);
     }
 }

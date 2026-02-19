@@ -15,6 +15,7 @@ use LearnDash\Core\Models\Product as Core_Product;
 use LearnDash\Core\Models\Transaction;
 use LearnDash\Core\Utilities\Cast;
 use LearnDash\Core\Mappers\Models\Commerce_Product_Mapper;
+use LearnDash\Core\Enums\Commerce\Cancellation_Reason;
 
 /**
  * Abstract Product model class for Commerce.
@@ -48,6 +49,15 @@ abstract class Product extends Transaction {
 	 * @var string
 	 */
 	public static $meta_key_cancellation_reason = 'cancellation_reason';
+
+	/**
+	 * Meta key for the ID of the user who canceled the product.
+	 *
+	 * @since 4.25.3
+	 *
+	 * @var string
+	 */
+	public static $meta_key_cancellation_user_id = 'cancellation_user_id';
 
 	/**
 	 * Meta key for the status history.
@@ -84,18 +94,6 @@ abstract class Product extends Transaction {
 	}
 
 	/**
-	 * Cancels the product.
-	 *
-	 * @since 4.25.0
-	 *
-	 * @param string $reason             The reason for the cancellation.
-	 * @param bool   $force_cancellation Whether to force the cancellation. Default false.
-	 *
-	 * @return bool True if the product was canceled. False otherwise.
-	 */
-	abstract public function cancel( string $reason, bool $force_cancellation = false ): bool;
-
-	/**
 	 * Returns the status based on the Core Product.
 	 *
 	 * @since 4.25.0
@@ -125,6 +123,24 @@ abstract class Product extends Transaction {
 	abstract public function get_price(): float;
 
 	/**
+	 * Cancels the product.
+	 *
+	 * @since 4.25.0
+	 *
+	 * @param string $reason             The reason for the cancellation.
+	 * @param bool   $force_cancellation Whether to force the cancellation. Default false.
+	 *
+	 * @return bool True if the product was canceled. False otherwise.
+	 */
+	public function cancel( string $reason, bool $force_cancellation = false ): bool {
+		$this->set_meta( self::$meta_key_cancellation_date, time() );
+		$this->set_meta( self::$meta_key_cancellation_reason, $reason );
+		$this->set_meta( self::$meta_key_cancellation_user_id, get_current_user_id() );
+
+		return true;
+	}
+
+	/**
 	 * Returns the timestamp when the product was canceled, or null if the product is not canceled.
 	 *
 	 * @since 4.25.0
@@ -137,6 +153,43 @@ abstract class Product extends Transaction {
 		return is_null( $cancellation_date )
 			? null
 			: Cast::to_int( $cancellation_date );
+	}
+
+	/**
+	 * Returns the ID of the user who canceled the product.
+	 * Returns null if the product is not canceled or if the cancellation was done by the system (via webhooks or payment processing).
+	 *
+	 * @since 4.25.3
+	 *
+	 * @return int|null
+	 */
+	public function get_cancellation_user_id(): ?int {
+		$user_id = Cast::to_int( $this->getAttribute( self::$meta_key_cancellation_user_id, 0 ) );
+
+		return $user_id <= 0
+			? null
+			: Cast::to_int( $user_id );
+	}
+
+	/**
+	 * Returns the cancellation reason enum, or null if the product is not canceled.
+	 *
+	 * @since 4.25.3
+	 *
+	 * @return ?Cancellation_Reason
+	 */
+	public function get_cancellation_reason(): ?Cancellation_Reason {
+		$cancellation_reason = Cast::to_string( $this->getAttribute( self::$meta_key_cancellation_reason ) );
+
+		if ( empty( $cancellation_reason ) ) {
+			return null;
+		}
+
+		try {
+			return Cancellation_Reason::from( $cancellation_reason );
+		} catch ( \UnexpectedValueException $e ) {
+			return null;
+		}
 	}
 
 	/**

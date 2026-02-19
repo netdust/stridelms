@@ -120,6 +120,14 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' ) ) && ( cl
 			) . '</option></select>';
 		}
 
+		/**
+		 * Courses search.
+		 *
+		 * @since 4.17.0
+		 * @since 4.25.1 excluded open courses from the list of courses because we don't support open course reporting.
+		 *
+		 * @return array<string, mixed> The courses data.
+		 */
 		function filter_search() {
 			$courses_data = array(
 				'total' => 0,
@@ -231,6 +239,12 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' ) ) && ( cl
 				}
 			}
 
+			// Remove open courses from the list of courses. Added in v4.25.1.
+			$open_course_ids = learndash_get_open_courses();
+			if ( ! empty( $open_course_ids ) ) {
+				$course_query_args['post__not_in'] = $open_course_ids;
+			}
+
 			if ( ! empty( $course_query_args ) ) {
 				$course_query = new WP_Query( $course_query_args );
 				if ( $course_query->have_posts() ) {
@@ -290,7 +304,6 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' ) ) && ( cl
 			$response = array(
 				'total_rows'  => 0,
 				'rows_html'   => '',
-				// 'user_ids' => array(),
 				'total_users' => 0,
 			);
 
@@ -301,7 +314,6 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' ) ) && ( cl
 				'activity_types'  => 'course',
 				'activity_status' => '',
 				'orderby_order'   => 'users.display_name, posts.post_title',
-			// 'date_format'       =>  'F j, Y H:i:s',
 			);
 
 			$this->activity_query_args = wp_parse_args( $this->activity_query_args, $activity_query_defaults );
