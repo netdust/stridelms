@@ -190,7 +190,7 @@ $paidCount = count($paidQuotes);
  */
 function stride_render_quote_card(array $quote, EditionService $editionService): void
 {
-    $quoteId = (int) ($quote['ID'] ?? 0);
+    $quoteId = (int) ($quote['id'] ?? $quote['ID'] ?? 0);
     $quoteNumber = $quote['quote_number'] ?? sprintf('Q%d', $quoteId);
     $status = $quote['status_enum'] ?? QuoteStatus::Draft;
     $totalMoney = $quote['total_money'] ?? null;
