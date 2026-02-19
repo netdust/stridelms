@@ -2,8 +2,9 @@
 /**
  * Quote Detail Template
  *
- * Displays a single quote with line items, billing info, and status.
- * Allows editing billing info for draft quotes.
+ * Displays a single quote with sidepanel layout:
+ * - Main panel: User info, billing info, actions
+ * - Side panel: Quote details, line items, totals
  *
  * @package stride
  */
@@ -100,11 +101,13 @@ $isEditable = $status->isEditable();
 $items = $quote['items'] ?? [];
 $billing = $quote['billing'] ?? [];
 $subtotal = $quote['subtotal_money'] ?? null;
+$discount = $quote['discount_money'] ?? null;
 $tax = $quote['tax_money'] ?? null;
 $total = $quote['total_money'] ?? null;
 $validUntil = $quote['valid_until'] ?? '';
 $quoteDate = $quote['post_date'] ?? '';
 $editionId = (int) ($quote['edition_id'] ?? 0);
+$voucherCode = $quote['voucher_code'] ?? '';
 
 // Get edition/course info
 $editionTitle = '';
@@ -113,6 +116,15 @@ if ($editionId > 0) {
     $editionTitle = $courseId ? get_the_title($courseId) : get_the_title($editionId);
 }
 
+// User data
+$quoteUser = get_user_by('ID', $quoteUserId);
+$userName = $quoteUser ? trim($quoteUser->first_name . ' ' . $quoteUser->last_name) : '';
+if (empty($userName)) {
+    $userName = $quoteUser->display_name ?? '';
+}
+$userEmail = $quoteUser->user_email ?? '';
+$userPhone = get_user_meta($quoteUserId, 'phone', true) ?: get_user_meta($quoteUserId, 'billing_phone', true);
+
 // Status badge
 $statusClass = match ($status) {
     QuoteStatus::Draft => 'stride-label-soft-secondary',
@@ -120,233 +132,307 @@ $statusClass = match ($status) {
     QuoteStatus::Exported => 'stride-label-soft-success',
     QuoteStatus::Cancelled => 'stride-label-soft-danger',
 };
+
+// Validity check
+$validDate = $validUntil ? strtotime($validUntil) : null;
+$isExpired = $validDate && $validDate < time();
+$daysLeft = $validDate ? ceil(($validDate - time()) / DAY_IN_SECONDS) : 0;
 ?>
 
-<div class="stride-quote-detail uk-width-xlarge uk-margin-auto">
-        <!-- Header -->
-        <header class="stride-page-header uk-margin-bottom">
-            <a href="<?php echo esc_url(home_url('/mijn-account/mijn-offertes/')); ?>" class="stride-page-header__back">
-                <span uk-icon="icon: arrow-left; ratio: 0.8"></span>
-                <?php esc_html_e('Mijn offertes', 'stride'); ?>
-            </a>
-            <div class="uk-flex uk-flex-between uk-flex-middle">
-                <h1 class="stride-page-header__title uk-margin-remove">
-                    <?php esc_html_e('Offerte', 'stride'); ?> <?php echo esc_html($quoteNumber); ?>
-                </h1>
-                <span class="uk-label <?php echo esc_attr($statusClass); ?>">
-                    <?php echo esc_html($status->label()); ?>
-                </span>
-            </div>
-            <?php if ($quoteDate): ?>
-                <p class="stride-page-header__subtitle">
-                    <?php echo esc_html(date_i18n('j F Y', strtotime($quoteDate))); ?>
-                </p>
-            <?php endif; ?>
-        </header>
-
-        <?php if ($status === QuoteStatus::Exported): ?>
-            <div class="uk-alert uk-alert-success uk-margin-bottom">
-                <span uk-icon="icon: check"></span>
-                <?php esc_html_e('Deze offerte is verwerkt en doorgestuurd naar de boekhouding.', 'stride'); ?>
-            </div>
-        <?php elseif ($status === QuoteStatus::Cancelled): ?>
-            <div class="uk-alert uk-alert-danger uk-margin-bottom">
-                <span uk-icon="icon: ban"></span>
-                <?php esc_html_e('Deze offerte is geannuleerd.', 'stride'); ?>
-            </div>
+<div class="stride-quote-detail">
+    <!-- Header -->
+    <header class="stride-page-header uk-margin-bottom">
+        <a href="<?php echo esc_url(home_url('/mijn-account/mijn-offertes/')); ?>" class="stride-page-header__back">
+            <span uk-icon="icon: arrow-left; ratio: 0.8"></span>
+            <?php esc_html_e('Mijn offertes', 'stride'); ?>
+        </a>
+        <div class="uk-flex uk-flex-between uk-flex-middle uk-flex-wrap" style="gap: 10px;">
+            <h1 class="stride-page-header__title uk-margin-remove">
+                <?php esc_html_e('Offerte', 'stride'); ?> <?php echo esc_html($quoteNumber); ?>
+            </h1>
+            <span class="uk-label <?php echo esc_attr($statusClass); ?>">
+                <?php echo esc_html($status->label()); ?>
+            </span>
+        </div>
+        <?php if ($quoteDate): ?>
+            <p class="stride-page-header__subtitle">
+                <?php echo esc_html(date_i18n('j F Y', strtotime($quoteDate))); ?>
+            </p>
         <?php endif; ?>
+    </header>
 
-        <!-- Quote Details -->
-        <div class="stride-card uk-margin-bottom">
-            <div class="stride-card-header">
-                <h2 class="stride-card-title">
-                    <span uk-icon="icon: file-text"></span>
-                    <?php esc_html_e('Offerte details', 'stride'); ?>
-                </h2>
+    <?php if ($status === QuoteStatus::Exported): ?>
+        <div class="uk-alert uk-alert-success uk-margin-bottom">
+            <span uk-icon="icon: check"></span>
+            <?php esc_html_e('Deze offerte is verwerkt en doorgestuurd naar de boekhouding.', 'stride'); ?>
+        </div>
+    <?php elseif ($status === QuoteStatus::Cancelled): ?>
+        <div class="uk-alert uk-alert-danger uk-margin-bottom">
+            <span uk-icon="icon: ban"></span>
+            <?php esc_html_e('Deze offerte is geannuleerd.', 'stride'); ?>
+        </div>
+    <?php endif; ?>
+
+    <!-- Main Layout: 2 columns -->
+    <div class="uk-grid uk-grid-medium" uk-grid>
+        <!-- Main Panel: User & Billing Info -->
+        <div class="uk-width-1-1 uk-width-2-3@m">
+            <!-- User Information -->
+            <div class="stride-card uk-margin-bottom">
+                <div class="stride-card-header">
+                    <h2 class="stride-card-title">
+                        <span uk-icon="icon: user"></span>
+                        <?php esc_html_e('Klantgegevens', 'stride'); ?>
+                    </h2>
+                </div>
+                <div class="uk-padding">
+                    <div class="uk-grid uk-grid-small" uk-grid>
+                        <div class="uk-width-1-2@s">
+                            <strong><?php esc_html_e('Naam', 'stride'); ?></strong>
+                            <p class="uk-margin-remove"><?php echo esc_html($userName ?: '-'); ?></p>
+                        </div>
+                        <div class="uk-width-1-2@s">
+                            <strong><?php esc_html_e('E-mailadres', 'stride'); ?></strong>
+                            <p class="uk-margin-remove"><?php echo esc_html($userEmail ?: '-'); ?></p>
+                        </div>
+                        <?php if ($userPhone): ?>
+                        <div class="uk-width-1-2@s">
+                            <strong><?php esc_html_e('Telefoon', 'stride'); ?></strong>
+                            <p class="uk-margin-remove"><?php echo esc_html($userPhone); ?></p>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
             </div>
-            <div class="uk-padding">
-                <!-- Line Items -->
-                <table class="uk-table uk-table-divider uk-table-middle">
-                    <thead>
-                        <tr>
-                            <th><?php esc_html_e('Omschrijving', 'stride'); ?></th>
-                            <th class="uk-text-right uk-width-small"><?php esc_html_e('Aantal', 'stride'); ?></th>
-                            <th class="uk-text-right uk-width-small"><?php esc_html_e('Bedrag', 'stride'); ?></th>
-                        </tr>
-                    </thead>
-                    <tbody>
+
+            <!-- Billing Information -->
+            <div class="stride-card uk-margin-bottom">
+                <div class="stride-card-header">
+                    <h2 class="stride-card-title">
+                        <span uk-icon="icon: file-text"></span>
+                        <?php esc_html_e('Facturatiegegevens', 'stride'); ?>
+                    </h2>
+                    <?php if ($isEditable): ?>
+                        <button type="button" class="uk-button uk-button-text" uk-toggle="target: #edit-billing-modal">
+                            <span uk-icon="icon: pencil; ratio: 0.8"></span>
+                            <?php esc_html_e('Wijzigen', 'stride'); ?>
+                        </button>
+                    <?php endif; ?>
+                </div>
+                <div class="uk-padding">
+                    <div class="uk-grid uk-grid-small" uk-grid>
+                        <?php $organisation = $billing['organisation'] ?? $billing['organization'] ?? ''; ?>
+                        <?php if (!empty($organisation)): ?>
+                            <div class="uk-width-1-1">
+                                <strong><?php esc_html_e('Organisatie', 'stride'); ?></strong>
+                                <p class="uk-margin-remove"><?php echo esc_html($organisation); ?></p>
+                            </div>
+                        <?php endif; ?>
+                        <div class="uk-width-1-2@s">
+                            <strong><?php esc_html_e('Facturatie e-mail', 'stride'); ?></strong>
+                            <p class="uk-margin-remove"><?php echo esc_html($billing['email'] ?? $userEmail ?: '-'); ?></p>
+                        </div>
+                        <?php if (!empty($billing['vat_number'])): ?>
+                            <div class="uk-width-1-2@s">
+                                <strong><?php esc_html_e('BTW-nummer', 'stride'); ?></strong>
+                                <p class="uk-margin-remove"><?php echo esc_html($billing['vat_number']); ?></p>
+                            </div>
+                        <?php endif; ?>
+                        <?php if (!empty($billing['gln_number'])): ?>
+                            <div class="uk-width-1-2@s">
+                                <strong><?php esc_html_e('GLN-nummer', 'stride'); ?></strong>
+                                <p class="uk-margin-remove"><?php echo esc_html($billing['gln_number']); ?></p>
+                            </div>
+                        <?php endif; ?>
+                        <?php if (!empty($billing['address'])): ?>
+                            <?php $postal = $billing['postal_code'] ?? $billing['postal'] ?? ''; ?>
+                            <div class="uk-width-1-1">
+                                <strong><?php esc_html_e('Adres', 'stride'); ?></strong>
+                                <p class="uk-margin-remove">
+                                    <?php echo esc_html($billing['address']); ?><br>
+                                    <?php if (!empty($postal) || !empty($billing['city'])): ?>
+                                        <?php echo esc_html(trim($postal . ' ' . ($billing['city'] ?? ''))); ?>
+                                    <?php endif; ?>
+                                </p>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <?php if (empty($organisation) && empty($billing['address']) && empty($billing['vat_number'])): ?>
+                        <p class="uk-text-muted uk-margin-remove">
+                            <?php esc_html_e('Geen aanvullende facturatiegegevens ingevuld.', 'stride'); ?>
+                            <?php if ($isEditable): ?>
+                                <a href="#" uk-toggle="target: #edit-billing-modal"><?php esc_html_e('Toevoegen', 'stride'); ?></a>
+                            <?php endif; ?>
+                        </p>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <!-- Course Info -->
+            <?php if ($editionId > 0): ?>
+            <div class="stride-card uk-margin-bottom">
+                <div class="stride-card-header">
+                    <h2 class="stride-card-title">
+                        <span uk-icon="icon: album"></span>
+                        <?php esc_html_e('Cursus', 'stride'); ?>
+                    </h2>
+                </div>
+                <div class="uk-padding">
+                    <h3 class="uk-h4 uk-margin-remove-top"><?php echo esc_html($editionTitle ?: __('Cursusinschrijving', 'stride')); ?></h3>
+                    <a href="<?php echo esc_url(get_permalink($editionId)); ?>" class="uk-button uk-button-text uk-margin-small-top">
+                        <?php esc_html_e('Bekijk cursus', 'stride'); ?>
+                        <span uk-icon="icon: arrow-right; ratio: 0.8"></span>
+                    </a>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <!-- Actions (mobile: at bottom) -->
+            <div class="uk-hidden@m uk-margin-top">
+                <?php stride_render_quote_actions($isEditable, $quoteId, $editionId); ?>
+            </div>
+        </div>
+
+        <!-- Side Panel: Quote Details -->
+        <div class="uk-width-1-1 uk-width-1-3@m">
+            <div class="stride-card stride-card--sticky" uk-sticky="offset: 100; bottom: true; media: @m">
+                <div class="stride-card-header">
+                    <h2 class="stride-card-title">
+                        <?php esc_html_e('Overzicht', 'stride'); ?>
+                    </h2>
+                </div>
+                <div class="uk-padding">
+                    <!-- Line Items -->
+                    <div class="stride-quote-items">
                         <?php if (!empty($items)): ?>
                             <?php foreach ($items as $item): ?>
-                                <tr>
-                                    <td>
+                                <div class="stride-quote-item">
+                                    <div class="stride-quote-item__title">
                                         <?php echo esc_html($item['title'] ?? $editionTitle); ?>
-                                        <?php if (!empty($item['description'])): ?>
-                                            <br><small class="uk-text-muted"><?php echo esc_html($item['description']); ?></small>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td class="uk-text-right"><?php echo esc_html($item['quantity'] ?? 1); ?></td>
-                                    <td class="uk-text-right">
-                                        <?php
-                                        $itemTotal = ($item['total'] ?? $item['unit_price'] ?? 0) / 100;
-                                        echo '€ ' . number_format($itemTotal, 2, ',', '.');
-                                        ?>
-                                    </td>
-                                </tr>
+                                    </div>
+                                    <div class="stride-quote-item__details">
+                                        <span><?php echo esc_html($item['quantity'] ?? 1); ?>x</span>
+                                        <span>
+                                            <?php
+                                            $itemTotal = ($item['total'] ?? $item['unit_price'] ?? 0) / 100;
+                                            echo '€ ' . number_format($itemTotal, 2, ',', '.');
+                                            ?>
+                                        </span>
+                                    </div>
+                                </div>
                             <?php endforeach; ?>
                         <?php else: ?>
-                            <tr>
-                                <td><?php echo esc_html($editionTitle ?: __('Cursusinschrijving', 'stride')); ?></td>
-                                <td class="uk-text-right">1</td>
-                                <td class="uk-text-right"><?php echo $subtotal ? esc_html($subtotal->format()) : '€ 0,00'; ?></td>
-                            </tr>
-                        <?php endif; ?>
-                    </tbody>
-                    <tfoot>
-                        <tr>
-                            <td colspan="2" class="uk-text-right"><?php esc_html_e('Subtotaal', 'stride'); ?></td>
-                            <td class="uk-text-right"><?php echo $subtotal ? esc_html($subtotal->format()) : '€ 0,00'; ?></td>
-                        </tr>
-                        <tr>
-                            <td colspan="2" class="uk-text-right"><?php esc_html_e('BTW (21%)', 'stride'); ?></td>
-                            <td class="uk-text-right"><?php echo $tax ? esc_html($tax->format()) : '€ 0,00'; ?></td>
-                        </tr>
-                        <tr class="uk-text-bold" style="font-size: 1.1em;">
-                            <td colspan="2" class="uk-text-right"><?php esc_html_e('Totaal', 'stride'); ?></td>
-                            <td class="uk-text-right"><?php echo $total ? esc_html($total->format()) : '€ 0,00'; ?></td>
-                        </tr>
-                    </tfoot>
-                </table>
-
-                <?php if ($isEditable): ?>
-                <!-- Voucher Code Input -->
-                <div class="uk-margin-medium-top uk-padding-small uk-background-muted" style="border-radius: 4px;">
-                    <h4 class="uk-h5 uk-margin-small-bottom"><?php esc_html_e('Kortingscode', 'stride'); ?></h4>
-                    <form id="voucher-form" class="uk-form-stacked">
-                        <input type="hidden" name="action" value="stride_apply_voucher">
-                        <input type="hidden" name="nonce" value="<?php echo esc_attr(wp_create_nonce('stride_quote_update')); ?>">
-                        <input type="hidden" name="quote_id" value="<?php echo esc_attr($quoteId); ?>">
-                        <div class="uk-grid-small" uk-grid>
-                            <div class="uk-width-expand">
-                                <input type="text" name="voucher_code" class="uk-input"
-                                       placeholder="<?php esc_attr_e('Voer kortingscode in', 'stride'); ?>">
+                            <div class="stride-quote-item">
+                                <div class="stride-quote-item__title">
+                                    <?php echo esc_html($editionTitle ?: __('Cursusinschrijving', 'stride')); ?>
+                                </div>
+                                <div class="stride-quote-item__details">
+                                    <span>1x</span>
+                                    <span><?php echo $subtotal ? esc_html($subtotal->format()) : '€ 0,00'; ?></span>
+                                </div>
                             </div>
-                            <div class="uk-width-auto">
-                                <button type="submit" class="uk-button uk-button-secondary" id="apply-voucher-btn">
-                                    <?php esc_html_e('Toepassen', 'stride'); ?>
-                                </button>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-                <?php endif; ?>
-
-                <?php if ($validUntil && $isEditable): ?>
-                    <?php
-                    $validDate = strtotime($validUntil);
-                    $isExpired = $validDate && $validDate < time();
-                    $daysLeft = $validDate ? ceil(($validDate - time()) / DAY_IN_SECONDS) : 0;
-                    ?>
-                    <div class="uk-margin-top uk-text-small <?php echo $isExpired ? 'uk-text-danger' : 'uk-text-muted'; ?>">
-                        <?php if ($isExpired): ?>
-                            <span uk-icon="icon: warning; ratio: 0.8"></span>
-                            <?php esc_html_e('Deze offerte is verlopen op', 'stride'); ?> <?php echo esc_html(date_i18n('j F Y', $validDate)); ?>
-                        <?php else: ?>
-                            <span uk-icon="icon: clock; ratio: 0.8"></span>
-                            <?php esc_html_e('Geldig tot', 'stride'); ?> <?php echo esc_html(date_i18n('j F Y', $validDate)); ?>
-                            (<?php printf(esc_html(_n('nog %d dag', 'nog %d dagen', $daysLeft, 'stride')), $daysLeft); ?>)
                         <?php endif; ?>
                     </div>
-                <?php endif; ?>
-            </div>
-        </div>
 
-        <!-- Billing Information -->
-        <div class="stride-card uk-margin-bottom">
-            <div class="stride-card-header">
-                <h2 class="stride-card-title">
-                    <span uk-icon="icon: user"></span>
-                    <?php esc_html_e('Facturatiegegevens', 'stride'); ?>
-                </h2>
-                <?php if ($isEditable): ?>
-                    <button type="button" class="uk-button uk-button-text" uk-toggle="target: #edit-billing-modal">
-                        <span uk-icon="icon: pencil; ratio: 0.8"></span>
-                        <?php esc_html_e('Wijzigen', 'stride'); ?>
-                    </button>
-                <?php endif; ?>
-            </div>
-            <div class="uk-padding">
-                <div class="uk-grid uk-grid-small uk-child-width-1-2@s" uk-grid>
-                    <?php $organisation = $billing['organisation'] ?? $billing['organization'] ?? ''; ?>
-                    <?php if (!empty($organisation)): ?>
-                        <div class="uk-width-1-1">
-                            <strong><?php esc_html_e('Organisatie', 'stride'); ?></strong>
-                            <p class="uk-margin-remove"><?php echo esc_html($organisation); ?></p>
+                    <hr class="uk-margin-small">
+
+                    <!-- Totals -->
+                    <div class="stride-quote-totals">
+                        <div class="stride-quote-total-row">
+                            <span><?php esc_html_e('Subtotaal', 'stride'); ?></span>
+                            <span><?php echo $subtotal ? esc_html($subtotal->format()) : '€ 0,00'; ?></span>
                         </div>
-                    <?php endif; ?>
-                    <div>
-                        <strong><?php esc_html_e('E-mailadres', 'stride'); ?></strong>
-                        <p class="uk-margin-remove"><?php echo esc_html($billing['email'] ?? '-'); ?></p>
+                        <?php if ($discount && $discount->inCents() > 0): ?>
+                            <div class="stride-quote-total-row stride-quote-total-row--discount">
+                                <span>
+                                    <?php esc_html_e('Korting', 'stride'); ?>
+                                    <?php if ($voucherCode): ?>
+                                        <small class="uk-text-muted">(<?php echo esc_html($voucherCode); ?>)</small>
+                                    <?php endif; ?>
+                                </span>
+                                <span>- <?php echo esc_html($discount->format()); ?></span>
+                            </div>
+                        <?php endif; ?>
+                        <div class="stride-quote-total-row">
+                            <span><?php esc_html_e('BTW (21%)', 'stride'); ?></span>
+                            <span><?php echo $tax ? esc_html($tax->format()) : '€ 0,00'; ?></span>
+                        </div>
+                        <div class="stride-quote-total-row stride-quote-total-row--total">
+                            <span><?php esc_html_e('Totaal', 'stride'); ?></span>
+                            <span><?php echo $total ? esc_html($total->format()) : '€ 0,00'; ?></span>
+                        </div>
                     </div>
-                    <?php if (!empty($billing['vat_number'])): ?>
-                        <div>
-                            <strong><?php esc_html_e('BTW-nummer', 'stride'); ?></strong>
-                            <p class="uk-margin-remove"><?php echo esc_html($billing['vat_number']); ?></p>
+
+                    <?php if ($isEditable): ?>
+                    <!-- Voucher Code Input -->
+                    <div class="uk-margin-top">
+                        <form id="voucher-form" class="uk-form-stacked">
+                            <input type="hidden" name="action" value="stride_apply_voucher">
+                            <input type="hidden" name="nonce" value="<?php echo esc_attr(wp_create_nonce('stride_quote_update')); ?>">
+                            <input type="hidden" name="quote_id" value="<?php echo esc_attr($quoteId); ?>">
+                            <label class="uk-form-label"><?php esc_html_e('Kortingscode', 'stride'); ?></label>
+                            <div class="uk-grid-small" uk-grid>
+                                <div class="uk-width-expand">
+                                    <input type="text" name="voucher_code" class="uk-input uk-form-small"
+                                           placeholder="<?php esc_attr_e('Code', 'stride'); ?>">
+                                </div>
+                                <div class="uk-width-auto">
+                                    <button type="submit" class="uk-button uk-button-secondary uk-button-small" id="apply-voucher-btn">
+                                        <?php esc_html_e('Toepassen', 'stride'); ?>
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php if ($validUntil && $isEditable): ?>
+                        <div class="uk-margin-top uk-text-small <?php echo $isExpired ? 'uk-text-danger' : 'uk-text-muted'; ?>">
+                            <?php if ($isExpired): ?>
+                                <span uk-icon="icon: warning; ratio: 0.8"></span>
+                                <?php esc_html_e('Verlopen op', 'stride'); ?> <?php echo esc_html(date_i18n('j M Y', $validDate)); ?>
+                            <?php else: ?>
+                                <span uk-icon="icon: clock; ratio: 0.8"></span>
+                                <?php esc_html_e('Geldig tot', 'stride'); ?> <?php echo esc_html(date_i18n('j M Y', $validDate)); ?>
+                            <?php endif; ?>
                         </div>
                     <?php endif; ?>
-                    <?php if (!empty($billing['gln_number'])): ?>
-                        <div>
-                            <strong><?php esc_html_e('GLN-nummer', 'stride'); ?></strong>
-                            <p class="uk-margin-remove"><?php echo esc_html($billing['gln_number']); ?></p>
-                        </div>
-                    <?php endif; ?>
-                    <?php if (!empty($billing['address'])): ?>
-                        <?php $postal = $billing['postal_code'] ?? $billing['postal'] ?? ''; ?>
-                        <div class="uk-width-1-1">
-                            <strong><?php esc_html_e('Adres', 'stride'); ?></strong>
-                            <p class="uk-margin-remove">
-                                <?php echo esc_html($billing['address']); ?><br>
-                                <?php if (!empty($postal) || !empty($billing['city'])): ?>
-                                    <?php echo esc_html(trim($postal . ' ' . ($billing['city'] ?? ''))); ?>
-                                <?php endif; ?>
-                            </p>
-                        </div>
-                    <?php endif; ?>
+
+                    <!-- Actions (desktop: in sidebar) -->
+                    <div class="uk-visible@m uk-margin-medium-top">
+                        <?php stride_render_quote_actions($isEditable, $quoteId, $editionId); ?>
+                    </div>
                 </div>
             </div>
         </div>
-
-        <!-- Actions -->
-        <div class="uk-flex uk-flex-between uk-flex-middle uk-flex-wrap" uk-grid>
-            <div>
-                <a href="<?php echo esc_url(home_url('/mijn-account/mijn-offertes/')); ?>" class="uk-button uk-button-default">
-                    <span uk-icon="icon: arrow-left"></span>
-                    <?php esc_html_e('Terug', 'stride'); ?>
-                </a>
-            </div>
-
-            <div class="uk-flex uk-flex-middle uk-flex-wrap" style="gap: 10px;">
-                <!-- PDF Download Button -->
-                <button type="button" class="uk-button uk-button-default" id="download-pdf-btn">
-                    <span uk-icon="icon: download"></span>
-                    <?php esc_html_e('Download PDF', 'stride'); ?>
-                </button>
-
-                <?php if ($isEditable): ?>
-                <!-- Cancel Enrollment Button -->
-                <button type="button" class="uk-button uk-button-danger" uk-toggle="target: #cancel-modal">
-                    <?php esc_html_e('Inschrijving annuleren', 'stride'); ?>
-                </button>
-                <?php endif; ?>
-
-                <?php if ($editionId > 0): ?>
-                <a href="<?php echo esc_url(get_permalink($editionId)); ?>" class="uk-button uk-button-text">
-                    <?php esc_html_e('Bekijk cursus', 'stride'); ?>
-                    <span uk-icon="icon: arrow-right"></span>
-                </a>
-                <?php endif; ?>
-            </div>
-        </div>
+    </div>
 </div>
+
+<?php
+/**
+ * Render quote action buttons
+ */
+function stride_render_quote_actions(bool $isEditable, int $quoteId, int $editionId): void
+{
+    ?>
+    <div class="stride-quote-actions">
+        <!-- PDF Download Button -->
+        <button type="button" class="uk-button uk-button-default uk-width-1-1 uk-margin-small-bottom" id="download-pdf-btn">
+            <span uk-icon="icon: download"></span>
+            <?php esc_html_e('Download PDF', 'stride'); ?>
+        </button>
+
+        <?php if ($isEditable): ?>
+        <!-- Cancel Button -->
+        <button type="button" class="uk-button uk-button-danger uk-button-small uk-width-1-1" uk-toggle="target: #cancel-modal">
+            <?php esc_html_e('Inschrijving annuleren', 'stride'); ?>
+        </button>
+        <?php endif; ?>
+    </div>
+    <?php
+}
+?>
 
 <?php if ($isEditable): ?>
 <!-- Cancel Confirmation Modal -->
@@ -369,9 +455,7 @@ $statusClass = match ($status) {
         </form>
     </div>
 </div>
-<?php endif; ?>
 
-<?php if ($isEditable): ?>
 <!-- Edit Billing Modal -->
 <div id="edit-billing-modal" uk-modal>
     <div class="uk-modal-dialog">
@@ -385,7 +469,7 @@ $statusClass = match ($status) {
             <input type="hidden" name="quote_id" value="<?php echo esc_attr($quoteId); ?>">
 
             <div class="uk-modal-body">
-                <div class="uk-grid uk-grid-small uk-child-width-1-2@s" uk-grid>
+                <div class="uk-grid uk-grid-small" uk-grid>
                     <div class="uk-width-1-1">
                         <label class="uk-form-label" for="edit_billing_organisation"><?php esc_html_e('Organisatie', 'stride'); ?></label>
                         <input type="text" id="edit_billing_organisation" name="billing[organisation]" class="uk-input"
@@ -396,12 +480,12 @@ $statusClass = match ($status) {
                         <input type="email" id="edit_billing_email" name="billing[email]" class="uk-input"
                                value="<?php echo esc_attr($billing['email'] ?? ''); ?>" required>
                     </div>
-                    <div>
+                    <div class="uk-width-1-2@s">
                         <label class="uk-form-label" for="edit_billing_vat"><?php esc_html_e('BTW-nummer', 'stride'); ?></label>
                         <input type="text" id="edit_billing_vat" name="billing[vat_number]" class="uk-input"
                                value="<?php echo esc_attr($billing['vat_number'] ?? ''); ?>">
                     </div>
-                    <div>
+                    <div class="uk-width-1-2@s">
                         <label class="uk-form-label" for="edit_billing_gln"><?php esc_html_e('GLN-nummer', 'stride'); ?></label>
                         <input type="text" id="edit_billing_gln" name="billing[gln_number]" class="uk-input"
                                value="<?php echo esc_attr($billing['gln_number'] ?? ''); ?>">
@@ -411,12 +495,12 @@ $statusClass = match ($status) {
                         <input type="text" id="edit_billing_address" name="billing[address]" class="uk-input"
                                value="<?php echo esc_attr($billing['address'] ?? ''); ?>">
                     </div>
-                    <div>
+                    <div class="uk-width-1-2@s">
                         <label class="uk-form-label" for="edit_billing_postal"><?php esc_html_e('Postcode', 'stride'); ?></label>
                         <input type="text" id="edit_billing_postal" name="billing[postal_code]" class="uk-input"
                                value="<?php echo esc_attr($billing['postal_code'] ?? $billing['postal'] ?? ''); ?>">
                     </div>
-                    <div>
+                    <div class="uk-width-1-2@s">
                         <label class="uk-form-label" for="edit_billing_city"><?php esc_html_e('Plaats', 'stride'); ?></label>
                         <input type="text" id="edit_billing_city" name="billing[city]" class="uk-input"
                                value="<?php echo esc_attr($billing['city'] ?? ''); ?>">
@@ -462,7 +546,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         status: 'success',
                         pos: 'top-center'
                     });
-                    // Reload to show updated data
                     setTimeout(() => window.location.reload(), 1000);
                 } else {
                     UIkit.notification({
@@ -521,7 +604,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         status: 'success',
                         pos: 'top-center'
                     });
-                    // Reload to show updated totals
                     setTimeout(() => window.location.reload(), 1000);
                 } else {
                     UIkit.notification({
@@ -570,7 +652,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         status: 'success',
                         pos: 'top-center'
                     });
-                    // Redirect if provided, otherwise reload
                     if (data.data.redirect_url) {
                         setTimeout(() => window.location.href = data.data.redirect_url, 1000);
                     } else {
@@ -603,7 +684,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <?php endif; ?>
 
-<!-- PDF download handler (outside isEditable check - available for all quotes) -->
+<!-- PDF download handler -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const pdfBtn = document.getElementById('download-pdf-btn');
@@ -618,3 +699,71 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+
+<style>
+/* Quote detail sidepanel styles */
+.stride-quote-items {
+    margin-bottom: 1rem;
+}
+
+.stride-quote-item {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--stride-border-color, #e5e5e5);
+}
+
+.stride-quote-item:last-child {
+    border-bottom: none;
+}
+
+.stride-quote-item__title {
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+.stride-quote-item__details {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.875rem;
+    color: var(--stride-text-muted, #666);
+}
+
+.stride-quote-totals {
+    margin-top: 1rem;
+}
+
+.stride-quote-total-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.375rem 0;
+    font-size: 0.9375rem;
+}
+
+.stride-quote-total-row--discount {
+    color: var(--stride-success, #32d296);
+}
+
+.stride-quote-total-row--total {
+    font-weight: 600;
+    font-size: 1.125rem;
+    border-top: 2px solid var(--stride-border-color, #e5e5e5);
+    padding-top: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.stride-quote-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.stride-card--sticky {
+    position: sticky;
+    top: 100px;
+}
+
+@media (max-width: 959px) {
+    .stride-card--sticky {
+        position: static;
+    }
+}
+</style>
