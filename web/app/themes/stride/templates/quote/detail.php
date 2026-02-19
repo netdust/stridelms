@@ -206,66 +206,88 @@ $daysLeft = $validDate ? ceil(($validDate - time()) / DAY_IN_SECONDS) : 0;
             </div>
 
             <!-- Billing Information -->
-            <div class="stride-card uk-margin-bottom">
+            <?php
+            $organisation = $billing['organisation'] ?? $billing['organization'] ?? '';
+            $billingEmail = $billing['email'] ?? $userEmail ?: '';
+            $vatNumber = $billing['vat_number'] ?? '';
+            $glnNumber = $billing['gln_number'] ?? '';
+            $billingAddress = $billing['address'] ?? '';
+            $postalCode = $billing['postal_code'] ?? $billing['postal'] ?? '';
+            $billingCity = $billing['city'] ?? '';
+            ?>
+            <div class="stride-card uk-margin-bottom" id="billing-card" data-editing="false">
                 <div class="stride-card-header">
                     <h2 class="stride-card-title">
                         <span uk-icon="icon: file-text"></span>
                         <?php esc_html_e('Facturatiegegevens', 'stride'); ?>
                     </h2>
                     <?php if ($isEditable): ?>
-                        <button type="button" class="uk-button uk-button-text" uk-toggle="target: #edit-billing-modal">
+                        <button type="button" class="uk-button uk-button-text" id="billing-edit-btn">
                             <span uk-icon="icon: pencil; ratio: 0.8"></span>
                             <?php esc_html_e('Wijzigen', 'stride'); ?>
                         </button>
                     <?php endif; ?>
                 </div>
                 <div class="uk-padding">
-                    <div class="uk-grid uk-grid-small" uk-grid>
-                        <?php $organisation = $billing['organisation'] ?? $billing['organization'] ?? ''; ?>
-                        <?php if (!empty($organisation)): ?>
-                            <div class="uk-width-1-1">
-                                <strong><?php esc_html_e('Organisatie', 'stride'); ?></strong>
-                                <p class="uk-margin-remove"><?php echo esc_html($organisation); ?></p>
-                            </div>
-                        <?php endif; ?>
-                        <div class="uk-width-1-2@s">
-                            <strong><?php esc_html_e('Facturatie e-mail', 'stride'); ?></strong>
-                            <p class="uk-margin-remove"><?php echo esc_html($billing['email'] ?? $userEmail ?: '-'); ?></p>
-                        </div>
-                        <?php if (!empty($billing['vat_number'])): ?>
-                            <div class="uk-width-1-2@s">
-                                <strong><?php esc_html_e('BTW-nummer', 'stride'); ?></strong>
-                                <p class="uk-margin-remove"><?php echo esc_html($billing['vat_number']); ?></p>
-                            </div>
-                        <?php endif; ?>
-                        <?php if (!empty($billing['gln_number'])): ?>
-                            <div class="uk-width-1-2@s">
-                                <strong><?php esc_html_e('GLN-nummer', 'stride'); ?></strong>
-                                <p class="uk-margin-remove"><?php echo esc_html($billing['gln_number']); ?></p>
-                            </div>
-                        <?php endif; ?>
-                        <?php if (!empty($billing['address'])): ?>
-                            <?php $postal = $billing['postal_code'] ?? $billing['postal'] ?? ''; ?>
-                            <div class="uk-width-1-1">
-                                <strong><?php esc_html_e('Adres', 'stride'); ?></strong>
-                                <p class="uk-margin-remove">
-                                    <?php echo esc_html($billing['address']); ?><br>
-                                    <?php if (!empty($postal) || !empty($billing['city'])): ?>
-                                        <?php echo esc_html(trim($postal . ' ' . ($billing['city'] ?? ''))); ?>
-                                    <?php endif; ?>
-                                </p>
-                            </div>
-                        <?php endif; ?>
-                    </div>
+                    <form id="billing-form">
+                        <?php wp_nonce_field('stride_quote_update', 'billing_nonce'); ?>
+                        <input type="hidden" name="action" value="stride_update_quote">
+                        <input type="hidden" name="quote_id" value="<?php echo esc_attr($quoteId); ?>">
 
-                    <?php if (empty($organisation) && empty($billing['address']) && empty($billing['vat_number'])): ?>
-                        <p class="uk-text-muted uk-margin-remove">
-                            <?php esc_html_e('Geen aanvullende facturatiegegevens ingevuld.', 'stride'); ?>
-                            <?php if ($isEditable): ?>
-                                <a href="#" uk-toggle="target: #edit-billing-modal"><?php esc_html_e('Toevoegen', 'stride'); ?></a>
-                            <?php endif; ?>
-                        </p>
-                    <?php endif; ?>
+                        <div class="uk-grid uk-grid-small" uk-grid>
+                            <div class="uk-width-1-1">
+                                <label class="uk-form-label"><?php esc_html_e('Organisatie', 'stride'); ?></label>
+                                <p class="uk-margin-remove billing-view"><?php echo esc_html($organisation ?: '-'); ?></p>
+                                <input type="text" name="billing[organisation]" class="uk-input billing-edit uk-hidden"
+                                       value="<?php echo esc_attr($organisation); ?>">
+                            </div>
+                            <div class="uk-width-1-2@s">
+                                <label class="uk-form-label"><?php esc_html_e('Facturatie e-mail', 'stride'); ?></label>
+                                <p class="uk-margin-remove billing-view"><?php echo esc_html($billingEmail ?: '-'); ?></p>
+                                <input type="email" name="billing[email]" class="uk-input billing-edit uk-hidden"
+                                       value="<?php echo esc_attr($billingEmail); ?>">
+                            </div>
+                            <div class="uk-width-1-2@s">
+                                <label class="uk-form-label"><?php esc_html_e('BTW-nummer', 'stride'); ?></label>
+                                <p class="uk-margin-remove billing-view"><?php echo esc_html($vatNumber ?: '-'); ?></p>
+                                <input type="text" name="billing[vat_number]" class="uk-input billing-edit uk-hidden"
+                                       value="<?php echo esc_attr($vatNumber); ?>">
+                            </div>
+                            <div class="uk-width-1-2@s">
+                                <label class="uk-form-label"><?php esc_html_e('GLN-nummer', 'stride'); ?></label>
+                                <p class="uk-margin-remove billing-view"><?php echo esc_html($glnNumber ?: '-'); ?></p>
+                                <input type="text" name="billing[gln_number]" class="uk-input billing-edit uk-hidden"
+                                       value="<?php echo esc_attr($glnNumber); ?>">
+                            </div>
+                            <div class="uk-width-1-1">
+                                <label class="uk-form-label"><?php esc_html_e('Adres', 'stride'); ?></label>
+                                <p class="uk-margin-remove billing-view"><?php echo esc_html($billingAddress ?: '-'); ?></p>
+                                <input type="text" name="billing[address]" class="uk-input billing-edit uk-hidden"
+                                       value="<?php echo esc_attr($billingAddress); ?>">
+                            </div>
+                            <div class="uk-width-1-2@s">
+                                <label class="uk-form-label"><?php esc_html_e('Postcode', 'stride'); ?></label>
+                                <p class="uk-margin-remove billing-view"><?php echo esc_html($postalCode ?: '-'); ?></p>
+                                <input type="text" name="billing[postal_code]" class="uk-input billing-edit uk-hidden"
+                                       value="<?php echo esc_attr($postalCode); ?>">
+                            </div>
+                            <div class="uk-width-1-2@s">
+                                <label class="uk-form-label"><?php esc_html_e('Plaats', 'stride'); ?></label>
+                                <p class="uk-margin-remove billing-view"><?php echo esc_html($billingCity ?: '-'); ?></p>
+                                <input type="text" name="billing[city]" class="uk-input billing-edit uk-hidden"
+                                       value="<?php echo esc_attr($billingCity); ?>">
+                            </div>
+                        </div>
+
+                        <div class="uk-margin-top billing-edit uk-hidden">
+                            <button type="submit" class="uk-button uk-button-primary uk-button-small" id="billing-save-btn">
+                                <?php esc_html_e('Opslaan', 'stride'); ?>
+                            </button>
+                            <button type="button" class="uk-button uk-button-default uk-button-small" id="billing-cancel-btn">
+                                <?php esc_html_e('Annuleren', 'stride'); ?>
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
 
@@ -456,83 +478,53 @@ function stride_render_quote_actions(bool $isEditable, int $quoteId, int $editio
     </div>
 </div>
 
-<!-- Edit Billing Modal -->
-<div id="edit-billing-modal" uk-modal>
-    <div class="uk-modal-dialog">
-        <button class="uk-modal-close-default" type="button" uk-close></button>
-        <div class="uk-modal-header">
-            <h2 class="uk-modal-title"><?php esc_html_e('Facturatiegegevens wijzigen', 'stride'); ?></h2>
-        </div>
-        <form id="edit-billing-form" method="post">
-            <?php wp_nonce_field('stride_quote_update', 'nonce'); ?>
-            <input type="hidden" name="action" value="stride_update_quote">
-            <input type="hidden" name="quote_id" value="<?php echo esc_attr($quoteId); ?>">
-
-            <div class="uk-modal-body">
-                <div class="uk-grid uk-grid-small" uk-grid>
-                    <div class="uk-width-1-1">
-                        <label class="uk-form-label" for="edit_billing_organisation"><?php esc_html_e('Organisatie', 'stride'); ?></label>
-                        <input type="text" id="edit_billing_organisation" name="billing[organisation]" class="uk-input"
-                               value="<?php echo esc_attr($billing['organisation'] ?? $billing['organization'] ?? ''); ?>">
-                    </div>
-                    <div class="uk-width-1-1">
-                        <label class="uk-form-label" for="edit_billing_email"><?php esc_html_e('E-mailadres', 'stride'); ?> *</label>
-                        <input type="email" id="edit_billing_email" name="billing[email]" class="uk-input"
-                               value="<?php echo esc_attr($billing['email'] ?? ''); ?>" required>
-                    </div>
-                    <div class="uk-width-1-2@s">
-                        <label class="uk-form-label" for="edit_billing_vat"><?php esc_html_e('BTW-nummer', 'stride'); ?></label>
-                        <input type="text" id="edit_billing_vat" name="billing[vat_number]" class="uk-input"
-                               value="<?php echo esc_attr($billing['vat_number'] ?? ''); ?>">
-                    </div>
-                    <div class="uk-width-1-2@s">
-                        <label class="uk-form-label" for="edit_billing_gln"><?php esc_html_e('GLN-nummer', 'stride'); ?></label>
-                        <input type="text" id="edit_billing_gln" name="billing[gln_number]" class="uk-input"
-                               value="<?php echo esc_attr($billing['gln_number'] ?? ''); ?>">
-                    </div>
-                    <div class="uk-width-1-1">
-                        <label class="uk-form-label" for="edit_billing_address"><?php esc_html_e('Adres', 'stride'); ?></label>
-                        <input type="text" id="edit_billing_address" name="billing[address]" class="uk-input"
-                               value="<?php echo esc_attr($billing['address'] ?? ''); ?>">
-                    </div>
-                    <div class="uk-width-1-2@s">
-                        <label class="uk-form-label" for="edit_billing_postal"><?php esc_html_e('Postcode', 'stride'); ?></label>
-                        <input type="text" id="edit_billing_postal" name="billing[postal_code]" class="uk-input"
-                               value="<?php echo esc_attr($billing['postal_code'] ?? $billing['postal'] ?? ''); ?>">
-                    </div>
-                    <div class="uk-width-1-2@s">
-                        <label class="uk-form-label" for="edit_billing_city"><?php esc_html_e('Plaats', 'stride'); ?></label>
-                        <input type="text" id="edit_billing_city" name="billing[city]" class="uk-input"
-                               value="<?php echo esc_attr($billing['city'] ?? ''); ?>">
-                    </div>
-                </div>
-            </div>
-            <div class="uk-modal-footer uk-text-right">
-                <button class="uk-button uk-button-default uk-modal-close" type="button">
-                    <?php esc_html_e('Annuleren', 'stride'); ?>
-                </button>
-                <button class="uk-button uk-button-primary" type="submit" id="save-billing-btn">
-                    <?php esc_html_e('Opslaan', 'stride'); ?>
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Edit billing form handling
-    const form = document.getElementById('edit-billing-form');
-    const saveBtn = document.getElementById('save-billing-btn');
+    // Inline billing edit handling
+    const billingCard = document.getElementById('billing-card');
+    const editBtn = document.getElementById('billing-edit-btn');
+    const cancelBtn = document.getElementById('billing-cancel-btn');
+    const billingForm = document.getElementById('billing-form');
+    const saveBtn = document.getElementById('billing-save-btn');
 
-    if (form) {
-        form.addEventListener('submit', function(e) {
+    function toggleBillingEdit(editing) {
+        if (!billingCard) return;
+        billingCard.dataset.editing = editing;
+        const viewEls = billingCard.querySelectorAll('.billing-view');
+        const editEls = billingCard.querySelectorAll('.billing-edit');
+
+        viewEls.forEach(el => el.classList.toggle('uk-hidden', editing));
+        editEls.forEach(el => el.classList.toggle('uk-hidden', !editing));
+
+        if (editBtn) {
+            editBtn.innerHTML = editing
+                ? '<span uk-icon="icon: close; ratio: 0.8"></span> <?php echo esc_js(__('Sluiten', 'stride')); ?>'
+                : '<span uk-icon="icon: pencil; ratio: 0.8"></span> <?php echo esc_js(__('Wijzigen', 'stride')); ?>';
+        }
+    }
+
+    if (editBtn) {
+        editBtn.addEventListener('click', function() {
+            const isEditing = billingCard.dataset.editing === 'true';
+            toggleBillingEdit(!isEditing);
+        });
+    }
+
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', function() {
+            toggleBillingEdit(false);
+        });
+    }
+
+    if (billingForm) {
+        billingForm.addEventListener('submit', function(e) {
             e.preventDefault();
 
             saveBtn.disabled = true;
             saveBtn.innerHTML = '<span uk-spinner="ratio: 0.5"></span>';
 
-            const formData = new FormData(form);
+            const formData = new FormData(billingForm);
+            formData.set('nonce', formData.get('billing_nonce'));
 
             fetch(strideConfig.ajaxUrl, {
                 method: 'POST',
@@ -549,7 +541,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     setTimeout(() => window.location.reload(), 1000);
                 } else {
                     UIkit.notification({
-                        message: data.data.message || '<?php echo esc_js(__('Er is een fout opgetreden', 'stride')); ?>',
+                        message: data.data?.message || '<?php echo esc_js(__('Er is een fout opgetreden', 'stride')); ?>',
                         status: 'danger',
                         pos: 'top-center'
                     });
