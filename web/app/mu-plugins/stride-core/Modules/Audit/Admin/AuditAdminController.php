@@ -125,8 +125,13 @@ final class AuditAdminController extends AbstractService
         $auditService = ntdst_get(AuditService::class);
         $repository = $auditService->getRepository();
 
-        $from = new DateTime($_POST['from'] ?? '-30 days');
-        $to = new DateTime($_POST['to'] ?? 'now');
+        try {
+            $from = new DateTime($_POST['from'] ?? '-30 days');
+            $to = new DateTime($_POST['to'] ?? 'now');
+        } catch (\Exception $e) {
+            wp_send_json_error(['message' => 'Invalid date format'], 400);
+        }
+
         $filters = [
             'entity_type' => sanitize_text_field($_POST['entity_type'] ?? ''),
             'actor_id' => absint($_POST['actor_id'] ?? 0) ?: null,

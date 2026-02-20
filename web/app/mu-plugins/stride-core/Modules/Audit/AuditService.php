@@ -202,6 +202,7 @@ final class AuditService extends AbstractService
     public function onCourseCompleted(array $data, \WP_User $user): void
     {
         $courseId = $data['course']->ID ?? $data['course_id'] ?? 0;
+        $courseTitle = $data['course']->post_title ?? '';
 
         $this->record(
             'completion',
@@ -210,7 +211,7 @@ final class AuditService extends AbstractService
             $user->ID,
             [
                 'course_id' => $courseId,
-                'course_title' => $data['course']->post_title ?? '',
+                'course_title' => $courseTitle,
             ]
         );
 
@@ -218,6 +219,29 @@ final class AuditService extends AbstractService
             'course_id' => $courseId,
             'user_id' => $user->ID,
         ]);
+
+        // Check if course has a certificate and record certificate_issued
+        if (function_exists('learndash_get_course_certificate_link')) {
+            $certificateLink = learndash_get_course_certificate_link($courseId, $user->ID);
+            if (!empty($certificateLink)) {
+                $this->record(
+                    'completion',
+                    $courseId,
+                    'completion.certificate_issued',
+                    $user->ID,
+                    [
+                        'course_id' => $courseId,
+                        'course_title' => $courseTitle,
+                        'certificate_link' => $certificateLink,
+                    ]
+                );
+
+                ntdst_log('audit')->info('Audit: completion.certificate_issued', [
+                    'course_id' => $courseId,
+                    'user_id' => $user->ID,
+                ]);
+            }
+        }
     }
 
     /**

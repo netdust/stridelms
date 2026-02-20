@@ -100,8 +100,13 @@ final class AuditAPIController extends AbstractService
         $auditService = ntdst_get(AuditService::class);
         $repository = $auditService->getRepository();
 
-        $from = new DateTime($request->get_param('from') ?: '-30 days');
-        $to = new DateTime($request->get_param('to') ?: 'now');
+        try {
+            $from = new DateTime($request->get_param('from') ?: '-30 days');
+            $to = new DateTime($request->get_param('to') ?: 'now');
+        } catch (\Exception $e) {
+            return new WP_REST_Response(['message' => 'Invalid date format'], 400);
+        }
+
         $page = max(1, $request->get_param('page'));
         $perPage = min(100, max(1, $request->get_param('per_page')));
         $offset = ($page - 1) * $perPage;

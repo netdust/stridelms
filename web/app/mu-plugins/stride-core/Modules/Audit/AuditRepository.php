@@ -6,7 +6,7 @@ namespace Stride\Modules\Audit;
 use DateTime;
 use WP_Error;
 
-final class AuditRepository
+class AuditRepository
 {
     private function table(): string
     {

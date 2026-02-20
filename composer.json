@@ -54,7 +54,8 @@
   },
   "autoload": {
     "psr-4": {
-      "stride\\": "web/app/themes/stride/"
+      "stride\\": "web/app/themes/stride/",
+      "Stride\\": "web/app/mu-plugins/stride-core/"
     }
   },
   "autoload-dev": {

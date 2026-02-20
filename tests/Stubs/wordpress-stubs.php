@@ -39,6 +39,35 @@ if (!class_exists('WP_Post')) {
     }
 }
 
+if (!class_exists('WP_User')) {
+    /**
+     * WordPress User Class Stub
+     */
+    class WP_User
+    {
+        public int $ID = 0;
+        public string $user_login = '';
+        public string $user_email = '';
+        public string $user_nicename = '';
+        public string $display_name = '';
+        public string $first_name = '';
+        public string $last_name = '';
+
+        public function __construct($id = 0, $name = '', $site_id = '')
+        {
+            if (is_numeric($id) && $id > 0) {
+                $this->ID = (int) $id;
+            } elseif (is_array($id)) {
+                foreach ($id as $key => $value) {
+                    if (property_exists($this, $key)) {
+                        $this->$key = $value;
+                    }
+                }
+            }
+        }
+    }
+}
+
 if (!class_exists('WP_Error')) {
     /**
      * WordPress Error Class
