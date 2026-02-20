@@ -49,7 +49,7 @@ class NTDST_Query_Cache
         add_action('trashed_post', [$this, 'onPostTrash'], 10, 1);
         add_action('updated_postmeta', [$this, 'onMetaUpdate'], 10, 4);
         add_action('added_post_meta', [$this, 'onMetaAdd'], 10, 4);
-        add_action('deleted_post_meta', [$this, 'onMetaDelete'], 10, 4);
+        add_action('delete_post_meta', [$this, 'onMetaDelete'], 10, 4);
 
         $this->hooks_registered = true;
     }
@@ -117,12 +117,20 @@ class NTDST_Query_Cache
 
     /**
      * Increment version to invalidate all cached queries for a post type
+     *
+     * Uses wp_cache_incr for atomic increment when supported.
      */
     public function incrementGroupVersion(string $post_type): void
     {
         $version_key = $this->getGroup($post_type) . '_version';
-        $current = $this->getGroupVersion($post_type);
-        wp_cache_set($version_key, $current + 1, 'ntdst_versions', 0);
+
+        // Try atomic increment first (supported by Redis, Memcached, etc.)
+        $result = wp_cache_incr($version_key, 1, 'ntdst_versions');
+
+        if ($result === false) {
+            // Key doesn't exist yet or backend doesn't support incr - initialize it
+            wp_cache_set($version_key, 1, 'ntdst_versions', 0);
+        }
     }
 
     /**
@@ -235,19 +243,35 @@ class NTDST_Query_Cache
     /**
      * Common logic for meta change invalidation
      *
-     * Only invalidates for _ntdst_ prefixed keys or known important meta.
+     * Only invalidates for _ntdst_ prefixed keys or explicitly important meta.
+     * Filters out WordPress internal meta to avoid unnecessary invalidations.
      */
     private function invalidateOnMetaChange(int $post_id, string $meta_key): void
     {
-        // Skip internal WordPress meta
-        if (str_starts_with($meta_key, '_wp_') || str_starts_with($meta_key, '_edit_')) {
-            return;
+        // Skip internal WordPress meta (common patterns)
+        $wp_internal_prefixes = ['_wp_', '_edit_', '_oembed_', '_menu_item_', '_customize_'];
+        foreach ($wp_internal_prefixes as $prefix) {
+            if (str_starts_with($meta_key, $prefix)) {
+                return;
+            }
         }
 
-        // Only invalidate for our prefixed meta or common important meta
-        $should_invalidate = str_starts_with($meta_key, '_ntdst_')
-            || str_starts_with($meta_key, '_')  // Most custom meta uses underscore prefix
-            || in_array($meta_key, ['_thumbnail_id', '_price', '_stock']);
+        // Allowlist: meta keys that should trigger invalidation
+        $should_invalidate = str_starts_with($meta_key, '_ntdst_')  // Our framework meta
+            || in_array($meta_key, [
+                '_thumbnail_id',   // Featured image
+                '_price',          // WooCommerce price
+                '_stock',          // WooCommerce stock
+                '_stock_status',   // WooCommerce stock status
+            ], true);
+
+        // Allow filtering for custom post types to register their meta keys
+        $should_invalidate = apply_filters(
+            'ntdst_should_invalidate_meta',
+            $should_invalidate,
+            $meta_key,
+            $post_id
+        );
 
         if (!$should_invalidate) {
             return;

@@ -660,9 +660,13 @@ class NTDST_Data_Model
                 // For parent, use post_parent__not_in
                 $this->query_args['post_parent__not_in'] = is_array($value) ? $value : [$value];
             } else {
-                // Other core fields - store for potential handling
-                // Note: WP_Query doesn't natively support != for most core fields
-                $this->query_args[$field . '__not'] = $value;
+                // Other core fields - WP_Query doesn't support != for these
+                // Throw exception to fail loudly rather than silently returning wrong results
+                throw new \InvalidArgumentException(
+                    "whereNot() does not support negation for core field '{$field}'. " .
+                    "Supported fields: post_status, post_author, post_parent. " .
+                    "For other fields, use a custom meta field or filter results in PHP."
+                );
             }
         } else {
             // Custom meta field - use meta_query with != compare
