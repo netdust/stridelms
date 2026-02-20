@@ -42,7 +42,9 @@ $enrollments = $enrollmentService->getUserEnrollments($userId);
 $activeCourses = [];
 $upcomingSessions = [];
 $totalCourses = 0;
+$includedCourseIds = []; // Track courses already added via editions
 
+// 1. First, add edition-based enrollments (scheduled courses with sessions)
 foreach ($enrollments as $enrollment) {
     $editionId = (int) $enrollment->edition_id;
     $edition = $editionService->getEdition($editionId);
@@ -53,6 +55,9 @@ foreach ($enrollments as $enrollment) {
 
     // Get course info
     $courseId = $editionService->getCourseId($editionId);
+    if ($courseId) {
+        $includedCourseIds[] = $courseId;
+    }
     $courseTitle = $courseId ? get_the_title($courseId) : ($edition->post_title ?? __('Onbekende cursus', 'stride'));
 
     // Get progress data
@@ -126,6 +131,58 @@ foreach ($enrollments as $enrollment) {
                 'end_time' => $session['end_time'] ?? '',
                 'location' => $session['location'] ?? '',
                 'is_online' => $isOnline,
+            ];
+        }
+    }
+}
+
+// 2. Add LearnDash direct enrollments (online courses without editions)
+if (function_exists('learndash_user_get_enrolled_courses')) {
+    $ldCourses = learndash_user_get_enrolled_courses($userId);
+
+    foreach ($ldCourses as $courseId) {
+        // Skip if already included via edition
+        if (in_array($courseId, $includedCourseIds, true)) {
+            continue;
+        }
+
+        $courseTitle = get_the_title($courseId);
+        if (empty($courseTitle)) {
+            continue;
+        }
+
+        // Skip LTI test courses (test data)
+        if (str_starts_with($courseTitle, 'LTI Test Course')) {
+            continue;
+        }
+
+        // Get LearnDash progress
+        $ldProgress = learndash_course_progress([
+            'user_id' => $userId,
+            'course_id' => $courseId,
+            'array' => true,
+        ]);
+        $percentage = $ldProgress['percentage'] ?? 0;
+        $isComplete = ($ldProgress['status'] ?? '') === 'completed' || $percentage >= 100;
+
+        $totalCourses++;
+
+        // Get course thumbnail
+        $thumbnail = get_the_post_thumbnail_url($courseId, 'stride_course_card');
+
+        // Build course data (only non-complete courses for "continue learning")
+        if (!$isComplete) {
+            $activeCourses[] = [
+                'edition_id' => null,
+                'course_id' => $courseId,
+                'title' => $courseTitle,
+                'url' => get_permalink($courseId),
+                'is_online' => true,
+                'percentage' => $percentage,
+                'total_sessions' => 0,
+                'attended' => 0,
+                'thumbnail' => $thumbnail,
+                'next_session' => null,
             ];
         }
     }
