@@ -195,8 +195,8 @@ $dutchMonths = [
                         <div class="stride-continue-hero__meta">
                             <?php if ($continueCourse['next_session']) :
                                 $nextDate = strtotime($continueCourse['next_session']['date']);
-                                $nextDay = date('j', $nextDate);
-                                $nextMonthNum = (int) date('n', $nextDate);
+                                $nextDay = wp_date('j', $nextDate);
+                                $nextMonthNum = (int) wp_date('n', $nextDate);
                                 $nextMonth = $dutchMonths[$nextMonthNum];
                             ?>
                                 <span class="stride-continue-hero__meta-item">
@@ -250,8 +250,8 @@ $dutchMonths = [
                 <div class="stride-sessions-grid">
                     <?php foreach ($upcomingSessions as $session) :
                         $date = strtotime($session['date']);
-                        $day = date('j', $date);
-                        $monthNum = (int) date('n', $date);
+                        $day = wp_date('j', $date);
+                        $monthNum = (int) wp_date('n', $date);
                         $month = $dutchMonths[$monthNum];
                     ?>
                         <a href="<?php echo esc_url($session['course_url']); ?>" class="stride-session-card">
@@ -291,7 +291,4 @@ $dutchMonths = [
             <?php endif; ?>
         </section>
     </div>
-
-    <!-- Mobile Bottom Navbar (included from partial, shown only on mobile) -->
-    <?php include locate_template('templates/dashboard/partials/nav-panel.php'); ?>
 </div>
