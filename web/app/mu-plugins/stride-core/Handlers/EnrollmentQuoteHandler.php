@@ -45,12 +45,20 @@ final class EnrollmentQuoteHandler
         // Check if quote already exists
         $existing = $quotes->getQuoteByRegistration($registrationId);
         if ($existing) {
+            ntdst_log('invoicing')->warning('Quote already exists for registration', [
+                'registration_id' => $registrationId,
+                'quote_id' => $existing['id'] ?? $existing['ID'] ?? null,
+            ]);
             return;
         }
 
         // Get edition details
         $edition = get_post($editionId);
         if (!$edition) {
+            ntdst_log('invoicing')->warning('Skipping quote: edition not found', [
+                'registration_id' => $registrationId,
+                'edition_id' => $editionId,
+            ]);
             return;
         }
 
@@ -60,6 +68,11 @@ final class EnrollmentQuoteHandler
 
         // Skip free editions
         if ($price->isZero()) {
+            ntdst_log('invoicing')->info('Skipping quote: free edition', [
+                'registration_id' => $registrationId,
+                'edition_id' => $editionId,
+                'user_id' => $userId,
+            ]);
             return;
         }
 
@@ -90,7 +103,7 @@ final class EnrollmentQuoteHandler
         }
 
         // Create quote for the billing user
-        $quotes->createQuote(
+        $quoteId = $quotes->createQuote(
             userId: $quoteUserId,
             registrationId: $registrationId,
             editionId: $editionId,
@@ -99,6 +112,16 @@ final class EnrollmentQuoteHandler
             voucherCode: $voucherCode,
             discount: $discount,
         );
+
+        if (!is_wp_error($quoteId)) {
+            ntdst_log('invoicing')->info('Quote created for registration', [
+                'registration_id' => $registrationId,
+                'quote_id' => $quoteId,
+                'user_id' => $quoteUserId,
+                'edition_id' => $editionId,
+                'amount' => $price->inCents(),
+            ]);
+        }
     }
 
     /**
