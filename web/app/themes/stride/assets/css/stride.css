@@ -3731,6 +3731,11 @@ h1, h2, h3, h4, h5, h6,
     text-decoration: none;
 }
 
+.stride-nav-panel__link:focus-visible {
+    outline: 2px solid var(--stride-primary);
+    outline-offset: 2px;
+}
+
 .stride-nav-panel__item--active .stride-nav-panel__link {
     background: var(--stride-primary-light);
     color: var(--stride-primary);
@@ -3771,6 +3776,11 @@ h1, h2, h3, h4, h5, h6,
 .stride-bottom-navbar__item:hover {
     color: var(--stride-primary);
     text-decoration: none;
+}
+
+.stride-bottom-navbar__item:focus-visible {
+    outline: 2px solid var(--stride-primary);
+    outline-offset: 2px;
 }
 
 .stride-bottom-navbar__item--active {
