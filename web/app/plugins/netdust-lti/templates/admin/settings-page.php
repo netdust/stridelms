@@ -24,7 +24,10 @@
     </table>
 
     <h2>Registered Platforms</h2>
-    <p><a href="<?php echo esc_url(admin_url('options-general.php?page=netdust-lti&action=add')); ?>" class="button button-primary">Add Platform</a></p>
+    <p>
+        <a href="<?php echo esc_url(admin_url('options-general.php?page=netdust-lti&action=add')); ?>" class="button button-primary">Add Platform</a>
+        <a href="<?php echo esc_url(admin_url('options-general.php?page=netdust-lti&action=logs')); ?>" class="button">View Logs</a>
+    </p>
 
     <?php $listTable->display(); ?>
 </div>

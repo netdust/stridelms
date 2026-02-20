@@ -39,6 +39,10 @@ final class AdminPage
                 $this->renderPlatformForm();
                 break;
 
+            case 'logs':
+                $this->renderLogs();
+                break;
+
             default:
                 $this->renderPlatformList();
         }
@@ -133,6 +137,45 @@ final class AdminPage
             wp_redirect(admin_url('options-general.php?page=netdust-lti&deleted=1'));
             exit;
         }
+    }
+
+    private function renderLogs(): void
+    {
+        $tab = $_GET['tab'] ?? 'launches';
+        $channel = $tab === 'grades' ? 'lti-grade' : 'lti';
+
+        // Read recent log entries
+        $logs = $this->readLogFile($channel, 50);
+
+        include dirname(__DIR__, 2) . '/templates/admin/logs.php';
+    }
+
+    private function readLogFile(string $channel, int $limit = 50): array
+    {
+        $logFile = WP_CONTENT_DIR . '/logs/' . $channel . '-' . date('Y-m-d') . '.log';
+
+        if (!file_exists($logFile)) {
+            return [];
+        }
+
+        $lines = file($logFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        $lines = array_slice(array_reverse($lines), 0, $limit);
+
+        $logs = [];
+        foreach ($lines as $line) {
+            // Parse log line format: [YYYY-MM-DD HH:MM:SS] channel.LEVEL: Message {"context":"data"}
+            if (preg_match('/^\[([^\]]+)\]\s+(\w+[-\w]*)\.(\w+):\s+(.+?)(\s+\{.*\})?$/', $line, $matches)) {
+                $logs[] = [
+                    'time' => $matches[1],
+                    'channel' => $matches[2],
+                    'level' => $matches[3],
+                    'message' => $matches[4],
+                    'context' => isset($matches[5]) ? json_decode(trim($matches[5]), true) : [],
+                ];
+            }
+        }
+
+        return $logs;
     }
 
     public function getToolEndpoints(): array
