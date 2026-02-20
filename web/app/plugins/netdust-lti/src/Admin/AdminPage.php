@@ -31,7 +31,7 @@ final class AdminPage
 
     public function renderPage(): void
     {
-        $action = $_GET['action'] ?? 'list';
+        $action = isset($_GET['action']) ? sanitize_key($_GET['action']) : 'list';
 
         switch ($action) {
             case 'add':
@@ -91,6 +91,25 @@ final class AdminPage
             return;
         }
 
+        // Validate HTTPS for all endpoints (security requirement)
+        $endpoints = [
+            'platform_url' => $_POST['platform_url'] ?? '',
+            'auth_endpoint' => $_POST['auth_endpoint'] ?? '',
+            'token_endpoint' => $_POST['token_endpoint'] ?? '',
+            'jwks_endpoint' => $_POST['jwks_endpoint'] ?? '',
+        ];
+
+        foreach ($endpoints as $field => $url) {
+            if (!empty($url) && !$this->isHttpsUrl($url)) {
+                add_settings_error(
+                    'netdust_lti',
+                    'https_required',
+                    sprintf(__('HTTPS is required for %s. HTTP endpoints are not secure.', 'netdust-lti'), $field)
+                );
+                return;
+            }
+        }
+
         $platform = new Platform(
             id: isset($_POST['platform_id']) ? (int) $_POST['platform_id'] : null,
             name: sanitize_text_field($_POST['name'] ?? ''),
@@ -141,7 +160,7 @@ final class AdminPage
 
     private function renderLogs(): void
     {
-        $tab = $_GET['tab'] ?? 'launches';
+        $tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'launches';
         $channel = $tab === 'grades' ? 'lti-grade' : 'lti';
 
         // Read recent log entries
@@ -186,5 +205,13 @@ final class AdminPage
             'jwks' => home_url('/lti/jwks'),
             'deep_link' => home_url('/lti/deep-link'),
         ];
+    }
+
+    /**
+     * Check if URL uses HTTPS protocol.
+     */
+    private function isHttpsUrl(string $url): bool
+    {
+        return str_starts_with($url, 'https://');
     }
 }

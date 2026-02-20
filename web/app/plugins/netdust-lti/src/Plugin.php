@@ -29,6 +29,9 @@ final class Plugin implements NTDST_Service_Meta
         // Activation/deactivation hooks are registered in netdust-lti.php
         // This method initializes runtime hooks and services
 
+        // Register cleanup cron handler
+        add_action('netdust_lti_cleanup', [$this, 'runCleanup']);
+
         // Register endpoint router for LTI requests
         ntdst_get(LTI\EndpointRouter::class);
 
@@ -58,5 +61,22 @@ final class Plugin implements NTDST_Service_Meta
     public static function pluginUrl(): string
     {
         return plugin_dir_url(dirname(__DIR__) . '/netdust-lti.php');
+    }
+
+    /**
+     * Run cleanup of expired nonces and tokens.
+     */
+    public function runCleanup(): void
+    {
+        $connector = new DataConnector\WPDataConnector();
+        $nonces = $connector->cleanupExpiredNonces();
+        $tokens = $connector->cleanupExpiredTokens();
+
+        if ($nonces > 0 || $tokens > 0) {
+            ntdst_log('lti')->info('Cleanup completed', [
+                'nonces_deleted' => $nonces,
+                'tokens_deleted' => $tokens,
+            ]);
+        }
     }
 }

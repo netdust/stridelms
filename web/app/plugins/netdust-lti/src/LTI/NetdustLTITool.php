@@ -29,6 +29,7 @@ final class NetdustLTITool extends Tool
         ntdst_log('lti')->info('Launch received', [
             'platform' => $this->platform->platformId ?? 'unknown',
             'user' => $this->userResult->ltiUserId ?? 'unknown',
+            'ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
         ]);
 
         // Parse claims
@@ -61,6 +62,7 @@ final class NetdustLTITool extends Tool
         ntdst_log('lti')->info('Launch successful', [
             'user_id' => $user->ID,
             'course_id' => $courseId,
+            'ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
         ]);
 
         // Redirect to course or dashboard
@@ -75,6 +77,7 @@ final class NetdustLTITool extends Tool
     {
         ntdst_log('lti')->info('Deep linking request', [
             'platform' => $this->platform->platformId ?? 'unknown',
+            'ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
         ]);
 
         // Store return info in session
@@ -97,6 +100,7 @@ final class NetdustLTITool extends Tool
         ntdst_log('lti')->error('Launch error', [
             'reason' => $this->reason,
             'platform' => $this->platform?->platformId ?? 'unknown',
+            'ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
         ]);
 
         $this->errorOutput = sprintf(

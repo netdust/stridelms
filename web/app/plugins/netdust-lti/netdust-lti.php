@@ -29,13 +29,33 @@ function activate_plugin(): void
     Database\Migrations::run();
     generate_keys_if_needed();
     flush_rewrite_rules();
+
+    // Schedule cleanup cron job
+    if (!wp_next_scheduled('netdust_lti_cleanup')) {
+        wp_schedule_event(time(), 'hourly', 'netdust_lti_cleanup');
+    }
 }
 
 function deactivate_plugin(): void
 {
     flush_rewrite_rules();
+
+    // Clear cleanup cron job
+    $timestamp = wp_next_scheduled('netdust_lti_cleanup');
+    if ($timestamp) {
+        wp_unschedule_event($timestamp, 'netdust_lti_cleanup');
+    }
 }
 
+/**
+ * Generate RSA key pair for LTI 1.3 JWT signing if not already present.
+ *
+ * SECURITY NOTE: Keys are stored in wp_options table. For production environments
+ * with strict security requirements, consider:
+ * - Storing keys in encrypted files outside webroot
+ * - Using environment variables or secrets management
+ * - Restricting database access appropriately
+ */
 function generate_keys_if_needed(): void
 {
     if (get_option('netdust_lti_private_key')) {
@@ -51,8 +71,8 @@ function generate_keys_if_needed(): void
     openssl_pkey_export($keyPair, $privateKey);
     $keyDetails = openssl_pkey_get_details($keyPair);
 
-    update_option('netdust_lti_private_key', $privateKey);
-    update_option('netdust_lti_public_key', $keyDetails['key']);
+    update_option('netdust_lti_private_key', $privateKey, false); // Don't autoload
+    update_option('netdust_lti_public_key', $keyDetails['key'], false);
     update_option('netdust_lti_kid', 'netdust-lti-' . time());
 }
 

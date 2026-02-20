@@ -47,11 +47,21 @@ final class WPDataConnector extends DataConnector
         if ($platform->getRecordId()) {
             $sql .= $this->wpdb->prepare("id = %d", $platform->getRecordId());
         } elseif ($platform->platformId && $platform->clientId) {
-            $sql .= $this->wpdb->prepare(
-                "platform_id = %s AND client_id = %s",
-                $platform->platformId,
-                $platform->clientId
-            );
+            // Include deployment_id in validation when provided (security requirement)
+            if ($platform->deploymentId) {
+                $sql .= $this->wpdb->prepare(
+                    "platform_id = %s AND client_id = %s AND deployment_id = %s",
+                    $platform->platformId,
+                    $platform->clientId,
+                    $platform->deploymentId
+                );
+            } else {
+                $sql .= $this->wpdb->prepare(
+                    "platform_id = %s AND client_id = %s",
+                    $platform->platformId,
+                    $platform->clientId
+                );
+            }
         } elseif ($platform->getKey()) {
             // Support loading by consumer key (platform_id)
             $sql .= $this->wpdb->prepare("platform_id = %s", $platform->getKey());

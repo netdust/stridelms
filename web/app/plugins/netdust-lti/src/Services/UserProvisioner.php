@@ -23,16 +23,36 @@ final class UserProvisioner
             $userId = $existing?->ID;
         }
 
-        // 3. Create new user
+        // 3. Create new user with race condition protection
         if (!$userId) {
-            $userId = $this->createUser($claims);
+            // Use transient lock to prevent duplicate creation during concurrent launches
+            $lockKey = 'lti_provision_' . md5($claims->email ?? $claims->sub);
 
-            if (is_wp_error($userId)) {
-                return $userId;
+            if (get_transient($lockKey)) {
+                // Another process is creating this user - wait and retry lookup
+                usleep(500000); // 500ms
+                $userId = $this->findByLtiSub($claims->sub);
+                if (!$userId && $claims->email) {
+                    $existing = get_user_by('email', $claims->email);
+                    $userId = $existing?->ID;
+                }
             }
 
-            // Mark as LTI-provisioned
-            update_user_meta($userId, self::META_LTI_PROVISIONED, 1);
+            if (!$userId) {
+                // Set lock before creating user (30 second TTL)
+                set_transient($lockKey, true, 30);
+
+                $userId = $this->createUser($claims);
+
+                delete_transient($lockKey);
+
+                if (is_wp_error($userId)) {
+                    return $userId;
+                }
+
+                // Mark as LTI-provisioned
+                update_user_meta($userId, self::META_LTI_PROVISIONED, 1);
+            }
         }
 
         // Store/update LTI sub
