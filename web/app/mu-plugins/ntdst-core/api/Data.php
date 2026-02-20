@@ -736,6 +736,18 @@ class NTDST_Data_Model
      */
     public function orderBy(string $field, string $dir = 'DESC', bool $numeric = false): self
     {
+        // Common WordPress column aliases → WP_Query orderby values
+        // These map actual database column names to WP_Query's expected values
+        $columnAliases = [
+            'post_date' => 'date',
+            'post_modified' => 'modified',
+            'post_title' => 'title',
+            'post_name' => 'name',
+            'post_author' => 'author',
+            'post_parent' => 'parent',
+            'post_type' => 'type',
+        ];
+
         // Core WordPress orderby values that don't need meta handling
         $coreOrderBy = [
             'none', 'ID', 'author', 'title', 'name', 'type', 'date',
@@ -744,8 +756,11 @@ class NTDST_Data_Model
             'post_name__in', 'post_parent__in',
         ];
 
-        if (in_array($field, $coreOrderBy, true)) {
-            $this->query_args['orderby'] = $field;
+        // Apply alias mapping if applicable
+        $orderByField = $columnAliases[$field] ?? $field;
+
+        if (in_array($orderByField, $coreOrderBy, true)) {
+            $this->query_args['orderby'] = $orderByField;
         } else {
             // Custom meta field - set up meta ordering with prefix
             $this->query_args['meta_key'] = $this->prefixMetaKey($field);
