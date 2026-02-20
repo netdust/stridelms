@@ -496,9 +496,9 @@ get_header();
 <section class="stride-section">
     <div class="uk-container uk-container-small">
         <div class="stride-newsletter">
-            <h3 class="stride-newsletter__title"><?php esc_html_e('Blijf op de hoogte', 'stride'); ?></h3>
+            <h3 class="stride-newsletter__title"><?php esc_html_e('Op de hoogte blijven', 'stride'); ?></h3>
             <p class="stride-newsletter__description">
-                <?php esc_html_e('Ontvang updates over nieuwe cursussen en opleidingsmogelijkheden.', 'stride'); ?>
+                <?php esc_html_e('Ontvang updates over nieuwe cursussen en trajecten in je vakgebied.', 'stride'); ?>
             </p>
             <form class="stride-newsletter__form" action="#" method="post">
                 <input type="email"
