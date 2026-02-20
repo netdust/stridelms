@@ -2532,6 +2532,17 @@ h1, h2, h3, h4, h5, h6,
     line-height: var(--stride-line-height-relaxed);
 }
 
+/* Compact 4-column features grid */
+.stride-features--compact {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+@media (min-width: 960px) {
+    .stride-features--compact {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
 /* ========================================
    STRIDE - LANDING PAGE: TESTIMONIALS
    ======================================== */
