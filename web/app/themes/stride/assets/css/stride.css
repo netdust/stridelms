@@ -3906,3 +3906,146 @@ h1, h2, h3, h4, h5, h6,
 .stride-continue-hero--empty .stride-continue-hero__body {
     align-items: center;
 }
+
+/* ========================================
+   DASHBOARD LAYOUT
+   ======================================== */
+
+.stride-dashboard-layout {
+    display: flex;
+    flex-direction: column;
+    gap: var(--stride-space-lg);
+}
+
+@media (min-width: 960px) {
+    .stride-dashboard-layout {
+        display: grid;
+        grid-template-columns: 1fr 200px;
+        grid-template-rows: auto auto 1fr;
+        gap: var(--stride-space-lg);
+    }
+
+    .stride-dashboard-layout__greeting {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .stride-dashboard-layout__nav {
+        grid-column: 2;
+        grid-row: 1 / 3;
+        align-self: start;
+    }
+
+    .stride-dashboard-layout__hero {
+        grid-column: 1;
+        grid-row: 2;
+    }
+
+    .stride-dashboard-layout__content {
+        grid-column: 1 / -1;
+        grid-row: 3;
+    }
+}
+
+/* Upcoming sessions horizontal layout */
+.stride-sessions-grid {
+    display: grid;
+    gap: var(--stride-space-md);
+    grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+    .stride-sessions-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (min-width: 960px) {
+    .stride-sessions-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* Session card styling */
+.stride-session-card {
+    background: var(--stride-surface);
+    border-radius: var(--stride-radius-lg);
+    box-shadow: var(--stride-shadow-sm);
+    border: 1px solid var(--stride-border-light);
+    padding: var(--stride-space-md);
+    display: flex;
+    gap: var(--stride-space-md);
+    transition: box-shadow var(--stride-transition-fast);
+    text-decoration: none;
+    color: inherit;
+}
+
+.stride-session-card:hover {
+    box-shadow: var(--stride-shadow-md);
+    text-decoration: none;
+    color: inherit;
+}
+
+.stride-session-card__date {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 50px;
+    padding: var(--stride-space-sm);
+    background: var(--stride-primary-light);
+    border-radius: var(--stride-radius-md);
+    color: var(--stride-primary);
+}
+
+.stride-session-card__day {
+    font-size: var(--stride-font-size-2xl);
+    font-weight: 700;
+    line-height: 1;
+}
+
+.stride-session-card__month {
+    font-size: var(--stride-font-size-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.stride-session-card__info {
+    flex: 1;
+    min-width: 0;
+}
+
+.stride-session-card__title {
+    font-size: var(--stride-font-size-sm);
+    font-weight: 600;
+    color: var(--stride-text);
+    margin: 0 0 var(--stride-space-xs);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.stride-session-card__meta {
+    font-size: var(--stride-font-size-xs);
+    color: var(--stride-text-muted);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.stride-session-card__meta-item {
+    display: flex;
+    align-items: center;
+    gap: var(--stride-space-xs);
+}
+
+.stride-session-card__badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    background: var(--stride-success-light);
+    color: var(--stride-success);
+    border-radius: var(--stride-radius-sm);
+    font-size: var(--stride-font-size-xs);
+    font-weight: 600;
+}
