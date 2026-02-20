@@ -62,6 +62,14 @@ final class EnrollmentFormHandler
         }
 
         $editionId = absint($params['edition_id'] ?? 0);
+        $enrollmentType = sanitize_text_field($params['enrollment_type'] ?? 'self');
+
+        ntdst_log('enrollment')->info('Enrollment form submitted', [
+            'user_id' => $userId,
+            'edition_id' => $editionId,
+            'enrollment_type' => $enrollmentType,
+        ]);
+
         if (!$editionId) {
             return new WP_Error('invalid_input', __('Geen editie opgegeven.', 'stride'));
         }
@@ -75,12 +83,22 @@ final class EnrollmentFormHandler
 
         $validation = $this->validateEnrollmentData($enrollmentData);
         if (is_wp_error($validation)) {
+            ntdst_log('enrollment')->warning('Enrollment validation failed', [
+                'user_id' => $userId,
+                'edition_id' => $editionId,
+                'error' => $validation->get_error_message(),
+            ]);
             return $validation;
         }
 
         $enrollment = ntdst_get(EnrollmentService::class);
         $result = $enrollment->processEnrollment($enrollmentData);
         if (is_wp_error($result)) {
+            ntdst_log('enrollment')->error('Enrollment submission failed', [
+                'user_id' => $userId,
+                'edition_id' => $editionId,
+                'error' => $result->get_error_message(),
+            ]);
             return $result;
         }
 
@@ -131,11 +149,21 @@ final class EnrollmentFormHandler
 
         $validation = $vouchers->validateVoucher($code, $editionId, 0, 'edition');
         if (is_wp_error($validation)) {
+            ntdst_log('enrollment')->warning('Voucher validation failed', [
+                'edition_id' => $editionId,
+                'code' => $code,
+            ]);
             return new WP_Error('invalid_voucher', __('Vouchercode ongeldig of verlopen.', 'stride'));
         }
 
         $price = $editions->getPrice($editionId);
         $discount = $vouchers->calculateDiscount($validation, 'edition', $editionId, $price);
+
+        ntdst_log('enrollment')->info('Voucher validated', [
+            'edition_id' => $editionId,
+            'code' => $code,
+            'discount' => $discount,
+        ]);
 
         return [
             'valid' => true,
@@ -187,8 +215,18 @@ final class EnrollmentFormHandler
 
         $result = $sessionSelection->selectSessions($registrationId, array_map('intval', $sessionIds));
         if (is_wp_error($result)) {
+            ntdst_log('enrollment')->error('Session selection failed', [
+                'registration_id' => $registrationId,
+                'session_ids' => $sessionIds,
+                'error' => $result->get_error_message(),
+            ]);
             return $result;
         }
+
+        ntdst_log('enrollment')->info('Session selection saved', [
+            'registration_id' => $registrationId,
+            'session_ids' => $sessionIds,
+        ]);
 
         return [
             'success' => true,

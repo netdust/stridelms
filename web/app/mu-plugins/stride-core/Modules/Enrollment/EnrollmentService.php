@@ -65,19 +65,36 @@ final class EnrollmentService extends AbstractService
         if (!$status->allowsEnrollment()) {
             // Distinguish between "full" and other closed reasons
             if ($status === \Stride\Domain\EditionStatus::Full) {
+                ntdst_log('enrollment')->warning('Enrollment rejected: edition full', [
+                    'user_id' => $userId,
+                    'edition_id' => $editionId,
+                ]);
                 return new WP_Error('edition_full', 'This edition is full');
             }
 
+            ntdst_log('enrollment')->warning('Enrollment rejected: enrollment closed', [
+                'user_id' => $userId,
+                'edition_id' => $editionId,
+                'status' => $status->value,
+            ]);
             return new WP_Error('enrollment_closed', 'Enrollment is not open for this edition');
         }
 
         // Check capacity (redundant when status is correctly maintained, but defensive)
         if (!$this->editions->hasAvailableSpots($editionId)) {
+            ntdst_log('enrollment')->warning('Enrollment rejected: edition full', [
+                'user_id' => $userId,
+                'edition_id' => $editionId,
+            ]);
             return new WP_Error('edition_full', 'This edition is full');
         }
 
         // Check not already enrolled
         if ($this->isEnrolled($userId, $editionId)) {
+            ntdst_log('enrollment')->warning('Enrollment rejected: already enrolled', [
+                'user_id' => $userId,
+                'edition_id' => $editionId,
+            ]);
             return new WP_Error('already_enrolled', 'User is already enrolled in this edition');
         }
 
@@ -110,6 +127,13 @@ final class EnrollmentService extends AbstractService
             'enrolled_by' => $options['enrolled_by'] ?? null,
         ]);
 
+        ntdst_log('enrollment')->info('Enrollment created', [
+            'user_id' => $userId,
+            'edition_id' => $editionId,
+            'registration_id' => $registrationId,
+            'enrollment_path' => $options['enrollment_path'] ?? RegistrationRepository::PATH_INDIVIDUAL,
+        ]);
+
         return $registrationId;
     }
 
@@ -128,6 +152,11 @@ final class EnrollmentService extends AbstractService
         $result = $this->registrations->cancel($registrationId);
 
         if (!$result) {
+            ntdst_log('enrollment')->error('Enrollment cancellation failed', [
+                'registration_id' => $registrationId,
+                'user_id' => (int) $registration->user_id,
+                'edition_id' => (int) $registration->edition_id,
+            ]);
             return new WP_Error('cancel_failed', 'Failed to cancel registration');
         }
 
@@ -139,6 +168,12 @@ final class EnrollmentService extends AbstractService
 
         // Fire event
         $this->dispatch('registration/cancelled', [
+            'registration_id' => $registrationId,
+            'user_id' => (int) $registration->user_id,
+            'edition_id' => (int) $registration->edition_id,
+        ]);
+
+        ntdst_log('enrollment')->info('Enrollment cancelled', [
             'registration_id' => $registrationId,
             'user_id' => (int) $registration->user_id,
             'edition_id' => (int) $registration->edition_id,
@@ -210,8 +245,17 @@ final class EnrollmentService extends AbstractService
         $currentUserId = (int) ($data['user_id'] ?? 0);
         $enrollmentType = $data['enrollment_type'] ?? 'self';
 
+        ntdst_log('enrollment')->info('Processing enrollment', [
+            'user_id' => $currentUserId,
+            'edition_id' => $editionId,
+            'enrollment_type' => $enrollmentType,
+        ]);
+
         // Determine participant and enrollment path
         if ($enrollmentType === 'colleague') {
+            // Check if user exists before resolving (to detect new user creation)
+            $existingUser = get_user_by('email', $data['email']);
+
             // Colleague enrollment: find or create user by email
             $participantId = $this->resolveParticipant(
                 $data['email'],
@@ -221,6 +265,15 @@ final class EnrollmentService extends AbstractService
 
             if (is_wp_error($participantId)) {
                 return $participantId;
+            }
+
+            // Log if a new user was created
+            if (!$existingUser) {
+                ntdst_log('enrollment')->info('Colleague user created', [
+                    'participant_id' => $participantId,
+                    'email' => $data['email'],
+                    'enrolled_by' => $currentUserId,
+                ]);
             }
 
             $enrollmentPath = RegistrationRepository::PATH_COLLEAGUE;

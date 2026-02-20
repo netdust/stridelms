@@ -54,6 +54,11 @@ final class QuoteUpdateHandler
 
         $validation = $this->validateQuoteAccess($quoteId, $userId);
         if (is_wp_error($validation)) {
+            ntdst_log('invoicing')->warning('Quote update rejected: access denied', [
+                'quote_id' => $quoteId,
+                'user_id' => $userId,
+                'error' => $validation->get_error_message(),
+            ]);
             return $validation;
         }
 
@@ -62,6 +67,11 @@ final class QuoteUpdateHandler
             $quoteRepo = ntdst_get(QuoteRepository::class);
             $quoteRepo->updateMeta($quoteId, ['billing' => $billing]);
         }
+
+        ntdst_log('invoicing')->info('Quote billing updated', [
+            'quote_id' => $quoteId,
+            'user_id' => $userId,
+        ]);
 
         return [
             'success' => true,
@@ -93,6 +103,11 @@ final class QuoteUpdateHandler
 
         $validation = $this->validateQuoteAccess($quoteId, $userId);
         if (is_wp_error($validation)) {
+            ntdst_log('invoicing')->warning('Voucher application rejected', [
+                'quote_id' => $quoteId,
+                'user_id' => $userId,
+                'error' => $validation->get_error_message(),
+            ]);
             return $validation;
         }
 
@@ -101,6 +116,12 @@ final class QuoteUpdateHandler
         if (is_wp_error($result)) {
             return $result;
         }
+
+        ntdst_log('invoicing')->info('Voucher applied via handler', [
+            'quote_id' => $quoteId,
+            'user_id' => $userId,
+            'voucher_code' => $voucherCode,
+        ]);
 
         return [
             'success' => true,
@@ -127,8 +148,18 @@ final class QuoteUpdateHandler
             return new WP_Error('invalid_input', __('Geen offerte opgegeven.', 'stride'));
         }
 
+        ntdst_log('invoicing')->info('Quote cancellation requested', [
+            'quote_id' => $quoteId,
+            'user_id' => $userId,
+        ]);
+
         $validation = $this->validateQuoteOwnership($quoteId, $userId);
         if (is_wp_error($validation)) {
+            ntdst_log('invoicing')->warning('Quote cancellation rejected', [
+                'quote_id' => $quoteId,
+                'user_id' => $userId,
+                'error' => $validation->get_error_message(),
+            ]);
             return $validation;
         }
 
@@ -136,6 +167,11 @@ final class QuoteUpdateHandler
         $result = $quoteService->cancel($quoteId);
 
         if (is_wp_error($result)) {
+            ntdst_log('invoicing')->error('Quote cancellation failed', [
+                'quote_id' => $quoteId,
+                'user_id' => $userId,
+                'error' => $result->get_error_message(),
+            ]);
             return $result;
         }
 
