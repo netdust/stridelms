@@ -4049,3 +4049,22 @@ h1, h2, h3, h4, h5, h6,
     font-size: var(--stride-font-size-xs);
     font-weight: 600;
 }
+
+/* ========================================
+   DASHBOARD SUB-PAGES
+   ======================================== */
+
+/* Sub-pages use relative positioning to place the nav panel */
+.stride-dashboard-page {
+    position: relative;
+}
+
+/* Position desktop nav panel in top-right corner of sub-pages */
+@media (min-width: 960px) {
+    .stride-dashboard-page > .stride-nav-panel {
+        position: absolute;
+        top: 0;
+        right: 0;
+        z-index: 10;
+    }
+}

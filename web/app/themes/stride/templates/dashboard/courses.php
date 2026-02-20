@@ -113,12 +113,7 @@ $activeCount = count($activeCourses);
 $completedCount = count($completedCourses);
 ?>
 
-<div class="stride-my-courses stride-dashboard-courses" style="position: relative;">
-    <!-- Desktop Navigation Panel (positioned top-right) -->
-    <div class="uk-visible@m" style="position: absolute; top: 0; right: 0; z-index: 10;">
-        <?php include locate_template('templates/dashboard/partials/nav-panel.php'); ?>
-    </div>
-
+<div class="stride-my-courses stride-dashboard-courses stride-dashboard-page">
     <!-- Page Header -->
     <header class="stride-page-header">
         <div class="stride-page-header__content">
@@ -242,10 +237,8 @@ $completedCount = count($completedCourses);
         </section>
     <?php endif; ?>
 
-    <!-- Mobile Bottom Navbar (only on mobile, nav-panel.php contains both but desktop part hidden via uk-visible@m on wrapper above) -->
-    <div class="uk-hidden@m">
-        <?php include locate_template('templates/dashboard/partials/nav-panel.php'); ?>
-    </div>
+    <!-- Navigation (Desktop nav panel + Mobile bottom navbar) -->
+    <?php include locate_template('templates/dashboard/partials/nav-panel.php'); ?>
 </div>
 
 <?php
