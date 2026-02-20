@@ -46,6 +46,7 @@ return [
         \Stride\Modules\Trajectory\Admin\TrajectoryAdminController::class,
         \Stride\Modules\Attendance\AttendanceService::class,
         \Stride\Modules\Completion\CompletionService::class,
+        \Stride\Modules\Audit\AuditService::class,
     ],
 
     /**
