@@ -426,76 +426,46 @@ get_header();
     </div>
 </section>
 
-<!-- TESTIMONIALS SECTION -->
+<!-- TRAINERS SECTION -->
 <section class="stride-section stride-section--muted">
     <div class="uk-container">
         <div class="stride-section__header">
-            <span class="stride-section__eyebrow"><?php esc_html_e('Ervaringen', 'stride'); ?></span>
-            <h2 class="stride-section__title"><?php esc_html_e('Wat deelnemers zeggen', 'stride'); ?></h2>
+            <span class="stride-section__eyebrow"><?php esc_html_e('Wie staat er voor je', 'stride'); ?></span>
+            <h2 class="stride-section__title"><?php esc_html_e('Experts uit het werkveld', 'stride'); ?></h2>
             <p class="stride-section__description">
-                <?php esc_html_e('Ontdek waarom honderden professionals kiezen voor onze trainingen.', 'stride'); ?>
+                <?php esc_html_e('Onze trainers combineren wetenschappelijke kennis met jarenlange praktijkervaring.', 'stride'); ?>
             </p>
         </div>
 
-        <div class="stride-testimonials">
-            <div class="stride-testimonial">
-                <div class="stride-testimonial__rating">
-                    <span uk-icon="icon: star; ratio: 0.9"></span>
-                    <span uk-icon="icon: star; ratio: 0.9"></span>
-                    <span uk-icon="icon: star; ratio: 0.9"></span>
-                    <span uk-icon="icon: star; ratio: 0.9"></span>
-                    <span uk-icon="icon: star; ratio: 0.9"></span>
+        <div class="stride-trainers">
+            <!-- Trainer 1 - Placeholder -->
+            <div class="stride-trainer">
+                <div class="stride-trainer__avatar">
+                    <span uk-icon="icon: user; ratio: 2"></span>
                 </div>
-                <p class="stride-testimonial__content">
-                    "<?php esc_html_e('De cursus Motiverende Gespreksvoering was precies wat ik zocht. Praktijkgericht en direct toepasbaar in mijn werk.', 'stride'); ?>"
-                </p>
-                <div class="stride-testimonial__author">
-                    <div class="stride-testimonial__avatar">JV</div>
-                    <div class="stride-testimonial__info">
-                        <p class="stride-testimonial__name">Jan Vermeer</p>
-                        <p class="stride-testimonial__role"><?php esc_html_e('Ambulant begeleider', 'stride'); ?></p>
-                    </div>
-                </div>
+                <h3 class="stride-trainer__name"><?php esc_html_e('Naam Trainer', 'stride'); ?></h3>
+                <p class="stride-trainer__role"><?php esc_html_e('Functie, Organisatie', 'stride'); ?></p>
+                <p class="stride-trainer__bio"><?php esc_html_e('Korte beschrijving van expertise en achtergrond.', 'stride'); ?></p>
             </div>
 
-            <div class="stride-testimonial">
-                <div class="stride-testimonial__rating">
-                    <span uk-icon="icon: star; ratio: 0.9"></span>
-                    <span uk-icon="icon: star; ratio: 0.9"></span>
-                    <span uk-icon="icon: star; ratio: 0.9"></span>
-                    <span uk-icon="icon: star; ratio: 0.9"></span>
-                    <span uk-icon="icon: star; ratio: 0.9"></span>
+            <!-- Trainer 2 - Placeholder -->
+            <div class="stride-trainer">
+                <div class="stride-trainer__avatar">
+                    <span uk-icon="icon: user; ratio: 2"></span>
                 </div>
-                <p class="stride-testimonial__content">
-                    "<?php esc_html_e('Fijn dat ik de online cursus in mijn eigen tempo kon volgen. De docent was heel toegankelijk voor vragen.', 'stride'); ?>"
-                </p>
-                <div class="stride-testimonial__author">
-                    <div class="stride-testimonial__avatar">MB</div>
-                    <div class="stride-testimonial__info">
-                        <p class="stride-testimonial__name">Maria Bakker</p>
-                        <p class="stride-testimonial__role"><?php esc_html_e('Maatschappelijk werker', 'stride'); ?></p>
-                    </div>
-                </div>
+                <h3 class="stride-trainer__name"><?php esc_html_e('Naam Trainer', 'stride'); ?></h3>
+                <p class="stride-trainer__role"><?php esc_html_e('Functie, Organisatie', 'stride'); ?></p>
+                <p class="stride-trainer__bio"><?php esc_html_e('Korte beschrijving van expertise en achtergrond.', 'stride'); ?></p>
             </div>
 
-            <div class="stride-testimonial">
-                <div class="stride-testimonial__rating">
-                    <span uk-icon="icon: star; ratio: 0.9"></span>
-                    <span uk-icon="icon: star; ratio: 0.9"></span>
-                    <span uk-icon="icon: star; ratio: 0.9"></span>
-                    <span uk-icon="icon: star; ratio: 0.9"></span>
-                    <span uk-icon="icon: star; ratio: 0.9"></span>
+            <!-- Trainer 3 - Placeholder -->
+            <div class="stride-trainer">
+                <div class="stride-trainer__avatar">
+                    <span uk-icon="icon: user; ratio: 2"></span>
                 </div>
-                <p class="stride-testimonial__content">
-                    "<?php esc_html_e('De klassikale training was intensief maar zeer waardevol. De uitwisseling met collega\'s uit andere organisaties was verrijkend.', 'stride'); ?>"
-                </p>
-                <div class="stride-testimonial__author">
-                    <div class="stride-testimonial__avatar">PS</div>
-                    <div class="stride-testimonial__info">
-                        <p class="stride-testimonial__name">Peter Smits</p>
-                        <p class="stride-testimonial__role"><?php esc_html_e('Teamleider verslavingszorg', 'stride'); ?></p>
-                    </div>
-                </div>
+                <h3 class="stride-trainer__name"><?php esc_html_e('Naam Trainer', 'stride'); ?></h3>
+                <p class="stride-trainer__role"><?php esc_html_e('Functie, Organisatie', 'stride'); ?></p>
+                <p class="stride-trainer__bio"><?php esc_html_e('Korte beschrijving van expertise en achtergrond.', 'stride'); ?></p>
             </div>
         </div>
     </div>
