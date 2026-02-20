@@ -192,10 +192,7 @@ get_header();
     <div class="uk-container">
         <div class="stride-section__header">
             <span class="stride-section__eyebrow"><?php esc_html_e('Cursusaanbod', 'stride'); ?></span>
-            <h2 class="stride-section__title"><?php esc_html_e('Ontdek onze cursussen', 'stride'); ?></h2>
-            <p class="stride-section__description">
-                <?php esc_html_e('Kies uit ons brede aanbod van praktijkgerichte trainingen voor professionals in de verslavingszorg.', 'stride'); ?>
-            </p>
+            <h2 class="stride-section__title"><?php esc_html_e('Actueel aanbod', 'stride'); ?></h2>
         </div>
 
         <!-- Filter Pills -->
