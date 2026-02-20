@@ -475,14 +475,19 @@ get_header();
 <section class="stride-section stride-section--primary">
     <div class="uk-container">
         <div class="stride-cta">
-            <h2 class="stride-cta__title"><?php esc_html_e('Klaar om te starten?', 'stride'); ?></h2>
+            <h2 class="stride-cta__title"><?php esc_html_e('Aan de slag', 'stride'); ?></h2>
             <p class="stride-cta__description">
-                <?php esc_html_e('Schrijf je vandaag nog in en zet de volgende stap in je professionele ontwikkeling.', 'stride'); ?>
+                <?php esc_html_e('Bekijk welke cursussen en trajecten aansluiten bij jouw ontwikkeldoelen.', 'stride'); ?>
             </p>
-            <a href="#cursussen" class="uk-button stride-cta__button">
-                <?php esc_html_e('Bekijk cursusaanbod', 'stride'); ?>
-                <span uk-icon="icon: arrow-up; ratio: 0.9"></span>
-            </a>
+            <div class="stride-cta__actions">
+                <a href="#cursussen" class="uk-button stride-cta__button">
+                    <?php esc_html_e('Bekijk cursussen', 'stride'); ?>
+                    <span uk-icon="icon: arrow-up; ratio: 0.9"></span>
+                </a>
+                <a href="<?php echo esc_url(home_url('/trajecten/')); ?>" class="uk-button stride-cta__button stride-cta__button--outline">
+                    <?php esc_html_e('Bekijk trajecten', 'stride'); ?>
+                </a>
+            </div>
         </div>
     </div>
 </section>
