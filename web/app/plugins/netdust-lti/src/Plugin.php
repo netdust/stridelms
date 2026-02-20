@@ -35,6 +35,7 @@ final class Plugin implements NTDST_Service_Meta
         // Register admin UI
         if (is_admin()) {
             ntdst_get(Admin\AdminPage::class);
+            ntdst_get(Admin\CourseSettingsMetabox::class);
         }
 
         // Register bridges after LearnDash is loaded
