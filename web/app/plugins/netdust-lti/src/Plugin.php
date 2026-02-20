@@ -26,28 +26,8 @@ final class Plugin implements NTDST_Service_Meta
 
     private function init(): void
     {
-        // Register activation hook
-        register_activation_hook(
-            dirname(__DIR__) . '/netdust-lti.php',
-            [$this, 'activate']
-        );
-
-        // Register deactivation hook
-        register_deactivation_hook(
-            dirname(__DIR__) . '/netdust-lti.php',
-            [$this, 'deactivate']
-        );
-    }
-
-    public function activate(): void
-    {
-        // Will be implemented in Task 1.2
-        flush_rewrite_rules();
-    }
-
-    public function deactivate(): void
-    {
-        flush_rewrite_rules();
+        // Activation/deactivation hooks are registered in netdust-lti.php
+        // This method initializes runtime hooks and services
     }
 
     public static function pluginPath(): string
