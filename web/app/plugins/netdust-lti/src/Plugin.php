@@ -28,6 +28,9 @@ final class Plugin implements NTDST_Service_Meta
     {
         // Activation/deactivation hooks are registered in netdust-lti.php
         // This method initializes runtime hooks and services
+
+        // Register endpoint router for LTI requests
+        ntdst_get(LTI\EndpointRouter::class);
     }
 
     public static function pluginPath(): string
