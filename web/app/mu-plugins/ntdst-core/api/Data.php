@@ -724,8 +724,13 @@ class NTDST_Data_Model
      *
      * Supports both core WP fields (date, title, menu_order, etc.)
      * and custom meta fields (which will be prefixed automatically).
+     *
+     * @param string $field Field to order by
+     * @param string $dir Direction: ASC or DESC
+     * @param bool $numeric Use numeric ordering for meta values (meta_value_num)
+     * @return self
      */
-    public function orderBy(string $field, string $dir = 'DESC'): self
+    public function orderBy(string $field, string $dir = 'DESC', bool $numeric = false): self
     {
         // Core WordPress orderby values that don't need meta handling
         $coreOrderBy = [
@@ -740,7 +745,7 @@ class NTDST_Data_Model
         } else {
             // Custom meta field - set up meta ordering with prefix
             $this->query_args['meta_key'] = $this->prefixMetaKey($field);
-            $this->query_args['orderby'] = 'meta_value';
+            $this->query_args['orderby'] = $numeric ? 'meta_value_num' : 'meta_value';
         }
 
         $this->query_args['order'] = strtoupper($dir);
