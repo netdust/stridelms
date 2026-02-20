@@ -3788,3 +3788,121 @@ h1, h2, h3, h4, h5, h6,
         padding-bottom: 80px;
     }
 }
+
+/* ========================================
+   CONTINUE LEARNING HERO
+   ======================================== */
+
+.stride-continue-hero {
+    background: var(--stride-surface);
+    border-radius: var(--stride-radius-lg);
+    box-shadow: var(--stride-shadow-sm);
+    border: 1px solid var(--stride-border-light);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+@media (min-width: 640px) {
+    .stride-continue-hero {
+        flex-direction: row;
+    }
+}
+
+.stride-continue-hero__image {
+    width: 100%;
+    height: 160px;
+    background: var(--stride-secondary-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+@media (min-width: 640px) {
+    .stride-continue-hero__image {
+        width: 200px;
+        height: auto;
+        min-height: 180px;
+    }
+}
+
+.stride-continue-hero__image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.stride-continue-hero__placeholder {
+    color: var(--stride-text-muted);
+}
+
+.stride-continue-hero__body {
+    flex: 1;
+    padding: var(--stride-space-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--stride-space-sm);
+}
+
+.stride-continue-hero__title {
+    font-size: var(--stride-font-size-xl);
+    font-weight: 600;
+    color: var(--stride-text);
+    margin: 0;
+    line-height: var(--stride-line-height-tight);
+}
+
+.stride-continue-hero__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--stride-space-md);
+    font-size: var(--stride-font-size-sm);
+    color: var(--stride-text-muted);
+}
+
+.stride-continue-hero__meta-item {
+    display: flex;
+    align-items: center;
+    gap: var(--stride-space-xs);
+}
+
+.stride-continue-hero__progress {
+    display: flex;
+    align-items: center;
+    gap: var(--stride-space-sm);
+    margin-top: var(--stride-space-xs);
+}
+
+.stride-continue-hero__progress .uk-progress {
+    flex: 1;
+    margin: 0;
+    height: 8px;
+}
+
+.stride-continue-hero__progress-text {
+    font-size: var(--stride-font-size-sm);
+    font-weight: 600;
+    color: var(--stride-text);
+    min-width: 40px;
+    text-align: right;
+}
+
+.stride-continue-hero__action {
+    margin-top: auto;
+    padding-top: var(--stride-space-sm);
+}
+
+.stride-continue-hero__action .uk-button {
+    min-width: 140px;
+}
+
+/* Empty state variation */
+.stride-continue-hero--empty {
+    text-align: center;
+    padding: var(--stride-space-xl);
+}
+
+.stride-continue-hero--empty .stride-continue-hero__body {
+    align-items: center;
+}
