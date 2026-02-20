@@ -9,6 +9,9 @@
 
 defined('ABSPATH') || exit;
 
+// Load QueryCache dependency
+require_once __DIR__ . '/QueryCache.php';
+
 class NTDST_Data_Model
 {
     protected string $post_type;
@@ -24,9 +27,18 @@ class NTDST_Data_Model
     {
         $this->post_type = $post_type;
         $this->schema = $schema;
-        $this->cache_time = $cache_time;
         $this->cache_group = 'ntdst_' . $post_type;
         $this->meta_prefix = $meta_prefix;
+
+        // Disable caching in dev if NTDST_DISABLE_CACHE is defined or WP_DEBUG is true
+        if (defined('NTDST_DISABLE_CACHE') && NTDST_DISABLE_CACHE) {
+            $this->cache_time = 0;
+        } elseif (defined('WP_DEBUG') && WP_DEBUG && !defined('NTDST_ENABLE_CACHE_IN_DEBUG')) {
+            $this->cache_time = 0;
+        } else {
+            $this->cache_time = $cache_time;
+        }
+
         $this->setupSanitizers();
         $this->setupValidators();
     }
@@ -698,10 +710,28 @@ class NTDST_Data_Model
 
     /**
      * Query builder - order by
+     *
+     * Supports both core WP fields (date, title, menu_order, etc.)
+     * and custom meta fields (which will be prefixed automatically).
      */
     public function orderBy(string $field, string $dir = 'DESC'): self
     {
-        $this->query_args['orderby'] = $field;
+        // Core WordPress orderby values that don't need meta handling
+        $coreOrderBy = [
+            'none', 'ID', 'author', 'title', 'name', 'type', 'date',
+            'modified', 'parent', 'rand', 'comment_count', 'relevance',
+            'menu_order', 'meta_value', 'meta_value_num', 'post__in',
+            'post_name__in', 'post_parent__in',
+        ];
+
+        if (in_array($field, $coreOrderBy, true)) {
+            $this->query_args['orderby'] = $field;
+        } else {
+            // Custom meta field - set up meta ordering with prefix
+            $this->query_args['meta_key'] = $this->prefixMetaKey($field);
+            $this->query_args['orderby'] = 'meta_value';
+        }
+
         $this->query_args['order'] = strtoupper($dir);
         return $this;
     }
@@ -1408,6 +1438,13 @@ class NTDST_Data_Manager
         $include_meta = (bool) ($args['include_meta'] ?? false);
         $include_terms = (bool) ($args['include_terms'] ?? false);
         $cache_time = (int) ($args['cache_time'] ?? 3600);
+
+        // Disable caching in dev if NTDST_DISABLE_CACHE is defined or WP_DEBUG is true
+        if (defined('NTDST_DISABLE_CACHE') && NTDST_DISABLE_CACHE) {
+            $cache_time = 0;
+        } elseif (defined('WP_DEBUG') && WP_DEBUG && !defined('NTDST_ENABLE_CACHE_IN_DEBUG')) {
+            $cache_time = 0;
+        }
 
         // Remove custom args so WP_Query doesn't get confused
         unset($args['include_meta'], $args['include_terms'], $args['cache_time']);
