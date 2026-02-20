@@ -633,6 +633,9 @@ class NTDST_Data_Model
 
     /**
      * Query builder - where NOT clause
+     *
+     * For core fields: uses post__not_in for IDs, or excludes via post_status array.
+     * For meta fields: uses meta_query with != compare.
      */
     public function whereNot(string $field, $value): self
     {
@@ -644,11 +647,25 @@ class NTDST_Data_Model
         ];
 
         if (in_array($field, $core_fields)) {
-            // Core WordPress field - use post__not_in for IDs or skip (WP_Query doesn't support != for most core fields)
-            // For now, we'll add it with a special prefix to handle in getPostsFast if needed
-            $this->query_args[$field . '__not'] = $value;
+            // Handle core field negation
+            if ($field === 'post_status') {
+                // For post_status, we need to explicitly include all OTHER statuses
+                $all_statuses = ['publish', 'draft', 'pending', 'private', 'future', 'inherit'];
+                $exclude = is_array($value) ? $value : [$value];
+                $this->query_args['post_status'] = array_diff($all_statuses, $exclude);
+            } elseif ($field === 'post_author') {
+                // For author, use author__not_in
+                $this->query_args['author__not_in'] = is_array($value) ? $value : [$value];
+            } elseif ($field === 'post_parent') {
+                // For parent, use post_parent__not_in
+                $this->query_args['post_parent__not_in'] = is_array($value) ? $value : [$value];
+            } else {
+                // Other core fields - store for potential handling
+                // Note: WP_Query doesn't natively support != for most core fields
+                $this->query_args[$field . '__not'] = $value;
+            }
         } else {
-            // Custom meta field - use meta_query with prefix
+            // Custom meta field - use meta_query with != compare
             if (!isset($this->query_args['meta_query'])) {
                 $this->query_args['meta_query'] = [];
             }
