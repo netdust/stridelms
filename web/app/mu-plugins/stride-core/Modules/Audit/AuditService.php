@@ -7,6 +7,19 @@ use Stride\Infrastructure\AbstractService;
 use Stride\Modules\Edition\EditionService;
 use WP_Error;
 
+/**
+ * V2 Considerations (not in V1):
+ *
+ * 1. Chained hashes - Each entry references previous hash for tamper detection
+ * 2. External verification - Exports to S3 Glacier / signed PDFs
+ * 3. Real-time notifications - Admin alerts on specific actions
+ * 4. Extended coverage - Quotes, vouchers, profile changes
+ * 5. Full-text search - Search within context JSON
+ * 6. Granular user view - Detailed attendance history
+ * 7. Audit reports - Pre-built compliance reports
+ * 8. REST API for external systems - External integrations
+ * 9. GDPR anonymization - Actor anonymization after user deletion
+ */
 final class AuditService extends AbstractService
 {
     private AuditRepository $repository;
