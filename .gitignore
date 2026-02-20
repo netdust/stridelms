@@ -3,6 +3,7 @@ web/app/plugins/*
 !web/app/plugins/.gitkeep
 !web/app/plugins/sfwd-lms/
 !web/app/plugins/learndash-hub/
+!web/app/plugins/netdust-lti/
 web/app/mu-plugins/*
 !web/app/mu-plugins/ntdst-core/
 !web/app/mu-plugins/ntdst-coreloader.php
