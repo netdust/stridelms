@@ -93,10 +93,24 @@ final class QuoteService extends AbstractService
         ]);
 
         if (is_wp_error($result)) {
+            ntdst_log('invoicing')->error('Quote creation failed', [
+                'user_id' => $userId,
+                'registration_id' => $registrationId,
+                'edition_id' => $editionId,
+                'error' => $result->get_error_message(),
+            ]);
             return $result;
         }
 
         $quoteId = $result->ID;
+
+        ntdst_log('invoicing')->info('Quote created', [
+            'quote_id' => $quoteId,
+            'quote_number' => $quoteNumber,
+            'user_id' => $userId,
+            'registration_id' => $registrationId,
+            'total' => $totals['total']->inCents(),
+        ]);
 
         // Fire event
         $this->dispatch('quote/created', [
@@ -162,12 +176,19 @@ final class QuoteService extends AbstractService
         $status = QuoteStatus::tryFrom($quote->status ?? '');
 
         if ($status !== QuoteStatus::Draft) {
+            ntdst_log('invoicing')->warning('Cannot send: invalid status', [
+                'quote_id' => $quoteId,
+                'current_status' => $status?->value ?? 'unknown',
+            ]);
             return new WP_Error('invalid_status', 'Only draft quotes can be sent');
         }
 
         $result = $this->repository->updateStatus($quoteId, QuoteStatus::Sent);
 
         if ($result) {
+            ntdst_log('invoicing')->info('Quote marked as sent', [
+                'quote_id' => $quoteId,
+            ]);
             $this->dispatch('quote/sent', ['quote_id' => $quoteId]);
         }
 
@@ -188,12 +209,18 @@ final class QuoteService extends AbstractService
         $status = QuoteStatus::tryFrom($quote->status ?? '');
 
         if ($status === QuoteStatus::Exported) {
+            ntdst_log('invoicing')->warning('Cannot cancel: quote exported', [
+                'quote_id' => $quoteId,
+            ]);
             return new WP_Error('cannot_cancel', 'Exported quotes cannot be cancelled');
         }
 
         $result = $this->repository->updateStatus($quoteId, QuoteStatus::Cancelled);
 
         if ($result) {
+            ntdst_log('invoicing')->info('Quote cancelled', [
+                'quote_id' => $quoteId,
+            ]);
             $this->dispatch('quote/cancelled', ['quote_id' => $quoteId]);
         }
 
@@ -216,6 +243,10 @@ final class QuoteService extends AbstractService
         $status = QuoteStatus::tryFrom($meta['status'] ?? '');
 
         if ($status !== QuoteStatus::Draft) {
+            ntdst_log('invoicing')->warning('Voucher application failed: invalid status', [
+                'quote_id' => $quoteId,
+                'current_status' => $status?->value ?? 'unknown',
+            ]);
             return new WP_Error('invalid_status', 'Alleen concept-offertes kunnen worden aangepast');
         }
 
@@ -225,6 +256,11 @@ final class QuoteService extends AbstractService
         $voucher = $voucherService->validateVoucher($voucherCode, $editionId);
 
         if (is_wp_error($voucher)) {
+            ntdst_log('invoicing')->error('Voucher application failed', [
+                'quote_id' => $quoteId,
+                'voucher_code' => $voucherCode,
+                'error' => $voucher->get_error_message(),
+            ]);
             return $voucher;
         }
 
@@ -248,6 +284,11 @@ final class QuoteService extends AbstractService
         ]);
 
         if (!$result) {
+            ntdst_log('invoicing')->error('Voucher application failed', [
+                'quote_id' => $quoteId,
+                'voucher_code' => $voucherCode,
+                'error' => 'Kon offerte niet bijwerken',
+            ]);
             return new WP_Error('update_failed', 'Kon offerte niet bijwerken');
         }
 
@@ -256,8 +297,19 @@ final class QuoteService extends AbstractService
         $redemption = $voucherService->redeemVoucher($voucherCode, $userId, $quoteId);
 
         if (is_wp_error($redemption)) {
+            ntdst_log('invoicing')->error('Voucher application failed', [
+                'quote_id' => $quoteId,
+                'voucher_code' => $voucherCode,
+                'error' => $redemption->get_error_message(),
+            ]);
             return $redemption;
         }
+
+        ntdst_log('invoicing')->info('Voucher applied to quote', [
+            'quote_id' => $quoteId,
+            'voucher_code' => $voucherCode,
+            'discount' => $newDiscount->inCents(),
+        ]);
 
         $this->dispatch('quote/voucher_applied', [
             'quote_id' => $quoteId,
