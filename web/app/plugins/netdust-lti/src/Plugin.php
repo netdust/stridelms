@@ -36,6 +36,11 @@ final class Plugin implements NTDST_Service_Meta
         if (is_admin()) {
             ntdst_get(Admin\AdminPage::class);
         }
+
+        // Register bridges after LearnDash is loaded
+        add_action('learndash_init', function () {
+            ntdst_get(Bridges\LearnDashBridge::class);
+        });
     }
 
     public static function pluginPath(): string
