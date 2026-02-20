@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Stride\Modules\Audit;
 
 use Stride\Infrastructure\AbstractService;
+use Stride\Modules\Edition\EditionService;
 use WP_Error;
 
 final class AuditService extends AbstractService
@@ -50,6 +51,9 @@ final class AuditService extends AbstractService
         if (!wp_next_scheduled('stride_audit_cleanup')) {
             wp_schedule_event(time(), 'weekly', 'stride_audit_cleanup');
         }
+
+        // Register user-facing shortcode
+        new ActivityShortcode($this, ntdst_get(EditionService::class));
     }
 
     /**
