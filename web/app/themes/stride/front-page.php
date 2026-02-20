@@ -117,17 +117,16 @@ get_header();
             <div class="stride-hero__content">
                 <span class="stride-hero__tagline">
                     <span uk-icon="icon: star; ratio: 0.8"></span>
-                    <?php esc_html_e('VAD Erkende Opleidingen', 'stride'); ?>
+                    <?php echo esc_html(get_bloginfo('name') . ' ' . __('Opleidingen', 'stride')); ?>
                 </span>
 
                 <h1 class="stride-hero__title">
-                    <?php esc_html_e('Versterk je', 'stride'); ?>
-                    <span class="stride-hero__title-accent"><?php esc_html_e('Expertise', 'stride'); ?></span>
-                    <?php esc_html_e('in Verslavingszorg', 'stride'); ?>
+                    <?php esc_html_e('Blijf groeien', 'stride'); ?>
+                    <span class="stride-hero__title-accent"><?php esc_html_e('in je vak', 'stride'); ?></span>
                 </h1>
 
                 <p class="stride-hero__description">
-                    <?php esc_html_e('Hoogwaardige trainingen voor professionals in de verslavingszorg. Klassikaal of online, altijd praktijkgericht en door experts ontwikkeld.', 'stride'); ?>
+                    <?php esc_html_e('Praktijkgerichte opleidingen ontwikkeld door experts uit het werkveld. Klassikaal of online, altijd toepasbaar in je dagelijkse praktijk.', 'stride'); ?>
                 </p>
 
                 <div class="stride-hero__actions">
@@ -143,20 +142,16 @@ get_header();
                 <!-- Stats -->
                 <div class="stride-hero__stats">
                     <div class="stride-hero__stat">
-                        <div class="stride-hero__stat-value stride-hero__stat-value--primary"><?php echo esc_html($totalEditions); ?>+</div>
+                        <div class="stride-hero__stat-value stride-hero__stat-value--primary">500+</div>
+                        <div class="stride-hero__stat-label"><?php esc_html_e('Professionals', 'stride'); ?></div>
+                    </div>
+                    <div class="stride-hero__stat">
+                        <div class="stride-hero__stat-value"><?php echo esc_html($totalEditions); ?>+</div>
                         <div class="stride-hero__stat-label"><?php esc_html_e('Cursussen', 'stride'); ?></div>
                     </div>
                     <div class="stride-hero__stat">
-                        <div class="stride-hero__stat-value"><?php echo esc_html($classroomCount); ?></div>
-                        <div class="stride-hero__stat-label"><?php esc_html_e('Klassikaal', 'stride'); ?></div>
-                    </div>
-                    <div class="stride-hero__stat">
-                        <div class="stride-hero__stat-value"><?php echo esc_html($onlineCount); ?></div>
-                        <div class="stride-hero__stat-label"><?php esc_html_e('Online', 'stride'); ?></div>
-                    </div>
-                    <div class="stride-hero__stat">
-                        <div class="stride-hero__stat-value">500+</div>
-                        <div class="stride-hero__stat-label"><?php esc_html_e('Deelnemers', 'stride'); ?></div>
+                        <div class="stride-hero__stat-value">25+</div>
+                        <div class="stride-hero__stat-label"><?php esc_html_e('Jaar expertise', 'stride'); ?></div>
                     </div>
                 </div>
             </div>
