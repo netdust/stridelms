@@ -14,6 +14,133 @@ use Stride\Domain\QuoteStatus;
 use Stride\Modules\Invoicing\QuoteService;
 use Stride\Modules\Edition\EditionService;
 
+/**
+ * Get CSS class for quote status badge
+ *
+ * @param QuoteStatus $status Quote status
+ * @return string CSS class
+ */
+if (!function_exists('stride_get_quote_status_class')) :
+function stride_get_quote_status_class(QuoteStatus $status): string
+{
+    return match ($status) {
+        QuoteStatus::Draft => 'stride-label-soft-secondary',
+        QuoteStatus::Sent => 'stride-label-soft-warning',
+        QuoteStatus::Exported => 'stride-label-soft-success',
+        QuoteStatus::Cancelled => 'stride-label-soft-danger',
+    };
+}
+endif;
+
+/**
+ * Render a quote card
+ *
+ * @param array $quote Quote data from QuoteService
+ * @param EditionService $editionService Edition service instance
+ */
+if (!function_exists('stride_render_quote_card')) :
+function stride_render_quote_card(array $quote, EditionService $editionService): void
+{
+    $quoteId = (int) ($quote['id'] ?? $quote['ID'] ?? 0);
+    $quoteNumber = $quote['quote_number'] ?? sprintf('Q%d', $quoteId);
+    $status = $quote['status_enum'] ?? QuoteStatus::Draft;
+    $totalMoney = $quote['total_money'] ?? null;
+    $total = $totalMoney ? $totalMoney->format() : '€ 0,00';
+    $validUntil = $quote['valid_until'] ?? '';
+    $editionId = (int) ($quote['edition_id'] ?? 0);
+
+    // Get edition/course name
+    $title = $quote['post_title'] ?? '';
+    if (empty($title) && $editionId > 0) {
+        $edition = $editionService->getEdition($editionId);
+        if (!is_wp_error($edition)) {
+            $title = $edition->post_title ?? '';
+        }
+    }
+    if (empty($title)) {
+        $title = __('Cursusinschrijving', 'stride');
+    }
+
+    // Quote date
+    $quoteDate = $quote['post_date'] ?? '';
+    $formattedDate = $quoteDate ? date_i18n('j M Y', strtotime($quoteDate)) : '';
+
+    // Status badge
+    $statusLabel = $status->label();
+    $statusClass = stride_get_quote_status_class($status);
+
+    // Quote detail URL (placeholder - can be updated when quote detail page exists)
+    $detailUrl = add_query_arg(['quote_id' => $quoteId], home_url('/offerte/'));
+    ?>
+    <div class="stride-quote-card uk-card uk-card-default">
+        <div class="stride-quote-card__body">
+            <div class="stride-quote-card__header">
+                <div class="stride-quote-card__info">
+                    <span class="stride-quote-card__number"><?php echo esc_html($quoteNumber); ?></span>
+                    <?php if ($formattedDate) : ?>
+                        <span class="stride-quote-card__date"><?php echo esc_html($formattedDate); ?></span>
+                    <?php endif; ?>
+                </div>
+                <span class="uk-label <?php echo esc_attr($statusClass); ?>">
+                    <?php echo esc_html($statusLabel); ?>
+                </span>
+            </div>
+
+            <h3 class="stride-quote-card__title"><?php echo esc_html($title); ?></h3>
+
+            <div class="stride-quote-card__footer">
+                <div class="stride-quote-card__amount">
+                    <span class="stride-quote-card__amount-label"><?php esc_html_e('Totaal', 'stride'); ?></span>
+                    <span class="stride-quote-card__amount-value"><?php echo esc_html($total); ?></span>
+                </div>
+
+                <div class="stride-quote-card__actions">
+                    <?php if ($status === QuoteStatus::Draft) : ?>
+                        <a href="<?php echo esc_url($detailUrl); ?>" class="uk-button uk-button-primary uk-button-small">
+                            <?php esc_html_e('Bekijken', 'stride'); ?>
+                        </a>
+                    <?php else : ?>
+                        <a href="<?php echo esc_url($detailUrl); ?>" class="uk-button uk-button-default uk-button-small">
+                            <?php esc_html_e('Bekijken', 'stride'); ?>
+                        </a>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <?php if ($status->isEditable() && $validUntil) : ?>
+                <?php
+                $validDate = strtotime($validUntil);
+                $isExpired = $validDate && $validDate < time();
+                $daysLeft = $validDate ? ceil(($validDate - time()) / DAY_IN_SECONDS) : 0;
+                ?>
+                <?php if ($isExpired) : ?>
+                    <div class="stride-quote-card__notice stride-quote-card__notice--danger">
+                        <span uk-icon="icon: warning; ratio: 0.8"></span>
+                        <?php esc_html_e('Deze offerte is verlopen', 'stride'); ?>
+                    </div>
+                <?php elseif ($daysLeft <= 7) : ?>
+                    <div class="stride-quote-card__notice stride-quote-card__notice--warning">
+                        <span uk-icon="icon: clock; ratio: 0.8"></span>
+                        <?php
+                        printf(
+                            esc_html(_n(
+                                'Nog %d dag geldig',
+                                'Nog %d dagen geldig',
+                                $daysLeft,
+                                'stride'
+                            )),
+                            $daysLeft
+                        );
+                        ?>
+                    </div>
+                <?php endif; ?>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php
+}
+endif; // function_exists stride_render_quote_card
+
 // Services - lazy loaded from DI container
 $quoteService = ntdst_get(QuoteService::class);
 $editionService = ntdst_get(EditionService::class);
@@ -183,132 +310,3 @@ $paidCount = count($paidQuotes);
     <!-- Navigation (Desktop nav panel + Mobile bottom navbar) -->
     <?php include locate_template('templates/dashboard/partials/nav-panel.php'); ?>
 </div>
-
-<?php
-/**
- * Render a quote card
- *
- * @param array $quote Quote data from QuoteService
- * @param EditionService $editionService Edition service instance
- */
-if (!function_exists('stride_render_quote_card')) :
-function stride_render_quote_card(array $quote, EditionService $editionService): void
-{
-    $quoteId = (int) ($quote['id'] ?? $quote['ID'] ?? 0);
-    $quoteNumber = $quote['quote_number'] ?? sprintf('Q%d', $quoteId);
-    $status = $quote['status_enum'] ?? QuoteStatus::Draft;
-    $totalMoney = $quote['total_money'] ?? null;
-    $total = $totalMoney ? $totalMoney->format() : '€ 0,00';
-    $validUntil = $quote['valid_until'] ?? '';
-    $editionId = (int) ($quote['edition_id'] ?? 0);
-
-    // Get edition/course name
-    $title = $quote['post_title'] ?? '';
-    if (empty($title) && $editionId > 0) {
-        $edition = $editionService->getEdition($editionId);
-        if (!is_wp_error($edition)) {
-            $title = $edition->post_title ?? '';
-        }
-    }
-    if (empty($title)) {
-        $title = __('Cursusinschrijving', 'stride');
-    }
-
-    // Quote date
-    $quoteDate = $quote['post_date'] ?? '';
-    $formattedDate = $quoteDate ? date_i18n('j M Y', strtotime($quoteDate)) : '';
-
-    // Status badge
-    $statusLabel = $status->label();
-    $statusClass = stride_get_quote_status_class($status);
-
-    // Quote detail URL (placeholder - can be updated when quote detail page exists)
-    $detailUrl = add_query_arg(['quote_id' => $quoteId], home_url('/offerte/'));
-    ?>
-    <div class="stride-quote-card uk-card uk-card-default">
-        <div class="stride-quote-card__body">
-            <div class="stride-quote-card__header">
-                <div class="stride-quote-card__info">
-                    <span class="stride-quote-card__number"><?php echo esc_html($quoteNumber); ?></span>
-                    <?php if ($formattedDate) : ?>
-                        <span class="stride-quote-card__date"><?php echo esc_html($formattedDate); ?></span>
-                    <?php endif; ?>
-                </div>
-                <span class="uk-label <?php echo esc_attr($statusClass); ?>">
-                    <?php echo esc_html($statusLabel); ?>
-                </span>
-            </div>
-
-            <h3 class="stride-quote-card__title"><?php echo esc_html($title); ?></h3>
-
-            <div class="stride-quote-card__footer">
-                <div class="stride-quote-card__amount">
-                    <span class="stride-quote-card__amount-label"><?php esc_html_e('Totaal', 'stride'); ?></span>
-                    <span class="stride-quote-card__amount-value"><?php echo esc_html($total); ?></span>
-                </div>
-
-                <div class="stride-quote-card__actions">
-                    <?php if ($status === QuoteStatus::Draft) : ?>
-                        <a href="<?php echo esc_url($detailUrl); ?>" class="uk-button uk-button-primary uk-button-small">
-                            <?php esc_html_e('Bekijken', 'stride'); ?>
-                        </a>
-                    <?php else : ?>
-                        <a href="<?php echo esc_url($detailUrl); ?>" class="uk-button uk-button-default uk-button-small">
-                            <?php esc_html_e('Bekijken', 'stride'); ?>
-                        </a>
-                    <?php endif; ?>
-                </div>
-            </div>
-
-            <?php if ($status->isEditable() && $validUntil) : ?>
-                <?php
-                $validDate = strtotime($validUntil);
-                $isExpired = $validDate && $validDate < time();
-                $daysLeft = $validDate ? ceil(($validDate - time()) / DAY_IN_SECONDS) : 0;
-                ?>
-                <?php if ($isExpired) : ?>
-                    <div class="stride-quote-card__notice stride-quote-card__notice--danger">
-                        <span uk-icon="icon: warning; ratio: 0.8"></span>
-                        <?php esc_html_e('Deze offerte is verlopen', 'stride'); ?>
-                    </div>
-                <?php elseif ($daysLeft <= 7) : ?>
-                    <div class="stride-quote-card__notice stride-quote-card__notice--warning">
-                        <span uk-icon="icon: clock; ratio: 0.8"></span>
-                        <?php
-                        printf(
-                            esc_html(_n(
-                                'Nog %d dag geldig',
-                                'Nog %d dagen geldig',
-                                $daysLeft,
-                                'stride'
-                            )),
-                            $daysLeft
-                        );
-                        ?>
-                    </div>
-                <?php endif; ?>
-            <?php endif; ?>
-        </div>
-    </div>
-    <?php
-}
-endif; // function_exists stride_render_quote_card
-
-/**
- * Get CSS class for quote status badge
- *
- * @param QuoteStatus $status Quote status
- * @return string CSS class
- */
-if (!function_exists('stride_get_quote_status_class')) :
-function stride_get_quote_status_class(QuoteStatus $status): string
-{
-    return match ($status) {
-        QuoteStatus::Draft => 'stride-label-soft-secondary',
-        QuoteStatus::Sent => 'stride-label-soft-warning',
-        QuoteStatus::Exported => 'stride-label-soft-success',
-        QuoteStatus::Cancelled => 'stride-label-soft-danger',
-    };
-}
-endif;
-?>

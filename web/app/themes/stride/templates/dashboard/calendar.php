@@ -23,15 +23,23 @@ $enrollments = $enrollmentService->getUserEnrollments($userId);
 $upcomingSessions = [];
 
 foreach ($enrollments as $enrollment) {
-    if (!empty($enrollment['edition_id'])) {
-        $sessions = $sessionService->getSessionsForEdition($enrollment['edition_id']);
+    // Handle both object and array formats
+    $editionId = is_object($enrollment) ? ($enrollment->edition_id ?? null) : ($enrollment['edition_id'] ?? null);
+
+    if (!empty($editionId)) {
+        $sessions = $sessionService->getSessionsForEdition((int) $editionId);
         foreach ($sessions as $session) {
+            // Convert session to array if needed
+            $sessionData = is_object($session) ? (array) $session : $session;
+
             // Only include future sessions
-            $sessionDate = strtotime($session['date'] ?? '');
+            $sessionDate = strtotime($sessionData['date'] ?? '');
             if ($sessionDate && $sessionDate >= strtotime('today')) {
-                $session['course_title'] = $enrollment['course_title'] ?? '';
-                $session['edition_id'] = $enrollment['edition_id'];
-                $upcomingSessions[] = $session;
+                // Get course title from enrollment
+                $courseTitle = is_object($enrollment) ? ($enrollment->course_title ?? '') : ($enrollment['course_title'] ?? '');
+                $sessionData['course_title'] = $courseTitle;
+                $sessionData['edition_id'] = $editionId;
+                $upcomingSessions[] = $sessionData;
             }
         }
     }

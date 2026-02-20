@@ -10,6 +10,117 @@
 
 defined('ABSPATH') || exit;
 
+/**
+ * Render a course card
+ */
+if (!function_exists('stride_render_course_card')) {
+function stride_render_course_card(array $course): void
+{
+    ?>
+    <div>
+        <div class="stride-course-card">
+            <div class="stride-course-card__image">
+                <?php if ($course['thumbnail']) : ?>
+                    <img src="<?php echo esc_url($course['thumbnail']); ?>" alt="<?php echo esc_attr($course['title']); ?>">
+                <?php else : ?>
+                    <div class="stride-course-placeholder">
+                        <span uk-icon="icon: album; ratio: 2" class="stride-course-placeholder__icon"></span>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ($course['is_complete']) : ?>
+                    <span class="stride-course-card__badge uk-label uk-label-success">
+                        <?php esc_html_e('Voltooid', 'stride'); ?>
+                    </span>
+                <?php elseif ($course['is_online']) : ?>
+                    <span class="stride-course-card__badge stride-label-soft-primary">
+                        <?php esc_html_e('Online', 'stride'); ?>
+                    </span>
+                <?php endif; ?>
+            </div>
+            <div class="stride-course-card__body">
+                <h3 class="stride-course-card__title">
+                    <?php if ($course['url']) : ?>
+                        <a href="<?php echo esc_url($course['url']); ?>">
+                            <?php echo esc_html($course['title']); ?>
+                        </a>
+                    <?php else : ?>
+                        <?php echo esc_html($course['title']); ?>
+                    <?php endif; ?>
+                </h3>
+
+                <div class="stride-course-card__meta">
+                    <?php if ($course['total_sessions'] > 0) : ?>
+                        <span class="stride-course-card__meta-item">
+                            <span uk-icon="icon: calendar; ratio: 0.8"></span>
+                            <?php
+                            printf(
+                                esc_html__('%d van %d sessies', 'stride'),
+                                $course['attended'],
+                                $course['total_sessions']
+                            );
+                            ?>
+                        </span>
+                    <?php endif; ?>
+
+                    <?php if ($course['start_date']) : ?>
+                        <span class="stride-course-card__meta-item">
+                            <span uk-icon="icon: clock; ratio: 0.8"></span>
+                            <?php echo esc_html(date_i18n('j M Y', strtotime($course['start_date']))); ?>
+                        </span>
+                    <?php endif; ?>
+                </div>
+
+                <?php if (!$course['is_complete']) : ?>
+                    <div class="stride-course-card__progress">
+                        <progress class="uk-progress" value="<?php echo esc_attr($course['percentage']); ?>" max="100"></progress>
+                        <span class="uk-text-small stride-text-muted">
+                            <?php echo esc_html($course['percentage'] . '%'); ?>
+                        </span>
+                    </div>
+                <?php endif; ?>
+            </div>
+
+            <?php if ($course['url']) : ?>
+                <div class="stride-course-card__footer">
+                    <?php if ($course['is_complete']) : ?>
+                        <a href="<?php echo esc_url($course['url']); ?>" class="uk-button uk-button-default uk-button-small">
+                            <?php esc_html_e('Bekijken', 'stride'); ?>
+                        </a>
+                        <?php
+                        // Show certificate download if available
+                        if ($course['course_id']) :
+                            $lmsAdapter = ntdst_get(\Stride\Contracts\LMSAdapterInterface::class);
+                            $certificateLink = $lmsAdapter->getCertificateLink(
+                                get_current_user_id(),
+                                $course['course_id']
+                            );
+                            if ($certificateLink) :
+                        ?>
+                            <a href="<?php echo esc_url($certificateLink); ?>"
+                               target="_blank"
+                               class="uk-button uk-button-primary uk-button-small"
+                               title="<?php esc_attr_e('Download certificaat', 'stride'); ?>">
+                                <span uk-icon="icon: download; ratio: 0.8"></span>
+                                <?php esc_html_e('Certificaat', 'stride'); ?>
+                            </a>
+                        <?php
+                            endif;
+                        endif;
+                        ?>
+                    <?php else : ?>
+                        <a href="<?php echo esc_url($course['url']); ?>" class="uk-button uk-button-primary uk-button-small">
+                            <?php esc_html_e('Doorgaan', 'stride'); ?>
+                        </a>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php
+}
+} // end function_exists
+
 // Services - lazy loaded from DI container
 $enrollmentService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class);
 $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
@@ -240,116 +351,3 @@ $completedCount = count($completedCourses);
     <!-- Navigation (Desktop nav panel + Mobile bottom navbar) -->
     <?php include locate_template('templates/dashboard/partials/nav-panel.php'); ?>
 </div>
-
-<?php
-/**
- * Render a course card
- */
-if (!function_exists('stride_render_course_card')) {
-function stride_render_course_card(array $course): void
-{
-    ?>
-    <div>
-        <div class="stride-course-card">
-            <div class="stride-course-card__image">
-                <?php if ($course['thumbnail']) : ?>
-                    <img src="<?php echo esc_url($course['thumbnail']); ?>" alt="<?php echo esc_attr($course['title']); ?>">
-                <?php else : ?>
-                    <div class="stride-course-placeholder">
-                        <span uk-icon="icon: album; ratio: 2" class="stride-course-placeholder__icon"></span>
-                    </div>
-                <?php endif; ?>
-
-                <?php if ($course['is_complete']) : ?>
-                    <span class="stride-course-card__badge uk-label uk-label-success">
-                        <?php esc_html_e('Voltooid', 'stride'); ?>
-                    </span>
-                <?php elseif ($course['is_online']) : ?>
-                    <span class="stride-course-card__badge stride-label-soft-primary">
-                        <?php esc_html_e('Online', 'stride'); ?>
-                    </span>
-                <?php endif; ?>
-            </div>
-            <div class="stride-course-card__body">
-                <h3 class="stride-course-card__title">
-                    <?php if ($course['url']) : ?>
-                        <a href="<?php echo esc_url($course['url']); ?>">
-                            <?php echo esc_html($course['title']); ?>
-                        </a>
-                    <?php else : ?>
-                        <?php echo esc_html($course['title']); ?>
-                    <?php endif; ?>
-                </h3>
-
-                <div class="stride-course-card__meta">
-                    <?php if ($course['total_sessions'] > 0) : ?>
-                        <span class="stride-course-card__meta-item">
-                            <span uk-icon="icon: calendar; ratio: 0.8"></span>
-                            <?php
-                            printf(
-                                esc_html__('%d van %d sessies', 'stride'),
-                                $course['attended'],
-                                $course['total_sessions']
-                            );
-                            ?>
-                        </span>
-                    <?php endif; ?>
-
-                    <?php if ($course['start_date']) : ?>
-                        <span class="stride-course-card__meta-item">
-                            <span uk-icon="icon: clock; ratio: 0.8"></span>
-                            <?php echo esc_html(date_i18n('j M Y', strtotime($course['start_date']))); ?>
-                        </span>
-                    <?php endif; ?>
-                </div>
-
-                <?php if (!$course['is_complete']) : ?>
-                    <div class="stride-course-card__progress">
-                        <progress class="uk-progress" value="<?php echo esc_attr($course['percentage']); ?>" max="100"></progress>
-                        <span class="uk-text-small stride-text-muted">
-                            <?php echo esc_html($course['percentage'] . '%'); ?>
-                        </span>
-                    </div>
-                <?php endif; ?>
-            </div>
-
-            <?php if ($course['url']) : ?>
-                <div class="stride-course-card__footer">
-                    <?php if ($course['is_complete']) : ?>
-                        <a href="<?php echo esc_url($course['url']); ?>" class="uk-button uk-button-default uk-button-small">
-                            <?php esc_html_e('Bekijken', 'stride'); ?>
-                        </a>
-                        <?php
-                        // Show certificate download if available
-                        if ($course['course_id']) :
-                            $lmsAdapter = ntdst_get(\Stride\Contracts\LMSAdapterInterface::class);
-                            $certificateLink = $lmsAdapter->getCertificateLink(
-                                get_current_user_id(),
-                                $course['course_id']
-                            );
-                            if ($certificateLink) :
-                        ?>
-                            <a href="<?php echo esc_url($certificateLink); ?>"
-                               target="_blank"
-                               class="uk-button uk-button-primary uk-button-small"
-                               title="<?php esc_attr_e('Download certificaat', 'stride'); ?>">
-                                <span uk-icon="icon: download; ratio: 0.8"></span>
-                                <?php esc_html_e('Certificaat', 'stride'); ?>
-                            </a>
-                        <?php
-                            endif;
-                        endif;
-                        ?>
-                    <?php else : ?>
-                        <a href="<?php echo esc_url($course['url']); ?>" class="uk-button uk-button-primary uk-button-small">
-                            <?php esc_html_e('Doorgaan', 'stride'); ?>
-                        </a>
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
-        </div>
-    </div>
-    <?php
-}
-} // end function_exists
-?>

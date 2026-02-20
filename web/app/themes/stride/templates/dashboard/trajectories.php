@@ -22,13 +22,16 @@ $trajectoryService = ntdst_get(TrajectoryService::class);
 // For now, get all enrollments and filter by enrollment_path
 $allEnrollments = $enrollmentService->getUserEnrollments($userId);
 $trajectoryEnrollments = array_filter($allEnrollments, function ($enrollment) {
-    return ($enrollment['enrollment_path'] ?? '') === 'trajectory';
+    // Handle both object and array formats
+    $path = is_object($enrollment) ? ($enrollment->enrollment_path ?? '') : ($enrollment['enrollment_path'] ?? '');
+    return $path === 'trajectory';
 });
 
 // Group by trajectory
 $trajectories = [];
 foreach ($trajectoryEnrollments as $enrollment) {
-    $trajectoryId = $enrollment['trajectory_id'] ?? null;
+    // Handle both object and array formats
+    $trajectoryId = is_object($enrollment) ? ($enrollment->trajectory_id ?? null) : ($enrollment['trajectory_id'] ?? null);
     if ($trajectoryId) {
         if (!isset($trajectories[$trajectoryId])) {
             $trajectory = $trajectoryService->getTrajectory($trajectoryId);
@@ -40,7 +43,9 @@ foreach ($trajectoryEnrollments as $enrollment) {
             }
         }
         if (isset($trajectories[$trajectoryId])) {
-            $trajectories[$trajectoryId]['courses'][] = $enrollment;
+            // Convert object to array for consistent template usage
+            $enrollmentData = is_object($enrollment) ? (array) $enrollment : $enrollment;
+            $trajectories[$trajectoryId]['courses'][] = $enrollmentData;
         }
     }
 }

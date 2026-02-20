@@ -40,7 +40,7 @@ $navItems = [
         'icon' => 'user',
     ],
     [
-        'url' => '/mijn-account/kalender/',
+        'url' => '/mijn-account/mijn-agenda/',
         'label' => __('Kalender', 'stride'),
         'icon' => 'calendar',
     ],

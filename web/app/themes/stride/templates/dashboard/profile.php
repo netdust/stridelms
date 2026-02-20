@@ -443,7 +443,7 @@ $profileNonce = wp_create_nonce('stride_profile');
 
             <!-- Calendar -->
             <div>
-                <a href="<?php echo esc_url(home_url('/mijn-account/kalender/')); ?>" class="stride-link-card uk-card uk-card-default">
+                <a href="<?php echo esc_url(home_url('/mijn-account/mijn-agenda/')); ?>" class="stride-link-card uk-card uk-card-default">
                     <div class="stride-link-card__icon stride-link-card__icon--secondary">
                         <span uk-icon="icon: calendar; ratio: 1.2"></span>
                     </div>
