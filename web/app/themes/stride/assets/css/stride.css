@@ -2111,6 +2111,7 @@ h1, h2, h3, h4, h5, h6,
 @media (min-width: 960px) {
     .stride-hero__visual {
         display: block;
+        height: 100%;
     }
 }
 
@@ -2388,6 +2389,67 @@ h1, h2, h3, h4, h5, h6,
         background: linear-gradient(90deg, var(--stride-primary) 0%, var(--stride-border) 100%);
         z-index: 1;
     }
+}
+
+/* Expect Cards */
+.stride-expect-card {
+    background: var(--stride-surface);
+    border-radius: var(--stride-radius-lg);
+    padding: var(--stride-space-xl);
+    box-shadow: var(--stride-shadow-sm);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.stride-expect-card__icon {
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--stride-primary-light);
+    color: var(--stride-primary);
+    border-radius: var(--stride-radius-md);
+    margin-bottom: var(--stride-space-lg);
+}
+
+.stride-expect-card__icon--secondary {
+    background: var(--stride-secondary-light);
+    color: var(--stride-secondary);
+}
+
+.stride-expect-card__title {
+    font-size: var(--stride-font-size-xl);
+    font-weight: 600;
+    color: var(--stride-text);
+    margin: 0 0 var(--stride-space-md);
+}
+
+.stride-expect-card__list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 var(--stride-space-lg);
+    flex: 1;
+}
+
+.stride-expect-card__list li {
+    position: relative;
+    padding-left: var(--stride-space-lg);
+    margin-bottom: var(--stride-space-sm);
+    color: var(--stride-text-muted);
+    line-height: var(--stride-line-height-relaxed);
+}
+
+.stride-expect-card__list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 8px;
+    width: 6px;
+    height: 6px;
+    background: var(--stride-primary);
+    border-radius: 50%;
 }
 
 /* ========================================
