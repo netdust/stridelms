@@ -323,49 +323,49 @@ get_header();
     </div>
 </section>
 
-<!-- HOW IT WORKS SECTION -->
+<!-- WHAT TO EXPECT SECTION -->
 <section class="stride-section stride-section--muted">
     <div class="uk-container">
         <div class="stride-section__header">
-            <span class="stride-section__eyebrow"><?php esc_html_e('Hoe werkt het', 'stride'); ?></span>
-            <h2 class="stride-section__title"><?php esc_html_e('In 3 stappen aan de slag', 'stride'); ?></h2>
-            <p class="stride-section__description">
-                <?php esc_html_e('Van inschrijving tot certificaat - wij maken leren eenvoudig.', 'stride'); ?>
-            </p>
+            <span class="stride-section__eyebrow"><?php esc_html_e('Ons aanbod', 'stride'); ?></span>
+            <h2 class="stride-section__title"><?php esc_html_e('Wat je kunt verwachten', 'stride'); ?></h2>
         </div>
 
-        <div class="stride-steps">
-            <div class="stride-step">
-                <span class="stride-step__number">1</span>
-                <div class="stride-step__icon">
-                    <span uk-icon="icon: search; ratio: 1.5"></span>
+        <div class="uk-grid uk-grid-large uk-child-width-1-2@m" uk-grid>
+            <!-- Losse cursussen -->
+            <div>
+                <div class="stride-expect-card">
+                    <div class="stride-expect-card__icon">
+                        <span uk-icon="icon: album; ratio: 1.5"></span>
+                    </div>
+                    <h3 class="stride-expect-card__title"><?php esc_html_e('Losse cursussen', 'stride'); ?></h3>
+                    <ul class="stride-expect-card__list">
+                        <li><?php esc_html_e('Praktijkgerichte inhoud door experts uit het veld', 'stride'); ?></li>
+                        <li><?php esc_html_e('Flexibel: klassikaal, online of e-learning', 'stride'); ?></li>
+                        <li><?php esc_html_e('Erkend certificaat na afronding', 'stride'); ?></li>
+                    </ul>
+                    <a href="#cursussen" class="uk-button uk-button-default">
+                        <?php esc_html_e('Bekijk cursussen', 'stride'); ?>
+                    </a>
                 </div>
-                <h3 class="stride-step__title"><?php esc_html_e('Kies een cursus', 'stride'); ?></h3>
-                <p class="stride-step__description">
-                    <?php esc_html_e('Blader door ons aanbod en kies de cursus die past bij jouw ontwikkeldoelen.', 'stride'); ?>
-                </p>
             </div>
 
-            <div class="stride-step">
-                <span class="stride-step__number">2</span>
-                <div class="stride-step__icon">
-                    <span uk-icon="icon: play-circle; ratio: 1.5"></span>
+            <!-- Leertrajecten -->
+            <div>
+                <div class="stride-expect-card">
+                    <div class="stride-expect-card__icon stride-expect-card__icon--secondary">
+                        <span uk-icon="icon: git-branch; ratio: 1.5"></span>
+                    </div>
+                    <h3 class="stride-expect-card__title"><?php esc_html_e('Leertrajecten', 'stride'); ?></h3>
+                    <ul class="stride-expect-card__list">
+                        <li><?php esc_html_e('Samengestelde routes voor gerichte verdieping', 'stride'); ?></li>
+                        <li><?php esc_html_e('Meerdere cursussen die op elkaar aansluiten', 'stride'); ?></li>
+                        <li><?php esc_html_e('Bouw stap voor stap aan je expertise', 'stride'); ?></li>
+                    </ul>
+                    <a href="<?php echo esc_url(home_url('/trajecten/')); ?>" class="uk-button uk-button-default">
+                        <?php esc_html_e('Bekijk trajecten', 'stride'); ?>
+                    </a>
                 </div>
-                <h3 class="stride-step__title"><?php esc_html_e('Leer in eigen tempo', 'stride'); ?></h3>
-                <p class="stride-step__description">
-                    <?php esc_html_e('Volg de lessen online of klassikaal, wanneer het jou uitkomt.', 'stride'); ?>
-                </p>
-            </div>
-
-            <div class="stride-step">
-                <span class="stride-step__number">3</span>
-                <div class="stride-step__icon">
-                    <span uk-icon="icon: check; ratio: 1.5"></span>
-                </div>
-                <h3 class="stride-step__title"><?php esc_html_e('Ontvang certificaat', 'stride'); ?></h3>
-                <p class="stride-step__description">
-                    <?php esc_html_e('Rond de cursus af en ontvang een erkend VAD-certificaat.', 'stride'); ?>
-                </p>
             </div>
         </div>
     </div>
