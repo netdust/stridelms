@@ -2,7 +2,11 @@
 /**
  * Dashboard Home Template
  *
- * User dashboard home page with greeting, progress, upcoming sessions, and active courses.
+ * Redesigned dashboard with:
+ * - Greeting section
+ * - Navigation panel (desktop) / Bottom navbar (mobile)
+ * - Continue learning hero
+ * - Upcoming sessions
  *
  * @package stride
  */
@@ -37,9 +41,7 @@ $enrollments = $enrollmentService->getUserEnrollments($userId);
 // Build active courses list with progress data
 $activeCourses = [];
 $upcomingSessions = [];
-$totalProgress = 0;
 $totalCourses = 0;
-$completedCourses = 0;
 
 foreach ($enrollments as $enrollment) {
     $editionId = (int) $enrollment->edition_id;
@@ -63,15 +65,10 @@ foreach ($enrollments as $enrollment) {
     $totalSessions = count($sessions);
     $attendedCount = $attendanceService->countAttended($userId, $editionId);
 
-    // Track overall stats
     $totalCourses++;
-    $totalProgress += $percentage;
-    if ($isComplete) {
-        $completedCourses++;
-    }
 
     // Determine if online by checking session types
-    $isOnline = true; // Default to online (e-learning)
+    $isOnline = true;
     foreach ($sessions as $session) {
         $sessionType = $session['type'] ?? 'online';
         if (in_array($sessionType, ['in_person', 'webinar'], true)) {
@@ -80,30 +77,42 @@ foreach ($enrollments as $enrollment) {
         }
     }
 
-    // Determine URL: online courses go to LearnDash course page, in-person go to edition page
+    // Determine URL
     $url = $isOnline && $courseId
         ? get_permalink($courseId)
         : get_permalink($editionId);
 
-    // Build course data
-    $activeCourses[] = [
-        'edition_id' => $editionId,
-        'course_id' => $courseId,
-        'title' => $courseTitle,
-        'url' => $url,
-        'is_online' => $isOnline,
-        'progress' => $progress,
-        'is_complete' => $isComplete,
-        'percentage' => $percentage,
-        'total_sessions' => $totalSessions,
-        'attended' => $attendedCount,
-        'start_date' => $edition instanceof \WP_Post
-            ? get_post_meta($editionId, '_ntdst_start_date', true)
-            : ($edition['start_date'] ?? ''),
-    ];
+    // Get thumbnail
+    $thumbnail = $courseId ? get_the_post_thumbnail_url($courseId, 'stride_course_card') : null;
+
+    // Find next session date
+    $nextSession = null;
+    $today = wp_date('Y-m-d');
+    foreach ($sessions as $session) {
+        $sessionDate = $session['date'] ?? '';
+        if ($sessionDate && $sessionDate >= $today) {
+            $nextSession = $session;
+            break;
+        }
+    }
+
+    // Build course data (only non-complete courses for "continue learning")
+    if (!$isComplete) {
+        $activeCourses[] = [
+            'edition_id' => $editionId,
+            'course_id' => $courseId,
+            'title' => $courseTitle,
+            'url' => $url,
+            'is_online' => $isOnline,
+            'percentage' => $percentage,
+            'total_sessions' => $totalSessions,
+            'attended' => $attendedCount,
+            'thumbnail' => $thumbnail,
+            'next_session' => $nextSession,
+        ];
+    }
 
     // Collect upcoming sessions
-    $today = wp_date('Y-m-d');
     foreach ($sessions as $session) {
         $sessionDate = $session['date'] ?? '';
         if ($sessionDate && $sessionDate >= $today) {
@@ -111,25 +120,28 @@ foreach ($enrollments as $enrollment) {
                 'session_id' => $session['id'],
                 'edition_id' => $editionId,
                 'course_title' => $courseTitle,
+                'course_url' => $url,
                 'date' => $sessionDate,
                 'start_time' => $session['start_time'] ?? '',
                 'end_time' => $session['end_time'] ?? '',
                 'location' => $session['location'] ?? '',
+                'is_online' => $isOnline,
             ];
         }
     }
 }
 
-// Sort upcoming sessions by date
+// Sort upcoming sessions by date and limit to 3
 usort($upcomingSessions, fn($a, $b) => strcmp($a['date'], $b['date']));
-
-// Limit to next 3 sessions
 $upcomingSessions = array_slice($upcomingSessions, 0, 3);
 
-// Calculate average progress
-$averageProgress = $totalCourses > 0 ? round($totalProgress / $totalCourses, 1) : 0;
+// Get the most recent active course for "Continue Learning"
+$continueCourse = !empty($activeCourses) ? $activeCourses[0] : null;
 
-// Dutch month names for date formatting
+// Count active courses
+$activeCount = count($activeCourses);
+
+// Dutch month names
 $dutchMonths = [
     1 => 'jan', 2 => 'feb', 3 => 'mrt', 4 => 'apr', 5 => 'mei', 6 => 'jun',
     7 => 'jul', 8 => 'aug', 9 => 'sep', 10 => 'okt', 11 => 'nov', 12 => 'dec'
@@ -137,218 +149,149 @@ $dutchMonths = [
 ?>
 
 <div class="stride-dashboard-home">
-    <!-- Greeting Section -->
-    <section class="stride-greeting">
-        <h1 class="stride-greeting__title">
-            <?php echo esc_html($greeting . ', ' . $firstName . '!'); ?>
-        </h1>
-        <?php if ($totalCourses > 0) : ?>
+    <div class="stride-dashboard-layout">
+        <!-- Greeting Section -->
+        <section class="stride-dashboard-layout__greeting stride-greeting">
+            <h1 class="stride-greeting__title">
+                <?php echo esc_html($greeting . ', ' . $firstName . '!'); ?>
+            </h1>
             <p class="stride-greeting__subtitle">
                 <?php
-                printf(
-                    esc_html(_n(
-                        'Je volgt momenteel %d cursus.',
-                        'Je volgt momenteel %d cursussen.',
-                        $totalCourses,
-                        'stride'
-                    )),
-                    $totalCourses
-                );
+                if ($activeCount > 0) {
+                    printf(
+                        esc_html(_n(
+                            'Je hebt %d actieve cursus',
+                            'Je hebt %d actieve cursussen',
+                            $activeCount,
+                            'stride'
+                        )),
+                        $activeCount
+                    );
+                } else {
+                    esc_html_e('Welkom op je persoonlijke dashboard.', 'stride');
+                }
                 ?>
             </p>
-        <?php else : ?>
-            <p class="stride-greeting__subtitle">
-                <?php esc_html_e('Welkom op je persoonlijke dashboard.', 'stride'); ?>
-            </p>
-        <?php endif; ?>
-    </section>
+        </section>
 
-    <?php if ($totalCourses > 0) : ?>
-        <!-- Progress & Upcoming Grid -->
-        <div class="uk-grid uk-grid-match uk-child-width-1-1 uk-child-width-1-2@m" uk-grid>
-            <!-- Progress Card -->
-            <div>
-                <div class="stride-progress-card">
-                    <div class="stride-progress-card__header">
-                        <div>
-                            <p class="stride-progress-card__title"><?php esc_html_e('Totale voortgang', 'stride'); ?></p>
-                            <p class="stride-progress-card__value"><?php echo esc_html($averageProgress . '%'); ?></p>
-                        </div>
-                        <div class="stride-progress-card__icon">
-                            <span uk-icon="icon: star; ratio: 1.5"></span>
-                        </div>
-                    </div>
-                    <div class="stride-progress-card__bar">
-                        <div class="stride-progress-card__bar-fill" style="width: <?php echo esc_attr($averageProgress); ?>%"></div>
-                    </div>
-                    <p class="stride-progress-card__footer">
-                        <?php
-                        printf(
-                            esc_html(_n(
-                                '%d van %d cursus voltooid',
-                                '%d van %d cursussen voltooid',
-                                $totalCourses,
-                                'stride'
-                            )),
-                            $completedCourses,
-                            $totalCourses
-                        );
-                        ?>
-                    </p>
-                </div>
-            </div>
+        <!-- Navigation Panel (Desktop) -->
+        <div class="stride-dashboard-layout__nav">
+            <?php include locate_template('templates/dashboard/partials/nav-panel.php'); ?>
+        </div>
 
-            <!-- Upcoming Sessions Card -->
-            <div>
-                <div class="uk-card uk-card-default">
-                    <div class="uk-card-header">
-                        <h3 class="uk-card-title uk-margin-remove">
-                            <?php esc_html_e('Komende sessies', 'stride'); ?>
-                        </h3>
-                    </div>
-                    <div class="uk-card-body uk-padding-remove">
-                        <?php if (!empty($upcomingSessions)) : ?>
-                            <div class="uk-padding-small uk-padding-remove-horizontal">
-                                <?php foreach ($upcomingSessions as $session) :
-                                    $date = strtotime($session['date']);
-                                    $day = date('j', $date);
-                                    $monthNum = (int) date('n', $date);
-                                    $month = $dutchMonths[$monthNum];
-                                ?>
-                                    <div class="stride-session-item uk-padding-small">
-                                        <div class="stride-session-date">
-                                            <span class="stride-session-date__day"><?php echo esc_html($day); ?></span>
-                                            <span class="stride-session-date__month"><?php echo esc_html($month); ?></span>
-                                        </div>
-                                        <div class="stride-session-info">
-                                            <h4 class="stride-session-info__title"><?php echo esc_html($session['course_title']); ?></h4>
-                                            <div class="stride-session-info__meta">
-                                                <?php if ($session['start_time']) : ?>
-                                                    <span class="stride-session-info__meta-item">
-                                                        <span uk-icon="icon: clock; ratio: 0.8"></span>
-                                                        <?php
-                                                        echo esc_html($session['start_time']);
-                                                        if ($session['end_time']) {
-                                                            echo ' - ' . esc_html($session['end_time']);
-                                                        }
-                                                        ?>
-                                                    </span>
-                                                <?php endif; ?>
-                                                <?php if ($session['location']) : ?>
-                                                    <span class="stride-session-info__meta-item">
-                                                        <span uk-icon="icon: location; ratio: 0.8"></span>
-                                                        <?php echo esc_html($session['location']); ?>
-                                                    </span>
-                                                <?php endif; ?>
-                                            </div>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
+        <!-- Continue Learning Hero -->
+        <section class="stride-dashboard-layout__hero">
+            <?php if ($continueCourse) : ?>
+                <div class="stride-continue-hero">
+                    <div class="stride-continue-hero__image">
+                        <?php if ($continueCourse['thumbnail']) : ?>
+                            <img src="<?php echo esc_url($continueCourse['thumbnail']); ?>" alt="<?php echo esc_attr($continueCourse['title']); ?>">
                         <?php else : ?>
-                            <div class="uk-padding-small uk-text-center stride-text-muted">
-                                <span uk-icon="icon: calendar; ratio: 1.5" class="uk-margin-small-bottom uk-display-block"></span>
-                                <p class="uk-margin-remove"><?php esc_html_e('Geen komende sessies gepland.', 'stride'); ?></p>
-                            </div>
+                            <span class="stride-continue-hero__placeholder" uk-icon="icon: play-circle; ratio: 3"></span>
                         <?php endif; ?>
                     </div>
-                    <?php if (!empty($upcomingSessions)) : ?>
-                        <div class="uk-card-footer">
-                            <a href="<?php echo esc_url(home_url('/mijn-account/kalender/')); ?>" class="uk-button uk-button-text">
-                                <?php esc_html_e('Bekijk volledige agenda', 'stride'); ?>
+                    <div class="stride-continue-hero__body">
+                        <h2 class="stride-continue-hero__title"><?php echo esc_html($continueCourse['title']); ?></h2>
+                        <div class="stride-continue-hero__meta">
+                            <?php if ($continueCourse['next_session']) :
+                                $nextDate = strtotime($continueCourse['next_session']['date']);
+                                $nextDay = date('j', $nextDate);
+                                $nextMonthNum = (int) date('n', $nextDate);
+                                $nextMonth = $dutchMonths[$nextMonthNum];
+                            ?>
+                                <span class="stride-continue-hero__meta-item">
+                                    <span uk-icon="icon: calendar; ratio: 0.8"></span>
+                                    <?php echo esc_html("Volgende sessie: {$nextDay} {$nextMonth}"); ?>
+                                    <?php if ($continueCourse['next_session']['start_time']) : ?>
+                                        <?php echo esc_html(', ' . $continueCourse['next_session']['start_time']); ?>
+                                    <?php endif; ?>
+                                </span>
+                            <?php elseif ($continueCourse['is_online']) : ?>
+                                <span class="stride-continue-hero__meta-item">
+                                    <span uk-icon="icon: laptop; ratio: 0.8"></span>
+                                    <?php esc_html_e('Online cursus', 'stride'); ?>
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                        <div class="stride-continue-hero__progress">
+                            <progress class="uk-progress" value="<?php echo esc_attr($continueCourse['percentage']); ?>" max="100"></progress>
+                            <span class="stride-continue-hero__progress-text"><?php echo esc_html($continueCourse['percentage'] . '%'); ?></span>
+                        </div>
+                        <div class="stride-continue-hero__action">
+                            <a href="<?php echo esc_url($continueCourse['url']); ?>" class="uk-button uk-button-primary">
+                                <?php esc_html_e('Doorgaan', 'stride'); ?>
                                 <span uk-icon="icon: arrow-right"></span>
                             </a>
                         </div>
-                    <?php endif; ?>
+                    </div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Active Courses Section -->
-        <section class="uk-margin-large-top">
-            <div class="stride-section-title">
-                <span><?php esc_html_e('Mijn cursussen', 'stride'); ?></span>
-                <a href="<?php echo esc_url(home_url('/mijn-account/mijn-cursussen/')); ?>" class="stride-section-title__link">
-                    <?php esc_html_e('Alles bekijken', 'stride'); ?>
-                </a>
-            </div>
-
-            <div class="uk-grid uk-grid-match uk-child-width-1-1 uk-child-width-1-2@s uk-child-width-1-3@l" uk-grid>
-                <?php foreach (array_slice($activeCourses, 0, 6) as $course) : ?>
-                    <div>
-                        <div class="stride-course-card">
-                            <div class="stride-course-card__image">
-                                <?php
-                                $thumbnail = $course['course_id'] ? get_the_post_thumbnail_url($course['course_id'], 'stride_course_card') : null;
-                                if ($thumbnail) :
-                                ?>
-                                    <img src="<?php echo esc_url($thumbnail); ?>" alt="<?php echo esc_attr($course['title']); ?>">
-                                <?php else : ?>
-                                    <div class="stride-course-placeholder">
-                                        <span uk-icon="icon: album; ratio: 2" class="stride-course-placeholder__icon"></span>
-                                    </div>
-                                <?php endif; ?>
-
-                                <?php if ($course['is_complete']) : ?>
-                                    <span class="stride-course-card__badge uk-label uk-label-success">
-                                        <?php esc_html_e('Voltooid', 'stride'); ?>
-                                    </span>
-                                <?php elseif ($course['is_online']) : ?>
-                                    <span class="stride-course-card__badge stride-label-soft-primary">
-                                        <?php esc_html_e('Online', 'stride'); ?>
-                                    </span>
-                                <?php endif; ?>
-                            </div>
-                            <div class="stride-course-card__body">
-                                <h3 class="stride-course-card__title">
-                                    <?php if ($course['url']) : ?>
-                                        <a href="<?php echo esc_url($course['url']); ?>">
-                                            <?php echo esc_html($course['title']); ?>
-                                        </a>
-                                    <?php else : ?>
-                                        <?php echo esc_html($course['title']); ?>
-                                    <?php endif; ?>
-                                </h3>
-                                <div class="stride-course-card__meta">
-                                    <span class="stride-course-card__meta-item">
-                                        <span uk-icon="icon: calendar; ratio: 0.8"></span>
-                                        <?php
-                                        printf(
-                                            esc_html__('%d van %d sessies', 'stride'),
-                                            $course['attended'],
-                                            $course['total_sessions']
-                                        );
-                                        ?>
-                                    </span>
-                                </div>
-                                <div class="stride-course-card__progress">
-                                    <progress class="uk-progress" value="<?php echo esc_attr($course['percentage']); ?>" max="100"></progress>
-                                    <span class="uk-text-small stride-text-muted">
-                                        <?php echo esc_html($course['percentage'] . '%'); ?>
-                                    </span>
-                                </div>
-                            </div>
+            <?php else : ?>
+                <!-- Empty state: No active courses -->
+                <div class="stride-continue-hero stride-continue-hero--empty">
+                    <div class="stride-continue-hero__body">
+                        <span uk-icon="icon: book; ratio: 2" class="stride-text-muted"></span>
+                        <h2 class="stride-continue-hero__title uk-margin-small-top"><?php esc_html_e('Nog geen cursussen', 'stride'); ?></h2>
+                        <p class="stride-text-muted"><?php esc_html_e('Ontdek ons aanbod en start met leren.', 'stride'); ?></p>
+                        <div class="stride-continue-hero__action">
+                            <a href="<?php echo esc_url(home_url('/cursussen/')); ?>" class="uk-button uk-button-primary">
+                                <?php esc_html_e('Ontdek cursussen', 'stride'); ?>
+                            </a>
                         </div>
                     </div>
-                <?php endforeach; ?>
-            </div>
+                </div>
+            <?php endif; ?>
         </section>
 
-    <?php else : ?>
-        <!-- Empty State -->
-        <section class="stride-empty-state uk-margin-large-top">
-            <div class="stride-empty-state__icon">
-                <span uk-icon="icon: book; ratio: 2"></span>
-            </div>
-            <h2 class="stride-empty-state__title"><?php esc_html_e('Nog geen cursussen', 'stride'); ?></h2>
-            <p class="stride-empty-state__description">
-                <?php esc_html_e('Je bent nog niet ingeschreven voor een cursus. Ontdek ons aanbod en start met leren.', 'stride'); ?>
-            </p>
-            <div class="stride-empty-state__action">
-                <a href="<?php echo esc_url(home_url('/cursussen/')); ?>" class="uk-button uk-button-primary uk-button-large">
-                    <?php esc_html_e('Ontdek cursussen', 'stride'); ?>
-                </a>
-            </div>
+        <!-- Upcoming Sessions Section -->
+        <section class="stride-dashboard-layout__content">
+            <h3 class="uk-h4 uk-margin-medium-bottom"><?php esc_html_e('Aankomende sessies', 'stride'); ?></h3>
+
+            <?php if (!empty($upcomingSessions)) : ?>
+                <div class="stride-sessions-grid">
+                    <?php foreach ($upcomingSessions as $session) :
+                        $date = strtotime($session['date']);
+                        $day = date('j', $date);
+                        $monthNum = (int) date('n', $date);
+                        $month = $dutchMonths[$monthNum];
+                    ?>
+                        <a href="<?php echo esc_url($session['course_url']); ?>" class="stride-session-card">
+                            <div class="stride-session-card__date">
+                                <span class="stride-session-card__day"><?php echo esc_html($day); ?></span>
+                                <span class="stride-session-card__month"><?php echo esc_html($month); ?></span>
+                            </div>
+                            <div class="stride-session-card__info">
+                                <h4 class="stride-session-card__title"><?php echo esc_html($session['course_title']); ?></h4>
+                                <div class="stride-session-card__meta">
+                                    <?php if ($session['start_time']) : ?>
+                                        <span class="stride-session-card__meta-item">
+                                            <span uk-icon="icon: clock; ratio: 0.7"></span>
+                                            <?php
+                                            echo esc_html($session['start_time']);
+                                            if ($session['end_time']) {
+                                                echo ' - ' . esc_html($session['end_time']);
+                                            }
+                                            ?>
+                                        </span>
+                                    <?php endif; ?>
+                                    <?php if ($session['is_online']) : ?>
+                                        <span class="stride-session-card__badge"><?php esc_html_e('Online', 'stride'); ?></span>
+                                    <?php elseif ($session['location']) : ?>
+                                        <span class="stride-session-card__meta-item">
+                                            <span uk-icon="icon: location; ratio: 0.7"></span>
+                                            <?php echo esc_html($session['location']); ?>
+                                        </span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            <?php else : ?>
+                <p class="stride-text-muted"><?php esc_html_e('Geen sessies gepland', 'stride'); ?></p>
+            <?php endif; ?>
         </section>
-    <?php endif; ?>
+    </div>
+
+    <!-- Mobile Bottom Navbar (included from partial, shown only on mobile) -->
+    <?php include locate_template('templates/dashboard/partials/nav-panel.php'); ?>
 </div>
