@@ -371,65 +371,25 @@ get_header();
     </div>
 </section>
 
-<!-- FEATURES SECTION -->
+<!-- APPROACH SECTION -->
 <section class="stride-section">
     <div class="uk-container">
         <div class="stride-section__header">
-            <span class="stride-section__eyebrow"><?php esc_html_e('Waarom Stride', 'stride'); ?></span>
-            <h2 class="stride-section__title"><?php esc_html_e('Waarom kiezen voor onze trainingen?', 'stride'); ?></h2>
+            <span class="stride-section__eyebrow"><?php esc_html_e('Onze aanpak', 'stride'); ?></span>
+            <h2 class="stride-section__title"><?php esc_html_e('Leren van vakgenoten', 'stride'); ?></h2>
             <p class="stride-section__description">
-                <?php esc_html_e('Wij bieden hoogwaardige, praktijkgerichte trainingen ontwikkeld door experts in de verslavingszorg.', 'stride'); ?>
+                <?php esc_html_e('Onze trainers zijn zelf actief in het werkveld en delen hun praktijkervaring.', 'stride'); ?>
             </p>
         </div>
 
-        <div class="stride-features">
+        <div class="stride-features stride-features--compact">
             <div class="stride-feature">
                 <div class="stride-feature__icon">
-                    <span uk-icon="icon: video-camera; ratio: 1.5"></span>
-                </div>
-                <h3 class="stride-feature__title"><?php esc_html_e('Online & Klassikaal', 'stride'); ?></h3>
-                <p class="stride-feature__description">
-                    <?php esc_html_e('Kies de leervorm die bij jou past: thuis achter je laptop of live in de groep.', 'stride'); ?>
-                </p>
-            </div>
-
-            <div class="stride-feature">
-                <div class="stride-feature__icon stride-feature__icon--success">
                     <span uk-icon="icon: users; ratio: 1.5"></span>
                 </div>
-                <h3 class="stride-feature__title"><?php esc_html_e('Ervaren docenten', 'stride'); ?></h3>
+                <h3 class="stride-feature__title"><?php esc_html_e('Experts uit de praktijk', 'stride'); ?></h3>
                 <p class="stride-feature__description">
-                    <?php esc_html_e('Al onze trainers zijn professionals met jarenlange praktijkervaring.', 'stride'); ?>
-                </p>
-            </div>
-
-            <div class="stride-feature">
-                <div class="stride-feature__icon stride-feature__icon--secondary">
-                    <span uk-icon="icon: clock; ratio: 1.5"></span>
-                </div>
-                <h3 class="stride-feature__title"><?php esc_html_e('Flexibel leren', 'stride'); ?></h3>
-                <p class="stride-feature__description">
-                    <?php esc_html_e('Leer wanneer het jou uitkomt, met toegang tot materialen op elk moment.', 'stride'); ?>
-                </p>
-            </div>
-
-            <div class="stride-feature">
-                <div class="stride-feature__icon stride-feature__icon--accent">
-                    <span uk-icon="icon: file-text; ratio: 1.5"></span>
-                </div>
-                <h3 class="stride-feature__title"><?php esc_html_e('Erkende certificaten', 'stride'); ?></h3>
-                <p class="stride-feature__description">
-                    <?php esc_html_e('Ontvang na afloop een VAD-erkend certificaat voor je portfolio.', 'stride'); ?>
-                </p>
-            </div>
-
-            <div class="stride-feature">
-                <div class="stride-feature__icon">
-                    <span uk-icon="icon: lifesaver; ratio: 1.5"></span>
-                </div>
-                <h3 class="stride-feature__title"><?php esc_html_e('Ondersteuning', 'stride'); ?></h3>
-                <p class="stride-feature__description">
-                    <?php esc_html_e('Heb je vragen? Ons team staat klaar om je te helpen.', 'stride'); ?>
+                    <?php esc_html_e('Trainers met jarenlange ervaring in het werkveld.', 'stride'); ?>
                 </p>
             </div>
 
@@ -437,9 +397,29 @@ get_header();
                 <div class="stride-feature__icon stride-feature__icon--success">
                     <span uk-icon="icon: bolt; ratio: 1.5"></span>
                 </div>
-                <h3 class="stride-feature__title"><?php esc_html_e('Direct starten', 'stride'); ?></h3>
+                <h3 class="stride-feature__title"><?php esc_html_e('Direct toepasbaar', 'stride'); ?></h3>
                 <p class="stride-feature__description">
-                    <?php esc_html_e('Na inschrijving krijg je direct toegang tot de leeromgeving.', 'stride'); ?>
+                    <?php esc_html_e('Kennis en vaardigheden die je morgen kunt inzetten.', 'stride'); ?>
+                </p>
+            </div>
+
+            <div class="stride-feature">
+                <div class="stride-feature__icon stride-feature__icon--accent">
+                    <span uk-icon="icon: file-text; ratio: 1.5"></span>
+                </div>
+                <h3 class="stride-feature__title"><?php esc_html_e('Erkende certificering', 'stride'); ?></h3>
+                <p class="stride-feature__description">
+                    <?php esc_html_e('Accreditatiepunten voor je professionele portfolio.', 'stride'); ?>
+                </p>
+            </div>
+
+            <div class="stride-feature">
+                <div class="stride-feature__icon stride-feature__icon--secondary">
+                    <span uk-icon="icon: laptop; ratio: 1.5"></span>
+                </div>
+                <h3 class="stride-feature__title"><?php esc_html_e('Flexibele leervormen', 'stride'); ?></h3>
+                <p class="stride-feature__description">
+                    <?php esc_html_e('Klassikaal, online of in eigen tempo.', 'stride'); ?>
                 </p>
             </div>
         </div>
