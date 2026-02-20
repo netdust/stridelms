@@ -191,6 +191,7 @@ $paidCount = count($paidQuotes);
  * @param array $quote Quote data from QuoteService
  * @param EditionService $editionService Edition service instance
  */
+if (!function_exists('stride_render_quote_card')) :
 function stride_render_quote_card(array $quote, EditionService $editionService): void
 {
     $quoteId = (int) ($quote['id'] ?? $quote['ID'] ?? 0);
@@ -291,6 +292,7 @@ function stride_render_quote_card(array $quote, EditionService $editionService):
     </div>
     <?php
 }
+endif; // function_exists stride_render_quote_card
 
 /**
  * Get CSS class for quote status badge
@@ -298,6 +300,7 @@ function stride_render_quote_card(array $quote, EditionService $editionService):
  * @param QuoteStatus $status Quote status
  * @return string CSS class
  */
+if (!function_exists('stride_get_quote_status_class')) :
 function stride_get_quote_status_class(QuoteStatus $status): string
 {
     return match ($status) {
@@ -307,4 +310,5 @@ function stride_get_quote_status_class(QuoteStatus $status): string
         QuoteStatus::Cancelled => 'stride-label-soft-danger',
     };
 }
+endif;
 ?>

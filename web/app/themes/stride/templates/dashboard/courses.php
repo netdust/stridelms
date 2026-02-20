@@ -245,6 +245,7 @@ $completedCount = count($completedCourses);
 /**
  * Render a course card
  */
+if (!function_exists('stride_render_course_card')) {
 function stride_render_course_card(array $course): void
 {
     ?>
@@ -350,4 +351,5 @@ function stride_render_course_card(array $course): void
     </div>
     <?php
 }
+} // end function_exists
 ?>
