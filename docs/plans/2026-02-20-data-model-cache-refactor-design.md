@@ -221,8 +221,8 @@ public function resolveCacheTime(int $requested): int
 
 ## Success Criteria
 
-- [ ] No stale cache results after post updates
-- [ ] Consistent query results across page loads
-- [ ] Existing `NTDST_Data::get()` calls work unchanged
-- [ ] Dev mode properly bypasses cache
-- [ ] Numeric meta ordering works correctly
+- [x] No stale cache results after post updates
+- [x] Consistent query results across page loads
+- [x] Existing `NTDST_Data::get()` calls work unchanged
+- [x] Dev mode properly bypasses cache
+- [x] Numeric meta ordering works correctly
