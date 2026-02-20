@@ -1649,3 +1649,26 @@ function ntdst_clear_posts_cache(?int $post_id = null): void
 {
     NTDST_Data_Manager::clearCache($post_id);
 }
+
+/**
+ * Global helper - invalidate all cached queries for a post type
+ *
+ * Use this when you've made bulk changes outside the normal CRUD flow.
+ *
+ * @param string $post_type Post type to invalidate
+ * @return void
+ */
+function ntdst_invalidate_post_type(string $post_type): void
+{
+    NTDST_Query_Cache::instance()->invalidatePostType($post_type);
+}
+
+/**
+ * Global helper - get query cache instance
+ *
+ * @return NTDST_Query_Cache
+ */
+function ntdst_query_cache(): NTDST_Query_Cache
+{
+    return NTDST_Query_Cache::instance();
+}
