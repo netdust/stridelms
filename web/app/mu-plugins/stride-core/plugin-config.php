@@ -48,6 +48,7 @@ return [
         \Stride\Modules\Completion\CompletionService::class,
         \Stride\Modules\Audit\AuditService::class,
         \Stride\Modules\Audit\Admin\AuditAdminController::class,
+        \Stride\Modules\Audit\Admin\AuditAPIController::class,
     ],
 
     /**
