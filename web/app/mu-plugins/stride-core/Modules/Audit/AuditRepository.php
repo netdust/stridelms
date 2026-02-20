@@ -27,10 +27,13 @@ class AuditRepository
             }
         }
 
+        // Sanitize action - allow dots for namespacing (e.g., 'registration.created')
+        $action = preg_replace('/[^a-z0-9._-]/', '', strtolower($data['action']));
+
         $insert = [
             'entity_type' => sanitize_key($data['entity_type']),
             'entity_id' => absint($data['entity_id']),
-            'action' => sanitize_key($data['action']),
+            'action' => $action,
             'actor_id' => isset($data['actor_id']) ? absint($data['actor_id']) : null,
             'actor_type' => sanitize_key($data['actor_type'] ?? 'user'),
             'context' => isset($data['context']) ? wp_json_encode($data['context']) : null,
