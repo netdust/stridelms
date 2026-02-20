@@ -32,7 +32,7 @@ final class DeepLinkHandler
     public function registerPage(): void
     {
         add_submenu_page(
-            null, // Hidden from menu
+            '', // Hidden from menu (empty string instead of null for WP 6.9+ compat)
             __('Select Course', 'netdust-lti'),
             __('Select Course', 'netdust-lti'),
             'manage_options',
