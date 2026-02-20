@@ -2634,6 +2634,77 @@ h1, h2, h3, h4, h5, h6,
 }
 
 /* ========================================
+   STRIDE - LANDING PAGE: TRAINERS
+   ======================================== */
+
+/* Trainers Grid */
+.stride-trainers {
+    display: grid;
+    grid-template-columns: repeat(1, 1fr);
+    gap: var(--stride-space-lg);
+}
+
+@media (min-width: 640px) {
+    .stride-trainers {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (min-width: 960px) {
+    .stride-trainers {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+.stride-trainer {
+    background: var(--stride-surface);
+    border-radius: var(--stride-radius-lg);
+    padding: var(--stride-space-xl);
+    text-align: center;
+    box-shadow: var(--stride-shadow-sm);
+}
+
+.stride-trainer__avatar {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto var(--stride-space-md);
+    background: var(--stride-secondary-light);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--stride-secondary);
+    overflow: hidden;
+}
+
+.stride-trainer__avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.stride-trainer__name {
+    font-size: var(--stride-font-size-lg);
+    font-weight: 600;
+    color: var(--stride-text);
+    margin: 0 0 var(--stride-space-xs);
+}
+
+.stride-trainer__role {
+    font-size: var(--stride-font-size-sm);
+    color: var(--stride-primary);
+    font-weight: 500;
+    margin: 0 0 var(--stride-space-sm);
+}
+
+.stride-trainer__bio {
+    font-size: var(--stride-font-size-sm);
+    color: var(--stride-text-muted);
+    line-height: var(--stride-line-height-relaxed);
+    margin: 0;
+}
+
+/* ========================================
    STRIDE - LANDING PAGE: CTA BANNER
    ======================================== */
 
