@@ -93,13 +93,13 @@ final class AdminPage
 
         $platform = new Platform(
             id: isset($_POST['platform_id']) ? (int) $_POST['platform_id'] : null,
-            name: sanitize_text_field($_POST['name']),
-            platformId: esc_url_raw($_POST['platform_url']),
-            clientId: sanitize_text_field($_POST['client_id']),
-            deploymentId: sanitize_text_field($_POST['deployment_id']) ?: null,
-            authEndpoint: esc_url_raw($_POST['auth_endpoint']),
-            tokenEndpoint: esc_url_raw($_POST['token_endpoint']),
-            jwksEndpoint: esc_url_raw($_POST['jwks_endpoint']),
+            name: sanitize_text_field($_POST['name'] ?? ''),
+            platformId: esc_url_raw($_POST['platform_url'] ?? ''),
+            clientId: sanitize_text_field($_POST['client_id'] ?? ''),
+            deploymentId: sanitize_text_field($_POST['deployment_id'] ?? '') ?: null,
+            authEndpoint: esc_url_raw($_POST['auth_endpoint'] ?? ''),
+            tokenEndpoint: esc_url_raw($_POST['token_endpoint'] ?? ''),
+            jwksEndpoint: esc_url_raw($_POST['jwks_endpoint'] ?? ''),
             enabled: isset($_POST['enabled']),
         );
 
