@@ -40,6 +40,11 @@ final class Plugin implements NTDST_Service_Meta
         // Register bridges after LearnDash is loaded
         add_action('learndash_init', function () {
             ntdst_get(Bridges\LearnDashBridge::class);
+
+            // Register TinCanny bridge if available
+            if (class_exists('UCTINCAN\Database')) {
+                ntdst_get(Bridges\TinCannyBridge::class);
+            }
         });
     }
 
