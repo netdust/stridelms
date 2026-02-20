@@ -46,7 +46,7 @@ foreach ($trajectoryEnrollments as $enrollment) {
 }
 ?>
 
-<div class="stride-dashboard-trajectories">
+<div class="stride-my-trajectories stride-dashboard-trajectories stride-dashboard-page">
     <!-- Page Header -->
     <div class="stride-page-header uk-margin-medium-bottom">
         <h1 class="uk-heading-medium"><?php esc_html_e('Mijn Trajecten', 'stride'); ?></h1>
@@ -133,4 +133,7 @@ foreach ($trajectoryEnrollments as $enrollment) {
             <?php endforeach; ?>
         </div>
     <?php endif; ?>
+
+    <!-- Navigation (Desktop nav panel + Mobile bottom navbar) -->
+    <?php include locate_template('templates/dashboard/partials/nav-panel.php'); ?>
 </div>

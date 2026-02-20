@@ -56,7 +56,7 @@ $pendingCount = count($pendingQuotes);
 $paidCount = count($paidQuotes);
 ?>
 
-<div class="stride-my-quotes">
+<div class="stride-my-quotes stride-dashboard-quotes stride-dashboard-page">
     <!-- Page Header -->
     <header class="stride-page-header">
         <div class="stride-page-header__content">
@@ -179,6 +179,9 @@ $paidCount = count($paidQuotes);
             </div>
         </section>
     <?php endif; ?>
+
+    <!-- Navigation (Desktop nav panel + Mobile bottom navbar) -->
+    <?php include locate_template('templates/dashboard/partials/nav-panel.php'); ?>
 </div>
 
 <?php

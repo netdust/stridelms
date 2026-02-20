@@ -83,7 +83,7 @@ $memberSince = date_i18n('F Y', strtotime($user->user_registered));
 $profileNonce = wp_create_nonce('stride_profile');
 ?>
 
-<div class="stride-profile">
+<div class="stride-profile stride-dashboard-profile stride-dashboard-page">
     <!-- Page Header -->
     <header class="stride-page-header">
         <div class="stride-page-header__content">
@@ -476,6 +476,9 @@ $profileNonce = wp_create_nonce('stride_profile');
             </div>
         </div>
     </section>
+
+    <!-- Navigation (Desktop nav panel + Mobile bottom navbar) -->
+    <?php include locate_template('templates/dashboard/partials/nav-panel.php'); ?>
 </div>
 
 <script>

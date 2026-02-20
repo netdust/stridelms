@@ -43,7 +43,7 @@ usort($upcomingSessions, function ($a, $b) {
 });
 ?>
 
-<div class="stride-dashboard-calendar">
+<div class="stride-my-calendar stride-dashboard-calendar stride-dashboard-page">
     <!-- Page Header -->
     <div class="stride-page-header uk-margin-medium-bottom">
         <h1 class="uk-heading-medium"><?php esc_html_e('Mijn Agenda', 'stride'); ?></h1>
@@ -118,4 +118,7 @@ usort($upcomingSessions, function ($a, $b) {
             </div>
         </div>
     <?php endif; ?>
+
+    <!-- Navigation (Desktop nav panel + Mobile bottom navbar) -->
+    <?php include locate_template('templates/dashboard/partials/nav-panel.php'); ?>
 </div>
