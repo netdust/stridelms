@@ -30,14 +30,8 @@ class NTDST_Data_Model
         $this->cache_group = 'ntdst_' . $post_type;
         $this->meta_prefix = $meta_prefix;
 
-        // Disable caching in dev if NTDST_DISABLE_CACHE is defined or WP_DEBUG is true
-        if (defined('NTDST_DISABLE_CACHE') && NTDST_DISABLE_CACHE) {
-            $this->cache_time = 0;
-        } elseif (defined('WP_DEBUG') && WP_DEBUG && !defined('NTDST_ENABLE_CACHE_IN_DEBUG')) {
-            $this->cache_time = 0;
-        } else {
-            $this->cache_time = $cache_time;
-        }
+        // Delegate cache time resolution to QueryCache
+        $this->cache_time = NTDST_Query_Cache::instance()->resolveCacheTime($cache_time);
 
         $this->setupSanitizers();
         $this->setupValidators();
