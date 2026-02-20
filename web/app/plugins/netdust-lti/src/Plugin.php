@@ -31,6 +31,11 @@ final class Plugin implements NTDST_Service_Meta
 
         // Register endpoint router for LTI requests
         ntdst_get(LTI\EndpointRouter::class);
+
+        // Register admin UI
+        if (is_admin()) {
+            ntdst_get(Admin\AdminPage::class);
+        }
     }
 
     public static function pluginPath(): string
