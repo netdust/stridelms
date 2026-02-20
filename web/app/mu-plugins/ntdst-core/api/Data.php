@@ -1424,12 +1424,9 @@ class NTDST_Data_Manager
         $include_terms = (bool) ($args['include_terms'] ?? false);
         $cache_time = (int) ($args['cache_time'] ?? 3600);
 
-        // Disable caching in dev if NTDST_DISABLE_CACHE is defined or WP_DEBUG is true
-        if (defined('NTDST_DISABLE_CACHE') && NTDST_DISABLE_CACHE) {
-            $cache_time = 0;
-        } elseif (defined('WP_DEBUG') && WP_DEBUG && !defined('NTDST_ENABLE_CACHE_IN_DEBUG')) {
-            $cache_time = 0;
-        }
+        // Delegate cache time resolution to QueryCache
+        $queryCache = NTDST_Query_Cache::instance();
+        $cache_time = $queryCache->resolveCacheTime($cache_time);
 
         // Remove custom args so WP_Query doesn't get confused
         unset($args['include_meta'], $args['include_terms'], $args['cache_time']);
@@ -1459,17 +1456,17 @@ class NTDST_Data_Manager
             unset($args['p']);
         }
 
-        // Generate unique cache key based on all arguments
-        // PERFORMANCE: Use json_encode instead of serialize (2-3x faster)
+        // Generate cache key using QueryCache (includes version for invalidation)
+        $post_type = $args['post_type'] ?? 'post';
         $cache_args = $args;
         $cache_args['include_meta'] = $include_meta;
         $cache_args['include_terms'] = $include_terms;
-        $cache_key = 'ntdst_posts_fast_' . md5(json_encode($cache_args, JSON_THROW_ON_ERROR));
-        $cache_group = 'ntdst_posts';
+        $cache_key = $queryCache->generateKey($cache_args, $post_type);
+        $cache_group = $queryCache->getGroup($post_type);
 
         // Try to get from cache
         if ($cache_time > 0) {
-            $cached = wp_cache_get($cache_key, $cache_group);
+            $cached = $queryCache->get($cache_key, $cache_group);
             if ($cached !== false) {
                 return $cached;
             }
@@ -1483,7 +1480,7 @@ class NTDST_Data_Manager
         if (empty($raw_posts)) {
             // Cache empty results too
             if ($cache_time > 0) {
-                wp_cache_set($cache_key, [], $cache_group, $cache_time);
+                $queryCache->set($cache_key, $cache_group, [], $cache_time);
             }
             return [];
         }
@@ -1565,9 +1562,9 @@ class NTDST_Data_Manager
             $posts[] = $post_data;
         }
 
-        // Cache results
+        // Cache results using QueryCache
         if ($cache_time > 0) {
-            wp_cache_set($cache_key, $posts, $cache_group, $cache_time);
+            $queryCache->set($cache_key, $cache_group, $posts, $cache_time);
         }
 
         return $posts;
