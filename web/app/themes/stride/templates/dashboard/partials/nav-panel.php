@@ -10,8 +10,14 @@
 
 defined('ABSPATH') || exit;
 
-// Determine current page for active state
-$currentUrl = $_SERVER['REQUEST_URI'] ?? '';
+// Determine current page for active state (sanitized)
+$currentUrl = isset($_SERVER['REQUEST_URI']) ? esc_url_raw($_SERVER['REQUEST_URI']) : '';
+
+// Check if URL matches current page
+$isActiveNav = function($url, $currentUrl) {
+    return strpos($currentUrl, $url) !== false;
+};
+
 $navItems = [
     [
         'url' => '/mijn-account/mijn-cursussen/',
@@ -40,19 +46,13 @@ $navItems = [
     ],
 ];
 
-/**
- * Check if URL matches current page
- */
-function stride_is_active_nav($url, $currentUrl) {
-    return strpos($currentUrl, $url) !== false;
-}
 ?>
 
 <!-- Desktop Navigation Panel (hidden on mobile) -->
 <nav class="stride-nav-panel uk-visible@m" aria-label="<?php esc_attr_e('Dashboard navigatie', 'stride'); ?>">
     <ul class="stride-nav-panel__list">
         <?php foreach ($navItems as $item) :
-            $isActive = stride_is_active_nav($item['url'], $currentUrl);
+            $isActive = $isActiveNav($item['url'], $currentUrl);
         ?>
             <li class="stride-nav-panel__item<?php echo $isActive ? ' stride-nav-panel__item--active' : ''; ?>">
                 <a href="<?php echo esc_url(home_url($item['url'])); ?>" class="stride-nav-panel__link">
@@ -67,7 +67,7 @@ function stride_is_active_nav($url, $currentUrl) {
 <!-- Mobile Bottom Navbar (hidden on desktop) -->
 <nav class="stride-bottom-navbar uk-hidden@m" aria-label="<?php esc_attr_e('Dashboard navigatie', 'stride'); ?>">
     <?php foreach ($navItems as $item) :
-        $isActive = stride_is_active_nav($item['url'], $currentUrl);
+        $isActive = $isActiveNav($item['url'], $currentUrl);
     ?>
         <a href="<?php echo esc_url(home_url($item['url'])); ?>"
            class="stride-bottom-navbar__item<?php echo $isActive ? ' stride-bottom-navbar__item--active' : ''; ?>"
