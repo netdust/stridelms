@@ -1031,33 +1031,24 @@ class NTDST_Data_Model
     }
 
     /**
-     * Clear cache for a specific post (Clears the Model's item cache and getPostsFast cache)
+     * Clear cache for a specific post or all posts of this type
+     *
+     * For single post: clears item cache and invalidates query caches via version bump
+     * Without ID: invalidates all query caches for this post type
      */
-    protected function clearCache(int $id): void
+    protected function clearCache(?int $id = null): void
     {
-        wp_cache_delete('item_' . $id, $this->cache_group);
+        $cache = NTDST_Query_Cache::instance();
 
-        // Also clear the getPostsFast cache used by find()
-        // CRITICAL: Key order must match exactly how getPostsFast builds cache_args
-        // Order: wp_parse_args preserves first array order, adds defaults, then p->post__in, then include_meta/terms
-        $cache_args = [
-            'post_type' => $this->post_type,      // from find() args
-            'post_status' => 'any',               // from find() args
-            'posts_per_page' => 1,                // from find() args (set again when p converted)
-            'orderby' => 'date',                  // from defaults
-            'order' => 'DESC',                    // from defaults
-            'no_found_rows' => true,              // from defaults
-            'update_post_term_cache' => false,    // from defaults
-            'update_post_meta_cache' => false,    // from defaults
-            'suppress_filters' => true,           // from defaults
-            'ignore_sticky_posts' => true,        // from defaults
-            'fields' => '',                       // from defaults
-            'post__in' => [$id],                  // converted from 'p' (added at end of array)
-            'include_meta' => true,               // added to cache_args at end
-            'include_terms' => false,             // added to cache_args at end
-        ];
-        $cache_key = 'ntdst_posts_fast_' . md5(json_encode($cache_args, JSON_THROW_ON_ERROR));
-        wp_cache_delete($cache_key, 'ntdst_posts');
+        if ($id !== null) {
+            // Clear specific item cache
+            wp_cache_delete('item_' . $id, $this->cache_group);
+            // Clear manager caches for this post
+            NTDST_Data_Manager::clearCache($id);
+        }
+
+        // Invalidate all query caches for this post type via version bump
+        $cache->invalidatePostType($this->post_type);
     }
 
     /**
