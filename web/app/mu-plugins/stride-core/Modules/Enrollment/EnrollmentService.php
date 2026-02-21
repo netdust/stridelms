@@ -45,6 +45,55 @@ final class EnrollmentService extends AbstractService
     {
         // Instantiate enrollment form handler
         ntdst_get(\Stride\Handlers\EnrollmentFormHandler::class);
+
+        // Auto-enroll users when they access an open course lesson
+        // This ensures open courses appear in learndash_user_get_enrolled_courses()
+        add_action('learndash-lesson-before', [$this, 'maybeEnrollOnLessonAccess'], 10, 3);
+        add_action('learndash-topic-before', [$this, 'maybeEnrollOnLessonAccess'], 10, 3);
+    }
+
+    /**
+     * Enroll user when they access an open course lesson.
+     *
+     * LearnDash "open" courses grant access to everyone but don't track enrollment.
+     * This hook ensures users get enrolled when they start an open course,
+     * so the course appears in their dashboard.
+     *
+     * @param int $postId The lesson/topic post ID
+     * @param int $courseId The course ID
+     * @param int $userId The user ID
+     */
+    public function maybeEnrollOnLessonAccess(int $postId, int $courseId, int $userId): void
+    {
+        if (!$userId || !$courseId) {
+            return;
+        }
+
+        // Check if user is already enrolled
+        if (function_exists('learndash_user_get_enrolled_courses')) {
+            $enrolledCourses = learndash_user_get_enrolled_courses($userId);
+            if (in_array($courseId, $enrolledCourses, true)) {
+                return; // Already enrolled
+            }
+        }
+
+        // Check if this is an open course (grant access without enrollment)
+        // LearnDash stores settings in serialized array under _sfwd-courses meta
+        $courseMeta = get_post_meta($courseId, '_sfwd-courses', true);
+        $priceType = is_array($courseMeta) ? ($courseMeta['course_price_type'] ?? '') : '';
+        if ($priceType !== 'open') {
+            return; // Not an open course
+        }
+
+        // Enroll the user via LearnDash
+        $this->lms->grantAccess($userId, $courseId);
+
+        ntdst_log('enrollment')->info('Auto-enrolled user in open course on lesson access', [
+            'user_id' => $userId,
+            'course_id' => $courseId,
+            'lesson_id' => $postId,
+            'course_title' => get_the_title($courseId),
+        ]);
     }
 
     /**
