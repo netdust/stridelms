@@ -39,9 +39,7 @@ final class QuoteService extends AbstractService
 
     protected function init(): void
     {
-        // Instantiate quote-related handlers
-        ntdst_get(\Stride\Handlers\EnrollmentQuoteHandler::class);
-        ntdst_get(\Stride\Handlers\QuoteUpdateHandler::class);
+        // Handlers are registered centrally in stride-core.php
     }
 
     /**

@@ -90,13 +90,17 @@ add_action('ntdst/features_ready', function () use ($config): void {
     ntdst_set(\Stride\Modules\User\QuotesShortcode::class);
     ntdst_get(\Stride\Modules\User\QuotesShortcode::class);
 
-    // Register handlers
-    ntdst_set(\Stride\Handlers\EnrollmentQuoteHandler::class);
-    ntdst_get(\Stride\Handlers\EnrollmentQuoteHandler::class);
+    // Register handlers (all handlers in one place for explicit configuration)
+    $handlers = [
+        \Stride\Handlers\EnrollmentQuoteHandler::class,
+        \Stride\Handlers\EnrollmentFormHandler::class,
+        \Stride\Handlers\QuoteUpdateHandler::class,
+        \Stride\Handlers\ProfileHandler::class,
+        \Stride\Handlers\ICalHandler::class,
+    ];
 
-    ntdst_set(\Stride\Handlers\ProfileHandler::class);
-    ntdst_get(\Stride\Handlers\ProfileHandler::class);
-
-    ntdst_set(\Stride\Handlers\ICalHandler::class);
-    ntdst_get(\Stride\Handlers\ICalHandler::class);
+    foreach ($handlers as $handlerClass) {
+        ntdst_set($handlerClass);
+        ntdst_get($handlerClass);
+    }
 });

@@ -43,8 +43,7 @@ final class EnrollmentService extends AbstractService
 
     protected function init(): void
     {
-        // Instantiate enrollment form handler
-        ntdst_get(\Stride\Handlers\EnrollmentFormHandler::class);
+        // Handlers are registered centrally in stride-core.php
 
         // Auto-enroll users when they access an open course lesson
         // This ensures open courses appear in learndash_user_get_enrolled_courses()
