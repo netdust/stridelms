@@ -185,7 +185,7 @@ final class EditionDetailsMetabox
         $posts = get_posts([
             'post_type' => 'sfwd-courses',
             'post_status' => 'publish',
-            'posts_per_page' => -1,
+            'posts_per_page' => 200, // Reasonable limit for course dropdown
             'orderby' => 'title',
             'order' => 'ASC',
         ]);
