@@ -1,0 +1,81 @@
+/**
+ * NTDST Auth - Styles
+ *
+ * Extends UIkit for authentication pages.
+ */
+
+.ntdst-auth-page {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+}
+
+.ntdst-auth-page .uk-card {
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+}
+
+.ntdst-auth-page .uk-card-title {
+    font-weight: 600;
+    color: #333;
+}
+
+.ntdst-auth-page .uk-form-label {
+    font-weight: 500;
+    color: #666;
+    margin-bottom: 5px;
+    display: block;
+}
+
+.ntdst-auth-page .uk-input,
+.ntdst-auth-page .uk-select {
+    border-radius: 4px;
+    border: 1px solid #e5e5e5;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.ntdst-auth-page .uk-input:focus,
+.ntdst-auth-page .uk-select:focus {
+    border-color: #1e87f0;
+    box-shadow: 0 0 0 3px rgba(30, 135, 240, 0.1);
+}
+
+.ntdst-auth-page .uk-button-primary {
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: none;
+    padding: 0 30px;
+    height: 44px;
+}
+
+.ntdst-auth-page .uk-alert {
+    border-radius: 4px;
+    padding: 15px 20px;
+}
+
+.ntdst-auth-page .uk-checkbox {
+    margin-right: 8px;
+}
+
+.ntdst-auth-page .uk-link-muted {
+    transition: color 0.2s;
+}
+
+.ntdst-auth-page .uk-link-muted:hover {
+    color: #1e87f0;
+}
+
+/* Loading state */
+.ntdst-auth-page button[disabled] {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* Success icon animation */
+@keyframes checkmark {
+    0% { transform: scale(0); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+.ntdst-auth-page .uk-text-success[uk-icon] {
+    animation: checkmark 0.5s ease-out;
+}
