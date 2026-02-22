@@ -1,0 +1,23 @@
+services:
+  selenium:
+    image: selenium/standalone-chrome:latest
+    container_name: ddev-${DDEV_SITENAME}-selenium
+    labels:
+      com.ddev.site-name: ${DDEV_SITENAME}
+      com.ddev.approot: ${DDEV_APPROOT}
+    expose:
+      - "4444"
+      - "7900"
+    environment:
+      - SE_NODE_MAX_SESSIONS=3
+      - SE_NODE_OVERRIDE_MAX_SESSIONS=true
+    shm_size: '2gb'
+    external_links:
+      - ddev-router:${DDEV_SITENAME}.ddev.site
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4444/wd/hub/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

@@ -1,0 +1,252 @@
+<?php
+
+declare(strict_types=1);
+
+use Tests\Support\AcceptanceTester;
+
+/**
+ * Acceptance tests for ntdst-auth plugin.
+ *
+ * Tests the authentication flows: login page, register page,
+ * magic link requests, and admin settings.
+ */
+class AuthPluginCest
+{
+    // -------------------------------------------------------------------------
+    // Login Page Tests
+    // -------------------------------------------------------------------------
+
+    /**
+     * SCENARIO: Login page loads correctly
+     *   GIVEN: I am not logged in
+     *   WHEN: I visit /login
+     *   THEN: I see the login page with email form
+     */
+    public function loginPageLoads(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify the custom login page loads');
+        $I->amOnPage('/login');
+        $I->seeElement('input[type="email"]');
+        $I->seeElement('button[type="submit"]');
+        $I->dontSee('Fatal error');
+        $I->dontSee('wp-login.php');
+    }
+
+    /**
+     * SCENARIO: Login page shows magic link form by default
+     *   GIVEN: I am on /login
+     *   THEN: I see magic link request form
+     */
+    public function loginPageShowsMagicLinkForm(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify login page shows magic link form');
+        $I->amOnPage('/login');
+        $I->see('Stride LMS');
+        $I->see('Email');
+        $I->seeElement('input[type="email"]');
+        $I->seeElement('button[type="submit"]');
+    }
+
+    // -------------------------------------------------------------------------
+    // Register Page Tests
+    // -------------------------------------------------------------------------
+
+    /**
+     * SCENARIO: Register page loads correctly
+     *   GIVEN: I am not logged in
+     *   WHEN: I visit /register
+     *   THEN: I see the registration form elements
+     */
+    public function registerPageLoads(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify the custom register page loads');
+        $I->amOnPage('/register');
+        $I->seeElement('input[type="email"]');
+        $I->seeElement('input[type="checkbox"]');
+        $I->seeElement('button[type="submit"]');
+        $I->dontSee('Fatal error');
+    }
+
+    // -------------------------------------------------------------------------
+    // Magic Link Request Tests
+    // -------------------------------------------------------------------------
+
+    /**
+     * SCENARIO: Magic link request shows success regardless of email existence
+     *   GIVEN: I am on /login
+     *   WHEN: I enter any email and submit
+     *   THEN: I see success message (anti-enumeration)
+     */
+    public function magicLinkRequestShowsSuccessForAnyEmail(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify magic link request shows success for any email');
+        $I->amOnPage('/login');
+
+        // Fill the email input by id
+        $I->fillField('#email', 'nonexistent-email-12345@example.com');
+        $I->click('button[type="submit"]');
+
+        // Wait for AJAX response - message is "If an account exists with this email, you will receive a login link shortly."
+        $I->waitForText('login link', 10);
+        $I->see('login link');
+        $I->dontSee('not found');
+        $I->dontSee('does not exist');
+    }
+
+    // -------------------------------------------------------------------------
+    // Registration Flow Tests
+    // -------------------------------------------------------------------------
+
+    /**
+     * SCENARIO: Registration shows success message
+     *   GIVEN: I am on /register
+     *   WHEN: I fill required fields and accept terms
+     *   THEN: I see "inbox" message
+     */
+    public function registrationShowsSuccessMessage(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify registration shows success message');
+        $I->amOnPage('/register');
+
+        // Generate unique email for this test
+        $testEmail = 'test-' . time() . '@example.com';
+
+        // Fill fields by id
+        $I->fillField('#email', $testEmail);
+        $I->fillField('#first_name', 'Test');
+        $I->fillField('#last_name', 'User');
+        $I->checkOption('#consent_terms');
+        $I->checkOption('#consent_privacy');
+        $I->click('button[type="submit"]');
+
+        // Wait for AJAX response - message is "Check your inbox for instructions..."
+        $I->waitForText('inbox', 10);
+        $I->see('inbox');
+    }
+
+    // -------------------------------------------------------------------------
+    // Error Flow Tests
+    // -------------------------------------------------------------------------
+
+    /**
+     * SCENARIO: Invalid magic link token shows error
+     *   GIVEN: I have a malformed or tampered token
+     *   WHEN: I visit /auth/verify/{bad_token}
+     *   THEN: I see error page with "Invalid" message
+     */
+    public function invalidTokenShowsError(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify invalid token shows error');
+        $I->amOnPage('/auth/verify/invalid-token-12345');
+        $I->see('Link Invalid');
+        $I->dontSee('Fatal error');
+    }
+
+    /**
+     * SCENARIO: Invalid activation token shows error
+     *   GIVEN: I have a malformed activation token
+     *   WHEN: I visit /auth/activate/{bad_token}
+     *   THEN: I see error page
+     */
+    public function invalidActivationTokenShowsError(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify invalid activation token shows error');
+        $I->amOnPage('/auth/activate/invalid-activation-token');
+        $I->dontSee('Fatal error');
+        // Should see some kind of error message
+        $I->see('Invalid');
+    }
+
+    // -------------------------------------------------------------------------
+    // Auth Routes Tests
+    // -------------------------------------------------------------------------
+
+    /**
+     * SCENARIO: Auth verify route exists
+     *   GIVEN: I visit /auth/verify with a token
+     *   WHEN: The token is processed
+     *   THEN: I don't see a 404 page or fatal error
+     */
+    public function authVerifyRouteExists(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify auth/verify route exists');
+        $I->amOnPage('/auth/verify/test-token');
+        $I->dontSee('Page not found');
+        $I->dontSee('Fatal error');
+        // Should see error page (invalid token) not 404
+        $I->see('Link');
+    }
+
+    /**
+     * SCENARIO: Auth activate route exists
+     *   GIVEN: I visit /auth/activate with a token
+     *   WHEN: The route is processed
+     *   THEN: I don't see a 404 page or fatal error
+     */
+    public function authActivateRouteExists(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify auth/activate route exists');
+        $I->amOnPage('/auth/activate/test-token');
+        $I->dontSee('Page not found');
+        $I->dontSee('Fatal error');
+    }
+
+    /**
+     * SCENARIO: Auth logout route exists and redirects
+     *   GIVEN: I am not logged in
+     *   WHEN: I visit /auth/logout
+     *   THEN: I am redirected to login page
+     */
+    public function authLogoutRouteRedirects(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify auth/logout route redirects to login');
+        $I->amOnPage('/auth/logout');
+        $I->seeInCurrentUrl('/login');
+    }
+
+    // -------------------------------------------------------------------------
+    // wp-login.php Redirect Tests
+    // -------------------------------------------------------------------------
+
+    /**
+     * SCENARIO: wp-login.php redirects to custom login
+     *   GIVEN: The redirect_wp_login setting is enabled
+     *   WHEN: I visit wp-login.php
+     *   THEN: I am redirected to /login
+     */
+    public function wpLoginRedirectsToCustomLogin(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify wp-login.php redirects to custom login');
+        $I->amOnPage('/wp/wp-login.php');
+        $I->seeInCurrentUrl('/login');
+        $I->see('Stride LMS');
+    }
+
+    /**
+     * SCENARIO: wp-login.php logout action still works
+     *   GIVEN: I am on wp-login.php with action=logout
+     *   WHEN: The page loads
+     *   THEN: I am NOT redirected (logout action is allowed)
+     */
+    public function wpLoginLogoutActionNotRedirected(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify wp-login.php logout action is not redirected');
+        $I->amOnPage('/wp/wp-login.php?action=logout');
+        // Should stay on wp-login.php for logout action
+        $I->seeInCurrentUrl('wp-login.php');
+    }
+
+    /**
+     * SCENARIO: wp-login.php password reset action still works
+     *   GIVEN: I am on wp-login.php with action=lostpassword
+     *   WHEN: The page loads
+     *   THEN: I am NOT redirected (password reset is allowed)
+     */
+    public function wpLoginPasswordResetNotRedirected(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify wp-login.php password reset is not redirected');
+        $I->amOnPage('/wp/wp-login.php?action=lostpassword');
+        // Should stay on wp-login.php for password reset
+        $I->seeInCurrentUrl('wp-login.php');
+    }
+}

@@ -1,0 +1,34 @@
+actor: AcceptanceTester
+modules:
+  enabled:
+    - WPWebDriver
+    - WPDb
+    - \Tests\Support\Helper\Acceptance
+  config:
+    WPWebDriver:
+      url: '%WP_URL%'
+      adminUsername: '%WP_ADMIN_USERNAME%'
+      adminPassword: '%WP_ADMIN_PASSWORD%'
+      adminPath: '%WP_ADMIN_PATH%'
+      browser: chrome
+      host: selenium
+      port: 4444
+      path: /wd/hub
+      window_size: 1920x1080
+      capabilities:
+        "goog:chromeOptions":
+          args:
+            - "--headless=new"
+            - "--disable-gpu"
+            - "--no-sandbox"
+            - "--disable-dev-shm-usage"
+            - "--ignore-certificate-errors"
+    WPDb:
+      dsn: 'mysql:host=db;dbname=db'
+      user: 'db'
+      password: 'db'
+      url: '%WP_URL%'
+      tablePrefix: 'stride_'
+      dump: 'tests/_data/dump.sql'
+      populate: false
+      cleanup: false
