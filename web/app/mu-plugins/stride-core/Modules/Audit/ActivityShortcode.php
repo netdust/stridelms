@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Stride\Modules\Audit;
 
+use NTDST\Audit\AuditService;
 use Stride\Modules\Edition\EditionService;
 
 final class ActivityShortcode
