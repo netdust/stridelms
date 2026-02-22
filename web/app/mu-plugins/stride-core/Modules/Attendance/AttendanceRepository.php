@@ -26,9 +26,9 @@ final class AttendanceRepository
     {
         global $wpdb;
 
-        // If edition_id not provided, look it up from session
+        // If edition_id not provided, look it up from session via Data Manager
         if ($editionId === null) {
-            $editionId = (int) get_post_meta($sessionId, '_vad_edition_id', true);
+            $editionId = (int) ntdst_data()->get('vad_session')->getMeta($sessionId, 'edition_id');
             if ($editionId === 0) {
                 return new WP_Error('missing_edition', 'Could not determine edition for session');
             }

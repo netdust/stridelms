@@ -107,7 +107,7 @@ final class CompletionService extends AbstractService
      */
     public function getCompletionMode(int $editionId): CompletionMode
     {
-        $modeValue = get_post_meta($editionId, '_vad_completion_mode', true);
+        $modeValue = ntdst_data()->get('vad_edition')->getMeta($editionId, 'completion_mode');
 
         return CompletionMode::tryFrom($modeValue) ?? CompletionMode::AttendAll;
     }
@@ -121,7 +121,7 @@ final class CompletionService extends AbstractService
      */
     public function getCompletionThreshold(int $editionId): int
     {
-        $threshold = get_post_meta($editionId, '_vad_completion_threshold', true);
+        $threshold = ntdst_data()->get('vad_edition')->getMeta($editionId, 'completion_threshold');
 
         return $threshold ? (int) $threshold : 100;
     }
@@ -191,7 +191,7 @@ final class CompletionService extends AbstractService
      */
     public function setCompletionMode(int $editionId, CompletionMode $mode): void
     {
-        update_post_meta($editionId, '_vad_completion_mode', $mode->value);
+        ntdst_data()->get('vad_edition')->updateMetaBatch($editionId, ['completion_mode' => $mode->value]);
     }
 
     /**
@@ -199,6 +199,6 @@ final class CompletionService extends AbstractService
      */
     public function setCompletionThreshold(int $editionId, int $threshold): void
     {
-        update_post_meta($editionId, '_vad_completion_threshold', $threshold);
+        ntdst_data()->get('vad_edition')->updateMetaBatch($editionId, ['completion_threshold' => $threshold]);
     }
 }

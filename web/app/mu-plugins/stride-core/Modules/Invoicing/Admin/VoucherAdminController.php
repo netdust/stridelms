@@ -503,7 +503,7 @@ final class VoucherAdminController extends AbstractService
     {
         switch ($column) {
             case 'code':
-                $code = get_post_meta($postId, 'code', true);
+                $code = $this->repository->getField($postId, 'code', '');
                 if ($code) {
                     echo '<code style="font-size:13px;background:#f0f0f1;padding:2px 6px;border-radius:3px;">' . esc_html($code) . '</code>';
                 } else {
@@ -512,8 +512,8 @@ final class VoucherAdminController extends AbstractService
                 break;
 
             case 'discount':
-                $type = get_post_meta($postId, 'discount_type', true);
-                $value = (int) get_post_meta($postId, 'discount_value', true);
+                $type = $this->repository->getField($postId, 'discount_type', '');
+                $value = (int) $this->repository->getField($postId, 'discount_value', 0);
                 $typeEnum = DiscountType::tryFrom($type);
 
                 if ($typeEnum) {
@@ -529,8 +529,8 @@ final class VoucherAdminController extends AbstractService
                 break;
 
             case 'usage':
-                $usedCount = (int) get_post_meta($postId, 'used_count', true);
-                $usageLimit = (int) get_post_meta($postId, 'usage_limit', true);
+                $usedCount = (int) $this->repository->getField($postId, 'used_count', 0);
+                $usageLimit = (int) $this->repository->getField($postId, 'usage_limit', 0);
 
                 if ($usageLimit > 0) {
                     $percentage = min(100, round(($usedCount / $usageLimit) * 100));
@@ -542,7 +542,7 @@ final class VoucherAdminController extends AbstractService
                 break;
 
             case 'status':
-                $status = get_post_meta($postId, 'status', true) ?: 'active';
+                $status = $this->repository->getField($postId, 'status', 'active');
                 $statusEnum = VoucherStatus::tryFrom($status) ?? VoucherStatus::Active;
                 $config = $this->getVoucherStatusConfig($statusEnum);
                 echo '<span style="display:inline-block;padding:2px 8px;border-radius:3px;background:' . $config['bg'] . ';color:' . $config['color'] . ';font-size:12px;">';
@@ -551,8 +551,8 @@ final class VoucherAdminController extends AbstractService
                 break;
 
             case 'valid_dates':
-                $validFrom = get_post_meta($postId, 'valid_from', true);
-                $validUntil = get_post_meta($postId, 'valid_until', true);
+                $validFrom = $this->repository->getField($postId, 'valid_from', '');
+                $validUntil = $this->repository->getField($postId, 'valid_until', '');
 
                 if ($validFrom || $validUntil) {
                     $from = $validFrom ? date_i18n('j M Y', strtotime($validFrom)) : '—';
@@ -566,7 +566,7 @@ final class VoucherAdminController extends AbstractService
                 break;
 
             case 'edition':
-                $editionId = (int) get_post_meta($postId, 'edition_id', true);
+                $editionId = (int) $this->repository->getField($postId, 'edition_id', 0);
                 if ($editionId) {
                     $editionTitle = get_the_title($editionId);
                     $editUrl = get_edit_post_link($editionId);

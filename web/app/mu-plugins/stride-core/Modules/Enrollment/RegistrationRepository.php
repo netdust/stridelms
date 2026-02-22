@@ -63,7 +63,18 @@ final class RegistrationRepository
             return new WP_Error('db_error', 'Failed to create registration');
         }
 
-        return (int) $wpdb->insert_id;
+        $registrationId = (int) $wpdb->insert_id;
+
+        // Fire audit hook
+        do_action('stride/registration/created', [
+            'registration_id' => $registrationId,
+            'user_id' => $insert['user_id'],
+            'edition_id' => $insert['edition_id'],
+            'enrollment_path' => $insert['enrollment_path'],
+            'enrolled_by' => $insert['enrolled_by'],
+        ]);
+
+        return $registrationId;
     }
 
     /**
@@ -187,6 +198,23 @@ final class RegistrationRepository
      */
     public function cancel(int $id): bool
     {
-        return $this->updateStatus($id, RegistrationStatus::Cancelled);
+        // Get registration data before cancelling for audit
+        $registration = $this->find($id);
+        if (is_wp_error($registration)) {
+            return false;
+        }
+
+        $result = $this->updateStatus($id, RegistrationStatus::Cancelled);
+
+        if ($result) {
+            // Fire audit hook
+            do_action('stride/registration/cancelled', [
+                'registration_id' => $id,
+                'user_id' => $registration->user_id,
+                'edition_id' => $registration->edition_id,
+            ]);
+        }
+
+        return $result;
     }
 }

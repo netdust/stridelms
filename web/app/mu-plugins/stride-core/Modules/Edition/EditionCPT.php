@@ -89,6 +89,21 @@ final class EditionCPT
                 'label' => 'Sessie slots',
                 'description' => 'JSON array of slot configurations',
             ],
+            'completion_mode' => [
+                'type' => 'text',
+                'label' => 'Completion Mode',
+                'description' => 'automatic or manual',
+            ],
+            'completion_threshold' => [
+                'type' => 'int',
+                'label' => 'Completion Threshold',
+                'description' => 'Percentage threshold for automatic completion',
+            ],
+            'notes' => [
+                'type' => 'json',
+                'label' => 'Notities',
+                'description' => 'Array of edition notes',
+            ],
         ];
     }
 

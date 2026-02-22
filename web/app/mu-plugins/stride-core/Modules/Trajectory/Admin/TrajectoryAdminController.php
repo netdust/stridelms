@@ -7,6 +7,7 @@ namespace Stride\Modules\Trajectory\Admin;
 use Stride\Domain\TrajectoryMode;
 use Stride\Domain\TrajectoryStatus;
 use Stride\Infrastructure\AbstractService;
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Trajectory\TrajectoryCPT;
 use Stride\Modules\Trajectory\TrajectoryRepository;
@@ -34,6 +35,7 @@ final class TrajectoryAdminController extends AbstractService
         private readonly TrajectoryRepository $repository,
         private readonly TrajectoryEnrollmentRepository $enrollmentRepository,
         private readonly EditionService $editionService,
+        private readonly EditionRepository $editionRepository,
     ) {
         parent::__construct();
     }
@@ -488,8 +490,8 @@ final class TrajectoryAdminController extends AbstractService
         if ($type === 'edition' && $editionId) {
             $editionPost = $this->editionService->getEdition($editionId);
             if (!is_wp_error($editionPost)) {
-                $startDate = get_post_meta($editionId, '_stride_start_date', true);
-                $venue = get_post_meta($editionId, '_stride_venue', true);
+                $startDate = $this->editionRepository->getField($editionId, 'start_date', '');
+                $venue = $this->editionRepository->getField($editionId, 'venue', '');
                 if ($startDate) {
                     $label .= ' - ' . date_i18n('d M Y', strtotime($startDate));
                 }
@@ -1122,7 +1124,7 @@ final class TrajectoryAdminController extends AbstractService
     {
         switch ($column) {
             case 'mode':
-                $mode = get_post_meta($postId, 'mode', true) ?: 'self_paced';
+                $mode = $this->repository->getField($postId, 'mode', 'self_paced');
                 $modeEnum = TrajectoryMode::tryFrom($mode) ?? TrajectoryMode::SelfPaced;
                 $icon = $modeEnum === TrajectoryMode::Cohort ? 'groups' : 'admin-users';
                 $color = $modeEnum === TrajectoryMode::Cohort ? '#2271b1' : '#00a32a';
@@ -1133,7 +1135,7 @@ final class TrajectoryAdminController extends AbstractService
                 break;
 
             case 'courses_count':
-                $courses = get_post_meta($postId, 'courses', true);
+                $courses = $this->repository->getField($postId, 'courses', []);
                 if (is_string($courses)) {
                     $courses = json_decode($courses, true) ?: [];
                 }
@@ -1152,7 +1154,7 @@ final class TrajectoryAdminController extends AbstractService
                 break;
 
             case 'enrollments':
-                $capacity = (int) get_post_meta($postId, 'capacity', true);
+                $capacity = (int) $this->repository->getField($postId, 'capacity', 0);
                 $enrolledCount = $this->enrollmentRepository->countByTrajectory($postId);
 
                 if ($capacity > 0) {
@@ -1165,7 +1167,7 @@ final class TrajectoryAdminController extends AbstractService
                 break;
 
             case 'status':
-                $status = get_post_meta($postId, 'status', true) ?: 'draft';
+                $status = $this->repository->getField($postId, 'status', 'draft');
                 $statusEnum = TrajectoryStatus::tryFrom($status) ?? TrajectoryStatus::Draft;
                 $config = $this->getTrajectoryStatusConfig($statusEnum);
                 echo '<span style="display:inline-block;padding:2px 8px;border-radius:3px;background:' . $config['bg'] . ';color:' . $config['color'] . ';font-size:12px;">';
@@ -1174,9 +1176,9 @@ final class TrajectoryAdminController extends AbstractService
                 break;
 
             case 'deadline':
-                $mode = get_post_meta($postId, 'mode', true) ?: 'self_paced';
+                $mode = $this->repository->getField($postId, 'mode', 'self_paced');
                 if ($mode === 'cohort') {
-                    $enrollmentDeadline = get_post_meta($postId, 'enrollment_deadline', true);
+                    $enrollmentDeadline = $this->repository->getField($postId, 'enrollment_deadline', '');
                     if ($enrollmentDeadline) {
                         $isExpired = strtotime($enrollmentDeadline) < time();
                         $style = $isExpired ? 'color:#d63638;' : '';
@@ -1185,7 +1187,7 @@ final class TrajectoryAdminController extends AbstractService
                         echo '<span style="color:#999;">—</span>';
                     }
                 } else {
-                    $months = (int) get_post_meta($postId, 'deadline_months', true);
+                    $months = (int) $this->repository->getField($postId, 'deadline_months', 0);
                     if ($months > 0) {
                         echo $months . ' ' . __('maanden', 'stride');
                     } else {

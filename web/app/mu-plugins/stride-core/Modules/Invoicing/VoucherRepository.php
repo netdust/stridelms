@@ -63,6 +63,14 @@ final class VoucherRepository extends AbstractRepository
     }
 
     /**
+     * Get field value from voucher.
+     */
+    public function getField(int $voucherId, string $field, mixed $default = null): mixed
+    {
+        return $this->model()->getMeta($voucherId, $field, $default);
+    }
+
+    /**
      * Update voucher meta fields.
      */
     public function updateMeta(int $voucherId, array $data): bool
