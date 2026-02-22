@@ -38,9 +38,38 @@ final class AuthService implements \NTDST_Service_Meta
     {
         add_action('init', [$this, 'registerRoutes']);
 
+        // Prevent WordPress canonical redirect for /login, /register
+        // wp_redirect_admin_locations() runs on template_redirect at priority 1000
+        // We remove it for our routes at priority 999 (before it runs)
+        add_action('template_redirect', [$this, 'preventCanonicalLoginRedirect'], 999);
+
         // Redirect wp-login.php if enabled
         if ($this->settings->get('redirect_wp_login', true)) {
             add_action('login_init', [$this, 'redirectWpLogin']);
+        }
+    }
+
+    /**
+     * Prevent WordPress from redirecting /login to wp-login.php and set correct status.
+     *
+     * WordPress core (canonical.php) has wp_redirect_admin_locations() hooked
+     * at template_redirect priority 1000 which redirects /login to wp-login.php.
+     * We remove that hook for our auth routes and set proper 200 status.
+     */
+    public function preventCanonicalLoginRedirect(): void
+    {
+        $loginUrl = ltrim($this->settings->get('login_url', '/login'), '/');
+        $registerUrl = ltrim($this->settings->get('register_url', '/register'), '/');
+        $currentPath = trim(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH), '/');
+
+        // If we're on our auth routes, prevent redirect and set 200 status
+        if ($currentPath === $loginUrl || $currentPath === $registerUrl) {
+            remove_action('template_redirect', 'wp_redirect_admin_locations', 1000);
+
+            // Set proper status (WordPress sets 404 for unknown URLs)
+            global $wp_query;
+            $wp_query->is_404 = false;
+            status_header(200);
         }
     }
 
@@ -337,6 +366,9 @@ final class AuthService implements \NTDST_Service_Meta
      */
     private function renderPage(string $template, array $data = []): void
     {
+        // Set proper HTTP status (WordPress sets 404 for unknown URLs)
+        status_header(200);
+
         // Check for theme override
         $paths = [
             get_stylesheet_directory() . '/ntdst-auth/pages/' . $template . '.php',
