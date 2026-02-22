@@ -39,7 +39,7 @@ abstract class TestCase extends BaseTestCase
     {
         global $_test_user_meta, $_test_post_meta, $_test_actions, $_test_filters;
         global $_test_action_calls, $_test_options, $_test_transients, $_test_container;
-        global $_test_users, $_test_posts;
+        global $_test_users, $_test_posts, $_test_data_manager_meta;
 
         $_test_user_meta = [];
         $_test_post_meta = [];
@@ -51,6 +51,7 @@ abstract class TestCase extends BaseTestCase
         $_test_container = [];
         $_test_users = [];
         $_test_posts = [];
+        $_test_data_manager_meta = [];
     }
 
     /**
@@ -246,5 +247,122 @@ abstract class TestCase extends BaseTestCase
     {
         global $_test_container;
         $_test_container[$key] = $service;
+    }
+
+    /**
+     * Set Data Manager meta for a post type
+     *
+     * @param string $postType
+     * @param int $postId
+     * @param array $meta
+     */
+    protected function setDataManagerMeta(string $postType, int $postId, array $meta): void
+    {
+        global $_test_data_manager_meta;
+        if (!isset($_test_data_manager_meta[$postType])) {
+            $_test_data_manager_meta[$postType] = [];
+        }
+        if (!isset($_test_data_manager_meta[$postType][$postId])) {
+            $_test_data_manager_meta[$postType][$postId] = [];
+        }
+        $_test_data_manager_meta[$postType][$postId] = array_merge(
+            $_test_data_manager_meta[$postType][$postId],
+            $meta
+        );
+    }
+
+    /**
+     * Get Data Manager meta for a post type
+     *
+     * @param string $postType
+     * @param int $postId
+     * @param string $key
+     * @return mixed
+     */
+    protected function getDataManagerMeta(string $postType, int $postId, string $key): mixed
+    {
+        global $_test_data_manager_meta;
+        return $_test_data_manager_meta[$postType][$postId][$key] ?? null;
+    }
+
+    /**
+     * Create a test edition
+     *
+     * @param array $data Edition data overrides
+     * @return object Post object
+     */
+    protected function createEdition(array $data = []): object
+    {
+        global $_test_posts;
+
+        static $nextId = 4000;
+
+        $defaults = [
+            'ID' => $nextId++,
+            'post_type' => 'vad_edition',
+            'post_title' => 'Test Edition',
+            'post_status' => 'publish',
+        ];
+
+        $editionData = array_merge($defaults, $data);
+        $edition = (object) $editionData;
+
+        $_test_posts[$edition->ID] = $edition;
+
+        return $edition;
+    }
+
+    /**
+     * Create a test session
+     *
+     * @param array $data Session data overrides
+     * @return object Post object
+     */
+    protected function createSession(array $data = []): object
+    {
+        global $_test_posts;
+
+        static $nextId = 5000;
+
+        $defaults = [
+            'ID' => $nextId++,
+            'post_type' => 'vad_session',
+            'post_title' => 'Test Session',
+            'post_status' => 'publish',
+        ];
+
+        $sessionData = array_merge($defaults, $data);
+        $session = (object) $sessionData;
+
+        $_test_posts[$session->ID] = $session;
+
+        return $session;
+    }
+
+    /**
+     * Create a test voucher
+     *
+     * @param array $data Voucher data overrides
+     * @return object Post object
+     */
+    protected function createVoucher(array $data = []): object
+    {
+        global $_test_posts;
+
+        static $nextId = 6000;
+
+        $defaults = [
+            'ID' => $nextId++,
+            'post_type' => 'vad_voucher',
+            'post_title' => 'Test Voucher',
+            'post_status' => 'publish',
+        ];
+
+        $voucherData = array_merge($defaults, $data);
+        $voucher = (object) $voucherData;
+
+        $_test_posts[$voucher->ID] = $voucher;
+
+        return $voucher;
     }
 }

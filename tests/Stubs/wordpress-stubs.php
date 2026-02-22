@@ -505,12 +505,62 @@ if (!function_exists('ntdst_set')) {
     }
 }
 
+// Data Manager mock storage
+global $_test_data_manager_meta;
+$_test_data_manager_meta = [];
+
 if (!function_exists('ntdst_data')) {
     function ntdst_data()
     {
         return new class {
             public function register($type, $args = []) {}
-            public function get($type) { return null; }
+
+            public function get($type)
+            {
+                return new class($type) {
+                    private string $postType;
+
+                    public function __construct(string $postType)
+                    {
+                        $this->postType = $postType;
+                    }
+
+                    public function getMeta(int $postId, string $key, mixed $default = null): mixed
+                    {
+                        global $_test_data_manager_meta;
+                        return $_test_data_manager_meta[$this->postType][$postId][$key] ?? $default;
+                    }
+
+                    public function updateMetaBatch(int $postId, array $data): bool
+                    {
+                        global $_test_data_manager_meta;
+                        if (!isset($_test_data_manager_meta[$this->postType])) {
+                            $_test_data_manager_meta[$this->postType] = [];
+                        }
+                        if (!isset($_test_data_manager_meta[$this->postType][$postId])) {
+                            $_test_data_manager_meta[$this->postType][$postId] = [];
+                        }
+                        foreach ($data as $key => $value) {
+                            $_test_data_manager_meta[$this->postType][$postId][$key] = $value;
+                        }
+                        return true;
+                    }
+
+                    public function find(int $postId): ?object
+                    {
+                        global $_test_posts, $_test_data_manager_meta;
+                        $post = $_test_posts[$postId] ?? null;
+                        if (!$post) {
+                            return null;
+                        }
+                        $meta = $_test_data_manager_meta[$this->postType][$postId] ?? [];
+                        return (object) array_merge(
+                            (array) $post,
+                            ['fields' => $meta]
+                        );
+                    }
+                };
+            }
         };
     }
 }
