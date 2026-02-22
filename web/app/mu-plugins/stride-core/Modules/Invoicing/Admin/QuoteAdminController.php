@@ -7,6 +7,7 @@ namespace Stride\Modules\Invoicing\Admin;
 use Stride\Domain\Money;
 use Stride\Domain\QuoteStatus;
 use Stride\Infrastructure\AbstractService;
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Invoicing\QuoteCPT;
 use Stride\Modules\Invoicing\QuoteRepository;
 use Stride\Modules\Invoicing\QuoteService;
@@ -28,6 +29,7 @@ final class QuoteAdminController extends AbstractService
         private readonly QuoteService $quoteService,
         private readonly QuoteRepository $repository,
         private readonly VoucherService $voucherService,
+        private readonly EditionRepository $editionRepository,
     ) {
         parent::__construct();
     }
@@ -490,8 +492,8 @@ final class QuoteAdminController extends AbstractService
             return;
         }
 
-        $price = (int) get_post_meta($editionId, 'price', true);
-        $priceNonMember = (int) get_post_meta($editionId, 'price_non_member', true);
+        $price = (int) $this->editionRepository->getField($editionId, 'price', 0);
+        $priceNonMember = (int) $this->editionRepository->getField($editionId, 'price_non_member', 0);
 
         // Use member price, or non-member if no member price
         $unitPrice = $price > 0 ? $price : ($priceNonMember > 0 ? $priceNonMember : 0);
@@ -616,8 +618,8 @@ final class QuoteAdminController extends AbstractService
     {
         switch ($column) {
             case 'quote_number':
-                $quoteNumber = get_post_meta($postId, 'quote_number', true);
-                $isLocked = (bool) get_post_meta($postId, 'locked', true);
+                $quoteNumber = $this->repository->getField($postId, 'quote_number', '');
+                $isLocked = (bool) $this->repository->getField($postId, 'locked', false);
                 if ($quoteNumber) {
                     echo '<strong>' . esc_html($quoteNumber) . '</strong>';
                     if ($isLocked) {
@@ -629,7 +631,7 @@ final class QuoteAdminController extends AbstractService
                 break;
 
             case 'customer':
-                $userId = (int) get_post_meta($postId, 'user_id', true);
+                $userId = (int) $this->repository->getField($postId, 'user_id', 0);
                 if ($userId) {
                     $user = get_userdata($userId);
                     if ($user) {
@@ -649,8 +651,8 @@ final class QuoteAdminController extends AbstractService
                 break;
 
             case 'total':
-                $total = (int) get_post_meta($postId, 'total', true);
-                $discount = (int) get_post_meta($postId, 'discount', true);
+                $total = (int) $this->repository->getField($postId, 'total', 0);
+                $discount = (int) $this->repository->getField($postId, 'discount', 0);
                 echo '<strong>' . esc_html(Money::cents($total)->format()) . '</strong>';
                 if ($discount > 0) {
                     echo '<br><span style="color:#00a32a;font-size:12px;">-' . esc_html(Money::cents($discount)->format()) . '</span>';
@@ -658,7 +660,7 @@ final class QuoteAdminController extends AbstractService
                 break;
 
             case 'status':
-                $status = get_post_meta($postId, 'status', true) ?: 'draft';
+                $status = $this->repository->getField($postId, 'status', 'draft');
                 $statusEnum = QuoteStatus::tryFrom($status) ?? QuoteStatus::Draft;
                 $config = $this->getStatusConfig($statusEnum);
                 echo '<span style="display:inline-block;padding:2px 8px;border-radius:3px;background:' . $config['bg'] . ';color:' . $config['color'] . ';font-size:12px;">';
@@ -667,7 +669,7 @@ final class QuoteAdminController extends AbstractService
                 break;
 
             case 'valid_until':
-                $validUntil = get_post_meta($postId, 'valid_until', true);
+                $validUntil = $this->repository->getField($postId, 'valid_until', '');
                 if ($validUntil) {
                     $isExpired = strtotime($validUntil) < time();
                     $style = $isExpired ? 'color:#d63638;' : '';

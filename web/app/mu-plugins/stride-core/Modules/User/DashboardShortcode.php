@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stride\Modules\User;
 
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Enrollment\EnrollmentService;
 
@@ -15,6 +16,7 @@ final class DashboardShortcode
     public function __construct(
         private readonly EnrollmentService $enrollment,
         private readonly EditionService $editions,
+        private readonly EditionRepository $editionRepository,
     ) {
         add_shortcode('stride_my_courses', [$this, 'renderMyCourses']);
     }
@@ -44,9 +46,9 @@ final class DashboardShortcode
                 continue;
             }
 
-            $startDate = get_post_meta($edition->ID, 'start_date', true);
-            $venue = get_post_meta($edition->ID, 'venue', true);
-            $status = get_post_meta($edition->ID, 'status', true);
+            $startDate = $this->editionRepository->getField($edition->ID, 'start_date', '');
+            $venue = $this->editionRepository->getField($edition->ID, 'venue', '');
+            $status = $this->editionRepository->getField($edition->ID, 'status', '');
 
             $output .= sprintf(
                 '<div>

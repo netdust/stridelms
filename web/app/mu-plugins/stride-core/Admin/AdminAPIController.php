@@ -11,7 +11,9 @@ use Stride\Infrastructure\BatchQueryHelper;
 use Stride\Modules\Attendance\AttendanceRepository;
 use Stride\Modules\Attendance\AttendanceTable;
 use Stride\Modules\Edition\EditionCPT;
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\SessionCPT;
+use Stride\Modules\Edition\SessionRepository;
 use Stride\Modules\Enrollment\RegistrationTable;
 use Stride\Modules\Invoicing\QuoteCPT;
 use Stride\Modules\Trajectory\TrajectoryCPT;
@@ -26,11 +28,11 @@ final class AdminAPIController extends AbstractService
 {
     private const NAMESPACE = 'stride/v1';
 
-    private AttendanceRepository $attendance;
-
-    public function __construct()
-    {
-        $this->attendance = new AttendanceRepository();
+    public function __construct(
+        private readonly AttendanceRepository $attendance,
+        private readonly EditionRepository $editionRepository,
+        private readonly SessionRepository $sessionRepository,
+    ) {
         parent::__construct();
     }
 
@@ -949,16 +951,16 @@ final class AdminAPIController extends AbstractService
             return new WP_Error('not_found', 'Edition not found', ['status' => 404]);
         }
 
-        // Get meta values
-        $startDate = get_post_meta($editionId, 'start_date', true);
-        $endDate = get_post_meta($editionId, 'end_date', true);
-        $venue = get_post_meta($editionId, 'venue', true);
-        $capacity = (int) get_post_meta($editionId, 'capacity', true);
-        $editionStatus = get_post_meta($editionId, 'status', true);
-        $courseId = (int) get_post_meta($editionId, 'course_id', true);
-        $price = (int) get_post_meta($editionId, 'price', true);
-        $priceNonMember = (int) get_post_meta($editionId, 'price_non_member', true);
-        $speakers = get_post_meta($editionId, 'speakers', true);
+        // Get meta values via repository
+        $startDate = $this->editionRepository->getField($editionId, 'start_date', '');
+        $endDate = $this->editionRepository->getField($editionId, 'end_date', '');
+        $venue = $this->editionRepository->getField($editionId, 'venue', '');
+        $capacity = (int) $this->editionRepository->getField($editionId, 'capacity', 0);
+        $editionStatus = $this->editionRepository->getField($editionId, 'status', '');
+        $courseId = (int) $this->editionRepository->getField($editionId, 'course_id', 0);
+        $price = (int) $this->editionRepository->getField($editionId, 'price', 0);
+        $priceNonMember = (int) $this->editionRepository->getField($editionId, 'price_non_member', 0);
+        $speakers = $this->editionRepository->getField($editionId, 'speakers', '');
 
         // Get course title
         $courseTitle = '';
@@ -979,31 +981,18 @@ final class AdminAPIController extends AbstractService
             ));
         }
 
-        // Get sessions
-        $sessions = $wpdb->get_results($wpdb->prepare(
-            "SELECT p.ID, p.post_title FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = 'edition_id'
-             WHERE p.post_type = %s AND p.post_status = 'publish' AND pm.meta_value = %d
-             ORDER BY p.ID ASC",
-            SessionCPT::POST_TYPE,
-            $editionId
-        ));
+        // Get sessions via repository
+        $sessions = $this->sessionRepository->findByEdition($editionId);
 
         $sessionItems = [];
         foreach ($sessions as $session) {
-            $sessionId = (int) $session->ID;
-            $sessionDate = get_post_meta($sessionId, 'date', true);
-            $startTime = get_post_meta($sessionId, 'start_time', true);
-            $endTime = get_post_meta($sessionId, 'end_time', true);
-            $sessionType = get_post_meta($sessionId, 'type', true);
-
             $sessionItems[] = [
-                'id' => $sessionId,
-                'title' => $session->post_title,
-                'date' => $sessionDate ?: null,
-                'startTime' => $startTime ?: null,
-                'endTime' => $endTime ?: null,
-                'type' => $sessionType ?: 'default',
+                'id' => (int) $session['id'],
+                'title' => $session['post_title'] ?? '',
+                'date' => $session['meta']['date'] ?? null,
+                'startTime' => $session['meta']['start_time'] ?? null,
+                'endTime' => $session['meta']['end_time'] ?? null,
+                'type' => $session['meta']['type'] ?? 'default',
             ];
         }
 

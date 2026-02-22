@@ -145,15 +145,10 @@ final class EnrollmentQuoteHandler
         // Check if user is member (simplified - check user meta)
         $isMember = (bool) get_user_meta($userId, 'is_member', true);
 
-        $field = $isMember ? 'price' : 'price_non_member';
-        $amount = (float) get_post_meta($editionId, $field, true);
+        // Use EditionService for proper meta access with prefix handling
+        $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
 
-        // Fall back to member price if non-member price not set
-        if (!$isMember && $amount === 0.0) {
-            $amount = (float) get_post_meta($editionId, 'price', true);
-        }
-
-        return Money::eur($amount);
+        return $editionService->getPrice($editionId, $isMember);
     }
 
     /**

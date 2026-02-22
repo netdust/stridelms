@@ -851,7 +851,7 @@ final class EditionAdminController extends AbstractService
     {
         switch ($column) {
             case 'course':
-                $courseId = (int) get_post_meta($postId, 'course_id', true);
+                $courseId = (int) $this->editionRepository->getField($postId, 'course_id', 0);
                 if ($courseId) {
                     $courseTitle = get_the_title($courseId);
                     $editUrl = get_edit_post_link($courseId);
@@ -866,8 +866,8 @@ final class EditionAdminController extends AbstractService
                 break;
 
             case 'start_date':
-                $startDate = get_post_meta($postId, 'start_date', true);
-                $endDate = get_post_meta($postId, 'end_date', true);
+                $startDate = $this->editionRepository->getField($postId, 'start_date', '');
+                $endDate = $this->editionRepository->getField($postId, 'end_date', '');
                 if ($startDate) {
                     echo esc_html(date_i18n('j M Y', strtotime($startDate)));
                     if ($endDate && $endDate !== $startDate) {
@@ -879,12 +879,12 @@ final class EditionAdminController extends AbstractService
                 break;
 
             case 'venue':
-                $venue = get_post_meta($postId, 'venue', true);
+                $venue = $this->editionRepository->getField($postId, 'venue', '');
                 echo $venue ? esc_html($venue) : '<span style="color:#999;">—</span>';
                 break;
 
             case 'capacity':
-                $capacity = (int) get_post_meta($postId, 'capacity', true);
+                $capacity = (int) $this->editionRepository->getField($postId, 'capacity', 0);
                 $registrations = $this->editionService->getRegisteredCount($postId);
 
                 if ($capacity > 0) {
@@ -897,7 +897,7 @@ final class EditionAdminController extends AbstractService
                 break;
 
             case 'status':
-                $status = get_post_meta($postId, 'status', true) ?: 'draft';
+                $status = $this->editionRepository->getField($postId, 'status', 'draft');
                 $statusLabels = [
                     'draft' => ['label' => __('Concept', 'stride'), 'color' => '#787c82'],
                     'open' => ['label' => __('Open', 'stride'), 'color' => '#00a32a'],
@@ -942,11 +942,12 @@ final class EditionAdminController extends AbstractService
 
         $orderby = $query->get('orderby');
 
+        // Meta keys use _ntdst_ prefix as defined in EditionCPT
         if ($orderby === 'start_date') {
-            $query->set('meta_key', 'start_date');
+            $query->set('meta_key', '_ntdst_start_date');
             $query->set('orderby', 'meta_value');
         } elseif ($orderby === 'status') {
-            $query->set('meta_key', 'status');
+            $query->set('meta_key', '_ntdst_status');
             $query->set('orderby', 'meta_value');
         }
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stride\Handlers;
 
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
@@ -110,10 +111,11 @@ final class ICalHandler
         $courseId = is_wp_error($edition) ? 0 : $editionService->getCourseId($session['edition_id']);
         $course = $courseId ? get_post($courseId) : null;
 
-        // Get venue from edition meta
+        // Get venue from edition via repository
         $venue = '';
         if (!is_wp_error($edition)) {
-            $venue = get_post_meta($edition->ID, 'venue', true) ?: '';
+            $editionRepository = ntdst_get(EditionRepository::class);
+            $venue = $editionRepository->getField($edition->ID, 'venue', '');
         }
 
         return [
