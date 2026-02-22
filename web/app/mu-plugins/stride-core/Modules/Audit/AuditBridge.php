@@ -1,0 +1,135 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Stride\Modules\Audit;
+
+use NTDST\Audit\AuditService;
+use Stride\Infrastructure\AbstractService;
+
+/**
+ * Bridge between Stride events and generic NTDST Audit plugin.
+ */
+final class AuditBridge extends AbstractService
+{
+    public static function metadata(): array
+    {
+        return [
+            'name' => 'Audit Bridge',
+            'description' => 'Connects Stride events to NTDST Audit plugin',
+            'priority' => 99,
+        ];
+    }
+
+    protected function getConfigSlug(): string
+    {
+        return 'audit_bridge';
+    }
+
+    protected function init(): void
+    {
+        // Registration events
+        add_action('stride/registration/created', [$this, 'onRegistrationCreated']);
+        add_action('stride/registration/cancelled', [$this, 'onRegistrationCancelled']);
+
+        // Attendance events
+        add_action('stride/attendance/marked', [$this, 'onAttendanceMarked']);
+
+        // LearnDash completion events
+        add_action('learndash_course_completed', [$this, 'onCourseCompleted'], 10, 2);
+    }
+
+    private function audit(): AuditService
+    {
+        return ntdst_get(AuditService::class);
+    }
+
+    public function onRegistrationCreated(array $data): void
+    {
+        $actorId = $data['enrolled_by'] ?? $data['user_id'] ?? null;
+
+        $this->audit()->record(
+            'registration',
+            (int) $data['registration_id'],
+            'registration.created',
+            $actorId ? (int) $actorId : null,
+            [
+                'user_id' => $data['user_id'] ?? null,
+                'edition_id' => $data['edition_id'] ?? null,
+                'enrollment_path' => $data['enrollment_path'] ?? 'individual',
+            ]
+        );
+    }
+
+    public function onRegistrationCancelled(array $data): void
+    {
+        $this->audit()->record(
+            'registration',
+            (int) $data['registration_id'],
+            'registration.cancelled',
+            null,
+            [
+                'user_id' => $data['user_id'] ?? null,
+                'edition_id' => $data['edition_id'] ?? null,
+            ]
+        );
+    }
+
+    public function onAttendanceMarked(array $data): void
+    {
+        $action = match ($data['status'] ?? 'present') {
+            'present' => 'attendance.marked_present',
+            'absent' => 'attendance.marked_absent',
+            'excused' => 'attendance.marked_excused',
+            default => 'attendance.marked',
+        };
+
+        $this->audit()->record(
+            'attendance',
+            (int) $data['attendance_id'],
+            $action,
+            isset($data['marked_by']) ? (int) $data['marked_by'] : null,
+            [
+                'session_id' => $data['session_id'] ?? null,
+                'user_id' => $data['user_id'] ?? null,
+                'edition_id' => $data['edition_id'] ?? null,
+                'status' => $data['status'] ?? null,
+            ]
+        );
+    }
+
+    public function onCourseCompleted(array $data, \WP_User $user): void
+    {
+        $courseId = $data['course']->ID ?? $data['course_id'] ?? 0;
+        $courseTitle = $data['course']->post_title ?? '';
+
+        $this->audit()->record(
+            'completion',
+            $courseId,
+            'completion.course_completed',
+            $user->ID,
+            [
+                'course_id' => $courseId,
+                'course_title' => $courseTitle,
+            ]
+        );
+
+        // Check if course has a certificate
+        if (function_exists('learndash_get_course_certificate_link')) {
+            $certificateLink = learndash_get_course_certificate_link($courseId, $user->ID);
+            if (!empty($certificateLink)) {
+                $this->audit()->record(
+                    'completion',
+                    $courseId,
+                    'completion.certificate_issued',
+                    $user->ID,
+                    [
+                        'course_id' => $courseId,
+                        'course_title' => $courseTitle,
+                        'certificate_link' => $certificateLink,
+                    ]
+                );
+            }
+        }
+    }
+}
