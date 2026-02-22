@@ -231,6 +231,101 @@ do_action('ntdst_auth_user_activated', $user_id);
 do_action('ntdst_auth_registration_complete', $user_id);
 ```
 
+## Testing
+
+### Acceptance Test Scenarios (Browser-Level)
+
+**VISITOR LOGIN FLOW:**
+
+```
+SCENARIO: Magic link request shows success regardless of email existence
+  GIVEN: I am on /login
+  WHEN: I enter any email and submit
+  THEN: I see "Check your inbox" message
+    AND: No indication whether email exists
+
+SCENARIO: Valid magic link logs user in
+  GIVEN: I have a valid magic link token
+  WHEN: I click the link
+  THEN: I am logged in and redirected to configured URL
+    AND: Auth cookie is set
+    AND: Token use count incremented in database
+
+SCENARIO: Expired magic link shows friendly error
+  GIVEN: I have an expired magic link (>15 min old)
+  WHEN: I click the link
+  THEN: I see "This link has expired" message
+    AND: I see option to request new link
+    AND: I am NOT logged in
+
+SCENARIO: Exhausted magic link (3 uses) shows error
+  GIVEN: I have a magic link that was used 3 times
+  WHEN: I click the link
+  THEN: I see "This link is no longer valid" message
+    AND: I am NOT logged in
+```
+
+**REGISTRATION FLOW:**
+
+```
+SCENARIO: Registration creates pending user
+  GIVEN: I am on /register
+  WHEN: I fill required fields (email, name) and accept terms
+  THEN: I see "Check your inbox" message
+    AND: User exists in database with ntdst_auth_activated=false
+    AND: Consent meta is stored with timestamp and IP
+
+SCENARIO: Activation link activates account
+  GIVEN: I registered and have activation token
+  WHEN: I click the activation link
+  THEN: I am logged in and see welcome message
+    AND: ntdst_auth_activated=true in database
+    AND: Welcome email is sent
+
+SCENARIO: Already registered email sends notification
+  GIVEN: user@example.com already exists
+  WHEN: I try to register with user@example.com
+  THEN: I see same "Check your inbox" message (no enumeration)
+    AND: "Already registered" email is sent to user
+```
+
+**ERROR FLOWS:**
+
+```
+SCENARIO: Rate limit blocks excessive requests
+  GIVEN: I sent 3 magic link requests in 15 minutes
+  WHEN: I try to send another
+  THEN: I see "Please wait before requesting another link"
+    AND: No email is sent
+
+SCENARIO: Invalid token shows error
+  GIVEN: I have a malformed or tampered token
+  WHEN: I visit /auth/verify/{bad_token}
+  THEN: I see "Invalid link" message
+    AND: I am NOT logged in
+```
+
+**ADMIN FLOW:**
+
+```
+SCENARIO: Admin can configure auth settings
+  GIVEN: I am logged in as admin
+  WHEN: I go to Settings → Authentication
+  THEN: I see tabs for URLs, Methods, Registration, Security
+    AND: I can save changes
+    AND: Changes persist after refresh
+```
+
+### Unit Test Coverage
+
+| Service | Key Test Cases |
+|---------|---------------|
+| `TokenService` | Token generation, hashing, verification, expiry, use counting |
+| `AuthService` | Magic link creation, password validation, session handling |
+| `RegistrationService` | User creation, field validation, activation |
+| `ConsentService` | Consent recording, version checking, GDPR export/erase |
+| `SettingsService` | Option retrieval, defaults, validation |
+
 ## Dependencies
 
 - ntdst-core (Router, Container, Mailer)
