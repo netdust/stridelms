@@ -114,6 +114,61 @@ namespace Stride\Modules\Audit {
     // Logger stub for audit module
 }
 
+// NTDST Audit plugin stub for testing
+namespace NTDST\Audit {
+    if (!class_exists(AuditService::class)) {
+        /**
+         * AuditService stub for testing
+         *
+         * This is a minimal stub that captures record() calls for assertions.
+         */
+        class AuditService
+        {
+            public array $recordedCalls = [];
+
+            public function record(
+                string $entityType,
+                int $entityId,
+                string $action,
+                ?int $actorId = null,
+                array $context = []
+            ): void {
+                $this->recordedCalls[] = [
+                    'entity_type' => $entityType,
+                    'entity_id' => $entityId,
+                    'action' => $action,
+                    'actor_id' => $actorId,
+                    'context' => $context,
+                ];
+            }
+
+            /**
+             * Reset recorded calls (for test isolation)
+             */
+            public function reset(): void
+            {
+                $this->recordedCalls = [];
+            }
+
+            /**
+             * Get all recorded calls
+             */
+            public function getRecordedCalls(): array
+            {
+                return $this->recordedCalls;
+            }
+
+            /**
+             * Get the last recorded call
+             */
+            public function getLastCall(): ?array
+            {
+                return end($this->recordedCalls) ?: null;
+            }
+        }
+    }
+}
+
 // Global namespace for ntdst_log function
 namespace {
     if (!function_exists('ntdst_log')) {

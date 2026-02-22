@@ -10,13 +10,15 @@
          failOnRisky="true"
          failOnWarning="true">
     <testsuites>
-        <!-- PHPUnit test directories will be added when new tests are written -->
-        <!-- Current testing uses Codeception for acceptance tests: tests/acceptance/ -->
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
     </testsuites>
 
     <source>
         <include>
             <directory>web/app/themes/stride/services</directory>
+            <directory>web/app/mu-plugins/stride-core</directory>
         </include>
     </source>
 
