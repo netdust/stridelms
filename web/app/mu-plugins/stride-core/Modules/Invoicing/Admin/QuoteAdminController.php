@@ -692,6 +692,7 @@ final class QuoteAdminController extends AbstractService
             QuoteStatus::Draft => ['color' => '#787c82', 'bg' => '#f0f0f1'],
             QuoteStatus::Sent => ['color' => '#2271b1', 'bg' => '#e5f0f8'],
             QuoteStatus::Exported => ['color' => '#00a32a', 'bg' => '#e6f4ea'],
+            QuoteStatus::Cancelled => ['color' => '#b32d2e', 'bg' => '#fcf0f1'],
         };
     }
 
