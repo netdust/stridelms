@@ -9,36 +9,44 @@ import type { Page } from '@playwright/test';
 
 /**
  * Test user credentials from seed data
+ *
+ * Email formats must match scripts/seed.php exactly:
+ * - Regular students: student1@seed.test (login: seed_student1)
+ * - E2E test users: seed_enrolled_user@seed.test, seed_completed_user@seed.test
+ * - Admin: seed_admin@seed.test
  */
 export const testUsers = {
   /**
    * Fresh student - not enrolled in any trajectories
+   * From seed.php: login=seed_student1, email=student1@seed.test
    */
   student: {
-    email: 'seed_student1@seed.test',
+    email: 'student1@seed.test',
     password: 'seedpass123',
-    firstName: 'Seed',
-    lastName: 'Student1',
+    firstName: 'Pieter',
+    lastName: 'Janssen',
   },
 
   /**
-   * User already enrolled in a trajectory
+   * User already enrolled in test-trajectory
+   * From seed.php: seed_enrolled_user@seed.test (enrolled in test-trajectory)
    */
   enrolledUser: {
-    email: 'seed_student2@seed.test',
+    email: 'seed_enrolled_user@seed.test',
     password: 'seedpass123',
-    firstName: 'Seed',
-    lastName: 'Student2',
+    firstName: 'Enrolled',
+    lastName: 'User',
   },
 
   /**
-   * User who has completed a trajectory
+   * User who has completed test-trajectory
+   * From seed.php: seed_completed_user@seed.test (completed test-trajectory)
    */
   completedUser: {
-    email: 'seed_student3@seed.test',
+    email: 'seed_completed_user@seed.test',
     password: 'seedpass123',
-    firstName: 'Seed',
-    lastName: 'Student3',
+    firstName: 'Completed',
+    lastName: 'User',
   },
 
   /**
@@ -47,8 +55,8 @@ export const testUsers = {
   admin: {
     email: 'seed_admin@seed.test',
     password: 'seedpass123',
-    firstName: 'Seed',
-    lastName: 'Admin',
+    firstName: 'Admin',
+    lastName: 'Seed',
   },
 };
 
