@@ -257,6 +257,11 @@ class Endpoints {
 
 		$data = apply_filters("ntdst/api_data/{$action}", [], $params);
 
+		// Handle WP_Error responses from filters
+		if (is_wp_error($data)) {
+			return $this->error($data->get_error_message(), $data->get_error_code());
+		}
+
 		if (empty($data)) {
 			return $this->error('Unknown action request', 'unknown_action');
 		}
