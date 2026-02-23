@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/Integration/bootstrap.php"
+         colors="true"
+         cacheDirectory=".phpunit.cache"
+         executionOrder="depends,defects"
+         requireCoverageMetadata="false"
+         beStrictAboutOutputDuringTests="true"
+         failOnRisky="true"
+         failOnWarning="true">
+    <testsuites>
+        <testsuite name="Integration">
+            <directory>tests/Integration</directory>
+            <exclude>tests/Integration/bootstrap.php</exclude>
+        </testsuite>
+    </testsuites>
+
+    <source>
+        <include>
+            <directory>web/app/themes/stride/services</directory>
+            <directory>web/app/mu-plugins/stride-core</directory>
+        </include>
+    </source>
+
+    <php>
+        <env name="STRIDE_TESTING" value="1"/>
+        <env name="STRIDE_INTEGRATION_TESTING" value="1"/>
+    </php>
+</phpunit>

@@ -8,6 +8,7 @@ use Stride\Domain\DiscountType;
 use Stride\Domain\Money;
 use Stride\Domain\VoucherStatus;
 use Stride\Infrastructure\AbstractService;
+use Stride\Modules\Invoicing\Helpers\VoucherCodeGenerator;
 use WP_Error;
 use WP_Post;
 
@@ -276,11 +277,19 @@ final class VoucherService extends AbstractService
         $data = is_array($voucher) ? $voucher : (array) $voucher;
 
         // Flatten fields to top level if present (NTDST_Data_Model returns formatted fields)
-        // Use 'fields' first (formatted/unprefixed), fallback to 'meta' for legacy batch query results
+        // Use 'fields' first (formatted/unprefixed), fallback to 'meta' (strip prefix)
         if (isset($data['fields']) && is_array($data['fields'])) {
             $data = array_merge($data, $data['fields']);
         } elseif (isset($data['meta']) && is_array($data['meta'])) {
-            $data = array_merge($data, $data['meta']);
+            // Strip _ntdst_ prefix from meta keys for consistent access
+            $unprefixedMeta = [];
+            foreach ($data['meta'] as $key => $value) {
+                $unprefixedKey = str_starts_with($key, '_ntdst_')
+                    ? substr($key, 7)  // strlen('_ntdst_') = 7
+                    : $key;
+                $unprefixedMeta[$unprefixedKey] = $value;
+            }
+            $data = array_merge($data, $unprefixedMeta);
         }
 
         // Parse enums

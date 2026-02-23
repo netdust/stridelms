@@ -10,6 +10,7 @@ namespace Stride\Domain;
 enum RegistrationStatus: string
 {
     case Confirmed = 'confirmed';
+    case Completed = 'completed';
     case Cancelled = 'cancelled';
     case Waitlist = 'waitlist';
     case Interest = 'interest';
@@ -19,7 +20,8 @@ enum RegistrationStatus: string
      */
     public function countsTowardCapacity(): bool
     {
-        return $this === self::Confirmed;
+        // Completed registrations still count - the spot was used
+        return in_array($this, [self::Confirmed, self::Completed], true);
     }
 
     /**
@@ -27,7 +29,8 @@ enum RegistrationStatus: string
      */
     public function hasAccess(): bool
     {
-        return $this === self::Confirmed;
+        // Both confirmed and completed users have access to course content
+        return in_array($this, [self::Confirmed, self::Completed], true);
     }
 
     /**
@@ -37,6 +40,7 @@ enum RegistrationStatus: string
     {
         return match ($this) {
             self::Confirmed => 'Bevestigd',
+            self::Completed => 'Afgerond',
             self::Cancelled => 'Geannuleerd',
             self::Waitlist => 'Wachtlijst',
             self::Interest => 'Interesse',

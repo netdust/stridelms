@@ -187,7 +187,7 @@ final class EditionService extends AbstractService implements EditionQueryInterf
      */
     public function onRegistrationCancelled(array $data): void
     {
-        $editionId = $data['edition_id'] ?? 0;
+        $editionId = (int) ($data['edition_id'] ?? 0);
         $currentStatus = $this->getStatus($editionId);
 
         if ($editionId && $currentStatus === EditionStatus::Full) {
