@@ -9,6 +9,12 @@
  */
 
 defined('ABSPATH') || exit;
+
+use Stride\Admin\StrideSettingsService;
+
+// Get configurable URL slugs
+$trajectorySlug = StrideSettingsService::getTrajectorySlug();
+$editionSlug = StrideSettingsService::getEditionSlug();
 ?>
 
 <nav class="stride-desktop-nav">
@@ -31,11 +37,11 @@ defined('ABSPATH') || exit;
 
             <!-- Main Menu -->
             <ul class="stride-desktop-nav__menu">
-                <li<?php echo is_page('cursussen') || is_singular('sfwd-courses') ? ' class="uk-active"' : ''; ?>>
-                    <a href="<?php echo esc_url(home_url('/cursussen/')); ?>"><?php esc_html_e('Cursussen', 'stride'); ?></a>
+                <li<?php echo is_page($editionSlug) || is_singular('sfwd-courses') || is_singular('vad_edition') ? ' class="uk-active"' : ''; ?>>
+                    <a href="<?php echo esc_url(home_url('/' . $editionSlug . '/')); ?>"><?php esc_html_e('Cursussen', 'stride'); ?></a>
                 </li>
-                <li<?php echo is_page('trajecten') || is_singular('trajectory') ? ' class="uk-active"' : ''; ?>>
-                    <a href="<?php echo esc_url(home_url('/trajecten/')); ?>"><?php esc_html_e('Trajecten', 'stride'); ?></a>
+                <li<?php echo is_page($trajectorySlug) || is_singular('vad_trajectory') ? ' class="uk-active"' : ''; ?>>
+                    <a href="<?php echo esc_url(home_url('/' . $trajectorySlug . '/')); ?>"><?php esc_html_e('Trajecten', 'stride'); ?></a>
                 </li>
             </ul>
 
@@ -73,7 +79,7 @@ defined('ABSPATH') || exit;
                                 </li>
                                 <li class="uk-nav-divider"></li>
                                 <li>
-                                    <a href="<?php echo esc_url(wp_logout_url(home_url())); ?>">
+                                    <a href="<?php echo esc_url(home_url('/auth/logout')); ?>">
                                         <span uk-icon="icon: sign-out; ratio: 0.9"></span>
                                         <?php esc_html_e('Uitloggen', 'stride'); ?>
                                     </a>

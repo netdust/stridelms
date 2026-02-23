@@ -17,12 +17,20 @@
 
 defined('ABSPATH') || exit;
 
+use Stride\Admin\StrideSettingsService;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Enrollment\EnrollmentService;
 use Stride\Modules\Trajectory\TrajectoryService;
 use Stride\Domain\SessionType;
 use Stride\Domain\Money;
+
+// Include header to load scripts (including ntdstAPI)
+get_header();
+
+// Get configurable URL slugs
+$trajectorySlug = StrideSettingsService::getTrajectorySlug();
+$editionSlug = StrideSettingsService::getEditionSlug();
 
 // ============================================================================
 // UNIFIED ITEM DETECTION
@@ -60,8 +68,8 @@ $userId = $user->ID;
 
 if (!is_user_logged_in()) {
     $loginReturnUrl = $type === 'trajectory'
-        ? home_url('/trajecten/' . ($item->post_name ?? '') . '/inschrijving/')
-        : add_query_arg('edition', $itemId, home_url('/inschrijven/'));
+        ? home_url('/' . $trajectorySlug . '/' . ($item->post_name ?? '') . '/inschrijving/')
+        : home_url('/' . $editionSlug . '/' . ($item->post_name ?? $itemId) . '/inschrijving/');
     ?>
     <div class="stride-enrollment uk-width-xlarge uk-margin-auto">
         <div class="stride-card uk-text-center uk-padding-large">
@@ -85,6 +93,7 @@ if (!is_user_logged_in()) {
         </div>
     </div>
     <?php
+    get_footer();
     return;
 }
 
@@ -94,8 +103,8 @@ if (!is_user_logged_in()) {
 
 if (!$itemId || !$item) {
     $catalogUrl = $type === 'trajectory'
-        ? home_url('/trajecten/')
-        : home_url('/cursussen/');
+        ? home_url('/' . $trajectorySlug . '/')
+        : home_url('/' . $editionSlug . '/');
     $itemLabel = $type === 'trajectory'
         ? __('traject', 'stride')
         : __('cursus', 'stride');
@@ -115,6 +124,7 @@ if (!$itemId || !$item) {
         </div>
     </div>
     <?php
+    get_footer();
     return;
 }
 
@@ -156,6 +166,7 @@ if ($type === 'trajectory') {
             </div>
         </div>
         <?php
+        get_footer();
         return;
     }
 
@@ -175,12 +186,13 @@ if ($type === 'trajectory') {
                 <p class="uk-text-muted uk-margin-bottom">
                     <?php esc_html_e('Inschrijving voor dit traject is momenteel niet mogelijk.', 'stride'); ?>
                 </p>
-                <a href="<?php echo esc_url(home_url('/trajecten/')); ?>" class="uk-button uk-button-default">
+                <a href="<?php echo esc_url(home_url('/' . $trajectorySlug . '/')); ?>" class="uk-button uk-button-default">
                     <?php esc_html_e('Bekijk andere trajecten', 'stride'); ?>
                 </a>
             </div>
         </div>
         <?php
+        get_footer();
         return;
     }
 
@@ -189,7 +201,7 @@ if ($type === 'trajectory') {
     $heroImage = get_the_post_thumbnail_url($itemId, 'medium');
     $backUrl = get_permalink($itemId);
     $backLabel = __('Terug naar traject', 'stride');
-    $catalogUrl = home_url('/trajecten/');
+    $catalogUrl = home_url('/' . $trajectorySlug . '/');
     $successUrl = home_url('/mijn-account/mijn-trajecten/');
     $price = Money::eur($trajectoryData['price']);
     $priceNonMember = Money::eur($trajectoryData['price_non_member']);
@@ -216,6 +228,7 @@ if ($type === 'trajectory') {
             </div>
         </div>
         <?php
+        get_footer();
         return;
     }
 
@@ -237,6 +250,7 @@ if ($type === 'trajectory') {
             </div>
         </div>
         <?php
+        get_footer();
         return;
     }
 
@@ -252,12 +266,13 @@ if ($type === 'trajectory') {
                 <p class="uk-text-muted uk-margin-bottom">
                     <?php esc_html_e('Inschrijving voor deze cursus is momenteel niet mogelijk. De cursus is volzet of de inschrijving is gesloten.', 'stride'); ?>
                 </p>
-                <a href="<?php echo esc_url(home_url('/cursussen/')); ?>" class="uk-button uk-button-default">
+                <a href="<?php echo esc_url(home_url('/' . $editionSlug . '/')); ?>" class="uk-button uk-button-default">
                     <?php esc_html_e('Bekijk andere cursussen', 'stride'); ?>
                 </a>
             </div>
         </div>
         <?php
+        get_footer();
         return;
     }
 
@@ -268,7 +283,7 @@ if ($type === 'trajectory') {
     $heroImage = $courseId ? get_the_post_thumbnail_url($courseId, 'medium') : null;
     $backUrl = get_permalink($itemId);
     $backLabel = __('Terug naar cursus', 'stride');
-    $catalogUrl = home_url('/cursussen/');
+    $catalogUrl = home_url('/' . $editionSlug . '/');
     $successUrl = home_url('/mijn-account/mijn-cursussen/');
 
     // Pricing
@@ -722,3 +737,5 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+
+<?php get_footer(); ?>

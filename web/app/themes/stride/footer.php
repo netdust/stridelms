@@ -1,4 +1,10 @@
     <?php
+    use Stride\Admin\StrideSettingsService;
+
+    // Get configurable URL slugs
+    $trajectorySlug = StrideSettingsService::getTrajectorySlug();
+    $editionSlug = StrideSettingsService::getEditionSlug();
+
     // Full-width templates handle their own layout
     // Check for: front page, edition/trajectory singles, and dashboard page templates
     $page_template = is_page() ? get_page_template_slug() : '';
@@ -50,10 +56,10 @@
                 <div class="stride-footer__column">
                     <h4 class="stride-footer__column-title"><?php esc_html_e('Cursussen', 'stride'); ?></h4>
                     <ul class="stride-footer__links">
-                        <li><a href="<?php echo esc_url(home_url('/cursussen/')); ?>"><?php esc_html_e('Alle cursussen', 'stride'); ?></a></li>
-                        <li><a href="<?php echo esc_url(home_url('/cursussen/?type=classroom')); ?>"><?php esc_html_e('Klassikaal', 'stride'); ?></a></li>
-                        <li><a href="<?php echo esc_url(home_url('/cursussen/?type=online')); ?>"><?php esc_html_e('Online', 'stride'); ?></a></li>
-                        <li><a href="<?php echo esc_url(home_url('/trajecten/')); ?>"><?php esc_html_e('Leertrajecten', 'stride'); ?></a></li>
+                        <li><a href="<?php echo esc_url(home_url('/' . $editionSlug . '/')); ?>"><?php esc_html_e('Alle cursussen', 'stride'); ?></a></li>
+                        <li><a href="<?php echo esc_url(home_url('/' . $editionSlug . '/?type=classroom')); ?>"><?php esc_html_e('Klassikaal', 'stride'); ?></a></li>
+                        <li><a href="<?php echo esc_url(home_url('/' . $editionSlug . '/?type=online')); ?>"><?php esc_html_e('Online', 'stride'); ?></a></li>
+                        <li><a href="<?php echo esc_url(home_url('/' . $trajectorySlug . '/')); ?>"><?php esc_html_e('Leertrajecten', 'stride'); ?></a></li>
                     </ul>
                 </div>
 

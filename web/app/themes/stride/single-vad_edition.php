@@ -8,6 +8,7 @@
  * @package stride
  */
 
+use Stride\Admin\StrideSettingsService;
 use Stride\Domain\EditionStatus;
 use Stride\Domain\SessionType;
 use Stride\Modules\Edition\EditionService;
@@ -15,6 +16,9 @@ use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Enrollment\EnrollmentService;
 
 get_header();
+
+// Get configurable URL slugs
+$editionSlug = StrideSettingsService::getEditionSlug();
 
 // Get services
 $editionService = ntdst_get(EditionService::class);
@@ -111,7 +115,7 @@ if (have_posts()) :
                 <nav class="uk-margin-bottom">
                     <ul class="uk-breadcrumb uk-breadcrumb-light">
                         <li><a href="<?php echo esc_url(home_url('/')); ?>"><?php esc_html_e('Home', 'stride'); ?></a></li>
-                        <li><a href="<?php echo esc_url(home_url('/cursussen/')); ?>"><?php esc_html_e('Cursussen', 'stride'); ?></a></li>
+                        <li><a href="<?php echo esc_url(home_url('/' . $editionSlug . '/')); ?>"><?php esc_html_e('Cursussen', 'stride'); ?></a></li>
                         <?php if ($course): ?>
                             <li><a href="<?php echo esc_url(get_permalink($courseId)); ?>"><?php echo esc_html($courseTitle); ?></a></li>
                         <?php endif; ?>
@@ -414,7 +418,7 @@ if (have_posts()) :
                                     <?php esc_html_e('Neem contact op voor de wachtlijst', 'stride'); ?>
                                 </p>
                             <?php elseif ($canEnroll): ?>
-                                <a href="<?php echo esc_url(add_query_arg('edition', $editionId, home_url('/inschrijven/'))); ?>" class="stride-course-action-btn uk-button uk-button-primary">
+                                <a href="<?php echo esc_url(home_url('/' . $editionSlug . '/' . get_post_field('post_name', $editionId) . '/inschrijving/')); ?>" class="stride-course-action-btn uk-button uk-button-primary">
                                     <?php esc_html_e('Inschrijven', 'stride'); ?>
                                 </a>
                             <?php else: ?>
@@ -452,7 +456,7 @@ if (have_posts()) :
                 <?php elseif (!$hasSpots): ?>
                     <span class="uk-text-warning"><?php esc_html_e('Volzet', 'stride'); ?></span>
                 <?php elseif ($canEnroll): ?>
-                    <a href="<?php echo esc_url(add_query_arg('edition', $editionId, home_url('/inschrijven/'))); ?>" class="uk-button uk-button-primary uk-button-small">
+                    <a href="<?php echo esc_url(home_url('/' . $editionSlug . '/' . get_post_field('post_name', $editionId) . '/inschrijving/')); ?>" class="uk-button uk-button-primary uk-button-small">
                         <?php esc_html_e('Inschrijven', 'stride'); ?>
                     </a>
                 <?php else: ?>

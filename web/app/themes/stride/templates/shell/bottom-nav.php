@@ -10,10 +10,16 @@
 
 defined('ABSPATH') || exit;
 
+use Stride\Admin\StrideSettingsService;
+
 // Only show for logged-in users
 if (!is_user_logged_in()) {
     return;
 }
+
+// Get configurable URL slugs
+$trajectorySlug = StrideSettingsService::getTrajectorySlug();
+$editionSlug = StrideSettingsService::getEditionSlug();
 
 // Define navigation items
 $nav_items = [
@@ -24,16 +30,16 @@ $nav_items = [
         'match' => '/mijn-account/$',
     ],
     [
-        'url'   => home_url('/cursussen/'),
+        'url'   => home_url('/' . $editionSlug . '/'),
         'icon'  => 'album',
         'label' => __('Cursussen', 'stride'),
-        'match' => '/cursussen/',
+        'match' => '/' . $editionSlug . '/',
     ],
     [
         'url'   => home_url('/mijn-account/mijn-trajecten/'),
         'icon'  => 'git-branch',
         'label' => __('Traject', 'stride'),
-        'match' => '/trajecten/',
+        'match' => '/' . $trajectorySlug . '/',
     ],
     [
         'url'   => home_url('/mijn-account/mijn-agenda/'),

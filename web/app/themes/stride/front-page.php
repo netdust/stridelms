@@ -10,9 +10,14 @@
 
 defined('ABSPATH') || exit;
 
+use Stride\Admin\StrideSettingsService;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionService;
 use Stride\Domain\SessionType;
+
+// Get configurable URL slugs
+$trajectorySlug = StrideSettingsService::getTrajectorySlug();
+$editionSlug = StrideSettingsService::getEditionSlug();
 
 // Services
 $editionService = ntdst_get(EditionService::class);
@@ -134,7 +139,7 @@ get_header();
                         <?php esc_html_e('Bekijk cursussen', 'stride'); ?>
                         <span uk-icon="icon: arrow-down; ratio: 0.9"></span>
                     </a>
-                    <a href="<?php echo esc_url(home_url('/trajecten/')); ?>" class="uk-button uk-button-default">
+                    <a href="<?php echo esc_url(home_url('/' . $trajectorySlug . '/')); ?>" class="uk-button uk-button-default">
                         <?php esc_html_e('Leertrajecten', 'stride'); ?>
                     </a>
                 </div>
@@ -304,7 +309,7 @@ get_header();
 
             <!-- View All Button -->
             <div class="stride-course-grid__footer">
-                <a href="<?php echo esc_url(home_url('/cursussen/')); ?>" class="uk-button uk-button-default uk-button-large">
+                <a href="<?php echo esc_url(home_url('/' . $editionSlug . '/')); ?>" class="uk-button uk-button-default uk-button-large">
                     <?php esc_html_e('Bekijk alle cursussen', 'stride'); ?>
                     <span uk-icon="icon: arrow-right; ratio: 0.9"></span>
                 </a>
@@ -362,7 +367,7 @@ get_header();
                         <li><?php esc_html_e('Meerdere cursussen die op elkaar aansluiten', 'stride'); ?></li>
                         <li><?php esc_html_e('Bouw stap voor stap aan je expertise', 'stride'); ?></li>
                     </ul>
-                    <a href="<?php echo esc_url(home_url('/trajecten/')); ?>" class="uk-button uk-button-default">
+                    <a href="<?php echo esc_url(home_url('/' . $trajectorySlug . '/')); ?>" class="uk-button uk-button-default">
                         <?php esc_html_e('Bekijk trajecten', 'stride'); ?>
                     </a>
                 </div>
@@ -484,7 +489,7 @@ get_header();
                     <?php esc_html_e('Bekijk cursussen', 'stride'); ?>
                     <span uk-icon="icon: arrow-up; ratio: 0.9"></span>
                 </a>
-                <a href="<?php echo esc_url(home_url('/trajecten/')); ?>" class="uk-button stride-cta__button stride-cta__button--outline">
+                <a href="<?php echo esc_url(home_url('/' . $trajectorySlug . '/')); ?>" class="uk-button stride-cta__button stride-cta__button--outline">
                     <?php esc_html_e('Bekijk trajecten', 'stride'); ?>
                 </a>
             </div>
