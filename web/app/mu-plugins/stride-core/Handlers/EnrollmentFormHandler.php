@@ -476,16 +476,13 @@ final class EnrollmentFormHandler
     }
 
     /**
-     * Sanitize edition enrollment form data.
+     * Sanitize common billing fields.
      *
-     * @return array<string, mixed>
+     * @return array<string, string>
      */
-    private function sanitizeEnrollmentData(array $params, int $userId, int $editionId): array
+    private function sanitizeBillingFields(array $params): array
     {
         return [
-            'edition_id' => $editionId,
-            'user_id' => $userId,
-            'enrollment_type' => sanitize_text_field($params['enrollment_type'] ?? 'self'),
             'first_name' => sanitize_text_field($params['first_name'] ?? ''),
             'last_name' => sanitize_text_field($params['last_name'] ?? ''),
             'email' => sanitize_email($params['email'] ?? ''),
@@ -498,10 +495,26 @@ final class EnrollmentFormHandler
             'gln_peppol' => sanitize_text_field($params['gln_peppol'] ?? ''),
             'invoice_email' => sanitize_email($params['invoice_email'] ?? ''),
             'po_number' => sanitize_text_field($params['po_number'] ?? ''),
+        ];
+    }
+
+    /**
+     * Sanitize edition enrollment form data.
+     *
+     * @return array<string, mixed>
+     */
+    private function sanitizeEnrollmentData(array $params, int $userId, int $editionId): array
+    {
+        $billing = $this->sanitizeBillingFields($params);
+
+        return array_merge($billing, [
+            'edition_id' => $editionId,
+            'user_id' => $userId,
+            'enrollment_type' => sanitize_text_field($params['enrollment_type'] ?? 'self'),
             'voucher_code' => sanitize_text_field($params['voucher_code'] ?? ''),
             'selected_sessions' => array_map('intval', $params['selected_sessions'] ?? []),
             'terms_accepted' => (bool) ($params['terms_accepted'] ?? false),
-        ];
+        ]);
     }
 
     /**
@@ -511,26 +524,13 @@ final class EnrollmentFormHandler
      */
     private function sanitizeTrajectoryBillingData(array $params): array
     {
-        return [
-            'first_name' => sanitize_text_field($params['first_name'] ?? ''),
-            'last_name' => sanitize_text_field($params['last_name'] ?? ''),
-            'email' => sanitize_email($params['email'] ?? ''),
-            'phone' => sanitize_text_field($params['phone'] ?? ''),
-            'company' => sanitize_text_field($params['company'] ?? ''),
-            'vat_number' => sanitize_text_field($params['vat_number'] ?? ''),
-            'address' => sanitize_text_field($params['address'] ?? ''),
-            'postal_code' => sanitize_text_field($params['postal_code'] ?? ''),
-            'city' => sanitize_text_field($params['city'] ?? ''),
-            'gln_peppol' => sanitize_text_field($params['gln_peppol'] ?? ''),
-            'invoice_email' => sanitize_email($params['invoice_email'] ?? ''),
-            'po_number' => sanitize_text_field($params['po_number'] ?? ''),
-        ];
+        return $this->sanitizeBillingFields($params);
     }
 
     /**
-     * Validate edition enrollment data.
+     * Validate required billing fields.
      */
-    private function validateEnrollmentData(array $data): true|WP_Error
+    private function validateRequiredBillingFields(array $data, bool $termsAccepted): true|WP_Error
     {
         if (empty($data['first_name']) || empty($data['last_name'])) {
             return new WP_Error('validation_error', __('Voornaam en achternaam zijn vereist.', 'stride'));
@@ -540,11 +540,19 @@ final class EnrollmentFormHandler
             return new WP_Error('validation_error', __('E-mailadres is vereist.', 'stride'));
         }
 
-        if (!$data['terms_accepted']) {
+        if (!$termsAccepted) {
             return new WP_Error('validation_error', __('Je moet akkoord gaan met de voorwaarden.', 'stride'));
         }
 
         return true;
+    }
+
+    /**
+     * Validate edition enrollment data.
+     */
+    private function validateEnrollmentData(array $data): true|WP_Error
+    {
+        return $this->validateRequiredBillingFields($data, $data['terms_accepted'] ?? false);
     }
 
     /**
@@ -555,19 +563,7 @@ final class EnrollmentFormHandler
      */
     private function validateTrajectoryEnrollmentData(array $billingData, array $params): true|WP_Error
     {
-        if (empty($billingData['first_name']) || empty($billingData['last_name'])) {
-            return new WP_Error('validation_error', __('Voornaam en achternaam zijn vereist.', 'stride'));
-        }
-
-        if (empty($billingData['email'])) {
-            return new WP_Error('validation_error', __('E-mailadres is vereist.', 'stride'));
-        }
-
-        if (empty($params['terms_accepted'])) {
-            return new WP_Error('validation_error', __('Je moet akkoord gaan met de voorwaarden.', 'stride'));
-        }
-
-        return true;
+        return $this->validateRequiredBillingFields($billingData, (bool) ($params['terms_accepted'] ?? false));
     }
 
     /**
