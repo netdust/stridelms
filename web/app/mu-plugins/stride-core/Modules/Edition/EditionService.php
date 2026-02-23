@@ -40,6 +40,8 @@ final class EditionService extends AbstractService implements EditionQueryInterf
 
     protected function init(): void
     {
+        EditionCPT::register();
+
         // Register hooks for capacity updates
         add_action('stride/registration/created', [$this, 'onRegistrationCreated']);
         add_action('stride/registration/cancelled', [$this, 'onRegistrationCancelled']);

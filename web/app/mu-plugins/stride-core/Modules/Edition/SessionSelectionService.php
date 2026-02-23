@@ -4,41 +4,20 @@ declare(strict_types=1);
 
 namespace Stride\Modules\Edition;
 
-use Stride\Infrastructure\AbstractService;
 use WP_Error;
 
 /**
  * Session selection with deadline enforcement.
  *
  * Handles user picking sessions from available slots.
+ * Plain class - no hooks, resolved via container when needed.
  */
-final class SessionSelectionService extends AbstractService
+final class SessionSelectionService
 {
     public function __construct(
         private readonly SessionService $sessions,
         private readonly EditionRepository $editions,
-    ) {
-        parent::__construct();
-    }
-
-    public static function metadata(): array
-    {
-        return [
-            'name' => 'Session Selection Service',
-            'description' => 'Handles session selection with deadlines',
-            'priority' => 16,
-        ];
-    }
-
-    protected function getConfigSlug(): string
-    {
-        return 'session_selection';
-    }
-
-    protected function init(): void
-    {
-        // Future: lock expired selections
-    }
+    ) {}
 
     // === Selection Queries ===
 

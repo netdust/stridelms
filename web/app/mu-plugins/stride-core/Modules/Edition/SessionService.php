@@ -36,7 +36,7 @@ final class SessionService extends AbstractService
 
     protected function init(): void
     {
-        // Future: hooks for session events
+        SessionCPT::register();
     }
 
     // === CRUD ===
