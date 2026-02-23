@@ -126,14 +126,11 @@ add_action('wp_head', function () {
 
 /**
  * Send no-cache headers in development environment
- * This prevents the need for hard refresh during development
  */
 if (defined('WP_DEBUG') && WP_DEBUG) {
     add_action('send_headers', function () {
         if (!is_admin()) {
-            header('Cache-Control: no-cache, no-store, must-revalidate');
-            header('Pragma: no-cache');
-            header('Expires: 0');
+            nocache_headers();
         }
     });
 }

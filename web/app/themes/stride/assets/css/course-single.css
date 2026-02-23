@@ -68,6 +68,11 @@
     color: var(--stride-secondary);
 }
 
+.stride-course-hero__badge--price {
+    background: var(--stride-warning-light, #FEF3CD);
+    color: var(--stride-warning, #856404);
+}
+
 .stride-course-hero__lessons {
     display: flex;
     align-items: center;
@@ -257,6 +262,86 @@
 
 .stride-certificate-info p {
     margin: 0 0 var(--stride-space-sm);
+}
+
+/* ========================================
+   EDITION LIST
+   ======================================== */
+
+.stride-edition-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.stride-edition-list__item {
+    border-bottom: 1px solid var(--stride-border-light);
+}
+
+.stride-edition-list__item:last-child {
+    border-bottom: none;
+}
+
+.stride-edition-list__item a {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--stride-space-md) var(--stride-space-sm);
+    color: var(--stride-text);
+    transition: background-color 0.15s ease;
+}
+
+.stride-edition-list__item a:hover {
+    background: var(--stride-bg);
+}
+
+.stride-edition-list__title {
+    font-size: var(--stride-font-size-base);
+    font-weight: 500;
+}
+
+.stride-edition-list__date {
+    font-size: var(--stride-font-size-sm);
+    color: var(--stride-text-muted);
+}
+
+/* ========================================
+   HERO ACTIONS
+   ======================================== */
+
+.stride-course-hero__actions {
+    margin-top: var(--stride-space-lg);
+}
+
+.stride-course-hero__login-hint {
+    margin-top: var(--stride-space-sm);
+}
+
+.stride-course-hero__login-hint a {
+    color: var(--stride-primary);
+    font-weight: 500;
+}
+
+.stride-course-hero__login-hint a:hover {
+    color: var(--stride-primary-hover);
+}
+
+/* ========================================
+   COURSE MATERIALS
+   ======================================== */
+
+.stride-course-materials {
+    line-height: var(--stride-line-height-relaxed);
+}
+
+.stride-course-materials ul,
+.stride-course-materials ol {
+    margin: var(--stride-space-md) 0;
+    padding-left: var(--stride-space-lg);
+}
+
+.stride-course-materials li {
+    margin-bottom: var(--stride-space-xs);
 }
 
 /* ========================================

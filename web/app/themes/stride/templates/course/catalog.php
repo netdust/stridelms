@@ -2,7 +2,10 @@
 /**
  * Course Catalog Template
  *
- * Displays upcoming editions as course cards with pricing, dates, and enrollment status.
+ * Displays:
+ * - Upcoming editions (scheduled classroom/webinar courses) with dates and enrollment
+ * - Online courses (always available e-learning) from LearnDash
+ *
  * Public page - no login required.
  *
  * @package stride
@@ -12,14 +15,28 @@ defined('ABSPATH') || exit;
 
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionService;
-use Stride\Domain\SessionType;
+use Stride\Domain\Money;
 
 // Services
 $editionService = ntdst_get(EditionService::class);
 $sessionService = ntdst_get(SessionService::class);
 
-// Get upcoming editions (limit 50 for initial load)
+// Get upcoming editions (for scheduled courses)
 $editions = $editionService->getUpcomingEditions(50);
+
+// Get online courses (always available, no editions needed)
+$onlineCourses = get_posts([
+    'post_type' => 'sfwd-courses',
+    'post_status' => 'publish',
+    'posts_per_page' => 50,
+    'meta_query' => [
+        [
+            'key' => '_course_type',
+            'value' => 'online',
+            'compare' => '=',
+        ],
+    ],
+]);
 
 // Current filter (from query string)
 $currentFilter = sanitize_text_field($_GET['type'] ?? 'all');
@@ -29,25 +46,6 @@ $dutchMonths = [
     1 => 'jan', 2 => 'feb', 3 => 'mrt', 4 => 'apr', 5 => 'mei', 6 => 'jun',
     7 => 'jul', 8 => 'aug', 9 => 'sep', 10 => 'okt', 11 => 'nov', 12 => 'dec'
 ];
-
-/**
- * Determine edition type based on its sessions.
- * If it has any in_person or webinar sessions, it's "classroom".
- * Otherwise it's "online".
- */
-function stride_get_edition_type(SessionService $sessionService, int $editionId): string
-{
-    $sessions = $sessionService->getSessionsForEdition($editionId);
-
-    foreach ($sessions as $session) {
-        $type = $session['type'] ?? 'online';
-        if (in_array($type, [SessionType::InPerson->value, SessionType::Webinar->value], true)) {
-            return 'classroom';
-        }
-    }
-
-    return 'online';
-}
 
 /**
  * Format date for display (e.g., "15 mrt 2026").
@@ -71,8 +69,10 @@ function stride_format_date(string $dateString, array $dutchMonths): string
     return "{$day} {$month} {$year}";
 }
 
-// Enrich editions with computed data
-$enrichedEditions = [];
+// Build unified catalog items array
+$catalogItems = [];
+
+// 1. Add upcoming editions (classroom/scheduled courses)
 foreach ($editions as $edition) {
     $editionId = (int) ($edition['id'] ?? $edition['ID'] ?? 0);
     $meta = $edition['meta'] ?? [];
@@ -93,9 +93,6 @@ foreach ($editions as $edition) {
     // Get thumbnail
     $thumbnail = $courseId ? get_the_post_thumbnail_url($courseId, 'stride_course_card') : null;
 
-    // Determine type
-    $type = stride_get_edition_type($sessionService, $editionId);
-
     // Get dates (meta keys are prefixed)
     $startDate = $meta['_ntdst_start_date'] ?? '';
 
@@ -115,13 +112,13 @@ foreach ($editions as $edition) {
     // Venue/location (meta keys are prefixed)
     $venue = $meta['_ntdst_venue'] ?? '';
 
-    $enrichedEditions[] = [
+    $catalogItems[] = [
         'id' => $editionId,
         'url' => get_permalink($editionId),
         'course_id' => $courseId,
         'title' => $courseTitle,
         'thumbnail' => $thumbnail,
-        'type' => $type,
+        'type' => 'classroom', // Editions are always classroom/scheduled
         'start_date' => $startDate,
         'start_date_formatted' => stride_format_date($startDate, $dutchMonths),
         'price' => $price,
@@ -130,8 +127,36 @@ foreach ($editions as $edition) {
         'can_enroll' => $canEnroll,
         'spots_left' => $spotsLeft,
         'venue' => $venue,
+        'is_online_course' => false,
     ];
 }
+
+// 2. Add online courses (always available, no editions)
+foreach ($onlineCourses as $course) {
+    $courseId = $course->ID;
+    $thumbnail = get_the_post_thumbnail_url($courseId, 'stride_course_card');
+
+    $catalogItems[] = [
+        'id' => $courseId,
+        'url' => get_permalink($courseId),
+        'course_id' => $courseId,
+        'title' => $course->post_title,
+        'thumbnail' => $thumbnail,
+        'type' => 'online',
+        'start_date' => '',
+        'start_date_formatted' => '',
+        'price' => Money::eur(0), // Online courses are typically free or have different pricing
+        'day_count' => 0,
+        'has_spots' => true, // Online courses always have spots
+        'can_enroll' => true, // Online courses can always be enrolled
+        'spots_left' => null, // Unlimited
+        'venue' => '',
+        'is_online_course' => true,
+    ];
+}
+
+// Legacy alias for template compatibility
+$enrichedEditions = $catalogItems;
 
 // Filter editions by type if requested
 $filteredEditions = $enrichedEditions;
@@ -230,30 +255,37 @@ if ($currentFilter !== 'all') {
                             </h3>
 
                             <div class="stride-course-card__meta">
-                                <?php if ($edition['start_date_formatted']) : ?>
-                                    <span class="stride-course-card__meta-item">
-                                        <span uk-icon="icon: calendar; ratio: 0.8"></span>
-                                        <?php echo esc_html($edition['start_date_formatted']); ?>
-                                    </span>
-                                <?php endif; ?>
-
-                                <?php if ($edition['day_count'] > 0) : ?>
+                                <?php if ($edition['type'] === 'online') : ?>
                                     <span class="stride-course-card__meta-item">
                                         <span uk-icon="icon: clock; ratio: 0.8"></span>
-                                        <?php
-                                        printf(
-                                            esc_html(_n('%d dag', '%d dagen', $edition['day_count'], 'stride')),
-                                            $edition['day_count']
-                                        );
-                                        ?>
+                                        <?php esc_html_e('Altijd beschikbaar', 'stride'); ?>
                                     </span>
-                                <?php endif; ?>
+                                <?php else : ?>
+                                    <?php if ($edition['start_date_formatted']) : ?>
+                                        <span class="stride-course-card__meta-item">
+                                            <span uk-icon="icon: calendar; ratio: 0.8"></span>
+                                            <?php echo esc_html($edition['start_date_formatted']); ?>
+                                        </span>
+                                    <?php endif; ?>
 
-                                <?php if ($edition['venue'] && $edition['type'] === 'classroom') : ?>
-                                    <span class="stride-course-card__meta-item">
-                                        <span uk-icon="icon: location; ratio: 0.8"></span>
-                                        <?php echo esc_html($edition['venue']); ?>
-                                    </span>
+                                    <?php if ($edition['day_count'] > 0) : ?>
+                                        <span class="stride-course-card__meta-item">
+                                            <span uk-icon="icon: clock; ratio: 0.8"></span>
+                                            <?php
+                                            printf(
+                                                esc_html(_n('%d dag', '%d dagen', $edition['day_count'], 'stride')),
+                                                $edition['day_count']
+                                            );
+                                            ?>
+                                        </span>
+                                    <?php endif; ?>
+
+                                    <?php if ($edition['venue']) : ?>
+                                        <span class="stride-course-card__meta-item">
+                                            <span uk-icon="icon: location; ratio: 0.8"></span>
+                                            <?php echo esc_html($edition['venue']); ?>
+                                        </span>
+                                    <?php endif; ?>
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -277,7 +309,12 @@ if ($currentFilter !== 'all') {
 
                             <!-- Availability Indicator -->
                             <div class="stride-course-card__availability">
-                                <?php if (!$edition['has_spots']) : ?>
+                                <?php if ($edition['type'] === 'online') : ?>
+                                    <span class="stride-availability stride-availability--available">
+                                        <span uk-icon="icon: play-circle; ratio: 0.8"></span>
+                                        <?php esc_html_e('Direct starten', 'stride'); ?>
+                                    </span>
+                                <?php elseif (!$edition['has_spots']) : ?>
                                     <span class="stride-availability stride-availability--full">
                                         <span uk-icon="icon: ban; ratio: 0.8"></span>
                                         <?php esc_html_e('Volzet', 'stride'); ?>

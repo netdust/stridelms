@@ -3,15 +3,17 @@
  * Course Single Template
  *
  * Custom landing page for LearnDash courses with hero, progress, and lesson accordion.
+ * Uses LearnDashHelper for clean access to all LearnDash features.
  *
  * @package stride
  */
 
 defined('ABSPATH') || exit;
 
+use Stride\Integrations\LearnDash\LearnDashHelper;
+
 // Course data
 $courseId = get_the_ID();
-$course = get_post($courseId);
 $courseTitle = get_the_title();
 $courseDescription = get_the_excerpt() ?: wp_trim_words(get_the_content(), 30);
 $thumbnail = get_the_post_thumbnail_url($courseId, 'large');
@@ -19,59 +21,23 @@ $thumbnail = get_the_post_thumbnail_url($courseId, 'large');
 // User data
 $userId = get_current_user_id();
 $isLoggedIn = is_user_logged_in();
-$hasAccess = $isLoggedIn && sfwd_lms_has_access($courseId, $userId);
 
-// Course meta
-$lessons = learndash_get_course_lessons_list($courseId);
+// LearnDash data via helper
+$hasAccess = LearnDashHelper::hasAccess($courseId, $userId);
+$accessMode = LearnDashHelper::getAccessMode($courseId);
+$progress = LearnDashHelper::getProgress($courseId, $userId);
+$lessons = LearnDashHelper::getLessons($courseId, $userId);
 $lessonCount = count($lessons);
+$certificateLink = LearnDashHelper::getCertificateLink($courseId, $userId);
+$courseMaterials = LearnDashHelper::getCourseMaterials($courseId);
+$hasCertificate = LearnDashHelper::hasCertificate($courseId);
+$priceInfo = LearnDashHelper::getCoursePrice($courseId);
 
-// Progress (only for enrolled users)
-$progress = 0;
-$courseStatus = '';
-if ($hasAccess) {
-    $progressData = learndash_course_progress([
-        'user_id' => $userId,
-        'course_id' => $courseId,
-        'array' => true,
-    ]);
-    $progress = $progressData['percentage'] ?? 0;
-    $courseStatus = learndash_course_status($courseId, $userId);
-}
-
-// Certificate
-$certificateLink = '';
-if ($hasAccess && $progress === 100) {
-    $certificateLink = learndash_get_course_certificate_link($courseId, $userId);
-}
-
-// Determine CTA
-$ctaText = __('Start Cursus', 'stride');
-$ctaUrl = '';
-if ($hasAccess && $progress > 0 && $progress < 100) {
-    $ctaText = __('Doorgaan', 'stride');
-} elseif ($progress === 100) {
-    $ctaText = __('Bekijk Cursus', 'stride');
-}
-
-// Get first lesson or resume point
-if (!empty($lessons)) {
-    $firstLesson = reset($lessons);
-    $ctaUrl = get_permalink($firstLesson['post']->ID ?? $firstLesson->ID);
-
-    // If in progress, find next incomplete lesson
-    if ($hasAccess && $progress > 0 && $progress < 100) {
-        foreach ($lessons as $lesson) {
-            $lessonId = $lesson['post']->ID ?? $lesson->ID;
-            if (!learndash_is_lesson_complete($userId, $lessonId, $courseId)) {
-                $ctaUrl = get_permalink($lessonId);
-                break;
-            }
-        }
-    }
-}
+// Get the appropriate CTA
+$cta = LearnDashHelper::getCourseAction($courseId, $userId);
 
 // Course type detection (check if has sessions - classroom vs online)
-$isOnline = true; // Default to online/e-learning
+$isOnline = true;
 $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
 $editions = $editionService->getEditionsForCourse($courseId);
 if (!empty($editions)) {
@@ -87,6 +53,15 @@ if (!empty($editions)) {
     }
 }
 $courseTypeLabel = $isOnline ? __('E-learning', 'stride') : __('Klassikaal', 'stride');
+
+// Access mode label for display
+$accessModeLabels = [
+    LearnDashHelper::MODE_OPEN => __('Open', 'stride'),
+    LearnDashHelper::MODE_FREE => __('Gratis', 'stride'),
+    LearnDashHelper::MODE_PAYNOW => LearnDashHelper::formatPrice($priceInfo),
+    LearnDashHelper::MODE_SUBSCRIBE => __('Abonnement', 'stride'),
+    LearnDashHelper::MODE_CLOSED => __('Op aanvraag', 'stride'),
+];
 ?>
 
 <div class="stride-course-single">
@@ -103,6 +78,11 @@ $courseTypeLabel = $isOnline ? __('E-learning', 'stride') : __('Klassikaal', 'st
                 <span class="stride-course-hero__badge stride-course-hero__badge--<?php echo $isOnline ? 'online' : 'classroom'; ?>">
                     <?php echo esc_html($courseTypeLabel); ?>
                 </span>
+                <?php if ($accessMode !== LearnDashHelper::MODE_OPEN): ?>
+                    <span class="stride-course-hero__badge stride-course-hero__badge--price">
+                        <?php echo esc_html($accessModeLabels[$accessMode] ?? ''); ?>
+                    </span>
+                <?php endif; ?>
                 <?php if ($lessonCount > 0): ?>
                     <span class="stride-course-hero__lessons">
                         <span uk-icon="icon: clock; ratio: 0.8"></span>
@@ -136,11 +116,32 @@ $courseTypeLabel = $isOnline ? __('E-learning', 'stride') : __('Klassikaal', 'st
                 </div>
             <?php endif; ?>
 
-            <?php if ($ctaUrl): ?>
-                <a href="<?php echo esc_url($ctaUrl); ?>" class="uk-button uk-button-primary uk-button-large stride-course-hero__cta">
-                    <span uk-icon="icon: play-circle; ratio: 0.9"></span>
-                    <?php echo esc_html($ctaText); ?>
-                </a>
+            <!-- CTA Button -->
+            <?php if ($cta['url']): ?>
+                <div class="stride-course-hero__actions">
+                    <a href="<?php echo esc_url($cta['url']); ?>" class="uk-button uk-button-primary uk-button-large stride-course-hero__cta">
+                        <?php if ($cta['action'] === 'start' || $cta['action'] === 'continue'): ?>
+                            <span uk-icon="icon: play-circle; ratio: 0.9"></span>
+                        <?php elseif ($cta['action'] === 'buy' || $cta['action'] === 'subscribe'): ?>
+                            <span uk-icon="icon: cart; ratio: 0.9"></span>
+                        <?php elseif ($cta['action'] === 'login'): ?>
+                            <span uk-icon="icon: sign-in; ratio: 0.9"></span>
+                        <?php endif; ?>
+                        <?php echo esc_html($cta['label']); ?>
+                    </a>
+
+                    <?php if ($cta['show_login'] && !$isLoggedIn): ?>
+                        <p class="stride-course-hero__login-hint uk-text-small uk-text-muted uk-margin-small-top">
+                            <?php
+                            printf(
+                                /* translators: %s: login link */
+                                esc_html__('Heb je al een account? %s', 'stride'),
+                                '<a href="' . esc_url(wp_login_url(get_permalink($courseId))) . '">' . esc_html__('Log in', 'stride') . '</a>'
+                            );
+                            ?>
+                        </p>
+                    <?php endif; ?>
+                </div>
             <?php endif; ?>
         </div>
     </section>
@@ -156,23 +157,17 @@ $courseTypeLabel = $isOnline ? __('E-learning', 'stride') : __('Klassikaal', 'st
                 <div class="uk-accordion-content">
                     <?php if (!empty($lessons)): ?>
                         <ul class="stride-lesson-list">
-                            <?php foreach ($lessons as $index => $lesson):
-                                $lessonPost = $lesson['post'] ?? $lesson;
-                                $lessonId = $lessonPost->ID ?? $lessonPost;
-                                $lessonTitle = is_object($lessonPost) ? $lessonPost->post_title : get_the_title($lessonId);
-                                $lessonUrl = get_permalink($lessonId);
-                                $isComplete = $hasAccess && learndash_is_lesson_complete($userId, $lessonId, $courseId);
-                            ?>
-                                <li class="stride-lesson-list__item <?php echo $isComplete ? 'stride-lesson-list__item--complete' : ''; ?>">
-                                    <a href="<?php echo esc_url($lessonUrl); ?>">
+                            <?php foreach ($lessons as $index => $lesson): ?>
+                                <li class="stride-lesson-list__item <?php echo $lesson['completed'] ? 'stride-lesson-list__item--complete' : ''; ?>">
+                                    <a href="<?php echo esc_url($lesson['url']); ?>">
                                         <span class="stride-lesson-list__status">
-                                            <?php if ($isComplete): ?>
+                                            <?php if ($lesson['completed']): ?>
                                                 <span uk-icon="icon: check; ratio: 0.8"></span>
                                             <?php else: ?>
                                                 <span class="stride-lesson-list__number"><?php echo $index + 1; ?></span>
                                             <?php endif; ?>
                                         </span>
-                                        <span class="stride-lesson-list__title"><?php echo esc_html($lessonTitle); ?></span>
+                                        <span class="stride-lesson-list__title"><?php echo esc_html($lesson['title']); ?></span>
                                     </a>
                                 </li>
                             <?php endforeach; ?>
@@ -184,31 +179,21 @@ $courseTypeLabel = $isOnline ? __('E-learning', 'stride') : __('Klassikaal', 'st
             </li>
 
             <!-- What You'll Learn -->
-            <?php
-            $learningObjectives = get_post_meta($courseId, '_learndash_course_materials', true);
-            if (empty($learningObjectives)) {
-                $learningObjectives = get_post_meta($courseId, 'course_materials', true);
-            }
-            if ($learningObjectives):
-            ?>
+            <?php if ($courseMaterials): ?>
                 <li>
                     <a class="uk-accordion-title" href>
                         <?php esc_html_e('Wat je leert', 'stride'); ?>
                     </a>
                     <div class="uk-accordion-content">
                         <div class="stride-course-materials">
-                            <?php echo wp_kses_post($learningObjectives); ?>
+                            <?php echo wp_kses_post($courseMaterials); ?>
                         </div>
                     </div>
                 </li>
             <?php endif; ?>
 
             <!-- Certificate -->
-            <?php
-            $hasCertificate = get_post_meta($courseId, '_sfwd-courses', true);
-            $certificateId = $hasCertificate['sfwd-courses_certificate'] ?? 0;
-            if ($certificateId):
-            ?>
+            <?php if ($hasCertificate): ?>
                 <li>
                     <a class="uk-accordion-title" href>
                         <?php esc_html_e('Certificaat', 'stride'); ?>
@@ -225,6 +210,35 @@ $courseTypeLabel = $isOnline ? __('E-learning', 'stride') : __('Klassikaal', 'st
                                 <?php endif; ?>
                             </div>
                         </div>
+                    </div>
+                </li>
+            <?php endif; ?>
+
+            <!-- Editions (if classroom course with scheduled sessions) -->
+            <?php if (!empty($editions)): ?>
+                <li>
+                    <a class="uk-accordion-title" href>
+                        <?php esc_html_e('Geplande sessies', 'stride'); ?>
+                    </a>
+                    <div class="uk-accordion-content">
+                        <ul class="stride-edition-list">
+                            <?php foreach ($editions as $edition):
+                                $editionId = $edition['id'] ?? $edition->ID;
+                                $editionTitle = $edition['title'] ?? get_the_title($editionId);
+                                $startDate = $edition['start_date'] ?? '';
+                            ?>
+                                <li class="stride-edition-list__item">
+                                    <a href="<?php echo esc_url(get_permalink($editionId)); ?>">
+                                        <span class="stride-edition-list__title"><?php echo esc_html($editionTitle); ?></span>
+                                        <?php if ($startDate): ?>
+                                            <span class="stride-edition-list__date">
+                                                <?php echo esc_html(date_i18n('j F Y', strtotime($startDate))); ?>
+                                            </span>
+                                        <?php endif; ?>
+                                    </a>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
                     </div>
                 </li>
             <?php endif; ?>

@@ -469,7 +469,7 @@ $profileNonce = wp_create_nonce('stride_profile');
                 </a>
             </div>
             <div>
-                <a href="<?php echo esc_url(wp_logout_url(home_url('/'))); ?>" class="uk-button uk-button-default stride-button-logout">
+                <a href="<?php echo esc_url(home_url('/auth/logout')); ?>" class="uk-button uk-button-default stride-button-logout">
                     <span uk-icon="icon: sign-out; ratio: 0.9"></span>
                     <?php esc_html_e('Uitloggen', 'stride'); ?>
                 </a>
