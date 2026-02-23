@@ -8,7 +8,7 @@ use Stride\Contracts\EditionQueryInterface;
 use Stride\Contracts\LMSAdapterInterface;
 use Stride\Domain\RegistrationStatus;
 use Stride\Infrastructure\AbstractService;
-use Stride\Modules\Edition\SessionSelectionService;
+use Stride\Modules\Edition\SessionSelection;
 use WP_Error;
 
 /**
@@ -22,7 +22,7 @@ final class EnrollmentService extends AbstractService
         private readonly RegistrationRepository $registrations,
         private readonly EditionQueryInterface $editions,
         private readonly LMSAdapterInterface $lms,
-        private readonly ?SessionSelectionService $sessionSelection = null,
+        private readonly ?SessionSelection $sessionSelection = null,
     ) {
         parent::__construct();
     }
@@ -49,6 +49,52 @@ final class EnrollmentService extends AbstractService
         // This ensures open courses appear in learndash_user_get_enrolled_courses()
         add_action('learndash-lesson-before', [$this, 'maybeEnrollOnLessonAccess'], 10, 3);
         add_action('learndash-topic-before', [$this, 'maybeEnrollOnLessonAccess'], 10, 3);
+
+        // Cancel registration when quote is cancelled (revokes course access)
+        add_action('stride/quote/cancelled', [$this, 'onQuoteCancelled']);
+    }
+
+    /**
+     * Handle quote cancellation - cancel associated registration.
+     *
+     * @param array{quote_id: int} $data Event data
+     */
+    public function onQuoteCancelled(array $data): void
+    {
+        $quoteId = (int) ($data['quote_id'] ?? 0);
+        if (!$quoteId) {
+            return;
+        }
+
+        // Get registration_id from quote
+        $quoteService = ntdst_get(\Stride\Modules\Invoicing\QuoteService::class);
+        $quote = $quoteService->getQuote($quoteId);
+
+        if (!$quote || empty($quote['registration_id'])) {
+            ntdst_log('enrollment')->warning('Quote cancelled but no registration found', [
+                'quote_id' => $quoteId,
+            ]);
+            return;
+        }
+
+        $registrationId = (int) $quote['registration_id'];
+
+        // Cancel registration (this revokes course access)
+        $result = $this->cancel($registrationId);
+
+        if (is_wp_error($result)) {
+            ntdst_log('enrollment')->error('Failed to cancel registration on quote cancellation', [
+                'quote_id' => $quoteId,
+                'registration_id' => $registrationId,
+                'error' => $result->get_error_message(),
+            ]);
+            return;
+        }
+
+        ntdst_log('enrollment')->info('Registration cancelled due to quote cancellation', [
+            'quote_id' => $quoteId,
+            'registration_id' => $registrationId,
+        ]);
     }
 
     /**
