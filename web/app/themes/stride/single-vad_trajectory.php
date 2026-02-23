@@ -361,7 +361,7 @@ $heroImage = get_the_post_thumbnail_url($trajectoryId, 'large');
                                     <?php esc_html_e('De inschrijfperiode voor dit traject is verstreken.', 'stride'); ?>
                                 </div>
                             <?php elseif (is_user_logged_in()): ?>
-                                <a href="<?php echo esc_url(add_query_arg('trajectory', $trajectoryId, home_url('/inschrijven-traject/'))); ?>" class="stride-course-action-btn uk-button uk-button-primary">
+                                <a href="<?php echo esc_url(get_permalink($trajectoryId) . 'inschrijving/'); ?>" class="stride-course-action-btn uk-button uk-button-primary">
                                     <?php esc_html_e('Start dit traject', 'stride'); ?>
                                 </a>
                             <?php else: ?>
@@ -405,7 +405,7 @@ $heroImage = get_the_post_thumbnail_url($trajectoryId, 'large');
                         <?php esc_html_e('Log in', 'stride'); ?>
                     </a>
                 <?php else: ?>
-                    <a href="<?php echo esc_url(add_query_arg('trajectory', $trajectoryId, home_url('/inschrijven-traject/'))); ?>" class="uk-button uk-button-primary uk-button-small">
+                    <a href="<?php echo esc_url(get_permalink($trajectoryId) . 'inschrijving/'); ?>" class="uk-button uk-button-primary uk-button-small">
                         <?php esc_html_e('Start traject', 'stride'); ?>
                     </a>
                 <?php endif; ?>
