@@ -32,6 +32,7 @@ use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Trajectory\TrajectoryService;
+use Stride\Modules\Trajectory\TrajectoryEnrollmentRepository;
 
 // Session type constants
 const SESSION_TYPE_IN_PERSON = 'in_person';
@@ -62,6 +63,7 @@ class StrideSeedData {
     private ?SessionService $sessionService = null;
     private ?RegistrationRepository $regRepo = null;
     private ?TrajectoryService $trajectoryService = null;
+    private ?TrajectoryEnrollmentRepository $trajectoryEnrollmentRepo = null;
 
     // Current admin user to subscribe
     private int $adminUserId = 1;
@@ -75,6 +77,7 @@ class StrideSeedData {
         $this->createTrajectories();
         $this->createVouchers();
         $this->createEnrollmentsAndQuotes();
+        $this->createTrajectoryTestData();
 
         $this->saveSeedManifest();
         $this->printSummary();
@@ -87,6 +90,7 @@ class StrideSeedData {
             $this->sessionService = ntdst_get(SessionService::class);
             $this->regRepo = ntdst_get(RegistrationRepository::class);
             $this->trajectoryService = ntdst_get(TrajectoryService::class);
+            $this->trajectoryEnrollmentRepo = ntdst_get(TrajectoryEnrollmentRepository::class);
         }
     }
 
@@ -254,27 +258,12 @@ class StrideSeedData {
             ],
 
             // === 5. ONLINE SELF-PACED (e-learning) ===
+            // Online courses do NOT have editions - they are always available
             [
                 'title' => 'E-learning: Basiskennis Verslavingszorg',
                 'description' => 'Volledig online cursus die je in je eigen tempo volgt. Ideaal als introductie of opfrisser. Inclusief certificaat na afronding.',
                 'type' => 'online',
-                'editions' => [
-                    [
-                        'start_date' => date('Y-m-d'),
-                        'end_date' => date('Y-m-d', strtotime('+1 year')),
-                        'price' => 99.00,
-                        'price_non_member' => 129.00,
-                        'capacity' => 0, // unlimited
-                        'venue' => 'Online (eigen tempo)',
-                        'status' => 'open',
-                        'sessions' => [
-                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'Module 1: Inleiding', 'optional' => false],
-                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'Module 2: Verslavingsmechanismen', 'optional' => false],
-                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'Module 3: Behandelmethoden', 'optional' => false],
-                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ASSIGNMENT, 'title' => 'Eindopdracht', 'optional' => false],
-                        ],
-                    ],
-                ],
+                'editions' => [], // No editions for online courses
             ],
 
             // === 6. ANOTHER ONLINE COURSE ===
@@ -282,18 +271,7 @@ class StrideSeedData {
                 'title' => 'E-learning: Alcohol en Gezondheid',
                 'description' => 'Verdiepende online module over de effecten van alcohol. Met video-interviews, quizzen en praktijkcases.',
                 'type' => 'online',
-                'editions' => [
-                    [
-                        'start_date' => date('Y-m-d'),
-                        'end_date' => date('Y-m-d', strtotime('+1 year')),
-                        'price' => 79.00,
-                        'price_non_member' => 99.00,
-                        'capacity' => 0,
-                        'venue' => 'Online',
-                        'status' => 'open',
-                        'sessions' => [],
-                    ],
-                ],
+                'editions' => [], // No editions for online courses
             ],
 
             // === 7. FULL EDITION (sold out) ===
@@ -678,6 +656,7 @@ class StrideSeedData {
             ['code' => 'VAD-MEMBER', 'discount_type' => 'percentage', 'discount_value' => 15, 'usage_limit' => 100],
             ['code' => 'GRATIS-INTRO', 'discount_type' => 'full', 'discount_value' => 0, 'usage_limit' => 5],
             ['code' => 'KORTING50', 'discount_type' => 'fixed', 'discount_value' => 5000, 'usage_limit' => 20],
+            ['code' => 'SEEDVOUCHER10', 'discount_type' => 'percentage', 'discount_value' => 10, 'usage_limit' => 100],
         ];
 
         foreach ($vouchers as $data) {
@@ -859,6 +838,168 @@ class StrideSeedData {
         echo "  + Quote: {$quoteNumber} ({$status})\n";
     }
 
+    /**
+     * Create trajectory-specific test data for E2E tests.
+     *
+     * Creates:
+     * - test-trajectory (cohort mode, open status)
+     * - seed_enrolled_user (enrolled in test-trajectory)
+     * - seed_completed_user (completed the trajectory)
+     */
+    private function createTrajectoryTestData(): void {
+        echo "\nCreating trajectory test data for E2E tests...\n";
+
+        // Get or create test trajectory
+        $testTrajectory = get_page_by_path('test-trajectory', OBJECT, 'vad_trajectory');
+        if (!$testTrajectory) {
+            $testTrajectoryId = wp_insert_post([
+                'post_type' => 'vad_trajectory',
+                'post_title' => 'Test Trajectory',
+                'post_name' => 'test-trajectory',
+                'post_status' => 'publish',
+                'post_content' => 'A test trajectory for E2E testing. This trajectory is used to verify enrollment flows.',
+            ]);
+
+            if (is_wp_error($testTrajectoryId)) {
+                echo "  ! Failed to create test-trajectory: {$testTrajectoryId->get_error_message()}\n";
+                return;
+            }
+
+            // Set trajectory meta using Data Manager if available
+            if (function_exists('ntdst_data')) {
+                $trajectoryModel = ntdst_data()->get('vad_trajectory');
+                if ($trajectoryModel) {
+                    $trajectoryModel->updateMetaBatch($testTrajectoryId, [
+                        'mode' => TrajectoryMode::Cohort->value,
+                        'status' => TrajectoryStatus::Open->value,
+                        'price' => 500,
+                        'price_non_member' => 600,
+                        'enrollment_deadline' => date('Y-m-d', strtotime('+30 days')),
+                        'capacity' => 20,
+                    ]);
+                }
+            } else {
+                // Fallback to direct meta
+                update_post_meta($testTrajectoryId, '_ntdst_mode', TrajectoryMode::Cohort->value);
+                update_post_meta($testTrajectoryId, '_ntdst_status', TrajectoryStatus::Open->value);
+                update_post_meta($testTrajectoryId, '_ntdst_price', 500);
+                update_post_meta($testTrajectoryId, '_ntdst_price_non_member', 600);
+                update_post_meta($testTrajectoryId, '_ntdst_enrollment_deadline', date('Y-m-d', strtotime('+30 days')));
+                update_post_meta($testTrajectoryId, '_ntdst_capacity', 20);
+            }
+
+            update_post_meta($testTrajectoryId, self::SEED_META_KEY, true);
+            $this->created['trajectories'][] = $testTrajectoryId;
+            echo "  + Created test-trajectory (ID: {$testTrajectoryId})\n";
+        } else {
+            $testTrajectoryId = $testTrajectory->ID;
+            if (!in_array($testTrajectoryId, $this->created['trajectories'], true)) {
+                $this->created['trajectories'][] = $testTrajectoryId;
+            }
+            echo "  - test-trajectory already exists (ID: {$testTrajectoryId})\n";
+        }
+
+        // Create enrolled test user
+        $enrolledUser = get_user_by('email', 'seed_enrolled_user@seed.test');
+        if (!$enrolledUser) {
+            $enrolledUserId = wp_insert_user([
+                'user_login' => 'seed_enrolled_user',
+                'user_email' => 'seed_enrolled_user@seed.test',
+                'user_pass' => 'seedpass123',
+                'first_name' => 'Enrolled',
+                'last_name' => 'User',
+                'display_name' => 'Enrolled User',
+                'role' => 'subscriber',
+            ]);
+
+            if (is_wp_error($enrolledUserId)) {
+                echo "  ! Failed to create seed_enrolled_user: {$enrolledUserId->get_error_message()}\n";
+            } else {
+                update_user_meta($enrolledUserId, self::SEED_META_KEY, true);
+                $this->created['users'][] = $enrolledUserId;
+                echo "  + Created seed_enrolled_user@seed.test (ID: {$enrolledUserId})\n";
+            }
+        } else {
+            $enrolledUserId = $enrolledUser->ID;
+            if (!in_array($enrolledUserId, $this->created['users'], true)) {
+                $this->created['users'][] = $enrolledUserId;
+            }
+            echo "  - seed_enrolled_user@seed.test already exists (ID: {$enrolledUserId})\n";
+        }
+
+        // Enroll user in trajectory
+        if ($this->trajectoryEnrollmentRepo && isset($enrolledUserId) && !is_wp_error($enrolledUserId)) {
+            $existingEnrollment = $this->trajectoryEnrollmentRepo->findByUserAndTrajectory($enrolledUserId, $testTrajectoryId);
+            if (!$existingEnrollment) {
+                $enrollmentResult = $this->trajectoryEnrollmentRepo->create([
+                    'user_id' => $enrolledUserId,
+                    'trajectory_id' => $testTrajectoryId,
+                    'status' => 'enrolled',
+                ]);
+                if (!is_wp_error($enrollmentResult)) {
+                    echo "  + Enrolled seed_enrolled_user in test-trajectory\n";
+                } else {
+                    echo "  ! Failed to enroll: {$enrollmentResult->get_error_message()}\n";
+                }
+            } else {
+                echo "  - seed_enrolled_user already enrolled in test-trajectory\n";
+            }
+        }
+
+        // Create completed test user
+        $completedUser = get_user_by('email', 'seed_completed_user@seed.test');
+        if (!$completedUser) {
+            $completedUserId = wp_insert_user([
+                'user_login' => 'seed_completed_user',
+                'user_email' => 'seed_completed_user@seed.test',
+                'user_pass' => 'seedpass123',
+                'first_name' => 'Completed',
+                'last_name' => 'User',
+                'display_name' => 'Completed User',
+                'role' => 'subscriber',
+            ]);
+
+            if (is_wp_error($completedUserId)) {
+                echo "  ! Failed to create seed_completed_user: {$completedUserId->get_error_message()}\n";
+            } else {
+                update_user_meta($completedUserId, self::SEED_META_KEY, true);
+                $this->created['users'][] = $completedUserId;
+                echo "  + Created seed_completed_user@seed.test (ID: {$completedUserId})\n";
+            }
+        } else {
+            $completedUserId = $completedUser->ID;
+            if (!in_array($completedUserId, $this->created['users'], true)) {
+                $this->created['users'][] = $completedUserId;
+            }
+            echo "  - seed_completed_user@seed.test already exists (ID: {$completedUserId})\n";
+        }
+
+        // Enroll completed user with completed status
+        if ($this->trajectoryEnrollmentRepo && isset($completedUserId) && !is_wp_error($completedUserId)) {
+            $existingEnrollment = $this->trajectoryEnrollmentRepo->findByUserAndTrajectory($completedUserId, $testTrajectoryId);
+            if (!$existingEnrollment) {
+                $enrollmentResult = $this->trajectoryEnrollmentRepo->create([
+                    'user_id' => $completedUserId,
+                    'trajectory_id' => $testTrajectoryId,
+                    'status' => 'completed',
+                ]);
+                if (!is_wp_error($enrollmentResult)) {
+                    // Update with completion timestamp
+                    $this->trajectoryEnrollmentRepo->update($enrollmentResult, [
+                        'completed_at' => current_time('mysql'),
+                    ]);
+                    echo "  + Enrolled seed_completed_user in test-trajectory (completed)\n";
+                } else {
+                    echo "  ! Failed to enroll completed user: {$enrollmentResult->get_error_message()}\n";
+                }
+            } else {
+                echo "  - seed_completed_user already enrolled in test-trajectory\n";
+            }
+        }
+
+        echo "Trajectory test data complete.\n";
+    }
+
     private function saveSeedManifest(): void {
         update_option('stride_seed_manifest', $this->created);
         update_option('stride_seed_timestamp', current_time('mysql'));
@@ -878,7 +1019,10 @@ class StrideSeedData {
         echo "\n";
         echo "Test credentials: seedpass123\n";
         echo "Admin user (ID 1) enrolled in 3 courses with quotes.\n\n";
-        echo "Voucher codes: WELKOM2026, VAD-MEMBER, GRATIS-INTRO, KORTING50\n\n";
+        echo "Voucher codes: WELKOM2026, VAD-MEMBER, GRATIS-INTRO, KORTING50, SEEDVOUCHER10\n\n";
+        echo "E2E Test Users:\n";
+        echo "  - seed_enrolled_user@seed.test (enrolled in test-trajectory)\n";
+        echo "  - seed_completed_user@seed.test (completed test-trajectory)\n\n";
         echo "To cleanup: ddev exec bash -c 'FORCE_UNSEED=1 wp eval-file scripts/unseed.php'\n";
     }
 }
