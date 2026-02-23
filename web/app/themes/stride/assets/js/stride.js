@@ -55,6 +55,56 @@
     };
 
     /**
+     * NTDST API Client
+     *
+     * Provides a clean interface for AJAX calls with automatic error handling.
+     * Uses WordPress AJAX endpoint (admin-ajax.php) for compatibility.
+     *
+     * Usage:
+     *   const result = await ntdstAPI.call('stride_validate_voucher', { code: 'ABC123' });
+     *
+     * On success: Returns the data object from the response
+     * On error: Throws an error with the message from the server
+     */
+    window.ntdstAPI = {
+        /**
+         * Call an AJAX action
+         *
+         * @param {string} action - The AJAX action name
+         * @param {object} params - Parameters to send
+         * @returns {Promise<object>} - Resolves with data on success, rejects with error on failure
+         */
+        call: async function(action, params) {
+            params = params || {};
+
+            var formData = new FormData();
+            formData.append('action', action);
+            formData.append('nonce', Stride.config.nonce);
+
+            Object.keys(params).forEach(function(key) {
+                formData.append(key, params[key]);
+            });
+
+            var response = await fetch(Stride.config.ajaxUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                body: formData
+            });
+
+            var data = await response.json();
+
+            if (!data.success) {
+                var error = new Error(data.data?.message || 'An error occurred');
+                error.code = data.data?.code || 'unknown_error';
+                error.data = data.data;
+                throw error;
+            }
+
+            return data.data;
+        }
+    };
+
+    /**
      * Utility: Format date for display
      *
      * @param {Date|string} date

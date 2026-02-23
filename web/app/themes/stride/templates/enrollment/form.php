@@ -621,55 +621,46 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Apply voucher
+    // Apply voucher using ntdstAPI
     if (applyVoucherBtn) {
-        applyVoucherBtn.addEventListener('click', function() {
+        applyVoucherBtn.addEventListener('click', async function() {
             const code = voucherInput.value.trim();
             if (!code) return;
 
             applyVoucherBtn.disabled = true;
-            applyVoucherBtn.textContent = '...';
+            applyVoucherBtn.innerHTML = '<span uk-spinner="ratio: 0.5"></span>';
 
-            fetch(strideConfig.ajaxUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({
-                    action: 'stride_validate_voucher',
-                    nonce: '<?php echo wp_create_nonce('stride_enrollment'); ?>',
+            try {
+                const result = await ntdstAPI.call('stride_validate_voucher', {
                     code: code,
                     item_type: itemType,
-                    item_id: itemId,
-                    // Keep edition_id for backward compatibility
-                    edition_id: itemType === 'edition' ? itemId : 0
-                })
-            })
-            .then(r => r.json())
-            .then(data => {
+                    item_id: itemId
+                });
+
                 voucherResult.style.display = 'block';
-                if (data.success) {
-                    voucherResult.innerHTML = '<div class="uk-alert uk-alert-success uk-margin-remove">' + data.data.message + '</div>';
-                    // Update prices
-                    if (data.data.discount) {
-                        document.getElementById('discount-row').style.display = '';
-                        document.getElementById('discount-amount').textContent = '- ' + data.data.discount_formatted;
-                        document.getElementById('subtotal').textContent = data.data.subtotal_formatted;
-                        document.getElementById('tax-amount').textContent = data.data.tax_formatted;
-                        document.getElementById('total-amount').textContent = data.data.total_formatted;
-                    }
-                } else {
-                    voucherResult.innerHTML = '<div class="uk-alert uk-alert-danger uk-margin-remove">' + data.data.message + '</div>';
+                voucherResult.innerHTML = '<div class="uk-alert uk-alert-success uk-margin-remove">' + result.message + '</div>';
+
+                // Update prices if discount was applied
+                if (result.discount) {
+                    document.getElementById('discount-row').style.display = '';
+                    document.getElementById('discount-amount').textContent = '- ' + result.discount_formatted;
+                    document.getElementById('subtotal').textContent = result.subtotal_formatted;
+                    document.getElementById('tax-amount').textContent = result.tax_formatted;
+                    document.getElementById('total-amount').textContent = result.total_formatted;
                 }
-            })
-            .finally(() => {
+            } catch (error) {
+                voucherResult.style.display = 'block';
+                voucherResult.innerHTML = '<div class="uk-alert uk-alert-danger uk-margin-remove">' + error.message + '</div>';
+            } finally {
                 applyVoucherBtn.disabled = false;
                 applyVoucherBtn.textContent = '<?php esc_html_e('Toepassen', 'stride'); ?>';
-            });
+            }
         });
     }
 
-    // Form submission
+    // Form submission using ntdstAPI
     if (form) {
-        form.addEventListener('submit', function(e) {
+        form.addEventListener('submit', async function(e) {
             e.preventDefault();
 
             // Validate checkboxes
@@ -685,56 +676,48 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
+            // Disable submit buttons
             submitBtns.forEach(btn => {
                 btn.disabled = true;
                 btn.innerHTML = '<span uk-spinner="ratio: 0.6"></span> <?php esc_html_e('Bezig...', 'stride'); ?>';
             });
 
-            const formData = new FormData(form);
-            // Add checkbox values explicitly
-            formData.set('terms_accepted', '1');
-            formData.set('cancellation_accepted', '1');
+            try {
+                // Collect form data as object
+                const formData = new FormData(form);
+                const params = Object.fromEntries(formData.entries());
 
-            fetch(strideConfig.ajaxUrl, {
-                method: 'POST',
-                body: formData
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    // Redirect to confirmation or quote page
-                    if (data.data.redirect_url) {
-                        window.location.href = data.data.redirect_url;
-                    } else {
-                        // Type-specific success URL
-                        const successUrl = itemType === 'trajectory'
-                            ? '<?php echo esc_url(home_url('/mijn-account/mijn-trajecten/')); ?>?enrolled=1'
-                            : '<?php echo esc_url(home_url('/mijn-account/mijn-cursussen/')); ?>?enrolled=1';
-                        window.location.href = successUrl;
-                    }
+                // Ensure item info is included
+                params.item_id = itemId;
+                params.item_type = itemType;
+                params.terms_accepted = '1';
+                params.cancellation_accepted = '1';
+
+                const result = await ntdstAPI.call('stride_submit_enrollment', params);
+
+                // Success - redirect
+                if (result.redirect_url) {
+                    window.location.href = result.redirect_url;
                 } else {
-                    UIkit.notification({
-                        message: data.data.message || '<?php esc_html_e('Er is een fout opgetreden', 'stride'); ?>',
-                        status: 'danger',
-                        pos: 'top-center'
-                    });
-                    submitBtns.forEach(btn => {
-                        btn.disabled = false;
-                        btn.textContent = '<?php esc_html_e('Bevestig inschrijving', 'stride'); ?>';
-                    });
+                    // Type-specific success URL
+                    const successUrl = itemType === 'trajectory'
+                        ? '<?php echo esc_url(home_url('/mijn-account/mijn-trajecten/')); ?>?enrolled=1'
+                        : '<?php echo esc_url(home_url('/mijn-account/mijn-cursussen/')); ?>?enrolled=1';
+                    window.location.href = successUrl;
                 }
-            })
-            .catch(() => {
+            } catch (error) {
                 UIkit.notification({
-                    message: '<?php esc_html_e('Er is een fout opgetreden', 'stride'); ?>',
+                    message: error.message || '<?php esc_html_e('Er is een fout opgetreden', 'stride'); ?>',
                     status: 'danger',
                     pos: 'top-center'
                 });
+
+                // Re-enable submit buttons
                 submitBtns.forEach(btn => {
                     btn.disabled = false;
                     btn.textContent = '<?php esc_html_e('Bevestig inschrijving', 'stride'); ?>';
                 });
-            });
+            }
         });
     }
 });
