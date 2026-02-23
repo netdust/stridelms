@@ -323,7 +323,6 @@ final class QuoteActionsMetabox
             jQuery(function($) {
                 var $select = $('#stride_change_status');
                 var $options = $('#stride-cancel-options');
-                var originalValue = $select.val();
 
                 function toggleCancelOptions() {
                     if ($select.val() === 'cancelled') {
@@ -334,17 +333,7 @@ final class QuoteActionsMetabox
                     }
                 }
 
-                $select.on('change', function() {
-                    if ($(this).val() === 'cancelled') {
-                        if (!confirm('<?php echo esc_js(__('Weet je zeker dat je deze offerte wilt annuleren?', 'stride')); ?>')) {
-                            $(this).val(originalValue);
-                            return;
-                        }
-                    }
-                    toggleCancelOptions();
-                });
-
-                // Initial state
+                $select.on('change', toggleCancelOptions);
                 toggleCancelOptions();
             });
             </script>
