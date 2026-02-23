@@ -17,6 +17,7 @@ final class TrajectoryService extends AbstractService
 {
     public function __construct(
         private readonly TrajectoryRepository $repository,
+        private readonly TrajectoryEnrollmentRepository $enrollmentRepo,
     ) {
         parent::__construct();
     }
@@ -164,6 +165,16 @@ final class TrajectoryService extends AbstractService
     public function getRequiredCourseCount(int $trajectoryId): int
     {
         return count($this->repository->getRequiredCourses($trajectoryId));
+    }
+
+    // === User Enrollment ===
+
+    /**
+     * Check if user is enrolled in trajectory.
+     */
+    public function isUserEnrolled(int $userId, int $trajectoryId): bool
+    {
+        return $this->enrollmentRepo->isEnrolled($userId, $trajectoryId);
     }
 
     // === Deadline Checks ===
