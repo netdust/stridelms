@@ -292,10 +292,11 @@ final class QuoteActionsMetabox
 
     private function renderStatusSection(QuoteStatus $status, bool $isLocked): void
     {
+        $isCancelled = $status === QuoteStatus::Cancelled;
         ?>
         <div class="stride-sidebar-section">
             <h4><?php esc_html_e('Status', 'stride'); ?></h4>
-            <select name="stride_change_status" id="stride_change_status" class="stride-status-select">
+            <select name="stride_change_status" id="stride_change_status" class="stride-status-select" <?php echo $isCancelled ? 'disabled' : ''; ?>>
                 <option value="draft" <?php echo $status === QuoteStatus::Draft ? 'selected' : ''; ?>>
                     <?php esc_html_e('Concept', 'stride'); ?>
                 </option>
@@ -303,9 +304,50 @@ final class QuoteActionsMetabox
                     <?php esc_html_e('Verzonden', 'stride'); ?>
                 </option>
                 <option value="exported" <?php echo $status === QuoteStatus::Exported ? 'selected' : ''; ?>>
-                    <?php esc_html_e('Geexporteerd', 'stride'); ?>
+                    <?php esc_html_e('Geëxporteerd', 'stride'); ?>
+                </option>
+                <option value="cancelled" <?php echo $isCancelled ? 'selected' : ''; ?>>
+                    <?php esc_html_e('Geannuleerd', 'stride'); ?>
                 </option>
             </select>
+
+            <!-- Cancel options (shown when cancelled is selected) -->
+            <div id="stride-cancel-options" style="display: none; margin-top: 10px; padding: 10px; background: #fcf0f1; border-radius: 4px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" name="stride_cancel_registration" id="stride_cancel_registration" value="1">
+                    <span><?php esc_html_e('Ook inschrijving annuleren en cursustoegang intrekken', 'stride'); ?></span>
+                </label>
+            </div>
+
+            <script>
+            jQuery(function($) {
+                var $select = $('#stride_change_status');
+                var $options = $('#stride-cancel-options');
+                var originalValue = $select.val();
+
+                function toggleCancelOptions() {
+                    if ($select.val() === 'cancelled') {
+                        $options.slideDown(200);
+                    } else {
+                        $options.slideUp(200);
+                        $('#stride_cancel_registration').prop('checked', false);
+                    }
+                }
+
+                $select.on('change', function() {
+                    if ($(this).val() === 'cancelled') {
+                        if (!confirm('<?php echo esc_js(__('Weet je zeker dat je deze offerte wilt annuleren?', 'stride')); ?>')) {
+                            $(this).val(originalValue);
+                            return;
+                        }
+                    }
+                    toggleCancelOptions();
+                });
+
+                // Initial state
+                toggleCancelOptions();
+            });
+            </script>
 
             <div class="stride-sidebar-actions">
                 <div class="stride-action-row">

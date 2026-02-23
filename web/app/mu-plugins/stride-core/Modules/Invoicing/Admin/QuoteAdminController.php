@@ -317,7 +317,7 @@ final class QuoteAdminController extends AbstractService
         // Handle status change
         if (!empty($_POST['stride_change_status'])) {
             $newStatus = sanitize_text_field($_POST['stride_change_status']);
-            $validStatuses = ['draft', 'sent', 'exported'];
+            $validStatuses = ['draft', 'sent', 'exported', 'cancelled'];
             if (in_array($newStatus, $validStatuses, true) && $newStatus !== ($quote['status'] ?? '')) {
                 $updateData['status'] = $newStatus;
 
@@ -329,6 +329,8 @@ final class QuoteAdminController extends AbstractService
                         $updateData['exported_at'] = current_time('mysql');
                     }
                     $updateData['locked'] = true; // Auto-lock on export
+                } elseif ($newStatus === 'cancelled') {
+                    $updateData['cancelled_at'] = current_time('mysql');
                 }
             }
         }
@@ -341,6 +343,12 @@ final class QuoteAdminController extends AbstractService
         // Update if we have data
         if (!empty($updateData)) {
             $this->repository->updateMeta($postId, $updateData);
+        }
+
+        // Handle quote cancellation with optional registration cancellation
+        if (($updateData['status'] ?? '') === 'cancelled' && !empty($_POST['stride_cancel_registration'])) {
+            // Fire event to cancel registration (which revokes course access)
+            do_action('stride/quote/cancelled', ['quote_id' => $postId]);
         }
 
         // Handle send quote action

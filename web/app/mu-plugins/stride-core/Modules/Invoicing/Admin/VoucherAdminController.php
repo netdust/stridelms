@@ -11,7 +11,7 @@ use Stride\Infrastructure\AbstractService;
 use Stride\Modules\Invoicing\VoucherCPT;
 use Stride\Modules\Invoicing\VoucherRepository;
 use Stride\Modules\Invoicing\VoucherService;
-use Stride\Modules\Invoicing\VoucherCodeGenerator;
+use Stride\Modules\Invoicing\Helpers\VoucherCodeGenerator;
 use WP_Post;
 
 /**
