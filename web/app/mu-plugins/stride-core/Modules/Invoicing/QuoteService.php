@@ -8,6 +8,7 @@ use Stride\Contracts\EditionQueryInterface;
 use Stride\Domain\Money;
 use Stride\Domain\QuoteStatus;
 use Stride\Infrastructure\AbstractService;
+use Stride\Modules\Invoicing\Helpers\QuoteCalculator;
 use WP_Error;
 use WP_Post;
 
@@ -40,6 +41,56 @@ final class QuoteService extends AbstractService
     protected function init(): void
     {
         QuoteCPT::register();
+
+        // Cancel quote when registration is cancelled
+        add_action('stride/registration/cancelled', [$this, 'onRegistrationCancelled']);
+    }
+
+    /**
+     * Handle registration cancellation - cancel associated quote.
+     *
+     * @param array{registration_id: int, user_id: int, edition_id: int} $data Event data
+     */
+    public function onRegistrationCancelled(array $data): void
+    {
+        $registrationId = (int) ($data['registration_id'] ?? 0);
+        if (!$registrationId) {
+            return;
+        }
+
+        // Find quote for this registration
+        $quote = $this->getQuoteByRegistration($registrationId);
+
+        if (!$quote) {
+            // No quote exists for this registration
+            return;
+        }
+
+        $quoteId = (int) $quote['id'];
+        $status = QuoteStatus::tryFrom($quote['status'] ?? '');
+
+        // Don't cancel already cancelled or exported quotes
+        if ($status === QuoteStatus::Cancelled) {
+            return;
+        }
+
+        if ($status === QuoteStatus::Exported) {
+            ntdst_log('invoicing')->warning('Registration cancelled but quote already exported', [
+                'registration_id' => $registrationId,
+                'quote_id' => $quoteId,
+            ]);
+            return;
+        }
+
+        // Cancel the quote (without triggering registration cancellation again)
+        $result = $this->repository->updateStatus($quoteId, QuoteStatus::Cancelled);
+
+        if ($result) {
+            ntdst_log('invoicing')->info('Quote cancelled due to registration cancellation', [
+                'registration_id' => $registrationId,
+                'quote_id' => $quoteId,
+            ]);
+        }
     }
 
     /**
