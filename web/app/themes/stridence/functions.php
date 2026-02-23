@@ -108,3 +108,38 @@ add_action('wp_footer', function () {
     </script>
     <?php
 }, 100);
+
+/**
+ * Add login/profile button to header
+ */
+add_action('kadence_header', function () {
+    ?>
+    <div class="str-header-account">
+        <?php if (is_user_logged_in()): ?>
+            <?php
+            $user = wp_get_current_user();
+            $avatar = get_avatar_url($user->ID, ['size' => 32]);
+            ?>
+            <a href="<?php echo esc_url(home_url('/mijn-account/')); ?>" class="str-header-account__link str-header-account__link--profile">
+                <img src="<?php echo esc_url($avatar); ?>" alt="" class="str-header-account__avatar">
+                <span class="str-header-account__name"><?php echo esc_html($user->display_name); ?></span>
+            </a>
+        <?php else: ?>
+            <a href="<?php echo esc_url(wp_login_url(get_permalink())); ?>" class="str-header-account__link str-header-account__link--login">
+                <?php stridence_icon('user', '', 20); ?>
+                <span><?php esc_html_e('Inloggen', 'stridence'); ?></span>
+            </a>
+        <?php endif; ?>
+    </div>
+    <?php
+}, 50);
+
+/**
+ * Register navigation menus
+ */
+add_action('after_setup_theme', function () {
+    register_nav_menus([
+        'primary' => __('Hoofdmenu', 'stridence'),
+        'footer' => __('Footermenu', 'stridence'),
+    ]);
+}, 5);

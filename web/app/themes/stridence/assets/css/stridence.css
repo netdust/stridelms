@@ -2265,3 +2265,80 @@ body.has-bottom-nav {
     background: rgba(255,255,255,0.1);
     border-color: #fff;
 }
+
+/* ==========================================================================
+   Header Account
+   ========================================================================== */
+
+.str-header-account {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.str-header-account__link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--str-space-sm);
+    padding: var(--str-space-sm) var(--str-space-md);
+    background: var(--str-card);
+    border: 1px solid var(--str-border);
+    border-radius: var(--str-radius-full);
+    color: var(--str-text);
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 500;
+    box-shadow: var(--str-shadow);
+    transition: var(--str-transition);
+}
+
+.str-header-account__link:hover {
+    border-color: var(--str-primary);
+    box-shadow: var(--str-shadow-md);
+}
+
+.str-header-account__link--login {
+    background: var(--str-primary);
+    border-color: var(--str-primary);
+    color: white;
+}
+
+.str-header-account__link--login:hover {
+    background: var(--str-primary-hover);
+    border-color: var(--str-primary-hover);
+    color: white;
+}
+
+.str-header-account__link--login svg {
+    color: white;
+}
+
+.str-header-account__avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.str-header-account__name {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (max-width: 767px) {
+    .str-header-account {
+        top: 12px;
+        right: 60px; /* Space for mobile menu toggle */
+    }
+    
+    .str-header-account__name {
+        display: none;
+    }
+    
+    .str-header-account__link {
+        padding: var(--str-space-sm);
+    }
+}
