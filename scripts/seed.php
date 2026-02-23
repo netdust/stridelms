@@ -109,7 +109,14 @@ class StrideSeedData {
             $existing = get_user_by('login', $userData['login']);
             if ($existing) {
                 $this->created['users'][] = $existing->ID;
-                echo "  - User {$userData['login']} exists (ID: {$existing->ID})\n";
+                // Ensure existing seed users are activated
+                if (!get_user_meta($existing->ID, 'ntdst_auth_activated', true)) {
+                    update_user_meta($existing->ID, 'ntdst_auth_activated', true);
+                    update_user_meta($existing->ID, 'ntdst_auth_activated_at', time());
+                    echo "  - User {$userData['login']} exists (ID: {$existing->ID}) - activated\n";
+                } else {
+                    echo "  - User {$userData['login']} exists (ID: {$existing->ID})\n";
+                }
                 continue;
             }
 
@@ -132,6 +139,10 @@ class StrideSeedData {
             if (isset($userData['is_member'])) {
                 update_user_meta($userId, 'is_vad_member', $userData['is_member']);
             }
+
+            // Activate users for auth (ntdst-auth requires activation)
+            update_user_meta($userId, 'ntdst_auth_activated', true);
+            update_user_meta($userId, 'ntdst_auth_activated_at', time());
 
             $this->created['users'][] = $userId;
             echo "  + Created: {$userData['login']} (ID: {$userId})\n";
@@ -916,6 +927,9 @@ class StrideSeedData {
                 echo "  ! Failed to create seed_enrolled_user: {$enrolledUserId->get_error_message()}\n";
             } else {
                 update_user_meta($enrolledUserId, self::SEED_META_KEY, true);
+                // Activate for auth
+                update_user_meta($enrolledUserId, 'ntdst_auth_activated', true);
+                update_user_meta($enrolledUserId, 'ntdst_auth_activated_at', time());
                 $this->created['users'][] = $enrolledUserId;
                 echo "  + Created seed_enrolled_user@seed.test (ID: {$enrolledUserId})\n";
             }
@@ -923,6 +937,11 @@ class StrideSeedData {
             $enrolledUserId = $enrolledUser->ID;
             if (!in_array($enrolledUserId, $this->created['users'], true)) {
                 $this->created['users'][] = $enrolledUserId;
+            }
+            // Ensure existing user is activated
+            if (!get_user_meta($enrolledUserId, 'ntdst_auth_activated', true)) {
+                update_user_meta($enrolledUserId, 'ntdst_auth_activated', true);
+                update_user_meta($enrolledUserId, 'ntdst_auth_activated_at', time());
             }
             echo "  - seed_enrolled_user@seed.test already exists (ID: {$enrolledUserId})\n";
         }
@@ -963,6 +982,9 @@ class StrideSeedData {
                 echo "  ! Failed to create seed_completed_user: {$completedUserId->get_error_message()}\n";
             } else {
                 update_user_meta($completedUserId, self::SEED_META_KEY, true);
+                // Activate for auth
+                update_user_meta($completedUserId, 'ntdst_auth_activated', true);
+                update_user_meta($completedUserId, 'ntdst_auth_activated_at', time());
                 $this->created['users'][] = $completedUserId;
                 echo "  + Created seed_completed_user@seed.test (ID: {$completedUserId})\n";
             }
@@ -970,6 +992,11 @@ class StrideSeedData {
             $completedUserId = $completedUser->ID;
             if (!in_array($completedUserId, $this->created['users'], true)) {
                 $this->created['users'][] = $completedUserId;
+            }
+            // Ensure existing user is activated
+            if (!get_user_meta($completedUserId, 'ntdst_auth_activated', true)) {
+                update_user_meta($completedUserId, 'ntdst_auth_activated', true);
+                update_user_meta($completedUserId, 'ntdst_auth_activated_at', time());
             }
             echo "  - seed_completed_user@seed.test already exists (ID: {$completedUserId})\n";
         }

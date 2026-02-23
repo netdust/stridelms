@@ -104,17 +104,20 @@ export const testVouchers = {
 
 /**
  * URL patterns for the enrollment flow
+ *
+ * Note: WordPress post type uses /vad_trajectory/ as base URL.
+ * The enrollment router intercepts /trajecten/{slug}/inschrijving/ for clean enrollment URLs.
  */
 export const urls = {
   /**
-   * Trajectory catalog page
+   * Trajectory catalog page (uses post type archive URL)
    */
-  trajectoryCatalog: '/trajecten/',
+  trajectoryCatalog: '/vad_trajectory/',
 
   /**
-   * Login page
+   * Login page (custom Stride login, not WordPress default)
    */
-  login: '/wp-login.php',
+  login: '/login',
 
   /**
    * Registration page
@@ -127,18 +130,21 @@ export const urls = {
   myTrajectories: '/mijn-account/mijn-trajecten/',
 
   /**
-   * Build trajectory detail URL
+   * Build trajectory detail URL (uses post type single URL)
    */
-  trajectoryDetail: (slug: string) => `/trajecten/${slug}/`,
+  trajectoryDetail: (slug: string) => `/vad_trajectory/${slug}/`,
 
   /**
-   * Build trajectory enrollment URL
+   * Build trajectory enrollment URL (handled by router, uses clean /trajecten/ base)
    */
   trajectoryEnrollment: (slug: string) => `/trajecten/${slug}/inschrijving/`,
 };
 
 /**
- * Log in a user via WordPress login form
+ * Log in a user via the custom Stride login form
+ *
+ * The site uses a custom Alpine.js-based login form, not WordPress default.
+ * Form fields: #email (email), password input, submit button
  *
  * @param page - Playwright page object
  * @param user - User credentials object with email and password
@@ -149,14 +155,19 @@ export async function login(
 ): Promise<void> {
   await page.goto(urls.login);
 
-  // WordPress login form uses #user_login and #user_pass
-  await page.fill('#user_login', user.email);
-  await page.fill('#user_pass', user.password);
-  await page.click('#wp-submit');
+  // Wait for page to load and Alpine.js to initialize
+  await page.waitForLoadState('domcontentloaded');
 
-  // Wait for redirect after successful login
-  // WordPress redirects to wp-admin by default, or to requested page
-  await page.waitForURL(/\/(wp-admin|mijn-account|trajecten|cursussen)/);
+  // Wait for password field to be visible (Alpine.js enables password mode)
+  await page.waitForSelector('#password', { state: 'visible', timeout: 5000 });
+
+  // Custom Stride login form - password mode
+  await page.fill('#email', user.email);
+  await page.fill('#password', user.password);
+  await page.click('button[type="submit"]');
+
+  // Wait for redirect after successful login (homepage or any dashboard page)
+  await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 10000 });
 }
 
 /**
@@ -171,16 +182,28 @@ export async function loginAndNavigate(
   user: { email: string; password: string },
   targetUrl: string
 ): Promise<void> {
-  // Use WordPress login with redirect
+  // Use custom Stride login with redirect
   const loginUrl = `${urls.login}?redirect_to=${encodeURIComponent(targetUrl)}`;
   await page.goto(loginUrl);
 
-  await page.fill('#user_login', user.email);
-  await page.fill('#user_pass', user.password);
-  await page.click('#wp-submit');
+  // Wait for page to load and Alpine.js to initialize
+  await page.waitForLoadState('domcontentloaded');
 
-  // Wait for navigation to target URL
-  await page.waitForURL(`**${targetUrl}*`);
+  // Wait for password field to be visible (Alpine.js enables password mode)
+  await page.waitForSelector('#password', { state: 'visible', timeout: 5000 });
+
+  await page.fill('#email', user.email);
+  await page.fill('#password', user.password);
+  await page.click('button[type="submit"]');
+
+  // Wait for redirect (either to target or default redirect)
+  await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 10000 });
+
+  // If not at target, navigate there (redirect might go to homepage)
+  if (!page.url().includes(targetUrl)) {
+    await page.goto(targetUrl);
+    await page.waitForLoadState('domcontentloaded');
+  }
 }
 
 /**
@@ -189,17 +212,14 @@ export async function loginAndNavigate(
  * @param page - Playwright page object
  */
 export async function logout(page: Page): Promise<void> {
-  // Navigate to logout URL
-  await page.goto('/wp-login.php?action=logout');
+  // Navigate to logout URL (custom Stride logout)
+  await page.goto('/logout');
 
-  // If logout confirmation is required, click the confirmation link
-  const confirmLink = page.locator('a[href*="action=logout"]');
-  if (await confirmLink.isVisible({ timeout: 1000 }).catch(() => false)) {
-    await confirmLink.click();
-  }
-
-  // Wait for logout to complete
-  await page.waitForURL(/wp-login\.php/);
+  // Wait for logout to complete - redirects to login page
+  await page.waitForURL(/\/(login|inloggen)/, { timeout: 5000 }).catch(() => {
+    // If custom logout doesn't exist, try WordPress logout
+    return page.goto('/wp/wp-login.php?action=logout');
+  });
 }
 
 /**
