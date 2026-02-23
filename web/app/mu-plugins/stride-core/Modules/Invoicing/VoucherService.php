@@ -38,7 +38,7 @@ final class VoucherService extends AbstractService
 
     protected function init(): void
     {
-        // No hooks needed - voucher operations triggered by service calls
+        VoucherCPT::register();
     }
 
     /**

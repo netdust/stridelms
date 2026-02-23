@@ -17,10 +17,7 @@ require_once __DIR__ . '/autoload.php';
 // Load config
 $config = require __DIR__ . '/plugin-config.php';
 
-// Register CPTs early (Edition/Session registered via their services)
-add_action('init', [\Stride\Modules\Invoicing\QuoteCPT::class, 'register'], 5);
-add_action('init', [\Stride\Modules\Invoicing\VoucherCPT::class, 'register'], 5);
-add_action('init', [\Stride\Modules\Trajectory\TrajectoryCPT::class, 'register'], 5);
+// CPTs registered via their services (EditionService, SessionService, etc.)
 
 // Create custom tables on activation
 add_action('init', function (): void {

@@ -43,7 +43,6 @@ return [
         \Stride\Modules\Invoicing\Admin\QuoteAdminController::class,
         \Stride\Modules\Invoicing\Admin\VoucherAdminController::class,
         \Stride\Modules\Trajectory\TrajectoryService::class,
-        \Stride\Modules\Trajectory\TrajectorySelectionService::class,
         \Stride\Modules\Trajectory\Admin\TrajectoryAdminController::class,
         \Stride\Modules\Attendance\AttendanceService::class,
         \Stride\Modules\Completion\CompletionService::class,

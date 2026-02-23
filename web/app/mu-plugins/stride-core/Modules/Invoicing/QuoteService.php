@@ -39,7 +39,7 @@ final class QuoteService extends AbstractService
 
     protected function init(): void
     {
-        // Handlers are registered centrally in stride-core.php
+        QuoteCPT::register();
     }
 
     /**

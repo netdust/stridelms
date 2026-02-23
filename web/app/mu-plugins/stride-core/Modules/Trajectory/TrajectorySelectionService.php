@@ -4,42 +4,21 @@ declare(strict_types=1);
 
 namespace Stride\Modules\Trajectory;
 
-use Stride\Infrastructure\AbstractService;
 use WP_Error;
 
 /**
  * Trajectory elective selection with deadline enforcement.
  *
  * Handles user picking elective courses within a trajectory.
+ * Plain class - no hooks, resolved via container when needed.
  */
-final class TrajectorySelectionService extends AbstractService
+final class TrajectorySelectionService
 {
     public function __construct(
         private readonly TrajectoryService $trajectories,
         private readonly TrajectoryEnrollmentRepository $enrollments,
         private readonly TrajectoryRepository $trajectoryRepo,
-    ) {
-        parent::__construct();
-    }
-
-    public static function metadata(): array
-    {
-        return [
-            'name' => 'Trajectory Selection Service',
-            'description' => 'Handles elective selection with deadlines',
-            'priority' => 21,
-        ];
-    }
-
-    protected function getConfigSlug(): string
-    {
-        return 'trajectory_selection';
-    }
-
-    protected function init(): void
-    {
-        // Future: lock expired choices
-    }
+    ) {}
 
     // === Enrollment Actions ===
 

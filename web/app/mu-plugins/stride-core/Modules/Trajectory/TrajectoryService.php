@@ -38,7 +38,7 @@ final class TrajectoryService extends AbstractService
 
     protected function init(): void
     {
-        // Future: hooks for trajectory events
+        TrajectoryCPT::register();
     }
 
     // === CRUD ===
