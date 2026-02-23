@@ -636,6 +636,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // Get form nonce for AJAX calls
+    const formNonce = form ? form.querySelector('input[name="nonce"]')?.value : '';
+
     // Apply voucher using ntdstAPI
     if (applyVoucherBtn) {
         applyVoucherBtn.addEventListener('click', async function() {
@@ -649,7 +652,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const result = await ntdstAPI.call('stride_validate_voucher', {
                     code: code,
                     item_type: itemType,
-                    item_id: itemId
+                    item_id: itemId,
+                    nonce: formNonce
                 });
 
                 voucherResult.style.display = 'block';

@@ -77,12 +77,17 @@
         call: async function(action, params) {
             params = params || {};
 
+            // Use nonce from params if provided, otherwise use global config
+            var nonce = params.nonce || Stride.config.nonce;
+
             var formData = new FormData();
             formData.append('action', action);
-            formData.append('nonce', Stride.config.nonce);
+            formData.append('nonce', nonce);
 
             Object.keys(params).forEach(function(key) {
-                formData.append(key, params[key]);
+                if (key !== 'nonce') { // Don't duplicate nonce
+                    formData.append(key, params[key]);
+                }
             });
 
             var response = await fetch(Stride.config.ajaxUrl, {
