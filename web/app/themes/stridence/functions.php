@@ -7,6 +7,9 @@
 
 defined('ABSPATH') || exit;
 
+// Load helpers
+require_once get_stylesheet_directory() . '/helpers/icons.php';
+
 /**
  * Enqueue parent and child theme styles
  */

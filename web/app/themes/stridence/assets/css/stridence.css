@@ -434,3 +434,174 @@ button, .str-btn, a.str-btn {
     font-weight: 600;
     color: var(--str-primary);
 }
+
+/* ==========================================================================
+   Bottom Navigation (Mobile Dashboard)
+   ========================================================================== */
+
+.str-bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-around;
+    background: var(--str-card);
+    border-top: 1px solid var(--str-border);
+    padding: var(--str-space-sm) 0;
+    padding-bottom: calc(var(--str-space-sm) + env(safe-area-inset-bottom, 0));
+    z-index: 1000;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+}
+
+/* Hide on desktop */
+@media (min-width: 768px) {
+    .str-bottom-nav {
+        display: none;
+    }
+}
+
+.str-bottom-nav__item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: var(--str-space-xs) var(--str-space-sm);
+    text-decoration: none;
+    color: var(--str-text-muted);
+    font-size: 0.65rem;
+    font-weight: 500;
+    transition: color var(--str-transition);
+    min-width: 60px;
+}
+
+.str-bottom-nav__item:hover,
+.str-bottom-nav__item--active {
+    color: var(--str-primary);
+}
+
+.str-bottom-nav__icon {
+    font-size: 1.25rem;
+}
+
+.str-bottom-nav__icon svg {
+    width: 24px;
+    height: 24px;
+}
+
+/* Add padding to body when bottom nav is present */
+body.has-bottom-nav {
+    padding-bottom: 70px;
+}
+
+@media (min-width: 768px) {
+    body.has-bottom-nav {
+        padding-bottom: 0;
+    }
+}
+
+/* ==========================================================================
+   Forms
+   ========================================================================== */
+
+.str-form-group {
+    margin-bottom: var(--str-space-lg);
+}
+
+.str-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--str-text);
+    margin-bottom: var(--str-space-sm);
+}
+
+.str-label--required::after {
+    content: ' *';
+    color: var(--str-danger);
+}
+
+.str-input,
+.str-select,
+.str-textarea {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    color: var(--str-text);
+    background: var(--str-card);
+    border: 1px solid var(--str-border);
+    border-radius: var(--str-radius-sm);
+    transition: border-color var(--str-transition), box-shadow var(--str-transition);
+}
+
+.str-input:focus,
+.str-select:focus,
+.str-textarea:focus {
+    outline: none;
+    border-color: var(--str-primary);
+    box-shadow: 0 0 0 3px var(--str-primary-light);
+}
+
+.str-input::placeholder {
+    color: var(--str-text-light);
+}
+
+.str-textarea {
+    min-height: 120px;
+    resize: vertical;
+}
+
+/* Checkbox & Radio */
+.str-checkbox,
+.str-radio {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--str-space-sm);
+    cursor: pointer;
+}
+
+.str-checkbox input,
+.str-radio input {
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    accent-color: var(--str-primary);
+}
+
+.str-checkbox__label,
+.str-radio__label {
+    font-size: 0.9rem;
+    color: var(--str-text);
+    line-height: 1.5;
+}
+
+/* Form sections */
+.str-form-section {
+    background: var(--str-card);
+    border: 1px solid var(--str-border);
+    border-radius: var(--str-radius);
+    padding: var(--str-space-lg);
+    margin-bottom: var(--str-space-lg);
+}
+
+.str-form-section__title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--str-text);
+    margin: 0 0 var(--str-space-lg);
+    padding-bottom: var(--str-space-md);
+    border-bottom: 1px solid var(--str-border);
+}
+
+/* Error state */
+.str-input--error,
+.str-select--error,
+.str-textarea--error {
+    border-color: var(--str-danger);
+}
+
+.str-error-message {
+    font-size: 0.8rem;
+    color: var(--str-danger);
+    margin-top: var(--str-space-xs);
+}
