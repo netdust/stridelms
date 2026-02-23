@@ -605,3 +605,192 @@ body.has-bottom-nav {
     color: var(--str-danger);
     margin-top: var(--str-space-xs);
 }
+
+/* ==========================================================================
+   Course Card (extends str-card)
+   ========================================================================== */
+
+.str-course-card__image-wrapper {
+    position: relative;
+}
+
+.str-course-card__placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--str-background);
+    color: var(--str-text-light);
+}
+
+.str-course-card__date-badge {
+    position: absolute;
+    bottom: var(--str-space-md);
+    left: var(--str-space-md);
+    padding: var(--str-space-xs) var(--str-space-sm);
+    font-size: 0.8rem;
+    font-weight: 500;
+    background: var(--str-card);
+    border-radius: var(--str-radius-sm);
+    box-shadow: var(--str-shadow);
+}
+
+.str-course-card__warning {
+    display: flex;
+    align-items: center;
+    gap: var(--str-space-xs);
+    padding: var(--str-space-sm);
+    margin-top: var(--str-space-sm);
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #b45309;
+    background: #fef3c7;
+    border-radius: var(--str-radius-sm);
+}
+
+/* ==========================================================================
+   Archive Filters
+   ========================================================================== */
+
+.str-filters {
+    margin-bottom: var(--str-space-xl);
+}
+
+.str-filters__toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--str-space-sm);
+}
+
+@media (min-width: 768px) {
+    .str-filters__toggle {
+        display: none;
+    }
+
+    .str-filters__panel {
+        display: block !important;
+    }
+}
+
+.str-filters__panel {
+    margin-top: var(--str-space-md);
+    padding: var(--str-space-lg);
+    background: var(--str-card);
+    border: 1px solid var(--str-border);
+    border-radius: var(--str-radius);
+}
+
+@media (min-width: 768px) {
+    .str-filters__panel {
+        display: flex;
+        gap: var(--str-space-xl);
+        padding: var(--str-space-md) 0;
+        background: transparent;
+        border: none;
+    }
+}
+
+.str-filters__group {
+    margin-bottom: var(--str-space-md);
+}
+
+@media (min-width: 768px) {
+    .str-filters__group {
+        margin-bottom: 0;
+    }
+}
+
+.str-filters__label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--str-text-muted);
+    margin-bottom: var(--str-space-sm);
+}
+
+.str-filters__options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--str-space-sm);
+}
+
+.str-filters__option {
+    padding: var(--str-space-sm) var(--str-space-md);
+    font-size: 0.875rem;
+    color: var(--str-text);
+    background: var(--str-background);
+    border-radius: var(--str-radius-full);
+    text-decoration: none;
+    transition: all var(--str-transition);
+}
+
+.str-filters__option:hover {
+    background: var(--str-border);
+}
+
+.str-filters__option--active {
+    background: var(--str-primary);
+    color: #fff;
+}
+
+.str-filters__option--active:hover {
+    background: var(--str-primary-hover);
+}
+
+/* ==========================================================================
+   Pagination
+   ========================================================================== */
+
+.str-pagination {
+    display: flex;
+    justify-content: center;
+    gap: var(--str-space-sm);
+    margin-top: var(--str-space-2xl);
+}
+
+.str-pagination a,
+.str-pagination span {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--str-space-xs);
+    padding: var(--str-space-sm) var(--str-space-md);
+    font-size: 0.9rem;
+    color: var(--str-text);
+    background: var(--str-card);
+    border: 1px solid var(--str-border);
+    border-radius: var(--str-radius-sm);
+    text-decoration: none;
+    transition: all var(--str-transition);
+}
+
+.str-pagination a:hover {
+    background: var(--str-background);
+    border-color: var(--str-primary);
+}
+
+.str-pagination .current {
+    background: var(--str-primary);
+    border-color: var(--str-primary);
+    color: #fff;
+}
+
+/* ==========================================================================
+   Empty State
+   ========================================================================== */
+
+.str-empty-state {
+    text-align: center;
+    padding: var(--str-space-2xl);
+    color: var(--str-text-muted);
+}
+
+.str-empty-state h2 {
+    margin: var(--str-space-md) 0 var(--str-space-sm);
+    font-size: 1.25rem;
+    color: var(--str-text);
+}
+
+.str-empty-state p {
+    margin: 0;
+}

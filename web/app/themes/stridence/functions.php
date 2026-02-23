@@ -84,3 +84,27 @@ add_action('after_setup_theme', function () {
     // Load text domain
     load_child_theme_textdomain('stridence', get_stylesheet_directory() . '/languages');
 });
+
+/**
+ * Add inline filter toggle script for course archives
+ */
+add_action('wp_footer', function () {
+    if (!is_post_type_archive('sfwd-courses')) {
+        return;
+    }
+    ?>
+    <script>
+    (function() {
+        var toggle = document.querySelector('.str-filters__toggle');
+        var panel = document.querySelector('.str-filters__panel');
+        if (!toggle || !panel) return;
+
+        toggle.addEventListener('click', function() {
+            var expanded = toggle.getAttribute('aria-expanded') === 'true';
+            toggle.setAttribute('aria-expanded', !expanded);
+            panel.hidden = expanded;
+        });
+    })();
+    </script>
+    <?php
+}, 100);
