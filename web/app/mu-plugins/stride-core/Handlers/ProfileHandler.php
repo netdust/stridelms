@@ -7,7 +7,7 @@ namespace Stride\Handlers;
 use WP_Error;
 
 /**
- * Handles user profile AJAX requests.
+ * Handles user profile API requests.
  *
  * Thin handler - validates input, updates user data.
  * Supports personal, billing, and notification form types.
@@ -21,52 +21,47 @@ final class ProfileHandler
 
     private function init(): void
     {
-        add_action('wp_ajax_stride_update_profile', [$this, 'ajaxUpdateProfile']);
+        add_filter('ntdst/api_data/stride_update_profile', [$this, 'handleUpdateProfile'], 10, 2);
     }
 
     /**
-     * AJAX: Update user profile.
-     */
-    public function ajaxUpdateProfile(): void
-    {
-        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'stride_profile')) {
-            wp_send_json_error(['message' => __('Ongeldige beveiligingstoken.', 'stride')]);
-        }
-
-        $formType = sanitize_text_field($_POST['form_type'] ?? 'personal');
-
-        $result = match ($formType) {
-            'billing' => $this->handleUpdateBilling($_POST),
-            'notifications' => $this->handleUpdateNotifications($_POST),
-            default => $this->handleUpdatePersonal($_POST),
-        };
-
-        if (is_wp_error($result)) {
-            wp_send_json_error(['message' => $result->get_error_message()]);
-        }
-
-        wp_send_json_success($result);
-    }
-
-    /**
-     * Handle personal profile update.
+     * Handle profile update request.
      *
+     * Routes to specific handler based on form_type parameter.
+     *
+     * @param mixed $data Existing data (unused)
      * @param array<string, mixed> $params Request parameters
      * @return array<string, mixed>|WP_Error
      */
-    public function handleUpdatePersonal(array $params): array|WP_Error
+    public function handleUpdateProfile(mixed $data, array $params): array|WP_Error
     {
         $userId = get_current_user_id();
         if (!$userId) {
             return new WP_Error('not_logged_in', __('Je moet ingelogd zijn.', 'stride'));
         }
 
-        // Sanitize input
+        $formType = sanitize_text_field($params['form_type'] ?? 'personal');
+
+        return match ($formType) {
+            'billing' => $this->updateBilling($userId, $params),
+            'notifications' => $this->updateNotifications($userId, $params),
+            default => $this->updatePersonal($userId, $params),
+        };
+    }
+
+    /**
+     * Update personal profile data.
+     *
+     * @param int $userId User ID
+     * @param array<string, mixed> $params Request parameters
+     * @return array<string, mixed>|WP_Error
+     */
+    private function updatePersonal(int $userId, array $params): array|WP_Error
+    {
         $firstName = sanitize_text_field($params['first_name'] ?? '');
         $lastName = sanitize_text_field($params['last_name'] ?? '');
         $phone = sanitize_text_field($params['phone'] ?? '');
 
-        // Update user
         $result = wp_update_user([
             'ID' => $userId,
             'first_name' => $firstName,
@@ -78,8 +73,11 @@ final class ProfileHandler
             return $result;
         }
 
-        // Update phone meta
         update_user_meta($userId, 'phone', $phone);
+
+        ntdst_log('profile')->info('Personal profile updated', [
+            'user_id' => $userId,
+        ]);
 
         return [
             'success' => true,
@@ -88,19 +86,14 @@ final class ProfileHandler
     }
 
     /**
-     * Handle billing profile update.
+     * Update billing profile data.
      *
+     * @param int $userId User ID
      * @param array<string, mixed> $params Request parameters
      * @return array<string, mixed>|WP_Error
      */
-    public function handleUpdateBilling(array $params): array|WP_Error
+    private function updateBilling(int $userId, array $params): array|WP_Error
     {
-        $userId = get_current_user_id();
-        if (!$userId) {
-            return new WP_Error('not_logged_in', __('Je moet ingelogd zijn.', 'stride'));
-        }
-
-        // Sanitize billing fields
         $billingFields = [
             'invoice_organization_name' => sanitize_text_field($params['billing_company'] ?? ''),
             'vat_number' => sanitize_text_field($params['billing_vat'] ?? ''),
@@ -111,7 +104,6 @@ final class ProfileHandler
             'gln_number' => sanitize_text_field($params['billing_gln'] ?? ''),
         ];
 
-        // Also update legacy field names for compatibility
         $legacyMappings = [
             'invoice_organization_name' => 'company',
             'invoice_address' => 'address_line_1',
@@ -119,15 +111,17 @@ final class ProfileHandler
             'invoice_city' => 'city',
         ];
 
-        // Update all billing meta
         foreach ($billingFields as $key => $value) {
             update_user_meta($userId, $key, $value);
 
-            // Also update legacy field if mapped
             if (isset($legacyMappings[$key])) {
                 update_user_meta($userId, $legacyMappings[$key], $value);
             }
         }
+
+        ntdst_log('profile')->info('Billing profile updated', [
+            'user_id' => $userId,
+        ]);
 
         return [
             'success' => true,
@@ -136,19 +130,14 @@ final class ProfileHandler
     }
 
     /**
-     * Handle notification preferences update.
+     * Update notification preferences.
      *
+     * @param int $userId User ID
      * @param array<string, mixed> $params Request parameters
      * @return array<string, mixed>|WP_Error
      */
-    public function handleUpdateNotifications(array $params): array|WP_Error
+    private function updateNotifications(int $userId, array $params): array|WP_Error
     {
-        $userId = get_current_user_id();
-        if (!$userId) {
-            return new WP_Error('not_logged_in', __('Je moet ingelogd zijn.', 'stride'));
-        }
-
-        // Notification preferences (checkboxes - absent means 'no')
         $notifyReminders = isset($params['notify_reminders']) ? 'yes' : 'no';
         $notifyNewCourses = isset($params['notify_new_courses']) ? 'yes' : 'no';
         $notifyNewsletter = isset($params['notify_newsletter']) ? 'yes' : 'no';
@@ -157,28 +146,20 @@ final class ProfileHandler
         update_user_meta($userId, 'stride_notify_new_courses', $notifyNewCourses);
         update_user_meta($userId, 'stride_notify_newsletter', $notifyNewsletter);
 
-        // Communication language (validate against allowed values)
         $allowedLanguages = ['nl', 'fr', 'en'];
         $language = sanitize_text_field($params['communication_language'] ?? 'nl');
         if (!in_array($language, $allowedLanguages, true)) {
-            $language = 'nl'; // Default to Dutch
+            $language = 'nl';
         }
         update_user_meta($userId, 'stride_communication_language', $language);
+
+        ntdst_log('profile')->info('Notification preferences updated', [
+            'user_id' => $userId,
+        ]);
 
         return [
             'success' => true,
             'message' => __('Meldingsvoorkeuren bijgewerkt.', 'stride'),
         ];
-    }
-
-    /**
-     * Handle profile update (legacy method for backward compatibility).
-     *
-     * @param array<string, mixed> $params Request parameters
-     * @return array<string, mixed>|WP_Error
-     */
-    public function handleUpdateProfile(array $params): array|WP_Error
-    {
-        return $this->handleUpdatePersonal($params);
     }
 }

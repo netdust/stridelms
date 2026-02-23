@@ -8,6 +8,7 @@ use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
+use WP_Error;
 
 /**
  * Handles iCal download requests.
@@ -23,32 +24,33 @@ final class ICalHandler
 
     private function init(): void
     {
-        add_action('wp_ajax_stride_download_ical', [$this, 'ajaxDownloadIcal']);
+        add_filter('ntdst/api_data/stride_download_ical', [$this, 'handleDownloadIcal'], 10, 2);
     }
 
     /**
-     * AJAX: Download iCal file.
+     * Handle iCal download.
+     *
+     * Uses Response->download() which outputs the file and exits,
+     * bypassing the normal JSON response.
+     *
+     * @param mixed $data Existing data (unused)
+     * @param array<string, mixed> $params Request parameters
+     * @return never|WP_Error
      */
-    public function ajaxDownloadIcal(): void
+    public function handleDownloadIcal(mixed $data, array $params): WP_Error
     {
-        if (!wp_verify_nonce($_GET['nonce'] ?? '', 'stride_ical')) {
-            wp_die(__('Ongeldige link.', 'stride'));
-        }
-
         $userId = get_current_user_id();
         if (!$userId) {
-            wp_die(__('Je moet ingelogd zijn.', 'stride'));
+            return new WP_Error('not_logged_in', __('Je moet ingelogd zijn.', 'stride'));
         }
 
-        $sessionId = absint($_GET['session_id'] ?? 0);
-        $editionId = absint($_GET['edition_id'] ?? 0);
+        $sessionId = absint($params['session_id'] ?? 0);
+        $editionId = absint($params['edition_id'] ?? 0);
 
         $ical = $this->generateIcal($userId, $sessionId, $editionId);
 
-        header('Content-Type: text/calendar; charset=utf-8');
-        header('Content-Disposition: attachment; filename="stride-calendar.ics"');
-        echo $ical;
-        exit;
+        // This exits - never returns
+        ntdst_response()->download($ical, 'stride-calendar.ics');
     }
 
     /**

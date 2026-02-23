@@ -22,19 +22,13 @@ final class QuoteUpdateHandler
 
     private function init(): void
     {
-        // Register API handlers using NTDST filter pattern
         add_filter('ntdst/api_data/stride_update_quote', [$this, 'handleUpdateQuote'], 10, 2);
         add_filter('ntdst/api_data/stride_apply_quote_voucher', [$this, 'handleApplyVoucher'], 10, 2);
         add_filter('ntdst/api_data/stride_cancel_quote', [$this, 'handleCancelQuote'], 10, 2);
-
-        // Fallback: Also register as wp_ajax for compatibility
-        add_action('wp_ajax_stride_update_quote', [$this, 'ajaxUpdateQuote']);
-        add_action('wp_ajax_stride_apply_quote_voucher', [$this, 'ajaxApplyVoucher']);
-        add_action('wp_ajax_stride_cancel_quote', [$this, 'ajaxCancelQuote']);
     }
 
     /**
-     * Handle quote update via NTDST API.
+     * Handle quote update.
      *
      * @param mixed $data Existing data (unused)
      * @param array<string, mixed> $params Request parameters
@@ -81,7 +75,7 @@ final class QuoteUpdateHandler
     }
 
     /**
-     * Handle voucher application via NTDST API.
+     * Handle voucher application.
      *
      * @param mixed $data Existing data (unused)
      * @param array<string, mixed> $params Request parameters
@@ -130,7 +124,7 @@ final class QuoteUpdateHandler
     }
 
     /**
-     * Handle quote cancellation via NTDST API.
+     * Handle quote cancellation.
      *
      * @param mixed $data Existing data (unused)
      * @param array<string, mixed> $params Request parameters
@@ -247,59 +241,5 @@ final class QuoteUpdateHandler
         }
 
         return $sanitized;
-    }
-
-    /**
-     * AJAX fallback: Update quote.
-     */
-    public function ajaxUpdateQuote(): void
-    {
-        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'stride_quote_update')) {
-            wp_send_json_error(['message' => __('Ongeldige beveiligingstoken.', 'stride')]);
-        }
-
-        $result = $this->handleUpdateQuote(null, $_POST);
-
-        if (is_wp_error($result)) {
-            wp_send_json_error(['message' => $result->get_error_message()]);
-        }
-
-        wp_send_json_success($result);
-    }
-
-    /**
-     * AJAX fallback: Apply voucher.
-     */
-    public function ajaxApplyVoucher(): void
-    {
-        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'stride_quote_update')) {
-            wp_send_json_error(['message' => __('Ongeldige beveiligingstoken.', 'stride')]);
-        }
-
-        $result = $this->handleApplyVoucher(null, $_POST);
-
-        if (is_wp_error($result)) {
-            wp_send_json_error(['message' => $result->get_error_message()]);
-        }
-
-        wp_send_json_success($result);
-    }
-
-    /**
-     * AJAX fallback: Cancel quote.
-     */
-    public function ajaxCancelQuote(): void
-    {
-        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'stride_quote_update')) {
-            wp_send_json_error(['message' => __('Ongeldige beveiligingstoken.', 'stride')]);
-        }
-
-        $result = $this->handleCancelQuote(null, $_POST);
-
-        if (is_wp_error($result)) {
-            wp_send_json_error(['message' => $result->get_error_message()]);
-        }
-
-        wp_send_json_success($result);
     }
 }

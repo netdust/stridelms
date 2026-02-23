@@ -6,18 +6,18 @@ namespace Stride\Handlers;
 
 use Stride\Domain\Money;
 use Stride\Modules\Edition\EditionService;
-use Stride\Modules\Edition\SessionSelectionService;
+use Stride\Modules\Edition\SessionSelection;
 use Stride\Modules\Enrollment\EnrollmentService;
 use Stride\Modules\Invoicing\QuoteService;
 use Stride\Modules\Invoicing\VoucherService;
-use Stride\Modules\Trajectory\TrajectorySelectionService;
+use Stride\Modules\Trajectory\TrajectorySelection;
 use Stride\Modules\Trajectory\TrajectoryService;
 use WP_Error;
 
 /**
  * Handles enrollment form API requests.
  *
- * Thin handler - validates input, delegates to EnrollmentService/TrajectorySelectionService.
+ * Thin handler - validates input, delegates to EnrollmentService/TrajectorySelection.
  * Supports both edition and trajectory enrollments via item_type parameter.
  */
 final class EnrollmentFormHandler
@@ -29,37 +29,13 @@ final class EnrollmentFormHandler
 
     private function init(): void
     {
-        // NTDST API pattern (primary)
         add_filter('ntdst/api_data/stride_submit_enrollment', [$this, 'handleSubmitEnrollment'], 10, 2);
         add_filter('ntdst/api_data/stride_validate_voucher', [$this, 'handleValidateVoucher'], 10, 2);
         add_filter('ntdst/api_data/stride_save_session_selection', [$this, 'handleSaveSessionSelection'], 10, 2);
-
-        // AJAX fallback for compatibility
-        add_action('wp_ajax_stride_submit_enrollment', [$this, 'ajaxSubmitEnrollment']);
-        add_action('wp_ajax_stride_validate_voucher', [$this, 'ajaxValidateVoucher']);
-        add_action('wp_ajax_stride_save_session_selection', [$this, 'ajaxSaveSessionSelection']);
     }
 
     /**
-     * AJAX: Submit enrollment form.
-     */
-    public function ajaxSubmitEnrollment(): void
-    {
-        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'stride_enrollment')) {
-            wp_send_json_error(['message' => __('Ongeldige beveiligingstoken.', 'stride')]);
-        }
-
-        $result = $this->handleSubmitEnrollment(null, $_POST);
-
-        if (is_wp_error($result)) {
-            wp_send_json_error(['message' => $result->get_error_message()]);
-        }
-
-        wp_send_json_success($result);
-    }
-
-    /**
-     * Handle enrollment submission via NTDST API.
+     * Handle enrollment submission.
      *
      * Routes to edition or trajectory enrollment based on item_type parameter.
      *
@@ -189,8 +165,8 @@ final class EnrollmentFormHandler
             return $validation;
         }
 
-        // Create enrollment via TrajectorySelectionService
-        $selectionService = ntdst_get(TrajectorySelectionService::class);
+        // Create enrollment via TrajectorySelection
+        $selectionService = ntdst_get(TrajectorySelection::class);
         $enrollmentId = $selectionService->enroll($userId, $trajectoryId);
 
         if (is_wp_error($enrollmentId)) {
@@ -322,25 +298,7 @@ final class EnrollmentFormHandler
     }
 
     /**
-     * AJAX: Validate voucher code.
-     */
-    public function ajaxValidateVoucher(): void
-    {
-        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'stride_enrollment')) {
-            wp_send_json_error(['message' => __('Ongeldige beveiligingstoken.', 'stride')]);
-        }
-
-        $result = $this->handleValidateVoucher(null, $_POST);
-
-        if (is_wp_error($result)) {
-            wp_send_json_error(['message' => $result->get_error_message()]);
-        }
-
-        wp_send_json_success($result);
-    }
-
-    /**
-     * Handle voucher validation via NTDST API.
+     * Handle voucher validation.
      *
      * @param mixed $data Existing data (unused)
      * @param array<string, mixed> $params Request parameters
@@ -414,25 +372,7 @@ final class EnrollmentFormHandler
     }
 
     /**
-     * AJAX: Save session selection.
-     */
-    public function ajaxSaveSessionSelection(): void
-    {
-        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'stride_session_selection')) {
-            wp_send_json_error(['message' => __('Ongeldige beveiligingstoken.', 'stride')]);
-        }
-
-        $result = $this->handleSaveSessionSelection(null, $_POST);
-
-        if (is_wp_error($result)) {
-            wp_send_json_error(['message' => $result->get_error_message()]);
-        }
-
-        wp_send_json_success($result);
-    }
-
-    /**
-     * Handle session selection save via NTDST API.
+     * Handle session selection save.
      *
      * @param mixed $data Existing data (unused)
      * @param array<string, mixed> $params Request parameters
@@ -448,7 +388,7 @@ final class EnrollmentFormHandler
             return new WP_Error('invalid_input', __('Geen registratie opgegeven.', 'stride'));
         }
 
-        $sessionSelection = ntdst_get(SessionSelectionService::class);
+        $sessionSelection = ntdst_get(SessionSelection::class);
         if (!$sessionSelection) {
             return new WP_Error('service_unavailable', __('Service niet beschikbaar.', 'stride'));
         }
