@@ -2271,10 +2271,9 @@ body.has-bottom-nav {
    ========================================================================== */
 
 .str-header-account {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 1000;
+    display: flex;
+    align-items: center;
+    margin-left: var(--str-space-md);
 }
 
 .str-header-account__link {
@@ -2289,13 +2288,12 @@ body.has-bottom-nav {
     text-decoration: none;
     font-size: 0.875rem;
     font-weight: 500;
-    box-shadow: var(--str-shadow);
     transition: var(--str-transition);
 }
 
 .str-header-account__link:hover {
     border-color: var(--str-primary);
-    box-shadow: var(--str-shadow-md);
+    color: var(--str-primary);
 }
 
 .str-header-account__link--login {
@@ -2328,16 +2326,11 @@ body.has-bottom-nav {
     white-space: nowrap;
 }
 
-@media (max-width: 767px) {
-    .str-header-account {
-        top: 12px;
-        right: 60px; /* Space for mobile menu toggle */
-    }
-    
+@media (max-width: 1024px) {
     .str-header-account__name {
         display: none;
     }
-    
+
     .str-header-account__link {
         padding: var(--str-space-sm);
     }

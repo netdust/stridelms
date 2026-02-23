@@ -110,11 +110,15 @@ add_action('wp_footer', function () {
 }, 100);
 
 /**
- * Add login/profile button to header
+ * Add login/profile button to header (in the right column)
  */
-add_action('kadence_header', function () {
+add_action('kadence_render_header_column', function ($row, $column) {
+    // Only add to main row, right column
+    if ($row !== 'main' || $column !== 'right') {
+        return;
+    }
     ?>
-    <div class="str-header-account">
+    <div class="site-header-item site-header-focus-item str-header-account">
         <?php if (is_user_logged_in()): ?>
             <?php
             $user = wp_get_current_user();
@@ -132,7 +136,7 @@ add_action('kadence_header', function () {
         <?php endif; ?>
     </div>
     <?php
-}, 50);
+}, 20, 2);
 
 /**
  * Register navigation menus
