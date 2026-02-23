@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Stride\Modules\Enrollment;
 
+use NTDST_Response;
+use Stride\Contracts\EditionQueryInterface;
 use Stride\Infrastructure\AbstractService;
 use Stride\Modules\Trajectory\TrajectoryService;
 
@@ -53,10 +55,8 @@ final class EnrollmentRouterService extends AbstractService
 
     /**
      * Handle trajectory enrollment route.
-     *
-     * @return \NTDST_Response|string|null
      */
-    private function handleTrajectoryEnrollment(string $slug)
+    private function handleTrajectoryEnrollment(string $slug): NTDST_Response|string
     {
         // Look up trajectory by slug
         $trajectory = get_page_by_path($slug, OBJECT, 'vad_trajectory');
@@ -68,8 +68,8 @@ final class EnrollmentRouterService extends AbstractService
         // Check login status
         if (!is_user_logged_in()) {
             $returnUrl = home_url('/trajecten/' . $slug . '/inschrijving/');
-            wp_redirect(wp_login_url($returnUrl));
-            exit;
+            wp_safe_redirect(wp_login_url($returnUrl));
+            exit; // Required after redirect - router won't continue
         }
 
         // Check if enrollment is open
@@ -85,10 +85,8 @@ final class EnrollmentRouterService extends AbstractService
 
     /**
      * Handle course/edition enrollment route.
-     *
-     * @return \NTDST_Response|string|null
      */
-    private function handleCourseEnrollment(string $slug)
+    private function handleCourseEnrollment(string $slug): NTDST_Response|string
     {
         // Look up edition by slug
         $edition = get_page_by_path($slug, OBJECT, 'vad_edition');
@@ -100,14 +98,18 @@ final class EnrollmentRouterService extends AbstractService
         // Check login status
         if (!is_user_logged_in()) {
             $returnUrl = home_url('/cursussen/' . $slug . '/inschrijving/');
-            wp_redirect(wp_login_url($returnUrl));
-            exit;
+            wp_safe_redirect(wp_login_url($returnUrl));
+            exit; // Required after redirect - router won't continue
         }
+
+        // Check if enrollment is open via EditionQueryInterface
+        $editionService = ntdst_get(EditionQueryInterface::class);
+        $enrollmentOpen = $editionService->getStatus($edition->ID)->allowsEnrollment();
 
         return ntdst_response()
             ->with('item', $edition)
             ->with('type', 'edition')
-            ->with('enrollment_open', true) // TODO: Check edition status
+            ->with('enrollment_open', $enrollmentOpen)
             ->template('enrollment/form');
     }
 
@@ -123,6 +125,8 @@ final class EnrollmentRouterService extends AbstractService
         status_header(404);
         nocache_headers();
 
-        return get_404_template();
+        $template = get_404_template();
+
+        return $template ?: '';
     }
 }
