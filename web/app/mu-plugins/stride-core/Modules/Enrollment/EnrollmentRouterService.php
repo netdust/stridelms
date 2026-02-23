@@ -15,6 +15,9 @@ use Stride\Modules\Trajectory\TrajectoryService;
  * Handles clean URLs for trajectory and course enrollment:
  * - /trajecten/{slug}/inschrijving/ -> Trajectory enrollment
  * - /cursussen/{slug}/inschrijving/ -> Course/edition enrollment (future)
+ *
+ * Uses WordPress rewrite rules to ensure these URLs are handled
+ * before WordPress tries to match them as CPT attachments.
  */
 final class EnrollmentRouterService extends AbstractService
 {
@@ -34,91 +37,144 @@ final class EnrollmentRouterService extends AbstractService
 
     protected function init(): void
     {
-        $this->registerRoutes();
+        // Register rewrite rules and query vars
+        add_action('init', [$this, 'addRewriteRules'], 20);
+        add_filter('query_vars', [$this, 'addQueryVars']);
+
+        // Handle the routing via template_redirect (before template_include)
+        add_action('template_redirect', [$this, 'handleEnrollmentRoutes'], 5);
     }
 
     /**
-     * Register routes with the NTDST router.
+     * Add custom rewrite rules for enrollment URLs.
+     * These must run BEFORE the CPT rewrite rules to take precedence.
      */
-    private function registerRoutes(): void
+    public function addRewriteRules(): void
     {
-        // Trajectory enrollment route
-        ntdst_router()->get('trajecten/:slug/inschrijving', function (array $params) {
-            return $this->handleTrajectoryEnrollment($params['slug']);
-        });
+        // Trajectory enrollment: /trajecten/{slug}/inschrijving/
+        add_rewrite_rule(
+            '^trajecten/([^/]+)/inschrijving/?$',
+            'index.php?stride_enrollment=trajectory&stride_enrollment_slug=$matches[1]',
+            'top'
+        );
 
-        // Course/edition enrollment route (future-proofing)
-        ntdst_router()->get('cursussen/:slug/inschrijving', function (array $params) {
-            return $this->handleCourseEnrollment($params['slug']);
-        });
+        // Edition enrollment: /vormingen/{slug}/inschrijving/
+        add_rewrite_rule(
+            '^vormingen/([^/]+)/inschrijving/?$',
+            'index.php?stride_enrollment=edition&stride_enrollment_slug=$matches[1]',
+            'top'
+        );
+    }
+
+    /**
+     * Register custom query variables.
+     */
+    public function addQueryVars(array $vars): array
+    {
+        $vars[] = 'stride_enrollment';
+        $vars[] = 'stride_enrollment_slug';
+        return $vars;
+    }
+
+    /**
+     * Handle enrollment routes via template_redirect.
+     */
+    public function handleEnrollmentRoutes(): void
+    {
+        $enrollmentType = get_query_var('stride_enrollment');
+        $slug = get_query_var('stride_enrollment_slug');
+
+        if (!$enrollmentType || !$slug) {
+            return;
+        }
+
+        if ($enrollmentType === 'trajectory') {
+            $this->handleTrajectoryEnrollment($slug);
+            exit;
+        }
+
+        if ($enrollmentType === 'edition') {
+            $this->handleCourseEnrollment($slug);
+            exit;
+        }
     }
 
     /**
      * Handle trajectory enrollment route.
      */
-    private function handleTrajectoryEnrollment(string $slug): NTDST_Response|string
+    private function handleTrajectoryEnrollment(string $slug): void
     {
         // Look up trajectory by slug
         $trajectory = get_page_by_path($slug, OBJECT, 'vad_trajectory');
 
         if (!$trajectory) {
-            return $this->trigger404();
+            $this->trigger404();
+            return;
         }
 
         // Check login status
         if (!is_user_logged_in()) {
             $returnUrl = home_url('/trajecten/' . $slug . '/inschrijving/');
             wp_safe_redirect(wp_login_url($returnUrl));
-            exit; // Required after redirect - router won't continue
+            exit;
         }
 
         // Check if enrollment is open
         $trajectoryService = ntdst_get(TrajectoryService::class);
         $enrollmentOpen = $trajectoryService->isEnrollmentOpen($trajectory->ID);
 
-        return ntdst_response()
+        // Render the enrollment form
+        ntdst_response()
             ->with('item', $trajectory)
             ->with('type', 'trajectory')
             ->with('enrollment_open', $enrollmentOpen)
-            ->template('enrollment/form');
+            ->render('enrollment/form');
     }
 
     /**
      * Handle course/edition enrollment route.
      */
-    private function handleCourseEnrollment(string $slug): NTDST_Response|string
+    private function handleCourseEnrollment(string $slug): void
     {
-        // Look up edition by slug
+        // Look up edition by slug (editions use numeric IDs as slugs)
         $edition = get_page_by_path($slug, OBJECT, 'vad_edition');
 
+        // Also try by ID if slug lookup fails (editions often use ID-based URLs)
+        if (!$edition && is_numeric($slug)) {
+            $edition = get_post((int) $slug);
+            if ($edition && $edition->post_type !== 'vad_edition') {
+                $edition = null;
+            }
+        }
+
         if (!$edition) {
-            return $this->trigger404();
+            $this->trigger404();
+            return;
         }
 
         // Check login status
         if (!is_user_logged_in()) {
-            $returnUrl = home_url('/cursussen/' . $slug . '/inschrijving/');
+            $returnUrl = home_url('/vormingen/' . $slug . '/inschrijving/');
             wp_safe_redirect(wp_login_url($returnUrl));
-            exit; // Required after redirect - router won't continue
+            exit;
         }
 
         // Check if enrollment is open via EditionQueryInterface
         $editionService = ntdst_get(EditionQueryInterface::class);
         $enrollmentOpen = $editionService->getStatus($edition->ID)->allowsEnrollment();
 
-        return ntdst_response()
+        // Render the enrollment form
+        ntdst_response()
             ->with('item', $edition)
             ->with('type', 'edition')
             ->with('enrollment_open', $enrollmentOpen)
-            ->template('enrollment/form');
+            ->render('enrollment/form');
     }
 
     /**
-     * Trigger a 404 response.
-     *
-     * Sets WordPress 404 status and returns the 404 template.
+     * Trigger a 404 response and render the 404 template.
      */
-    private function trigger404(): string
+    private function trigger404(): void
     {
         global $wp_query;
         $wp_query->set_404();
@@ -126,7 +182,9 @@ final class EnrollmentRouterService extends AbstractService
         nocache_headers();
 
         $template = get_404_template();
-
-        return $template ?: '';
+        if ($template) {
+            include $template;
+        }
+        exit;
     }
 }
