@@ -8,7 +8,7 @@ declare(strict_types=1);
  * Service registration and DI bindings.
  */
 
-use Stride\Adapters\LearnDashAdapter;
+use Stride\Integrations\LearnDash\LearnDashAdapter;
 use Stride\Contracts\EditionQueryInterface;
 use Stride\Contracts\LMSAdapterInterface;
 use Stride\Modules\Edition\EditionService;
@@ -37,6 +37,7 @@ return [
         \Stride\Modules\Edition\SessionSelectionService::class,
         \Stride\Modules\Edition\Admin\EditionAdminController::class,
         \Stride\Modules\Enrollment\EnrollmentService::class,
+        \Stride\Modules\Enrollment\EnrollmentRouterService::class,
         \Stride\Modules\Invoicing\QuoteService::class,
         \Stride\Modules\Invoicing\VoucherService::class,
         \Stride\Modules\Invoicing\Admin\QuoteAdminController::class,
