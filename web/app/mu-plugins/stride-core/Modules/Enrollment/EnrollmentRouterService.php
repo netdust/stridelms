@@ -32,35 +32,7 @@ final class EnrollmentRouterService extends AbstractService
 
     protected function init(): void
     {
-        $this->registerRewriteRules();
         $this->registerRoutes();
-    }
-
-    /**
-     * Register rewrite rules to prevent 404.
-     *
-     * WordPress needs to know these URLs are valid before the router can handle them.
-     */
-    private function registerRewriteRules(): void
-    {
-        add_action('init', function (): void {
-            // Trajectory enrollment: /trajecten/{slug}/inschrijving/
-            add_rewrite_rule(
-                '^trajecten/([^/]+)/inschrijving/?$',
-                'index.php?ntdst_route=1',
-                'top'
-            );
-
-            // Course/edition enrollment: /cursussen/{slug}/inschrijving/
-            add_rewrite_rule(
-                '^cursussen/([^/]+)/inschrijving/?$',
-                'index.php?ntdst_route=1',
-                'top'
-            );
-        });
-
-        // Register query var
-        add_filter('query_vars', fn(array $vars): array => array_merge($vars, ['ntdst_route']));
     }
 
     /**
