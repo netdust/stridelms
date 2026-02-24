@@ -95,14 +95,18 @@ return [
     // SERVICES CONFIGURATION
     // ========================================
     // Note: Business logic services are in stride-core mu-plugin
-    // Frontend services will be added during frontend implementation
+    // Frontend services live in the theme (presentation layer)
     'services' => [
-        'core' => [],
+        'core' => [
+            \stride\services\frontend\TrajectoryDashboardService::class,
+        ],
         'handlers' => [],
         'admin' => [],
         'conditional' => [],
         'auto_discover' => false,
-        'discovery_paths' => [],
+        'discovery_paths' => [
+            __DIR__ . '/services',
+        ],
     ],
 
     // ========================================
