@@ -75,6 +75,24 @@ add_action('after_setup_theme', function () {
 }, 10);
 
 // ========================================
+// ROUTING / REWRITE RULES
+// ========================================
+
+// Personal trajectory dashboard routing
+add_action('init', function (): void {
+    add_rewrite_rule(
+        '^mijn-account/trajecten/([^/]+)/?$',
+        'index.php?pagename=mijn-account&trajectory_slug=$matches[1]',
+        'top'
+    );
+}, 10);
+
+add_filter('query_vars', function (array $vars): array {
+    $vars[] = 'trajectory_slug';
+    return $vars;
+});
+
+// ========================================
 // VITE ASSETS
 // ========================================
 
@@ -323,7 +341,7 @@ function stridence_fallback_menu(): void
 {
     echo '<ul class="flex items-center gap-1">';
     echo '<li><a href="' . esc_url(home_url('/')) . '" class="nav-link">' . esc_html__('Home', 'stridence') . '</a></li>';
-    echo '<li><a href="' . esc_url(home_url('/cursussen/')) . '" class="nav-link">' . esc_html__('Cursussen', 'stridence') . '</a></li>';
+    echo '<li><a href="' . esc_url(home_url('/opleidingen/')) . '" class="nav-link">' . esc_html__('Opleidingen', 'stridence') . '</a></li>';
     echo '<li><a href="' . esc_url(home_url('/trajecten/')) . '" class="nav-link">' . esc_html__('Trajecten', 'stridence') . '</a></li>';
     echo '</ul>';
 }
@@ -335,10 +353,27 @@ function stridence_fallback_menu_mobile(): void
 {
     echo '<ul class="space-y-1">';
     echo '<li><a href="' . esc_url(home_url('/')) . '" class="block nav-link">' . esc_html__('Home', 'stridence') . '</a></li>';
-    echo '<li><a href="' . esc_url(home_url('/cursussen/')) . '" class="block nav-link">' . esc_html__('Cursussen', 'stridence') . '</a></li>';
+    echo '<li><a href="' . esc_url(home_url('/opleidingen/')) . '" class="block nav-link">' . esc_html__('Opleidingen', 'stridence') . '</a></li>';
     echo '<li><a href="' . esc_url(home_url('/trajecten/')) . '" class="block nav-link">' . esc_html__('Trajecten', 'stridence') . '</a></li>';
     echo '</ul>';
 }
+
+// ========================================
+// LEARNDASH PERMALINK OVERRIDE
+// ========================================
+
+/**
+ * Override LearnDash course permalink slug to 'opleidingen'
+ *
+ * LearnDash stores its slug in learndash_settings_permalinks option.
+ * We filter the option value to override without changing the database.
+ */
+add_filter('option_learndash_settings_permalinks', function ($value) {
+    if (is_array($value)) {
+        $value['courses'] = 'opleidingen';
+    }
+    return $value;
+});
 
 // ========================================
 // BODY CLASSES
@@ -355,6 +390,146 @@ add_filter('body_class', function ($classes) {
 
     return $classes;
 });
+
+// ========================================
+// SHORTCODES
+// ========================================
+
+/**
+ * Enrollment form shortcode
+ *
+ * Usage: [stride_enrollment]
+ * URL parameter: ?editie=<edition_id>
+ */
+add_shortcode('stride_enrollment', function ($atts = []) {
+    $edition_id = isset($_GET['editie']) ? absint($_GET['editie']) : 0;
+
+    if (!$edition_id) {
+        return stridence_render_error_state(
+            'alert-circle',
+            __('Geen editie geselecteerd', 'stridence'),
+            __('Selecteer eerst een editie via de cursuspagina.', 'stridence'),
+            __('Naar cursussen', 'stridence'),
+            get_post_type_archive_link('sfwd-courses')
+        );
+    }
+
+    $edition = get_post($edition_id);
+    if (!$edition || $edition->post_type !== 'vad_edition') {
+        return stridence_render_error_state(
+            'alert-circle',
+            __('Editie niet gevonden', 'stridence'),
+            __('Deze editie bestaat niet of is verwijderd.', 'stridence'),
+            __('Naar cursussen', 'stridence'),
+            get_post_type_archive_link('sfwd-courses')
+        );
+    }
+
+    // Pre-fetch edition data for template (used by Alpine component)
+    $item_data = [
+        'id' => $edition_id,
+        'title' => $edition->post_title,
+    ];
+
+    ob_start();
+    get_template_part('templates/forms/enrollment', null, [
+        'item_id' => $edition_id,
+        'item_type' => 'edition',
+        'item_data' => $item_data,
+    ]);
+    return ob_get_clean();
+});
+
+/**
+ * Interest form shortcode
+ *
+ * Usage: [stride_interest]
+ * URL parameters: ?cursus=<course_id> or ?traject=<trajectory_id>
+ */
+add_shortcode('stride_interest', function ($atts = []) {
+    $course_id = isset($_GET['cursus']) ? absint($_GET['cursus']) : 0;
+    $trajectory_id = isset($_GET['traject']) ? absint($_GET['traject']) : 0;
+
+    // Handle trajectory interest
+    if ($trajectory_id) {
+        $trajectory = get_post($trajectory_id);
+        if (!$trajectory || $trajectory->post_type !== 'vad_trajectory') {
+            return stridence_render_error_state(
+                'alert-circle',
+                __('Traject niet gevonden', 'stridence'),
+                __('Dit traject bestaat niet of is verwijderd.', 'stridence'),
+                __('Naar trajecten', 'stridence'),
+                get_post_type_archive_link('vad_trajectory')
+            );
+        }
+
+        ob_start();
+        get_template_part('templates/forms/interest-trajectory', null, [
+            'trajectory_id' => $trajectory_id,
+            'trajectory' => $trajectory,
+        ]);
+        return ob_get_clean();
+    }
+
+    // Handle course interest
+    if (!$course_id) {
+        return stridence_render_error_state(
+            'alert-circle',
+            __('Geen cursus geselecteerd', 'stridence'),
+            __('Selecteer eerst een cursus of traject.', 'stridence'),
+            __('Naar cursussen', 'stridence'),
+            get_post_type_archive_link('sfwd-courses')
+        );
+    }
+
+    $course = get_post($course_id);
+    if (!$course || $course->post_type !== 'sfwd-courses') {
+        return stridence_render_error_state(
+            'alert-circle',
+            __('Cursus niet gevonden', 'stridence'),
+            __('Deze cursus bestaat niet of is verwijderd.', 'stridence'),
+            __('Naar cursussen', 'stridence'),
+            get_post_type_archive_link('sfwd-courses')
+        );
+    }
+
+    // Pre-fetch course data for template
+    $course_data = [
+        'id' => $course_id,
+        'title' => $course->post_title,
+    ];
+
+    ob_start();
+    get_template_part('templates/forms/interest', null, [
+        'course_id' => $course_id,
+        'course_data' => $course_data,
+    ]);
+    return ob_get_clean();
+});
+
+/**
+ * Render error state card
+ */
+function stridence_render_error_state(string $icon, string $title, string $message, string $action_label, string $action_url): string
+{
+    ob_start();
+    ?>
+    <div class="container py-8 lg:py-12">
+        <div class="card p-8 text-center max-w-lg mx-auto">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-error/10 flex items-center justify-center">
+                <?php echo stridence_icon($icon, 'w-8 h-8 text-error'); ?>
+            </div>
+            <h2 class="text-lg font-semibold mb-2"><?php echo esc_html($title); ?></h2>
+            <p class="text-text-muted mb-6"><?php echo esc_html($message); ?></p>
+            <a href="<?php echo esc_url($action_url); ?>" class="btn-primary">
+                <?php echo stridence_icon('arrow-left', 'w-4 h-4 mr-2'); ?>
+                <?php echo esc_html($action_label); ?>
+            </a>
+        </div>
+    </div>
+    <?php
+    return ob_get_clean();
+}
 
 // ========================================
 // HELPER FUNCTIONS
