@@ -111,6 +111,16 @@ final class TrajectoryAdminController extends AbstractService
             'default'
         );
 
+        // Messages metabox
+        add_meta_box(
+            'stride_trajectory_messages',
+            __('Berichten', 'stride'),
+            [$this, 'renderMessagesMetabox'],
+            TrajectoryCPT::POST_TYPE,
+            'normal',
+            'default'
+        );
+
         // Sidebar
         add_meta_box(
             'stride_trajectory_actions',
@@ -145,32 +155,35 @@ final class TrajectoryAdminController extends AbstractService
             true
         );
 
-        // Trajectory admin styles
-        $cssFile = get_stylesheet_directory() . '/assets/css/admin/trajectory-admin.css';
+        // Trajectory admin styles (from stride-core mu-plugin)
+        $basePath = dirname(__DIR__, 3);
+        $cssFile = $basePath . '/assets/css/admin/trajectory-admin.css';
         if (file_exists($cssFile)) {
             wp_enqueue_style(
                 'stride-trajectory-admin',
-                get_stylesheet_directory_uri() . '/assets/css/admin/trajectory-admin.css',
+                plugins_url('assets/css/admin/trajectory-admin.css', $basePath . '/stride-core.php'),
                 ['select2'],
                 filemtime($cssFile)
             );
         }
 
-        // Trajectory admin scripts
-        $jsFile = get_stylesheet_directory() . '/assets/js/admin/trajectory-admin.js';
+        // Trajectory admin scripts (from stride-core mu-plugin)
+        $jsFile = $basePath . '/assets/js/admin/trajectory-admin.js';
         if (file_exists($jsFile)) {
             wp_enqueue_script(
                 'stride-trajectory-admin',
-                get_stylesheet_directory_uri() . '/assets/js/admin/trajectory-admin.js',
+                plugins_url('assets/js/admin/trajectory-admin.js', $basePath . '/stride-core.php'),
                 ['jquery', 'select2'],
                 filemtime($jsFile),
                 true
             );
 
+            $currentUser = wp_get_current_user();
             wp_localize_script('stride-trajectory-admin', 'strideTrajectoryAdmin', [
                 'ajaxUrl' => admin_url('admin-ajax.php'),
                 'nonce' => wp_create_nonce(self::NONCE_AJAX),
                 'trajectoryId' => $post ? $post->ID : 0,
+                'currentUser' => $currentUser->display_name ?: $currentUser->user_login,
                 'i18n' => [
                     'searchCourse' => __('Zoek cursus...', 'stride'),
                     'searchCourseOrEdition' => __('Zoek cursus of editie...', 'stride'),
@@ -184,6 +197,13 @@ final class TrajectoryAdminController extends AbstractService
                     'error' => __('Er ging iets mis.', 'stride'),
                     'editionBadge' => __('Editie', 'stride'),
                     'onlineBadge' => __('Online', 'stride'),
+                    // Messages i18n
+                    'enterMessage' => __('Vul een bericht in.', 'stride'),
+                    'noMessages' => __('Nog geen berichten toegevoegd.', 'stride'),
+                    'remove' => __('Verwijderen', 'stride'),
+                    'announcement' => __('Mededeling', 'stride'),
+                    'faq' => __('Vraag', 'stride'),
+                    'update' => __('Update', 'stride'),
                 ],
             ]);
         }
@@ -728,6 +748,241 @@ final class TrajectoryAdminController extends AbstractService
         <?php
     }
 
+    public function renderMessagesMetabox(WP_Post $post): void
+    {
+        // For new trajectories, show placeholder
+        if ($post->post_status === 'auto-draft') {
+            echo '<p class="description">' . esc_html__('Sla het traject eerst op om berichten toe te voegen.', 'stride') . '</p>';
+            return;
+        }
+
+        $messages = $this->repository->getField($post->ID, 'trajectory_messages', []);
+        if (is_string($messages)) {
+            $messages = json_decode($messages, true) ?: [];
+        }
+
+        // Message types configuration
+        $messageTypes = [
+            'announcement' => [
+                'label' => __('Mededeling', 'stride'),
+                'icon' => 'megaphone',
+                'color' => 'announcement',
+            ],
+            'faq' => [
+                'label' => __('Vraag', 'stride'),
+                'icon' => 'editor-help',
+                'color' => 'faq',
+            ],
+            'update' => [
+                'label' => __('Update', 'stride'),
+                'icon' => 'update',
+                'color' => 'update',
+            ],
+        ];
+        ?>
+        <style>
+            .stride-messages-timeline { margin-bottom: 16px; }
+            .stride-message-item { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f0f0f1; position: relative; }
+            .stride-message-item:last-child { border-bottom: none; }
+            .stride-message-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+            .stride-message-icon.announcement { background: #e6f4ea; color: #1e7e34; }
+            .stride-message-icon.faq { background: #fff3cd; color: #856404; }
+            .stride-message-icon.update { background: #e5f0f8; color: #2271b1; }
+            .stride-message-icon .dashicons { font-size: 16px; width: 16px; height: 16px; }
+            .stride-message-body { flex: 1; min-width: 0; }
+            .stride-message-meta { display: flex; gap: 8px; align-items: center; font-size: 12px; color: #646970; margin-bottom: 4px; }
+            .stride-message-meta .author { font-weight: 500; color: #1d2327; }
+            .stride-message-meta .type-badge { padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 500; }
+            .stride-message-meta .type-badge.announcement { background: #e6f4ea; color: #1e7e34; }
+            .stride-message-meta .type-badge.faq { background: #fff3cd; color: #856404; }
+            .stride-message-meta .type-badge.update { background: #e5f0f8; color: #2271b1; }
+            .stride-message-content { font-size: 13px; color: #1d2327; line-height: 1.5; white-space: pre-wrap; }
+            .stride-message-delete { color: #b32d2e; cursor: pointer; opacity: 0; transition: opacity 0.15s; position: absolute; right: 0; top: 12px; }
+            .stride-message-item:hover .stride-message-delete { opacity: 1; }
+            .stride-empty-messages { padding: 24px; text-align: center; color: #646970; background: #f9f9f9; border-radius: 4px; }
+            .stride-add-message-form textarea { width: 100%; min-height: 80px; margin-bottom: 8px; resize: vertical; }
+            .stride-add-message-form .form-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+            .stride-add-message-form .type-selector { display: flex; gap: 12px; }
+            .stride-add-message-form .type-selector label { display: flex; align-items: center; gap: 4px; cursor: pointer; font-size: 12px; }
+            .stride-add-message-form .type-selector input[type="radio"] { margin: 0; }
+            .stride-add-message-form .type-icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; }
+            .stride-add-message-form .type-icon.announcement { background: #e6f4ea; color: #1e7e34; }
+            .stride-add-message-form .type-icon.faq { background: #fff3cd; color: #856404; }
+            .stride-add-message-form .type-icon.update { background: #e5f0f8; color: #2271b1; }
+            .stride-add-message-form .type-icon .dashicons { font-size: 12px; width: 12px; height: 12px; }
+        </style>
+
+        <!-- Messages Timeline -->
+        <div id="stride-messages-list" class="stride-messages-timeline">
+            <?php if (empty($messages)): ?>
+                <div class="stride-empty-messages">
+                    <?php esc_html_e('Nog geen berichten toegevoegd.', 'stride'); ?>
+                </div>
+            <?php else: ?>
+                <?php foreach ($messages as $index => $message): ?>
+                    <?php if (!empty($message['_deleted'])) continue; ?>
+                    <?php
+                    $type = $message['type'] ?? 'announcement';
+                    $typeConfig = $messageTypes[$type] ?? $messageTypes['announcement'];
+                    ?>
+                    <div class="stride-message-item" data-index="<?php echo esc_attr($index); ?>">
+                        <div class="stride-message-icon <?php echo esc_attr($type); ?>">
+                            <span class="dashicons dashicons-<?php echo esc_attr($typeConfig['icon']); ?>"></span>
+                        </div>
+                        <div class="stride-message-body">
+                            <div class="stride-message-meta">
+                                <span class="author"><?php echo esc_html($message['author'] ?? __('Onbekend', 'stride')); ?></span>
+                                <span class="type-badge <?php echo esc_attr($type); ?>"><?php echo esc_html($typeConfig['label']); ?></span>
+                                <span class="date"><?php echo esc_html($message['date'] ?? ''); ?></span>
+                            </div>
+                            <div class="stride-message-content"><?php echo esc_html($message['content'] ?? ''); ?></div>
+                        </div>
+                        <span class="stride-message-delete dashicons dashicons-no-alt" title="<?php esc_attr_e('Verwijderen', 'stride'); ?>"></span>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+
+        <!-- Add Message Form -->
+        <div class="stride-add-message-form">
+            <textarea id="stride-message-content" placeholder="<?php esc_attr_e('Schrijf een bericht...', 'stride'); ?>"></textarea>
+            <div class="form-row">
+                <div class="type-selector">
+                    <?php foreach ($messageTypes as $typeKey => $typeConfig): ?>
+                        <label>
+                            <input type="radio" name="stride_message_type" value="<?php echo esc_attr($typeKey); ?>" <?php checked($typeKey, 'announcement'); ?>>
+                            <span class="type-icon <?php echo esc_attr($typeKey); ?>"><span class="dashicons dashicons-<?php echo esc_attr($typeConfig['icon']); ?>"></span></span>
+                            <?php echo esc_html($typeConfig['label']); ?>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+                <button type="button" class="button" id="stride-add-message">
+                    <?php esc_html_e('Bericht toevoegen', 'stride'); ?>
+                </button>
+            </div>
+        </div>
+
+        <input type="hidden" id="stride_messages_data" name="ntdst_fields[trajectory_messages]" value="<?php echo esc_attr(json_encode($messages)); ?>">
+
+        <script>
+        (function($) {
+            'use strict';
+
+            var $messagesList = $('#stride-messages-list');
+            var $messagesData = $('#stride_messages_data');
+            var messages = [];
+
+            // Parse existing messages
+            try {
+                messages = JSON.parse($messagesData.val() || '[]');
+            } catch(e) {
+                messages = [];
+            }
+
+            // Message types configuration (mirrored from PHP)
+            var messageTypes = {
+                announcement: { label: strideTrajectoryAdmin.i18n.announcement || 'Mededeling', icon: 'megaphone' },
+                faq: { label: strideTrajectoryAdmin.i18n.faq || 'Vraag', icon: 'editor-help' },
+                update: { label: strideTrajectoryAdmin.i18n.update || 'Update', icon: 'update' }
+            };
+
+            function renderMessages() {
+                if (messages.length === 0 || messages.every(function(m) { return m._deleted; })) {
+                    $messagesList.html('<div class="stride-empty-messages">' + (strideTrajectoryAdmin.i18n.noMessages || 'Nog geen berichten toegevoegd.') + '</div>');
+                    return;
+                }
+
+                var html = '';
+                messages.forEach(function(message, index) {
+                    if (message._deleted) return;
+
+                    var type = message.type || 'announcement';
+                    var typeConfig = messageTypes[type] || messageTypes.announcement;
+
+                    html += '<div class="stride-message-item" data-index="' + index + '">';
+                    html += '<div class="stride-message-icon ' + type + '">';
+                    html += '<span class="dashicons dashicons-' + typeConfig.icon + '"></span>';
+                    html += '</div>';
+                    html += '<div class="stride-message-body">';
+                    html += '<div class="stride-message-meta">';
+                    html += '<span class="author">' + escapeHtml(message.author || '') + '</span>';
+                    html += '<span class="type-badge ' + type + '">' + escapeHtml(typeConfig.label) + '</span>';
+                    html += '<span class="date">' + escapeHtml(message.date || '') + '</span>';
+                    html += '</div>';
+                    html += '<div class="stride-message-content">' + escapeHtml(message.content || '') + '</div>';
+                    html += '</div>';
+                    html += '<span class="stride-message-delete dashicons dashicons-no-alt" title="' + (strideTrajectoryAdmin.i18n.remove || 'Verwijderen') + '"></span>';
+                    html += '</div>';
+                });
+
+                $messagesList.html(html);
+            }
+
+            function escapeHtml(text) {
+                var div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            function saveMessages() {
+                $messagesData.val(JSON.stringify(messages));
+            }
+
+            // Add message
+            $('#stride-add-message').on('click', function() {
+                var $content = $('#stride-message-content');
+                var content = $content.val().trim();
+
+                if (!content) {
+                    alert(strideTrajectoryAdmin.i18n.enterMessage || 'Vul een bericht in.');
+                    $content.focus();
+                    return;
+                }
+
+                var type = $('input[name="stride_message_type"]:checked').val() || 'announcement';
+
+                // Get current user from localized data
+                var currentUser = strideTrajectoryAdmin.currentUser || 'Admin';
+                if (!currentUser && typeof strideEditionAdmin !== 'undefined') {
+                    currentUser = strideEditionAdmin.currentUser || 'Admin';
+                }
+
+                var now = new Date();
+                var dateStr = now.toLocaleDateString('nl-BE', { day: '2-digit', month: 'short', year: 'numeric' });
+
+                var newMessage = {
+                    type: type,
+                    content: content,
+                    author: currentUser,
+                    date: dateStr
+                };
+
+                // Prepend new message to beginning
+                messages.unshift(newMessage);
+                saveMessages();
+                renderMessages();
+
+                // Clear form
+                $content.val('');
+            });
+
+            // Delete message
+            $messagesList.on('click', '.stride-message-delete', function() {
+                var $item = $(this).closest('.stride-message-item');
+                var index = parseInt($item.data('index'), 10);
+
+                if (typeof messages[index] !== 'undefined') {
+                    messages[index]._deleted = true;
+                    saveMessages();
+                    renderMessages();
+                }
+            });
+
+        })(jQuery);
+        </script>
+        <?php
+    }
+
     public function handleSave(int $postId, WP_Post $post): void
     {
         if (!isset($_POST[self::NONCE_FIELD]) ||
@@ -833,6 +1088,35 @@ final class TrajectoryAdminController extends AbstractService
         }
 
         $updateData['courses'] = $courses;
+
+        // Save trajectory messages
+        if (isset($fields['trajectory_messages'])) {
+            $jsonString = wp_unslash($fields['trajectory_messages']);
+            $messages = json_decode($jsonString, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                // Log JSON decode error for debugging
+                error_log(sprintf(
+                    'Stride Trajectory: JSON decode error for messages on post %d: %s',
+                    $postId,
+                    json_last_error_msg()
+                ));
+            } elseif (is_array($messages)) {
+                // Filter out deleted messages and sanitize
+                $sanitizedMessages = [];
+                foreach ($messages as $message) {
+                    if (empty($message['_deleted'])) {
+                        $sanitizedMessages[] = [
+                            'type' => sanitize_key($message['type'] ?? 'announcement'),
+                            'content' => sanitize_textarea_field($message['content'] ?? ''),
+                            'author' => sanitize_text_field($message['author'] ?? ''),
+                            'date' => sanitize_text_field($message['date'] ?? ''),
+                        ];
+                    }
+                }
+                $updateData['trajectory_messages'] = $sanitizedMessages;
+            }
+        }
 
         if (!empty($updateData)) {
             $this->repository->update($postId, $updateData);
