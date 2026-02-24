@@ -3,9 +3,12 @@
  * Trajectory Card Partial
  *
  * Renders a trajectory card with title, status badge, excerpt, course count, and deadline.
+ * All data must be passed via $args - no service calls or meta lookups inside partials.
  *
  * @param array $args {
- *     @type WP_Post|object $trajectory Trajectory post object or custom object with id, title, excerpt properties
+ *     @type array|WP_Post $trajectory Trajectory data array or WP_Post (legacy support)
+ *         Array format (from Data Manager): id, title, content, meta[status, enrollment_deadline, course_count]
+ *         WP_Post: Trajectory post object
  * }
  */
 
@@ -18,34 +21,46 @@ if (!$trajectory) {
     return;
 }
 
-// Handle both WP_Post and custom objects
-if ($trajectory instanceof WP_Post) {
+// Handle array format (Data Manager) vs WP_Post (legacy)
+if (is_array($trajectory)) {
+    // Data Manager array format - meta nested under 'meta' key
+    $id        = (int) ($trajectory['id'] ?? $trajectory['ID'] ?? 0);
+    $permalink = get_permalink($id);
+    $title     = $trajectory['title'] ?? $trajectory['post_title'] ?? '';
+    $content   = $trajectory['content'] ?? $trajectory['post_content'] ?? '';
+    $excerpt   = !empty($trajectory['excerpt'])
+        ? $trajectory['excerpt']
+        : wp_trim_words(wp_strip_all_tags($content), 20, '...');
+
+    // Meta fields from Data Manager (nested under 'meta' key with possible prefix)
+    $meta         = $trajectory['meta'] ?? [];
+    $course_count = (int) ($meta['course_count'] ?? $meta['_ntdst_course_count'] ?? 0);
+    $deadline     = $meta['enrollment_deadline'] ?? $meta['_ntdst_enrollment_deadline'] ?? '';
+    $status       = $meta['status'] ?? $meta['_ntdst_status'] ?? 'open';
+} elseif ($trajectory instanceof WP_Post) {
+    // Legacy WP_Post support - still requires parent to pass meta via separate args
     $id        = $trajectory->ID;
     $permalink = get_permalink($trajectory);
     $title     = get_the_title($trajectory);
     $excerpt   = !empty($trajectory->post_excerpt)
         ? $trajectory->post_excerpt
         : wp_trim_words(wp_strip_all_tags($trajectory->post_content), 20, '...');
+
+    // Use args for meta if provided, otherwise empty
+    $course_count = (int) ($args['course_count'] ?? 0);
+    $deadline     = $args['deadline'] ?? '';
+    $status       = $args['status'] ?? 'open';
 } else {
-    // Custom object - expect id, title, excerpt, permalink properties
-    $id        = $trajectory->id ?? 0;
-    $permalink = $trajectory->permalink ?? '#';
-    $title     = $trajectory->title ?? '';
-    $excerpt   = $trajectory->excerpt ?? '';
+    return;
 }
 
-// Get meta fields
-$course_count = (int) get_post_meta($id, '_trajectory_course_count', true);
-$deadline     = get_post_meta($id, '_trajectory_deadline', true);
-$status       = get_post_meta($id, '_trajectory_status', true) ?: 'open';
-
 // Map trajectory status to badge status
-// Trajectory uses: open, ongoing, completed
-// Badge supports: open, completed (and others)
 $badge_status_map = [
     'open'      => 'open',
     'ongoing'   => 'pending',
     'completed' => 'completed',
+    'draft'     => 'pending',
+    'closed'    => 'cancelled',
 ];
 $badge_status = $badge_status_map[$status] ?? 'open';
 

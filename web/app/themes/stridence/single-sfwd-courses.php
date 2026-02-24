@@ -8,18 +8,29 @@
  * @package stridence
  */
 
+declare(strict_types=1);
+
 defined('ABSPATH') || exit;
+
+use Stride\Modules\Edition\EditionService;
 
 $course_id = get_the_ID();
 
-// TODO: Wire up EditionService when available
-// $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
-// $editions = $editionService->getEditionsForCourse($course_id);
-$editions = [];
+// Get editions via EditionService
+$editionService = ntdst_get(EditionService::class);
+$editions = $editionService->getEditionsForCourse($course_id);
 
-// Get first edition for mobile CTA (if any)
-$first_edition = !empty($editions) ? $editions[0] : null;
-$enrollment_url = $first_edition ? stride_enrollment_url((int) ($first_edition['id'] ?? $first_edition['ID'] ?? 0)) : '';
+// Get first enrollable edition for mobile CTA
+$first_edition  = null;
+$enrollment_url = '';
+foreach ($editions as $edition) {
+    $edition_id = (int) ($edition['id'] ?? $edition['ID'] ?? 0);
+    if ($edition_id && $editionService->canEnroll($edition_id)) {
+        $first_edition  = $edition;
+        $enrollment_url = stride_enrollment_url($edition_id);
+        break;
+    }
+}
 
 // Breadcrumb items
 $breadcrumbs = [

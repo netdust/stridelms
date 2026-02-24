@@ -8,33 +8,36 @@
  * @package stridence
  */
 
+declare(strict_types=1);
+
 defined('ABSPATH') || exit;
 
 // Get filter value from URL
 $current_status = isset($_GET['status']) ? sanitize_text_field($_GET['status']) : '';
 
-// Build query args
-$paged = get_query_var('paged') ? get_query_var('paged') : 1;
+// Pagination
+$paged    = get_query_var('paged') ? (int) get_query_var('paged') : 1;
+$per_page = 12;
 
-$query_args = [
-    'post_type'      => 'vad_trajectory',
-    'posts_per_page' => 12,
-    'paged'          => $paged,
-    'orderby'        => 'title',
-    'order'          => 'ASC',
-];
+// Build query via Data Manager
+$model = ntdst_data()->get('vad_trajectory');
+$query = $model->where('post_status', 'publish')
+               ->orderBy('post_title', 'ASC');
 
-// Apply status filter via meta query
+// Apply status filter if set
 if (!empty($current_status)) {
-    $query_args['meta_query'] = [
-        [
-            'key'   => '_trajectory_status',
-            'value' => $current_status,
-        ],
-    ];
+    $query = $query->where('status', $current_status);
 }
 
-$trajectories_query = new WP_Query($query_args);
+// Get total count for pagination
+$total_count = $query->count();
+$max_pages   = (int) ceil($total_count / $per_page);
+
+// Get paginated results
+$trajectories = $query->limit($per_page)
+                      ->offset(($paged - 1) * $per_page)
+                      ->withMeta()
+                      ->get();
 
 // Check if filter is active
 $has_filter = !empty($current_status);
@@ -88,23 +91,24 @@ get_header();
 
 <!-- Trajectory Grid -->
 <div class="container pb-12">
-    <?php if ($trajectories_query->have_posts()) : ?>
+    <?php if (!empty($trajectories)) : ?>
         <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            <?php while ($trajectories_query->have_posts()) : $trajectories_query->the_post(); ?>
+            <?php foreach ($trajectories as $trajectory_data) : ?>
                 <?php
+                // Pass trajectory data to card partial
                 get_template_part('partials/card-trajectory', null, [
-                    'trajectory' => get_post(),
+                    'trajectory' => $trajectory_data,
                 ]);
                 ?>
-            <?php endwhile; ?>
+            <?php endforeach; ?>
         </div>
 
         <!-- Pagination -->
-        <?php if ($trajectories_query->max_num_pages > 1) : ?>
+        <?php if ($max_pages > 1) : ?>
             <nav class="mt-12 flex justify-center" aria-label="<?php esc_attr_e('Paginatie', 'stridence'); ?>">
                 <?php
                 $pagination_args = [
-                    'total'     => $trajectories_query->max_num_pages,
+                    'total'     => $max_pages,
                     'current'   => $paged,
                     'mid_size'  => 2,
                     'prev_text' => '<span class="sr-only">' . __('Vorige', 'stridence') . '</span>' . stridence_icon('chevron-left', 'w-5 h-5'),
@@ -167,6 +171,4 @@ get_header();
     <?php endif; ?>
 </div>
 
-<?php
-wp_reset_postdata();
-get_footer();
+<?php get_footer();

@@ -8,42 +8,57 @@
  * @package stridence
  */
 
+declare(strict_types=1);
+
 defined('ABSPATH') || exit;
+
+use Stride\Modules\Trajectory\TrajectoryService;
 
 $trajectory_id = get_the_ID();
 
-// Get trajectory meta
-$deadline           = get_post_meta($trajectory_id, '_trajectory_deadline', true);
-$status             = get_post_meta($trajectory_id, '_trajectory_status', true) ?: 'open';
-$electives_required = (int) (get_post_meta($trajectory_id, '_electives_required', true) ?: 0);
+// Get trajectory service
+$trajectoryService = ntdst_get(TrajectoryService::class);
+
+// Get trajectory data via service
+$trajectory = $trajectoryService->getTrajectory($trajectory_id);
+if (!$trajectory) {
+    get_template_part('partials/empty-state', null, [
+        'icon'    => 'alert-circle',
+        'title'   => __('Traject niet gevonden', 'stridence'),
+        'message' => __('Dit traject bestaat niet of is verwijderd.', 'stridence'),
+        'action'  => __('Naar trajecten', 'stridence'),
+        'url'     => get_post_type_archive_link('vad_trajectory'),
+    ]);
+    return;
+}
+
+// Extract fields from trajectory array
+$status             = $trajectory['status'];
+$status_enum        = $trajectory['status_enum'];
+$deadline           = $trajectory['enrollment_deadline'];
+$can_enroll         = $trajectoryService->isEnrollmentOpen($trajectory_id);
+
+// Get courses via service
+$required_courses   = $trajectoryService->getRequiredCourses($trajectory_id);
+$elective_groups    = $trajectoryService->getElectiveGroups($trajectory_id);
+
+// Flatten elective groups for template (course-groups.php expects flat array)
+$elective_courses = [];
+$electives_required = 0;
+foreach ($elective_groups as $group) {
+    $electives_required += (int) ($group['required'] ?? 0);
+    $elective_courses = array_merge($elective_courses, $group['courses'] ?? []);
+}
 
 // Map trajectory status to badge status
-// open -> open, ongoing -> pending, completed -> completed
 $badge_status_map = [
     'open'      => 'open',
     'ongoing'   => 'pending',
     'completed' => 'completed',
+    'draft'     => 'pending',
+    'closed'    => 'cancelled',
 ];
 $badge_status = $badge_status_map[$status] ?? 'open';
-
-// Get courses for this trajectory (stub - will wire up TrajectoryService later)
-$required_courses = [];
-$elective_courses = [];
-
-// Try to get courses from TrajectoryService if available
-if (class_exists('\Stride\Modules\Trajectory\TrajectoryService')) {
-    try {
-        $trajectory_service = ntdst_get(\Stride\Modules\Trajectory\TrajectoryService::class);
-        if (method_exists($trajectory_service, 'getRequiredCourses')) {
-            $required_courses = $trajectory_service->getRequiredCourses($trajectory_id);
-        }
-        if (method_exists($trajectory_service, 'getElectiveCourses')) {
-            $elective_courses = $trajectory_service->getElectiveCourses($trajectory_id);
-        }
-    } catch (\Exception $e) {
-        // Service not available
-    }
-}
 
 // Breadcrumb items
 $breadcrumbs = [

@@ -8,32 +8,49 @@
  * @package stridence
  */
 
+declare(strict_types=1);
+
 defined('ABSPATH') || exit;
+
+use Stride\Modules\Edition\EditionService;
+use Stride\Modules\Edition\SessionService;
 
 $edition_id = get_the_ID();
 
-// Get edition meta
-$course_id = get_post_meta($edition_id, '_course_id', true);
-$course    = $course_id ? get_post($course_id) : null;
-$start_date = get_post_meta($edition_id, '_start_date', true);
-$venue     = get_post_meta($edition_id, '_venue', true);
-$price     = get_post_meta($edition_id, '_price', true);
-$status    = get_post_meta($edition_id, '_status', true) ?: 'open';
-$spots     = get_post_meta($edition_id, '_spots_remaining', true);
+// Get services
+$editionService = ntdst_get(EditionService::class);
+$sessionService = ntdst_get(SessionService::class);
 
-// Get sessions for this edition
-$sessions = [];
-if (class_exists('\Stride\Modules\Edition\SessionService')) {
-    try {
-        $session_service = ntdst_get(\Stride\Modules\Edition\SessionService::class);
-        $sessions = $session_service->getSessionsForEdition($edition_id);
-    } catch (\Exception $e) {
-        // Service not available
-    }
+// Get edition data via service
+$edition = $editionService->getEdition($edition_id);
+if (is_wp_error($edition)) {
+    get_template_part('partials/empty-state', null, [
+        'icon'    => 'alert-circle',
+        'title'   => __('Editie niet gevonden', 'stridence'),
+        'message' => __('Deze editie bestaat niet of is verwijderd.', 'stridence'),
+        'action'  => __('Naar opleidingen', 'stridence'),
+        'url'     => get_post_type_archive_link('sfwd-courses'),
+    ]);
+    return;
 }
 
-// Determine enrollment availability
-$can_enroll = in_array($status, ['open', 'few_spots'], true);
+// Get edition fields via service
+$course_id  = $editionService->getCourseId($edition_id);
+$course     = $course_id ? get_post($course_id) : null;
+$status     = $editionService->getStatus($edition_id);
+$price      = $editionService->getPrice($edition_id);
+$can_enroll = $editionService->canEnroll($edition_id);
+$capacity   = $editionService->getCapacity($edition_id);
+
+// Get raw meta fields via Data Manager
+// Note: These could be added to EditionService if needed frequently
+$editionModel = ntdst_data()->get('vad_edition');
+$start_date   = $editionModel->getMeta($edition_id, 'start_date', '');
+$venue        = $editionModel->getMeta($edition_id, 'venue', '');
+$spots        = $editionModel->getMeta($edition_id, 'spots_remaining');
+
+// Get sessions via SessionService
+$sessions = $sessionService->getSessionsForEdition($edition_id);
 
 // Breadcrumb items
 $breadcrumbs = [
@@ -65,7 +82,7 @@ get_header();
                 </h1>
                 <?php
                 get_template_part('partials/badge-status', null, [
-                    'status' => $status,
+                    'status' => $status->value,
                     'spots'  => $spots,
                 ]);
                 ?>
@@ -86,10 +103,10 @@ get_header();
                     </span>
                 <?php endif; ?>
 
-                <?php if ($price !== null && $price !== '') : ?>
+                <?php if (!$price->isZero()) : ?>
                     <span class="flex items-center gap-2 font-semibold text-text">
                         <?php echo stridence_icon('receipt', 'w-5 h-5 text-text-muted'); ?>
-                        <?php echo esc_html(stride_format_money((int) $price)); ?>
+                        <?php echo esc_html($price->format()); ?>
                     </span>
                 <?php endif; ?>
             </div>
@@ -150,8 +167,8 @@ get_header();
                             <span class="text-text-muted"><?php esc_html_e('Prijs', 'stridence'); ?></span>
                             <span class="font-semibold">
                                 <?php
-                                if ($price !== null && $price !== '') {
-                                    echo esc_html(stride_format_money((int) $price));
+                                if (!$price->isZero()) {
+                                    echo esc_html($price->format());
                                 } else {
                                     esc_html_e('Op aanvraag', 'stridence');
                                 }

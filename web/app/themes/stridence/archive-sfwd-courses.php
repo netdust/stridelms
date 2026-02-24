@@ -5,8 +5,13 @@
  * Template for displaying LearnDash courses in a filterable grid.
  * Supports domain, format, and location filters.
  *
+ * Note: Uses WP_Query for LearnDash courses as they are managed natively by LearnDash.
+ * Stride services (EditionService) are used for edition-specific data when needed.
+ *
  * @package stridence
  */
+
+declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
