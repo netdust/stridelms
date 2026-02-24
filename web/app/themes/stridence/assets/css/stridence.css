@@ -2561,3 +2561,108 @@ body.has-bottom-nav {
     border-color: #fff;
 }
 
+
+/* ==========================================================================
+   Trajectory Cards
+   ========================================================================== */
+
+.str-grid--trajectories {
+    display: grid;
+    gap: var(--str-space-lg);
+    grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+    .str-grid--trajectories {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (min-width: 1024px) {
+    .str-grid--trajectories {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+.str-trajectory-card {
+    background: var(--str-card);
+    border-radius: var(--str-radius);
+    overflow: hidden;
+    box-shadow: var(--str-shadow);
+    transition: var(--str-transition);
+}
+
+.str-trajectory-card:hover {
+    box-shadow: var(--str-shadow-md);
+    transform: translateY(-2px);
+}
+
+.str-trajectory-card__image {
+    aspect-ratio: 16 / 9;
+    background: var(--str-primary-light);
+    overflow: hidden;
+}
+
+.str-trajectory-card__image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.str-trajectory-card__placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--str-primary);
+}
+
+.str-trajectory-card__content {
+    padding: var(--str-space-lg);
+}
+
+.str-trajectory-card__title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 0 0 var(--str-space-sm);
+}
+
+.str-trajectory-card__title a {
+    color: var(--str-text);
+    text-decoration: none;
+}
+
+.str-trajectory-card__title a:hover {
+    color: var(--str-primary);
+}
+
+.str-trajectory-card__excerpt {
+    font-size: 0.875rem;
+    color: var(--str-text-muted);
+    margin: 0 0 var(--str-space-md);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.str-trajectory-card__meta {
+    display: flex;
+    gap: var(--str-space-md);
+    font-size: 0.875rem;
+    color: var(--str-text-muted);
+    margin-bottom: var(--str-space-md);
+}
+
+.str-trajectory-card__meta span {
+    display: flex;
+    align-items: center;
+    gap: var(--str-space-xs);
+}
+
+.str-trajectory-card__price {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--str-primary);
+}

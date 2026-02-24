@@ -32,7 +32,6 @@ use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Trajectory\TrajectoryService;
-use Stride\Modules\Trajectory\TrajectoryEnrollmentRepository;
 
 // Session type constants
 const SESSION_TYPE_IN_PERSON = 'in_person';
@@ -63,7 +62,6 @@ class StrideSeedData {
     private ?SessionService $sessionService = null;
     private ?RegistrationRepository $regRepo = null;
     private ?TrajectoryService $trajectoryService = null;
-    private ?TrajectoryEnrollmentRepository $trajectoryEnrollmentRepo = null;
 
     // Current admin user to subscribe
     private int $adminUserId = 1;
@@ -90,7 +88,6 @@ class StrideSeedData {
             $this->sessionService = ntdst_get(SessionService::class);
             $this->regRepo = ntdst_get(RegistrationRepository::class);
             $this->trajectoryService = ntdst_get(TrajectoryService::class);
-            $this->trajectoryEnrollmentRepo = ntdst_get(TrajectoryEnrollmentRepository::class);
         }
     }
 
@@ -946,25 +943,6 @@ class StrideSeedData {
             echo "  - seed_enrolled_user@seed.test already exists (ID: {$enrolledUserId})\n";
         }
 
-        // Enroll user in trajectory
-        if ($this->trajectoryEnrollmentRepo && isset($enrolledUserId) && !is_wp_error($enrolledUserId)) {
-            $existingEnrollment = $this->trajectoryEnrollmentRepo->findByUserAndTrajectory($enrolledUserId, $testTrajectoryId);
-            if (!$existingEnrollment) {
-                $enrollmentResult = $this->trajectoryEnrollmentRepo->create([
-                    'user_id' => $enrolledUserId,
-                    'trajectory_id' => $testTrajectoryId,
-                    'status' => 'enrolled',
-                ]);
-                if (!is_wp_error($enrollmentResult)) {
-                    echo "  + Enrolled seed_enrolled_user in test-trajectory\n";
-                } else {
-                    echo "  ! Failed to enroll: {$enrollmentResult->get_error_message()}\n";
-                }
-            } else {
-                echo "  - seed_enrolled_user already enrolled in test-trajectory\n";
-            }
-        }
-
         // Create completed test user
         $completedUser = get_user_by('email', 'seed_completed_user@seed.test');
         if (!$completedUser) {
@@ -999,29 +977,6 @@ class StrideSeedData {
                 update_user_meta($completedUserId, 'ntdst_auth_activated_at', time());
             }
             echo "  - seed_completed_user@seed.test already exists (ID: {$completedUserId})\n";
-        }
-
-        // Enroll completed user with completed status
-        if ($this->trajectoryEnrollmentRepo && isset($completedUserId) && !is_wp_error($completedUserId)) {
-            $existingEnrollment = $this->trajectoryEnrollmentRepo->findByUserAndTrajectory($completedUserId, $testTrajectoryId);
-            if (!$existingEnrollment) {
-                $enrollmentResult = $this->trajectoryEnrollmentRepo->create([
-                    'user_id' => $completedUserId,
-                    'trajectory_id' => $testTrajectoryId,
-                    'status' => 'completed',
-                ]);
-                if (!is_wp_error($enrollmentResult)) {
-                    // Update with completion timestamp
-                    $this->trajectoryEnrollmentRepo->update($enrollmentResult, [
-                        'completed_at' => current_time('mysql'),
-                    ]);
-                    echo "  + Enrolled seed_completed_user in test-trajectory (completed)\n";
-                } else {
-                    echo "  ! Failed to enroll completed user: {$enrollmentResult->get_error_message()}\n";
-                }
-            } else {
-                echo "  - seed_completed_user already enrolled in test-trajectory\n";
-            }
         }
 
         echo "Trajectory test data complete.\n";
