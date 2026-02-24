@@ -21,8 +21,20 @@ if (!is_user_logged_in()) {
 
 $user = wp_get_current_user();
 
+// Check for personal trajectory dashboard route
+$trajectory_slug = get_query_var('trajectory_slug');
+if (!empty($trajectory_slug)) {
+    get_header();
+    get_template_part('templates/trajectory/dashboard', null, [
+        'trajectory_slug' => sanitize_title($trajectory_slug),
+        'user' => $user,
+    ]);
+    get_footer();
+    exit;
+}
+
 // Get current tab from URL (default: inschrijvingen)
-$valid_tabs = ['inschrijvingen', 'offertes', 'certificaten', 'profiel'];
+$valid_tabs = ['inschrijvingen', 'trajecten', 'offertes', 'certificaten', 'profiel'];
 $current_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'inschrijvingen';
 
 if (!in_array($current_tab, $valid_tabs, true)) {
