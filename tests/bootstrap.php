@@ -7,6 +7,9 @@
  * and loads the autoloader.
  */
 
+// Enable bypass-finals to allow mocking final classes
+DG\BypassFinals::enable();
+
 // Composer autoloader
 require_once dirname(__DIR__) . '/vendor/autoload.php';
 
@@ -44,6 +47,8 @@ $optionalFiles = [
     dirname(__DIR__) . '/web/app/themes/stride/services/contracts/FluentCRMAdapterInterface.php',
     dirname(__DIR__) . '/web/app/themes/stride/services/contracts/LearnDashAdapterInterface.php',
     dirname(__DIR__) . '/web/app/themes/stride/services/FieldRegistry.php',
+    // Theme services
+    dirname(__DIR__) . '/web/app/themes/stridence/services/frontend/TrajectoryDashboardService.php',
     // Mocks disabled - need interface alignment
     // __DIR__ . '/Mocks/MockFluentCRMAdapter.php',
     // __DIR__ . '/Mocks/MockLearnDashAdapter.php',

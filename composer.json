@@ -52,7 +52,8 @@
     "phpunit/phpunit": "^10.5",
     "brain/monkey": "^2.6",
     "mockery/mockery": "^1.6",
-    "lucatume/wp-browser": "^4.5"
+    "lucatume/wp-browser": "^4.5",
+    "dg/bypass-finals": "^1.9"
   },
   "autoload": {
     "psr-4": {

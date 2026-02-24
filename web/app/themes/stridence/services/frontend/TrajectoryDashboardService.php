@@ -52,7 +52,7 @@ class TrajectoryDashboardService implements \NTDST_Service_Meta
      */
     public function getTrajectoryBySlug(string $slug): ?WP_Post
     {
-        $posts = get_posts([
+        $posts = \get_posts([
             'post_type' => 'vad_trajectory',
             'name' => $slug,
             'post_status' => 'publish',
@@ -201,7 +201,7 @@ class TrajectoryDashboardService implements \NTDST_Service_Meta
                 continue;
             }
 
-            $courseMeta = get_post_meta($course->ID, '_sfwd-courses', true);
+            $courseMeta = \get_post_meta($course->ID, '_sfwd-courses', true);
             $courseMaterials = $courseMeta['sfwd-courses_course_materials'] ?? '';
 
             if (empty($courseMaterials)) {
@@ -225,7 +225,7 @@ class TrajectoryDashboardService implements \NTDST_Service_Meta
      */
     public function getMessages(int $trajectoryId): array
     {
-        $messages = get_post_meta($trajectoryId, 'trajectory_messages', true);
+        $messages = \get_post_meta($trajectoryId, 'trajectory_messages', true);
 
         if (empty($messages) || !is_array($messages)) {
             return [];

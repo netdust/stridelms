@@ -449,6 +449,49 @@ if (!function_exists('get_post')) {
     }
 }
 
+if (!function_exists('get_posts')) {
+    function get_posts(array $args = []): array
+    {
+        global $_test_posts;
+
+        if (empty($_test_posts)) {
+            return [];
+        }
+
+        $results = [];
+        $postType = $args['post_type'] ?? 'post';
+        $postStatus = $args['post_status'] ?? 'publish';
+        $name = $args['name'] ?? null;
+        $limit = $args['posts_per_page'] ?? -1;
+
+        foreach ($_test_posts as $post) {
+            // Filter by post_type
+            if (isset($post->post_type) && $post->post_type !== $postType) {
+                continue;
+            }
+
+            // Filter by post_status
+            if (isset($post->post_status) && $post->post_status !== $postStatus) {
+                continue;
+            }
+
+            // Filter by name (slug)
+            if ($name !== null && isset($post->post_name) && $post->post_name !== $name) {
+                continue;
+            }
+
+            $results[] = $post;
+
+            // Apply limit
+            if ($limit > 0 && count($results) >= $limit) {
+                break;
+            }
+        }
+
+        return $results;
+    }
+}
+
 if (!function_exists('get_the_title')) {
     function get_the_title($post = null): string
     {
