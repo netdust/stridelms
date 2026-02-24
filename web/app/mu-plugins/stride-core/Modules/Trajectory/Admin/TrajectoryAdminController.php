@@ -9,10 +9,10 @@ use Stride\Domain\TrajectoryStatus;
 use Stride\Infrastructure\AbstractService;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
+use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Trajectory\TrajectoryCPT;
 use Stride\Modules\Trajectory\TrajectoryRepository;
 use Stride\Modules\Trajectory\TrajectoryService;
-use Stride\Modules\Trajectory\TrajectoryEnrollmentRepository;
 use WP_Post;
 
 /**
@@ -33,7 +33,7 @@ final class TrajectoryAdminController extends AbstractService
     public function __construct(
         private readonly TrajectoryService $trajectoryService,
         private readonly TrajectoryRepository $repository,
-        private readonly TrajectoryEnrollmentRepository $enrollmentRepository,
+        private readonly RegistrationRepository $registrations,
         private readonly EditionService $editionService,
         private readonly EditionRepository $editionRepository,
     ) {
@@ -534,7 +534,7 @@ final class TrajectoryAdminController extends AbstractService
             return;
         }
 
-        $enrollments = $this->enrollmentRepository->findByTrajectory($post->ID);
+        $enrollments = $this->registrations->findByTrajectory($post->ID);
         $trajectory = $this->trajectoryService->getTrajectory($post->ID);
         $totalCourses = count($trajectory['courses'] ?? []);
         ?>
@@ -588,17 +588,17 @@ final class TrajectoryAdminController extends AbstractService
                 <tbody>
                     <?php foreach ($enrollments as $enrollment): ?>
                         <?php
-                        $user = get_userdata($enrollment['user_id']);
+                        $user = get_userdata($enrollment->user_id);
                         $userName = $user ? ($user->display_name ?: $user->user_email) : __('Onbekend', 'stride');
-                        $status = $enrollment['status'] ?? 'enrolled';
-                        $enrolledAt = $enrollment['enrolled_at'] ?? '';
+                        $status = $enrollment->status ?? 'confirmed';
+                        $enrolledAt = $enrollment->registered_at ?? '';
                         $completedCourses = 0;
                         $progressPercent = $totalCourses > 0 ? round(($completedCourses / $totalCourses) * 100) : 0;
 
                         $statusLabels = [
-                            'enrolled' => __('Actief', 'stride'),
+                            'confirmed' => __('Actief', 'stride'),
                             'completed' => __('Voltooid', 'stride'),
-                            'paused' => __('Pauze', 'stride'),
+                            'waitlist' => __('Wachtlijst', 'stride'),
                             'cancelled' => __('Geannuleerd', 'stride'),
                         ];
                         ?>
@@ -647,9 +647,9 @@ final class TrajectoryAdminController extends AbstractService
         $mode = TrajectoryMode::tryFrom($trajectory['mode'] ?? '') ?? TrajectoryMode::Cohort;
         $courseCount = count($trajectory['courses'] ?? []);
 
-        $enrollments = $this->enrollmentRepository->findByTrajectory($post->ID);
-        $activeCount = count(array_filter($enrollments, fn($e) => $e['status'] === 'enrolled'));
-        $completedCount = count(array_filter($enrollments, fn($e) => $e['status'] === 'completed'));
+        $enrollments = $this->registrations->findByTrajectory($post->ID);
+        $activeCount = count(array_filter($enrollments, fn($e) => $e->status === 'confirmed'));
+        $completedCount = count(array_filter($enrollments, fn($e) => $e->status === 'completed'));
         ?>
         <style>
             .stride-trajectory-sidebar .stride-sidebar-section { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #f0f0f1; }
@@ -1040,15 +1040,15 @@ final class TrajectoryAdminController extends AbstractService
             return;
         }
 
-        $enrollments = $this->enrollmentRepository->findByTrajectory($trajectoryId);
+        $enrollments = $this->registrations->findByTrajectory($trajectoryId);
 
         if (!empty($status)) {
-            $enrollments = array_filter($enrollments, fn($e) => $e['status'] === $status);
+            $enrollments = array_filter($enrollments, fn($e) => $e->status === $status);
         }
 
         if (!empty($search)) {
             $enrollments = array_filter($enrollments, function($e) use ($search) {
-                $user = get_userdata($e['user_id']);
+                $user = get_userdata($e->user_id);
                 if (!$user) return false;
                 $name = strtolower($user->display_name . ' ' . $user->user_email);
                 return str_contains($name, strtolower($search));
@@ -1060,13 +1060,13 @@ final class TrajectoryAdminController extends AbstractService
 
         $results = [];
         foreach ($enrollments as $enrollment) {
-            $user = get_userdata($enrollment['user_id']);
+            $user = get_userdata($enrollment->user_id);
             $results[] = [
-                'id' => $enrollment['id'],
-                'user_id' => $enrollment['user_id'],
+                'id' => $enrollment->id,
+                'user_id' => $enrollment->user_id,
                 'user_name' => $user ? ($user->display_name ?: $user->user_email) : 'Unknown',
-                'status' => $enrollment['status'],
-                'enrolled_at' => $enrollment['enrolled_at'],
+                'status' => $enrollment->status,
+                'enrolled_at' => $enrollment->registered_at,
             ];
         }
 
@@ -1155,7 +1155,7 @@ final class TrajectoryAdminController extends AbstractService
 
             case 'enrollments':
                 $capacity = (int) $this->repository->getField($postId, 'capacity', 0);
-                $enrolledCount = $this->enrollmentRepository->countByTrajectory($postId);
+                $enrolledCount = $this->registrations->countByTrajectory($postId);
 
                 if ($capacity > 0) {
                     $percentage = min(100, round(($enrolledCount / $capacity) * 100));

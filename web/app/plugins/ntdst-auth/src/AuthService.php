@@ -4,18 +4,22 @@ declare(strict_types=1);
 
 namespace NTDST\Auth;
 
+use NTDST\Auth\Helpers\Config;
+use NTDST\Auth\Helpers\TokenHelper;
+use NTDST\Auth\Helpers\ConsentHelper;
+
 defined('ABSPATH') || exit;
 
 /**
- * Handles authentication via magic link and optional password.
+ * Main authentication service.
  *
- * Registers URL routes, processes login/logout, and manages sessions.
+ * Handles magic link and password authentication, URL routes,
+ * admin settings, and privacy tools integration.
  */
 final class AuthService implements \NTDST_Service_Meta
 {
-    private SettingsService $settings;
-    private TokenService $tokens;
-    private ConsentService $consent;
+    private TokenHelper $tokens;
+    private ConsentHelper $consent;
 
     public static function metadata(): array
     {
@@ -28,58 +32,54 @@ final class AuthService implements \NTDST_Service_Meta
 
     public function __construct()
     {
-        $this->settings = ntdst_get(SettingsService::class);
-        $this->tokens = ntdst_get(TokenService::class);
-        $this->consent = ntdst_get(ConsentService::class);
+        $config = Config::all();
+        $this->tokens = new TokenHelper($config);
+        $this->consent = new ConsentHelper($config);
         $this->init();
     }
 
     private function init(): void
     {
+        // Routes
         add_action('init', [$this, 'registerRoutes']);
-
-        // Prevent WordPress canonical redirect for /login, /register
-        // wp_redirect_admin_locations() runs on template_redirect at priority 1000
-        // We remove it for our routes at priority 999 (before it runs)
         add_action('template_redirect', [$this, 'preventCanonicalLoginRedirect'], 999);
 
         // Redirect wp-login.php if enabled
-        if ($this->settings->get('redirect_wp_login', true)) {
+        if (Config::get('redirect_wp_login', true)) {
             add_action('login_init', [$this, 'redirectWpLogin']);
         }
+
+        // Admin settings
+        add_action('admin_menu', [$this, 'addSettingsPage']);
+        add_action('admin_init', [$this, 'registerSettings']);
+
+        // Privacy tools
+        add_filter('wp_privacy_personal_data_exporters', [$this, 'registerPrivacyExporter']);
+        add_filter('wp_privacy_personal_data_erasers', [$this, 'registerPrivacyEraser']);
     }
 
-    /**
-     * Prevent WordPress from redirecting /login to wp-login.php and set correct status.
-     *
-     * WordPress core (canonical.php) has wp_redirect_admin_locations() hooked
-     * at template_redirect priority 1000 which redirects /login to wp-login.php.
-     * We remove that hook for our auth routes and set proper 200 status.
-     */
-    public function preventCanonicalLoginRedirect(): void
+    // -------------------------------------------------------------------------
+    // Helpers access (for RegistrationService)
+    // -------------------------------------------------------------------------
+
+    public function tokens(): TokenHelper
     {
-        $loginUrl = ltrim($this->settings->get('login_url', '/login'), '/');
-        $registerUrl = ltrim($this->settings->get('register_url', '/register'), '/');
-        $currentPath = trim(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH), '/');
-
-        // If we're on our auth routes, prevent redirect and set 200 status
-        if ($currentPath === $loginUrl || $currentPath === $registerUrl) {
-            remove_action('template_redirect', 'wp_redirect_admin_locations', 1000);
-
-            // Set proper status (WordPress sets 404 for unknown URLs)
-            global $wp_query;
-            $wp_query->is_404 = false;
-            status_header(200);
-        }
+        return $this->tokens;
     }
 
-    /**
-     * Register URL routes.
-     */
+    public function consent(): ConsentHelper
+    {
+        return $this->consent;
+    }
+
+    // -------------------------------------------------------------------------
+    // Routes
+    // -------------------------------------------------------------------------
+
     public function registerRoutes(): void
     {
-        $loginUrl = ltrim($this->settings->get('login_url', '/login'), '/');
-        $registerUrl = ltrim($this->settings->get('register_url', '/register'), '/');
+        $loginUrl = ltrim(Config::get('login_url', '/login'), '/');
+        $registerUrl = ltrim(Config::get('register_url', '/register'), '/');
 
         // Login page
         ntdst_router()->get($loginUrl, function () {
@@ -96,8 +96,8 @@ final class AuthService implements \NTDST_Service_Meta
                 wp_redirect($this->getRedirectAfterLogin());
                 exit;
             }
-            if (!$this->settings->get('enable_registration', true)) {
-                wp_redirect(home_url($this->settings->get('login_url', '/login')));
+            if (!Config::get('enable_registration', true)) {
+                wp_redirect(home_url(Config::get('login_url', '/login')));
                 exit;
             }
             return $this->renderPage('register');
@@ -119,6 +119,25 @@ final class AuthService implements \NTDST_Service_Meta
         });
     }
 
+    public function preventCanonicalLoginRedirect(): void
+    {
+        $loginUrl = ltrim(Config::get('login_url', '/login'), '/');
+        $registerUrl = ltrim(Config::get('register_url', '/register'), '/');
+        $currentPath = trim(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH), '/');
+
+        if ($currentPath === $loginUrl || $currentPath === $registerUrl) {
+            remove_action('template_redirect', 'wp_redirect_admin_locations', 1000);
+
+            global $wp_query;
+            $wp_query->is_404 = false;
+            status_header(200);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Authentication
+    // -------------------------------------------------------------------------
+
     /**
      * Request magic link for email.
      *
@@ -127,16 +146,12 @@ final class AuthService implements \NTDST_Service_Meta
     public function requestMagicLink(string $email): array
     {
         $email = sanitize_email($email);
-
-        // Always return same message to prevent enumeration
         $successMessage = __('If an account exists with this email, you will receive a login link shortly.', 'ntdst-auth');
 
         if (!is_email($email)) {
-            // Still return success message (no enumeration)
             return ['success' => true, 'message' => $successMessage];
         }
 
-        // Check rate limit
         if ($this->tokens->isRateLimited('magic_email_' . $email) || $this->tokens->isRateLimited('magic_ip_' . $this->getClientIp())) {
             return [
                 'success' => false,
@@ -146,7 +161,6 @@ final class AuthService implements \NTDST_Service_Meta
 
         $user = get_user_by('email', $email);
 
-        // Only send if user exists and is activated
         if ($user && $this->consent->isActivated($user->ID)) {
             $token = $this->tokens->createMagicLinkToken($email, $user->ID);
 
@@ -165,43 +179,32 @@ final class AuthService implements \NTDST_Service_Meta
      */
     public function loginWithPassword(string $email, string $password): array|\WP_Error
     {
-        if (!$this->settings->get('enable_password', false)) {
+        if (!Config::get('enable_password', false)) {
             return new \WP_Error('password_disabled', __('Password login is not enabled.', 'ntdst-auth'));
         }
 
-        // Check rate limit
         if ($this->tokens->isRateLimited('login_ip_' . $this->getClientIp())) {
             return new \WP_Error('rate_limited', __('Too many login attempts. Please try again later.', 'ntdst-auth'));
         }
 
         $email = sanitize_email($email);
         $user = get_user_by('email', $email);
-
-        // Generic error for security
         $genericError = new \WP_Error('invalid_credentials', __('Invalid email or password.', 'ntdst-auth'));
 
         if (!$user) {
             return $genericError;
         }
 
-        // Check if activated
         if (!$this->consent->isActivated($user->ID)) {
             return new \WP_Error('not_activated', __('Please activate your account first. Check your email for the activation link.', 'ntdst-auth'));
         }
 
-        // Verify password
         if (!wp_check_password($password, $user->user_pass, $user->ID)) {
             return $genericError;
         }
 
-        // Log user in
         $this->setAuthCookie($user->ID);
 
-        /**
-         * Fires on successful login.
-         *
-         * @param int $userId User ID
-         */
         do_action('ntdst_auth_login_success', $user->ID);
 
         return [
@@ -210,9 +213,6 @@ final class AuthService implements \NTDST_Service_Meta
         ];
     }
 
-    /**
-     * Handle magic link verification.
-     */
     private function handleMagicLinkVerify(string $token): void
     {
         $result = $this->tokens->verify($token, 'magic_link');
@@ -226,7 +226,6 @@ final class AuthService implements \NTDST_Service_Meta
             exit;
         }
 
-        // Check if user is activated
         if (!$this->consent->isActivated($result['user_id'])) {
             $this->renderPage('error', [
                 'title' => __('Account Not Activated', 'ntdst-auth'),
@@ -235,24 +234,14 @@ final class AuthService implements \NTDST_Service_Meta
             exit;
         }
 
-        // Log user in
         $this->setAuthCookie($result['user_id']);
 
-        /**
-         * Fires on successful login.
-         *
-         * @param int $userId User ID
-         */
         do_action('ntdst_auth_login_success', $result['user_id']);
 
-        // Redirect
-        wp_redirect($this->getRedirectAfterLogin());
+        wp_safe_redirect($this->getRedirectAfterLogin());
         exit;
     }
 
-    /**
-     * Handle activation link.
-     */
     private function handleActivation(string $token): void
     {
         $registration = ntdst_get(RegistrationService::class);
@@ -266,10 +255,8 @@ final class AuthService implements \NTDST_Service_Meta
             exit;
         }
 
-        // Log user in
         $this->setAuthCookie($result['user_id']);
 
-        // Show success page
         $this->renderPage('activate', [
             'title' => __('Account Activated', 'ntdst-auth'),
             'message' => __('Your account has been activated successfully!', 'ntdst-auth'),
@@ -278,44 +265,99 @@ final class AuthService implements \NTDST_Service_Meta
         exit;
     }
 
-    /**
-     * Handle logout.
-     */
     private function handleLogout(): void
     {
         if (is_user_logged_in()) {
             wp_logout();
         }
 
-        $redirectUrl = home_url($this->settings->get('redirect_after_logout', '/login'));
+        $redirectUrl = home_url(Config::get('redirect_after_logout', '/login'));
         wp_safe_redirect($redirectUrl);
         exit;
     }
 
-    /**
-     * Redirect wp-login.php to custom login.
-     */
     public function redirectWpLogin(): void
     {
-        // Allow password reset flow
         $action = $_GET['action'] ?? '';
-        if (in_array($action, ['lostpassword', 'rp', 'resetpass'], true)) {
+        if (in_array($action, ['lostpassword', 'rp', 'resetpass', 'logout'], true)) {
             return;
         }
 
-        // Allow logout
-        if ($action === 'logout') {
-            return;
-        }
-
-        $loginUrl = home_url($this->settings->get('login_url', '/login'));
+        $loginUrl = home_url(Config::get('login_url', '/login'));
         wp_safe_redirect($loginUrl);
         exit;
     }
 
+    // -------------------------------------------------------------------------
+    // Admin Settings
+    // -------------------------------------------------------------------------
+
+    public function addSettingsPage(): void
+    {
+        add_options_page(
+            __('Authentication', 'ntdst-auth'),
+            __('Authentication', 'ntdst-auth'),
+            'manage_options',
+            'ntdst-auth',
+            [$this, 'renderSettingsPage']
+        );
+    }
+
+    public function registerSettings(): void
+    {
+        register_setting('ntdst_auth', Config::optionKey(), [
+            'type' => 'array',
+            'sanitize_callback' => [Config::class, 'sanitize'],
+        ]);
+    }
+
+    public function renderSettingsPage(): void
+    {
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+
+        $template = NTDST_AUTH_PATH . 'admin/settings.php';
+        if (file_exists($template)) {
+            $settings = Config::all();
+            include $template;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Privacy Tools
+    // -------------------------------------------------------------------------
+
     /**
-     * Set authentication cookie for user.
+     * @param array<string, array> $exporters
+     * @return array<string, array>
      */
+    public function registerPrivacyExporter(array $exporters): array
+    {
+        $exporters['ntdst-auth'] = [
+            'exporter_friendly_name' => __('Authentication Data', 'ntdst-auth'),
+            'callback' => [$this->consent, 'exportUserData'],
+        ];
+        return $exporters;
+    }
+
+    /**
+     * @param array<string, array> $erasers
+     * @return array<string, array>
+     */
+    public function registerPrivacyEraser(array $erasers): array
+    {
+        $erasers['ntdst-auth'] = [
+            'eraser_friendly_name' => __('Authentication Data', 'ntdst-auth'),
+            'callback' => [$this->consent, 'eraseUserData'],
+        ];
+        return $erasers;
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
     private function setAuthCookie(int $userId): void
     {
         wp_clear_auth_cookie();
@@ -323,12 +365,8 @@ final class AuthService implements \NTDST_Service_Meta
         wp_set_auth_cookie($userId, true);
     }
 
-    /**
-     * Get redirect URL after login.
-     */
     private function getRedirectAfterLogin(): string
     {
-        // Check for redirect_to parameter
         $redirectTo = $_GET['redirect_to'] ?? '';
         if ($redirectTo) {
             $validated = wp_validate_redirect($redirectTo, home_url('/'));
@@ -337,16 +375,13 @@ final class AuthService implements \NTDST_Service_Meta
             }
         }
 
-        return home_url($this->settings->get('redirect_after_login', '/'));
+        return home_url(Config::get('redirect_after_login', '/'));
     }
 
-    /**
-     * Send magic link email.
-     */
     private function sendMagicLinkEmail(string $email, string $token): void
     {
         $verifyUrl = home_url('/auth/verify/' . $token);
-        $expiry = (int) $this->settings->get('magic_link_expiry', 15);
+        $expiry = (int) Config::get('magic_link_expiry', 15);
 
         ntdst_mail()
             ->to($email)
@@ -360,16 +395,12 @@ final class AuthService implements \NTDST_Service_Meta
     }
 
     /**
-     * Render a page template.
-     *
      * @param array<string, mixed> $data
      */
     private function renderPage(string $template, array $data = []): void
     {
-        // Set proper HTTP status (WordPress sets 404 for unknown URLs)
         status_header(200);
 
-        // Check for theme override
         $paths = [
             get_stylesheet_directory() . '/ntdst-auth/pages/' . $template . '.php',
             get_template_directory() . '/ntdst-auth/pages/' . $template . '.php',
@@ -378,22 +409,16 @@ final class AuthService implements \NTDST_Service_Meta
 
         foreach ($paths as $path) {
             if (file_exists($path)) {
-                // Extract data to variables
                 extract($data);
-                $settings = $this->settings->getSettings();
-
+                $settings = Config::all();
                 include $path;
                 exit;
             }
         }
 
-        // Fallback
         wp_die(__('Template not found.', 'ntdst-auth'));
     }
 
-    /**
-     * Get client IP address.
-     */
     private function getClientIp(): string
     {
         $headers = ['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'REMOTE_ADDR'];

@@ -1,0 +1,165 @@
+/**
+ * LearnDash Style Overrides
+ *
+ * Theme LearnDash elements to match Stride design system.
+ * Rule: Style it, don't rebuild it.
+ */
+
+@layer components {
+  /* ══════════════════════════════════════
+     BASE WRAPPER
+     ══════════════════════════════════════ */
+
+  .learndash-wrapper {
+    @apply text-text;
+  }
+
+  /* ══════════════════════════════════════
+     LESSON LIST
+     ══════════════════════════════════════ */
+
+  .learndash-wrapper .ld-lesson-list .ld-lesson-item {
+    @apply border border-border rounded-lg mb-2 bg-surface-card;
+  }
+
+  .learndash-wrapper .ld-lesson-list .ld-lesson-item:hover {
+    @apply shadow-card;
+  }
+
+  .learndash-wrapper .ld-lesson-item-preview {
+    @apply px-4 py-3;
+  }
+
+  .learndash-wrapper .ld-lesson-title {
+    @apply text-text font-medium;
+  }
+
+  /* ══════════════════════════════════════
+     PROGRESS BAR
+     ══════════════════════════════════════ */
+
+  .learndash-wrapper .ld-progress {
+    @apply bg-surface-alt rounded-full overflow-hidden;
+  }
+
+  .learndash-wrapper .ld-progress .ld-progress-bar {
+    @apply bg-accent rounded-full;
+  }
+
+  .learndash-wrapper .ld-progress-stats {
+    @apply text-sm text-text-muted mt-2;
+  }
+
+  /* ══════════════════════════════════════
+     QUIZ STYLES
+     ══════════════════════════════════════ */
+
+  .learndash-wrapper .wpProQuiz_content {
+    @apply bg-surface-card rounded-xl p-6 shadow-card;
+  }
+
+  .learndash-wrapper .wpProQuiz_question {
+    @apply mb-6;
+  }
+
+  .learndash-wrapper .wpProQuiz_questionList {
+    @apply space-y-3;
+  }
+
+  .learndash-wrapper .wpProQuiz_questionListItem {
+    @apply flex items-start gap-3 p-3 rounded-lg border border-border
+           hover:bg-surface-alt cursor-pointer transition-colors;
+  }
+
+  /* ══════════════════════════════════════
+     BUTTONS
+     ══════════════════════════════════════ */
+
+  .learndash-wrapper .ld-button,
+  .learndash-wrapper input[type="submit"],
+  .learndash-wrapper .wpProQuiz_button {
+    @apply bg-primary text-text-inverse font-medium
+           px-6 py-3 rounded-lg
+           hover:bg-primary-dark
+           transition-colors duration-fast
+           border-none cursor-pointer;
+  }
+
+  .learndash-wrapper .ld-button-outline {
+    @apply bg-transparent text-primary border-2 border-primary
+           hover:bg-primary hover:text-text-inverse;
+  }
+
+  /* ══════════════════════════════════════
+     FOCUS MODE
+     ══════════════════════════════════════ */
+
+  .learndash-wrapper.ld-focus {
+    @apply bg-surface;
+  }
+
+  .ld-focus .ld-focus-sidebar {
+    @apply bg-surface-card border-r border-border;
+  }
+
+  .ld-focus .ld-focus-header {
+    @apply bg-surface-card border-b border-border shadow-card;
+  }
+
+  .ld-focus .ld-focus-content {
+    @apply bg-surface;
+  }
+
+  /* ══════════════════════════════════════
+     COURSE GRID
+     ══════════════════════════════════════ */
+
+  .learndash-wrapper .ld-course-list-items {
+    @apply grid gap-6;
+  }
+
+  .learndash-wrapper .ld-course-list-item {
+    @apply bg-surface-card rounded-xl shadow-card overflow-hidden;
+  }
+
+  /* ══════════════════════════════════════
+     ALERTS & MESSAGES
+     ══════════════════════════════════════ */
+
+  .learndash-wrapper .ld-alert {
+    @apply rounded-lg p-4 mb-4;
+  }
+
+  .learndash-wrapper .ld-alert-success {
+    @apply bg-green-50 text-green-800 border border-green-200;
+  }
+
+  .learndash-wrapper .ld-alert-warning {
+    @apply bg-yellow-50 text-yellow-800 border border-yellow-200;
+  }
+
+  .learndash-wrapper .ld-alert-danger {
+    @apply bg-red-50 text-red-800 border border-red-200;
+  }
+
+  /* ══════════════════════════════════════
+     TABLES
+     ══════════════════════════════════════ */
+
+  .learndash-wrapper table {
+    @apply w-full border-collapse;
+  }
+
+  .learndash-wrapper th,
+  .learndash-wrapper td {
+    @apply px-4 py-3 text-left border-b border-border;
+  }
+
+  .learndash-wrapper th {
+    @apply bg-surface-alt font-semibold text-sm uppercase tracking-wide text-text-muted;
+  }
+
+  .learndash-wrapper tr:hover td {
+    @apply bg-surface-alt/50;
+  }
+}

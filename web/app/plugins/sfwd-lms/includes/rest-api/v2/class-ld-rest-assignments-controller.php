@@ -19,7 +19,6 @@ use LearnDash\Core\Models\Assignment;
 use LearnDash\Core\Utilities\Cast;
 
 if ( ( ! class_exists( 'LD_REST_Assignments_Controller_V2' ) ) && ( class_exists( 'LD_REST_Posts_Controller_V2' ) ) ) {
-
 	/**
 	 * Class LearnDash REST API V2 Assignment (sfwd-assignment) Post Controller.
 	 *
@@ -27,7 +26,6 @@ if ( ( ! class_exists( 'LD_REST_Assignments_Controller_V2' ) ) && ( class_exists
 	 * @uses LD_REST_Posts_Controller_V2
 	 */
 	class LD_REST_Assignments_Controller_V2 extends LD_REST_Posts_Controller_V2 /* phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedClassFound */ {
-
 		/**
 		 * Assignment Post data
 		 *
@@ -76,7 +74,6 @@ if ( ( ! class_exists( 'LD_REST_Assignments_Controller_V2' ) ) && ( class_exists
 		 * @since 3.3.0
 		 */
 		protected function register_fields() {
-
 			register_rest_field(
 				$this->post_type,
 				'course',
@@ -227,7 +224,6 @@ if ( ( ! class_exists( 'LD_REST_Assignments_Controller_V2' ) ) && ( class_exists
 			$this->register_fields_metabox();
 
 			do_action( 'learndash_rest_register_fields', $this->post_type, $this );
-
 		}
 
 		/**
@@ -247,7 +243,6 @@ if ( ( ! class_exists( 'LD_REST_Assignments_Controller_V2' ) ) && ( class_exists
 		 * @return array
 		 */
 		public function get_public_item_schema() {
-
 			$schema = parent::get_public_item_schema();
 
 			$schema['title'] = 'assignment';
@@ -494,7 +489,6 @@ if ( ( ! class_exists( 'LD_REST_Assignments_Controller_V2' ) ) && ( class_exists
 
 			$filter_approved_status = $request['approved_status'];
 			if ( ! empty( $filter_approved_status ) ) {
-
 				if ( 'approved' === $filter_approved_status ) {
 					$meta_query[] = array(
 						'key'   => 'approval_status',
@@ -692,7 +686,6 @@ if ( ( ! class_exists( 'LD_REST_Assignments_Controller_V2' ) ) && ( class_exists
 		 * @param string          $post_type  Post Type for request.
 		 */
 		public function get_rest_settings_field_value( array $postdata, $field_name, WP_REST_Request $request, $post_type ) {
-
 			if ( ( isset( $postdata['id'] ) ) && ( ! empty( $postdata['id'] ) ) && ( $post_type == $this->post_type ) ) {
 				$field_value = '';
 
@@ -787,7 +780,6 @@ if ( ( ! class_exists( 'LD_REST_Assignments_Controller_V2' ) ) && ( class_exists
 
 			if ( ! empty( $post_id ) ) {
 				if ( ! isset( $this->assignment_post_data[ $post_id ] ) ) {
-
 					$course_id = (int) get_post_meta( $post_id, 'course_id', true );
 					$lesson_id = (int) get_post_meta( $post_id, 'lesson_id', true );
 
@@ -834,7 +826,6 @@ if ( ( ! class_exists( 'LD_REST_Assignments_Controller_V2' ) ) && ( class_exists
 		 */
 		public function update_rest_settings_field_value( $post_value, WP_Post $post, $field_name, WP_REST_Request $request, $post_type ) {
 			if ( ( is_a( $post, 'WP_Post' ) ) && ( $post->post_type == $this->post_type ) ) {
-
 				$lesson_id = (int) get_post_meta( $post->ID, 'lesson_id', true );
 				if ( empty( $lesson_id ) ) {
 					return false;
@@ -849,7 +840,7 @@ if ( ( ! class_exists( 'LD_REST_Assignments_Controller_V2' ) ) && ( class_exists
 					case 'approved_status':
 						// We don't allow assignment status to revert to unapproved.
 						if ( $post_value ) {
-							learndash_assignment_mark_approved( $post->ID );
+							learndash_approve_assignment( $post->post_author, $lesson_id, $post->ID );
 						}
 						break;
 

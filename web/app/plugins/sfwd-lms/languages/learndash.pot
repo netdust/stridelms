@@ -2,14 +2,14 @@
 # This file is distributed under the same license as the LearnDash LMS plugin.
 msgid ""
 msgstr ""
-"Project-Id-Version: LearnDash LMS 5.0.0\n"
+"Project-Id-Version: LearnDash LMS 5.0.1.1\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/learndash-core\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-01-27T17:31:19+00:00\n"
+"POT-Creation-Date: 2026-02-16T15:22:41+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: learndash\n"
@@ -616,8 +616,8 @@ msgstr ""
 
 #: includes/admin/class-learndash-admin-menus-tabs.php:411
 #: includes/reports/includes/class-ld-tinymce-courseinfo.php:18
-#: src/Core/Modules/Reports/Legacy/Settings/Page.php:35
 #: src/Core/Modules/Reports/Legacy/Settings/Page.php:36
+#: src/Core/Modules/Reports/Legacy/Settings/Page.php:37
 #: src/Core/Modules/Reports/Settings/Reports_Section.php:38
 msgid "Reports"
 msgstr ""
@@ -806,7 +806,7 @@ msgstr ""
 #: includes/admin/class-learndash-admin-menus-tabs.php:1870
 #: includes/admin/class-learndash-admin-menus-tabs.php:1914
 #: includes/admin/class-learndash-admin-menus-tabs.php:2203
-#: includes/ld-groups.php:2921
+#: includes/ld-groups.php:2939
 #: includes/lib/wp-pro-quiz/lib/view/WpProQuiz_View_QuizOverall.php:103
 #: includes/licensing/src/controller/class-settings-controller.php:27
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-coupon-settings.php:39
@@ -2258,7 +2258,7 @@ msgid "Clone"
 msgstr ""
 
 #: includes/admin/classes-cloning/class-learndash-admin-cloning.php:171
-#: includes/class-ld-course-wizard.php:335
+#: includes/class-ld-course-wizard.php:371
 msgid "Request expired. Please try it again."
 msgstr ""
 
@@ -2447,6 +2447,7 @@ msgstr ""
 
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-course-access-list-convert.php:52
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-course-access-list.php:45
+#: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-group-courses-access.php:54
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-quiz-questions.php:45
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-rename_wpproquiz-tables.php:166
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-user-meta-courses.php:41
@@ -2470,6 +2471,7 @@ msgstr ""
 
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-course-access-list-convert.php:97
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-course-access-list.php:89
+#: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-group-courses-access.php:117
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-quiz-questions.php:110
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-user-meta-courses.php:90
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-user-meta-quizzes.php:92
@@ -2478,6 +2480,7 @@ msgstr ""
 
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-course-access-list-convert.php:290
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-course-access-list.php:278
+#: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-group-courses-access.php:454
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-quiz-questions.php:507
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-rename_wpproquiz-tables.php:567
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-user-meta-courses.php:276
@@ -2490,6 +2493,7 @@ msgstr ""
 
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-course-access-list-convert.php:294
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-course-access-list.php:282
+#: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-group-courses-access.php:460
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-quiz-questions.php:511
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-rename_wpproquiz-tables.php:571
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-user-meta-courses.php:280
@@ -2498,7 +2502,7 @@ msgstr ""
 #: includes/class-ldlms-post-types.php:155
 #: includes/class-ldlms-post-types.php:161
 #: includes/deprecated/5.0.0/functions.php:2032
-#: includes/ld-groups.php:2158
+#: includes/ld-groups.php:2176
 #: includes/reports/templates/reporting-filters/status/ld-propanel-reporting-filter-status.php:56
 #: includes/settings/shortcodes-sections/ld_course_list.php:136
 #: includes/settings/shortcodes-sections/ld_group_list.php:135
@@ -2517,6 +2521,7 @@ msgstr ""
 
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-course-access-list-convert.php:297
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-course-access-list.php:285
+#: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-group-courses-access.php:463
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-quiz-questions.php:514
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-rename_wpproquiz-tables.php:574
 #: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-user-meta-courses.php:283
@@ -2553,6 +2558,34 @@ msgstr ""
 #, php-format
 msgctxt "placeholder: course"
 msgid "This upgrade will upgrade the %s meta elements. (Optional)"
+msgstr ""
+
+#. translators: placeholder: Group, Course.
+#: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-group-courses-access.php:62
+#, php-format
+msgctxt "placeholder: Group, Course"
+msgid "Upgrade %1$s %2$s Access Data"
+msgstr ""
+
+#. translators: placeholder: group, courses.
+#: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-group-courses-access.php:72
+#, php-format
+msgctxt "placeholder: group, courses"
+msgid "This upgrade will create activity records for users enrolled in %1$s to ensure they appear in %2$s reports."
+msgstr ""
+
+#. translators: placeholders: group, course, group.
+#: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-group-courses-access.php:82
+#, php-format
+msgctxt "placeholders: group, course, group"
+msgid "Note: New %1$s enrollments will automatically track the correct enrollment date. For existing enrollments, the enrollment date will be based on when the user joined the %1$s or when the %2$s was added to it, whichever is later."
+msgstr ""
+
+#. translators: placeholders: progress status, result count, total count, Groups.
+#: includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-group-courses-access.php:469
+#, php-format
+msgctxt "placeholders: progress status, result count, total count, Groups"
+msgid "%1$s: %2$d of %3$d %4$s"
 msgstr ""
 
 #. translators: placeholders: Quiz, Questions.
@@ -4122,7 +4155,7 @@ msgid "All Price Types"
 msgstr ""
 
 #: includes/admin/classes-posts-listings/class-learndash-admin-courses-listing.php:87
-#: includes/class-ld-course-wizard.php:531
+#: includes/class-ld-course-wizard.php:564
 #: includes/class-ld-lms.php:1764
 #: includes/rest-api/v2/class-ld-rest-price-types-controller.php:105
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-course-enrollment.php:443
@@ -4135,7 +4168,7 @@ msgstr ""
 
 #: includes/admin/classes-posts-listings/class-learndash-admin-courses-listing.php:88
 #: includes/admin/classes-posts-listings/class-learndash-admin-groups-listing.php:57
-#: includes/class-ld-course-wizard.php:539
+#: includes/class-ld-course-wizard.php:572
 #: includes/class-ld-lms.php:1766
 #: includes/course-grid/includes/functions.php:331
 #: includes/course-grid/includes/functions.php:350
@@ -4158,7 +4191,7 @@ msgstr ""
 
 #: includes/admin/classes-posts-listings/class-learndash-admin-courses-listing.php:89
 #: includes/admin/classes-posts-listings/class-learndash-admin-groups-listing.php:58
-#: includes/class-ld-course-wizard.php:547
+#: includes/class-ld-course-wizard.php:580
 #: includes/rest-api/v2/class-ld-rest-price-types-controller.php:123
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-course-enrollment.php:459
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-group-access-settings.php:525
@@ -4167,7 +4200,7 @@ msgstr ""
 
 #: includes/admin/classes-posts-listings/class-learndash-admin-courses-listing.php:90
 #: includes/admin/classes-posts-listings/class-learndash-admin-groups-listing.php:59
-#: includes/class-ld-course-wizard.php:563
+#: includes/class-ld-course-wizard.php:596
 #: includes/class-ld-lms.php:1768
 #: includes/rest-api/v2/class-ld-rest-price-types-controller.php:133
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-course-enrollment.php:472
@@ -4181,7 +4214,7 @@ msgstr ""
 
 #: includes/admin/classes-posts-listings/class-learndash-admin-courses-listing.php:91
 #: includes/admin/classes-posts-listings/class-learndash-admin-groups-listing.php:60
-#: includes/class-ld-course-wizard.php:592
+#: includes/class-ld-course-wizard.php:625
 #: includes/class-ld-lms.php:1765
 #: includes/rest-api/v2/class-ld-rest-price-types-controller.php:143
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-course-enrollment.php:485
@@ -5276,126 +5309,129 @@ msgctxt "placeholder: plugin title"
 msgid "%s: Translations"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:64
+#: includes/class-ld-course-wizard.php:63
 #: src/Core/Modules/Admin/Header/Course_Wizard.php:35
 msgid "Create from Video Playlist"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:83
+#. translators: %s: Course label.
 #: includes/class-ld-course-wizard.php:84
-msgid "Course Creation Wizard"
+#: includes/class-ld-course-wizard.php:89
+#: includes/class-ld-course-wizard.php:124
+#, php-format
+msgid "%s Creation Wizard"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:120
+#: includes/class-ld-course-wizard.php:156
 msgid "Load data from YouTube"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:124
+#: includes/class-ld-course-wizard.php:160
 msgid "YouTube icon"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:128
+#: includes/class-ld-course-wizard.php:164
 msgid "Load data from Vimeo"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:132
+#: includes/class-ld-course-wizard.php:168
 msgid "Vimeo icon"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:136
+#: includes/class-ld-course-wizard.php:172
 msgid "Load data from Wistia"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:140
+#: includes/class-ld-course-wizard.php:176
 msgid "Wistia icon"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:144
-#: includes/class-ld-course-wizard.php:497
+#: includes/class-ld-course-wizard.php:180
+#: includes/class-ld-course-wizard.php:530
 msgid "Load"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:243
-#: includes/class-ld-course-wizard.php:393
+#: includes/class-ld-course-wizard.php:279
+#: includes/class-ld-course-wizard.php:428
 msgid "Error on access LearnDash service. Please try it again in a few minutes."
 msgstr ""
 
 #. translators: course.
-#: includes/class-ld-course-wizard.php:412
+#: includes/class-ld-course-wizard.php:447
 #, php-format
 msgctxt "placeholder: course"
 msgid "Create a %s from a video playlist."
 msgstr ""
 
 #. translators: course.
-#: includes/class-ld-course-wizard.php:427
+#: includes/class-ld-course-wizard.php:462
 #, php-format
 msgctxt "placeholder: course"
 msgid "You can use a YouTube Playlist, a Vimeo Showcase or a Wistia Project URL to create a LearnDash %s in a few minutes."
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:443
+#: includes/class-ld-course-wizard.php:478
 msgid "Please activate your license to use this feature."
 msgstr ""
 
 #. translators: course.
-#: includes/class-ld-course-wizard.php:460
+#: includes/class-ld-course-wizard.php:493
 #, php-format
 msgctxt "placeholder: course"
 msgid "Back to %s list"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:475
+#: includes/class-ld-course-wizard.php:508
 msgid "Create the course"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:495
+#: includes/class-ld-course-wizard.php:528
 msgid "Enter playlist URL"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:516
+#: includes/class-ld-course-wizard.php:549
 msgid "Try it again"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:524
+#: includes/class-ld-course-wizard.php:557
 msgid "How users will gain access to the course?"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:533
+#: includes/class-ld-course-wizard.php:566
 msgid "The course is not protected. Any user can access its content without the need to be logged-in or enrolled."
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:541
+#: includes/class-ld-course-wizard.php:574
 msgid "The course is protected. Registration and enrollment are required in order to access the content."
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:549
+#: includes/class-ld-course-wizard.php:582
 msgid "The course is protected via the LearnDash built-in PayPal and/or Stripe. Users need to purchase the course (one-time fee) in order to gain access."
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:553
-#: includes/class-ld-course-wizard.php:569
+#: includes/class-ld-course-wizard.php:586
+#: includes/class-ld-course-wizard.php:602
 msgid "Course Price"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:565
+#: includes/class-ld-course-wizard.php:598
 msgid "The course is protected via the LearnDash built-in PayPal and/or Stripe. Users need to purchase the course (recurring fee) in order to gain access."
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:575
+#: includes/class-ld-course-wizard.php:608
 #: includes/class-ld-lms.php:1810
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-course-enrollment.php:289
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-group-access-settings.php:364
 msgid "Billing Cycle"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:579
+#: includes/class-ld-course-wizard.php:612
 #: includes/settings/settings-billing-functions.php:59
 #: includes/settings/settings-billing-functions.php:124
 msgid "select interval"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:580
+#: includes/class-ld-course-wizard.php:613
 #: includes/settings/settings-billing-functions.php:60
 #: includes/settings/settings-billing-functions.php:125
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-lesson-access-settings.php:182
@@ -5404,58 +5440,58 @@ msgstr ""
 msgid "day(s)"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:581
+#: includes/class-ld-course-wizard.php:614
 #: includes/settings/settings-billing-functions.php:61
 #: includes/settings/settings-billing-functions.php:126
 msgid "week(s)"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:582
+#: includes/class-ld-course-wizard.php:615
 #: includes/settings/settings-billing-functions.php:62
 #: includes/settings/settings-billing-functions.php:127
 msgid "month(s)"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:583
+#: includes/class-ld-course-wizard.php:616
 #: includes/settings/settings-billing-functions.php:63
 #: includes/settings/settings-billing-functions.php:128
 msgid "year(s)"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:594
+#: includes/class-ld-course-wizard.php:627
 msgid "The course can only be accessed through admin enrollment (manual), group enrollment, or integration (shopping cart or membership) enrollment."
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:602
+#: includes/class-ld-course-wizard.php:635
 msgid "How users will interact with the content?"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:609
+#: includes/class-ld-course-wizard.php:642
 msgid "Linear form"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:611
+#: includes/class-ld-course-wizard.php:644
 msgid "Requires the user to progress through the course in the designated step sequence."
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:616
+#: includes/class-ld-course-wizard.php:649
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-course-navigation-settings.php:97
 msgid "Free form"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:618
+#: includes/class-ld-course-wizard.php:651
 msgid "Allows the user to move freely through the course without following the designated step sequence."
 msgstr ""
 
 #. translators: placeholders: course name, lessons qty description.
-#: includes/class-ld-course-wizard.php:644
+#: includes/class-ld-course-wizard.php:677
 #, php-format
 msgctxt "placeholders: course name, lessons qty description"
 msgid "The course \"%1$s\" will be created with %2$s."
 msgstr ""
 
 #. translators: placeholders: number of lessons.
-#: includes/class-ld-course-wizard.php:647
+#: includes/class-ld-course-wizard.php:680
 #, php-format
 msgid "%s lesson"
 msgid_plural "%s lessons"
@@ -6561,7 +6597,7 @@ msgstr ""
 
 #. translators: placeholder: Course.
 #: includes/class-ld-gdpr.php:1259
-#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:88
+#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:85
 #: includes/rest-api/v2/class-ld-rest-courses-groups-controller.php:85
 #: includes/rest-api/v2/class-ld-rest-courses-prerequisites-controller.php:85
 #: includes/rest-api/v2/class-ld-rest-courses-steps-controller.php:100
@@ -6625,7 +6661,7 @@ msgstr ""
 #: includes/class-ldlms-post-types.php:154
 #: includes/class-ldlms-post-types.php:160
 #: includes/deprecated/5.0.0/functions.php:2019
-#: includes/ld-groups.php:2167
+#: includes/ld-groups.php:2185
 #: includes/reports/templates/ld-propanel-activity-rows.php:534
 #: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course-row.php:85
 #: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group-row.php:104
@@ -6657,7 +6693,7 @@ msgstr ""
 #: includes/course/ld-course-progress.php:2064
 #: includes/deprecated/5.0.0/functions.php:1885
 #: includes/deprecated/5.0.0/functions.php:2042
-#: includes/ld-groups.php:2152
+#: includes/ld-groups.php:2170
 #: includes/reports/templates/reporting-filters/status/ld-propanel-reporting-filter-status.php:60
 #: includes/settings/shortcodes-sections/ld_course_list.php:137
 #: includes/settings/shortcodes-sections/ld_group_list.php:136
@@ -9305,6 +9341,7 @@ msgid "LearnDash Categories"
 msgstr ""
 
 #: includes/class-ld-semper-fi-module.php:681
+#: src/Core/Modules/Reports/Legacy/Settings/Page.php:133
 msgid "Loading..."
 msgstr ""
 
@@ -10444,7 +10481,7 @@ msgid "Number of allowed assignment uploads reached."
 msgstr ""
 
 #: includes/ld-certificates.php:210
-#: includes/quiz/ld-quiz-pro.php:1677
+#: includes/quiz/ld-quiz-pro.php:1717
 #: includes/shortcodes/ld_course_certificate.php:65
 #: themes/legacy/templates/course.php:78
 msgid "PRINT YOUR CERTIFICATE"
@@ -10578,7 +10615,7 @@ msgid "No users found."
 msgstr ""
 
 #. translators: placeholders: Groups, link to Group settings page.
-#: includes/ld-groups.php:2924
+#: includes/ld-groups.php:2942
 #, php-format
 msgctxt "placeholders: Groups, link to Group settings page"
 msgid "%1$s are not public, please visit the %2$s page and set them to Public to enable access on the front end."
@@ -10928,7 +10965,7 @@ msgstr ""
 
 #: includes/lib/wp-pro-quiz/lib/controller/WpProQuiz_Controller_Admin.php:511
 #: includes/lib/wp-pro-quiz/lib/view/WpProQuiz_View_StatisticsNew.php:215
-#: includes/quiz/ld-quiz-pro.php:1904
+#: includes/quiz/ld-quiz-pro.php:1944
 #: includes/views/design-wizard/wizard-1.php:91
 #: includes/views/setup/setup.php:123
 msgid "Close"
@@ -10955,7 +10992,7 @@ msgstr ""
 #: includes/lib/wp-pro-quiz/lib/view/WpProQuiz_View_StatisticsNew.php:183
 #: includes/lib/wp-pro-quiz/lib/view/WpProQuiz_View_StatisticsNew.php:221
 #: includes/lib/wp-pro-quiz/lib/view/WpProQuiz_View_StatisticsNew.php:270
-#: includes/quiz/ld-quiz-pro.php:1910
+#: includes/quiz/ld-quiz-pro.php:1950
 #: includes/views/design-wizard/live-preview.php:17
 #: includes/views/design-wizard/wizard-1.php:87
 #: includes/views/setup/setup.php:119
@@ -14114,7 +14151,7 @@ msgid "Special Filters"
 msgstr ""
 
 #. translators: questions.
-#: includes/quiz/ld-quiz-pro.php:1599
+#: includes/quiz/ld-quiz-pro.php:1639
 #, php-format
 msgctxt "placeholder: questions"
 msgid "Certificate Pending - %s still need to be graded, please check your profile for the status"
@@ -15229,9 +15266,9 @@ msgstr ""
 #: includes/rest-api/v1/class-ld-rest-topics-controller.php:241
 #: includes/rest-api/v1/class-ld-rest-topics-controller.php:245
 #: includes/rest-api/v1/class-ld-rest-topics-controller.php:319
-#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:273
-#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:303
-#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:329
+#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:268
+#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:298
+#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:324
 #: includes/rest-api/v2/class-ld-rest-courses-controller.php:243
 #: includes/rest-api/v2/class-ld-rest-courses-controller.php:265
 #: includes/rest-api/v2/class-ld-rest-courses-groups-controller.php:284
@@ -15592,7 +15629,7 @@ msgid "Sorry, you are not allowed to edit this user."
 msgstr ""
 
 #. translators: placeholder: Lesson.
-#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:113
+#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:110
 #: includes/rest-api/v2/class-ld-rest-essays-controller.php:118
 #: includes/rest-api/v2/class-ld-rest-users-quiz-progress-controller.php:122
 #: includes/rest-api/v2/class-ld-rest-users-quiz-progress-controller.php:201
@@ -15606,7 +15643,7 @@ msgid "%s ID"
 msgstr ""
 
 #. translators: placeholder: Topic.
-#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:138
+#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:135
 #: includes/rest-api/v2/class-ld-rest-essays-controller.php:143
 #: includes/rest-api/v2/class-ld-rest-users-quiz-progress-controller.php:135
 #: includes/rest-api/v2/class-ld-rest-users-quiz-progress-controller.php:215
@@ -15615,31 +15652,31 @@ msgctxt "placeholder: Topic"
 msgid "%s ID"
 msgstr ""
 
-#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:161
+#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:158
 msgid "Assignment Approved Status"
 msgstr ""
 
-#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:183
+#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:180
 msgid "Assignment Points Enabled"
 msgstr ""
 
-#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:200
+#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:197
 msgid "Assignment Points Maximum"
 msgstr ""
 
-#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:216
+#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:213
 msgid "Assignment Points Awarded"
 msgstr ""
 
 #. translators: placeholder: Assignment label.
-#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:291
-#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:917
+#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:286
+#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:908
 #, php-format
 msgid "Invalid %s ID."
 msgstr ""
 
 #. translators: placeholder: course.
-#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:618
+#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:612
 #: includes/rest-api/v2/class-ld-rest-essays-controller.php:515
 #, php-format
 msgctxt "placeholder: course"
@@ -15648,8 +15685,8 @@ msgstr ""
 
 #. translators: placeholder: Lesson.
 #. translators: placeholder: Topic.
-#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:635
-#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:649
+#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:629
+#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:643
 #: includes/rest-api/v2/class-ld-rest-essays-controller.php:532
 #, php-format
 msgctxt "placeholder: Lesson"
@@ -15657,13 +15694,13 @@ msgid "Filter by %s ID"
 msgstr ""
 
 #. translators: placeholder: %1$s: Assignment label, %2$s: Assignments label lowercase.
-#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:665
+#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:659
 #, php-format
 msgid "Filter by %1$s Approved Status. \"approved\" will show only approved %2$s, \"not_approved\" will show only not approved %2$s, \"\" will show all %2$s."
 msgstr ""
 
-#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:933
-#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:943
+#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:924
+#: includes/rest-api/v2/class-ld-rest-assignments-controller.php:934
 #: includes/rest-api/v2/class-ld-rest-essays-controller.php:818
 #: src/deprecated/LD_REST_Posts_Gutenberg_Controller.php:161
 msgid "Sorry, you are not allowed to edit this post."
@@ -21392,6 +21429,7 @@ msgstr ""
 
 #: includes/settings/settings-pages/class-ld-settings-page-translations.php:111
 #: includes/settings/settings-pages/class-ld-settings-page-translations.php:120
+#: assets/js/learndash-admin-settings-data-reports.js:164
 msgid "Dismiss this notice."
 msgstr ""
 
@@ -27547,18 +27585,18 @@ msgctxt "placeholder: Course"
 msgid "%s access expired on:"
 msgstr ""
 
-#: includes/shortcodes/ld_course_list.php:1167
+#: includes/shortcodes/ld_course_list.php:1165
 #: themes/legacy/templates/quiz/partials/show_quiz_result_box.php:223
 #: themes/legacy/templates/quiz_result_categories_email.php:19
 msgid "Categories"
 msgstr ""
 
-#: includes/shortcodes/ld_course_list.php:1169
+#: includes/shortcodes/ld_course_list.php:1167
 msgid "Select category"
 msgstr ""
 
 #. translators: placeholder: LD Category label.
-#: includes/shortcodes/ld_course_list.php:1200
+#: includes/shortcodes/ld_course_list.php:1198
 #, php-format
 msgctxt "placeholder: LD Category label"
 msgid "Select %s"
@@ -38641,6 +38679,14 @@ msgstr ""
 msgid "%s template updated."
 msgstr ""
 
+#: assets/js/learndash-admin-settings-data-reports.js:34
+msgid "Your report is being processed for export. Do not close or navigate away from this page until the report is ready."
+msgstr ""
+
+#: assets/js/learndash-admin-settings-data-reports.js:156
+msgid "Your report export is now completed."
+msgstr ""
+
 #: assets/js/learndash-payments.js:52
 #: assets/js/learndash-payments.js:60
 msgid "second"
@@ -40818,7 +40864,7 @@ msgid "The current LearnDash template \"%s\" does not support this block. Please
 msgstr ""
 
 #. translators: placeholder: Status text.
-#: includes/lib/wp-pro-quiz/js/wpProQuiz_front.js:695
+#: includes/lib/wp-pro-quiz/js/wpProQuiz_front.js:694
 #, js-format
 msgid "Status: %s"
 msgstr ""

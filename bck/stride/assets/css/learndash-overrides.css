@@ -1,0 +1,1259 @@
+/**
+ * Stride LearnDash Overrides
+ *
+ * Professional LMS styling inspired by modern e-learning platforms.
+ * Two-column layout with sidebar, metadata badges, and clean typography.
+ *
+ * @package stride
+ */
+
+/* ==========================================================================
+   CSS Variables - Stride Design System
+   ========================================================================== */
+
+:root {
+    /* Primary Colors */
+    --stride-primary: #6366f1;
+    --stride-primary-hover: #4f46e5;
+    --stride-primary-light: #eef2ff;
+
+    /* Accent Colors */
+    --stride-accent: #f97316;
+    --stride-accent-hover: #ea580c;
+
+    /* Status Colors */
+    --stride-success: #22c55e;
+    --stride-success-light: #dcfce7;
+    --stride-warning: #f59e0b;
+    --stride-warning-light: #fef3c7;
+    --stride-danger: #ef4444;
+
+    /* Neutrals */
+    --stride-text: #1e293b;
+    --stride-text-muted: #64748b;
+    --stride-text-light: #94a3b8;
+    --stride-border: #e2e8f0;
+    --stride-background: #f8fafc;
+    --stride-card: #ffffff;
+
+    /* Typography */
+    --stride-font: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+    /* Spacing & Sizing */
+    --stride-radius: 12px;
+    --stride-radius-sm: 8px;
+    --stride-radius-lg: 16px;
+    --stride-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+    --stride-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --stride-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* ==========================================================================
+   Global Resets - Remove LearnDash Default Styling Issues
+   ========================================================================== */
+
+/* Remove ALL strikethrough text in LearnDash */
+.learndash-wrapper *,
+.learndash-wrapper.learndash-wrapper--modern * {
+    text-decoration: none !important;
+}
+
+/* Specifically target completion status text */
+.learndash-wrapper .ld-course-status-segment,
+.learndash-wrapper .ld-course-status-segment-course,
+.learndash-wrapper .ld-course-status .ld-course-status-segment,
+.learndash-wrapper.learndash-wrapper--modern .ld-course-status-segment {
+    text-decoration: none !important;
+}
+
+/* Course completion banner */
+.learndash-wrapper .ld-course-status-segment.ld-course-status-segment-course.ld-course-status-segment-complete,
+.learndash-wrapper .ld-course-status.ld-course-status-not-complete,
+.learndash-wrapper .ld-course-status.ld-course-status-complete {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    padding: 12px 16px !important;
+    background: var(--stride-success-light) !important;
+    border-radius: var(--stride-radius-sm) !important;
+    margin-bottom: 20px !important;
+    border: none !important;
+}
+
+.learndash-wrapper .ld-course-status-segment .ld-icon,
+.learndash-wrapper .ld-course-status .ld-icon {
+    color: var(--stride-success) !important;
+    font-size: 20px !important;
+}
+
+.learndash-wrapper .ld-course-status-segment .ld-text,
+.learndash-wrapper .ld-course-status .ld-text {
+    font-weight: 600 !important;
+    font-size: 0.875rem !important;
+    color: var(--stride-success) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+    text-decoration: none !important;
+}
+
+/* ==========================================================================
+   Main Layout - Two Column
+   ========================================================================== */
+
+.learndash-wrapper {
+    font-family: var(--stride-font);
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 24px;
+    background: transparent;
+}
+
+.learndash-wrapper--modern {
+    background: transparent;
+}
+
+/* Create two-column grid layout */
+.ld-layout__content {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 40px;
+    align-items: start;
+}
+
+/* Main content area */
+.ld-layout__main {
+    min-width: 0;
+}
+
+/* ==========================================================================
+   Course Header / Hero
+   ========================================================================== */
+
+.stride-course-header {
+    margin-bottom: 32px;
+}
+
+.stride-course-header__title {
+    font-size: 2.25rem;
+    font-weight: 700;
+    color: var(--stride-text);
+    line-height: 1.2;
+    margin: 0 0 12px 0;
+}
+
+.stride-course-header__subtitle {
+    font-size: 1.125rem;
+    color: var(--stride-text-muted);
+    line-height: 1.6;
+    margin: 0 0 20px 0;
+}
+
+/* Course Metadata Row */
+.stride-course-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    padding: 16px 0;
+    border-top: 1px solid var(--stride-border);
+    border-bottom: 1px solid var(--stride-border);
+}
+
+.stride-course-meta__item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    color: var(--stride-text-muted);
+}
+
+.stride-course-meta__item svg,
+.stride-course-meta__item [uk-icon] {
+    color: var(--stride-primary);
+    opacity: 0.8;
+}
+
+.stride-course-meta__value {
+    font-weight: 600;
+    color: var(--stride-text);
+}
+
+/* Rating Stars */
+.stride-rating {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.stride-rating__stars {
+    color: #fbbf24;
+}
+
+.stride-rating__count {
+    color: var(--stride-text-muted);
+    font-size: 0.875rem;
+}
+
+/* ==========================================================================
+   Tab Bar - Pill Style (High Specificity Override)
+   ========================================================================== */
+
+/* Reset LearnDash modern theme tab styles */
+.learndash-wrapper .ld-tab-bar,
+.learndash-wrapper.learndash-wrapper--modern .ld-tab-bar {
+    margin-bottom: 32px !important;
+    border-bottom: none !important;
+}
+
+.learndash-wrapper .ld-tab-bar__tabs,
+.learndash-wrapper.learndash-wrapper--modern .ld-tab-bar__tabs {
+    display: flex !important;
+    gap: 8px !important;
+    padding: 6px !important;
+    background: var(--stride-background) !important;
+    border-radius: var(--stride-radius) !important;
+    border: none !important;
+    border-bottom: none !important;
+    margin-bottom: 24px !important;
+}
+
+.learndash-wrapper .ld-tab-bar__tab,
+.learndash-wrapper.learndash-wrapper--modern .ld-tab-bar__tab {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 12px 20px !important;
+    background: transparent !important;
+    border: none !important;
+    border-bottom: none !important;
+    border-radius: var(--stride-radius-sm) !important;
+    cursor: pointer !important;
+    font-size: 0.9rem !important;
+    font-weight: 500 !important;
+    color: var(--stride-text-muted) !important;
+    transition: all 0.2s ease !important;
+    white-space: nowrap !important;
+    margin: 0 !important;
+}
+
+.learndash-wrapper .ld-tab-bar__tab:hover,
+.learndash-wrapper.learndash-wrapper--modern .ld-tab-bar__tab:hover {
+    color: var(--stride-text) !important;
+    background: rgba(255, 255, 255, 0.8) !important;
+}
+
+.learndash-wrapper .ld-tab-bar__tab[aria-selected="true"],
+.learndash-wrapper.learndash-wrapper--modern .ld-tab-bar__tab[aria-selected="true"] {
+    color: #fff !important;
+    background: var(--stride-primary) !important;
+    box-shadow: var(--stride-shadow) !important;
+    border-bottom: none !important;
+}
+
+.learndash-wrapper .ld-tab-bar__tab[aria-selected="true"]:hover,
+.learndash-wrapper.learndash-wrapper--modern .ld-tab-bar__tab[aria-selected="true"]:hover {
+    background: var(--stride-primary-hover) !important;
+    color: #fff !important;
+}
+
+.learndash-wrapper .ld-tab-bar__tab-title,
+.learndash-wrapper.learndash-wrapper--modern .ld-tab-bar__tab-title {
+    font-weight: 500 !important;
+}
+
+.learndash-wrapper .ld-tab-bar__tab .ld-icon,
+.learndash-wrapper .ld-tab-bar__tab .dashicons,
+.learndash-wrapper.learndash-wrapper--modern .ld-tab-bar__tab .ld-icon,
+.learndash-wrapper.learndash-wrapper--modern .ld-tab-bar__tab .dashicons {
+    font-size: 16px !important;
+    opacity: 0.8 !important;
+}
+
+/* Tab Panels */
+.ld-tab-bar__panels {
+    padding: 0;
+}
+
+.ld-tab-bar__panel {
+    padding: 0;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.ld-tab-bar__panel[aria-hidden="true"] {
+    display: none;
+}
+
+.ld-tab-bar__panel p {
+    font-size: 1rem;
+    line-height: 1.75;
+    color: var(--stride-text-muted);
+    margin-bottom: 1.5rem;
+}
+
+/* Single tab - still show for consistency */
+.learndash-wrapper .ld-tab-bar--single .ld-tab-bar__tabs,
+.learndash-wrapper.learndash-wrapper--modern .ld-tab-bar--single .ld-tab-bar__tabs {
+    display: flex !important;
+}
+
+/* ==========================================================================
+   Course Status / Completion Badge
+   ========================================================================== */
+
+/* Course complete status banner */
+.learndash-wrapper .ld-course-status,
+.learndash-wrapper.learndash-wrapper--modern .ld-course-status {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    padding: 16px 20px !important;
+    background: var(--stride-success-light) !important;
+    border: 1px solid var(--stride-success) !important;
+    border-radius: var(--stride-radius-sm) !important;
+    margin-bottom: 24px !important;
+}
+
+.learndash-wrapper .ld-course-status .ld-status-icon,
+.learndash-wrapper.learndash-wrapper--modern .ld-course-status .ld-status-icon {
+    width: 32px !important;
+    height: 32px !important;
+    background: var(--stride-success) !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    color: #fff !important;
+    flex-shrink: 0 !important;
+}
+
+.learndash-wrapper .ld-course-status-content,
+.learndash-wrapper.learndash-wrapper--modern .ld-course-status-content {
+    flex: 1 !important;
+}
+
+.learndash-wrapper .ld-course-status-title,
+.learndash-wrapper.learndash-wrapper--modern .ld-course-status-title,
+.learndash-wrapper .ld-course-status .ld-text,
+.learndash-wrapper.learndash-wrapper--modern .ld-course-status .ld-text {
+    font-weight: 600 !important;
+    font-size: 0.95rem !important;
+    color: var(--stride-success) !important;
+    text-decoration: none !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+}
+
+/* Remove any strikethrough on completed courses */
+.learndash-wrapper .ld-course-status *,
+.learndash-wrapper.learndash-wrapper--modern .ld-course-status * {
+    text-decoration: none !important;
+}
+
+/* Lesson completion checkmarks in accordion */
+.learndash-wrapper .ld-accordion__item .ld-status,
+.learndash-wrapper.learndash-wrapper--modern .ld-accordion__item .ld-status {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    font-size: 0.8rem !important;
+    color: var(--stride-success) !important;
+    margin-top: 4px !important;
+}
+
+.learndash-wrapper .ld-accordion__item .ld-status .ld-icon,
+.learndash-wrapper.learndash-wrapper--modern .ld-accordion__item .ld-status .ld-icon {
+    color: var(--stride-success) !important;
+}
+
+/* ==========================================================================
+   Course Content Accordion
+   ========================================================================== */
+
+.learndash-wrapper .ld-accordion,
+.learndash-wrapper.learndash-wrapper--modern .ld-accordion {
+    background: var(--stride-card) !important;
+    border: 1px solid var(--stride-border) !important;
+    border-radius: var(--stride-radius) !important;
+    box-shadow: var(--stride-shadow) !important;
+    overflow: hidden !important;
+}
+
+.learndash-wrapper .ld-accordion__header,
+.learndash-wrapper.learndash-wrapper--modern .ld-accordion__header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 20px 24px !important;
+    background: linear-gradient(135deg, var(--stride-primary-light) 0%, #fff 100%) !important;
+    border-bottom: 1px solid var(--stride-border) !important;
+}
+
+.learndash-wrapper .ld-accordion__heading,
+.learndash-wrapper.learndash-wrapper--modern .ld-accordion__heading {
+    font-size: 1.125rem !important;
+    font-weight: 600 !important;
+    color: var(--stride-text) !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+}
+
+.learndash-wrapper .ld-accordion__heading::before,
+.learndash-wrapper.learndash-wrapper--modern .ld-accordion__heading::before {
+    content: '' !important;
+    width: 4px !important;
+    height: 20px !important;
+    background: var(--stride-primary) !important;
+    border-radius: 2px !important;
+}
+
+.learndash-wrapper .ld-accordion__count,
+.learndash-wrapper.learndash-wrapper--modern .ld-accordion__count {
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    color: var(--stride-text-muted) !important;
+    background: var(--stride-background) !important;
+    padding: 4px 12px !important;
+    border-radius: 20px !important;
+}
+
+.learndash-wrapper .ld-accordion__content,
+.learndash-wrapper.learndash-wrapper--modern .ld-accordion__content {
+    padding: 0 !important;
+}
+
+/* ==========================================================================
+   Lesson/Topic Items
+   ========================================================================== */
+
+.ld-accordion__section {
+    padding: 0;
+}
+
+.ld-accordion__items {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.ld-accordion__item {
+    border-bottom: 1px solid var(--stride-border);
+    transition: background 0.15s ease;
+}
+
+.ld-accordion__item:last-child {
+    border-bottom: none;
+}
+
+.ld-accordion__item:hover {
+    background: var(--stride-background);
+}
+
+.learndash-wrapper .ld-accordion__item-header,
+.ld-accordion__item-header {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 16px 24px;
+    text-align: left;
+    gap: 16px;
+}
+
+.learndash-wrapper .ld-accordion__item-title-wrapper,
+.ld-accordion__item-title-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+    text-align: left;
+    width: 100%;
+}
+
+.learndash-wrapper .ld-accordion__item-title,
+.ld-accordion__item-title {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--stride-text);
+    text-decoration: none;
+    text-align: left;
+    transition: color 0.15s ease;
+}
+
+.ld-accordion__item-title:hover {
+    color: var(--stride-primary);
+}
+
+/* Lesson Type Badge */
+.ld-accordion__item-type {
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: var(--stride-background);
+    color: var(--stride-text-muted);
+}
+
+/* Completion Status Icons */
+.ld-accordion__item .ld-status-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 12px;
+}
+
+.ld-accordion__item .ld-status-icon--complete {
+    background: var(--stride-success);
+    color: #fff;
+}
+
+.ld-accordion__item .ld-status-icon--incomplete {
+    background: var(--stride-border);
+    color: var(--stride-text-light);
+    border: 2px solid var(--stride-border);
+    background: transparent;
+}
+
+.ld-accordion__item .ld-status-icon--incomplete::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    background: var(--stride-border);
+    border-radius: 50%;
+}
+
+/* ==========================================================================
+   Course Sidebar
+   ========================================================================== */
+
+.stride-course-sidebar {
+    position: sticky;
+    top: 100px;
+}
+
+.stride-course-sidebar__card {
+    background: var(--stride-card);
+    border: 1px solid var(--stride-border);
+    border-radius: var(--stride-radius);
+    box-shadow: var(--stride-shadow-md);
+    overflow: hidden;
+}
+
+/* Course Preview Image/Video */
+.stride-course-sidebar__preview {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: var(--stride-background);
+    overflow: hidden;
+}
+
+.stride-course-sidebar__preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.stride-course-sidebar__play {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 64px;
+    height: 64px;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--stride-shadow-lg);
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.stride-course-sidebar__play:hover {
+    transform: translate(-50%, -50%) scale(1.1);
+}
+
+.stride-course-sidebar__play svg {
+    color: var(--stride-primary);
+    margin-left: 4px;
+}
+
+/* Price Section */
+.stride-course-sidebar__price {
+    padding: 24px;
+    border-bottom: 1px solid var(--stride-border);
+}
+
+.stride-course-sidebar__price-row {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.stride-course-sidebar__current-price {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--stride-text);
+}
+
+.stride-course-sidebar__original-price {
+    font-size: 1.125rem;
+    color: var(--stride-text-light);
+    text-decoration: line-through;
+}
+
+.stride-course-sidebar__discount {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--stride-success);
+    background: var(--stride-success-light);
+    padding: 4px 10px;
+    border-radius: 4px;
+}
+
+.stride-course-sidebar__urgency {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.875rem;
+    color: var(--stride-accent);
+    font-weight: 500;
+}
+
+/* CTA Button */
+.stride-course-sidebar__cta {
+    padding: 0 24px 24px;
+}
+
+.stride-course-sidebar__btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 16px 24px;
+    background: var(--stride-primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--stride-radius-sm);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+}
+
+.stride-course-sidebar__btn:hover {
+    background: var(--stride-primary-hover);
+    color: #fff;
+    transform: translateY(-2px);
+    box-shadow: var(--stride-shadow-md);
+}
+
+.stride-course-sidebar__btn--secondary {
+    background: transparent;
+    color: var(--stride-primary);
+    border: 2px solid var(--stride-primary);
+}
+
+.stride-course-sidebar__btn--secondary:hover {
+    background: var(--stride-primary-light);
+    color: var(--stride-primary);
+}
+
+/* Course Includes List */
+.stride-course-sidebar__includes {
+    padding: 24px;
+    border-bottom: 1px solid var(--stride-border);
+}
+
+.stride-course-sidebar__includes-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--stride-text);
+    margin: 0 0 16px 0;
+}
+
+.stride-course-sidebar__includes-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.stride-course-sidebar__includes-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    font-size: 0.9rem;
+    color: var(--stride-text-muted);
+    border-bottom: 1px solid var(--stride-border);
+}
+
+.stride-course-sidebar__includes-item:last-child {
+    border-bottom: none;
+}
+
+.stride-course-sidebar__includes-icon {
+    width: 20px;
+    height: 20px;
+    color: var(--stride-primary);
+    flex-shrink: 0;
+}
+
+/* Share Section */
+.stride-course-sidebar__share {
+    padding: 24px;
+}
+
+.stride-course-sidebar__share-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--stride-text);
+    margin: 0 0 12px 0;
+}
+
+.stride-course-sidebar__share-icons {
+    display: flex;
+    gap: 8px;
+}
+
+.stride-course-sidebar__share-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--stride-background);
+    border: 1px solid var(--stride-border);
+    border-radius: var(--stride-radius-sm);
+    color: var(--stride-text-muted);
+    transition: all 0.15s ease;
+    cursor: pointer;
+}
+
+.stride-course-sidebar__share-btn:hover {
+    background: var(--stride-primary);
+    border-color: var(--stride-primary);
+    color: #fff;
+}
+
+/* ==========================================================================
+   Progress Bar
+   ========================================================================== */
+
+.ld-progress {
+    margin-bottom: 24px;
+    padding: 20px;
+    background: var(--stride-card);
+    border: 1px solid var(--stride-border);
+    border-radius: var(--stride-radius);
+}
+
+.ld-progress-wrap {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 8px;
+}
+
+.ld-progress-bar {
+    flex: 1;
+    height: 10px;
+    background: var(--stride-background);
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.ld-progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--stride-primary) 0%, #818cf8 100%);
+    border-radius: 5px;
+    transition: width 0.3s ease;
+}
+
+.ld-progress-percentage {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--stride-primary);
+    min-width: 50px;
+    text-align: right;
+}
+
+.ld-progress-stats {
+    display: flex;
+    gap: 24px;
+    font-size: 0.875rem;
+    color: var(--stride-text-muted);
+}
+
+.ld-progress-stats span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* ==========================================================================
+   Alerts / Notices
+   ========================================================================== */
+
+.ld-alert,
+.learndash-wrapper .ld-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 20px 24px;
+    border-radius: var(--stride-radius);
+    margin-bottom: 24px;
+    background: var(--stride-background);
+    border-left: 4px solid var(--stride-primary);
+}
+
+.ld-alert--success {
+    background: var(--stride-success-light);
+    border-left-color: var(--stride-success);
+}
+
+.ld-alert--warning {
+    background: var(--stride-warning-light);
+    border-left-color: var(--stride-warning);
+}
+
+.ld-alert--error {
+    background: #fef2f2;
+    border-left-color: var(--stride-danger);
+}
+
+.ld-alert__icon {
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.ld-alert__content {
+    flex: 1;
+}
+
+.ld-alert__message {
+    font-size: 0.95rem;
+    color: var(--stride-text);
+    line-height: 1.5;
+}
+
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
+
+.ld-button,
+.learndash-wrapper .ld-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 24px;
+    background: var(--stride-primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--stride-radius-sm);
+    font-size: 0.95rem;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.ld-button:hover,
+.learndash-wrapper .ld-button:hover {
+    background: var(--stride-primary-hover);
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: var(--stride-shadow-md);
+}
+
+.ld-button--secondary {
+    background: transparent;
+    color: var(--stride-primary);
+    border: 2px solid var(--stride-primary);
+}
+
+.ld-button--secondary:hover {
+    background: var(--stride-primary-light);
+    color: var(--stride-primary);
+}
+
+/* ==========================================================================
+   Stride Editions Section (Scheduled Sessions)
+   ========================================================================== */
+
+.stride-ld-editions {
+    margin-top: 8px;
+}
+
+.stride-ld-editions--tab {
+    padding: 0;
+}
+
+.stride-ld-editions__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.stride-ld-editions__header h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--stride-text);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.stride-ld-editions__header h3::before {
+    content: '';
+    width: 4px;
+    height: 20px;
+    background: var(--stride-accent);
+    border-radius: 2px;
+}
+
+.stride-ld-editions__badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: var(--stride-primary-light);
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--stride-primary);
+}
+
+.stride-ld-editions__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.stride-ld-editions__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 20px 24px;
+    background: var(--stride-card);
+    border: 1px solid var(--stride-border);
+    border-radius: var(--stride-radius);
+    transition: all 0.2s ease;
+}
+
+.stride-ld-editions__item:hover {
+    border-color: var(--stride-primary);
+    box-shadow: var(--stride-shadow-md);
+    transform: translateY(-2px);
+}
+
+.stride-ld-editions__info {
+    flex: 1;
+    min-width: 0;
+}
+
+.stride-ld-editions__title {
+    display: block;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--stride-text);
+    margin-bottom: 8px;
+}
+
+.stride-ld-editions__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    font-size: 0.875rem;
+    color: var(--stride-text-muted);
+}
+
+.stride-ld-editions__meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.stride-ld-editions__meta [uk-icon] {
+    color: var(--stride-primary);
+    opacity: 0.7;
+}
+
+.stride-ld-editions__spots-warning {
+    color: var(--stride-accent) !important;
+    font-weight: 600;
+}
+
+.stride-ld-editions__spots-warning [uk-icon] {
+    color: var(--stride-accent) !important;
+}
+
+.stride-ld-editions__action .uk-button {
+    white-space: nowrap;
+    padding: 10px 20px;
+    font-weight: 500;
+    border-radius: var(--stride-radius-sm);
+}
+
+/* ==========================================================================
+   Course Content / Text
+   ========================================================================== */
+
+.ld-content-text {
+    font-size: 1rem;
+    line-height: 1.8;
+    color: var(--stride-text-muted);
+}
+
+.ld-content-text p {
+    margin-bottom: 1.25rem;
+}
+
+.ld-content-text h2,
+.ld-content-text h3 {
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    color: var(--stride-text);
+    font-weight: 600;
+}
+
+.ld-content-text ul,
+.ld-content-text ol {
+    margin-bottom: 1.25rem;
+    padding-left: 1.5rem;
+}
+
+.ld-content-text li {
+    margin-bottom: 0.5rem;
+}
+
+/* ==========================================================================
+   Login / Payment Forms
+   ========================================================================== */
+
+.ld-login-form,
+.learndash-wrapper .ld-login-modal {
+    background: var(--stride-card);
+    border: 1px solid var(--stride-border);
+    border-radius: var(--stride-radius);
+    padding: 32px;
+    box-shadow: var(--stride-shadow-md);
+}
+
+.ld-login-form input[type="text"],
+.ld-login-form input[type="email"],
+.ld-login-form input[type="password"] {
+    width: 100%;
+    padding: 14px 16px;
+    border: 1px solid var(--stride-border);
+    border-radius: var(--stride-radius-sm);
+    font-size: 1rem;
+    transition: all 0.2s ease;
+}
+
+.ld-login-form input:focus {
+    outline: none;
+    border-color: var(--stride-primary);
+    box-shadow: 0 0 0 3px var(--stride-primary-light);
+}
+
+/* ==========================================================================
+   Quiz Styles
+   ========================================================================== */
+
+.wpProQuiz_content {
+    background: var(--stride-card);
+    border: 1px solid var(--stride-border);
+    border-radius: var(--stride-radius);
+    padding: 32px;
+    box-shadow: var(--stride-shadow);
+}
+
+.wpProQuiz_question {
+    padding: 24px 0;
+    border-bottom: 1px solid var(--stride-border);
+}
+
+.wpProQuiz_questionList {
+    list-style: none;
+    padding: 0;
+    margin: 20px 0;
+}
+
+.wpProQuiz_questionListItem {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    background: var(--stride-background);
+    border-radius: var(--stride-radius-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: 2px solid transparent;
+}
+
+.wpProQuiz_questionListItem:hover {
+    background: var(--stride-primary-light);
+    border-color: var(--stride-primary);
+}
+
+.wpProQuiz_button {
+    background: var(--stride-primary);
+    color: #fff;
+    padding: 14px 28px;
+    border: none;
+    border-radius: var(--stride-radius-sm);
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.wpProQuiz_button:hover {
+    background: var(--stride-primary-hover);
+    transform: translateY(-1px);
+}
+
+/* ==========================================================================
+   SVG Icons
+   ========================================================================== */
+
+.ld-svgicon {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+}
+
+/* ==========================================================================
+   Responsive Design
+   ========================================================================== */
+
+@media (max-width: 1024px) {
+    .ld-layout__content {
+        grid-template-columns: 1fr;
+        gap: 32px;
+    }
+
+    .stride-course-sidebar {
+        position: static;
+        order: -1;
+    }
+
+    .stride-course-sidebar__card {
+        max-width: 500px;
+    }
+}
+
+@media (max-width: 768px) {
+    .learndash-wrapper {
+        padding: 24px 16px;
+    }
+
+    .stride-course-header__title {
+        font-size: 1.75rem;
+    }
+
+    .stride-course-meta {
+        gap: 12px;
+    }
+
+    .stride-course-meta__item {
+        font-size: 0.85rem;
+    }
+
+    .ld-tab-bar__tabs {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .ld-tab-bar__tab {
+        flex: 1;
+        justify-content: center;
+        padding: 10px 16px;
+        font-size: 0.85rem;
+    }
+
+    .ld-accordion__header {
+        padding: 16px 20px;
+    }
+
+    .ld-accordion__item-header {
+        padding: 14px 20px;
+    }
+
+    .stride-ld-editions__item {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 16px;
+        padding: 16px 20px;
+    }
+
+    .stride-ld-editions__action {
+        width: 100%;
+    }
+
+    .stride-ld-editions__action .uk-button {
+        width: 100%;
+    }
+
+    .stride-course-sidebar__card {
+        max-width: 100%;
+    }
+}
+
+/* ==========================================================================
+   Focus Mode Overrides
+   ========================================================================== */
+
+.learndash-wrapper[data-focus-mode="true"] {
+    max-width: 900px;
+}
+
+.learndash-wrapper[data-focus-mode="true"] .ld-layout__content {
+    grid-template-columns: 1fr;
+}
+
+/* ==========================================================================
+   Print Styles
+   ========================================================================== */
+
+@media print {
+    .learndash-wrapper {
+        max-width: 100%;
+        padding: 0;
+    }
+
+    .ld-tab-bar__tabs,
+    .ld-button,
+    .stride-ld-editions__action,
+    .stride-course-sidebar {
+        display: none;
+    }
+
+    .ld-layout__content {
+        grid-template-columns: 1fr;
+    }
+}

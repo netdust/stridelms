@@ -48,56 +48,60 @@ test.describe('Trajectory Discovery & Navigation', () => {
   test('trajectory catalog displays trajectory cards', async ({ page }) => {
     await page.goto(urls.trajectoryCatalog);
 
-    // Check for trajectory article cards (archive page uses .stride-article)
-    const hasTrajectories = await page.locator('article.vad_trajectory, .stride-article').count();
-    const hasEmptyState = await page.locator('.stride-empty-state').isVisible().catch(() => false);
+    // Check for trajectory cards (archive page uses .stride-trajectory-card)
+    const trajectoryCards = page.locator('.stride-trajectory-card');
+    const emptyState = page.locator('.stride-empty-state');
 
-    expect(hasTrajectories > 0 || hasEmptyState).toBeTruthy();
+    // Either we have trajectory cards OR an empty state message
+    const hasCards = await trajectoryCards.count();
+    const hasEmpty = await emptyState.isVisible().catch(() => false);
+
+    expect(hasCards > 0 || hasEmpty).toBeTruthy();
   });
 
   test('trajectory card shows key information', async ({ page }) => {
     await page.goto(urls.trajectoryCatalog);
 
-    // If trajectories exist, check card structure
-    const firstCard = page.locator('article.vad_trajectory, .stride-article').first();
-    if (await firstCard.isVisible({ timeout: 1000 }).catch(() => false)) {
-      // Card should have a heading (h1, h2, or link with title)
-      const hasTitle = await firstCard.locator('h1, h2, .stride-page-title, a').first().isVisible().catch(() => false);
-      expect(hasTitle).toBeTruthy();
-    }
+    // Find the Test Trajectory card specifically (has proper title)
+    const testTrajectoryCard = page.locator('.stride-trajectory-card', {
+      has: page.locator('.stride-trajectory-card__title', { hasText: 'Test Trajectory' }),
+    });
+    await expect(testTrajectoryCard).toBeVisible();
+
+    // Card should have title, meta info, price, and CTA button
+    await expect(testTrajectoryCard.locator('.stride-trajectory-card__title')).toHaveText('Test Trajectory');
+    await expect(testTrajectoryCard.locator('.stride-trajectory-card__meta')).toBeVisible();
+    await expect(testTrajectoryCard.locator('.stride-trajectory-card__price')).toBeVisible();
+    await expect(testTrajectoryCard.locator('.stride-trajectory-card__cta')).toHaveText('Bekijk traject');
   });
 
   test('clicking trajectory card navigates to detail page', async ({ page }) => {
     await page.goto(urls.trajectoryCatalog);
 
-    const firstCard = page.locator('article.vad_trajectory, .stride-article').first();
-    if (await firstCard.isVisible({ timeout: 1000 }).catch(() => false)) {
-      // Get the trajectory link (find first link in the card)
-      const trajectoryLink = firstCard.locator('a').first();
+    const firstCard = page.locator('.stride-trajectory-card').first();
+    await expect(firstCard).toBeVisible();
 
-      await trajectoryLink.click();
+    // Get the trajectory link
+    const trajectoryLink = firstCard.locator('.stride-trajectory-card__link');
+    await trajectoryLink.click();
 
-      // Should navigate to trajectory detail page (uses WordPress post type URL)
-      await expect(page).toHaveURL(/\/vad_trajectory\/[^/]+\//);
-    }
+    // Should navigate to trajectory detail page (uses /trajecten/ slug)
+    await expect(page).toHaveURL(/\/trajecten\/[^/]+\//);
   });
 
   test('trajectory detail page has enrollment button', async ({ page }) => {
-    await page.goto(urls.trajectoryCatalog);
+    // Navigate directly to test trajectory detail page
+    await page.goto(urls.trajectoryDetail(testTrajectories.open.slug));
+    await page.waitForLoadState('domcontentloaded');
 
-    const firstCard = page.locator('article.vad_trajectory, .stride-article').first();
-    if (await firstCard.isVisible({ timeout: 1000 }).catch(() => false)) {
-      // Navigate to detail page
-      await firstCard.locator('a').first().click();
-      await page.waitForLoadState('domcontentloaded');
+    // Should have enrollment CTA (either "Log in" for guests or "Start traject" for logged in)
+    const enrollmentCta = page.locator('.stride-course-action-btn');
+    await expect(enrollmentCta).toBeVisible();
 
-      // Should have enrollment button or link
-      const enrollmentLink = page.locator('a[href*="inschrijving"], a[href*="enrollment"], .enrollment-cta');
-      const hasEnrollment = await enrollmentLink.count() > 0;
-
-      // At minimum, page should load without errors
-      await expect(page.locator('body')).toBeVisible();
-    }
+    // Button should link to login or enrollment
+    const href = await enrollmentCta.getAttribute('href');
+    expect(href).toBeTruthy();
+    expect(href?.includes('login') || href?.includes('inschrijving')).toBeTruthy();
   });
 });
 

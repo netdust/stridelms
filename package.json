@@ -1,0 +1,27 @@
+{
+  "name": "stride",
+  "version": "1.0.0",
+  "description": "<p align=\"center\">   <a href=\"https://roots.io/bedrock/\">     <img alt=\"Bedrock\" src=\"https://cdn.roots.io/app/uploads/logo-bedrock.svg\" height=\"100\">   </a> </p>",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "npx playwright test",
+    "test:ui": "npx playwright test --ui",
+    "test:headed": "npx playwright test --headed",
+    "test:debug": "npx playwright test --debug",
+    "test:pages": "npx playwright test pages.spec.ts",
+    "test:forms": "npx playwright test forms.spec.ts",
+    "test:uikit": "npx playwright test uikit.spec.ts",
+    "test:js": "npx playwright test javascript.spec.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
+  }
+}

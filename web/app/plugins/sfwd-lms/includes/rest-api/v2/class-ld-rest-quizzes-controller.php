@@ -442,7 +442,7 @@ if ( ( ! class_exists( 'LD_REST_Quizzes_Controller_V2' ) ) && ( class_exists( 'L
 		 * Get REST Setting Field value.
 		 *
 		 * @since 3.3.0
-		 * @since The 5.0.0 The `prerequisites` field is now converted to Post IDs (from Pro Quiz IDs). We don't want to manipulate Pro Quiz IDs in REST API.
+		 * @since 5.0.0 The `prerequisites` field is now converted to Post IDs (from Pro Quiz IDs). We don't want to manipulate Pro Quiz IDs in REST API.
 		 *
 		 * @param array           $postdata   Post data array.
 		 * @param string          $field_name Field Name for $postdata value.

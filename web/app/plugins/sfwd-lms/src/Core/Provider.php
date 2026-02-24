@@ -76,7 +76,17 @@ class Provider extends ServiceProvider {
 			->add_localize_script(
 				'learndash.global',
 				[
-					'ajaxurl' => admin_url( 'admin-ajax.php' ),
+					'ajaxurl'      => admin_url( 'admin-ajax.php' ),
+					/**
+					 * Filters an additional scroll offset used when programmatically scrolling to an element on the page.
+					 *
+					 * @since 5.0.1
+					 *
+					 * @param int $scroll_offset The scroll offset. Default 0.
+					 *
+					 * @return int The scroll offset. Default 0.
+					 */
+					'scrollOffset' => apply_filters( 'learndash_scroll_offset', 0 ),
 				]
 			)
 			->register();

@@ -241,10 +241,38 @@ if (!function_exists('delete_user_meta')) {
     }
 }
 
+// Configurable current user for testing
+global $_test_current_user_id;
+$_test_current_user_id = 1;
+
 if (!function_exists('get_current_user_id')) {
     function get_current_user_id(): int
     {
-        return 1; // Default test user
+        global $_test_current_user_id;
+        return $_test_current_user_id;
+    }
+}
+
+if (!function_exists('wp_update_user')) {
+    function wp_update_user(array $userdata)
+    {
+        global $_test_users;
+
+        $userId = $userdata['ID'] ?? 0;
+        if (!$userId) {
+            return new WP_Error('invalid_user_id', 'Invalid user ID');
+        }
+
+        // Update user object if it exists
+        if (isset($_test_users[$userId])) {
+            foreach ($userdata as $key => $value) {
+                if (property_exists($_test_users[$userId], $key)) {
+                    $_test_users[$userId]->$key = $value;
+                }
+            }
+        }
+
+        return $userId;
     }
 }
 
@@ -427,6 +455,38 @@ if (!function_exists('get_the_title')) {
         $post = get_post($post);
         return $post->post_title ?? '';
     }
+}
+
+if (!function_exists('get_stylesheet_directory')) {
+    function get_stylesheet_directory(): string
+    {
+        return '/tmp/test-theme';
+    }
+}
+
+if (!function_exists('get_template_directory')) {
+    function get_template_directory(): string
+    {
+        return '/tmp/test-theme';
+    }
+}
+
+if (!function_exists('locate_template')) {
+    function locate_template(array $templates, bool $load = false, bool $require_once = true): string
+    {
+        return '';
+    }
+}
+
+if (!function_exists('nocache_headers')) {
+    function nocache_headers(): void
+    {
+        // No-op in tests
+    }
+}
+
+if (!function_exists('http_response_code')) {
+    // Already exists in PHP, no stub needed
 }
 
 // Options storage

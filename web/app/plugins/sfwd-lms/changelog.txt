@@ -1,3 +1,21 @@
+= [5.0.1.1] 2026-02-17 =
+
+* Fix - Resolved an issue where downloaded Report CSVs would only contain the header row.
+
+= [5.0.1] 2026-02-11 =
+
+* Fix - Fixed the course category counters in a Course List block.
+* Fix - Resolved an issue where approving an assignment via API did not complete the related lesson.
+* Fix - Resolved an issue where creating a course using the Course Creation Wizard could not maintain the video ordering for Vimeo showcases.
+* Fix - Resolved an issue where resuming a quiz could result in a corrupted start timestamp.
+* Fix - Resolved an issue where when moving between questions in a quiz, the WordPress Admin Bar could overlap the question text after scrolling to the question.
+* Fix - Resolved deprecated warnings in the Course Creation Wizard page.
+* Tweak - Added extra loading styles and messages for User Course Data and User Quiz Data exports on the LearnDash LMS -> Reports page.
+* Tweak - Course activity records are now created for users when they added to a group or when new courses are added to a group. Course activity records can be generated for groups created prior to this change by running the data upgrade at LearnDash LMS -> Settings -> Advanced -> Data Upgrades -> Upgrade Group Course Access Data.
+* Tweak - Updated `[ld_lesson_list]` shortcode to follow the course lessons order by default when a course is provided and the shared course steps are disabled.
+* Tweak - Added filters: `learndash_bulk_create_course_access_activities_skip`, `learndash_group_access_activity_chunk_size`, `learndash_group_courses_access_user_batch_size`, `learndash_scroll_offset`.
+* Tweak - Updated functions: `ld_update_course_group_access`, `ld_update_group_access`.
+
 = [5.0.0] 2026-02-04 =
 
 * Deprecate - Deprecated actions: `learndash_report_page_buttons`.

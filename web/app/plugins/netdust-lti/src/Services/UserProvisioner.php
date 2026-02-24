@@ -20,7 +20,7 @@ final class UserProvisioner
         // 2. Look up by email
         if (!$userId && $claims->email) {
             $existing = get_user_by('email', $claims->email);
-            $userId = $existing?->ID;
+            $userId = $existing instanceof WP_User ? $existing->ID : null;
         }
 
         // 3. Create new user with race condition protection
@@ -34,7 +34,7 @@ final class UserProvisioner
                 $userId = $this->findByLtiSub($claims->sub);
                 if (!$userId && $claims->email) {
                     $existing = get_user_by('email', $claims->email);
-                    $userId = $existing?->ID;
+                    $userId = $existing instanceof WP_User ? $existing->ID : null;
                 }
             }
 

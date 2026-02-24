@@ -109,6 +109,10 @@ final class CompletionService extends AbstractService
     {
         $modeValue = ntdst_data()->get('vad_edition')->getMeta($editionId, 'completion_mode');
 
+        if ($modeValue === null || $modeValue === '') {
+            return CompletionMode::AttendAll;
+        }
+
         return CompletionMode::tryFrom($modeValue) ?? CompletionMode::AttendAll;
     }
 

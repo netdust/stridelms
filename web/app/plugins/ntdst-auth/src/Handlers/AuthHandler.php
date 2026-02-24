@@ -6,7 +6,6 @@ namespace NTDST\Auth\Handlers;
 
 use NTDST\Auth\AuthService;
 use NTDST\Auth\RegistrationService;
-use NTDST\Auth\SettingsService;
 
 defined('ABSPATH') || exit;
 

@@ -1096,24 +1096,22 @@ function ld_course_list( $attr = array(), $content = '', $shortcode_slug = 'ld_c
 				}
 
 				foreach ( $post_categories as $c ) {
-					if ( ! empty( $ld_cats[ $c ] ) ) {
-						continue;
+					if ( empty( $ld_cats[ $c ] ) ) {
+						$ld_cat = get_term( $c, 'ld_' . $post_type_slug . '_category' );
+
+						if ( ! $ld_cat instanceof WP_Term ) {
+							continue;
+						}
+
+						$ld_cats[ $c ] = [
+							'id'     => $ld_cat->term_id,
+							'name'   => $ld_cat->name,
+							'slug'   => $ld_cat->slug,
+							'parent' => $ld_cat->parent,
+							'count'  => 0,
+							'posts'  => [],
+						];
 					}
-
-					$ld_cat = get_term( $c, 'ld_' . $post_type_slug . '_category' );
-
-					if ( ! $ld_cat instanceof WP_Term ) {
-						continue;
-					}
-
-					$ld_cats[ $c ] = array(
-						'id'     => $ld_cat->term_id,
-						'name'   => $ld_cat->name,
-						'slug'   => $ld_cat->slug,
-						'parent' => $ld_cat->parent,
-						'count'  => 0,
-						'posts'  => array(),
-					);
 
 					++$ld_cats[ $c ]['count'];
 					$ld_cats[ $c ]['posts'][] = $cat_post->ID;

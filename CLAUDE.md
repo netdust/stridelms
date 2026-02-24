@@ -9,7 +9,7 @@
 - Stack: Bedrock WordPress
 - LMS: LearnDash
 - CRM/Forms: FluentCRM, FluentForms, Fluent SMTP
-- Frontend: UIkit 3
+- Frontend: Tailwind CSS + Alpine.js + Vite (Stridence theme)
 
 **Project Plan:** See `docs/V4-PROJECT-PLAN master.md` for the full feature inventory and 9-phase implementation plan.
 
@@ -472,6 +472,44 @@ ddev exec wp eval "echo class_exists('\ntdst\Stride\core\EditionService') ? 'OK'
 
 ---
 
+## Stridence Theme (Public Frontend)
+
+**Full specification:** `docs/plans/stride-theme-spec.md`
+
+**Stack:** Tailwind CSS + Alpine.js + Vite
+**Location:** `web/app/themes/stridence/`
+**Language:** Dutch (nl_BE) UI, English code
+
+### Theme Development
+
+```bash
+cd web/app/themes/stridence
+npm run dev     # Vite dev server (localhost:5173)
+npm run build   # Production build
+```
+
+### Key Theme Rules
+
+1. **All UI text in Dutch** — labels, buttons, errors, empty states
+2. **Server-render first** — pages must work without JS
+3. **Alpine for UI state only** — menus, tabs, filters (no business logic)
+4. **Edition is the enrollable unit** — users enroll in editions, not courses
+5. **LearnDash content via `the_content()`** — never re-implement LD rendering
+6. **Style LearnDash, don't replace** — CSS overrides only for lessons/quizzes
+7. **Use `ntdstAPI` for AJAX** — never raw fetch() for WP endpoints
+8. **Dashboard tabs use URL state** — `?tab=xxx` for bookmarkability
+
+### Helper Functions
+
+```php
+stride_format_date($date)      // Dutch formatted date
+stride_format_money($cents)    // "€ 45,00"
+stride_enrollment_url($id)     // Enrollment page URL
+stridence_icon($name, $class)  // Inline SVG icon
+```
+
+---
+
 ## Environment
 
 - **Site URL:** https://stride.ddev.site
@@ -486,6 +524,7 @@ ddev exec wp eval "echo class_exists('\ntdst\Stride\core\EditionService') ? 'OK'
 
 - **V4 Project Plan (Master):** `docs/V4-PROJECT-PLAN master.md`
 - **V4 Architecture:** `docs/ARCHITECTURE-V4-PROPOSAL.md`
+- **Stridence Theme Spec:** `docs/plans/stride-theme-spec.md`
 - **V3 Analysis:** `docs/ARCHITECTURE-V3-ANALYSIS.md`
 - **Plugin Extraction Plan:** `plans/plugin-extraction.md`
 - **Seed Scripts:** `scripts/seed.php`, `scripts/unseed.php`

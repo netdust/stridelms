@@ -62,7 +62,7 @@ $fields = $settings['registration_fields'] ?? ['email', 'first_name', 'last_name
 
                 <div class="uk-margin">
                     <label>
-                        <input class="uk-checkbox" type="checkbox" x-model="consentTerms" required>
+                        <input class="uk-checkbox" type="checkbox" id="consent_terms" x-model="consentTerms" required>
                         <?php printf(
                             esc_html__('I accept the %1$sTerms of Service%2$s', 'ntdst-auth'),
                             '<a href="' . esc_url($termsUrl) . '" target="_blank">',
@@ -73,7 +73,7 @@ $fields = $settings['registration_fields'] ?? ['email', 'first_name', 'last_name
 
                 <div class="uk-margin">
                     <label>
-                        <input class="uk-checkbox" type="checkbox" x-model="consentPrivacy" required>
+                        <input class="uk-checkbox" type="checkbox" id="consent_privacy" x-model="consentPrivacy" required>
                         <?php printf(
                             esc_html__('I accept the %1$sPrivacy Policy%2$s', 'ntdst-auth'),
                             '<a href="' . esc_url($privacyUrl) . '" target="_blank">',

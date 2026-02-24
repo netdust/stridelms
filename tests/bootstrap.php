@@ -26,6 +26,17 @@ require_once __DIR__ . '/Stubs/stride-infrastructure-stubs.php';
 // Base test case
 require_once __DIR__ . '/TestCase.php';
 
+// Load NTDST Core classes needed for testing
+$ntdstCoreFiles = [
+    dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/api/Response.php',
+];
+
+foreach ($ntdstCoreFiles as $file) {
+    if (file_exists($file)) {
+        require_once $file;
+    }
+}
+
 // Load service contracts and core classes (if they exist)
 // Note: Mocks are temporarily disabled as they need interface alignment
 $optionalFiles = [

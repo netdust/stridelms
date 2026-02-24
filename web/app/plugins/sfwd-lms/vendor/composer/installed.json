@@ -535,17 +535,17 @@
         },
         {
             "name": "stellarwp/assets",
-            "version": "1.5.0",
-            "version_normalized": "1.5.0.0",
+            "version": "1.5.1",
+            "version_normalized": "1.5.1.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/stellarwp/assets.git",
-                "reference": "9280e52d982e6bd7fc153d09864caa673eeea705"
+                "reference": "d1e1852299f838a54fb5b296e77cc3788bc530ed"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/stellarwp/assets/zipball/9280e52d982e6bd7fc153d09864caa673eeea705",
-                "reference": "9280e52d982e6bd7fc153d09864caa673eeea705",
+                "url": "https://api.github.com/repos/stellarwp/assets/zipball/d1e1852299f838a54fb5b296e77cc3788bc530ed",
+                "reference": "d1e1852299f838a54fb5b296e77cc3788bc530ed",
                 "shasum": ""
             },
             "require": {
@@ -566,7 +566,7 @@
                 "symfony/string": "^5.4",
                 "szepeviktor/phpstan-wordpress": "^1.1"
             },
-            "time": "2025-09-22T17:55:26+00:00",
+            "time": "2026-01-27T14:39:53+00:00",
             "type": "library",
             "installation-source": "dist",
             "autoload": [],
@@ -587,7 +587,7 @@
             "description": "A library for managing asset registration and enqueuing in WordPress.",
             "support": {
                 "issues": "https://github.com/stellarwp/assets/issues",
-                "source": "https://github.com/stellarwp/assets/tree/1.5.0"
+                "source": "https://github.com/stellarwp/assets/tree/1.5.1"
             },
             "install-path": "../stellarwp/assets"
         },

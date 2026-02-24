@@ -1,0 +1,228 @@
+/**
+ * Stride Component Classes
+ *
+ * Reusable UI components following the design system.
+ */
+
+@layer components {
+  /* ══════════════════════════════════════
+     BUTTONS
+     ══════════════════════════════════════ */
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2
+           bg-primary text-text-inverse font-medium
+           px-5 py-2.5 rounded-lg
+           hover:bg-primary-dark
+           focus:outline-none focus:ring-2 focus:ring-primary/50
+           disabled:opacity-50 disabled:cursor-not-allowed
+           transition-colors duration-fast;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2
+           bg-surface-alt text-text font-medium
+           px-5 py-2.5 rounded-lg border border-border
+           hover:bg-border/50
+           focus:outline-none focus:ring-2 focus:ring-primary/50
+           disabled:opacity-50 disabled:cursor-not-allowed
+           transition-colors duration-fast;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2
+           text-primary font-medium
+           px-5 py-2.5 rounded-lg
+           hover:bg-primary/5
+           focus:outline-none focus:ring-2 focus:ring-primary/50
+           transition-colors duration-fast;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2
+           text-error font-medium
+           px-5 py-2.5 rounded-lg
+           hover:bg-error/5
+           transition-colors duration-fast;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-sm;
+  }
+
+  .btn-lg {
+    @apply px-6 py-3 text-lg;
+  }
+
+  /* ══════════════════════════════════════
+     FORM INPUTS
+     ══════════════════════════════════════ */
+
+  .input-field {
+    @apply w-full px-3.5 py-2.5 rounded-lg
+           border border-border bg-surface-card text-text
+           placeholder:text-text-muted
+           focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary
+           transition-colors duration-fast;
+  }
+
+  .input-select {
+    @apply input-field appearance-none cursor-pointer
+           bg-no-repeat bg-[length:1.25rem] bg-[right_0.75rem_center];
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2378716c' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+    padding-right: 2.5rem;
+  }
+
+  .input-label {
+    @apply block text-sm font-medium text-text mb-1.5;
+  }
+
+  .input-error {
+    @apply text-xs text-error mt-1;
+  }
+
+  .input-hint {
+    @apply text-xs text-text-muted mt-1;
+  }
+
+  /* ══════════════════════════════════════
+     CARDS
+     ══════════════════════════════════════ */
+
+  .card {
+    @apply bg-surface-card rounded-xl shadow-card;
+  }
+
+  .card-interactive {
+    @apply card hover:shadow-elevated transition-shadow duration-normal cursor-pointer;
+  }
+
+  .card-bordered {
+    @apply card border border-border shadow-none;
+  }
+
+  /* ══════════════════════════════════════
+     BADGES
+     ══════════════════════════════════════ */
+
+  .badge {
+    @apply inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full;
+  }
+
+  .badge-open {
+    @apply badge bg-green-100 text-green-800;
+  }
+
+  .badge-few {
+    @apply badge bg-yellow-100 text-yellow-800;
+  }
+
+  .badge-full {
+    @apply badge bg-red-100 text-red-800;
+  }
+
+  .badge-cancelled {
+    @apply badge bg-gray-100 text-gray-500;
+  }
+
+  .badge-online {
+    @apply badge bg-indigo-100 text-indigo-700;
+  }
+
+  .badge-free {
+    @apply badge bg-emerald-100 text-emerald-700;
+  }
+
+  .badge-primary {
+    @apply badge bg-primary/10 text-primary;
+  }
+
+  /* ══════════════════════════════════════
+     SECTIONS
+     ══════════════════════════════════════ */
+
+  .section {
+    @apply py-section;
+  }
+
+  .section-alt {
+    @apply section bg-surface-alt;
+  }
+
+  .container {
+    @apply max-w-container mx-auto px-4 md:px-6 lg:px-8;
+  }
+
+  /* ══════════════════════════════════════
+     PROSE (Content Areas)
+     ══════════════════════════════════════ */
+
+  .prose-stride {
+    @apply text-text leading-relaxed;
+  }
+
+  .prose-stride h2 {
+    @apply font-heading text-2xl font-bold mt-10 mb-4;
+  }
+
+  .prose-stride h3 {
+    @apply font-heading text-xl font-semibold mt-8 mb-3;
+  }
+
+  .prose-stride p {
+    @apply mb-4;
+  }
+
+  .prose-stride ul {
+    @apply list-disc pl-5 mb-4 space-y-1;
+  }
+
+  .prose-stride ol {
+    @apply list-decimal pl-5 mb-4 space-y-1;
+  }
+
+  .prose-stride a {
+    @apply text-primary underline hover:text-primary-dark;
+  }
+
+  .prose-stride blockquote {
+    @apply border-l-4 border-primary/30 pl-4 italic text-text-muted;
+  }
+
+  /* ══════════════════════════════════════
+     NAVIGATION
+     ══════════════════════════════════════ */
+
+  .nav-link {
+    @apply text-text font-medium px-3 py-2 rounded-lg
+           hover:bg-surface-alt hover:text-primary
+           transition-colors duration-fast;
+  }
+
+  .nav-link-active {
+    @apply nav-link bg-primary/10 text-primary;
+  }
+
+  /* ══════════════════════════════════════
+     UTILITIES
+     ══════════════════════════════════════ */
+
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Loading spinner */
+  .spinner {
+    @apply animate-spin h-5 w-5 border-2 border-current border-t-transparent rounded-full;
+  }
+}

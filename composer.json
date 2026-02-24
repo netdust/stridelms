@@ -44,13 +44,15 @@
     "wpackagist-plugin/fluent-crm": "^2.9",
     "wpackagist-plugin/fluentform": "^6.1",
     "wpackagist-plugin/fluent-smtp": "^2.2",
-    "dompdf/dompdf": "^3.1"
+    "dompdf/dompdf": "^3.1",
+    "wpackagist-theme/kadence": "^1.4"
   },
   "require-dev": {
     "laravel/pint": "^1.18",
     "phpunit/phpunit": "^10.5",
     "brain/monkey": "^2.6",
-    "mockery/mockery": "^1.6"
+    "mockery/mockery": "^1.6",
+    "lucatume/wp-browser": "^4.5"
   },
   "autoload": {
     "psr-4": {
@@ -86,7 +88,7 @@
     "lint:fix": "pint",
     "test": "phpunit",
     "test:unit": "phpunit --testsuite Unit",
-    "test:integration": "phpunit --testsuite Integration",
+    "test:integration": "phpunit -c phpunit-integration.xml.dist",
     "test:coverage": "phpunit --coverage-html coverage"
   }
 }

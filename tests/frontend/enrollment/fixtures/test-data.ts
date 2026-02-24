@@ -105,14 +105,14 @@ export const testVouchers = {
 /**
  * URL patterns for the enrollment flow
  *
- * Note: WordPress post type uses /vad_trajectory/ as base URL.
- * The enrollment router intercepts /trajecten/{slug}/inschrijving/ for clean enrollment URLs.
+ * Note: URLs are configured in Stride Settings (Admin > Stride > Instellingen).
+ * Default slugs: /trajecten/ for trajectories, /vormingen/ for editions/courses.
  */
 export const urls = {
   /**
-   * Trajectory catalog page (uses post type archive URL)
+   * Trajectory catalog page (configurable slug, default: /trajecten/)
    */
-  trajectoryCatalog: '/vad_trajectory/',
+  trajectoryCatalog: '/trajecten/',
 
   /**
    * Login page (custom Stride login, not WordPress default)
@@ -130,12 +130,12 @@ export const urls = {
   myTrajectories: '/mijn-account/mijn-trajecten/',
 
   /**
-   * Build trajectory detail URL (uses post type single URL)
+   * Build trajectory detail URL (configurable slug, default: /trajecten/)
    */
-  trajectoryDetail: (slug: string) => `/vad_trajectory/${slug}/`,
+  trajectoryDetail: (slug: string) => `/trajecten/${slug}/`,
 
   /**
-   * Build trajectory enrollment URL (handled by router, uses clean /trajecten/ base)
+   * Build trajectory enrollment URL (router handles /trajecten/{slug}/inschrijving/)
    */
   trajectoryEnrollment: (slug: string) => `/trajecten/${slug}/inschrijving/`,
 };

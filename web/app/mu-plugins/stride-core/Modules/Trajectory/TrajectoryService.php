@@ -7,6 +7,7 @@ namespace Stride\Modules\Trajectory;
 use Stride\Domain\TrajectoryMode;
 use Stride\Domain\TrajectoryStatus;
 use Stride\Infrastructure\AbstractService;
+use Stride\Modules\Enrollment\RegistrationRepository;
 use WP_Error;
 use WP_Post;
 
@@ -17,7 +18,7 @@ final class TrajectoryService extends AbstractService
 {
     public function __construct(
         private readonly TrajectoryRepository $repository,
-        private readonly TrajectoryEnrollmentRepository $enrollmentRepo,
+        private readonly RegistrationRepository $registrations,
     ) {
         parent::__construct();
     }
@@ -174,7 +175,7 @@ final class TrajectoryService extends AbstractService
      */
     public function isUserEnrolled(int $userId, int $trajectoryId): bool
     {
-        return $this->enrollmentRepo->isEnrolled($userId, $trajectoryId);
+        return $this->registrations->existsForTrajectory($userId, $trajectoryId);
     }
 
     // === Deadline Checks ===

@@ -1386,13 +1386,53 @@ class LD_QuizPro {
 			$quizdata['completed'] = intval( $_POST['results']['comp']['quizEndTimestamp'] / 1000 );
 		}
 
-		if ( ( isset( $quizdata['started'] ) ) && ( ! empty( $quizdata['started'] ) ) && ( isset( $quizdata['completed'] ) ) && ( ! empty( $quizdata['completed'] ) ) ) {
-			$quiz_time_diff  = absint( $quizdata['completed'] ) - absint( $quizdata['started'] );
-			$quiz_time_end   = time();
-			$quiz_time_start = $quiz_time_end - $quiz_time_diff;
+		if (
+			isset( $quizdata['started'] )
+			&& ! empty( $quizdata['started'] )
+			&& isset( $quizdata['completed'] )
+			&& ! empty( $quizdata['completed'] )
+		) {
+			/**
+			 * Preserve the original start timestamp for existing quiz activities to prevent drift.
+			 *
+			 * Drift occurs when timestamps are recalculated using server time: any delay between
+			 * JavaScript sending completion and PHP processing causes the start time to shift forward,
+			 * corrupting the original quiz start time. By preserving the existing activity_started
+			 * timestamp, we maintain accuracy for resumed quizzes while still normalizing new quizzes
+			 * to server time to handle client clock differences.
+			*/
+			$quiz_args = [
+				'course_id'          => $course_id,
+				'user_id'            => $user_id,
+				'post_id'            => $quiz_post_id,
+				'activity_type'      => LDLMS_Post_Types::QUIZ,
+				'activity_completed' => 0,
+			];
 
-			$quizdata['started']   = $quiz_time_start;
-			$quizdata['completed'] = $quiz_time_end;
+			$quiz_activity    = learndash_get_user_activity( $quiz_args );
+			$existing_started = 0;
+
+			if (
+				is_object( $quiz_activity )
+				&& property_exists( $quiz_activity, 'activity_started' )
+				&& ! empty( $quiz_activity->activity_started )
+			) {
+				$existing_started = absint( $quiz_activity->activity_started );
+			}
+
+			if ( ! empty( $existing_started ) ) {
+				// Preserve the original start timestamp from existing activity.
+				$quizdata['started']   = $existing_started;
+				$quizdata['completed'] = time();
+			} else {
+				// No existing activity or invalid timestamp, normalize to server time.
+				$quiz_time_diff  = absint( $quizdata['completed'] ) - absint( $quizdata['started'] );
+				$quiz_time_end   = time();
+				$quiz_time_start = $quiz_time_end - $quiz_time_diff;
+
+				$quizdata['started']   = $quiz_time_start;
+				$quizdata['completed'] = $quiz_time_end;
+			}
 		} else {
 			$quizdata['started']   = 0;
 			$quizdata['completed'] = 0;

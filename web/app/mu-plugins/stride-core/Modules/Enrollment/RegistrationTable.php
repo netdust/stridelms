@@ -5,7 +5,12 @@ declare(strict_types=1);
 namespace Stride\Modules\Enrollment;
 
 /**
- * Registration table creation and migration.
+ * Unified registration table for edition and trajectory enrollments.
+ *
+ * Handles:
+ * - Edition enrollment (edition_id set, trajectory_id null)
+ * - Trajectory enrollment (trajectory_id set, edition_id null)
+ * - Edition via trajectory (both set)
  */
 final class RegistrationTable
 {
@@ -27,20 +32,24 @@ final class RegistrationTable
         $sql = "CREATE TABLE IF NOT EXISTS {$table} (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             user_id BIGINT UNSIGNED NOT NULL,
-            edition_id BIGINT UNSIGNED NOT NULL,
-            status ENUM('confirmed','cancelled','waitlist','interest') DEFAULT 'confirmed',
-            enrollment_path ENUM('individual','colleague','trajectory','interest') DEFAULT 'individual',
-            enrolled_by BIGINT UNSIGNED NULL,
-            voucher_code VARCHAR(50) NULL,
+            edition_id BIGINT UNSIGNED NULL,
+            trajectory_id BIGINT UNSIGNED NULL,
+            status ENUM('confirmed','cancelled','waitlist','completed','withdrawn') DEFAULT 'confirmed',
+            enrollment_path ENUM('individual','colleague','trajectory') DEFAULT 'individual',
+            selections JSON NULL COMMENT 'Session IDs or elective edition IDs',
+            selections_locked_at DATETIME NULL,
             quote_id BIGINT UNSIGNED NULL,
+            enrolled_by BIGINT UNSIGNED NULL,
             registered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            completed_at DATETIME NULL,
             cancelled_at DATETIME NULL,
             notes TEXT NULL,
             INDEX idx_user (user_id),
             INDEX idx_edition (edition_id),
+            INDEX idx_trajectory (trajectory_id),
             INDEX idx_status (status),
             INDEX idx_edition_status (edition_id, status),
-            UNIQUE KEY unique_user_edition (user_id, edition_id)
+            INDEX idx_trajectory_status (trajectory_id, status)
         ) {$charset};";
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -57,26 +66,42 @@ final class RegistrationTable
     }
 
     /**
-     * Add composite index for existing tables (migration).
+     * Migration: Add new columns to existing table.
      */
-    public static function addCompositeIndexIfMissing(): void
+    public static function migrate(): void
     {
         global $wpdb;
 
         $table = self::getTableName();
 
-        // Check if index exists
-        $indexExists = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM information_schema.statistics
-             WHERE table_schema = DATABASE()
-             AND table_name = %s
-             AND index_name = 'idx_edition_status'",
-            $table
-        ));
+        // Add trajectory_id if missing
+        $hasTrajectoryId = $wpdb->get_var("SHOW COLUMNS FROM {$table} LIKE 'trajectory_id'");
+        if (!$hasTrajectoryId) {
+            $wpdb->query("ALTER TABLE {$table} ADD COLUMN trajectory_id BIGINT UNSIGNED NULL AFTER edition_id");
+            $wpdb->query("ALTER TABLE {$table} ADD INDEX idx_trajectory (trajectory_id)");
+            $wpdb->query("ALTER TABLE {$table} ADD INDEX idx_trajectory_status (trajectory_id, status)");
+        }
 
-        if (!$indexExists) {
-            // Table name from constant - safe from injection (identifiers can't use prepare())
-            $wpdb->query("ALTER TABLE {$table} ADD INDEX idx_edition_status (edition_id, status)");
+        // Add selections if missing
+        $hasSelections = $wpdb->get_var("SHOW COLUMNS FROM {$table} LIKE 'selections'");
+        if (!$hasSelections) {
+            $wpdb->query("ALTER TABLE {$table} ADD COLUMN selections JSON NULL AFTER enrollment_path");
+            $wpdb->query("ALTER TABLE {$table} ADD COLUMN selections_locked_at DATETIME NULL AFTER selections");
+        }
+
+        // Add completed_at if missing
+        $hasCompletedAt = $wpdb->get_var("SHOW COLUMNS FROM {$table} LIKE 'completed_at'");
+        if (!$hasCompletedAt) {
+            $wpdb->query("ALTER TABLE {$table} ADD COLUMN completed_at DATETIME NULL AFTER registered_at");
+        }
+
+        // Make edition_id nullable if needed
+        $wpdb->query("ALTER TABLE {$table} MODIFY COLUMN edition_id BIGINT UNSIGNED NULL");
+
+        // Drop voucher_code if exists (moved to quote)
+        $hasVoucherCode = $wpdb->get_var("SHOW COLUMNS FROM {$table} LIKE 'voucher_code'");
+        if ($hasVoucherCode) {
+            $wpdb->query("ALTER TABLE {$table} DROP COLUMN voucher_code");
         }
     }
 }

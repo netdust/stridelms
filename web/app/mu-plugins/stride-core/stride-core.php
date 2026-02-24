@@ -23,25 +23,15 @@ $config = require __DIR__ . '/plugin-config.php';
 add_action('init', function (): void {
     if (!get_option('stride_tables_created')) {
         \Stride\Modules\Enrollment\RegistrationTable::create();
-        \Stride\Modules\Edition\SessionRegistrationTable::create();
-        \Stride\Modules\Trajectory\TrajectoryEnrollmentTable::create();
         update_option('stride_tables_created', '1');
     }
 }, 1);
 
-// Create session_registrations table if missing (added in later version)
+// Migrate registration table to unified schema (v2)
 add_action('init', function (): void {
-    if (!get_option('stride_session_registrations_table_created')) {
-        \Stride\Modules\Edition\SessionRegistrationTable::create();
-        update_option('stride_session_registrations_table_created', '1');
-    }
-}, 1);
-
-// Create trajectory_enrollments table if missing
-add_action('init', function (): void {
-    if (!get_option('stride_trajectory_enrollments_table_created')) {
-        \Stride\Modules\Trajectory\TrajectoryEnrollmentTable::create();
-        update_option('stride_trajectory_enrollments_table_created', '1');
+    if (!get_option('stride_registration_table_v2')) {
+        \Stride\Modules\Enrollment\RegistrationTable::migrate();
+        update_option('stride_registration_table_v2', '1');
     }
 }, 1);
 

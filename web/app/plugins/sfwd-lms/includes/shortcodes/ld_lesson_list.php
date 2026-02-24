@@ -49,12 +49,11 @@ function ld_lesson_list( $attr = array(), $content = '', $shortcode_slug = 'ld_l
 			return '';
 		}
 
-		$course_steps      = learndash_course_get_steps_by_type( $attr['course_id'], $attr['post_type'] );
+		$course_steps = learndash_course_get_steps_by_type( $attr['course_id'], $attr['post_type'] );
 		if ( ! empty( $course_steps ) ) {
 			$attr['post__in'] = $course_steps;
-		}
 
-		if ( LearnDash_Settings_Section::get_section_setting( 'LearnDash_Settings_Courses_Builder', 'shared_steps' ) == 'yes' ) {
+			// Always order by course arrangement when lessons are part of a course.
 			if ( ! isset( $attr['order'] ) ) {
 				$attr['order'] = 'ASC';
 			}

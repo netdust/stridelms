@@ -5,6 +5,7 @@ const learndash = window.learndash || {};
 
 learndash.forms = learndash.forms || {};
 learndash.forms.sortable = learndash.forms.sortable || {};
+learndash.scrollTo = learndash.scrollTo || {};
 
 const localStorage = window.localStorage || {};
 
@@ -463,9 +464,7 @@ const localStorage = window.localStorage || {};
 					//updateItemsStatus();
 
 					if (e.values.item.length > 0) {
-						window.scroll({
-							top: $(e.values.item).offset().top,
-						});
+						learndash.scrollTo( e.values.item[ 0 ] );
 					}
 
 					// Attempt to focus the question text and let screen readers read it.
@@ -766,15 +765,16 @@ const localStorage = window.localStorage || {};
 				quizStartTimer = +new Date();
 
 				// Use server start time when quiz is resumed.
+				// Server sends timestamp in seconds (Unix timestamp), but JavaScript Date uses milliseconds.
 				if (
 					config.quiz_resume_enabled === '1' &&
 					typeof config.quiz_resume_quiz_started === 'string'
 				) {
 					if ('0' !== config.quiz_resume_quiz_started) {
-						quizStartTimer = parseInt(
-							config.quiz_resume_quiz_started,
-							10
-						);
+						// Convert from saved seconds to milliseconds by multiplying by 1000.
+						quizStartTimer =
+							parseInt( config.quiz_resume_quiz_started, 10 ) *
+							1000;
 					}
 				}
 

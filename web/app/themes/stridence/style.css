@@ -1,0 +1,18 @@
+/*
+Theme Name: Stridence
+Theme URI: https://stride.ddev.site
+Author: Netdust
+Author URI: https://netdust.be
+Description: Modern LMS theme for Stride - Healthcare professional training platform. Built with Tailwind CSS, Alpine.js, and Vite.
+Version: 1.0.0
+Requires at least: 6.4
+Tested up to: 6.5
+Requires PHP: 8.1
+License: GNU General Public License v2 or later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
+Text Domain: stridence
+Tags: lms, education, healthcare, tailwind, alpine
+
+This theme uses Vite for asset bundling.
+Run `npm run dev` for development or `npm run build` for production.
+*/

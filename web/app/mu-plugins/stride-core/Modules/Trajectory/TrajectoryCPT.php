@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Stride\Modules\Trajectory;
 
+use Stride\Admin\StrideSettingsService;
+
 /**
  * Trajectory CPT Registration.
  *
@@ -25,13 +27,18 @@ final class TrajectoryCPT
                 'add_new_item' => 'Nieuw traject toevoegen',
                 'edit_item' => 'Traject bewerken',
             ],
-            'public' => false,
+            'public' => true,
             'publicly_queryable' => true,
+            'has_archive' => true,
             'show_ui' => true,
             'show_in_menu' => 'stride-dashboard',
             'menu_icon' => 'dashicons-networking',
             'supports' => ['title', 'editor'],
             'auto_metabox' => false,
+            'rewrite' => [
+                'slug' => StrideSettingsService::getTrajectorySlug(),
+                'with_front' => false,
+            ],
             'fields' => self::getFields(),
             'field_groups' => self::getFieldGroups(),
         ]);

@@ -1661,6 +1661,12 @@ function ld_update_group_access( $user_id = 0, $group_id = 0, $remove = false ):
 					$product && $product->get_start_date() ? $product->get_start_date() : time()
 				);
 
+				// Create 'access' activity records for all courses in this group.
+				learndash_bulk_create_course_access_activities(
+					[ $user_id ],
+					learndash_group_enrolled_courses( $group_id )
+				);
+
 				/**
 				 * Fires after the user is added to group access meta.
 				 *
@@ -1727,8 +1733,21 @@ function ld_update_course_group_access( $course_id = 0, $group_id = 0, $remove =
 		} else {
 			$group_enrolled = get_post_meta( $course_id, 'learndash_group_enrolled_' . $group_id, true );
 			if ( empty( $group_enrolled ) ) {
-				$action_success = true;
-				update_post_meta( $course_id, 'learndash_group_enrolled_' . $group_id, time() );
+				$action_success  = true;
+				$enrollment_time = time();
+				update_post_meta( $course_id, 'learndash_group_enrolled_' . $group_id, $enrollment_time );
+
+				// Store permanent enrollment timestamp for historical data (not deleted on removal).
+				$enrolled_at = get_post_meta( $course_id, 'learndash_group_' . $group_id . '_enrolled_at', true );
+				if ( empty( $enrolled_at ) ) {
+					update_post_meta( $course_id, 'learndash_group_' . $group_id . '_enrolled_at', $enrollment_time );
+				}
+
+				// Create 'access' activity records for all users in this group.
+				learndash_bulk_create_course_access_activities(
+					learndash_get_groups_user_ids( $group_id ),
+					[ $course_id ]
+				);
 
 				/**
 				 * Fires after the user is added to the course group access meta.
@@ -1745,7 +1764,6 @@ function ld_update_course_group_access( $course_id = 0, $group_id = 0, $remove =
 
 	return $action_success;
 }
-
 
 /**
  * Updates the group access for a group leader.

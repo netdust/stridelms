@@ -12,10 +12,12 @@
       <sourceFolder url="file://$MODULE_DIR$/web/app/plugins/fluent-smtp/includes" isTestSource="false" packagePrefix="FluentMail\Includes\" />
       <sourceFolder url="file://$MODULE_DIR$/web/app/plugins/fluentform/app" isTestSource="false" packagePrefix="FluentForm\App\" />
       <sourceFolder url="file://$MODULE_DIR$/web/app/plugins/fluentform/vendor/wpfluent/framework/src/WPFluent" isTestSource="false" packagePrefix="FluentForm\Framework\" />
-      <sourceFolder url="file://$MODULE_DIR$/web/app/themes/stride" isTestSource="false" packagePrefix="stride\" />
       <sourceFolder url="file://$MODULE_DIR$/tests" isTestSource="true" packagePrefix="Stride\Tests\" />
       <sourceFolder url="file://$MODULE_DIR$/tests/Integration" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/tests/Unit" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/web/app/mu-plugins/stride-core" isTestSource="false" packagePrefix="Stride\" />
+      <sourceFolder url="file://$MODULE_DIR$/spec" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/bck/stride" isTestSource="false" packagePrefix="stride\" />
       <excludeFolder url="file://$MODULE_DIR$/vendor/composer" />
       <excludeFolder url="file://$MODULE_DIR$/vendor/dompdf/dompdf" />
       <excludeFolder url="file://$MODULE_DIR$/vendor/dompdf/php-font-lib" />
@@ -88,6 +90,47 @@
       <excludeFolder url="file://$MODULE_DIR$/vendor/sebastian/type" />
       <excludeFolder url="file://$MODULE_DIR$/vendor/sebastian/version" />
       <excludeFolder url="file://$MODULE_DIR$/vendor/theseer/tokenizer" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/behat/gherkin" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/codeception/codeception" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/codeception/lib-asserts" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/codeception/lib-innerbrowser" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/codeception/lib-web" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/codeception/module-asserts" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/codeception/module-cli" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/codeception/module-db" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/codeception/module-filesystem" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/codeception/module-phpbrowser" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/codeception/module-webdriver" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/codeception/stub" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/druidfi/mysqldump-php" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/guzzlehttp/guzzle" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/guzzlehttp/promises" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/guzzlehttp/psr7" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/lucatume/wp-browser" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/php-webdriver/webdriver" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/psr/container" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/psr/event-dispatcher" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/psr/http-client" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/psr/http-factory" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/psr/http-message" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/psy/psysh" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/ralouphie/getallheaders" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/symfony/browser-kit" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/symfony/console" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/symfony/css-selector" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/symfony/deprecation-contracts" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/symfony/dom-crawler" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/symfony/event-dispatcher" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/symfony/event-dispatcher-contracts" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/symfony/filesystem" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/symfony/finder" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/symfony/polyfill-intl-grapheme" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/symfony/polyfill-intl-normalizer" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/symfony/process" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/symfony/service-contracts" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/symfony/string" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/symfony/var-dumper" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/symfony/yaml" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

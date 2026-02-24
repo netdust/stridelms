@@ -10,19 +10,20 @@ use WP_Error;
 /**
  * Repository for registration data access.
  *
- * Uses custom table instead of CPT for performance.
+ * Unified table for edition and trajectory enrollments.
  */
 final class RegistrationRepository
 {
     public const PATH_INDIVIDUAL = 'individual';
     public const PATH_COLLEAGUE = 'colleague';
     public const PATH_TRAJECTORY = 'trajectory';
-    public const PATH_INTEREST = 'interest';
 
     private function table(): string
     {
         return RegistrationTable::getTableName();
     }
+
+    // === Create ===
 
     /**
      * Create a new registration.
@@ -34,26 +35,36 @@ final class RegistrationRepository
     {
         global $wpdb;
 
-        $required = ['user_id', 'edition_id'];
-        foreach ($required as $field) {
-            if (empty($data[$field])) {
-                return new WP_Error('missing_field', "Required field: {$field}");
-            }
+        // Must have at least edition_id or trajectory_id
+        if (empty($data['edition_id']) && empty($data['trajectory_id'])) {
+            return new WP_Error('missing_field', 'Required: edition_id or trajectory_id');
+        }
+
+        if (empty($data['user_id'])) {
+            return new WP_Error('missing_field', 'Required: user_id');
         }
 
         // Check for duplicate
-        if ($this->exists((int) $data['user_id'], (int) $data['edition_id'])) {
+        $editionId = isset($data['edition_id']) ? absint($data['edition_id']) : null;
+        $trajectoryId = isset($data['trajectory_id']) ? absint($data['trajectory_id']) : null;
+
+        if ($editionId && $this->existsForEdition((int) $data['user_id'], $editionId)) {
             return new WP_Error('duplicate', 'User already registered for this edition');
+        }
+
+        if ($trajectoryId && !$editionId && $this->existsForTrajectory((int) $data['user_id'], $trajectoryId)) {
+            return new WP_Error('duplicate', 'User already enrolled in this trajectory');
         }
 
         $insert = [
             'user_id' => absint($data['user_id']),
-            'edition_id' => absint($data['edition_id']),
+            'edition_id' => $editionId,
+            'trajectory_id' => $trajectoryId,
             'status' => $data['status'] ?? RegistrationStatus::Confirmed->value,
             'enrollment_path' => $data['enrollment_path'] ?? self::PATH_INDIVIDUAL,
-            'enrolled_by' => isset($data['enrolled_by']) ? absint($data['enrolled_by']) : null,
-            'voucher_code' => isset($data['voucher_code']) ? sanitize_text_field($data['voucher_code']) : null,
+            'selections' => isset($data['selections']) ? wp_json_encode($data['selections']) : null,
             'quote_id' => isset($data['quote_id']) ? absint($data['quote_id']) : null,
+            'enrolled_by' => isset($data['enrolled_by']) ? absint($data['enrolled_by']) : null,
             'notes' => isset($data['notes']) ? sanitize_textarea_field($data['notes']) : null,
         ];
 
@@ -65,24 +76,23 @@ final class RegistrationRepository
 
         $registrationId = (int) $wpdb->insert_id;
 
-        // Fire audit hook
         do_action('stride/registration/created', [
             'registration_id' => $registrationId,
             'user_id' => $insert['user_id'],
             'edition_id' => $insert['edition_id'],
+            'trajectory_id' => $insert['trajectory_id'],
             'enrollment_path' => $insert['enrollment_path'],
-            'enrolled_by' => $insert['enrolled_by'],
         ]);
 
         return $registrationId;
     }
 
+    // === Find by ID ===
+
     /**
      * Find registration by ID.
-     *
-     * @return \stdClass|WP_Error
      */
-    public function find(int $id): \stdClass|WP_Error
+    public function find(int $id): ?object
     {
         global $wpdb;
 
@@ -91,12 +101,14 @@ final class RegistrationRepository
             $id
         ));
 
-        if (!$row) {
-            return new WP_Error('not_found', 'Registration not found');
+        if ($row && $row->selections) {
+            $row->selections = json_decode($row->selections, true);
         }
 
         return $row;
     }
+
+    // === Edition queries ===
 
     /**
      * Find registration by user and edition.
@@ -105,41 +117,25 @@ final class RegistrationRepository
     {
         global $wpdb;
 
-        return $wpdb->get_row($wpdb->prepare(
+        $row = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$this->table()} WHERE user_id = %d AND edition_id = %d",
             $userId,
             $editionId
         ));
-    }
 
-    /**
-     * Check if registration exists.
-     */
-    public function exists(int $userId, int $editionId): bool
-    {
-        return $this->findByUserAndEdition($userId, $editionId) !== null;
-    }
-
-    /**
-     * Get all registrations for a user.
-     *
-     * @return array<object>
-     */
-    public function findByUser(int $userId, ?string $status = null): array
-    {
-        global $wpdb;
-
-        $sql = "SELECT * FROM {$this->table()} WHERE user_id = %d";
-        $params = [$userId];
-
-        if ($status !== null) {
-            $sql .= " AND status = %s";
-            $params[] = $status;
+        if ($row && $row->selections) {
+            $row->selections = json_decode($row->selections, true);
         }
 
-        $sql .= " ORDER BY registered_at DESC";
+        return $row;
+    }
 
-        return $wpdb->get_results($wpdb->prepare($sql, ...$params));
+    /**
+     * Check if user is registered for edition.
+     */
+    public function existsForEdition(int $userId, int $editionId): bool
+    {
+        return $this->findByUserAndEdition($userId, $editionId) !== null;
     }
 
     /**
@@ -167,7 +163,7 @@ final class RegistrationRepository
     /**
      * Count confirmed registrations for edition.
      */
-    public function countConfirmed(int $editionId): int
+    public function countConfirmedForEdition(int $editionId): int
     {
         global $wpdb;
 
@@ -177,20 +173,236 @@ final class RegistrationRepository
         ));
     }
 
+    // === Trajectory queries ===
+
+    /**
+     * Find trajectory enrollment (no edition_id).
+     */
+    public function findByUserAndTrajectory(int $userId, int $trajectoryId): ?object
+    {
+        global $wpdb;
+
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$this->table()} WHERE user_id = %d AND trajectory_id = %d AND edition_id IS NULL",
+            $userId,
+            $trajectoryId
+        ));
+
+        if ($row && $row->selections) {
+            $row->selections = json_decode($row->selections, true);
+        }
+
+        return $row;
+    }
+
+    /**
+     * Check if user is enrolled in trajectory.
+     */
+    public function existsForTrajectory(int $userId, int $trajectoryId): bool
+    {
+        return $this->findByUserAndTrajectory($userId, $trajectoryId) !== null;
+    }
+
+    /**
+     * Get all enrollments for a trajectory.
+     *
+     * @return array<object>
+     */
+    public function findByTrajectory(int $trajectoryId, ?string $status = null): array
+    {
+        global $wpdb;
+
+        $sql = "SELECT * FROM {$this->table()} WHERE trajectory_id = %d AND edition_id IS NULL";
+        $params = [$trajectoryId];
+
+        if ($status !== null) {
+            $sql .= " AND status = %s";
+            $params[] = $status;
+        }
+
+        $sql .= " ORDER BY registered_at ASC";
+
+        return $wpdb->get_results($wpdb->prepare($sql, ...$params));
+    }
+
+    /**
+     * Get edition registrations linked to a trajectory.
+     *
+     * @return array<object>
+     */
+    public function findEditionsByTrajectory(int $userId, int $trajectoryId): array
+    {
+        global $wpdb;
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$this->table()} WHERE user_id = %d AND trajectory_id = %d AND edition_id IS NOT NULL ORDER BY registered_at ASC",
+            $userId,
+            $trajectoryId
+        ));
+    }
+
+    /**
+     * Count enrollments for a trajectory.
+     */
+    public function countByTrajectory(int $trajectoryId, ?string $status = null): int
+    {
+        global $wpdb;
+
+        $sql = "SELECT COUNT(*) FROM {$this->table()} WHERE trajectory_id = %d AND edition_id IS NULL";
+        $params = [$trajectoryId];
+
+        if ($status !== null) {
+            $sql .= " AND status = %s";
+            $params[] = $status;
+        }
+
+        return (int) $wpdb->get_var($wpdb->prepare($sql, ...$params));
+    }
+
+    // === User queries ===
+
+    /**
+     * Get all registrations for a user.
+     *
+     * @return array<object>
+     */
+    public function findByUser(int $userId, ?string $status = null): array
+    {
+        global $wpdb;
+
+        $sql = "SELECT * FROM {$this->table()} WHERE user_id = %d";
+        $params = [$userId];
+
+        if ($status !== null) {
+            $sql .= " AND status = %s";
+            $params[] = $status;
+        }
+
+        $sql .= " ORDER BY registered_at DESC";
+
+        return $wpdb->get_results($wpdb->prepare($sql, ...$params));
+    }
+
+    /**
+     * Get user's trajectory enrollments.
+     *
+     * @return array<object>
+     */
+    public function findTrajectoryEnrollmentsByUser(int $userId): array
+    {
+        global $wpdb;
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$this->table()} WHERE user_id = %d AND trajectory_id IS NOT NULL AND edition_id IS NULL AND status != 'cancelled' ORDER BY registered_at DESC",
+            $userId
+        ));
+    }
+
+    // === Selections ===
+
+    /**
+     * Set selections (sessions or elective editions).
+     *
+     * @param array<int> $selections
+     */
+    public function setSelections(int $registrationId, array $selections): bool
+    {
+        global $wpdb;
+
+        return $wpdb->update(
+            $this->table(),
+            ['selections' => wp_json_encode($selections)],
+            ['id' => $registrationId]
+        ) !== false;
+    }
+
+    /**
+     * Get selections for a registration.
+     *
+     * @return array<int>
+     */
+    public function getSelections(int $registrationId): array
+    {
+        $registration = $this->find($registrationId);
+
+        if (!$registration) {
+            return [];
+        }
+
+        return $registration->selections ?? [];
+    }
+
+    /**
+     * Lock selections (prevent further changes).
+     */
+    public function lockSelections(int $registrationId): bool
+    {
+        global $wpdb;
+
+        return $wpdb->update(
+            $this->table(),
+            ['selections_locked_at' => current_time('mysql')],
+            ['id' => $registrationId]
+        ) !== false;
+    }
+
+    /**
+     * Check if selections are locked.
+     */
+    public function areSelectionsLocked(int $registrationId): bool
+    {
+        $registration = $this->find($registrationId);
+
+        return $registration && !empty($registration->selections_locked_at);
+    }
+
+    // === Status updates ===
+
+    /**
+     * Update registration.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function update(int $id, array $data): bool
+    {
+        global $wpdb;
+
+        $allowed = ['status', 'selections', 'selections_locked_at', 'quote_id', 'completed_at', 'cancelled_at', 'notes'];
+        $update = [];
+
+        foreach ($allowed as $field) {
+            if (array_key_exists($field, $data)) {
+                $value = $data[$field];
+                if ($field === 'selections' && is_array($value)) {
+                    $value = wp_json_encode($value);
+                }
+                $update[$field] = $value;
+            }
+        }
+
+        if (empty($update)) {
+            return true;
+        }
+
+        return $wpdb->update($this->table(), $update, ['id' => $id]) !== false;
+    }
+
     /**
      * Update registration status.
      */
     public function updateStatus(int $id, RegistrationStatus $status): bool
     {
-        global $wpdb;
-
         $data = ['status' => $status->value];
 
         if ($status === RegistrationStatus::Cancelled) {
             $data['cancelled_at'] = current_time('mysql');
         }
 
-        return $wpdb->update($this->table(), $data, ['id' => $id]) !== false;
+        if ($status === RegistrationStatus::Completed) {
+            $data['completed_at'] = current_time('mysql');
+        }
+
+        return $this->update($id, $data);
     }
 
     /**
@@ -198,23 +410,36 @@ final class RegistrationRepository
      */
     public function cancel(int $id): bool
     {
-        // Get registration data before cancelling for audit
         $registration = $this->find($id);
-        if (is_wp_error($registration)) {
+        if (!$registration) {
             return false;
         }
 
         $result = $this->updateStatus($id, RegistrationStatus::Cancelled);
 
         if ($result) {
-            // Fire audit hook
             do_action('stride/registration/cancelled', [
                 'registration_id' => $id,
                 'user_id' => $registration->user_id,
                 'edition_id' => $registration->edition_id,
+                'trajectory_id' => $registration->trajectory_id,
             ]);
         }
 
         return $result;
+    }
+
+    // === Legacy aliases ===
+
+    /** @deprecated Use existsForEdition() */
+    public function exists(int $userId, int $editionId): bool
+    {
+        return $this->existsForEdition($userId, $editionId);
+    }
+
+    /** @deprecated Use countConfirmedForEdition() */
+    public function countConfirmed(int $editionId): int
+    {
+        return $this->countConfirmedForEdition($editionId);
     }
 }

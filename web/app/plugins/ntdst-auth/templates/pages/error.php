@@ -2,12 +2,13 @@
 /**
  * Error Page Template
  *
- * Variables: $title, $message, $show_request_new (optional)
+ * Variables: $title, $message, $show_request_new (optional), $settings (from AuthService)
  */
 defined('ABSPATH') || exit;
 
-$settings = ntdst_get(\NTDST\Auth\SettingsService::class)->getSettings();
-$loginUrl = home_url($settings['login_url'] ?? '/login');
+use NTDST\Auth\Helpers\Config;
+
+$loginUrl = home_url(Config::get('login_url', '/login'));
 ?>
 <!DOCTYPE html>
 <html <?php language_attributes(); ?>>

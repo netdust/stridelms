@@ -697,6 +697,7 @@ require_once LEARNDASH_LMS_PLUGIN_DIR . 'includes/admin/classes-data-upgrades-ac
 require_once LEARNDASH_LMS_PLUGIN_DIR . 'includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-quiz-questions.php';
 require_once LEARNDASH_LMS_PLUGIN_DIR . 'includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-course-access-list-convert.php';
 require_once LEARNDASH_LMS_PLUGIN_DIR . 'includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-rename_wpproquiz-tables.php';
+require_once LEARNDASH_LMS_PLUGIN_DIR . 'includes/admin/classes-data-upgrades-actions/class-learndash-admin-data-upgrades-group-courses-access.php';
 
 /**
  * Fires on admin data upgrades init

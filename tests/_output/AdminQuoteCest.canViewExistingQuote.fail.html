@@ -1,0 +1,1469 @@
+<html class="wp-toolbar" lang="en-US"><head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<title>Dashboard ‹ Stride LMS — WordPress</title>
+<script type="text/javascript">
+addLoadEvent = function(func){if(typeof jQuery!=='undefined')jQuery(function(){func();});else if(typeof wpOnload!=='function'){wpOnload=func;}else{var oldonload=wpOnload;wpOnload=function(){oldonload();func();}}};
+var ajaxurl = '/wp/wp-admin/admin-ajax.php',
+	pagenow = 'dashboard',
+	typenow = '',
+	adminpage = 'index-php',
+	thousandsSeparator = ',',
+	decimalPoint = '.',
+	isRtl = 0;
+</script>
+			<style>
+			.wpProQuiz_blueBox {
+				padding: 20px;
+				background-color: rgb(223, 238, 255);
+				border: 1px dotted;
+				margin-top: 10px;
+			}
+			.categoryTr th {
+				background-color: #F1F1F1;
+			}
+			.wpProQuiz_modal_backdrop {
+				background: #000;
+				opacity: 0.7;
+				top: 0;
+				bottom: 0;
+				right: 0;
+				left: 0;
+				position: fixed;
+				z-index: 159900;
+			}
+			.wpProQuiz_modal_window {
+				position: fixed;
+				background: #FFF;
+				top: 40px;
+				bottom: 40px;
+				left: 40px;
+				right: 40px;
+				z-index: 160000;
+			}
+			.wpProQuiz_actions {
+				display: none;
+				padding: 2px 0 0;
+			}
+
+			.mobile .wpProQuiz_actions {
+				display: block;
+			}
+
+			tr:hover .wpProQuiz_actions {
+				display: block;
+			}
+			</style>
+			<style id="iris-css">.iris-picker{display:block;position:relative}.iris-picker,.iris-picker *{-moz-box-sizing:content-box;-webkit-box-sizing:content-box;box-sizing:content-box}input+.iris-picker{margin-top:4px}.iris-error{background-color:#ffafaf}.iris-border{border-radius:3px;border:1px solid #aaa;width:200px;background-color:#fff}.iris-picker-inner{position:absolute;top:0;right:0;left:0;bottom:0}.iris-border .iris-picker-inner{top:10px;right:10px;left:10px;bottom:10px}.iris-picker .iris-square-inner{position:absolute;left:0;right:0;top:0;bottom:0}.iris-picker .iris-square,.iris-picker .iris-slider,.iris-picker .iris-square-inner,.iris-picker .iris-palette{border-radius:3px;box-shadow:inset 0 0 5px rgba(0,0,0,.4);height:100%;width:12.5%;float:left;margin-right:5%}.iris-only-strip .iris-slider{width:100%}.iris-picker .iris-square{width:76%;margin-right:10%;position:relative}.iris-only-strip .iris-square{display:none}.iris-picker .iris-square-inner{width:auto;margin:0}.iris-ie-9 .iris-square,.iris-ie-9 .iris-slider,.iris-ie-9 .iris-square-inner,.iris-ie-9 .iris-palette{box-shadow:none;border-radius:0}.iris-ie-9 .iris-square,.iris-ie-9 .iris-slider,.iris-ie-9 .iris-palette{outline:1px solid rgba(0,0,0,.1)}.iris-ie-lt9 .iris-square,.iris-ie-lt9 .iris-slider,.iris-ie-lt9 .iris-square-inner,.iris-ie-lt9 .iris-palette{outline:1px solid #aaa}.iris-ie-lt9 .iris-square .ui-slider-handle{outline:1px solid #aaa;background-color:#fff;-ms-filter:"alpha(Opacity=30)"}.iris-ie-lt9 .iris-square .iris-square-handle{background:0 0;border:3px solid #fff;-ms-filter:"alpha(Opacity=50)"}.iris-picker .iris-strip{margin-right:0;position:relative}.iris-picker .iris-strip .ui-slider-handle{position:absolute;background:0 0;margin:0;right:-3px;left:-3px;border:4px solid #aaa;border-width:4px 3px;width:auto;height:6px;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.2);opacity:.9;z-index:5;cursor:ns-resize}.iris-strip-horiz .iris-strip .ui-slider-handle{right:auto;left:auto;bottom:-3px;top:-3px;height:auto;width:6px;cursor:ew-resize}.iris-strip .ui-slider-handle:before{content:" ";position:absolute;left:-2px;right:-2px;top:-3px;bottom:-3px;border:2px solid #fff;border-radius:3px}.iris-picker .iris-slider-offset{position:absolute;top:11px;left:0;right:0;bottom:-3px;width:auto;height:auto;background:transparent;border:0;border-radius:0}.iris-strip-horiz .iris-slider-offset{top:0;bottom:0;right:11px;left:-3px}.iris-picker .iris-square-handle{background:transparent;border:5px solid #aaa;border-radius:50%;border-color:rgba(128,128,128,.5);box-shadow:none;width:12px;height:12px;position:absolute;left:-10px;top:-10px;cursor:move;opacity:1;z-index:10}.iris-picker .ui-state-focus .iris-square-handle{opacity:.8}.iris-picker .iris-square-handle:hover{border-color:#999}.iris-picker .iris-square-value:focus .iris-square-handle{box-shadow:0 0 2px rgba(0,0,0,.75);opacity:.8}.iris-picker .iris-square-handle:hover::after{border-color:#fff}.iris-picker .iris-square-handle::after{position:absolute;bottom:-4px;right:-4px;left:-4px;top:-4px;border:3px solid #f9f9f9;border-color:rgba(255,255,255,.8);border-radius:50%;content:" "}.iris-picker .iris-square-value{width:8px;height:8px;position:absolute}.iris-ie-lt9 .iris-square-value,.iris-mozilla .iris-square-value{width:1px;height:1px}.iris-palette-container{position:absolute;bottom:0;left:0;margin:0;padding:0}.iris-border .iris-palette-container{left:10px;bottom:10px}.iris-picker .iris-palette{margin:0;cursor:pointer}.iris-square-handle,.ui-slider-handle{border:0;outline:0}</style><style>@keyframes fc_spin{0%{transform:rotate(0deg)}to{transform:rotate(1turn)}}li#wp-admin-bar-fc_global_search>a{background:#7757e6}li#wp-admin-bar-fc_global_search *{box-sizing:border-box;margin:0;overflow:hidden;padding:0}li#wp-admin-bar-fc_global_search .fc_search_container{clear:both;display:none;position:relative}li#wp-admin-bar-fc_global_search .fc_search_container.fc_show{background:#fff;border:1px solid #7757e6;box-shadow:0 8px 2px 3px #f1f1f1;display:block;min-width:400px;padding:10px 20px;position:absolute;right:0}li#wp-admin-bar-fc_global_search .fc_search_container input{border-radius:7px;padding:4px 10px;width:100%}li#wp-admin-bar-fc_global_search .fc_search_container .fc_quick_links_wrapper{background:#f7f5f5;clear:both;display:block;margin:10px -20px -10px!important;overflow:hidden;padding:0 20px 20px}li#wp-admin-bar-fc_global_search .fc_search_container .fc_quick_links_wrapper h4{color:#000;font-size:16px;margin:0;padding:0}li#wp-admin-bar-fc_global_search .fc_search_container .fc_quick_links_wrapper ul.fc_quick_links{clear:both;display:block;list-style:disc;margin:0;overflow:hidden;padding:0;width:100%}li#wp-admin-bar-fc_global_search .fc_search_container .fc_quick_links_wrapper ul.fc_quick_links li{display:block;width:50%}li#wp-admin-bar-fc_global_search .fc_search_container .fc_quick_links_wrapper ul.fc_quick_links li a{margin:0;padding:0}li#wp-admin-bar-fc_global_search .fc_search_container div#fc_search_result_wrapper{clear:both;display:block;width:100%}li#wp-admin-bar-fc_global_search .fc_search_container div#fc_search_result_wrapper.fc_has_results{padding:10px 0}li#wp-admin-bar-fc_global_search .fc_search_container div#fc_search_result_wrapper .fc_result_lists{list-style:disc}li#wp-admin-bar-fc_global_search .fc_search_container div#fc_search_result_wrapper.fc_loading .fc_result_lists{animation:fc_spin 2s linear infinite;border:5px solid #f3f3f3;border-radius:50%;border-top-color:#3498db;opacity:0;text-align:center}li#wp-admin-bar-fc_global_search .fc_search_container .fc_load_more{display:none;text-align:center}li#wp-admin-bar-fc_global_search .fc_search_container .fc_load_more.fc_has_more{display:block}li#wp-admin-bar-fc_global_search .fc_search_container .fc_load_more button#fc_load_more_result{background:#fff;border:1px solid grey;border-radius:6px;cursor:pointer;height:auto;line-height:16px;margin:0;padding:6px 15px}li#wp-admin-bar-fc_global_search .fc_search_container .fc_load_more button#fc_load_more_result:hover{background:#000;color:#fff}html[dir=rtl] li#wp-admin-bar-fc_global_search .fc_search_container.fc_show{left:0;right:auto}</style></head><body class="wp-admin wp-core-ui js learndash-user-admin index-php auto-fold admin-bar branch-6-9 version-6-9-1 admin-color-fresh locale-en-us svg wp-theme-stride customize-support sticky-menu"><div id="wpProQuiz_user_overlay" style="display: none;">
+				<div class="wpProQuiz_modal_window" style="padding: 20px; overflow: scroll;">
+					<input type="button" value="Close" class="button-primary" style=" position: fixed; top: 48px; right: 59px; z-index: 160001;" id="wpProQuiz_overlay_close">
+
+					<div id="wpProQuiz_user_content" style="margin-top: 20px;"></div>
+
+					<div id="wpProQuiz_loadUserData" class="wpProQuiz_blueBox" style="background-color: #F8F5A8; display: none; margin: 50px;">
+						<img alt="load" src="https://stride.ddev.site/wp/wp-admin/images/wpspin_light.gif">
+						Loading					</div>
+				</div>
+				<div class="wpProQuiz_modal_backdrop"></div>
+			</div>
+			<link rel="stylesheet" id="dashicons-css" href="https://stride.ddev.site/wp/wp-includes/css/dashicons.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="admin-bar-css" href="https://stride.ddev.site/wp/wp-includes/css/admin-bar.css?ver=6.9.1" media="all">
+<style id="admin-bar-inline-css">
+@media print { #wpadminbar { display:none; } }
+/*# sourceURL=admin-bar-inline-css */
+</style>
+<link rel="stylesheet" id="site-health-css" href="https://stride.ddev.site/wp/wp-admin/css/site-health.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="thickbox-css" href="https://stride.ddev.site/wp/wp-includes/js/thickbox/thickbox.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="common-css" href="https://stride.ddev.site/wp/wp-admin/css/common.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="forms-css" href="https://stride.ddev.site/wp/wp-admin/css/forms.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="admin-menu-css" href="https://stride.ddev.site/wp/wp-admin/css/admin-menu.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="dashboard-css" href="https://stride.ddev.site/wp/wp-admin/css/dashboard.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="list-tables-css" href="https://stride.ddev.site/wp/wp-admin/css/list-tables.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="edit-css" href="https://stride.ddev.site/wp/wp-admin/css/edit.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="revisions-css" href="https://stride.ddev.site/wp/wp-admin/css/revisions.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="media-css" href="https://stride.ddev.site/wp/wp-admin/css/media.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="themes-css" href="https://stride.ddev.site/wp/wp-admin/css/themes.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="about-css" href="https://stride.ddev.site/wp/wp-admin/css/about.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="nav-menus-css" href="https://stride.ddev.site/wp/wp-admin/css/nav-menus.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="wp-pointer-css" href="https://stride.ddev.site/wp/wp-includes/css/wp-pointer.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="widgets-css" href="https://stride.ddev.site/wp/wp-admin/css/widgets.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="site-icon-css" href="https://stride.ddev.site/wp/wp-admin/css/site-icon.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="l10n-css" href="https://stride.ddev.site/wp/wp-admin/css/l10n.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="buttons-css" href="https://stride.ddev.site/wp/wp-includes/css/buttons.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="ld-propanel-flatpickr-style-css" href="https://stride.ddev.site/app/plugins/sfwd-lms/includes/reports/dist/vendor/flatpickr/flatpickr.min.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="ld-propanel-select2-style-css" href="https://stride.ddev.site/app/plugins/sfwd-lms/includes/reports/dist/vendor/select2-jquery/css/select2.min.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="ld-propanel-style-css" href="https://stride.ddev.site/app/plugins/sfwd-lms/includes/reports/dist/css/ld-propanel.css?ver=2.2.2" media="all">
+<link rel="stylesheet" id="wp-auth-check-css" href="https://stride.ddev.site/wp/wp-includes/css/wp-auth-check.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="wp-components-css" href="https://stride.ddev.site/wp/wp-includes/css/dist/components/style.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="wp-commands-css" href="https://stride.ddev.site/wp/wp-includes/css/dist/commands/style.css?ver=6.9.1" media="all">
+<link rel="stylesheet" id="ult-admin-global-css" href="https://stride.ddev.site/app/plugins/uncanny-learndash-toolkit/src/assets/backend/css/global.css?ver=3.8.0.2" media="all">
+<link rel="stylesheet" id="learndash-admin-css" href="//stride.ddev.site/app/plugins/sfwd-lms/src/assets/dist/css/admin/styles.css?ver=5.0.0-1771876077" media="all">
+<link rel="stylesheet" id="learndash-admin-menu-style-css" href="//stride.ddev.site/app/plugins/sfwd-lms/assets/css/learndash-admin-menu.css?ver=5.0.0-1771876077" media="all">
+<link rel="stylesheet" id="learndash-admin-bar-css" href="https://stride.ddev.site/app/plugins/sfwd-lms/src/assets/dist/css/admin-bar/styles.css?ver=5.0.0" media="all">
+<link rel="stylesheet" id="sfwd-module-style-css" href="//stride.ddev.site/app/plugins/sfwd-lms/assets/css/sfwd_module.css?ver=5.0.0-1771876077" media="all">
+<link rel="stylesheet" id="learndash_admin_shortcodes_style-css" href="//stride.ddev.site/app/plugins/sfwd-lms/assets/css/learndash-admin-shortcodes.css?ver=5.0.0-1771876077" media="all">
+<link rel="stylesheet" id="learndash-select2-jquery-style-css" href="//stride.ddev.site/app/plugins/sfwd-lms/assets/vendor-libs/select2-jquery/css/select2.min.css?ver=5.0.0-1771876077" media="all">
+<link rel="stylesheet" id="learndash-admin-settings-page-css" href="//stride.ddev.site/app/plugins/sfwd-lms/assets/css/learndash-admin-settings-page.css?ver=5.0.0-1771876077" media="all">
+<style id="wp-emoji-styles-inline-css">
+
+	img.wp-smiley, img.emoji {
+		display: inline !important;
+		border: none !important;
+		box-shadow: none !important;
+		height: 1em !important;
+		width: 1em !important;
+		margin: 0 0.07em !important;
+		vertical-align: -0.1em !important;
+		background: none !important;
+		padding: 0 !important;
+	}
+/*# sourceURL=wp-emoji-styles-inline-css */
+</style>
+<link rel="stylesheet" id="wp-h5p-xapi-css" href="https://stride.ddev.site/app/plugins/tin-canny-learndash-reporting/src/h5p-xapi/wp-h5p-xapi.css?ver=5.1.3.1" media="all">
+<link rel="stylesheet" id="storyline-and-captivate-admin-css" href="https://stride.ddev.site/app/plugins/tin-canny-learndash-reporting/src/uncanny-articulate-and-captivate/assets/css/min/admin-styles.min.css?ver=5.1.3.1" media="all">
+<link rel="stylesheet" id="tincanny-zip-uploader-css" href="https://stride.ddev.site/app/plugins/tin-canny-learndash-reporting/src/tincanny-zip-uploader/dist/style-index.css?ver=296eb9529d996ff825b6" media="all">
+<link rel="stylesheet" id="tclr-icons-css" href="https://stride.ddev.site/app/plugins/tin-canny-learndash-reporting/src/assets/admin/css/icons.css?ver=5.1.3.1" media="all">
+<link rel="stylesheet" id="tclr-select2-css" href="https://stride.ddev.site/app/plugins/tin-canny-learndash-reporting/src/assets/admin/css/select2.min.css?ver=5.1.3.1" media="all">
+<link rel="stylesheet" id="tclr-data-tables-css" href="https://stride.ddev.site/app/plugins/tin-canny-learndash-reporting/src/assets/admin/css/datatables.min.css?ver=5.1.3.1" media="all">
+<link rel="stylesheet" id="reporting-admin-css" href="https://stride.ddev.site/app/plugins/tin-canny-learndash-reporting/src/assets/admin/css/admin-style.css?ver=5.1.3.1" media="all">
+<style id="reporting-admin-inline-css">
+
+		/* Main font */
+
+		.tclr.wrap,
+		.tclr-select2 .select2-dropdown {
+		font-family: -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, Oxygen-Sans, Ubuntu, Cantarell, &quot;Helvetica Neue&quot;, sans-serif		}
+
+		/* Primary color */
+
+		.reporting-dashboard-status--loading .reporting-dashboard-status__icon {
+		background: #0290c2;
+		}
+
+		.reporting-datatable__search .dataTables_filter input:focus {
+		border-color: #0290c2;
+		}
+
+		.reporting-table-see-details,
+		.reporting-breadcrumbs-item__link {
+		color: #0290c2;
+		}
+
+		.reporting-single-course-progress-tabs__item.reporting-single-course-progress-tabs__item--selected {
+		box-shadow: inset 3px 0 0 0 #0290c2;
+		}
+
+		/* Secondary color */
+
+		.reporting-dashboard-quick-links__icon {
+		color: #d52c82;
+		}
+
+		/* Notice */
+
+		.reporting-dashboard-status--warning .reporting-dashboard-status__icon {
+		background:
+		#f5ba05		;
+		}
+
+		
+/*# sourceURL=reporting-admin-inline-css */
+</style>
+<script src="https://stride.ddev.site/wp/wp-includes/js/jquery/jquery.js?ver=3.7.1" id="jquery-core-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/jquery/jquery-migrate.js?ver=3.4.1" id="jquery-migrate-js"></script>
+<script id="utils-js-extra">
+var userSettings = {"url":"/wp/","uid":"1","time":"1771876077","secure":"1"};
+//# sourceURL=utils-js-extra
+</script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/utils.js?ver=6.9.1" id="utils-js"></script>
+<script src="https://stride.ddev.site/app/plugins/sfwd-lms/includes/reports/dist/vendor/Chart.js?ver=2.2.2" id="ld-propanel-chart-script-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/development/react-refresh-runtime.js?ver=8f1acdfb845f670b0ef2" id="wp-react-refresh-runtime-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/development/react-refresh-entry.js?ver=a100113810d2b7fe3a75" id="wp-react-refresh-entry-js"></script>
+<script id="ult-admin-global-js-extra">
+var UncannyToolkitGlobal = {"rest":{"url":"https://stride.ddev.site/wp-json/ult/v2","nonce":"a88cf4ee72"},"ajax":{"nonce":"5416cf246f"}};
+//# sourceURL=ult-admin-global-js-extra
+</script>
+<script src="https://stride.ddev.site/app/plugins/uncanny-learndash-toolkit/src/assets/backend/js/global.js?ver=3.8.0.2" id="ult-admin-global-js"></script>
+<script id="wp-h5p-xapi-js-before">
+WP_H5P_XAPI_STATEMENT_URL = 'https://stride.ddev.site/wp/wp-admin/admin-ajax.php?action=process-xapi-statement';WP_H5P_XAPI_CONTEXTACTIVITY = JSON.parse( 'null' );
+//# sourceURL=wp-h5p-xapi-js-before
+</script>
+<script src="https://stride.ddev.site/app/plugins/tin-canny-learndash-reporting/src/h5p-xapi/wp-h5p-xapi.js?ver=5.1.3.1" id="wp-h5p-xapi-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/jquery/jquery.form.js?ver=4.3.0" id="jquery-form-js"></script>
+<script src="https://stride.ddev.site/app/plugins/tin-canny-learndash-reporting/src/uncanny-articulate-and-captivate/assets/scripts/min/admin.min.js?ver=5.1.3.1" id="storyline-and-captivate-admin-js"></script>
+		<style>
+			/* This CSS must be on every page for `Try Automator` text */
+			.ultc-sidebar-featured-item__tag {
+				background: #6ac45a;
+				color: #fff;
+				font-size: 11px;
+				font-weight: 600;
+				line-height: 1;
+				padding: 1px 3px;
+				border-radius: 150px;
+			}
+
+			.ultc-sidebar-featured-item__text {
+				margin-right: 5px;
+			}
+
+			.ultc-sidebar-featured-item-container {
+				background: #232323 !important;
+			}
+					</style>
+		<script>
+			jQuery(document).ready(function ($) {
+				'use strict';
+				$(".toplevel_page_uncanny-learnDash-reporting .ultc-sidebar-featured-item").parent().addClass("ultc-sidebar-featured-item-container");
+			});
+		</script>
+		<style>a.ult-sidebar-upgrade-pro { background-color: #1E9515 !important; color: #fff !important; font-weight: 600 !important; }</style>		<style>
+			#adminmenu .toplevel_page_learndash-lms .wp-submenu a[href="admin.php?page=learndash-ai-course-outline"] {
+				display: none;
+			}
+		</style>
+		<style>
+                #wpadminbar #wp-admin-bar-ntdst-sectors > .ab-item {
+                    background: rgba(255,255,255,0.1);
+                    border-radius: 3px;
+                }
+                #wpadminbar #wp-admin-bar-ntdst-sectors:hover > .ab-item {
+                    background: rgba(255,255,255,0.2);
+                }
+            </style>                        			<script type="text/javascript">var _wpColorScheme = {"icons":{"base":"#a7aaad","focus":"#72aee6","current":"#fff"}};</script>
+	<link id="wp-admin-canonical" rel="canonical" href="https://stride.ddev.site/wp/wp-admin/">
+	<script>
+		if ( window.history.replaceState ) {
+			window.history.replaceState( null, null, document.getElementById( 'wp-admin-canonical' ).href + window.location.hash );
+		}
+	</script>
+	<meta name="viewport" content="width=device-width,initial-scale=1.0">
+
+<script type="text/javascript">
+	document.body.className = document.body.className.replace('no-js','js');
+</script>
+
+<script>
+		(function() {
+			var request, b = document.body, c = 'className', cs = 'customize-support', rcs = new RegExp('(^|\\s+)(no-)?'+cs+'(\\s+|$)');
+
+				request = true;
+	
+			b[c] = b[c].replace( rcs, ' ' );
+			// The customizer requires postMessage and CORS (if the site is cross domain).
+			b[c] += ( window.postMessage && request ? ' ' : ' no-' ) + cs;
+		}());
+	
+//# sourceURL=wp_customize_support_script
+</script>
+
+<div id="wpwrap">
+
+<div id="adminmenumain" role="navigation" aria-label="Main menu">
+<a href="#wpbody-content" class="screen-reader-shortcut">Skip to main content</a>
+<a href="#wp-toolbar" class="screen-reader-shortcut">Skip to toolbar</a>
+<div id="adminmenuback"></div>
+<div id="adminmenuwrap">
+<ul id="adminmenu">
+
+
+	<li class="wp-first-item wp-has-submenu wp-has-current-submenu wp-menu-open menu-top menu-top-first menu-icon-dashboard" id="menu-dashboard">
+	<a href="index.php" class="wp-first-item wp-has-submenu wp-has-current-submenu wp-menu-open menu-top menu-top-first menu-icon-dashboard"><div class="wp-menu-image dashicons-before dashicons-dashboard" aria-hidden="true"><br></div><div class="wp-menu-name">Dashboard</div></a>
+	<ul class="wp-submenu wp-submenu-wrap"><li class="wp-submenu-head" aria-hidden="true">Dashboard</li><li class="wp-first-item current"><a href="index.php" class="wp-first-item current" aria-current="page">Home</a></li><li><a href="update-core.php">Updates <span class="update-plugins count-1"><span class="update-count">1</span></span></a></li></ul></li>
+	<li class="wp-has-submenu wp-not-current-submenu menu-top toplevel_page_learndash-lms" id="toplevel_page_learndash-lms">
+	<a href="admin.php?page=learndash-setup" class="wp-has-submenu wp-not-current-submenu menu-top toplevel_page_learndash-lms" data-ariahaspopup=""><div class="wp-menu-image svg" style="background-image: url(&quot;data:image/svg+xml;base64,CgkJCQk8c3ZnIHdpZHRoPSIyMCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDIwNiAyNTEiIGZpbGw9IiNhN2FhYWQiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CgkJCQkJPGcgaWQ9ImxlYXJuZGFzaC1pY29uIj4KCQkJCQkJPHBhdGggaWQ9IlZlY3RvciIgZD0iTTEwMi45OTYgNjMuNDA1Qzk5LjUyNzEgNjMuMzk3NSA5Ni4wOTE0IDY0LjA3NSA5Mi44ODU1IDY1LjM5ODhDODkuNjc5NyA2Ni43MjI2IDg2Ljc2NjkgNjguNjY2NiA4NC4zMTQ0IDcxLjExOTFDODEuODYxOSA3My41NzE3IDc5LjkxNzkgNzYuNDg0NSA3OC41OTQxIDc5LjY5MDNDNzcuMjcwMyA4Mi44OTYxIDc2LjU5MjcgODYuMzMxOSA3Ni42MDAzIDg5LjgwMDJWMjQyLjQzM0M3Ni42MzY0IDI0My43MTYgNzcuMTYxOSAyNDQuOTM1IDc4LjA2ODkgMjQ1Ljg0MkM3OC45NzU4IDI0Ni43NDkgODAuMTk1NSAyNDcuMjc1IDgxLjQ3NzcgMjQ3LjMxMUM5NC4xNzggMjQ3LjI4OCAxMDYuMzUyIDI0Mi4yMzMgMTE1LjMzMiAyMzMuMjUyQzEyNC4zMTMgMjI0LjI3MiAxMjkuMzY4IDIxMi4wOTggMTI5LjM5MSAxOTkuMzk4Vjg5LjgwMDJDMTI5LjM5OCA4Ni4zMzE5IDEyOC43MjEgODIuODk2MSAxMjcuMzk3IDc5LjY5MDNDMTI2LjA3MyA3Ni40ODQ1IDEyNC4xMjkgNzMuNTcxNyAxMjEuNjc3IDcxLjExOTFDMTE5LjIyNCA2OC42NjY2IDExNi4zMTEgNjYuNzIyNiAxMTMuMTA1IDY1LjM5ODhDMTA5LjkgNjQuMDc1IDEwNi40NjQgNjMuMzk3NSAxMDIuOTk2IDYzLjQwNVoiLz4KCQkJCQkJPHBhdGggaWQ9IlZlY3Rvcl8yIiBkPSJNMjYuMzk0OSAxMzguMDAxQzIyLjkyNjUgMTM3Ljk5MyAxOS40OTA4IDEzOC42NzEgMTYuMjg1IDEzOS45OTVDMTMuMDc5MSAxNDEuMzE5IDEwLjE2NjMgMTQzLjI2MyA3LjcxMzgxIDE0NS43MTVDNS4yNjEyOCAxNDguMTY4IDMuMzE3MzEgMTUxLjA4IDEuOTkzNTEgMTU0LjI4NkMwLjY2OTcwMSAxNTcuNDkyIC0wLjAwNzg2ODI0IDE2MC45MjggLTAuMDAwMzAzNTYyIDE2NC4zOTZWMjQ1LjMwM0MwLjAzNTgzNDQgMjQ2LjU4NSAwLjU2MTMgMjQ3LjgwNSAxLjQ2ODI3IDI0OC43MTJDMi4zNzUyNCAyNDkuNjE5IDMuNTk0OTMgMjUwLjE0NCA0Ljg3NzA4IDI1MC4xODFDMTcuNTc3NCAyNTAuMTU4IDI5Ljc1MTEgMjQ1LjEwMyAzOC43MzE2IDIzNi4xMjJDNDcuNzEyMSAyMjcuMTQyIDUyLjc2NzQgMjE0Ljk2OCA1Mi43OTAxIDIwMi4yNjhWMTY0LjM5NkM1Mi43OTc3IDE2MC45MjggNTIuMTIwMSAxNTcuNDkyIDUwLjc5NjMgMTU0LjI4NkM0OS40NzI1IDE1MS4wOCA0Ny41Mjg2IDE0OC4xNjggNDUuMDc2IDE0NS43MTVDNDIuNjIzNSAxNDMuMjYzIDM5LjcxMDcgMTQxLjMxOSAzNi41MDQ5IDEzOS45OTVDMzMuMjk5IDEzOC42NzEgMjkuODYzMyAxMzcuOTkzIDI2LjM5NDkgMTM4LjAwMVoiLz4KCQkJCQkJPHBhdGggaWQ9IlZlY3Rvcl8zIiBkPSJNMTc5LjYwNSA2LjI2NDg3ZS0wNUMxNzYuMTM2IC0wLjAwNzUwMjAzIDE3Mi43IDAuNjcwMDY3IDE2OS40OTUgMS45OTM4N0MxNjYuMjg5IDMuMzE3NjggMTYzLjM3NiA1LjI2MTY0IDE2MC45MjMgNy43MTQxN0MxNTguNDcxIDEwLjE2NjcgMTU2LjUyNyAxMy4wNzk1IDE1NS4yMDMgMTYuMjg1M0MxNTMuODc5IDE5LjQ5MTIgMTUzLjIwMiAyMi45MjY5IDE1My4yMDkgMjYuMzk1M1YyNDQuMTU2QzE1My4yNDUgMjQ1LjQzOCAxNTMuNzcxIDI0Ni42NTggMTU0LjY3OCAyNDcuNTY1QzE1NS41ODUgMjQ4LjQ3MiAxNTYuODA1IDI0OC45OTcgMTU4LjA4NyAyNDkuMDMzQzE3MC43ODcgMjQ5LjAxIDE4Mi45NjEgMjQzLjk1NSAxOTEuOTQxIDIzNC45NzVDMjAwLjkyMiAyMjUuOTk0IDIwNS45NzcgMjEzLjgyMSAyMDYgMjAxLjEyVjI2LjM5NTNDMjA2LjAwNyAyMi45MjY5IDIwNS4zMyAxOS40OTEyIDIwNC4wMDYgMTYuMjg1M0MyMDIuNjgyIDEzLjA3OTUgMjAwLjczOCAxMC4xNjY3IDE5OC4yODYgNy43MTQxN0MxOTUuODMzIDUuMjYxNjQgMTkyLjkyIDMuMzE3NjggMTg5LjcxNCAxLjk5Mzg3QzE4Ni41MDkgMC42NzAwNjcgMTgzLjA3MyAtMC4wMDc1MDIwMyAxNzkuNjA1IDYuMjY0ODdlLTA1WiIvPgoJCQkJCTwvZz4KCQkJCTwvc3ZnPgoJCQkJ&quot;) !important;" aria-hidden="true"><br></div><div class="wp-menu-name">LearnDash LMS</div></a>
+	<ul class="wp-submenu wp-submenu-wrap"><li class="wp-submenu-head" aria-hidden="true">LearnDash LMS</li><li class="wp-first-item submenu-ldlms-setup"><a href="admin.php?page=learndash-setup" class="wp-first-item submenu-ldlms-setup">Setup</a></li><li class="submenu-ldlms-courses"><a href="edit.php?post_type=sfwd-courses" class="submenu-ldlms-courses">Courses</a></li><li class="submenu-ldlms-lessons"><a href="edit.php?post_type=sfwd-lessons" class="submenu-ldlms-lessons">Lessons</a></li><li class="submenu-ldlms-topics"><a href="edit.php?post_type=sfwd-topic" class="submenu-ldlms-topics">Topics</a></li><li class="submenu-ldlms-quizzes"><a href="edit.php?post_type=sfwd-quiz" class="submenu-ldlms-quizzes">Quizzes</a></li><li class="submenu-ldlms-questions"><a href="edit.php?post_type=sfwd-question" class="submenu-ldlms-questions">Questions</a></li><li class="submenu-ldlms-certificates"><a href="edit.php?post_type=sfwd-certificates" class="submenu-ldlms-certificates">Certificates</a></li><li class="submenu-ldlms-groups"><a href="edit.php?post_type=groups" class="submenu-ldlms-groups">Groups</a></li><li class="submenu-ldlms-exams"><a href="edit.php?post_type=ld-exam" class="submenu-ldlms-exams">Challenge Exams</a></li><li class="submenu-ldlms-reports"><a href="admin.php?page=learndash-lms-reports" class="submenu-ldlms-reports">Reports</a></li><li class="submenu-ldlms-assignments"><a href="edit.php?post_type=sfwd-assignment" class="submenu-ldlms-assignments">Assignments</a></li><li class="submenu-ldlms-orders"><a href="edit.php?post_type=sfwd-transactions" class="submenu-ldlms-orders">Orders</a></li><li class="submenu-ldlms-help"><a href="admin.php?page=learndash-help" class="submenu-ldlms-help">Help</a></li><li><a href="admin.php?page=learndash-ai-course-outline"></a></li><li><a href="admin.php?page=learndash-hub">Add-ons</a></li><li><a href="admin.php?page=learndash_lms_settings">Settings</a></li></ul></li>
+	<li class="wp-has-submenu wp-not-current-submenu menu-top toplevel_page_stride-dashboard" id="toplevel_page_stride-dashboard"><a href="admin.php?page=stride-dashboard" class="wp-has-submenu wp-not-current-submenu menu-top toplevel_page_stride-dashboard" data-ariahaspopup=""><div class="wp-menu-image dashicons-before dashicons-welcome-learn-more" aria-hidden="true"><br></div><div class="wp-menu-name">Stride</div></a>
+	<ul class="wp-submenu wp-submenu-wrap"><li class="wp-submenu-head" aria-hidden="true">Stride</li><li class="wp-first-item"><a href="admin.php?page=stride-dashboard" class="wp-first-item">Dashboard</a></li><li><a href="edit.php?post_type=vad_edition">Edities</a></li><li><a href="edit.php?post_type=vad_quote">Offertes</a></li><li><a href="edit.php?post_type=vad_voucher">Vouchers</a></li><li><a href="edit.php?post_type=vad_trajectory">Trajecten</a></li><li><a href="stride-settings">Instellingen</a></li></ul></li>
+	<li class="wp-has-submenu wp-not-current-submenu menu-top toplevel_page_fluentcrm-admin" id="toplevel_page_fluentcrm-admin"><a href="admin.php?page=fluentcrm-admin" class="wp-has-submenu wp-not-current-submenu menu-top toplevel_page_fluentcrm-admin" data-ariahaspopup=""><div class="wp-menu-image svg" style="background-image: url(&quot;data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+PCFET0NUWVBFIHN2ZyBQVUJMSUMgIi0vL1czQy8vRFREIFNWRyAxLjEvL0VOIiAiaHR0cDovL3d3dy53My5vcmcvR3JhcGhpY3MvU1ZHLzEuMS9EVEQvc3ZnMTEuZHRkIj48c3ZnIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIHZpZXdCb3g9IjAgMCAzMDAgMjM1IiB2ZXJzaW9uPSIxLjEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHhtbDpzcGFjZT0icHJlc2VydmUiIHhtbG5zOnNlcmlmPSJodHRwOi8vd3d3LnNlcmlmLmNvbS8iIHN0eWxlPSJmaWxsOiNhN2FhYWQiPjxnPjxwYXRoIGQ9Ik0zMDAsMGMwLDAgLTIxMS4wNDcsNTYuNTUgLTI3OS4xMTMsNzQuNzg4Yy0xMi4zMiwzLjMwMSAtMjAuODg3LDE0LjQ2NiAtMjAuODg3LDI3LjIyMWwwLDM4LjcxOWMwLDAgMTY5LjM4OCwtNDUuMzg3IDI1My42MDIsLTY3Ljk1MmMyNy4zNjgsLTcuMzMzIDQ2LjM5OCwtMzIuMTM0IDQ2LjM5OCwtNjAuNDY3YzAsLTcuMjIxIDAsLTEyLjMwOSAwLC0xMi4zMDlaIi8+PHBhdGggZD0iTTE4NC44NTYsMTI0LjUyMWMwLC0wIC0xMTUuNiwzMC45NzUgLTE2My45NjksNDMuOTM1Yy0xMi4zMiwzLjMwMiAtMjAuODg3LDE0LjQ2NiAtMjAuODg3LDI3LjIyMWwwLDM4LjcxOWMwLDAgODMuNzAxLC0yMi40MjcgMTM4LjQ1OCwtMzcuMDk5YzI3LjM2OCwtNy4zMzQgNDYuMzk4LC0zMi4xMzQgNDYuMzk4LC02MC40NjdjMCwtNy4yMjEgMCwtMTIuMzA5IDAsLTEyLjMwOVoiLz48L2c+PC9zdmc+&quot;) !important;" aria-hidden="true"><br></div><div class="wp-menu-name">FluentCRM</div></a>
+	<ul class="wp-submenu wp-submenu-wrap"><li class="wp-submenu-head" aria-hidden="true">FluentCRM</li><li class="wp-first-item"><a href="admin.php?page=fluentcrm-admin" class="wp-first-item">Dashboard</a></li><li><a href="admin.php?page=fluentcrm-admin#/subscribers">Contacts</a></li><li><a href="admin.php?page=fluentcrm-admin#/contact-groups/lists">Lists</a></li><li><a href="admin.php?page=fluentcrm-admin#/contact-groups/tags">Tags</a></li><li><a href="admin.php?page=fluentcrm-admin#/email/campaigns">Campaigns</a></li><li><a href="admin.php?page=fluentcrm-admin#/email/recurring-campaigns">Recurring Campaigns</a></li><li><a href="admin.php?page=fluentcrm-admin#/email/sequences">Email Sequences</a></li><li><a href="admin.php?page=fluentcrm-admin#/email/templates">Email Templates</a></li><li><a href="admin.php?page=fluentcrm-admin#/forms">Forms</a></li><li><a href="admin.php?page=fluentcrm-admin#/funnels">Automations</a></li><li><a href="admin.php?page=fluentcrm-admin#/settings">Settings</a></li><li><a href="admin.php?page=fluentcrm-admin#/reports">Reports</a></li><li><a href="admin.php?page=fluentcrm-admin#/add-ons">Addons</a></li><li><a href="admin.php?page=fluentcrm-admin#/documentation">Help</a></li></ul></li>
+	<li class="wp-has-submenu wp-not-current-submenu menu-top toplevel_page_fluent_forms menu-top-last" id="toplevel_page_fluent_forms"><a href="admin.php?page=fluent_forms" class="wp-has-submenu wp-not-current-submenu menu-top toplevel_page_fluent_forms menu-top-last" data-ariahaspopup=""><div class="wp-menu-image svg" style="background-image: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMCAyMCI+PGRlZnM+PHN0eWxlPi5jbHMtMXtmaWxsOiAjYTdhYWFkO308L3N0eWxlPjwvZGVmcz48dGl0bGU+ZGFzaGJvYXJkX2ljb248L3RpdGxlPjxnIGlkPSJMYXllcl8yIiBkYXRhLW5hbWU9IkxheWVyIDIiPjxnIGlkPSJMYXllcl8xLTIiIGRhdGEtbmFtZT0iTGF5ZXIgMSI+PHBhdGggY2xhc3M9ImNscy0xIiBkPSJNMTUuNTcsMEg0LjQzQTQuNDMsNC40MywwLDAsMCwwLDQuNDNWMTUuNTdBNC40Myw0LjQzLDAsMCwwLDQuNDMsMjBIMTUuNTdBNC40Myw0LjQzLDAsMCwwLDIwLDE1LjU3VjQuNDNBNC40Myw0LjQzLDAsMCwwLDE1LjU3LDBaTTEyLjgyLDE0YTIuMzYsMi4zNiwwLDAsMS0xLjY2LjY4SDYuNUEyLjMxLDIuMzEsMCwwLDEsNy4xOCwxM2EyLjM2LDIuMzYsMCwwLDEsMS42Ni0uNjhsNC42NiwwQTIuMzQsMi4zNCwwLDAsMSwxMi44MiwxNFptMy4zLTMuNDZhMi4zNiwyLjM2LDAsMCwxLTEuNjYuNjhIMy4yMWEyLjI1LDIuMjUsMCwwLDEsLjY4LTEuNjQsMi4zNiwyLjM2LDAsMCwxLDEuNjYtLjY4SDE2Ljc5QTIuMjUsMi4yNSwwLDAsMSwxNi4xMiwxMC41M1ptMC0zLjczYTIuMzYsMi4zNiwwLDAsMS0xLjY2LjY4SDMuMjFhMi4yNSwyLjI1LDAsMCwxLC42OC0xLjY0LDIuMzYsMi4zNiwwLDAsMSwxLjY2LS42OEgxNi43OUEyLjI1LDIuMjUsMCwwLDEsMTYuMTIsNi44MVoiLz48L2c+PC9nPjwvc3ZnPg==&quot;) !important;" aria-hidden="true"><br></div><div class="wp-menu-name">Fluent Forms</div></a>
+	<ul class="wp-submenu wp-submenu-wrap"><li class="wp-submenu-head" aria-hidden="true">Fluent Forms</li><li class="wp-first-item"><a href="admin.php?page=fluent_forms" class="wp-first-item">Forms</a></li><li><a href="admin.php?page=fluent_forms#add=1">New Form</a></li><li><a href="admin.php?page=fluent_forms_all_entries">Entries</a></li><li><a href="admin.php?page=fluent_forms_reports">Reports</a></li><li><a href="admin.php?page=fluent_forms_settings">Global Settings</a></li><li><a href="admin.php?page=fluent_forms_transfer">Tools</a></li><li><a href="admin.php?page=fluent_forms_smtp">SMTP</a></li><li><a href="admin.php?page=fluent_forms_add_ons">Integrations</a></li><li><a href="admin.php?page=fluent_forms_docs">Support</a></li></ul></li>
+	<li class="wp-not-current-submenu wp-menu-separator" aria-hidden="true"><div class="separator"></div></li>
+	<li class="wp-has-submenu wp-not-current-submenu menu-top menu-icon-post open-if-no-js menu-top-first" id="menu-posts">
+	<a href="edit.php" class="wp-has-submenu wp-not-current-submenu menu-top menu-icon-post open-if-no-js menu-top-first" data-ariahaspopup=""><div class="wp-menu-image dashicons-before dashicons-admin-post" aria-hidden="true"><br></div><div class="wp-menu-name">Posts</div></a>
+	<ul class="wp-submenu wp-submenu-wrap"><li class="wp-submenu-head" aria-hidden="true">Posts</li><li class="wp-first-item"><a href="edit.php" class="wp-first-item">All Posts</a></li><li><a href="post-new.php">Add Post</a></li><li><a href="edit-tags.php?taxonomy=category">Categories</a></li><li><a href="edit-tags.php?taxonomy=post_tag">Tags</a></li></ul></li>
+	<li class="wp-has-submenu wp-not-current-submenu menu-top menu-icon-media" id="menu-media">
+	<a href="upload.php" class="wp-has-submenu wp-not-current-submenu menu-top menu-icon-media" data-ariahaspopup=""><div class="wp-menu-image dashicons-before dashicons-admin-media" aria-hidden="true"><br></div><div class="wp-menu-name">Media</div></a>
+	<ul class="wp-submenu wp-submenu-wrap"><li class="wp-submenu-head" aria-hidden="true">Media</li><li class="wp-first-item"><a href="upload.php" class="wp-first-item">Library</a></li><li><a href="media-new.php">Add Media File</a></li></ul></li>
+	<li class="wp-has-submenu wp-not-current-submenu menu-top menu-icon-page" id="menu-pages">
+	<a href="edit.php?post_type=page" class="wp-has-submenu wp-not-current-submenu menu-top menu-icon-page" data-ariahaspopup=""><div class="wp-menu-image dashicons-before dashicons-admin-page" aria-hidden="true"><br></div><div class="wp-menu-name">Pages</div></a>
+	<ul class="wp-submenu wp-submenu-wrap"><li class="wp-submenu-head" aria-hidden="true">Pages</li><li class="wp-first-item"><a href="edit.php?post_type=page" class="wp-first-item">All Pages</a></li><li><a href="post-new.php?post_type=page">Add Page</a></li></ul></li>
+	<li class="wp-not-current-submenu menu-top menu-icon-comments" id="menu-comments">
+	<a href="edit-comments.php" class="wp-not-current-submenu menu-top menu-icon-comments"><div class="wp-menu-image dashicons-before dashicons-admin-comments" aria-hidden="true"><br></div><div class="wp-menu-name">Comments <span class="awaiting-mod count-0"><span class="pending-count" aria-hidden="true">0</span><span class="comments-in-moderation-text screen-reader-text">0 Comments in moderation</span></span></div></a></li>
+	<li class="wp-has-submenu wp-not-current-submenu menu-top toplevel_page_uncanny-toolkit menu-top-last" id="toplevel_page_uncanny-toolkit"><a href="admin.php?page=uncanny-toolkit" class="wp-has-submenu wp-not-current-submenu menu-top toplevel_page_uncanny-toolkit menu-top-last" data-ariahaspopup=""><div class="wp-menu-image svg" style="background-image: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyOCAyOSI+PHBhdGggZD0iTTE0LjQ2LDEzLjIxYzAtLjMxLjA5LS42MS4yNC0uODctLjQ1LS4xOS0uOTQtLjMtMS40Ni0uMy0yLjA0LDAtMy43LDEuNjUtMy43LDMuN3MxLjY2LDMuNywzLjcsMy43LDMuNy0xLjY1LDMuNy0zLjdjMC0uMzMtLjA0LS42NS0uMTMtLjk1LS4xOS4wNy0uNDIuMTMtLjY0LjEzLS45NCwwLTEuNy0uNzYtMS43LTEuN2gwWk0yNS4wNiwyLjkybC0xMC4zOSwyLjA4cy0yLjQ3LjQxLTIuODkuNDdjLS4xNi4wMi0uMzIuMDUtLjQ4LjA5LTQuOC45MS04LjQ1LDUuMTItOC40NSwxMC4xNywwLDUuNzEsNC42NSwxMC4zNiwxMC4zNywxMC4zNnMxMC4zNy00LjY1LDEwLjM3LTEwLjM2YzAtMy0xLjI5LTUuNzItMy4zNC03LjYxbDEuNTQtLjMxYzIuMjUtLjQ2LDMuNzItMi42NSwzLjI2LTQuOTFoLjAyWk0xMy4yMywyMS45M2MtMy40MiwwLTYuMi0yLjc4LTYuMi02LjJzMi43OC02LjIsNi4yLTYuMiw2LjIsMi43OCw2LjIsNi4yLTIuNzgsNi4yLTYuMiw2LjJaIiBmaWxsPSIjYTdhYWFkIi8+PC9zdmc+&quot;) !important;" aria-hidden="true"><br></div><div class="wp-menu-name">Uncanny Toolkit</div></a>
+	<ul class="wp-submenu wp-submenu-wrap"><li class="wp-submenu-head" aria-hidden="true">Uncanny Toolkit</li><li class="wp-first-item"><a href="admin.php?page=uncanny-toolkit" class="wp-first-item">Modules</a></li><li><a href="admin.php?page=install-automator" class="ult-sidebar-featured-item-container"><span class="ult-sidebar-featured-item"><span class="ult-sidebar-featured-item__text">Automation</span></span></a></li><li><a href="admin.php?page=uncanny-toolkit-kb">Help</a></li><li><a href="admin.php?page=uncanny-toolkit-plugins">LearnDash Plugins</a></li><li class="ult-sidebar-upgrade-pro"><a href="https://www.uncannyowl.com/downloads/uncanny-learndash-toolkit-pro/?utm_source=uncanny_toolkit&amp;utm_medium=plugins_page&amp;utm_content=update_to_pro" class="ult-sidebar-upgrade-pro">Upgrade to Pro</a></li></ul></li>
+	<li class="wp-not-current-submenu wp-menu-separator" aria-hidden="true"><div class="separator"></div></li>
+	<li class="wp-has-submenu wp-not-current-submenu menu-top menu-icon-appearance menu-top-first" id="menu-appearance">
+	<a href="themes.php" class="wp-has-submenu wp-not-current-submenu menu-top menu-icon-appearance menu-top-first" data-ariahaspopup=""><div class="wp-menu-image dashicons-before dashicons-admin-appearance" aria-hidden="true"><br></div><div class="wp-menu-name">Appearance</div></a>
+	<ul class="wp-submenu wp-submenu-wrap"><li class="wp-submenu-head" aria-hidden="true">Appearance</li><li class="wp-first-item"><a href="themes.php" class="wp-first-item">Themes <span class="update-plugins count-0"><span class="theme-count">0</span></span></a></li><li><a href="site-editor.php?p=/pattern">Patterns</a></li><li class="hide-if-no-customize"><a href="customize.php?return=%2Fwp%2Fwp-admin%2F" class="hide-if-no-customize">Customize</a></li><li><a href="nav-menus.php">Menus</a></li></ul></li>
+	<li class="wp-has-submenu wp-not-current-submenu menu-top menu-icon-plugins" id="menu-plugins">
+	<a href="plugins.php" class="wp-has-submenu wp-not-current-submenu menu-top menu-icon-plugins" data-ariahaspopup=""><div class="wp-menu-image dashicons-before dashicons-admin-plugins" aria-hidden="true"><br></div><div class="wp-menu-name">Plugins <span class="update-plugins count-1"><span class="plugin-count">1</span></span></div></a>
+	<ul class="wp-submenu wp-submenu-wrap"><li class="wp-submenu-head" aria-hidden="true">Plugins <span class="update-plugins count-1"><span class="plugin-count">1</span></span></li><li class="wp-first-item"><a href="plugins.php" class="wp-first-item">Installed Plugins</a></li><li><a href="plugin-install.php">Add Plugin</a></li></ul></li>
+	<li class="wp-has-submenu wp-not-current-submenu menu-top menu-icon-users" id="menu-users">
+	<a href="users.php" class="wp-has-submenu wp-not-current-submenu menu-top menu-icon-users" data-ariahaspopup=""><div class="wp-menu-image dashicons-before dashicons-admin-users" aria-hidden="true"><br></div><div class="wp-menu-name">Users</div></a>
+	<ul class="wp-submenu wp-submenu-wrap"><li class="wp-submenu-head" aria-hidden="true">Users</li><li class="wp-first-item"><a href="users.php" class="wp-first-item">All Users</a></li><li><a href="user-new.php">Add User</a></li><li><a href="profile.php">Profile</a></li></ul></li>
+	<li class="wp-has-submenu wp-not-current-submenu menu-top menu-icon-tools" id="menu-tools">
+	<a href="tools.php" class="wp-has-submenu wp-not-current-submenu menu-top menu-icon-tools" data-ariahaspopup=""><div class="wp-menu-image dashicons-before dashicons-admin-tools" aria-hidden="true"><br></div><div class="wp-menu-name">Tools</div></a>
+	<ul class="wp-submenu wp-submenu-wrap"><li class="wp-submenu-head" aria-hidden="true">Tools</li><li class="wp-first-item"><a href="tools.php" class="wp-first-item">Available Tools</a></li><li><a href="import.php">Import</a></li><li><a href="export.php">Export</a></li><li><a href="site-health.php">Site Health <span class="menu-counter site-health-counter count-1"><span class="count">1</span></span></a></li><li><a href="export-personal-data.php">Export Personal Data</a></li><li><a href="erase-personal-data.php">Erase Personal Data</a></li><li><a href="tools.php?page=ntdst-audit-log">Audit Log</a></li><li><a href="tools.php?page=action-scheduler">Scheduled Actions</a></li></ul></li>
+	<li class="wp-has-submenu wp-not-current-submenu menu-top menu-icon-settings" id="menu-settings">
+	<a href="options-general.php" class="wp-has-submenu wp-not-current-submenu menu-top menu-icon-settings" data-ariahaspopup=""><div class="wp-menu-image dashicons-before dashicons-admin-settings" aria-hidden="true"><br></div><div class="wp-menu-name">Settings</div></a>
+	<ul class="wp-submenu wp-submenu-wrap"><li class="wp-submenu-head" aria-hidden="true">Settings</li><li class="wp-first-item"><a href="options-general.php" class="wp-first-item">General</a></li><li><a href="options-writing.php">Writing</a></li><li><a href="options-reading.php">Reading</a></li><li><a href="options-discussion.php">Discussion</a></li><li><a href="options-media.php">Media</a></li><li><a href="options-permalink.php">Permalinks</a></li><li><a href="options-privacy.php">Privacy</a></li><li><a href="options-general.php?page=fluent-mail">FluentSMTP</a></li><li><a href="options-general.php?page=netdust-lti">Netdust LTI</a></li><li><a href="options-general.php?page=ntdst-auth">Authentication</a></li></ul></li>
+	<li class="wp-has-submenu wp-not-current-submenu menu-top toplevel_page_uncanny-learnDash-reporting menu-top-last" id="toplevel_page_uncanny-learnDash-reporting"><a href="admin.php?page=uncanny-learnDash-reporting" class="wp-has-submenu wp-not-current-submenu menu-top toplevel_page_uncanny-learnDash-reporting menu-top-last" data-ariahaspopup=""><div class="wp-menu-image svg" style="background-image: url(&quot;data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz48c3ZnIGVuYWJsZS1iYWNrZ3JvdW5kPSJuZXcgMCAwIDU4MSA2NDAiIHZlcnNpb249IjEuMSIgdmlld0JveD0iMCAwIDU4MSA2NDAiIHhtbDpzcGFjZT0icHJlc2VydmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0ibTUyNi40IDM0LjFjMC42IDUgMSAxMC4xIDEuMyAxNS4xIDAuNSAxMC4zIDEuMiAyMC42IDAuOCAzMC45LTAuNSAxMS41LTEgMjMtMi4xIDM0LjQtMi42IDI2LjctNy44IDUzLjMtMTYuNSA3OC43LTcuMyAyMS4zLTE3LjEgNDEuOC0yOS45IDYwLjQtMTIgMTcuNS0yNi44IDMzLTQzLjggNDUuOS0xNy4yIDEzLTM2LjcgMjMtNTcuMSAyOS45LTI1LjEgOC41LTUxLjUgMTIuNy03Ny45IDEzLjggNzAuMyAyNS4zIDEwNi45IDEwMi44IDgxLjYgMTczLjEtMTguOSA1Mi42LTY4LjEgODguMS0xMjQgODkuNWgtNi4xYy0xMS4xLTAuMi0yMi4xLTEuOC0zMi45LTQuNy0yOS40LTcuOS01NS45LTI2LjMtNzMuNy01MC45LTI5LjItNDAuMi0zNC4xLTkzLjEtMTIuNi0xMzgtMjUgMjUuMS00NC41IDU1LjMtNTkuMSA4Ny40LTguOCAxOS43LTE2LjEgNDAuMS0yMC44IDYxLjEtMS4yLTE0LjMtMS4yLTI4LjYtMC42LTQyLjkgMS4zLTI2LjYgNS4xLTUzLjIgMTIuMi03OC45IDUuOC0yMS4yIDEzLjktNDEuOCAyNC43LTYwLjlzMjQuNC0zNi42IDQwLjYtNTEuM2MxNy4zLTE1LjcgMzcuMy0yOC4xIDU5LjEtMzYuOCAyNC41LTkuOSA1MC42LTE1LjIgNzYuOC0xNy4yIDEzLjMtMS4xIDI2LjctMC44IDQwLjEtMi4zIDI0LjUtMi40IDQ4LjgtOC40IDcxLjMtMTguMyAyMS05LjIgNDAuNC0yMS44IDU3LjUtMzcuMiAxNi41LTE0LjkgMzAuOC0zMi4xIDQyLjgtNTAuOCAxMy0yMC4yIDIzLjQtNDIuMSAzMS42LTY0LjcgNy42LTIxLjEgMTMuNC00Mi45IDE2LjctNjUuM3ptLTI3OS40IDMyOS41Yy0xOC42IDEuOC0zNi4yIDguOC01MC45IDIwLjQtMTcuMSAxMy40LTI5LjggMzIuMi0zNi4yIDUyLjktNy40IDIzLjktNi44IDQ5LjUgMS43IDczIDcuMSAxOS42IDE5LjkgMzcuMiAzNi44IDQ5LjYgMTQuMSAxMC41IDMwLjkgMTYuOSA0OC40IDE4LjZzMzUuMi0xLjYgNTEtOS40YzEzLjUtNi43IDI1LjQtMTYuMyAzNC44LTI4LjEgMTAuNi0xMy40IDE3LjktMjkgMjEuNS00NS43IDQuOC0yMi40IDIuOC00NS43LTUuOC02Ni45LTguMS0yMC0yMi4yLTM3LjYtNDAuMy00OS4zLTE4LTExLjctMzkuNS0xNy02MS0xNS4xeiIgZmlsbD0iI2E3YWFhZCIvPjxwYXRoIGQ9Im0yNDIuNiA0MDIuNmM2LjItMS4zIDEyLjYtMS44IDE4LjktMS41LTExLjQgMTEuNC0xMi4yIDI5LjctMS44IDQyIDExLjIgMTMuMyAzMS4xIDE1LjEgNDQuNCAzLjkgNS4zLTQuNCA4LjktMTAuNCAxMC41LTE3LjEgMTIuNCAxNi44IDE2LjYgMzkuNCAxMSA1OS41LTUgMTguNS0xOCAzNC42LTM1IDQzLjUtMzQuNSAxOC4yLTc3LjMgNS4xLTk1LjUtMjkuNS0xLTItMi00LTIuOS02LjEtOC4xLTE5LjYtNi41LTQzIDQuMi02MS4zIDEwLTE3IDI2LjgtMjkuMiA0Ni4yLTMzLjR6IiBmaWxsPSIjYTdhYWFkIi8+PC9zdmc+&quot;) !important;" aria-hidden="true"><br></div><div class="wp-menu-name">Tin Canny Reporting</div></a>
+	<ul class="wp-submenu wp-submenu-wrap"><li class="wp-submenu-head" aria-hidden="true">Tin Canny Reporting</li><li class="wp-first-item"><a href="admin.php?page=uncanny-learnDash-reporting" class="wp-first-item">Course Report</a></li><li><a href="admin.php?page=uncanny-tincanny-user-report">User Report</a></li><li><a href="admin.php?page=uncanny-tincanny-tin-can-report">Tin Can Report</a></li><li><a href="admin.php?page=uncanny-tincanny-xapi-quiz-report">xAPI Quiz Report</a></li><li><a href="admin.php?page=manage-content">Manage Content</a></li><li><a href="admin.php?page=snc_options">Settings</a></li><li><a href="admin.php?page=tincanny-install-automator" class="ultc-sidebar-featured-item-container"><span class="ultc-sidebar-featured-item"><span class="ultc-sidebar-featured-item__text">Automation</span><span class="ultc-sidebar-featured-item__close" id="ultc-sidebar-try-automator-close"><span class="ultc-sidebar-featured-item__close-icon"></span></span></span></a></li><li><a href="admin.php?page=uncanny-tincanny-kb">Help</a></li><li><a href="admin.php?page=uncanny-tincanny-plugins">LearnDash Plugins</a></li><li><a href="admin.php?page=uncanny-tincanny-site-check">Site check</a></li><li><a href="admin.php?page=uncanny-reporting-license-activation">License activation</a></li></ul></li><li id="collapse-menu" class="hide-if-no-js"><button type="button" id="collapse-button" aria-label="Collapse Main menu" aria-expanded="true"><span class="collapse-button-icon" aria-hidden="true"></span><span class="collapse-button-label">Collapse Menu</span></button></li></ul>
+</div>
+</div>
+<div id="wpcontent">
+
+		<div id="wpadminbar" class="nojq">
+						<div class="quicklinks" id="wp-toolbar" role="navigation" aria-label="Toolbar">
+				<ul role="menu" id="wp-admin-bar-root-default" class="ab-top-menu"><li role="group" id="wp-admin-bar-menu-toggle"><a class="ab-item" role="menuitem" href="#" aria-expanded="false"><span class="ab-icon" aria-hidden="true"></span><span class="screen-reader-text">Menu</span></a></li><li role="group" id="wp-admin-bar-wp-logo" class="menupop"><a class="ab-item" role="menuitem" aria-expanded="false" href="https://stride.ddev.site/wp/wp-admin/about.php"><span class="ab-icon" aria-hidden="true"></span><span class="screen-reader-text">About WordPress</span></a><div class="ab-sub-wrapper"><ul role="menu" aria-label="About WordPress" id="wp-admin-bar-wp-logo-default" class="ab-submenu"><li role="group" id="wp-admin-bar-about"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/about.php">About WordPress</a></li><li role="group" id="wp-admin-bar-contribute"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/contribute.php">Get Involved</a></li></ul><ul role="menu" aria-label="About WordPress" id="wp-admin-bar-wp-logo-external" class="ab-sub-secondary ab-submenu"><li role="group" id="wp-admin-bar-wporg"><a class="ab-item" role="menuitem" href="https://wordpress.org/">WordPress.org</a></li><li role="group" id="wp-admin-bar-documentation"><a class="ab-item" role="menuitem" href="https://wordpress.org/documentation/">Documentation</a></li><li role="group" id="wp-admin-bar-learn"><a class="ab-item" role="menuitem" href="https://learn.wordpress.org/">Learn WordPress</a></li><li role="group" id="wp-admin-bar-support-forums"><a class="ab-item" role="menuitem" href="https://wordpress.org/support/forums/">Support</a></li><li role="group" id="wp-admin-bar-feedback"><a class="ab-item" role="menuitem" href="https://wordpress.org/support/forum/requests-and-feedback">Feedback</a></li></ul></div></li><li role="group" id="wp-admin-bar-site-name" class="menupop"><a class="ab-item" role="menuitem" aria-expanded="false" href="https://stride.ddev.site/">Stride LMS</a><div class="ab-sub-wrapper"><ul role="menu" aria-label="Stride LMS" id="wp-admin-bar-site-name-default" class="ab-submenu"><li role="group" id="wp-admin-bar-view-site"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/">Visit Site</a></li></ul></div></li><li role="group" id="wp-admin-bar-updates"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/update-core.php"><span class="ab-icon" aria-hidden="true"></span><span class="ab-label" aria-hidden="true">1</span><span class="screen-reader-text updates-available-text">1 update available</span></a></li><li role="group" id="wp-admin-bar-comments"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/edit-comments.php"><span class="ab-icon" aria-hidden="true"></span><span class="ab-label awaiting-mod pending-count count-0" aria-hidden="true">0</span><span class="screen-reader-text comments-in-moderation-text">0 Comments in moderation</span></a></li><li role="group" id="wp-admin-bar-new-content" class="menupop"><a class="ab-item" role="menuitem" aria-expanded="false" href="https://stride.ddev.site/wp/wp-admin/post-new.php"><span class="ab-icon" aria-hidden="true"></span><span class="ab-label">New</span></a><div class="ab-sub-wrapper"><ul role="menu" aria-label="New" id="wp-admin-bar-new-content-default" class="ab-submenu"><li role="group" id="wp-admin-bar-new-post"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/post-new.php">Post</a></li><li role="group" id="wp-admin-bar-new-media"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/media-new.php">Media</a></li><li role="group" id="wp-admin-bar-new-page"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/post-new.php?post_type=page">Page</a></li><li role="group" id="wp-admin-bar-new-vad_edition"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/post-new.php?post_type=vad_edition">Editie</a></li><li role="group" id="wp-admin-bar-new-vad_session"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/post-new.php?post_type=vad_session">Sessie</a></li><li role="group" id="wp-admin-bar-new-vad_quote"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/post-new.php?post_type=vad_quote">Offerte</a></li><li role="group" id="wp-admin-bar-new-vad_voucher"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/post-new.php?post_type=vad_voucher">Voucher</a></li><li role="group" id="wp-admin-bar-new-vad_trajectory"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/post-new.php?post_type=vad_trajectory">Traject</a></li><li role="group" id="wp-admin-bar-new-sfwd-courses"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/post-new.php?post_type=sfwd-courses">Course</a></li><li role="group" id="wp-admin-bar-new-sfwd-lessons"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/post-new.php?post_type=sfwd-lessons">Lesson</a></li><li role="group" id="wp-admin-bar-new-sfwd-topic"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/post-new.php?post_type=sfwd-topic">Topic</a></li><li role="group" id="wp-admin-bar-new-sfwd-quiz"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/post-new.php?post_type=sfwd-quiz">Quiz</a></li><li role="group" id="wp-admin-bar-new-sfwd-question"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/post-new.php?post_type=sfwd-question">Question</a></li><li role="group" id="wp-admin-bar-new-ld-exam"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/post-new.php?post_type=ld-exam">Challenge Exam</a></li><li role="group" id="wp-admin-bar-new-sfwd-certificates"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/post-new.php?post_type=sfwd-certificates">Certificate</a></li><li role="group" id="wp-admin-bar-new-groups"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/post-new.php?post_type=groups">Group</a></li><li role="group" id="wp-admin-bar-new-user"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/user-new.php">User</a></li></ul></div></li><li role="group" id="wp-admin-bar-fluent_form" class="menupop"><a class="ab-item" role="menuitem" aria-expanded="false" href="https://stride.ddev.site/wp/wp-admin/admin.php?page=fluent_forms">Fluent Forms</a><div class="ab-sub-wrapper"><ul role="menu" id="wp-admin-bar-fluent_form-default" class="ab-submenu"><li role="group" id="wp-admin-bar-all_forms"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/admin.php?page=fluent_forms">Forms</a></li><li role="group" id="wp-admin-bar-new_form"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/admin.php?page=fluent_forms#add=1">New Form</a></li><li role="group" id="wp-admin-bar-fluent_forms_all_entries"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/admin.php?page=fluent_forms_all_entries">Entries</a></li><li role="group" id="wp-admin-bar-fluent_forms_community"><a class="ab-item" role="menuitem" href="https://www.facebook.com/groups/fluentforms/" target="_blank" rel="noopener noreferrer">Community</a></li><li role="group" id="wp-admin-bar-fluent_forms_doc"><a class="ab-item" role="menuitem" href="https://wpmanageninja.com/docs/fluent-form/">Docs</a></li><li role="group" id="wp-admin-bar-fluent_forms_dev_doc"><a class="ab-item" role="menuitem" href="https://developers.fluentforms.com/" target="_blank" rel="noopener noreferrer">Developer Docs</a></li></ul></div></li></ul><ul role="menu" id="wp-admin-bar-top-secondary" class="ab-top-secondary ab-top-menu"><li role="group" id="wp-admin-bar-ntdst-sectors" class="menupop"><a class="ab-item" role="menuitem" aria-expanded="false" href="https://stride.ddev.site/wp/wp-admin/options-general.php" title="Active NTDST Sectors"><span class="ab-icon dashicons dashicons-screenoptions" style="font: normal 20px/1 dashicons; margin-right: 5px;"></span>Gallery (essential)</a><div class="ab-sub-wrapper"><ul role="menu" id="wp-admin-bar-ntdst-sectors-default" class="ab-submenu"><li role="group" id="wp-admin-bar-ntdst-sector-gallery"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/gallery-dashboard">Gallery Platform <em style="opacity: 0.7">(essential)</em></a></li></ul></div></li><li role="group" id="wp-admin-bar-fc_global_search"><a class="ab-item" role="menuitem" href="#">Search Contacts</a><div class="fc_search_container"><div class="fc_search_box"><input type="search" placeholder="Search Contacts" autocomplete="off" id="fc_search_input" autocorrect="off" autocapitalize="none" spellcheck="false"></div><div id="fc_search_result_wrapper">Type to search contacts</div><div class="fc_load_more"><button id="fc_load_more_result">Load More</button></div><div class="fc_quick_links_wrapper"><h4>Quick Links</h4><ul class="fc_quick_links"><li><a href="https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/contact-groups/lists">Contact Segments</a></li><li><a href="https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/email/recurring-campaigns">Recurring Campaigns</a></li><li><a href="https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/email/sequences">Email Sequences</a></li><li><a href="https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/documentation">Documentations</a></li><li><a href="https://www.youtube.com/playlist?list=PLXpD0vT4thWG-ZPeM6cco7BS5cJY9bTjL">Video Tutorials (Free)</a></li><li><a href="https://stride.ddev.site/wp/wp-admin/options-general.php?page=fluent-mail#/">SMTP/Mail Settings</a></li></ul></div></div></li><li role="group" id="wp-admin-bar-my-account" class="menupop with-avatar"><a class="ab-item" role="menuitem" aria-expanded="false" href="https://stride.ddev.site/wp/wp-admin/profile.php">Howdy, <span class="display-name">Admin Vandermeulen</span><img alt="" src="https://secure.gravatar.com/avatar/286348db4e625f7c2fcafaed11f1e9067ba2a1095e85ec2e7717e1a260f87808?s=26&amp;d=mm&amp;r=g" srcset="https://secure.gravatar.com/avatar/286348db4e625f7c2fcafaed11f1e9067ba2a1095e85ec2e7717e1a260f87808?s=52&amp;d=mm&amp;r=g 2x" class="avatar avatar-26 photo" height="26" width="26" loading="lazy" decoding="async"></a><div class="ab-sub-wrapper"><ul role="menu" aria-label="Howdy, Admin Vandermeulen" id="wp-admin-bar-user-actions" class="ab-submenu"><li role="group" id="wp-admin-bar-user-info"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-admin/profile.php"><img alt="" src="https://secure.gravatar.com/avatar/286348db4e625f7c2fcafaed11f1e9067ba2a1095e85ec2e7717e1a260f87808?s=64&amp;d=mm&amp;r=g" srcset="https://secure.gravatar.com/avatar/286348db4e625f7c2fcafaed11f1e9067ba2a1095e85ec2e7717e1a260f87808?s=128&amp;d=mm&amp;r=g 2x" class="avatar avatar-64 photo" height="64" width="64" loading="lazy" decoding="async"><span class="display-name">Admin Vandermeulen</span><span class="username">admin</span><span class="display-name edit-profile">Edit Profile</span></a></li><li role="group" id="wp-admin-bar-logout"><a class="ab-item" role="menuitem" href="https://stride.ddev.site/wp/wp-login.php?action=logout&amp;_wpnonce=a103192e3c">Log Out</a></li></ul></div></li></ul>			</div>
+		</div>
+
+		
+<div id="wpbody" role="main">
+
+<div id="wpbody-content">
+		<div id="screen-meta" class="metabox-prefs">
+
+			<div id="contextual-help-wrap" class="hidden" tabindex="-1" aria-label="Contextual Help Tab">
+				<div id="contextual-help-back"></div>
+				<div id="contextual-help-columns">
+					<div class="contextual-help-tabs">
+						<ul>
+						
+							<li id="tab-link-overview" class="active">
+								<a href="#tab-panel-overview" aria-controls="tab-panel-overview">
+									Overview								</a>
+							</li>
+							
+							<li id="tab-link-help-navigation">
+								<a href="#tab-panel-help-navigation" aria-controls="tab-panel-help-navigation">
+									Navigation								</a>
+							</li>
+							
+							<li id="tab-link-help-layout">
+								<a href="#tab-panel-help-layout" aria-controls="tab-panel-help-layout">
+									Layout								</a>
+							</li>
+							
+							<li id="tab-link-help-content">
+								<a href="#tab-panel-help-content" aria-controls="tab-panel-help-content">
+									Content								</a>
+							</li>
+													</ul>
+					</div>
+
+										<div class="contextual-help-sidebar">
+						<p><strong>For more information:</strong></p><p><a href="https://wordpress.org/documentation/article/dashboard-screen/">Documentation on Dashboard</a></p><p><a href="https://wordpress.org/support/forums/">Support forums</a></p><p><a href="https://wordpress.org/documentation/wordpress-version/version-6-9-1/">Version 6.9.1</a></p>					</div>
+					
+					<div class="contextual-help-tabs-wrap">
+						
+							<div id="tab-panel-overview" class="help-tab-content active">
+								<p>Welcome to your WordPress Dashboard!</p><p>The Dashboard is the first place you will come to every time you log into your site. It is where you will find all your WordPress tools. If you need help, just click the “Help” tab above the screen title.</p>							</div>
+							
+							<div id="tab-panel-help-navigation" class="help-tab-content">
+								<p>The left-hand navigation menu provides links to all of the WordPress administration screens, with submenu items displayed on hover. You can minimize this menu to a narrow icon strip by clicking on the Collapse Menu arrow at the bottom.</p><p>Links in the Toolbar at the top of the screen connect your dashboard and the front end of your site, and provide access to your profile and helpful WordPress information.</p>							</div>
+							
+							<div id="tab-panel-help-layout" class="help-tab-content">
+								<p>You can use the following controls to arrange your Dashboard screen to suit your workflow. This is true on most other administration screens as well.</p><p><strong>Screen Options</strong> — Use the Screen Options tab to choose which Dashboard boxes to show.</p><p><strong>Drag and Drop</strong> — To rearrange the boxes, drag and drop by clicking on the title bar of the selected box and releasing when you see a gray dotted-line rectangle appear in the location you want to place the box.</p><p><strong>Box Controls</strong> — Click the title bar of the box to expand or collapse it. Some boxes added by plugins may have configurable content, and will show a “Configure” link in the title bar if you hover over it.</p>							</div>
+							
+							<div id="tab-panel-help-content" class="help-tab-content">
+								<p>The boxes on your Dashboard screen are:</p><p><strong>Welcome</strong> — Shows links for some of the most common tasks when setting up a new site.</p><p><strong>Site Health Status</strong> — Informs you of any potential issues that should be addressed to improve the performance or security of your website.</p><p><strong>At a Glance</strong> — Displays a summary of the content on your site and identifies which theme and version of WordPress you are using.</p><p><strong>Activity</strong> — Shows the upcoming scheduled posts, recently published posts, and the most recent comments on your posts and allows you to moderate them.</p><p><strong>Quick Draft</strong> — Allows you to create a new post and save it as a draft. Also displays links to the 3 most recent draft posts you've started.</p><p><strong>WordPress Events and News</strong> — Upcoming events near you as well as the latest news from the official WordPress project and the <a href="https://planet.wordpress.org/">WordPress Planet</a>.</p>							</div>
+												</div>
+				</div>
+			</div>
+		<div id="screen-options-wrap" class="hidden" tabindex="-1" aria-label="Screen Options Tab">
+<form id="adv-settings" method="post">
+		<fieldset class="metabox-prefs">
+		<legend>Screen elements</legend>
+		<p>
+			Some screen elements can be shown or hidden by using the checkboxes.			Expand or collapse the elements by clicking on their headings, and arrange them by dragging their headings or by clicking on the up and down arrows.		</p>
+		<div class="metabox-prefs-container">
+		<label for="dashboard_site_health-hide"><input class="hide-postbox-tog" name="dashboard_site_health-hide" type="checkbox" id="dashboard_site_health-hide" value="dashboard_site_health" checked="checked">Site Health Status</label><label for="dashboard_right_now-hide"><input class="hide-postbox-tog" name="dashboard_right_now-hide" type="checkbox" id="dashboard_right_now-hide" value="dashboard_right_now" checked="checked">At a Glance</label><label for="dashboard_activity-hide"><input class="hide-postbox-tog" name="dashboard_activity-hide" type="checkbox" id="dashboard_activity-hide" value="dashboard_activity" checked="checked">Activity</label><label for="fluentform_stat_widget-hide"><input class="hide-postbox-tog" name="fluentform_stat_widget-hide" type="checkbox" id="fluentform_stat_widget-hide" value="fluentform_stat_widget" checked="checked">Fluent Forms Latest Form Submissions</label><label for="learndash-propanel-overview-hide"><input class="hide-postbox-tog" name="learndash-propanel-overview-hide" type="checkbox" id="learndash-propanel-overview-hide" value="learndash-propanel-overview" checked="checked">LearnDash Reports Overview</label><label for="learndash-propanel-filtering-hide"><input class="hide-postbox-tog" name="learndash-propanel-filtering-hide" type="checkbox" id="learndash-propanel-filtering-hide" value="learndash-propanel-filtering" checked="checked">LearnDash Report Filters</label><label for="learndash-propanel-reporting-hide"><input class="hide-postbox-tog" name="learndash-propanel-reporting-hide" type="checkbox" id="learndash-propanel-reporting-hide" value="learndash-propanel-reporting" checked="checked">LearnDash Reporting</label><label for="learndash-propanel-activity-hide"><input class="hide-postbox-tog" name="learndash-propanel-activity-hide" type="checkbox" id="learndash-propanel-activity-hide" value="learndash-propanel-activity" checked="checked">LearnDash Activity</label><label for="learndash-propanel-progress-chart-hide"><input class="hide-postbox-tog" name="learndash-propanel-progress-chart-hide" type="checkbox" id="learndash-propanel-progress-chart-hide" value="learndash-propanel-progress-chart" checked="checked">LearnDash Progress Chart</label><label for="fluentsmtp_reports_widget-hide"><input class="hide-postbox-tog" name="fluentsmtp_reports_widget-hide" type="checkbox" id="fluentsmtp_reports_widget-hide" value="fluentsmtp_reports_widget" checked="checked">Fluent SMTP</label><label for="dashboard_quick_press-hide"><input class="hide-postbox-tog" name="dashboard_quick_press-hide" type="checkbox" id="dashboard_quick_press-hide" value="dashboard_quick_press" checked="checked"><span class="hide-if-no-js">Quick Draft</span> <span class="hide-if-js">Your Recent Drafts</span></label><label for="dashboard_primary-hide"><input class="hide-postbox-tog" name="dashboard_primary-hide" type="checkbox" id="dashboard_primary-hide" value="dashboard_primary" checked="checked">WordPress Events and News</label><label for="wp_welcome_panel-hide"><input type="checkbox" id="wp_welcome_panel-hide" checked="checked">Welcome</label>
+		</div>
+		</fieldset>
+		
+<input type="hidden" id="screenoptionnonce" name="screenoptionnonce" value="c88e957bd3">
+</form>
+</div>		</div>
+				<div id="screen-meta-links">
+					<div id="screen-options-link-wrap" class="hide-if-no-js screen-meta-toggle">
+			<button type="button" id="show-settings-link" class="button show-settings" aria-controls="screen-options-wrap" aria-expanded="false">Screen Options</button>
+			</div>
+						<div id="contextual-help-link-wrap" class="hide-if-no-js screen-meta-toggle">
+			<button type="button" id="contextual-help-link" class="button show-settings" aria-controls="contextual-help-wrap" aria-expanded="false">Help</button>
+			</div>
+				</div>
+		
+<div class="wrap">
+	<h1>Dashboard</h1><div class="notice notice-warning"><p><strong>Bedrock:</strong> Search engine indexing has been discouraged because the current environment is <code>development</code>.</p></div>
+
+	
+
+	<div id="welcome-panel" class="welcome-panel">
+		<input type="hidden" id="welcomepanelnonce" name="welcomepanelnonce" value="7ca0ea2910">		<a class="welcome-panel-close" href="https://stride.ddev.site/wp/wp-admin/?welcome=0" aria-label="Dismiss the welcome panel">Dismiss</a>
+			<div class="welcome-panel-content">
+	<div class="welcome-panel-header">
+		<div class="welcome-panel-header-image">
+			<svg preserveAspectRatio="xMidYMin slice" fill="none" viewBox="0 0 1232 240" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+  <g clip-path="url(#a)">
+    <path fill="#151515" d="M0 0h1232v240H0z"></path>
+    <ellipse cx="616" cy="232" fill="url(#b)" opacity=".05" rx="1497" ry="249"></ellipse>
+    <mask id="d" width="1000" height="400" x="232" y="20" maskUnits="userSpaceOnUse" style="mask-type:alpha">
+      <path fill="url(#c)" d="M0 0h1000v400H0z" transform="translate(232 20)"></path>
+    </mask>
+    <g stroke-width="2" mask="url(#d)">
+      <path stroke="url(#e)" d="M387 20v1635"></path>
+      <path stroke="url(#f)" d="M559.5 20v1635"></path>
+      <path stroke="url(#g)" d="M732 20v1635"></path>
+      <path stroke="url(#h)" d="M904.5 20v1635"></path>
+      <path stroke="url(#i)" d="M1077 20v1635"></path>
+    </g>
+  </g>
+  <defs>
+    <linearGradient id="e" x1="387.5" x2="387.5" y1="20" y2="1655" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3858E9" stop-opacity="0"></stop>
+      <stop offset=".297" stop-color="#3858E9"></stop>
+      <stop offset=".734" stop-color="#3858E9"></stop>
+      <stop offset="1" stop-color="#3858E9" stop-opacity="0"></stop>
+      <stop offset="1" stop-color="#3858E9" stop-opacity="0"></stop>
+    </linearGradient>
+    <linearGradient id="f" x1="560" x2="560" y1="20" y2="1655" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFCB5" stop-opacity="0"></stop>
+      <stop offset="0" stop-color="#FFFCB5" stop-opacity="0"></stop>
+      <stop offset=".297" stop-color="#FFFCB5"></stop>
+      <stop offset=".734" stop-color="#FFFCB5"></stop>
+      <stop offset="1" stop-color="#FFFCB5" stop-opacity="0"></stop>
+    </linearGradient>
+    <linearGradient id="g" x1="732.5" x2="732.5" y1="20" y2="1655" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C7FFDB" stop-opacity="0"></stop>
+      <stop offset=".297" stop-color="#C7FFDB"></stop>
+      <stop offset=".693" stop-color="#C7FFDB"></stop>
+      <stop offset="1" stop-color="#C7FFDB" stop-opacity="0"></stop>
+    </linearGradient>
+    <linearGradient id="h" x1="905" x2="905" y1="20" y2="1655" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFB7A7" stop-opacity="0"></stop>
+      <stop offset=".297" stop-color="#FFB7A7"></stop>
+      <stop offset=".734" stop-color="#FFB7A7"></stop>
+      <stop offset="1" stop-color="#3858E9" stop-opacity="0"></stop>
+      <stop offset="1" stop-color="#FFB7A7" stop-opacity="0"></stop>
+    </linearGradient>
+    <linearGradient id="i" x1="1077.5" x2="1077.5" y1="20" y2="1655" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7B90FF" stop-opacity="0"></stop>
+      <stop offset=".297" stop-color="#7B90FF"></stop>
+      <stop offset=".734" stop-color="#7B90FF"></stop>
+      <stop offset="1" stop-color="#3858E9" stop-opacity="0"></stop>
+      <stop offset="1" stop-color="#7B90FF" stop-opacity="0"></stop>
+    </linearGradient>
+    <radialGradient id="b" cx="0" cy="0" r="1" gradientTransform="matrix(0 249 -1497 0 616 232)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3858E9"></stop>
+      <stop offset="1" stop-color="#151515" stop-opacity="0"></stop>
+    </radialGradient>
+    <radialGradient id="c" cx="0" cy="0" r="1" gradientTransform="matrix(0 765 -1912.5 0 500 -110)" gradientUnits="userSpaceOnUse">
+      <stop offset=".161" stop-color="#151515" stop-opacity="0"></stop>
+      <stop offset=".682"></stop>
+    </radialGradient>
+    <clipPath id="a">
+      <path fill="#fff" d="M0 0h1232v240H0z"></path>
+    </clipPath>
+  </defs>
+</svg>
+		</div>
+		<h2>Welcome to WordPress!</h2>
+		<p>
+			<a href="https://stride.ddev.site/wp/wp-admin/about.php">
+			Learn more about the 6.9.1 version.			</a>
+		</p>
+	</div>
+	<div class="welcome-panel-column-container">
+		<div class="welcome-panel-column">
+			<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+				<rect width="48" height="48" rx="4" fill="#1E1E1E"></rect>
+				<path fill-rule="evenodd" clip-rule="evenodd" d="M32.0668 17.0854L28.8221 13.9454L18.2008 24.671L16.8983 29.0827L21.4257 27.8309L32.0668 17.0854ZM16 32.75H24V31.25H16V32.75Z" fill="white"></path>
+			</svg>
+			<div class="welcome-panel-column-content">
+				<h3>Author rich content with blocks and patterns</h3>
+				<p>Block patterns are pre-configured block layouts. Use them to get inspired or create new pages in a flash.</p>
+				<a href="https://stride.ddev.site/wp/wp-admin/post-new.php?post_type=page">Add a new page</a>
+			</div>
+		</div>
+		<div class="welcome-panel-column">
+			<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+				<rect width="48" height="48" rx="4" fill="#1E1E1E"></rect>
+				<path fill-rule="evenodd" clip-rule="evenodd" d="M18 16h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H18a2 2 0 0 1-2-2V18a2 2 0 0 1 2-2zm12 1.5H18a.5.5 0 0 0-.5.5v3h13v-3a.5.5 0 0 0-.5-.5zm.5 5H22v8h8a.5.5 0 0 0 .5-.5v-7.5zm-10 0h-3V30a.5.5 0 0 0 .5.5h2.5v-8z" fill="#fff"></path>
+			</svg>
+			<div class="welcome-panel-column-content">
+							<h3>Start Customizing</h3>
+				<p>Configure your site’s logo, header, menus, and more in the Customizer.</p>
+									<a class="load-customize hide-if-no-customize" href="https://stride.ddev.site/wp/wp-admin/customize.php">Open the Customizer</a>
+										</div>
+		</div>
+		<div class="welcome-panel-column">
+			<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+				<rect width="48" height="48" rx="4" fill="#1E1E1E"></rect>
+				<path fill-rule="evenodd" clip-rule="evenodd" d="M31 24a7 7 0 0 1-7 7V17a7 7 0 0 1 7 7zm-7-8a8 8 0 1 1 0 16 8 8 0 0 1 0-16z" fill="#fff"></path>
+			</svg>
+			<div class="welcome-panel-column-content">
+							<h3>Discover a new way to build your site.</h3>
+				<p>There is a new kind of WordPress theme, called a block theme, that lets you build the site you’ve always wanted — with blocks and styles.</p>
+				<a href="https://wordpress.org/documentation/article/block-themes/">Learn about block themes</a>
+						</div>
+		</div>
+	</div>
+	</div>
+		</div><div class="tclr uo-reporting-dashboard-container uo-reporting--dashboard">
+                <div class="reporting-dashboard-col-container reporting-dashboard-col-1">
+                    <div class="reporting-dashboard-col-inner-container">
+                        <div class="reporting-dashboard-col-heading">Reports</div>
+                        <div class="reporting-dashboard-col-content">
+                            <div class="reporting-dashboard-quick-links">
+                                <div class="reporting-dashboard-quick-links__item" data-id="courseReportTab" data-append="">
+                                    <div class="reporting-dashboard-quick-links__icon">
+                                        <span class="tincanny-icon tincanny-icon-book"></span>
+                                    </div>
+                                    <div class="reporting-dashboard-quick-links__content">
+                                        <div class="reporting-dashboard-quick-links__title">
+                                            Course Report
+                                        </div>
+                                        <div class="reporting-dashboard-quick-links__description">
+                                            A summary-level overview of LearnDash courses and user progress
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="reporting-dashboard-quick-links__item" data-id="userReportTab" data-append="&amp;tab=userReportTab">
+                                    <div class="reporting-dashboard-quick-links__icon">
+                                        <span class="tincanny-icon tincanny-icon-user"></span>
+                                    </div>
+                                    <div class="reporting-dashboard-quick-links__content">
+                                        <div class="reporting-dashboard-quick-links__title">
+                                            User Report
+                                        </div>
+                                        <div class="reporting-dashboard-quick-links__description">
+                                            Monitor progress for individual users enrolled in LearnDash courses
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="reporting-dashboard-quick-links__item" data-id="tin-can" data-append="&amp;tab=tin-can">
+                                    <div class="reporting-dashboard-quick-links__icon">
+                                        <span class="tincanny-icon tincanny-icon-chart-bar"></span>
+                                    </div>
+                                    <div class="reporting-dashboard-quick-links__content">
+                                        <div class="reporting-dashboard-quick-links__title">
+                                            Tin Can Report
+                                        </div>
+                                        <div class="reporting-dashboard-quick-links__description">
+                                            Detailed records of user activity in H5P and uploaded modules
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="reporting-dashboard-quick-stats">
+                                <div class="reporting-dashboard-quick-stats__item" data-id="users">
+                                    <div class="reporting-dashboard-quick-stats__number">-</div>
+                                    <div class="reporting-dashboard-quick-stats__description">Users</div>
+                                </div>
+                                <div class="reporting-dashboard-quick-stats__item" data-id="courses">
+                                    <div class="reporting-dashboard-quick-stats__number">-</div>
+                                    <div class="reporting-dashboard-quick-stats__description">Courses</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <style>
+                    #reporting-recent-activities {
+                        width: 100%;
+                        height: 250px;
+                    }
+                    #courseSingleOverviewPieChart {
+                        width: 100%;
+                        height: 250px;
+                    }
+                    #courseSingleActivitiesGraph {
+                        width: 100%;
+                        height: 350px;
+                    }
+                </style>
+                <div class="reporting-dashboard-col-container reporting-dashboard-col-2">
+                    <div class="reporting-dashboard-col-inner-container">
+                        <div class="reporting-dashboard-col-heading">Recent Activities</div>
+                        <div class="reporting-dashboard-col-content reporting-dashboard-col-content--small-padding">
+                            <div id="reporting-recent-activities" class="reporting-recent-activities">
+                                <div class="reporting-dashboard-status reporting-dashboard-status--loading">
+                                    <div class="reporting-dashboard-status__icon"></div>
+                                    <div class="reporting-dashboard-status__text">
+                                        Loading
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="reporting-dashboard-col-container reporting-dashboard-col-3">
+                    <div class="reporting-dashboard-col-inner-container">
+                        <div class="reporting-dashboard-col-heading">
+                            Most Completed Courses
+                        </div>
+                        <div class="reporting-dashboard-col-content">
+                            <div class="reporting-completed-ranking" id="reporting-completed-ranking">
+                                <div class="reporting-dashboard-status reporting-dashboard-status--loading">
+                                    <div class="reporting-dashboard-status__icon"></div>
+                                    <div class="reporting-dashboard-status__text">
+                                        Loading
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+	<div id="dashboard-widgets-wrap">
+	<div id="dashboard-widgets" class="metabox-holder">
+	<div id="postbox-container-1" class="postbox-container">
+	<div id="normal-sortables" class="meta-box-sortables ui-sortable"><div id="dashboard_site_health" class="postbox ">
+<div class="postbox-header"><h2 class="hndle ui-sortable-handle">Site Health Status</h2>
+<div class="handle-actions hide-if-no-js"><button type="button" class="handle-order-higher" aria-disabled="true" aria-describedby="dashboard_site_health-handle-order-higher-description"><span class="screen-reader-text">Move up</span><span class="order-higher-indicator" aria-hidden="true"></span></button><span class="hidden" id="dashboard_site_health-handle-order-higher-description">Move Site Health Status box up</span><button type="button" class="handle-order-lower" aria-disabled="false" aria-describedby="dashboard_site_health-handle-order-lower-description"><span class="screen-reader-text">Move down</span><span class="order-lower-indicator" aria-hidden="true"></span></button><span class="hidden" id="dashboard_site_health-handle-order-lower-description">Move Site Health Status box down</span><button type="button" class="handlediv" aria-expanded="true"><span class="screen-reader-text">Toggle panel: Site Health Status</span><span class="toggle-indicator" aria-hidden="true"></span></button></div></div><div class="inside">
+	<div class="health-check-widget">
+		<div class="health-check-widget-title-section site-health-progress-wrapper hide-if-no-js orange">
+			<div class="site-health-progress">
+				<svg aria-hidden="true" focusable="false" width="100%" height="100%" viewBox="0 0 200 200" version="1.1" xmlns="http://www.w3.org/2000/svg">
+					<circle r="90" cx="100" cy="100" fill="transparent" stroke-dasharray="565.48" stroke-dashoffset="0"></circle>
+					<circle id="bar" r="90" cx="100" cy="100" fill="transparent" stroke-dasharray="565.48" stroke-dashoffset="0" style="stroke-dashoffset: 96.1327px;"></circle>
+				</svg>
+			</div>
+			<div class="site-health-progress-label">Should be improved</div>
+		</div>
+
+		<div class="site-health-details">
+							<p>
+											Your site has a critical issue that should be addressed as soon as possible to improve its performance and security.									</p>
+			
+							<p>
+					Take a look at the <strong>5 items</strong> on the <a href="https://stride.ddev.site/wp/wp-admin/site-health.php">Site Health screen</a>.				</p>
+					</div>
+	</div>
+
+	</div>
+</div>
+<div id="dashboard_right_now" class="postbox ">
+<div class="postbox-header"><h2 class="hndle ui-sortable-handle">At a Glance</h2>
+<div class="handle-actions hide-if-no-js"><button type="button" class="handle-order-higher" aria-disabled="false" aria-describedby="dashboard_right_now-handle-order-higher-description"><span class="screen-reader-text">Move up</span><span class="order-higher-indicator" aria-hidden="true"></span></button><span class="hidden" id="dashboard_right_now-handle-order-higher-description">Move At a Glance box up</span><button type="button" class="handle-order-lower" aria-disabled="false" aria-describedby="dashboard_right_now-handle-order-lower-description"><span class="screen-reader-text">Move down</span><span class="order-lower-indicator" aria-hidden="true"></span></button><span class="hidden" id="dashboard_right_now-handle-order-lower-description">Move At a Glance box down</span><button type="button" class="handlediv" aria-expanded="true"><span class="screen-reader-text">Toggle panel: At a Glance</span><span class="toggle-indicator" aria-hidden="true"></span></button></div></div><div class="inside">
+	<div class="main">
+	<ul>
+	<li class="post-count"><a href="edit.php?post_type=post">1 Post</a></li><li class="page-count"><a href="edit.php?post_type=page">14 Pages</a></li>		<li class="comment-count">
+			<a href="edit-comments.php">1 Comment</a>
+		</li>
+				<li class="comment-mod-count hidden">
+			<a href="edit-comments.php?comment_status=moderated" class="comments-in-moderation-text">0 Comments in moderation</a>
+		</li>
+			</ul>
+	<p id="wp-version-message"><span id="wp-version">WordPress 6.9.1 running <a href="themes.php">Stride LMS</a> theme.</span></p><p class="search-engines-info"><a href="options-reading.php">Search engines discouraged</a></p>	</div>
+	</div>
+</div>
+<div id="dashboard_activity" class="postbox ">
+<div class="postbox-header"><h2 class="hndle ui-sortable-handle">Activity</h2>
+<div class="handle-actions hide-if-no-js"><button type="button" class="handle-order-higher" aria-disabled="false" aria-describedby="dashboard_activity-handle-order-higher-description"><span class="screen-reader-text">Move up</span><span class="order-higher-indicator" aria-hidden="true"></span></button><span class="hidden" id="dashboard_activity-handle-order-higher-description">Move Activity box up</span><button type="button" class="handle-order-lower" aria-disabled="false" aria-describedby="dashboard_activity-handle-order-lower-description"><span class="screen-reader-text">Move down</span><span class="order-lower-indicator" aria-hidden="true"></span></button><span class="hidden" id="dashboard_activity-handle-order-lower-description">Move Activity box down</span><button type="button" class="handlediv" aria-expanded="true"><span class="screen-reader-text">Toggle panel: Activity</span><span class="toggle-indicator" aria-hidden="true"></span></button></div></div><div class="inside">
+<div id="activity-widget"><div id="published-posts" class="activity-block"><h3>Recently Published</h3><ul><li><span>Feb 11th, 7:03 pm</span> <a href="https://stride.ddev.site/wp/wp-admin/post.php?post=1&amp;action=edit" aria-label="Edit “Hello world!”">Hello world!</a></li></ul></div><div id="latest-comments" class="activity-block table-view-list"><h3>Recent Comments</h3><ul id="the-comment-list" data-wp-lists="list:comment">
+		<li id="comment-1" class="comment even thread-even depth-1 comment-item approved">
+
+			<img alt="" src="https://secure.gravatar.com/avatar/8e1606e6fba450a9362af43874c1b2dfad34c782e33d0a51e1b46c18a2a567dd?s=50&amp;d=mm&amp;r=g" srcset="https://secure.gravatar.com/avatar/8e1606e6fba450a9362af43874c1b2dfad34c782e33d0a51e1b46c18a2a567dd?s=100&amp;d=mm&amp;r=g 2x" class="avatar avatar-50 photo" height="50" width="50" loading="lazy" decoding="async">
+			
+			<div class="dashboard-comment-wrap has-row-actions  has-avatar">
+			<p class="comment-meta">
+				From <cite class="comment-author"><a href="https://wordpress.org/" class="url" rel="ugc external nofollow">A WordPress Commenter</a></cite> on <a href="https://stride.ddev.site/2026/02/11/hello-world/">Hello world!</a> <span class="approve">[Pending]</span>			</p>
+
+							<blockquote><p>Hi, this is a comment. To get started with moderating, editing, and deleting comments, please visit the Comments screen in…</p></blockquote>
+						<p class="row-actions"><span class="approve"><a href="comment.php?action=approvecomment&amp;p=1&amp;c=1&amp;_wpnonce=c69d9a4142" data-wp-lists="dim:the-comment-list:comment-1:unapproved:e7e7d3:e7e7d3:new=approved" class="vim-a aria-button-if-js" aria-label="Approve this comment" role="button">Approve</a></span><span class="unapprove"><a href="comment.php?action=unapprovecomment&amp;p=1&amp;c=1&amp;_wpnonce=c69d9a4142" data-wp-lists="dim:the-comment-list:comment-1:unapproved:e7e7d3:e7e7d3:new=unapproved" class="vim-u aria-button-if-js" aria-label="Unapprove this comment" role="button">Unapprove</a></span><span class="reply hide-if-no-js"> | <button type="button" onclick="window.commentReply &amp;&amp; commentReply.open('1','1');" class="vim-r button-link hide-if-no-js" aria-label="Reply to this comment">Reply</button></span><span class="edit"> | <a href="comment.php?action=editcomment&amp;c=1" aria-label="Edit this comment">Edit</a></span><span class="spam"> | <a href="comment.php?action=spamcomment&amp;p=1&amp;c=1&amp;_wpnonce=05e4868d95" data-wp-lists="delete:the-comment-list:comment-1::spam=1" class="vim-s vim-destructive aria-button-if-js" aria-label="Mark this comment as spam" role="button">Spam</a></span><span class="trash"> | <a href="comment.php?action=trashcomment&amp;p=1&amp;c=1&amp;_wpnonce=05e4868d95" data-wp-lists="delete:the-comment-list:comment-1::trash=1" class="delete vim-d vim-destructive aria-button-if-js" aria-label="Move this comment to the Trash" role="button">Trash</a></span><span class="view"> | <a class="comment-link" href="https://stride.ddev.site/2026/02/11/hello-world/#comment-1" aria-label="View this comment">View</a></span></p>
+						</div>
+		</li>
+	</ul><h3 class="screen-reader-text">View more comments</h3><ul class="subsubsub">
+	<li class="all"><a href="https://stride.ddev.site/wp/wp-admin/edit-comments.php?comment_status=all">All <span class="count">(<span class="all-count">1</span>)</span></a> |</li>
+	<li class="mine"><a href="https://stride.ddev.site/wp/wp-admin/edit-comments.php?comment_status=mine&amp;user_id=1">Mine <span class="count">(<span class="mine-count">0</span>)</span></a> |</li>
+	<li class="moderated"><a href="https://stride.ddev.site/wp/wp-admin/edit-comments.php?comment_status=moderated">Pending <span class="count">(<span class="pending-count">0</span>)</span></a> |</li>
+	<li class="approved"><a href="https://stride.ddev.site/wp/wp-admin/edit-comments.php?comment_status=approved">Approved <span class="count">(<span class="approved-count">1</span>)</span></a> |</li>
+	<li class="spam"><a href="https://stride.ddev.site/wp/wp-admin/edit-comments.php?comment_status=spam">Spam <span class="count">(<span class="spam-count">0</span>)</span></a> |</li>
+	<li class="trash"><a href="https://stride.ddev.site/wp/wp-admin/edit-comments.php?comment_status=trash">Trash <span class="count">(<span class="trash-count">0</span>)</span></a></li>
+</ul><form method="get">
+	<div id="com-reply" style="display:none;"><div id="replyrow" style="display:none;">
+	<fieldset class="comment-reply">
+	<legend>
+		<span class="hidden" id="editlegend">Edit Comment</span>
+		<span class="hidden" id="replyhead">Reply to Comment</span>
+		<span class="hidden" id="addhead">Add Comment</span>
+	</legend>
+
+	<div id="replycontainer">
+	<label for="replycontent" class="screen-reader-text">
+		Comment	</label>
+	<div id="wp-replycontent-wrap" class="wp-core-ui wp-editor-wrap html-active"><link rel="stylesheet" id="editor-buttons-css" href="https://stride.ddev.site/wp/wp-includes/css/editor.css?ver=6.9.1" media="all">
+<div id="wp-replycontent-editor-container" class="wp-editor-container"><div id="qt_replycontent_toolbar" class="quicktags-toolbar hide-if-no-js"><input type="button" id="qt_replycontent_strong" class="ed_button button button-small" aria-label="Bold" value="b"><input type="button" id="qt_replycontent_em" class="ed_button button button-small" aria-label="Italic" value="i"><input type="button" id="qt_replycontent_link" class="ed_button button button-small" aria-label="Insert link" value="link"><input type="button" id="qt_replycontent_block" class="ed_button button button-small" aria-label="Blockquote" value="b-quote"><input type="button" id="qt_replycontent_del" class="ed_button button button-small" aria-label="Deleted text (strikethrough)" value="del"><input type="button" id="qt_replycontent_ins" class="ed_button button button-small" aria-label="Inserted text" value="ins"><input type="button" id="qt_replycontent_img" class="ed_button button button-small" aria-label="Insert image" value="img"><input type="button" id="qt_replycontent_ul" class="ed_button button button-small" aria-label="Bulleted list" value="ul"><input type="button" id="qt_replycontent_ol" class="ed_button button button-small" aria-label="Numbered list" value="ol"><input type="button" id="qt_replycontent_li" class="ed_button button button-small" aria-label="List item" value="li"><input type="button" id="qt_replycontent_code" class="ed_button button button-small" aria-label="Code" value="code"><input type="button" id="qt_replycontent_close" class="ed_button button button-small" title="Close all open tags" value="close tags"></div><textarea class="wp-editor-area" rows="20" cols="40" name="replycontent" id="replycontent"></textarea></div>
+</div>
+
+	</div>
+
+	<div id="edithead" style="display:none;">
+		<div class="inside">
+		<label for="author-name">Name</label>
+		<input type="text" name="newcomment_author" size="50" value="" id="author-name">
+		</div>
+
+		<div class="inside">
+		<label for="author-email">Email</label>
+		<input type="text" name="newcomment_author_email" size="50" value="" id="author-email">
+		</div>
+
+		<div class="inside">
+		<label for="author-url">URL</label>
+		<input type="text" id="author-url" name="newcomment_author_url" class="code" size="103" value="">
+		</div>
+	</div>
+
+	<div id="replysubmit" class="submit">
+		<p class="reply-submit-buttons">
+			<button type="button" class="save button button-primary">
+				<span id="addbtn" style="display: none;">Add Comment</span>
+				<span id="savebtn" style="display: none;">Update Comment</span>
+				<span id="replybtn" style="display: none;">Submit Reply</span>
+			</button>
+			<button type="button" class="cancel button">Cancel</button>
+			<span class="waiting spinner"></span>
+		</p>
+		<div class="notice notice-error notice-alt inline hidden"><p class="error"></p></div>	</div>
+
+	<input type="hidden" name="action" id="action" value="">
+	<input type="hidden" name="comment_ID" id="comment_ID" value="">
+	<input type="hidden" name="comment_post_ID" id="comment_post_ID" value="">
+	<input type="hidden" name="status" id="status" value="">
+	<input type="hidden" name="position" id="position" value="-1">
+	<input type="hidden" name="checkbox" id="checkbox" value="0">
+	<input type="hidden" name="mode" id="mode" value="dashboard">
+	<input type="hidden" id="_ajax_nonce-replyto-comment" name="_ajax_nonce-replyto-comment" value="c84eecf43e"><input type="hidden" id="_wp_unfiltered_html_comment" name="_wp_unfiltered_html_comment" value="46ed1f903c">	</fieldset>
+	</div></div>
+	</form>
+	<div class="hidden" id="trash-undo-holder">
+	<div class="trash-undo-inside">
+		Comment by <strong></strong> moved to the Trash.		<span class="undo untrash"><a href="#">Undo</a></span>
+	</div>
+</div>
+<div class="hidden" id="spam-undo-holder">
+	<div class="spam-undo-inside">
+		Comment by <strong></strong> marked as spam.		<span class="undo unspam"><a href="#">Undo</a></span>
+	</div>
+</div>
+	</div></div></div>
+</div>
+<div id="fluentform_stat_widget" class="postbox ">
+<div class="postbox-header"><h2 class="hndle ui-sortable-handle">Fluent Forms Latest Form Submissions</h2>
+<div class="handle-actions hide-if-no-js"><button type="button" class="handle-order-higher" aria-disabled="false" aria-describedby="fluentform_stat_widget-handle-order-higher-description"><span class="screen-reader-text">Move up</span><span class="order-higher-indicator" aria-hidden="true"></span></button><span class="hidden" id="fluentform_stat_widget-handle-order-higher-description">Move Fluent Forms Latest Form Submissions box up</span><button type="button" class="handle-order-lower" aria-disabled="false" aria-describedby="fluentform_stat_widget-handle-order-lower-description"><span class="screen-reader-text">Move down</span><span class="order-lower-indicator" aria-hidden="true"></span></button><span class="hidden" id="fluentform_stat_widget-handle-order-lower-description">Move Fluent Forms Latest Form Submissions box down</span><button type="button" class="handlediv" aria-expanded="true"><span class="screen-reader-text">Toggle panel: Fluent Forms Latest Form Submissions</span><span class="toggle-indicator" aria-hidden="true"></span></button></div></div><div class="inside">
+You can see your submission stats here</div>
+</div>
+<div id="learndash-propanel-overview" class="postbox ">
+<div class="postbox-header"><h2 class="hndle ui-sortable-handle">LearnDash Reports Overview<img src="https://stride.ddev.site/wp/wp-admin/images/spinner.gif" class="loading"></h2>
+<div class="handle-actions hide-if-no-js"><button type="button" class="handle-order-higher" aria-disabled="false" aria-describedby="learndash-propanel-overview-handle-order-higher-description"><span class="screen-reader-text">Move up</span><span class="order-higher-indicator" aria-hidden="true"></span></button><span class="hidden" id="learndash-propanel-overview-handle-order-higher-description">Move LearnDash Reports Overview box up</span><button type="button" class="handle-order-lower" aria-disabled="false" aria-describedby="learndash-propanel-overview-handle-order-lower-description"><span class="screen-reader-text">Move down</span><span class="order-lower-indicator" aria-hidden="true"></span></button><span class="hidden" id="learndash-propanel-overview-handle-order-lower-description">Move LearnDash Reports Overview box down</span><button type="button" class="handlediv" aria-expanded="true"><span class="screen-reader-text">Toggle panel: LearnDash Reports Overview</span><span class="toggle-indicator" aria-hidden="true"></span></button></div></div><div class="inside">
+			<div class="ld-propanel-widget ld-propanel-widget-overview ld-propanel-screen-dashboard" data-ld-widget-type="overview"></div>
+			</div>
+</div>
+<div id="learndash-propanel-filtering" class="postbox ">
+<div class="postbox-header"><h2 class="hndle ui-sortable-handle">LearnDash Report Filters<img src="https://stride.ddev.site/wp/wp-admin/images/spinner.gif" class="loading"></h2>
+<div class="handle-actions hide-if-no-js"><button type="button" class="handle-order-higher" aria-disabled="false" aria-describedby="learndash-propanel-filtering-handle-order-higher-description"><span class="screen-reader-text">Move up</span><span class="order-higher-indicator" aria-hidden="true"></span></button><span class="hidden" id="learndash-propanel-filtering-handle-order-higher-description">Move LearnDash Report Filters box up</span><button type="button" class="handle-order-lower" aria-disabled="false" aria-describedby="learndash-propanel-filtering-handle-order-lower-description"><span class="screen-reader-text">Move down</span><span class="order-lower-indicator" aria-hidden="true"></span></button><span class="hidden" id="learndash-propanel-filtering-handle-order-lower-description">Move LearnDash Report Filters box down</span><button type="button" class="handlediv" aria-expanded="true"><span class="screen-reader-text">Toggle panel: LearnDash Report Filters</span><span class="toggle-indicator" aria-hidden="true"></span></button></div></div><div class="inside">
+			<div class="ld-propanel-widget ld-propanel-widget-filtering ld-propanel-screen-dashboard" data-ld-widget-type="filtering"></div>
+			</div>
+</div>
+<div id="learndash-propanel-reporting" class="postbox ">
+<div class="postbox-header"><h2 class="hndle ui-sortable-handle">LearnDash Reporting<img src="https://stride.ddev.site/wp/wp-admin/images/spinner.gif" class="loading"></h2>
+<div class="handle-actions hide-if-no-js"><button type="button" class="handle-order-higher" aria-disabled="false" aria-describedby="learndash-propanel-reporting-handle-order-higher-description"><span class="screen-reader-text">Move up</span><span class="order-higher-indicator" aria-hidden="true"></span></button><span class="hidden" id="learndash-propanel-reporting-handle-order-higher-description">Move LearnDash Reporting box up</span><button type="button" class="handle-order-lower" aria-disabled="false" aria-describedby="learndash-propanel-reporting-handle-order-lower-description"><span class="screen-reader-text">Move down</span><span class="order-lower-indicator" aria-hidden="true"></span></button><span class="hidden" id="learndash-propanel-reporting-handle-order-lower-description">Move LearnDash Reporting box down</span><button type="button" class="handlediv" aria-expanded="true"><span class="screen-reader-text">Toggle panel: LearnDash Reporting</span><span class="toggle-indicator" aria-hidden="true"></span></button></div></div><div class="inside">
+			<div class="ld-propanel-widget ld-propanel-widget-reporting ld-propanel-screen-dashboard" data-ld-widget-type="reporting"></div>
+			</div>
+</div>
+<div id="learndash-propanel-activity" class="postbox ">
+<div class="postbox-header"><h2 class="hndle ui-sortable-handle">LearnDash Activity<img src="https://stride.ddev.site/wp/wp-admin/images/spinner.gif" class="loading"></h2>
+<div class="handle-actions hide-if-no-js"><button type="button" class="handle-order-higher" aria-disabled="false" aria-describedby="learndash-propanel-activity-handle-order-higher-description"><span class="screen-reader-text">Move up</span><span class="order-higher-indicator" aria-hidden="true"></span></button><span class="hidden" id="learndash-propanel-activity-handle-order-higher-description">Move LearnDash Activity box up</span><button type="button" class="handle-order-lower" aria-disabled="false" aria-describedby="learndash-propanel-activity-handle-order-lower-description"><span class="screen-reader-text">Move down</span><span class="order-lower-indicator" aria-hidden="true"></span></button><span class="hidden" id="learndash-propanel-activity-handle-order-lower-description">Move LearnDash Activity box down</span><button type="button" class="handlediv" aria-expanded="true"><span class="screen-reader-text">Toggle panel: LearnDash Activity</span><span class="toggle-indicator" aria-hidden="true"></span></button></div></div><div class="inside">
+			<div class="ld-propanel-widget ld-propanel-widget-activity ld-propanel-screen-dashboard" data-ld-widget-type="activity"></div>
+			</div>
+</div>
+<div id="learndash-propanel-progress-chart" class="postbox ">
+<div class="postbox-header"><h2 class="hndle ui-sortable-handle">LearnDash Progress Chart<img src="https://stride.ddev.site/wp/wp-admin/images/spinner.gif" class="loading"></h2>
+<div class="handle-actions hide-if-no-js"><button type="button" class="handle-order-higher" aria-disabled="false" aria-describedby="learndash-propanel-progress-chart-handle-order-higher-description"><span class="screen-reader-text">Move up</span><span class="order-higher-indicator" aria-hidden="true"></span></button><span class="hidden" id="learndash-propanel-progress-chart-handle-order-higher-description">Move LearnDash Progress Chart box up</span><button type="button" class="handle-order-lower" aria-disabled="false" aria-describedby="learndash-propanel-progress-chart-handle-order-lower-description"><span class="screen-reader-text">Move down</span><span class="order-lower-indicator" aria-hidden="true"></span></button><span class="hidden" id="learndash-propanel-progress-chart-handle-order-lower-description">Move LearnDash Progress Chart box down</span><button type="button" class="handlediv" aria-expanded="true"><span class="screen-reader-text">Toggle panel: LearnDash Progress Chart</span><span class="toggle-indicator" aria-hidden="true"></span></button></div></div><div class="inside">
+			<div class="ld-propanel-widget side-by-side ld-propanel-widget-progress-chart ld-propanel-screen-dashboard" data-ld-widget-type="progress-chart"></div>
+			</div>
+</div>
+<div id="fluentsmtp_reports_widget" class="postbox ">
+<div class="postbox-header"><h2 class="hndle ui-sortable-handle">Fluent SMTP</h2>
+<div class="handle-actions hide-if-no-js"><button type="button" class="handle-order-higher" aria-disabled="false" aria-describedby="fluentsmtp_reports_widget-handle-order-higher-description"><span class="screen-reader-text">Move up</span><span class="order-higher-indicator" aria-hidden="true"></span></button><span class="hidden" id="fluentsmtp_reports_widget-handle-order-higher-description">Move Fluent SMTP box up</span><button type="button" class="handle-order-lower" aria-disabled="false" aria-describedby="fluentsmtp_reports_widget-handle-order-lower-description"><span class="screen-reader-text">Move down</span><span class="order-lower-indicator" aria-hidden="true"></span></button><span class="hidden" id="fluentsmtp_reports_widget-handle-order-lower-description">Move Fluent SMTP box down</span><button type="button" class="handlediv" aria-expanded="true"><span class="screen-reader-text">Toggle panel: Fluent SMTP</span><span class="toggle-indicator" aria-hidden="true"></span></button></div></div><div class="inside">
+        <style type="text/css">
+            td.fstmp_failed {
+                color: red;
+                font-weight: bold;
+            }
+        </style>
+        <div id="fsmtp_dashboard_widget_html" class="fsmtp_dash_wrapper">
+            <h3 style="min-height: 170px;">Loading data...</h3>
+        </div>
+        </div>
+</div>
+</div>	</div>
+	<div id="postbox-container-2" class="postbox-container">
+	<div id="side-sortables" class="meta-box-sortables ui-sortable"><div id="dashboard_quick_press" class="postbox ">
+<div class="postbox-header"><h2 class="hndle ui-sortable-handle"><span class="hide-if-no-js">Quick Draft</span> <span class="hide-if-js">Your Recent Drafts</span></h2>
+<div class="handle-actions hide-if-no-js"><button type="button" class="handle-order-higher" aria-disabled="false" aria-describedby="dashboard_quick_press-handle-order-higher-description"><span class="screen-reader-text">Move up</span><span class="order-higher-indicator" aria-hidden="true"></span></button><span class="hidden" id="dashboard_quick_press-handle-order-higher-description">Move <span class="hide-if-no-js">Quick Draft</span> <span class="hide-if-js">Your Recent Drafts</span> box up</span><button type="button" class="handle-order-lower" aria-disabled="false" aria-describedby="dashboard_quick_press-handle-order-lower-description"><span class="screen-reader-text">Move down</span><span class="order-lower-indicator" aria-hidden="true"></span></button><span class="hidden" id="dashboard_quick_press-handle-order-lower-description">Move <span class="hide-if-no-js">Quick Draft</span> <span class="hide-if-js">Your Recent Drafts</span> box down</span><button type="button" class="handlediv" aria-expanded="true"><span class="screen-reader-text">Toggle panel: <span class="hide-if-no-js">Quick Draft</span> <span class="hide-if-js">Your Recent Drafts</span></span><span class="toggle-indicator" aria-hidden="true"></span></button></div></div><div class="inside">
+
+	<form name="post" action="https://stride.ddev.site/wp/wp-admin/post.php" method="post" id="quick-press" class="initial-form hide-if-no-js">
+
+		
+		<div class="input-text-wrap" id="title-wrap">
+			<label for="title">
+				Title			</label>
+			<input type="text" name="post_title" id="title" autocomplete="off">
+		</div>
+
+		<div class="textarea-wrap" id="description-wrap">
+			<label for="content">Content</label>
+			<textarea name="content" id="content" placeholder="What’s on your mind?" class="mceEditor" rows="3" cols="15" autocomplete="off"></textarea>
+		</div>
+
+		<p class="submit">
+			<input type="hidden" name="action" id="quickpost-action" value="post-quickdraft-save">
+			<input type="hidden" name="post_ID" value="2546">
+			<input type="hidden" name="post_type" value="post">
+			<input type="hidden" id="_wpnonce" name="_wpnonce" value="25fd553133"><input type="hidden" name="_wp_http_referer" value="/wp/wp-admin/">			<input type="submit" name="save" id="save-post" class="button button-primary" value="Save Draft">			<br class="clear">
+		</p>
+
+	</form>
+	</div>
+</div>
+<div id="dashboard_primary" class="postbox ">
+<div class="postbox-header"><h2 class="hndle ui-sortable-handle">WordPress Events and News</h2>
+<div class="handle-actions hide-if-no-js"><button type="button" class="handle-order-higher" aria-disabled="false" aria-describedby="dashboard_primary-handle-order-higher-description"><span class="screen-reader-text">Move up</span><span class="order-higher-indicator" aria-hidden="true"></span></button><span class="hidden" id="dashboard_primary-handle-order-higher-description">Move WordPress Events and News box up</span><button type="button" class="handle-order-lower" aria-disabled="false" aria-describedby="dashboard_primary-handle-order-lower-description"><span class="screen-reader-text">Move down</span><span class="order-lower-indicator" aria-hidden="true"></span></button><span class="hidden" id="dashboard_primary-handle-order-lower-description">Move WordPress Events and News box down</span><button type="button" class="handlediv" aria-expanded="true"><span class="screen-reader-text">Toggle panel: WordPress Events and News</span><span class="toggle-indicator" aria-hidden="true"></span></button></div></div><div class="inside">
+<div class="notice notice-error community-events-errors inline" aria-hidden="true"><p class="hide-if-js">This widget requires JavaScript.</p><p class="community-events-error-occurred" aria-hidden="true">An error occurred. Please try again.</p><p class="community-events-could-not-locate" aria-hidden="true"></p></div>	<div id="community-events" class="community-events" aria-hidden="false">
+		<div class="activity-block">
+			<p>
+				<span id="community-events-location-message" aria-hidden="false">Attend an upcoming event near you.</span>
+
+				<button class="button-link community-events-toggle-location" aria-expanded="false" aria-hidden="false">
+					<span class="dashicons dashicons-location" aria-hidden="true"></span>
+					<span class="community-events-location-edit">Select location</span>
+				</button>
+			</p>
+
+			<form class="community-events-form" aria-hidden="true" action="https://stride.ddev.site/wp/wp-admin/admin-ajax.php" method="post">
+				<label for="community-events-location">
+					City:				</label>
+								<input id="community-events-location" class="regular-text" type="text" name="community-events-location" placeholder="Cincinnati">
+
+				<input type="submit" name="community-events-submit" id="community-events-submit" class="button" value="Submit">
+				<button class="community-events-cancel button-link" type="button" aria-expanded="false">
+					Cancel				</button>
+
+				<span class="spinner"></span>
+			</form>
+		</div>
+
+		<ul class="community-events-results activity-block last" aria-hidden="false">
+		
+			<li class="event event-wordcamp wp-clearfix">
+				<div class="event-info">
+					<div class="dashicons event-icon" aria-hidden="true"></div>
+					<div class="event-info-inner">
+						<a class="event-title" href="https://mannheim.wordcamp.org/2026/">WordCamp Mannheim 2026</a>
+						
+							WordCamp
+							<span class="ce-separator" aria-hidden="true"></span>
+						
+						<span class="event-city">Mannheim, Germany</span>
+					</div>
+				</div>
+
+				<div class="event-date-time">
+					<span class="event-date">Friday, Jul 3, 2026</span>
+					
+				</div>
+			</li>
+		
+
+		
+			<li class="event-none">
+				Want more events? <a href="https://make.wordpress.org/community/organize-event-landing-page/">Help organize the next one</a>!			</li>
+		
+
+	</ul>
+	</div>
+
+	
+	<div class="wordpress-news hide-if-no-js">
+		<div class="rss-widget"><ul><li><a class="rsswidget" href="https://wordpress.org/news/2026/02/wordpress-7-0-beta-1/">WordPress 7.0 Beta 1</a></li><li><a class="rsswidget" href="https://wordpress.org/news/2026/02/ai-leaders-credential/">Piloting the AI Leaders Micro-Credential</a></li></ul></div><div class="rss-widget"><ul><li><a class="rsswidget" href="https://ma.tt/2026/02/claude-sonos/">Matt: Claude &amp;amp; Sonos</a></li><li><a class="rsswidget" href="https://gutenbergtimes.com/interactivity-api-wordpress-7-0-beta-and-telex-updates-weekend-edition-358/">Gutenberg Times: Interactivity API, WordPress 7.0 Beta and Telex updates — Weekend Edition 358</a></li><li><a class="rsswidget" href="https://ma.tt/2026/02/wp-ai/">Matt: WordPress, AI, plugins, future of software engineering</a></li></ul></div>	</div>
+
+	<p class="community-events-footer">
+		<a href="https://make.wordpress.org/community/meetups-landing-page" target="_blank">Meetups <span class="screen-reader-text"> (opens in a new tab)</span><span aria-hidden="true" class="dashicons dashicons-external"></span></a>
+		|
+
+		<a href="https://central.wordcamp.org/schedule/" target="_blank">WordCamps <span class="screen-reader-text"> (opens in a new tab)</span><span aria-hidden="true" class="dashicons dashicons-external"></span></a>
+		|
+
+		<a href="https://wordpress.org/news/" target="_blank">News <span class="screen-reader-text"> (opens in a new tab)</span><span aria-hidden="true" class="dashicons dashicons-external"></span></a>	</p>
+
+	</div>
+</div>
+</div>	</div>
+	<div id="postbox-container-3" class="postbox-container">
+	<div id="column3-sortables" class="meta-box-sortables ui-sortable empty-container" data-emptystring="Drag boxes here"></div>	</div>
+	<div id="postbox-container-4" class="postbox-container">
+	<div id="column4-sortables" class="meta-box-sortables ui-sortable empty-container" data-emptystring="Drag boxes here"></div>	</div>
+</div>
+
+	<input type="hidden" id="closedpostboxesnonce" name="closedpostboxesnonce" value="138edb47b7"><input type="hidden" id="meta-box-order-nonce" name="meta-box-order-nonce" value="337f44be8f">	</div><!-- dashboard-widgets-wrap -->
+
+</div><!-- wrap -->
+
+
+	<script id="tmpl-community-events-attend-event-near" type="text/template">
+		Attend an upcoming event near <strong>{{ data.location.description }}</strong>.	</script>
+
+	<script id="tmpl-community-events-could-not-locate" type="text/template">
+		<em>{{data.unknownCity}}</em> could not be located. Please try another nearby city. For example: Kansas City; Springfield; Portland.	</script>
+
+	<script id="tmpl-community-events-event-list" type="text/template">
+		<# _.each( data.events, function( event ) { #>
+			<li class="event event-{{ event.type }} wp-clearfix">
+				<div class="event-info">
+					<div class="dashicons event-icon" aria-hidden="true"></div>
+					<div class="event-info-inner">
+						<a class="event-title" href="{{ event.url }}">{{ event.title }}</a>
+						<# if ( event.type ) {
+							const titleCaseEventType = event.type.replace(
+								/\w\S*/g,
+								function ( type ) { return type.charAt(0).toUpperCase() + type.substr(1).toLowerCase(); }
+							);
+						#>
+							{{ 'wordcamp' === event.type ? 'WordCamp' : titleCaseEventType }}
+							<span class="ce-separator" aria-hidden="true"></span>
+						<# } #>
+						<span class="event-city">{{ event.location.location }}</span>
+					</div>
+				</div>
+
+				<div class="event-date-time">
+					<span class="event-date">{{ event.user_formatted_date }}</span>
+					<# if ( 'meetup' === event.type ) { #>
+						<span class="event-time">
+							{{ event.user_formatted_time }} {{ event.timeZoneAbbreviation }}
+						</span>
+					<# } #>
+				</div>
+			</li>
+		<# } ) #>
+
+		<# if ( data.events.length <= 2 ) { #>
+			<li class="event-none">
+				Want more events? <a href="https://make.wordpress.org/community/organize-event-landing-page/">Help organize the next one</a>!			</li>
+		<# } #>
+
+	</script>
+
+	<script id="tmpl-community-events-no-upcoming-events" type="text/template">
+		<li class="event-none">
+			<# if ( data.location.description ) { #>
+				There are no events scheduled near {{ data.location.description }} at the moment. Would you like to <a href="https://make.wordpress.org/community/handbook/meetup-organizer/welcome/">organize a WordPress event</a>?
+			<# } else { #>
+				There are no events scheduled near you at the moment. Would you like to <a href="https://make.wordpress.org/community/handbook/meetup-organizer/welcome/">organize a WordPress event</a>?			<# } #>
+		</li>
+	</script>
+	
+<div class="clear"></div></div><!-- wpbody-content -->
+<div class="clear"></div></div><!-- wpbody -->
+<div class="clear"></div></div><!-- wpcontent -->
+
+<div id="wpfooter" role="contentinfo">
+		<p id="footer-left" class="alignleft">
+		<span id="footer-thankyou">Thank you for creating with <a href="https://wordpress.org/">WordPress</a>.</span>	</p>
+	<p id="footer-upgrade" class="alignright">
+		Version 6.9.1	</p>
+	<div class="clear"></div>
+</div>
+	
+		<script type="text/javascript">
+			function autoPluginInstall(el) {
+
+				let data = {
+					'action': 'auto_plugin_install',
+					'data': el.dataset,
+					'nonce': 'c043cfdd12'
+				};
+
+				el.disabled = true;
+				let $button = jQuery(el);
+
+				$button.parent().find('.auto-plugin-install-loader').show();
+
+				// since 2.8 ajaxurl is always defined in the admin header and points to admin-ajax.php.
+				jQuery.post(ajaxurl, data, function (response) {
+					$button.parent().find('.auto-plugin-install-loader').hide();
+					response = JSON.parse(response);
+					$button.parent().find('.auto-plugin-install-message').text(response.message);
+
+					if (response.success) {
+						if (el.dataset.redirect) {
+							location.href = el.dataset.redirect;
+						} else {
+							location.reload();
+						}
+					}
+				}).fail( function(response){
+					$button.parent().find('.auto-plugin-install-loader').hide();
+					$button.parent().find('.auto-plugin-install-message').text(response.responseText);
+				});
+			}
+		</script>
+			
+		<script type="text/javascript">
+			function autoPluginInstall(el) {
+
+				let data = {
+					'action': 'auto_plugin_install',
+					'data': el.dataset,
+					'nonce': 'c043cfdd12'
+				};
+
+				el.disabled = true;
+				let $button = jQuery(el);
+
+				$button.parent().find('.auto-plugin-install-loader').show();
+
+				// since 2.8 ajaxurl is always defined in the admin header and points to admin-ajax.php.
+				jQuery.post(ajaxurl, data, function (response) {
+					$button.parent().find('.auto-plugin-install-loader').hide();
+					response = JSON.parse(response);
+					$button.parent().find('.auto-plugin-install-message').text(response.message);
+
+					if (response.success) {
+						if (el.dataset.redirect) {
+							location.href = el.dataset.redirect;
+						} else {
+							location.reload();
+						}
+					}
+				}).fail( function(response){
+					$button.parent().find('.auto-plugin-install-loader').hide();
+					$button.parent().find('.auto-plugin-install-message').text(response.responseText);
+				});
+			}
+		</script>
+		<script type="text/javascript">list_args = {"class":"WP_Comments_List_Table","screen":{"id":"dashboard","base":"dashboard"}};</script>
+<script type="text/javascript">list_args = {"class":"WP_Comments_List_Table","screen":{"id":"dashboard","base":"dashboard"}};</script>
+            <script type="application/javascript">
+                document.addEventListener('DOMContentLoaded', function () {
+                    // send an ajax request to ajax url with raw javascript
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('POST', 'https://stride.ddev.site/wp/wp-admin/admin-ajax.php?action=fluent_smtp_get_dashboard_html', true);
+                    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                    xhr.onreadystatechange = function () {
+                        if (xhr.readyState === 4 && xhr.status === 200) {
+                            var response = JSON.parse(xhr.responseText);
+                            if (response && response.html) {
+                                document.getElementById('fsmtp_dashboard_widget_html').innerHTML = response.html;
+                            } else {
+                                document.getElementById('fsmtp_dashboard_widget_html').innerHTML = '<h3>Failed to load FluentSMTP Reports</h3>';
+                            }
+                        }
+                    };
+
+                    xhr.send();
+                });
+            </script>
+            		<script>
+		jQuery( function() {
+		if(jQuery(".toplevel_page_learndash-lms").length && jQuery(".toplevel_page_learndash-lms").find("li").length <= 1)
+			jQuery(".toplevel_page_learndash-lms").hide();
+		});
+		</script>
+		<div id="wp-auth-check-wrap" class="hidden">
+	<div id="wp-auth-check-bg"></div>
+	<div id="wp-auth-check">
+	<button type="button" class="wp-auth-check-close button-link"><span class="screen-reader-text">
+		Close dialog	</span></button>
+			<div id="wp-auth-check-form" class="loading" data-src="https://stride.ddev.site/wp/wp-login.php?interim-login=1&amp;wp_lang=en_US"></div>
+			<div class="wp-auth-fallback">
+		<p><b class="wp-auth-fallback-expired" tabindex="0">Session expired</b></p>
+		<p><a href="https://stride.ddev.site/wp/wp-login.php" target="_blank">Please log in again.</a>
+		The login page will open in a new tab. After logging in you can close it and return to this page.</p>
+	</div>
+	</div>
+	</div>
+				<script type="text/javascript">
+				if (typeof QTags !== 'undefined') {
+					QTags.addButton( 'learndash_shortcodes', '[ld]', learndash_shortcodes_qt_callback, '', '', '', 'LearnDash Shortcodes' );
+
+					// In the QTags.addButton we need to call this intermediate function because learndash_shortcodes is now loaded yet.
+					function learndash_shortcodes_qt_callback() {
+						learndash_shortcodes.qt_callback();
+					}
+				}
+			</script>
+			<link rel="stylesheet" id="wp-jquery-ui-dialog-css" href="https://stride.ddev.site/wp/wp-includes/css/jquery-ui-dialog.css?ver=6.9.1" media="all">
+<script src="https://stride.ddev.site/wp/wp-includes/js/hoverIntent.js?ver=1.10.2" id="hoverIntent-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/dom-ready.js?ver=e8a78afc9e733da0e68c" id="wp-dom-ready-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/hooks.js?ver=220ff17f5667d013d468" id="wp-hooks-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/i18n.js?ver=6b3ae5bd3b8d9598492d" id="wp-i18n-js"></script>
+<script id="wp-i18n-js-after">
+wp.i18n.setLocaleData( { 'text direction\u0004ltr': [ 'ltr' ] } );
+//# sourceURL=wp-i18n-js-after
+</script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/a11y.js?ver=454e8a3cffdca128c277" id="wp-a11y-js"></script>
+<script id="common-js-extra">
+var bulkActionObserverIds = {"bulk_action":"action","changeit":"new_role"};
+//# sourceURL=common-js-extra
+</script>
+<script src="https://stride.ddev.site/wp/wp-admin/js/common.js?ver=6.9.1" id="common-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/hoverintent-js.min.js?ver=2.2.1" id="hoverintent-js-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/admin-bar.js?ver=6.9.1" id="admin-bar-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/clipboard.js?ver=2.0.11" id="clipboard-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/underscore.min.js?ver=1.13.7" id="underscore-js"></script>
+<script id="wp-util-js-extra">
+var _wpUtilSettings = {"ajax":{"url":"/wp/wp-admin/admin-ajax.php"}};
+//# sourceURL=wp-util-js-extra
+</script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/wp-util.js?ver=6.9.1" id="wp-util-js"></script>
+<script id="wp-api-request-js-extra">
+var wpApiSettings = {"root":"https://stride.ddev.site/wp-json/","nonce":"a88cf4ee72","versionString":"wp/v2/"};
+//# sourceURL=wp-api-request-js-extra
+</script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/api-request.js?ver=6.9.1" id="wp-api-request-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/url.js?ver=6bc6a4c3049d91342459" id="wp-url-js"></script>
+<script id="site-health-js-extra">
+var SiteHealth = {"screen":"dashboard","nonce":{"site_status":"ff7e119f38","site_status_result":"b914ffa06b"},"site_status":{"direct":[],"async":[],"issues":{"good":16,"recommended":4,"critical":1}}};
+//# sourceURL=site-health-js-extra
+</script>
+<script src="https://stride.ddev.site/wp/wp-admin/js/site-health.js?ver=6.9.1" id="site-health-js"></script>
+<script id="wp-ajax-response-js-extra">
+var wpAjax = {"noPerm":"Sorry, you are not allowed to do that.","broken":"An error occurred while processing your request. Please try again later."};
+//# sourceURL=wp-ajax-response-js-extra
+</script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/wp-ajax-response.js?ver=6.9.1" id="wp-ajax-response-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/jquery/jquery.color.min.js?ver=3.0.0" id="jquery-color-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/wp-lists.js?ver=6.9.1" id="wp-lists-js"></script>
+<script id="quicktags-js-extra">
+var quicktagsL10n = {"closeAllOpenTags":"Close all open tags","closeTags":"close tags","enterURL":"Enter the URL","enterImageURL":"Enter the URL of the image","enterImageDescription":"Enter a description of the image","textdirection":"text direction","toggleTextdirection":"Toggle Editor Text Direction","dfw":"Distraction-free writing mode","strong":"Bold","strongClose":"Close bold tag","em":"Italic","emClose":"Close italic tag","link":"Insert link","blockquote":"Blockquote","blockquoteClose":"Close blockquote tag","del":"Deleted text (strikethrough)","delClose":"Close deleted text tag","ins":"Inserted text","insClose":"Close inserted text tag","image":"Insert image","ul":"Bulleted list","ulClose":"Close bulleted list tag","ol":"Numbered list","olClose":"Close numbered list tag","li":"List item","liClose":"Close list item tag","code":"Code","codeClose":"Close code tag","more":"Insert Read More tag"};
+//# sourceURL=quicktags-js-extra
+</script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/quicktags.js?ver=6.9.1" id="quicktags-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/jquery/jquery.query.js?ver=2.2.3" id="jquery-query-js"></script>
+<script id="admin-comments-js-extra">
+var adminCommentsSettings = {"hotkeys_highlight_first":"","hotkeys_highlight_last":""};
+//# sourceURL=admin-comments-js-extra
+</script>
+<script src="https://stride.ddev.site/wp/wp-admin/js/edit-comments.js?ver=6.9.1" id="admin-comments-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/jquery/ui/core.js?ver=1.13.3" id="jquery-ui-core-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/jquery/ui/mouse.js?ver=1.13.3" id="jquery-ui-mouse-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/jquery/ui/sortable.js?ver=1.13.3" id="jquery-ui-sortable-js"></script>
+<script src="https://stride.ddev.site/wp/wp-admin/js/postbox.js?ver=6.9.1" id="postbox-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/vendor/moment.js?ver=2.30.1" id="moment-js"></script>
+<script id="moment-js-after">
+moment.updateLocale( 'en_US', {"months":["January","February","March","April","May","June","July","August","September","October","November","December"],"monthsShort":["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],"weekdays":["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],"weekdaysShort":["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],"week":{"dow":1},"longDateFormat":{"LT":"g:i a","LTS":null,"L":null,"LL":"F j, Y","LLL":"F j, Y g:i a","LLLL":null}} );
+//# sourceURL=moment-js-after
+</script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/deprecated.js?ver=6c0519d363872604d48f" id="wp-deprecated-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/date.js?ver=90011238ea6662a51b76" id="wp-date-js"></script>
+<script id="wp-date-js-after">
+wp.date.setSettings( {"l10n":{"locale":"en_US","months":["January","February","March","April","May","June","July","August","September","October","November","December"],"monthsShort":["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],"weekdays":["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],"weekdaysShort":["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],"meridiem":{"am":"am","pm":"pm","AM":"AM","PM":"PM"},"relative":{"future":"%s from now","past":"%s ago","s":"a second","ss":"%d seconds","m":"a minute","mm":"%d minutes","h":"an hour","hh":"%d hours","d":"a day","dd":"%d days","M":"a month","MM":"%d months","y":"a year","yy":"%d years"},"startOfWeek":1},"formats":{"time":"g:i a","date":"F j, Y","datetime":"F j, Y g:i a","datetimeAbbreviated":"M j, Y g:i a"},"timezone":{"offset":0,"offsetFormatted":"0","string":"","abbr":""}} );
+//# sourceURL=wp-date-js-after
+</script>
+<script id="dashboard-js-extra">
+var communityEventsData = {"nonce":"6b680419d9","cache":{"sandboxed":false,"error":null,"location":{"ip":"172.18.0.0"},"events":[{"type":"wordcamp","title":"WordCamp Mannheim 2026","url":"https://mannheim.wordcamp.org/2026/","meetup":"","meetup_url":"","date":"2026-07-03 17:00:00","end_date":"2026-07-04 00:00:00","start_unix_timestamp":1783090800,"end_unix_timestamp":1783116000,"location":{"location":"Mannheim, Germany","country":"DE","latitude":49.4820104,"longitude":8.4674385}}]},"time_format":"g:i a"};
+//# sourceURL=dashboard-js-extra
+</script>
+<script src="https://stride.ddev.site/wp/wp-admin/js/dashboard.js?ver=6.9.1" id="dashboard-js"></script>
+<script id="thickbox-js-extra">
+var thickboxL10n = {"next":"Next \u003E","prev":"\u003C Prev","image":"Image","of":"of","close":"Close","noiframes":"This feature requires inline frames. You have iframes disabled or your browser does not support them.","loadingAnimation":"https://stride.ddev.site/wp/wp-includes/js/thickbox/loadingAnimation.gif"};
+//# sourceURL=thickbox-js-extra
+</script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/thickbox/thickbox.js?ver=3.1-20121105" id="thickbox-js"></script>
+<script src="https://stride.ddev.site/wp/wp-admin/js/plugin-install.js?ver=6.9.1" id="plugin-install-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/wp-sanitize.js?ver=6.9.1" id="wp-sanitize-js"></script>
+<script id="updates-js-extra">
+var _wpUpdatesSettings = {"ajax_nonce":"a7956df504"};
+//# sourceURL=updates-js-extra
+</script>
+<script src="https://stride.ddev.site/wp/wp-admin/js/updates.js?ver=6.9.1" id="updates-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/shortcode.js?ver=6.9.1" id="shortcode-js"></script>
+<script src="https://stride.ddev.site/wp/wp-admin/js/media-upload.js?ver=6.9.1" id="media-upload-js"></script>
+<script src="https://stride.ddev.site/wp/wp-admin/js/svg-painter.js?ver=6.9.1" id="svg-painter-js"></script>
+<script src="https://stride.ddev.site/app/plugins/tin-canny-learndash-reporting/src/assets/admin/js/dist/runtime.min.js" id="tc_runtime-js"></script>
+<script src="https://stride.ddev.site/app/plugins/tin-canny-learndash-reporting/src/assets/admin/js/dist/vendors.min.js" id="tc_vendors-js"></script>
+<script src="https://stride.ddev.site/app/plugins/sfwd-lms/includes/reports/dist/vendor/flatpickr/flatpickr.min.js?ver=2.2.2" id="ld-propanel-flatpickr-script-js"></script>
+<script src="https://stride.ddev.site/app/plugins/sfwd-lms/includes/reports/dist/vendor/select2-jquery/js/select2.full.min.js?ver=4.0.3" id="ld-propanel-select2-script-js"></script>
+<script id="ld-propanel-script-js-extra">
+var ld_propanel_settings = {"nonce":"cd59a3081e","ajaxurl":"https://stride.ddev.site/wp/wp-admin/admin-ajax.php","spinner_admin_img":"https://stride.ddev.site/wp/wp-admin/images/spinner.gif","is_dashboard":"1","is_debug":"","template_load_delay":"1000","default_per_page":"5","lang":"","flatpickr_locale":{"months":{"longhand":["January","February","March","April","May","June","July","August","September","October","November","December"],"shorthand":["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]},"weekdays":{"longhand":["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],"shorthand":["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]},"time_24hr":0,"hourAriaLabel":"Hour","minuteAriaLabel":"Minute","monthAriaLabel":"Month","rangeSeparator":" to ","scrollTitle":"Scroll to increment","toggleTitle":"Click to toggle","weekAbbreviation":"Wk","yearAriaLabel":"Year"},"flatpickr_date_time_format":"F j, Y G:i K"};
+var ld_propanel_reporting = {"filename":"learndash-report-2026-02-23.csv","ajax_email_error":"ProPanel Email: AJAX submission could not complete, please try again."};
+var ld_propanel_reporting = {"filename":"learndash-report-2026-02-23.csv","ajax_email_error":"ProPanel Email: AJAX submission could not complete, please try again."};
+var ld_propanel_reporting = {"filename":"learndash-report-2026-02-23.csv","ajax_email_error":"ProPanel Email: AJAX submission could not complete, please try again."};
+var ld_propanel_reporting = {"filename":"learndash-report-2026-02-23.csv","ajax_email_error":"ProPanel Email: AJAX submission could not complete, please try again."};
+var ld_propanel_reporting = {"filename":"learndash-report-2026-02-23.csv","ajax_email_error":"ProPanel Email: AJAX submission could not complete, please try again."};
+//# sourceURL=ld-propanel-script-js-extra
+</script>
+<script src="https://stride.ddev.site/app/plugins/sfwd-lms/includes/reports/dist/js/ld-propanel.js?ver=2.2.2" id="ld-propanel-script-js"></script>
+<script id="learndash_template_script_js-js-extra">
+var sfwd_data = {"json":"{\"ajaxurl\":\"https:\\/\\/stride.ddev.site\\/wp\\/wp-admin\\/admin-ajax.php\"}"};
+//# sourceURL=learndash_template_script_js-js-extra
+</script>
+<script src="//stride.ddev.site/app/plugins/sfwd-lms/themes/legacy/templates/learndash_template_script.js?ver=5.0.0-1771876077" id="learndash_template_script_js-js"></script>
+<script id="heartbeat-js-extra">
+var heartbeatSettings = {"nonce":"8f53dc4d89"};
+//# sourceURL=heartbeat-js-extra
+</script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/heartbeat.js?ver=6.9.1" id="heartbeat-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/wp-auth-check.js?ver=6.9.1" id="wp-auth-check-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/vendor/react.js?ver=18.3.1.1" id="react-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/vendor/react-dom.js?ver=18.3.1.1" id="react-dom-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/vendor/react-jsx-runtime.js?ver=18.3.1" id="react-jsx-runtime-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/dom.js?ver=ce91312aee495c65e891" id="wp-dom-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/escape-html.js?ver=6cade854f375b3091114" id="wp-escape-html-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/element.js?ver=a63ee6ce984c02a99fa7" id="wp-element-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/is-shallow-equal.js?ver=4554764360b974e32f5d" id="wp-is-shallow-equal-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/keycodes.js?ver=0ae26254e495f9f44348" id="wp-keycodes-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/priority-queue.js?ver=b617c70465159c57937b" id="wp-priority-queue-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/compose.js?ver=7c895b31cd7a903b5229" id="wp-compose-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/html-entities.js?ver=4ae2a0abe957ffc91832" id="wp-html-entities-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/primitives.js?ver=2a765d78f060aed119ff" id="wp-primitives-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/private-apis.js?ver=d7d926d9becc3eef5e24" id="wp-private-apis-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/redux-routine.js?ver=58e4c7cd114da148c2c4" id="wp-redux-routine-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/data.js?ver=c64d89d47908ae6c6928" id="wp-data-js"></script>
+<script id="wp-data-js-after">
+( function() {
+	var userId = 1;
+	var storageKey = "WP_DATA_USER_" + userId;
+	wp.data
+		.use( wp.data.plugins.persistence, { storageKey: storageKey } );
+} )();
+//# sourceURL=wp-data-js-after
+</script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/rich-text.js?ver=26b032e73cfbf9a8165e" id="wp-rich-text-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/warning.js?ver=9eb7f5c6957924ec4b81" id="wp-warning-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/components.js?ver=316cf67f025fcb3e30cc" id="wp-components-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/keyboard-shortcuts.js?ver=98dc6100b14191414e86" id="wp-keyboard-shortcuts-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/commands.js?ver=dc36b1bd84586300bf60" id="wp-commands-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/api-fetch.js?ver=dde45ae4bb2923c6d069" id="wp-api-fetch-js"></script>
+<script id="wp-api-fetch-js-after">
+wp.apiFetch.use( wp.apiFetch.createRootURLMiddleware( "https://stride.ddev.site/wp-json/" ) );
+wp.apiFetch.nonceMiddleware = wp.apiFetch.createNonceMiddleware( "a88cf4ee72" );
+wp.apiFetch.use( wp.apiFetch.nonceMiddleware );
+wp.apiFetch.use( wp.apiFetch.mediaUploadMiddleware );
+wp.apiFetch.nonceEndpoint = "https://stride.ddev.site/wp/wp-admin/admin-ajax.php?action=rest-nonce";
+//# sourceURL=wp-api-fetch-js-after
+</script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/blob.js?ver=e1b9669561b45fc50da4" id="wp-blob-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/block-serialization-default-parser.js?ver=6f4152c4a3466c0e1107" id="wp-block-serialization-default-parser-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/autop.js?ver=4253b2f13990616d5356" id="wp-autop-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/shortcode.js?ver=c4ba248a967c40b8582c" id="wp-shortcode-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/blocks.js?ver=038adc2b455e24b7ce0e" id="wp-blocks-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/notices.js?ver=bce2bc515ebefc1c8fdb" id="wp-notices-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/preferences-persistence.js?ver=c2f2335b9574eb86f052" id="wp-preferences-persistence-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/preferences.js?ver=82e07780e2bc6c33ac54" id="wp-preferences-js"></script>
+<script id="wp-preferences-js-after">
+( function() {
+				var serverData = {"stellarwp/admin-notices/learndash":{"learndash_course_grid_merge":1770848834,"learndash_course_reviews_merge":1770848836,"learndash-invalid-license":1770921962},"_modified":"2026-02-15T07:41:09.416Z","core":{"isComplementaryAreaVisible":true,"openPanels":["post-status","taxonomy-panel-ld_lesson_tag","taxonomy-panel-ld_lesson_category"]},"core/edit-post":{"welcomeGuide":false,"fullscreenMode":false}};
+				var userId = "1";
+				var persistenceLayer = wp.preferencesPersistence.__unstableCreatePersistenceLayer( serverData, userId );
+				var preferencesStore = wp.preferences.store;
+				wp.data.dispatch( preferencesStore ).setPersistenceLayer( persistenceLayer );
+			} ) ();
+//# sourceURL=wp-preferences-js-after
+</script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/style-engine.js?ver=e9af2fb3cca3fc5b8836" id="wp-style-engine-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/token-list.js?ver=2dbca0e379f5b7d539a9" id="wp-token-list-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/block-editor.js?ver=eae9c1c1fdbcd744c9d5" id="wp-block-editor-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/core-data.js?ver=164cd7b3a5ff5fbcb9c6" id="wp-core-data-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/router.js?ver=a276444c22bcd59e25c6" id="wp-router-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/dist/core-commands.js?ver=2aa6475e85b024c6a8d7" id="wp-core-commands-js"></script>
+<script id="wp-core-commands-js-after">
+wp.coreCommands.initializeCommandPalette( {"is_network_admin":false,"menu_commands":[{"label":"Dashboard","url":"index.php","name":"index.php"},{"label":"Dashboard \u003E Home","url":"index.php","name":"index.php-index.php"},{"label":"Dashboard \u003E Updates","url":"update-core.php","name":"index.php-update-core.php"},{"label":"LearnDash LMS","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=learndash-lms","name":"learndash-lms"},{"label":"LearnDash LMS \u003E Setup","url":"admin.php?page=learndash-setup","name":"learndash-lms-admin.php?page=learndash-setup"},{"label":"LearnDash LMS \u003E Courses","url":"edit.php?post_type=sfwd-courses","name":"learndash-lms-edit.php?post_type=sfwd-courses"},{"label":"LearnDash LMS \u003E Lessons","url":"edit.php?post_type=sfwd-lessons","name":"learndash-lms-edit.php?post_type=sfwd-lessons"},{"label":"LearnDash LMS \u003E Topics","url":"edit.php?post_type=sfwd-topic","name":"learndash-lms-edit.php?post_type=sfwd-topic"},{"label":"LearnDash LMS \u003E Quizzes","url":"edit.php?post_type=sfwd-quiz","name":"learndash-lms-edit.php?post_type=sfwd-quiz"},{"label":"LearnDash LMS \u003E Questions","url":"edit.php?post_type=sfwd-question","name":"learndash-lms-edit.php?post_type=sfwd-question"},{"label":"LearnDash LMS \u003E Certificates","url":"edit.php?post_type=sfwd-certificates","name":"learndash-lms-edit.php?post_type=sfwd-certificates"},{"label":"LearnDash LMS \u003E Groups","url":"edit.php?post_type=groups","name":"learndash-lms-edit.php?post_type=groups"},{"label":"LearnDash LMS \u003E Challenge Exams","url":"edit.php?post_type=ld-exam","name":"learndash-lms-edit.php?post_type=ld-exam"},{"label":"LearnDash LMS \u003E Reports","url":"admin.php?page=learndash-lms-reports","name":"learndash-lms-admin.php?page=learndash-lms-reports"},{"label":"LearnDash LMS \u003E Assignments","url":"edit.php?post_type=sfwd-assignment","name":"learndash-lms-edit.php?post_type=sfwd-assignment"},{"label":"LearnDash LMS \u003E Orders","url":"edit.php?post_type=sfwd-transactions","name":"learndash-lms-edit.php?post_type=sfwd-transactions"},{"label":"LearnDash LMS \u003E Help","url":"admin.php?page=learndash-help","name":"learndash-lms-admin.php?page=learndash-help"},{"label":"LearnDash LMS \u003E Add-ons","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=learndash-hub","name":"learndash-lms-learndash-hub"},{"label":"LearnDash LMS \u003E Grant Support Access","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=grant-learndash-access","name":"learndash-lms-grant-learndash-access"},{"label":"LearnDash LMS \u003E Settings","url":"admin.php?page=learndash_lms_settings","name":"learndash-lms-admin.php?page=learndash_lms_settings"},{"label":"Stride","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=stride-dashboard","name":"stride-dashboard"},{"label":"Stride \u003E Dashboard","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=stride-dashboard","name":"stride-dashboard-stride-dashboard"},{"label":"Stride \u003E Edities","url":"edit.php?post_type=vad_edition","name":"stride-dashboard-edit.php?post_type=vad_edition"},{"label":"Stride \u003E Offertes","url":"edit.php?post_type=vad_quote","name":"stride-dashboard-edit.php?post_type=vad_quote"},{"label":"Stride \u003E Vouchers","url":"edit.php?post_type=vad_voucher","name":"stride-dashboard-edit.php?post_type=vad_voucher"},{"label":"Stride \u003E Trajecten","url":"edit.php?post_type=vad_trajectory","name":"stride-dashboard-edit.php?post_type=vad_trajectory"},{"label":"Stride \u003E Instellingen","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=stride-settings","name":"stride-dashboard-stride-settings"},{"label":"FluentCRM","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin","name":"fluentcrm-admin"},{"label":"FluentCRM \u003E Dashboard","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin","name":"fluentcrm-admin-fluentcrm-admin"},{"label":"FluentCRM \u003E Contacts","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/subscribers","name":"fluentcrm-admin-fluentcrm-admin#/subscribers"},{"label":"FluentCRM \u003E Lists","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/contact-groups/lists","name":"fluentcrm-admin-fluentcrm-admin#/contact-groups/lists"},{"label":"FluentCRM \u003E Tags","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/contact-groups/tags","name":"fluentcrm-admin-fluentcrm-admin#/contact-groups/tags"},{"label":"FluentCRM \u003E Campaigns","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/email/campaigns","name":"fluentcrm-admin-fluentcrm-admin#/email/campaigns"},{"label":"FluentCRM \u003E Recurring Campaigns","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/email/recurring-campaigns","name":"fluentcrm-admin-fluentcrm-admin#/email/recurring-campaigns"},{"label":"FluentCRM \u003E Email Sequences","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/email/sequences","name":"fluentcrm-admin-fluentcrm-admin#/email/sequences"},{"label":"FluentCRM \u003E Email Templates","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/email/templates","name":"fluentcrm-admin-fluentcrm-admin#/email/templates"},{"label":"FluentCRM \u003E Forms","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/forms","name":"fluentcrm-admin-fluentcrm-admin#/forms"},{"label":"FluentCRM \u003E Automations","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/funnels","name":"fluentcrm-admin-fluentcrm-admin#/funnels"},{"label":"FluentCRM \u003E Settings","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/settings","name":"fluentcrm-admin-fluentcrm-admin#/settings"},{"label":"FluentCRM \u003E Reports","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/reports","name":"fluentcrm-admin-fluentcrm-admin#/reports"},{"label":"FluentCRM \u003E Addons","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/add-ons","name":"fluentcrm-admin-fluentcrm-admin#/add-ons"},{"label":"FluentCRM \u003E Help","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/documentation","name":"fluentcrm-admin-fluentcrm-admin#/documentation"},{"label":"Fluent Forms","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluent_forms","name":"fluent_forms"},{"label":"Fluent Forms \u003E Forms","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluent_forms","name":"fluent_forms-fluent_forms"},{"label":"Fluent Forms \u003E New Form","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluent_forms#add=1","name":"fluent_forms-fluent_forms#add=1"},{"label":"Fluent Forms \u003E Entries","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluent_forms_all_entries","name":"fluent_forms-fluent_forms_all_entries"},{"label":"Fluent Forms \u003E Reports","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluent_forms_reports","name":"fluent_forms-fluent_forms_reports"},{"label":"Fluent Forms \u003E Global Settings","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluent_forms_settings","name":"fluent_forms-fluent_forms_settings"},{"label":"Fluent Forms \u003E Tools","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluent_forms_transfer","name":"fluent_forms-fluent_forms_transfer"},{"label":"Fluent Forms \u003E SMTP","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluent_forms_smtp","name":"fluent_forms-fluent_forms_smtp"},{"label":"Fluent Forms \u003E Integrations","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluent_forms_add_ons","name":"fluent_forms-fluent_forms_add_ons"},{"label":"Fluent Forms \u003E Support","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluent_forms_docs","name":"fluent_forms-fluent_forms_docs"},{"label":"Posts","url":"edit.php","name":"edit.php"},{"label":"Posts \u003E All Posts","url":"edit.php","name":"edit.php-edit.php"},{"label":"Posts \u003E Add Post","url":"post-new.php","name":"edit.php-post-new.php"},{"label":"Posts \u003E Categories","url":"edit-tags.php?taxonomy=category","name":"edit.php-edit-tags.php?taxonomy=category"},{"label":"Posts \u003E Tags","url":"edit-tags.php?taxonomy=post_tag","name":"edit.php-edit-tags.php?taxonomy=post_tag"},{"label":"Media","url":"upload.php","name":"upload.php"},{"label":"Media \u003E Library","url":"upload.php","name":"upload.php-upload.php"},{"label":"Media \u003E Add Media File","url":"media-new.php","name":"upload.php-media-new.php"},{"label":"Pages","url":"edit.php?post_type=page","name":"edit.php?post_type=page"},{"label":"Pages \u003E All Pages","url":"edit.php?post_type=page","name":"edit.php?post_type=page-edit.php?post_type=page"},{"label":"Pages \u003E Add Page","url":"post-new.php?post_type=page","name":"edit.php?post_type=page-post-new.php?post_type=page"},{"label":"Comments","url":"edit-comments.php","name":"edit-comments.php"},{"label":"Uncanny Toolkit","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=uncanny-toolkit","name":"uncanny-toolkit"},{"label":"Uncanny Toolkit \u003E Modules","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=uncanny-toolkit","name":"uncanny-toolkit-uncanny-toolkit"},{"label":"Uncanny Toolkit \u003E ","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=install-automator","name":"uncanny-toolkit-install-automator"},{"label":"Uncanny Toolkit \u003E Help","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=uncanny-toolkit-kb","name":"uncanny-toolkit-uncanny-toolkit-kb"},{"label":"Uncanny Toolkit \u003E LearnDash Plugins","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=uncanny-toolkit-plugins","name":"uncanny-toolkit-uncanny-toolkit-plugins"},{"label":"Uncanny Toolkit \u003E Upgrade to Pro","url":"https://www.uncannyowl.com/downloads/uncanny-learndash-toolkit-pro/?utm_source=uncanny_toolkit&utm_medium=plugins_page&utm_content=update_to_pro","name":"uncanny-toolkit-https://www.uncannyowl.com/downloads/uncanny-learndash-toolkit-pro/?utm_source=uncanny_toolkit&utm_medium=plugins_page&utm_content=update_to_pro"},{"label":"Appearance","url":"themes.php","name":"themes.php"},{"label":"Appearance \u003E Themes","url":"themes.php","name":"themes.php-themes.php"},{"label":"Appearance \u003E Patterns","url":"site-editor.php?p=/pattern","name":"themes.php-site-editor.php?p=/pattern"},{"label":"Appearance \u003E Customize","url":"customize.php?return=%2Fwp%2Fwp-admin%2F","name":"themes.php-customize.php?return=%2Fwp%2Fwp-admin%2F"},{"label":"Appearance \u003E Menus","url":"nav-menus.php","name":"themes.php-nav-menus.php"},{"label":"Plugins","url":"plugins.php","name":"plugins.php"},{"label":"Plugins \u003E Installed Plugins","url":"plugins.php","name":"plugins.php-plugins.php"},{"label":"Plugins \u003E Add Plugin","url":"plugin-install.php","name":"plugins.php-plugin-install.php"},{"label":"Users","url":"users.php","name":"users.php"},{"label":"Users \u003E All Users","url":"users.php","name":"users.php-users.php"},{"label":"Users \u003E Add User","url":"user-new.php","name":"users.php-user-new.php"},{"label":"Users \u003E Profile","url":"profile.php","name":"users.php-profile.php"},{"label":"Tools","url":"tools.php","name":"tools.php"},{"label":"Tools \u003E Available Tools","url":"tools.php","name":"tools.php-tools.php"},{"label":"Tools \u003E Import","url":"import.php","name":"tools.php-import.php"},{"label":"Tools \u003E Export","url":"export.php","name":"tools.php-export.php"},{"label":"Tools \u003E Site Health","url":"site-health.php","name":"tools.php-site-health.php"},{"label":"Tools \u003E Export Personal Data","url":"export-personal-data.php","name":"tools.php-export-personal-data.php"},{"label":"Tools \u003E Erase Personal Data","url":"erase-personal-data.php","name":"tools.php-erase-personal-data.php"},{"label":"Tools \u003E Audit Log","url":"https://stride.ddev.site/wp/wp-admin/tools.php?page=ntdst-audit-log","name":"tools.php-ntdst-audit-log"},{"label":"Tools \u003E Scheduled Actions","url":"https://stride.ddev.site/wp/wp-admin/tools.php?page=action-scheduler","name":"tools.php-action-scheduler"},{"label":"Settings","url":"options-general.php","name":"options-general.php"},{"label":"Settings \u003E General","url":"options-general.php","name":"options-general.php-options-general.php"},{"label":"Settings \u003E Writing","url":"options-writing.php","name":"options-general.php-options-writing.php"},{"label":"Settings \u003E Reading","url":"options-reading.php","name":"options-general.php-options-reading.php"},{"label":"Settings \u003E Discussion","url":"options-discussion.php","name":"options-general.php-options-discussion.php"},{"label":"Settings \u003E Media","url":"options-media.php","name":"options-general.php-options-media.php"},{"label":"Settings \u003E Permalinks","url":"options-permalink.php","name":"options-general.php-options-permalink.php"},{"label":"Settings \u003E Privacy","url":"options-privacy.php","name":"options-general.php-options-privacy.php"},{"label":"Settings \u003E FluentSMTP","url":"https://stride.ddev.site/wp/wp-admin/options-general.php?page=fluent-mail","name":"options-general.php-fluent-mail"},{"label":"Settings \u003E Netdust LTI","url":"https://stride.ddev.site/wp/wp-admin/options-general.php?page=netdust-lti","name":"options-general.php-netdust-lti"},{"label":"Settings \u003E Authentication","url":"https://stride.ddev.site/wp/wp-admin/options-general.php?page=ntdst-auth","name":"options-general.php-ntdst-auth"},{"label":"Tin Canny Reporting","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=uncanny-learnDash-reporting","name":"uncanny-learnDash-reporting"},{"label":"Tin Canny Reporting \u003E Course Report","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=uncanny-learnDash-reporting","name":"uncanny-learnDash-reporting-uncanny-learnDash-reporting"},{"label":"Tin Canny Reporting \u003E User Report","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=uncanny-tincanny-user-report","name":"uncanny-learnDash-reporting-uncanny-tincanny-user-report"},{"label":"Tin Canny Reporting \u003E Tin Can Report","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=uncanny-tincanny-tin-can-report","name":"uncanny-learnDash-reporting-uncanny-tincanny-tin-can-report"},{"label":"Tin Canny Reporting \u003E xAPI Quiz Report","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=uncanny-tincanny-xapi-quiz-report","name":"uncanny-learnDash-reporting-uncanny-tincanny-xapi-quiz-report"},{"label":"Tin Canny Reporting \u003E Manage Content","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=manage-content","name":"uncanny-learnDash-reporting-manage-content"},{"label":"Tin Canny Reporting \u003E Settings","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=snc_options","name":"uncanny-learnDash-reporting-snc_options"},{"label":"Tin Canny Reporting \u003E ","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=tincanny-install-automator","name":"uncanny-learnDash-reporting-tincanny-install-automator"},{"label":"Tin Canny Reporting \u003E Help","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=uncanny-tincanny-kb","name":"uncanny-learnDash-reporting-uncanny-tincanny-kb"},{"label":"Tin Canny Reporting \u003E LearnDash Plugins","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=uncanny-tincanny-plugins","name":"uncanny-learnDash-reporting-uncanny-tincanny-plugins"},{"label":"Tin Canny Reporting \u003E Site check","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=uncanny-tincanny-site-check","name":"uncanny-learnDash-reporting-uncanny-tincanny-site-check"},{"label":"Tin Canny Reporting \u003E License activation","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=uncanny-reporting-license-activation","name":"uncanny-learnDash-reporting-uncanny-reporting-license-activation"}]} );
+//# sourceURL=wp-core-commands-js-after
+</script>
+<script data-stellarwp-namespace="learndash" defer="" src="https://stride.ddev.site/app/plugins/sfwd-lms/vendor-prefixed/stellarwp/admin-notices/src/resources/admin-notices.js?ver=1771583497" id="learndash-admin-notices-js"></script>
+<script src="//stride.ddev.site/app/plugins/sfwd-lms/assets/js/learndash-admin-menu.js?ver=5.0.0-1771876077" id="learndash-admin-menu-script-js"></script>
+<script src="//stride.ddev.site/app/plugins/sfwd-lms/src/assets/dist/js/admin/modules/experiments/action-items.js?ver=5.0.0-1771876077" id="learndash-experiments-action-items-js"></script>
+<script id="sfwd-module-script-js-extra">
+var sfwd_data = {"json":"{\"ajaxurl\":\"https:\\/\\/stride.ddev.site\\/wp\\/wp-admin\\/admin-ajax.php\"}"};
+//# sourceURL=sfwd-module-script-js-extra
+</script>
+<script src="//stride.ddev.site/app/plugins/sfwd-lms/assets/js/sfwd_module.js?ver=5.0.0-1771876077" id="sfwd-module-script-js"></script>
+<script id="learndash_admin_shortcodes_script-js-extra">
+var learndash_admin_shortcodes_assets = {"popup_title":"LearnDash Shortcodes","popup_type":"jQuery-dialog","typenow":"","pagenow":"index.php","nonce":"7300ab6b22"};
+//# sourceURL=learndash_admin_shortcodes_script-js-extra
+</script>
+<script src="//stride.ddev.site/app/plugins/sfwd-lms/assets/js/learndash-admin-shortcodes.js?ver=5.0.0-1771876077" id="learndash_admin_shortcodes_script-js"></script>
+<script src="//stride.ddev.site/app/plugins/sfwd-lms/assets/vendor-libs/select2-jquery/js/select2.full.min.js?ver=5.0.0-1771876077" id="learndash-select2-jquery-script-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/jquery/ui/resizable.js?ver=1.13.3" id="jquery-ui-resizable-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/jquery/ui/draggable.js?ver=1.13.3" id="jquery-ui-draggable-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/jquery/ui/controlgroup.js?ver=1.13.3" id="jquery-ui-controlgroup-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/jquery/ui/checkboxradio.js?ver=1.13.3" id="jquery-ui-checkboxradio-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/jquery/ui/button.js?ver=1.13.3" id="jquery-ui-button-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/jquery/ui/dialog.js?ver=1.13.3" id="jquery-ui-dialog-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/jquery/ui/slider.js?ver=1.13.3" id="jquery-ui-slider-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/jquery/jquery.ui.touch-punch.js?ver=0.2.2" id="jquery-touch-punch-js"></script>
+<script src="https://stride.ddev.site/wp/wp-admin/js/iris.min.js?ver=1.1.1" id="iris-js"></script>
+<script src="https://stride.ddev.site/wp/wp-admin/js/color-picker.js?ver=6.9.1" id="wp-color-picker-js"></script>
+<script id="learndash-admin-settings-page-js-extra">
+var learndash_admin_settings_data = {"json":"{\"themes_inheriting_settings\":{\"breezy\":\"ld30\"},\"ajaxurl\":\"https:\\/\\/stride.ddev.site\\/wp\\/wp-admin\\/admin-ajax.php\",\"admin_notice_settings_fields_errors_container\":\"\u003Cdiv id=\\\"learndash-settings-fields-notice-errors\\\" class=\\\"learndash-settings-fields-notice-errors notice notice-error\\\"\u003E\u003Cp class=\\\"errors-header\\\"\u003EYou have errors on the following settings\u003C\\/p\u003E\u003Cul class=\\\"errors-list\\\"\u003E\u003C\\/ul\u003E\u003C\\/div\u003E\",\"selec2_language\":{\"loadingMore\":\"Loading more results\\u2026\",\"noResults\":\"No results found\",\"searching\":\"Searching\\u2026\",\"removeAllItems\":\"Remove all items\",\"removeItem\":\"Remove item\"},\"settings_fields_errors\":{\"number\":{\"invalid\":\"Entered value is invalid.\",\"empty\":\"Value cannot be empty.\",\"negative\":\"Entered value cannot be negative.\",\"decimal\":\"Entered value cannot contain decimal.\",\"minimum\":\"Entered value less than minimum.\",\"maximum\":\"Entered value greater than maximum.\"}},\"logs\":{\"actions\":{\"get_log_content\":{\"name\":\"get_log_content\",\"nonce\":\"ae5c37bae7\"},\"delete_log_content\":{\"name\":\"delete_log_content\",\"nonce\":\"dcc37be09e\"}}},\"import_file_size_limit\":104857600,\"import_file_empty\":\"Please select a valid file to import.\",\"import_file_size_limit_exceeded\":\"The file you are trying to upload is too large. Max size allowed: 100 MB\",\"in_progress_label\":\"in progress\",\"uploading_label\":\"Uploading...\",\"valid_recurring_paypal_day_range\":\"Valid range is 1 to 90 when the Billing Cycle is set to days.\",\"valid_recurring_paypal_week_range\":\"Valid range is 1 to 52 when the Billing Cycle is set to weeks.\",\"valid_recurring_paypal_month_range\":\"Valid range is 1 to 24 when the Billing Cycle is set to months.\",\"valid_recurring_paypal_year_range\":\"Valid range is 1 to 5 when the Billing Cycle is set to years.\"}"};
+//# sourceURL=learndash-admin-settings-page-js-extra
+</script>
+<script src="//stride.ddev.site/app/plugins/sfwd-lms/assets/js/learndash-admin-settings-page.js?ver=5.0.0-1771876077" id="learndash-admin-settings-page-js"></script>
+<script id="tincanny-zip-uploader-js-extra">
+var tincannyZipUploadData = {"nonce":"b33a8e1411","rest_nonce":"a88cf4ee72","rest_url":"https://stride.ddev.site/wp-json/","rest_namespace":"tincanny/v1/handle_zip_uploads","max_upload_size":{"full_zip_upload":104857600,"files_upload":2147483648,"chunk_upload":2048000,"post_max_size":104857600},"module_types":[{"name":"Storyline","checks":["story_content/"],"subtype":false},{"name":"Captivate","checks":["project.txt"],"subtype":{"checks":["scormdriver.js"],"condition":"doesNotExist","type":"web","required":false}},{"name":"iSpring","checks":["res/index.html"],"subtype":false},{"name":"ArticulateRise","checks":["scormcontent/lib/main.bundle.js"],"subtype":false},{"name":"iSpringWeb","checks":["data/","metainfo.xml"],"subtype":{"checks":["metainfo.xml"],"condition":"exists","type":"web","required":true}},{"name":"Captivate2017","checks":["captivate.css"],"subtype":false},{"name":"AR2017","checks":["index.html","tc-config.js","tincan.xml","lib/tincan.js"],"subtype":false},{"name":"ArticulateRise","checks":["scormcontent/lib/rise/"],"subtype":false},{"name":"Presenter360","checks":["presentation_content/user.js"],"subtype":false},{"name":"Lectora","checks":["a001index.html"],"subtype":false},{"name":"Scorm","checks":["imsmanifest.xml"],"subtype":false},{"name":"Tincan","checks":["tincan.xml"],"subtype":false}],"invalid_files":["__MACOSX",".DS_Store",".git",".gitignore",".idea",".sass-cache",".vscode","bower_components","composer.lock","composer.phar","node_modules","npm-debug.log","phpcs.xml","phpunit.xml","phpunit.xml.dist"],"max_filename_length":"255","debug":"0","i18n":{"max_upload_size":"Maximum upload file size: 100 MB.","file_too_large":"The zip file you attempted to upload exceeds the maximum allowed size of %s.","file_too_large_alt":"Please cancel the upload and uncheck the &quot;Upload entire zip file&quot; checkbox, then try the upload again.","invalid_file_type":"Selected file type (%s) is not supported. Please choose a .zip file.","filename_too_long":"File name: %1$s is %2$d characters long and exceeds the %3$d character maximum length.","scanning_file":"Scanning zip file","no_file":"No file selected","not_zip_file":"Selected file is not a zip file.","module_type_name":"Uploading %1$s Module - %2$s","unsupported_type":"Unsupported","unkown":"Unknown","uploading_files":"Uploading file %1$d of %2$d","uploaded_files":"Uploaded %1$d of %2$d files","bytes_processed":"%1$s of %2$s","current_file":"Current file:","cancel_upload":"Cancel Upload","chunk_failed":"Failed to upload chunk.","upload_started":"Upload started","upload_complete":"Upload complete","upload_cancelled":"Upload cancelled","upload_error":"Upload error","loading":"Loading...","errors":"Errors","file":"File","unexpected_error":"An unexpected response was received. Please check console error log by right clicking the page, choosing Inspect, and checking the Console tab.","cloudflare":"Cloudflare Security / Firewall may be blocking the request. Please whitelist the Tin Canny REST route %s","no_server_response":"No response received from the server.","payload_limit":"The server is unable to handle your request. Please contact your hosting administrator to confirm the allowed payload limit.","unsupported":{"notice":"Unable to read .zip file. Please use the original zip file as exported from your elearning authoring tool.","item_title":"Please note that any xAPI/SCORM statements sent by this module in its current state:","items":["will not be recorded","may display errors because the module cannot communicate with an LMS or LRS"],"instructions":"Select an .html file","description":"To use this module anyway, select the .html file that launches the module using the file browser below:","aria_label":"directory tree"}}};
+//# sourceURL=tincanny-zip-uploader-js-extra
+</script>
+<script src="https://stride.ddev.site/app/plugins/tin-canny-learndash-reporting/src/tincanny-zip-uploader/dist/index.js?ver=296eb9529d996ff825b6" id="tincanny-zip-uploader-js"></script>
+<script id="reporting_js_handle-js-extra">
+var TincannyUI = {"mainFont":"-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen-Sans, Ubuntu, Cantarell, \"Helvetica Neue\", sans-serif","colors":{"primary":"#0290c2","secondary":"#d52c82","notice":"#f5ba05","status":{"completed":"#02c219","inProgress":"#FF9E01","notStarted":"#e3e3e3"}},"show":{"tinCanData":true}};
+var TincannyData = {"url":{"updateData":"https://stride.ddev.site/wp/wp-admin/admin.php?page=learndash_data_upgrades"},"i18n":{"dataNotRight":"Data not right?","tryRunning":"Try running the %s.","updatesLinkText":"LearnDash Data Upgrades","allQuestions":"All Questions","dropdown":{"errorLoading":"The results could not be loaded.","inputTooLong":{"singular":"Please delete 1 character","plural":"Please delete %s characters"},"inputTooShort":"Please enter %s or more characters","loadingMore":"Loading more results...","maximumSelected":{"singular":"You can only select 1 item","plural":"You can only select %s items"},"noResults":"No results found","searching":"Searching...","removeAllItems":"Remove all items"},"tables":{"processing":"Processing...","sSearch":"Search","searchPlaceholder":"Search","lengthMenu":"Show _MENU_ entries","info":"Showing page _PAGE_ of _PAGES_","infoEmpty":"Showing 0 to 0 of 0 entries","infoFiltered":"(filtered from _MAX_ total entries)","loadingRecords":"Loading","zeroRecords":"No matching records found","emptyTable":"No data available in table","paginate":{"first":"First","previous":"Previous","next":"Next","last":"Last"},"sortAscending":": activate to sort column ascending","sortDescending":": activate to sort column descending","buttons":{"csvExport":"CSV export","pdfExport":"PDF export"}}},"administratorView":"1","pageLength":"50","tinCanReportColumns":[{"title":"Group","data":"group_name","sortable":false,"className":"tclr-group-name"},{"title":"User","data":"user_name","className":"tclr-user-name"},{"title":"Course","data":"course_name","sortable":false,"className":"tclr-course-name"},{"title":"Module","data":"module_name","className":"tclr-module-name"},{"title":"Target","data":"target_name","className":"tclr-target-name"},{"title":"Action","data":"verb","className":"tclr-action"},{"title":"Result","data":"result","className":"tclr-result"},{"title":"Success","data":"completion","className":"tclr-success"},{"title":"Date Time","data":"xstored","className":"tclr-date-time"}],"xAPIReportColumns":[{"title":"Group","data":"group_name","sortable":false,"className":"tclr-group-name"},{"title":"User","data":"user_name","className":"tclr-user-name"},{"title":"Course","data":"course_name","sortable":false,"className":"tclr-course-name"},{"title":"Module","data":"module_name","className":"tclr-module-name"},{"title":"Question","data":"question","className":"tclr-question"},{"title":"Result","data":"result","sortable":false,"className":"tclr-result"},{"title":"Score","data":"score","sortable":false,"className":"tclr-score"},{"title":"Date Time","data":"xstored","className":"tclr-date-time"},{"title":"Choices","data":"choices","sortable":false,"className":"tclr-choices"},{"title":"Correct Response","data":"correct_response","sortable":false,"className":"tclr-correct-response"},{"title":"User Response","data":"user_response","sortable":false,"className":"tclr-user-response"}]};
+var reportingApiSetup = {"root":"https://stride.ddev.site/wp-json/uncanny_reporting/v1/","nonce":"a88cf4ee72","learnDashLabels":{"course":"Course","courses":"Courses","lesson":"Lesson","lessons":"Lessons","topic":"Topic","topics":"Topics","quiz":"Quiz","quizzes":"Quizzes"},"page":"dashboard","localizedStrings":{"In Progress":"In Progress","Completed":"Completed","Not Started":"Not Started","No Data":"No Data","Are you sure you want to permanently delete all Tin Can data? This cannot be undone.":"Are you sure you want to permanently delete all Tin Can data? This cannot be undone.","Are you sure you want to permanently delete all Bookmark data? This cannot be undone.":"Are you sure you want to permanently delete all Bookmark data? This cannot be undone.","%":"%","Please select your criteria to filter the Tin Can data.":"Please select your criteria to filter the Tin Can data.","Please select your criteria to filter the xAPI Quiz data.":"Please select your criteria to filter the xAPI Quiz data.","Enrolled":"Enrolled","Avg Time to Complete":"Avg Time to Complete","Avg Time Spent":"Avg Time Spent","% Complete":"% Complete","Certificate Link":"Certificate Link","Users Enrolled":"Users Enrolled","Average Time to Complete":"Average Time to Complete","Average ":"Average ","Display Name":"Name","First Name":"First Name","Last Name":"Last Name","Username":"Username","Email Address":"Email Address","Course Enrolled":"Course Enrolled","Quiz Average":"Quiz Average","Completion Date":"Completion Date","Time to Complete":"Time to Complete","Time Spent":"Time Spent","Status":"Status","Associated Lesson":"Associated Lesson","Name":"Name","Date Completed":"Date Completed","Assignment Name":"Assignment Name","Approval":"Approval","Submitted On":"Submitted On","Module":"Module","Target":"Target","Action":"Action","Result":"Result","Date":"Date","There are no activities to report.":"There are no activities to report.","CSV Export":"CSV Export","Excel Export":"Excel Export","missingTitleCourseId":"%s ID: ","Not Complete":"Not Complete","Not Approved":"Not Approved","Approved":"Approved","Page":"Page","View":"View"," Summary":" Summary","\u003C Users Overview":"\u003C Users Overview","\u003C User Overview":"\u003C User Overview","\u003C Users ":"\u003C User's "," Overview":" Overview","Showing _START_ to _END_ of _TOTAL_ entries":"Showing _START_ to _END_ of _TOTAL_ entries","Showing 0 to 0 of 0 entries":"Showing 0 to 0 of 0 entries","(filtered from _MAX_ total entries)":"(filtered from _MAX_ total entries)","Show _MENU_ entries":"Show _MENU_ entries","Loading...":"Loading...","Processing...":"Processing...","Search:":"Search:","No matching records found":"No matching records found","First":"First","Last":"Last","Next":"Next","Previous":"Previous",": activate to sort column ascending":": activate to sort column ascending",": activate to sort column descending":": activate to sort column descending","Detailed Report":"Detailed Report","Score":"Score","Order":"Order","tablesColumnsAvgQuizScore":"Avg %s Score","tablesColumnsCoursesEnrolled":"%s Enrolled","tablesColumnsLessonName":"%s Name","tablesColumnsTopicName":"%s Name","tablesColumnsQuizName":"%s Name","tablesColumnsDetails":"Details","tablesButtonSeeDetails":"See details","tablesSearchPlaceholder":"Search...","overviewGoToCourseOverview":"%s Overview","overviewGoToCourseUserReport":"User Report","overviewUsers":"Users","overviewUserCardId":"ID: %s","overviewBoxesTitleRecentActivities":"Recent Activities","overviewBoxesTitleReports":"Reports","overviewBoxesTitleCompletedCourses":"Most Completed %s","overviewBoxesReportsCourseReportTitle":"%s Report","overviewBoxesReportsCourseReportDescription":"A summary-level overview of LearnDash courses and user progress","overviewBoxesReportsUserReportTitle":"User Report","overviewBoxesReportsUserReportDescription":"Monitor progress for individual users enrolled in LearnDash courses","overviewBoxesReportsTinCanReportTitle":"Tin Can Report","overviewBoxesReportsTinCanReportDescription":"Detailed records of user activity in H5P and uploaded modules","overviewBoxesReportsCoursesCompletionSeeAll":"See all %s","overviewBoxesReportsCoursesCompletionNoData":"No completions registered","overviewLoading":"Loading","graphNoActivity":"No activity registered","graphNoEnrolledUsers":"No enrolled users","graphCourseCompletions":"%s Completions","graphTinCanStatements":"Tin Can Statements","graphTooltipCompletions":"%s completion(s)","graphTooltipStatements":"%s statement(s)","customizeColumns":"Customize columns","hideCustomizeColumns":"Hide customize columns","showAll":"Show all","ID":"ID"},"optimized_build":"1","showTinCanTab":"1","current_tab":"uncanny-learnDash-reporting"};
+//# sourceURL=reporting_js_handle-js-extra
+</script>
+<script src="https://stride.ddev.site/app/plugins/tin-canny-learndash-reporting/src/assets/admin/js/dist/tc-reporting-dashboard.min.js?ver=5.1.3.1" id="reporting_js_handle-js"></script>
+<script id="fluentcrm_global_search-js-extra">
+var fc_bar_vars = {"rest":{"base_url":"https://stride.ddev.site/wp-json/","url":"https://stride.ddev.site/wp-json/fluent-crm/v2","nonce":"a88cf4ee72","namespace":"fluent-crm","version":"v2"},"links":[{"title":"Contact Segments","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/contact-groups/lists","icon":"el-icon-folder"},{"title":"Recurring Campaigns","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/email/recurring-campaigns","icon":"el-icon-message"},{"title":"Email Sequences","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/email/sequences","icon":"el-icon-alarm-clock"},{"title":"Documentations","url":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/documentation","icon":"el-icon-document"},{"title":"Video Tutorials (Free)","url":"https://www.youtube.com/playlist?list=PLXpD0vT4thWG-ZPeM6cco7BS5cJY9bTjL","icon":"el-icon-video-camera","is_external":true},{"title":"SMTP/Mail Settings","url":"https://stride.ddev.site/wp/wp-admin/options-general.php?page=fluent-mail#/"}],"subscriber_base":"https://stride.ddev.site/wp/wp-admin/admin.php?page=fluentcrm-admin#/subscribers/","edit_user_vars":null,"trans":{"Search Contacts":"Search Contacts","Type and press enter":"Type and press enter","Type to search contacts":"Type to search contacts","Quick Links":"Quick Links","Sorry no contact found":"Sorry no contact found","Load More":"Load More"}};
+//# sourceURL=fluentcrm_global_search-js-extra
+</script>
+<script src="https://stride.ddev.site/app/plugins/fluent-crm/assets/admin/js/global-search.js?ver=6.9.1" id="fluentcrm_global_search-js"></script>
+<script id="wplink-js-extra">
+var wpLinkL10n = {"title":"Insert/edit link","update":"Update","save":"Add Link","noTitle":"(no title)","noMatchesFound":"No results found.","linkSelected":"Link selected.","linkInserted":"Link inserted.","minInputLength":"3"};
+//# sourceURL=wplink-js-extra
+</script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/wplink.js?ver=6.9.1" id="wplink-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/jquery/ui/menu.js?ver=1.13.3" id="jquery-ui-menu-js"></script>
+<script src="https://stride.ddev.site/wp/wp-includes/js/jquery/ui/autocomplete.js?ver=1.13.3" id="jquery-ui-autocomplete-js"></script>
+
+		<script type="text/javascript">
+		tinyMCEPreInit = {
+			baseURL: "https://stride.ddev.site/wp/wp-includes/js/tinymce",
+			suffix: "",
+						mceInit: {},
+			qtInit: {'replycontent':{id:"replycontent",buttons:"strong,em,link,block,del,ins,img,ul,ol,li,code,close"}},
+			ref: {plugins:"",theme:"modern",language:""},
+			load_ext: function(url,lang){var sl=tinymce.ScriptLoader;sl.markDone(url+'/langs/'+lang+'.js');sl.markDone(url+'/langs/'+lang+'_dlg.js');}
+		};
+		</script>
+				<script type="text/javascript">
+		
+		( function() {
+			var initialized = [];
+			var initialize  = function() {
+				var init, id, inPostbox, $wrap;
+				var readyState = document.readyState;
+
+				if ( readyState !== 'complete' && readyState !== 'interactive' ) {
+					return;
+				}
+
+				for ( id in tinyMCEPreInit.mceInit ) {
+					if ( initialized.indexOf( id ) > -1 ) {
+						continue;
+					}
+
+					init      = tinyMCEPreInit.mceInit[id];
+					$wrap     = tinymce.$( '#wp-' + id + '-wrap' );
+					inPostbox = $wrap.parents( '.postbox' ).length > 0;
+
+					if (
+						! init.wp_skip_init &&
+						( $wrap.hasClass( 'tmce-active' ) || ! tinyMCEPreInit.qtInit.hasOwnProperty( id ) ) &&
+						( readyState === 'complete' || ( ! inPostbox && readyState === 'interactive' ) )
+					) {
+						tinymce.init( init );
+						initialized.push( id );
+
+						if ( ! window.wpActiveEditor ) {
+							window.wpActiveEditor = id;
+						}
+					}
+				}
+			}
+
+			if ( typeof tinymce !== 'undefined' ) {
+				if ( tinymce.Env.ie && tinymce.Env.ie < 11 ) {
+					tinymce.$( '.wp-editor-wrap ' ).removeClass( 'tmce-active' ).addClass( 'html-active' );
+				} else {
+					if ( document.readyState === 'complete' ) {
+						initialize();
+					} else {
+						document.addEventListener( 'readystatechange', initialize );
+					}
+				}
+			}
+
+			if ( typeof quicktags !== 'undefined' ) {
+				for ( id in tinyMCEPreInit.qtInit ) {
+					quicktags( tinyMCEPreInit.qtInit[id] );
+
+					if ( ! window.wpActiveEditor ) {
+						window.wpActiveEditor = id;
+					}
+				}
+			}
+		}());
+		</script>
+				<div id="wp-link-backdrop" style="display: none"></div>
+		<div id="wp-link-wrap" class="wp-core-ui" style="display: none" role="dialog" aria-modal="true" aria-labelledby="link-modal-title">
+		<form id="wp-link" tabindex="-1">
+		<input type="hidden" id="_ajax_linking_nonce" name="_ajax_linking_nonce" value="bf8ce810e3">		<h1 id="link-modal-title">Insert/edit link</h1>
+		<button type="button" id="wp-link-close"><span class="screen-reader-text">
+			Close		</span></button>
+		<div id="link-selector">
+			<div id="link-options">
+				<p class="howto" id="wplink-enter-url">Enter the destination URL</p>
+				<div>
+					<label><span>URL</span>
+					<input id="wp-link-url" type="text" aria-describedby="wplink-enter-url"></label>
+				</div>
+				<div class="wp-link-text-field">
+					<label><span>Link Text</span>
+					<input id="wp-link-text" type="text"></label>
+				</div>
+				<div class="link-target">
+					<label><span></span>
+					<input type="checkbox" id="wp-link-target"> Open link in a new tab</label>
+				</div>
+			</div>
+			<p class="howto" id="wplink-link-existing-content">Or link to existing content</p>
+			<div id="search-panel">
+				<div class="link-search-wrapper">
+					<label>
+						<span class="search-label">Search</span>
+						<input type="search" id="wp-link-search" class="link-search-field" autocomplete="off" aria-describedby="wplink-link-existing-content">
+						<span class="spinner"></span>
+					</label>
+				</div>
+				<div id="search-results" class="query-results" tabindex="0">
+					<ul></ul>
+					<div class="river-waiting">
+						<span class="spinner"></span>
+					</div>
+				</div>
+				<div id="most-recent-results" class="query-results" tabindex="0">
+					<div class="query-notice" id="query-notice-message">
+						<em class="query-notice-default">No search term specified. Showing recent items.</em>
+						<em class="query-notice-hint screen-reader-text">
+							Search or use up and down arrow keys to select an item.						</em>
+					</div>
+					<ul></ul>
+					<div class="river-waiting">
+						<span class="spinner"></span>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="submitbox">
+			<div id="wp-link-cancel">
+				<button type="button" class="button">Cancel</button>
+			</div>
+			<div id="wp-link-update">
+				<input type="submit" value="Add Link" class="button button-primary" id="wp-link-submit" name="wp-link-submit">
+			</div>
+		</div>
+		</form>
+		</div>
+		
+<div class="clear"></div></div><div></div><!-- wpwrap -->
+<script type="text/javascript">if(typeof wpOnload==='function')wpOnload();</script>
+
+
+<p id="a11y-speak-intro-text" class="a11y-speak-intro-text" style="position:absolute;margin:-1px;padding:0;height:1px;width:1px;overflow:hidden;clip-path:inset(50%);border:0;word-wrap:normal !important;" hidden="">Notifications</p><div id="a11y-speak-assertive" class="a11y-speak-region" style="position:absolute;margin:-1px;padding:0;height:1px;width:1px;overflow:hidden;clip-path:inset(50%);border:0;word-wrap:normal !important;" aria-live="assertive" aria-relevant="additions text" aria-atomic="true"></div><div id="a11y-speak-polite" class="a11y-speak-region" style="position:absolute;margin:-1px;padding:0;height:1px;width:1px;overflow:hidden;clip-path:inset(50%);border:0;word-wrap:normal !important;" aria-live="polite" aria-relevant="additions text" aria-atomic="true"></div><div class="quick-draft-textarea-clone" style="display: none; font-family: -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, Oxygen-Sans, Ubuntu, Cantarell, &quot;Helvetica Neue&quot;, sans-serif; font-size: 14px; line-height: 20px; padding: 6px 7px; white-space: pre-wrap; overflow-wrap: break-word;"></div><div id="wp-h5p-xapi-spinner" style="display: none;">Saving...</div></body></html>

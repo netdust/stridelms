@@ -13,6 +13,7 @@ use LearnDash_Settings_Page;
 use Learndash_Admin_Settings_Data_Reports;
 use LearnDash\Core\Utilities\Cast;
 use LearnDash\Core\App;
+use LearnDash\Core\Template\Template;
 
 /**
  * Reports Legacy Settings Page.
@@ -121,6 +122,28 @@ class Page extends LearnDash_Settings_Page {
 		 * @since 3.0.0
 		 */
 		do_action( 'learndash_settings_page_before_content' );
+
+		Template::show_template(
+			'components/icons/refresh',
+			[
+				'classes' => [
+					'ld-svgicon__refresh--reports',
+					'hidden',
+				],
+				'label'   => __( 'Loading...', 'learndash' ),
+			]
+		);
+
+		Template::show_template(
+			'components/icons/check',
+			[
+				'classes'        => [
+					'ld-svgicon__check--reports',
+					'hidden',
+				],
+				'is_aria_hidden' => true,
+			]
+		);
 
 		parent::show_settings_page();
 	}
