@@ -70,6 +70,55 @@ Alpine.data('dashboardTabs', () => ({
 }));
 
 /**
+ * Course detail page tabs with scroll tracking
+ * Usage: x-data="courseDetailTabs()"
+ */
+Alpine.data('courseDetailTabs', () => ({
+  activeTab: 'overzicht',
+  sections: ['overzicht', 'programma', 'sprekers', 'praktisch'],
+  observer: null,
+
+  scrollTo(sectionId) {
+    const section = document.getElementById(sectionId);
+    if (section) {
+      this.activeTab = sectionId;
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  },
+
+  init() {
+    // Set up intersection observer to track which section is visible
+    const options = {
+      root: null,
+      rootMargin: '-30% 0px -60% 0px',
+      threshold: 0,
+    };
+
+    this.observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          this.activeTab = entry.target.id;
+        }
+      });
+    }, options);
+
+    // Observe all sections
+    this.sections.forEach((sectionId) => {
+      const section = document.getElementById(sectionId);
+      if (section) {
+        this.observer.observe(section);
+      }
+    });
+  },
+
+  destroy() {
+    if (this.observer) {
+      this.observer.disconnect();
+    }
+  },
+}));
+
+/**
  * Inline confirmation for destructive actions
  * Usage: x-data="confirmAction()"
  */

@@ -204,6 +204,21 @@
   }
 
   /* ══════════════════════════════════════
+     TAB NAVIGATION
+     ══════════════════════════════════════ */
+
+  .tab-link {
+    @apply whitespace-nowrap py-3 px-1 text-sm font-medium
+           border-b-2 border-transparent text-text-muted
+           hover:text-text hover:border-border
+           transition-colors duration-fast;
+  }
+
+  .tab-active {
+    @apply border-primary text-primary;
+  }
+
+  /* ══════════════════════════════════════
      UTILITIES
      ══════════════════════════════════════ */
 
