@@ -1,12 +1,16 @@
 /**
  * Stride Base Styles
  *
- * Reset, typography, and base element styles.
+ * Main entry point for all CSS.
+ * Imports are processed by PostCSS/Tailwind.
  */
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss/base';
+@import './tokens.css';
+@import 'tailwindcss/components';
+@import './components.css';
+@import 'tailwindcss/utilities';
+@import './learndash.css';
 
 @layer base {
   /* ── Reset ── */

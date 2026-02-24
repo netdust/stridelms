@@ -4,11 +4,8 @@
  * Initializes Alpine.js and global components.
  */
 
-// Import styles
-import './css/tokens.css';
+// Import styles (base.css imports all other CSS files)
 import './css/base.css';
-import './css/components.css';
-import './css/learndash.css';
 
 // Import Alpine.js
 import Alpine from 'alpinejs';
@@ -226,12 +223,65 @@ Alpine.data('loadingState', () => ({
 // ══════════════════════════════════════
 
 /**
- * WordPress AJAX wrapper
- * Always use this instead of raw fetch() for WP endpoints
+ * NTDST API wrapper
+ * Uses the NTDST REST API with automatic nonce management.
+ * Always use this instead of raw fetch() for WP endpoints.
  */
 window.ntdstAPI = {
+  _nonceCache: {},
+
   /**
-   * POST to WordPress AJAX
+   * Call an NTDST API action (preferred method)
+   * Handles nonce fetching and error throwing automatically.
+   *
+   * @param {string} action - Action name (e.g., 'stride_update_profile')
+   * @param {object} params - Action parameters
+   * @returns {Promise<object>} Action result data
+   * @throws {Error} If action fails
+   */
+  async call(action, params = {}) {
+    // Get or fetch nonce for this action
+    let nonce = this._nonceCache[action];
+    if (!nonce) {
+      const nonceResponse = await fetch('/wp-json/ntdst/v1/get_nonce', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const nonceResult = await nonceResponse.json();
+      if (!nonceResult.success) {
+        throw new Error(nonceResult.data?.message || 'Kon geen beveiligingstoken ophalen');
+      }
+      nonce = nonceResult.data.nonce;
+      this._nonceCache[action] = nonce;
+    }
+
+    // Call the action
+    const response = await fetch('/wp-json/ntdst/v1/action', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, nonce, ...params }),
+    });
+
+    const result = await response.json();
+
+    // If nonce expired, clear cache and retry once
+    if (!result.success && result.data?.code === 'invalid_nonce') {
+      delete this._nonceCache[action];
+      return this.call(action, params);
+    }
+
+    if (!result.success) {
+      throw new Error(result.data?.message || 'Actie mislukt');
+    }
+
+    return result.data;
+  },
+
+  /**
+   * POST to WordPress AJAX (legacy, prefer call())
    * @param {string} action - AJAX action name
    * @param {object} data - Request data
    * @returns {Promise<object>}
@@ -285,6 +335,15 @@ window.ntdstAPI = {
       console.error('ntdstAPI error:', error);
       return null;
     }
+  },
+
+  // Built-in helpers matching NTDST reference
+  async getRecentPosts(postType = 'post', perPage = 10) {
+    return this.call('get_recent_posts', { post_type: postType, per_page: perPage });
+  },
+
+  async searchPosts(search, postTypes = ['post', 'page']) {
+    return this.call('search_posts', { search, post_types: postTypes });
   },
 };
 
