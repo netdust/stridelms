@@ -2,42 +2,20 @@
 /**
  * Archive template for Trajectories
  *
+ * Uses TrajectoryService for data access.
+ *
  * @package stridence
  */
 
 defined('ABSPATH') || exit;
 
+use Stride\Modules\Trajectory\TrajectoryService;
+
 get_header();
 
-// Get trajectories
-$trajectories = [];
-$args = [
-    'post_type' => 'vad_trajectory',
-    'posts_per_page' => 12,
-    'post_status' => 'publish',
-    'paged' => get_query_var('paged') ?: 1,
-];
-
-$query = new WP_Query($args);
-
-if ($query->have_posts()) {
-    while ($query->have_posts()) {
-        $query->the_post();
-        $id = get_the_ID();
-
-        $trajectories[] = [
-            'id' => $id,
-            'title' => get_the_title(),
-            'url' => get_permalink(),
-            'thumbnail' => get_the_post_thumbnail_url($id, 'medium_large'),
-            'excerpt' => get_the_excerpt(),
-            'course_count' => count(get_post_meta($id, '_course_ids', true) ?: []),
-            'duration' => get_post_meta($id, '_duration', true) ?: '',
-            'price' => (float) (get_post_meta($id, '_price', true) ?: 0),
-        ];
-    }
-    wp_reset_postdata();
-}
+// Get trajectories via service
+$trajectoryService = stride_service(TrajectoryService::class);
+$trajectories = $trajectoryService->getOpenTrajectories();
 ?>
 
 <main class="str-main">
@@ -55,8 +33,8 @@ if ($query->have_posts()) {
                     <?php foreach ($trajectories as $trajectory): ?>
                         <article class="str-trajectory-card">
                             <div class="str-trajectory-card__image">
-                                <?php if ($trajectory['thumbnail']): ?>
-                                    <img src="<?php echo esc_url($trajectory['thumbnail']); ?>" alt="">
+                                <?php if ($thumbnail = get_the_post_thumbnail_url($trajectory['id'], 'medium_large')): ?>
+                                    <img src="<?php echo esc_url($thumbnail); ?>" alt="">
                                 <?php else: ?>
                                     <div class="str-trajectory-card__placeholder">
                                         <?php stridence_icon('academic-cap', '', 48); ?>
@@ -66,56 +44,46 @@ if ($query->have_posts()) {
 
                             <div class="str-trajectory-card__content">
                                 <h2 class="str-trajectory-card__title">
-                                    <a href="<?php echo esc_url($trajectory['url']); ?>">
+                                    <a href="<?php echo esc_url(get_permalink($trajectory['id'])); ?>">
                                         <?php echo esc_html($trajectory['title']); ?>
                                     </a>
                                 </h2>
 
-                                <?php if ($trajectory['excerpt']): ?>
+                                <?php if (!empty($trajectory['description'])): ?>
                                     <p class="str-trajectory-card__excerpt">
-                                        <?php echo esc_html($trajectory['excerpt']); ?>
+                                        <?php echo esc_html(wp_trim_words($trajectory['description'], 20)); ?>
                                     </p>
                                 <?php endif; ?>
 
                                 <div class="str-trajectory-card__meta">
-                                    <?php if ($trajectory['course_count']): ?>
+                                    <?php $courseCount = count($trajectory['courses'] ?? []); ?>
+                                    <?php if ($courseCount > 0): ?>
                                         <span class="str-trajectory-card__courses">
                                             <?php stridence_icon('book', '', 16); ?>
                                             <?php printf(
-                                                _n('%d cursus', '%d cursussen', $trajectory['course_count'], 'stridence'),
-                                                $trajectory['course_count']
+                                                _n('%d cursus', '%d cursussen', $courseCount, 'stridence'),
+                                                $courseCount
                                             ); ?>
                                         </span>
                                     <?php endif; ?>
 
-                                    <?php if ($trajectory['duration']): ?>
-                                        <span class="str-trajectory-card__duration">
-                                            <?php stridence_icon('clock', '', 16); ?>
-                                            <?php echo esc_html($trajectory['duration']); ?>
+                                    <?php if (!empty($trajectory['enrollment_deadline'])): ?>
+                                        <span class="str-trajectory-card__deadline">
+                                            <?php stridence_icon('calendar', '', 16); ?>
+                                            <?php echo esc_html(date_i18n('j F Y', strtotime($trajectory['enrollment_deadline']))); ?>
                                         </span>
                                     <?php endif; ?>
                                 </div>
 
                                 <?php if ($trajectory['price'] > 0): ?>
                                     <div class="str-trajectory-card__price">
-                                        €<?php echo esc_html(number_format($trajectory['price'], 0, ',', '.')); ?>
+                                        <?php echo esc_html(number_format($trajectory['price'], 0, ',', '.')); ?>
                                     </div>
                                 <?php endif; ?>
                             </div>
                         </article>
                     <?php endforeach; ?>
                 </div>
-
-                <?php if ($query->max_num_pages > 1): ?>
-                    <nav class="str-pagination">
-                        <?php
-                        echo paginate_links([
-                            'total' => $query->max_num_pages,
-                            'current' => get_query_var('paged') ?: 1,
-                        ]);
-                        ?>
-                    </nav>
-                <?php endif; ?>
             <?php else: ?>
                 <div class="str-empty-state">
                     <?php stridence_icon('academic-cap', '', 48); ?>

@@ -1,4 +1,4 @@
-<?php
+the <?php
 /**
  * Template for: Mijn Account (Dashboard Overview)
  *

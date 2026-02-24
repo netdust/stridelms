@@ -252,6 +252,21 @@ add_action('wp_enqueue_scripts', function () {
 }, 20); // After other styles
 
 // ========================================
+// LEARNDASH CUSTOMIZATIONS
+// ========================================
+
+/**
+ * Initialize LearnDash customizer
+ *
+ * Applies Stride styling to LearnDash templates and adds
+ * editions/sessions section for classroom courses.
+ */
+add_action('after_setup_theme', function () {
+    require_once get_template_directory() . '/services/frontend/LearnDashCustomizer.php';
+    new \stride\services\frontend\LearnDashCustomizer();
+}, 20);
+
+// ========================================
 // THEME ACTIVATION
 // ========================================
 
