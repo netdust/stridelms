@@ -19,7 +19,7 @@ defined('ABSPATH') || exit;
 
 use Stride\Contracts\LMSAdapterInterface;
 use Stride\Domain\TrajectoryMode;
-use stride\services\frontend\TrajectoryDashboardService;
+use stridence\services\frontend\TrajectoryDashboardService;
 
 $trajectory = $args['trajectory'];
 $enrollment = $args['enrollment'];

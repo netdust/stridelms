@@ -10,7 +10,7 @@
 
 declare(strict_types=1);
 
-namespace stride\services\frontend;
+namespace stridence\services\frontend;
 
 use Stride\Contracts\LMSAdapterInterface;
 use Stride\Domain\TrajectoryMode;

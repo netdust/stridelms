@@ -98,7 +98,7 @@ return [
     // Frontend services live in the theme (presentation layer)
     'services' => [
         'core' => [
-            \stride\services\frontend\TrajectoryDashboardService::class,
+            \stridence\services\frontend\TrajectoryDashboardService::class,
         ],
         'handlers' => [],
         'admin' => [],

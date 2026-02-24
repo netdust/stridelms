@@ -16,7 +16,7 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
-use stride\services\frontend\TrajectoryDashboardService;
+use stridence\services\frontend\TrajectoryDashboardService;
 
 $trajectory_slug = $args['trajectory_slug'] ?? '';
 $user = $args['user'] ?? wp_get_current_user();
