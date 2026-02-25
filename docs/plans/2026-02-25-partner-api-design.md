@@ -308,3 +308,35 @@ Optional enhancement (later): Custom admin page listing all partners with their 
 - **Usage dashboard** - Show API usage stats per partner
 - **Granular permissions** - Read-only vs read-write per partner
 - **MCP wrapper** - Expose Partner API via MCP for AI agents
+
+---
+
+## Implementation Status
+
+**Completed:** 2026-02-25
+
+**Commits:**
+- `7df140f` - docs: add Partner API design document
+- `9077e9b` - docs(partner-api): add implementation plan
+- `0601653` - feat(partner-api): add partner role on activation
+- `9ee1d1c` - feat(partner-api): add company_id column to registrations
+- `2bd51a6` - feat(partner-api): add findByCompany to RegistrationRepository
+- `199edb0` - feat(partner-api): create PartnerAPIController with all endpoints
+- `ed09fda` - feat(partner-api): register PartnerAPIController service
+- `ba3bf5c` - feat(partner-api): add partner user to seed script
+- `f267ddc` - feat(partner-api): propagate company_id from user meta in enrollments
+
+**Verification Results:**
+- Partner role exists: YES
+- company_id column exists in stride_vad_registrations: YES
+- PartnerAPIController service loads: OK
+- REST routes registered: 6 endpoints (/partner/users, /partner/enrollments, /partner/enrollments/{id}, /partner/certificates, /partner/attendance, POST /partner/enrollments)
+
+**Notes:**
+- All 6 endpoints implemented and tested
+- company_id propagation added to EnrollmentService for automatic linking
+- Seed script updated with partner user for testing (seed_partner@seed.test / seedpass123)
+- Table prefix is `stride_vad_registrations` (not `wp_vad_registrations` as in design)
+
+**Minor enhancement for future:**
+- Add explicit REST API args definitions for pagination parameters
