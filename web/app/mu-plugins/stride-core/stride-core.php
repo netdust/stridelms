@@ -43,6 +43,13 @@ add_action('init', function (): void {
     }
 }, 1);
 
+// Register partner role for Partner API
+add_action('init', function (): void {
+    if (!get_role('partner')) {
+        add_role('partner', 'Partner', ['read' => true]);
+    }
+}, 1);
+
 // Register DI bindings
 add_action('ntdst/core_ready', function () use ($config): void {
     // Register repositories first
