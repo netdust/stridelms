@@ -60,6 +60,7 @@ final class RegistrationRepository
             'user_id' => absint($data['user_id']),
             'edition_id' => $editionId,
             'trajectory_id' => $trajectoryId,
+            'company_id' => isset($data['company_id']) ? absint($data['company_id']) : null,
             'status' => $data['status'] ?? RegistrationStatus::Confirmed->value,
             'enrollment_path' => $data['enrollment_path'] ?? self::PATH_INDIVIDUAL,
             'selections' => isset($data['selections']) ? wp_json_encode($data['selections']) : null,
@@ -296,6 +297,67 @@ final class RegistrationRepository
             "SELECT * FROM {$this->table()} WHERE user_id = %d AND trajectory_id IS NOT NULL AND edition_id IS NULL AND status != 'cancelled' ORDER BY registered_at DESC",
             $userId
         ));
+    }
+
+    // === Company queries ===
+
+    /**
+     * Get enrollments for a company.
+     *
+     * @param int $companyId Company ID
+     * @param array<string, mixed> $filters Optional filters: status, edition_id, user_id, page, per_page
+     * @return array{data: array<object>, total: int}
+     */
+    public function findByCompany(int $companyId, array $filters = []): array
+    {
+        global $wpdb;
+
+        $status = $filters['status'] ?? null;
+        $editionId = isset($filters['edition_id']) ? absint($filters['edition_id']) : null;
+        $userId = isset($filters['user_id']) ? absint($filters['user_id']) : null;
+        $page = max(1, absint($filters['page'] ?? 1));
+        $perPage = min(100, max(1, absint($filters['per_page'] ?? 20)));
+        $offset = ($page - 1) * $perPage;
+
+        // Build WHERE clause
+        $where = ["company_id = %d"];
+        $params = [$companyId];
+
+        if ($status !== null) {
+            $where[] = "status = %s";
+            $params[] = sanitize_text_field($status);
+        }
+
+        if ($editionId !== null) {
+            $where[] = "edition_id = %d";
+            $params[] = $editionId;
+        }
+
+        if ($userId !== null) {
+            $where[] = "user_id = %d";
+            $params[] = $userId;
+        }
+
+        $whereClause = implode(' AND ', $where);
+
+        // Count total
+        $countSql = "SELECT COUNT(*) FROM {$this->table()} WHERE {$whereClause}";
+        $total = (int) $wpdb->get_var($wpdb->prepare($countSql, ...$params));
+
+        // Get data
+        $dataSql = "SELECT * FROM {$this->table()} WHERE {$whereClause} ORDER BY registered_at DESC LIMIT %d OFFSET %d";
+        $params[] = $perPage;
+        $params[] = $offset;
+
+        $data = $wpdb->get_results($wpdb->prepare($dataSql, ...$params));
+
+        foreach ($data as $row) {
+            if ($row->selections) {
+                $row->selections = json_decode($row->selections, true);
+            }
+        }
+
+        return ['data' => $data, 'total' => $total];
     }
 
     // === Selections ===
