@@ -97,9 +97,10 @@ class StrideSeedData {
         $users = [
             ['login' => 'seed_admin', 'email' => 'seed_admin@seed.test', 'role' => 'administrator', 'first' => 'Admin', 'last' => 'Seed'],
             ['login' => 'seed_instructor', 'email' => 'instructor@seed.test', 'role' => 'group_leader', 'first' => 'Jan', 'last' => 'De Trainer'],
-            ['login' => 'seed_student1', 'email' => 'student1@seed.test', 'role' => 'subscriber', 'first' => 'Pieter', 'last' => 'Janssen', 'is_member' => true],
-            ['login' => 'seed_student2', 'email' => 'student2@seed.test', 'role' => 'subscriber', 'first' => 'Anna', 'last' => 'De Vries', 'is_member' => true],
-            ['login' => 'seed_student3', 'email' => 'student3@seed.test', 'role' => 'subscriber', 'first' => 'Thomas', 'last' => 'Bakker', 'is_member' => false],
+            ['login' => 'seed_partner', 'email' => 'seed_partner@seed.test', 'role' => 'partner', 'first' => 'Partner', 'last' => 'Test', 'company_id' => 1],
+            ['login' => 'seed_student1', 'email' => 'student1@seed.test', 'role' => 'subscriber', 'first' => 'Pieter', 'last' => 'Janssen', 'is_member' => true, 'company_id' => 1],
+            ['login' => 'seed_student2', 'email' => 'student2@seed.test', 'role' => 'subscriber', 'first' => 'Anna', 'last' => 'De Vries', 'is_member' => true, 'company_id' => 1],
+            ['login' => 'seed_student3', 'email' => 'student3@seed.test', 'role' => 'subscriber', 'first' => 'Thomas', 'last' => 'Bakker', 'is_member' => false, 'company_id' => 1],
         ];
 
         foreach ($users as $userData) {
@@ -113,6 +114,10 @@ class StrideSeedData {
                     echo "  - User {$userData['login']} exists (ID: {$existing->ID}) - activated\n";
                 } else {
                     echo "  - User {$userData['login']} exists (ID: {$existing->ID})\n";
+                }
+                // Ensure company_id is set for existing users
+                if (isset($userData['company_id'])) {
+                    update_user_meta($existing->ID, '_stride_company_id', $userData['company_id']);
                 }
                 continue;
             }
@@ -136,6 +141,9 @@ class StrideSeedData {
             if (isset($userData['is_member'])) {
                 update_user_meta($userId, 'is_vad_member', $userData['is_member']);
             }
+            if (isset($userData['company_id'])) {
+                update_user_meta($userId, '_stride_company_id', $userData['company_id']);
+            }
 
             // Activate users for auth (ntdst-auth requires activation)
             update_user_meta($userId, 'ntdst_auth_activated', true);
@@ -155,46 +163,349 @@ class StrideSeedData {
         }
 
         // ===== COURSE DEFINITIONS =====
+        // Organized by type: Online (self-paced), In-Person (with editions), Hybrid, Webinar
         $courses = [
-            // === 1. SINGLE EDITION COURSE (in-person, 1 day) ===
+
+            // =========================================================================
+            // ONLINE COURSES (Self-paced e-learning - NO editions, always available)
+            // =========================================================================
+
+            // === ONLINE 1: Comprehensive introduction course ===
             [
-                'title' => 'Motiverende Gespreksvoering',
-                'description' => 'Leer de technieken van motiverende gespreksvoering. Een praktijkgerichte cursus voor professionals die werken met cliënten in de verslavingszorg.',
+                'title' => 'E-learning: Basiskennis Verslavingszorg',
+                'description' => 'Deze uitgebreide online cursus biedt een stevige basis in de verslavingszorg. Je leert over de verschillende soorten verslavingen, de biologische en psychologische mechanismen, en de belangrijkste behandelmethoden. Ideaal voor nieuwe medewerkers of als opfrisser voor ervaren professionals. Na afronding ontvang je een officieel VAD-certificaat.',
+                'type' => 'online',
+                'editions' => [], // No editions - always available
+                'lessons' => [
+                    [
+                        'title' => 'Module 1: Wat is verslaving?',
+                        'content' => '<h3>Definitie en Kenmerken</h3>
+<p>In deze eerste module verkennen we wat verslaving precies inhoudt. We bekijken de DSM-5 criteria voor stoornis in middelengebruik en gedragsverslavingen.</p>
+
+<h4>Leerdoelen</h4>
+<ul>
+<li>Je kunt verslaving definiëren volgens de huidige wetenschappelijke inzichten</li>
+<li>Je herkent de 11 criteria van DSM-5 voor stoornissen in middelengebruik</li>
+<li>Je begrijpt het verschil tussen gebruik, misbruik en afhankelijkheid</li>
+</ul>
+
+<h4>Kernbegrippen</h4>
+<p><strong>Tolerantie:</strong> Het lichaam went aan de stof, waardoor steeds meer nodig is voor hetzelfde effect.</p>
+<p><strong>Onthoudingsverschijnselen:</strong> Lichamelijke en psychische klachten die optreden bij stoppen of minderen.</p>
+<p><strong>Craving:</strong> Een intense drang of verlangen naar de stof of het gedrag.</p>',
+                    ],
+                    [
+                        'title' => 'Module 2: Het verslaafde brein',
+                        'content' => '<h3>Neurobiologie van Verslaving</h3>
+<p>Verslaving is een hersenziekte. In deze module leer je hoe verslavende stoffen en gedragingen het beloningssysteem van de hersenen beïnvloeden.</p>
+
+<h4>Het Dopamine Systeem</h4>
+<p>Dopamine speelt een centrale rol bij verslaving. We bekijken hoe drugs en verslavend gedrag leiden tot een abnormale dopamine-afgifte en hoe dit het brein verandert.</p>
+
+<h4>De Prefrontale Cortex</h4>
+<p>Dit deel van de hersenen is verantwoordelijk voor planning, impulscontrole en besluitvorming. Bij verslaving raakt dit gebied aangetast, wat verklaart waarom mensen blijven gebruiken ondanks negatieve gevolgen.</p>',
+                    ],
+                    [
+                        'title' => 'Module 3: Soorten verslavingen',
+                        'content' => '<h3>Middelen en Gedragsverslavingen</h3>
+
+<h4>Middelenverslavingen</h4>
+<ul>
+<li><strong>Alcohol:</strong> De meest voorkomende verslaving in België en Nederland</li>
+<li><strong>Cannabis:</strong> Vooral problematisch bij jongeren vanwege hersenontwikkeling</li>
+<li><strong>Opiaten:</strong> Heroïne en pijnstillers - hoog risico op overdosis</li>
+<li><strong>Stimulantia:</strong> Cocaïne, amfetaminen, MDMA</li>
+<li><strong>Benzodiazepines:</strong> Vaak onderschat maar zeer verslavend</li>
+</ul>
+
+<h4>Gedragsverslavingen</h4>
+<ul>
+<li><strong>Gokken:</strong> Officieel erkend als verslaving in DSM-5</li>
+<li><strong>Gaming:</strong> Internet Gaming Disorder</li>
+<li><strong>Social media:</strong> Groeiend probleem, vooral bij jongeren</li>
+</ul>',
+                    ],
+                    [
+                        'title' => 'Module 4: Behandelmethoden overzicht',
+                        'content' => '<h3>Evidence-Based Behandelingen</h3>
+
+<h4>Psychosociale Behandelingen</h4>
+<p><strong>Cognitieve Gedragstherapie (CGT):</strong> Helpt cliënten hun gedachten en gedrag te veranderen. Zeer effectief bij diverse verslavingen.</p>
+<p><strong>Motiverende Gespreksvoering (MGV):</strong> Versterkt de eigen motivatie van de cliënt om te veranderen. Niet-confronterend en cliëntgericht.</p>
+<p><strong>Community Reinforcement Approach (CRA):</strong> Richt zich op het opbouwen van een bevredigend leven zonder middelen.</p>
+
+<h4>Farmacologische Behandelingen</h4>
+<p>Bij sommige verslavingen kunnen medicijnen helpen: methadon/buprenorfine bij opiaatverslaving, naltrexon bij alcohol, varenicline bij nicotine.</p>',
+                    ],
+                    [
+                        'title' => 'Module 5: Eindtoets en certificaat',
+                        'content' => '<h3>Toets je Kennis</h3>
+<p>Je hebt alle modules doorgewerkt. Nu is het tijd om je kennis te toetsen met de eindtoets.</p>
+
+<h4>Instructies</h4>
+<ul>
+<li>De toets bestaat uit 25 meerkeuzevragen</li>
+<li>Je hebt 45 minuten de tijd</li>
+<li>Je moet minimaal 70% scoren om te slagen</li>
+<li>Bij voldoende resultaat ontvang je direct je certificaat</li>
+</ul>
+
+<p><strong>Succes!</strong></p>',
+                    ],
+                ],
+            ],
+
+            // === ONLINE 2: Alcohol specific course ===
+            [
+                'title' => 'E-learning: Alcohol en Gezondheid',
+                'description' => 'Verdiepende online module over alle aspecten van alcohol. Van de werking op het lichaam tot de sociale impact, van vroege signalering tot behandeling. Met interactieve cases, video-interviews met ervaringsdeskundigen, en praktische tools voor gesprekken over alcohol.',
+                'type' => 'online',
+                'editions' => [],
+                'lessons' => [
+                    [
+                        'title' => 'Hoofdstuk 1: Alcohol in cijfers',
+                        'content' => '<h3>De Nederlandse en Belgische Situatie</h3>
+
+<h4>Alcoholgebruik in België</h4>
+<p>België staat in de Europese top als het gaat om alcoholconsumptie. Gemiddeld drinkt een Belg 12,1 liter pure alcohol per jaar.</p>
+
+<h4>Problematisch gebruik</h4>
+<ul>
+<li>Ongeveer 10% van de bevolking heeft een riskant drinkpatroon</li>
+<li>Mannen drinken gemiddeld meer dan vrouwen</li>
+<li>Bingedrinken is vooral een probleem bij jongvolwassenen (18-24 jaar)</li>
+<li>De kosten voor de maatschappij worden geschat op 4,2 miljard euro per jaar</li>
+</ul>
+
+<h4>Wat is een standaardglas?</h4>
+<p>Een standaardglas bevat 10 gram pure alcohol. Dit komt overeen met: een glas bier (25cl), een glas wijn (10cl), of een borrel (3,5cl).</p>',
+                    ],
+                    [
+                        'title' => 'Hoofdstuk 2: Effecten op lichaam en geest',
+                        'content' => '<h3>Hoe Alcohol Werkt</h3>
+
+<h4>Korte termijn effecten</h4>
+<p>Alcohol werkt als een remmer op het centrale zenuwstelsel. Het verhoogt de activiteit van GABA (remmende neurotransmitter) en verlaagt de activiteit van glutamaat (stimulerende neurotransmitter).</p>
+
+<h4>Effecten per BAC niveau</h4>
+<ul>
+<li><strong>0.2-0.5‰:</strong> Ontspanning, lichte euforie, verminderde remmingen</li>
+<li><strong>0.5-1.0‰:</strong> Verminderde coördinatie, trager reactievermogen</li>
+<li><strong>1.0-2.0‰:</strong> Onduidelijke spraak, evenwichtsproblemen, emotionele instabiliteit</li>
+<li><strong>2.0-3.0‰:</strong> Ernstige motorische problemen, black-outs mogelijk</li>
+<li><strong>>3.0‰:</strong> Levensgevaarlijk, risico op coma</li>
+</ul>
+
+<h4>Lange termijn gevolgen</h4>
+<p>Chronisch overmatig alcoholgebruik kan leiden tot levercirrose, hersenkrimp, hart- en vaatziekten, kanker, en psychische stoornissen.</p>',
+                    ],
+                    [
+                        'title' => 'Hoofdstuk 3: Herkennen van problematisch gebruik',
+                        'content' => '<h3>Vroege Signalering</h3>
+
+<h4>Signalen bij de persoon zelf</h4>
+<ul>
+<li>Regelmatig meer drinken dan gepland</li>
+<li>Tolerantieontwikkeling: steeds meer nodig voor effect</li>
+<li>Onthoudingsklachten bij niet drinken (trillen, zweten, angst)</li>
+<li>Verwaarlozing van andere activiteiten</li>
+<li>Blijven drinken ondanks problemen</li>
+</ul>
+
+<h4>De CAGE vragenlijst</h4>
+<p>Een snelle screening tool met 4 vragen:</p>
+<ol>
+<li><strong>C</strong>ut down: Heeft u ooit het gevoel gehad dat u moest minderen?</li>
+<li><strong>A</strong>nnoyed: Ergert u zich aan kritiek van anderen op uw drinkgedrag?</li>
+<li><strong>G</strong>uilty: Heeft u zich wel eens schuldig gevoeld over uw drinkgedrag?</li>
+<li><strong>E</strong>ye-opener: Drinkt u wel eens alcohol in de ochtend?</li>
+</ol>
+<p>2 of meer "ja" antwoorden wijzen op mogelijk problematisch gebruik.</p>',
+                    ],
+                    [
+                        'title' => 'Hoofdstuk 4: Gespreksvoering over alcohol',
+                        'content' => '<h3>Het Gesprek Aangaan</h3>
+
+<h4>Barrières overwinnen</h4>
+<p>Veel hulpverleners vinden het lastig om alcohol ter sprake te brengen. Veelgehoorde redenen:</p>
+<ul>
+<li>"Het is privé"</li>
+<li>"De cliënt zal boos worden"</li>
+<li>"Ik drink zelf ook, wie ben ik om te oordelen?"</li>
+</ul>
+<p>Onderzoek toont echter dat de meeste mensen korte interventies over alcohol waarderen.</p>
+
+<h4>De 5 A\'s</h4>
+<ol>
+<li><strong>Ask:</strong> Vraag naar alcoholgebruik</li>
+<li><strong>Assess:</strong> Bepaal het risiconiveau</li>
+<li><strong>Advise:</strong> Geef helder advies</li>
+<li><strong>Assist:</strong> Help bij verandering</li>
+<li><strong>Arrange:</strong> Regel follow-up</li>
+</ol>',
+                    ],
+                    [
+                        'title' => 'Hoofdstuk 5: Behandelmogelijkheden',
+                        'content' => '<h3>Van Vroeginterventie tot Intensieve Behandeling</h3>
+
+<h4>Korte interventies</h4>
+<p>Voor mensen met riskant maar niet afhankelijk drinkgedrag kan een korte interventie (5-15 minuten) al effect hebben. Dit omvat feedback, advies en het stellen van doelen.</p>
+
+<h4>Ambulante behandeling</h4>
+<p>Bij alcoholafhankelijkheid is vaak intensievere hulp nodig. Dit kan bestaan uit:</p>
+<ul>
+<li>Individuele therapie (CGT, MGV)</li>
+<li>Groepstherapie</li>
+<li>Medicamenteuze ondersteuning (disulfiram, acamprosaat, naltrexon)</li>
+</ul>
+
+<h4>Klinische behandeling</h4>
+<p>Bij ernstige afhankelijkheid of comorbiditeit kan opname nodig zijn voor detoxificatie en intensieve behandeling.</p>
+
+<h4>Zelfhulpgroepen</h4>
+<p>AA (Anonieme Alcoholisten) en SMART Recovery bieden peer support en zijn een waardevolle aanvulling op professionele behandeling.</p>',
+                    ],
+                ],
+            ],
+
+            // === ONLINE 3: Cannabis course ===
+            [
+                'title' => 'E-learning: Cannabis - Feiten en Fabels',
+                'description' => 'Alles wat je moet weten over cannabis: van de werkzame stoffen tot de effecten op de hersenen, van recreatief gebruik tot medicinale toepassingen. Speciaal ontwikkeld voor professionals die werken met jongeren en jongvolwassenen.',
+                'type' => 'online',
+                'editions' => [],
+                'lessons' => [
+                    [
+                        'title' => 'Les 1: Cannabis 101 - De Basis',
+                        'content' => '<h3>Wat is Cannabis?</h3>
+<p>Cannabis is een plant die meer dan 100 verschillende cannabinoïden bevat. De twee belangrijkste zijn THC (tetrahydrocannabinol) en CBD (cannabidiol).</p>
+
+<h4>THC vs CBD</h4>
+<p><strong>THC</strong> is de psychoactieve stof die zorgt voor de "high". Het bindt aan CB1-receptoren in de hersenen.</p>
+<p><strong>CBD</strong> is niet psychoactief en heeft mogelijk medicinale eigenschappen. Het kan zelfs de effecten van THC temperen.</p>
+
+<h4>Vormen van cannabis</h4>
+<ul>
+<li><strong>Wiet/marihuana:</strong> Gedroogde bloemen van de cannabisplant</li>
+<li><strong>Hasj:</strong> Geperste hars van de plant</li>
+<li><strong>Cannabis olie:</strong> Geconcentreerd extract</li>
+<li><strong>Edibles:</strong> Eetbare producten met cannabis</li>
+</ul>',
+                    ],
+                    [
+                        'title' => 'Les 2: Effecten en risico\'s',
+                        'content' => '<h3>Wat Doet Cannabis?</h3>
+
+<h4>Gewenste effecten</h4>
+<ul>
+<li>Ontspanning en euforie</li>
+<li>Verhoogde zintuiglijke waarneming</li>
+<li>Creativiteit en associatief denken</li>
+<li>Eetlust stimulatie ("munchies")</li>
+</ul>
+
+<h4>Ongewenste effecten</h4>
+<ul>
+<li>Angst en paranoia</li>
+<li>Verstoord korte termijn geheugen</li>
+<li>Verminderde concentratie en reactiesnelheid</li>
+<li>Bij hoge doses: hallucinaties, psychose</li>
+</ul>
+
+<h4>Risico\'s bij jongeren</h4>
+<p>De hersenen zijn pas rond het 25e levensjaar volgroeid. Cannabisgebruik tijdens de adolescentie kan leiden tot:</p>
+<ul>
+<li>Verstoring van de hersenontwikkeling</li>
+<li>Verhoogd risico op psychose (vooral bij genetische aanleg)</li>
+<li>Cognitieve achteruitgang</li>
+<li>Amotivatie syndroom</li>
+</ul>',
+                    ],
+                    [
+                        'title' => 'Les 3: Cannabis en psychose',
+                        'content' => '<h3>De Relatie Tussen Cannabis en Psychose</h3>
+
+<h4>Wat zegt het onderzoek?</h4>
+<p>Er is een duidelijke statistische relatie tussen cannabisgebruik en psychose. Hoe vroeger iemand begint en hoe meer hij/zij gebruikt, hoe groter het risico.</p>
+
+<h4>Risicofactoren</h4>
+<ul>
+<li><strong>Genetische kwetsbaarheid:</strong> Mensen met psychose in de familie hebben een verhoogd risico</li>
+<li><strong>Leeftijd van eerste gebruik:</strong> Gebruik vóór 15 jaar vergroot het risico aanzienlijk</li>
+<li><strong>THC-gehalte:</strong> Hoog-potente cannabis is riskanter</li>
+<li><strong>Frequentie van gebruik:</strong> Dagelijks gebruik verhoogt het risico 5x</li>
+</ul>
+
+<h4>Praktische implicaties</h4>
+<p>Screen bij elke jongere met psychotische symptomen op cannabisgebruik. Bespreek de risico\'s openlijk, zonder te moraliseren.</p>',
+                    ],
+                ],
+            ],
+
+            // =========================================================================
+            // IN-PERSON COURSES (With editions and sessions)
+            // =========================================================================
+
+            // === IN-PERSON 1: Single day course ===
+            [
+                'title' => 'Motiverende Gespreksvoering - Basistraining',
+                'description' => 'Motiverende Gespreksvoering (MGV) is een evidence-based gespreksmethodiek die de intrinsieke motivatie van cliënten versterkt. In deze intensieve basistraining leer je de vier processen van MGV en oefen je uitgebreid met de technieken. Je leert reflectief luisteren, open vragen stellen, en omgaan met weerstand. Deze cursus is erkend voor SKJ/NVO-registratie.',
                 'type' => 'in-person',
+                'lessons' => [
+                    ['title' => 'Theorie: De geest van MGV', 'content' => 'Achtergrond en principes van motiverende gespreksvoering.'],
+                    ['title' => 'Praktijk: ORBS-technieken', 'content' => 'Open vragen, Reflecteren, Bevestigen, Samenvatten.'],
+                ],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+2 weeks')),
                         'price' => 295.00,
                         'price_non_member' => 345.00,
                         'capacity' => 16,
-                        'venue' => 'VAD Brussel',
+                        'venue' => 'VAD Opleidingscentrum Brussel',
                         'speakers' => 'Dr. Marie De Vries',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => SESSION_TYPE_IN_PERSON],
+                            ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Basistraining MGV'],
+                        ],
+                    ],
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+6 weeks')),
+                        'price' => 295.00,
+                        'price_non_member' => 345.00,
+                        'capacity' => 16,
+                        'venue' => 'VAD Locatie Antwerpen',
+                        'speakers' => 'Drs. Peter Willems',
+                        'status' => 'open',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Basistraining MGV'],
                         ],
                     ],
                 ],
             ],
 
-            // === 2. MULTI-DAY COURSE (3 days, spread over weeks) ===
+            // === IN-PERSON 2: Multi-day intensive course ===
             [
                 'title' => 'Cognitieve Gedragstherapie bij Verslaving',
-                'description' => 'Intensieve driedaagse cursus over CGT-technieken specifiek voor verslavingszorg. Inclusief casusbespreking en praktijkoefeningen.',
+                'description' => 'Deze driedaagse intensieve training geeft je een gedegen basis in CGT specifiek voor de verslavingszorg. Je leert functionele analyses maken, gedachten uitdagen, en terugvalpreventieplannen opstellen. De training combineert theorie met veel praktijkoefeningen, rollenspel en casusbespreking. Inclusief werkboek en online naslagmateriaal.',
                 'type' => 'in-person',
+                'lessons' => [
+                    ['title' => 'CGT Dag 1: Functieanalyse', 'content' => 'Leer het gedragsmodel en het maken van een functionele analyse.'],
+                    ['title' => 'CGT Dag 2: Gedachten uitdagen', 'content' => 'Cognitieve technieken voor het werken met automatische gedachten.'],
+                    ['title' => 'CGT Dag 3: Terugvalpreventie', 'content' => 'Het opstellen en implementeren van een terugvalpreventieplan.'],
+                ],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+3 weeks')),
                         'price' => 695.00,
                         'price_non_member' => 795.00,
                         'capacity' => 12,
-                        'venue' => 'Conferentiecentrum Antwerpen',
-                        'speakers' => 'Prof. Jan Janssen, Dr. Els Peters',
+                        'venue' => 'Conferentiecentrum De Factorij, Antwerpen',
+                        'speakers' => 'Prof. dr. Jan Janssen, Dr. Els Peters',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON],
-                            ['date_offset' => 7, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON],
-                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Gedragsanalyse en functieanalyse'],
+                            ['date_offset' => 7, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 2: Cognitieve interventies'],
+                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 3: Terugvalpreventie en integratie'],
                         ],
                     ],
                     // Second edition - almost full
@@ -203,90 +514,27 @@ class StrideSeedData {
                         'price' => 695.00,
                         'price_non_member' => 795.00,
                         'capacity' => 12,
-                        'registered' => 10, // almost full
-                        'venue' => 'VAD Gent',
-                        'speakers' => 'Prof. Jan Janssen',
+                        'registered' => 10,
+                        'venue' => 'VAD Opleidingscentrum Gent',
+                        'speakers' => 'Prof. dr. Jan Janssen',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON],
-                            ['date_offset' => 7, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON],
-                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Gedragsanalyse'],
+                            ['date_offset' => 7, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 2: Cognitieve interventies'],
+                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 3: Terugvalpreventie'],
                         ],
                     ],
                 ],
             ],
 
-            // === 3. HYBRID COURSE (in-person + online) ===
+            // === IN-PERSON 3: Masterclass (sold out + future date) ===
             [
-                'title' => 'Dual Diagnose: Theorie en Praktijk',
-                'description' => 'Hybride cursus met zowel klassikale sessies als online modules. Leer omgaan met cliënten met een dubbele diagnose.',
-                'type' => 'hybrid',
-                'editions' => [
-                    [
-                        'start_date' => date('Y-m-d', strtotime('+4 weeks')),
-                        'price' => 550.00,
-                        'price_non_member' => 650.00,
-                        'capacity' => 20,
-                        'venue' => 'VAD Brussel + Online',
-                        'speakers' => 'Dr. Katrien Maes',
-                        'status' => 'open',
-                        'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'location' => 'VAD Brussel'],
-                            ['date_offset' => 3, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning module 1'],
-                            ['date_offset' => 7, 'start' => '14:00', 'end' => '16:00', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Live Q&A webinar'],
-                            ['date_offset' => 10, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning module 2'],
-                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'location' => 'VAD Brussel'],
-                        ],
-                    ],
-                ],
-            ],
-
-            // === 4. WEBINAR SERIES ===
-            [
-                'title' => 'Webinarreeks: Actuele Themas Verslavingszorg',
-                'description' => 'Reeks van 4 interactieve webinars over actuele onderwerpen in de verslavingszorg. Volg live of bekijk de opname achteraf.',
-                'type' => 'webinar',
-                'editions' => [
-                    [
-                        'start_date' => date('Y-m-d', strtotime('+1 week')),
-                        'price' => 150.00,
-                        'price_non_member' => 180.00,
-                        'capacity' => 100,
-                        'venue' => 'Online (Zoom)',
-                        'speakers' => 'Diverse sprekers',
-                        'status' => 'open',
-                        'sessions' => [
-                            ['date_offset' => 0, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 1: Gaming verslaving'],
-                            ['date_offset' => 7, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 2: Social media & jongeren'],
-                            ['date_offset' => 14, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 3: Medicatie en verslaving'],
-                            ['date_offset' => 21, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 4: Terugvalpreventie'],
-                        ],
-                    ],
-                ],
-            ],
-
-            // === 5. ONLINE SELF-PACED (e-learning) ===
-            // Online courses do NOT have editions - they are always available
-            [
-                'title' => 'E-learning: Basiskennis Verslavingszorg',
-                'description' => 'Volledig online cursus die je in je eigen tempo volgt. Ideaal als introductie of opfrisser. Inclusief certificaat na afronding.',
-                'type' => 'online',
-                'editions' => [], // No editions for online courses
-            ],
-
-            // === 6. ANOTHER ONLINE COURSE ===
-            [
-                'title' => 'E-learning: Alcohol en Gezondheid',
-                'description' => 'Verdiepende online module over de effecten van alcohol. Met video-interviews, quizzen en praktijkcases.',
-                'type' => 'online',
-                'editions' => [], // No editions for online courses
-            ],
-
-            // === 7. FULL EDITION (sold out) ===
-            [
-                'title' => 'Masterclass Crisisinterventie',
-                'description' => 'Intensieve masterclass voor ervaren professionals. Zeer populair - vaak snel vol!',
+                'title' => 'Masterclass Crisisinterventie bij Verslaving',
+                'description' => 'Deze exclusieve masterclass is bedoeld voor ervaren professionals die regelmatig te maken hebben met crisissituaties. Je leert de-escalatietechnieken, crisisassessment, en veilig handelen bij intoxicatie en onthoudingssyndroom. Maximum 8 deelnemers voor optimale interactie. Zeer populair - vaak snel volgeboekt!',
                 'type' => 'in-person',
+                'lessons' => [
+                    ['title' => 'Crisisinterventie module', 'content' => 'Theorie en praktijk van crisisinterventie in de verslavingszorg.'],
+                ],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+3 weeks')),
@@ -294,103 +542,332 @@ class StrideSeedData {
                         'price_non_member' => 525.00,
                         'capacity' => 8,
                         'registered' => 8, // FULL
-                        'venue' => 'VAD Brussel',
+                        'venue' => 'VAD Opleidingscentrum Brussel',
                         'speakers' => 'Dr. Paul Verhaeghe',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Masterclass Crisisinterventie'],
                         ],
                     ],
-                    // Future edition with spots
                     [
                         'start_date' => date('Y-m-d', strtotime('+3 months')),
                         'price' => 450.00,
                         'price_non_member' => 525.00,
                         'capacity' => 8,
-                        'venue' => 'VAD Brussel',
+                        'venue' => 'VAD Opleidingscentrum Brussel',
                         'speakers' => 'Dr. Paul Verhaeghe',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Masterclass Crisisinterventie'],
                         ],
                     ],
                 ],
             ],
 
-            // === 8. CANCELLED EDITION ===
+            // === IN-PERSON 4: Cancelled + rescheduled ===
             [
-                'title' => 'Workshop Mindfulness in Behandeling',
-                'description' => 'Praktische workshop over het integreren van mindfulness-technieken in de behandeling.',
+                'title' => 'Workshop Mindfulness in de Verslavingszorg',
+                'description' => 'Praktische workshop over het integreren van mindfulness-technieken in de behandeling van verslaving. Je leert eenvoudige oefeningen die je direct kunt toepassen met cliënten. Geschikt voor alle hulpverleners, geen meditatie-ervaring vereist.',
                 'type' => 'in-person',
+                'lessons' => [
+                    ['title' => 'Mindfulness workshop', 'content' => 'Praktische introductie in mindfulness voor de behandelpraktijk.'],
+                ],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+2 weeks')),
                         'price' => 195.00,
                         'price_non_member' => 225.00,
                         'capacity' => 15,
-                        'venue' => 'VAD Leuven',
-                        'speakers' => 'Leen Smits',
+                        'venue' => 'Yogacentrum Leuven',
+                        'speakers' => 'Leen Smits, MBSR-trainer',
                         'status' => 'cancelled',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '13:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON],
+                            ['date_offset' => 0, 'start' => '13:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Workshop Mindfulness'],
                         ],
                     ],
-                    // New date available
                     [
                         'start_date' => date('Y-m-d', strtotime('+6 weeks')),
                         'price' => 195.00,
                         'price_non_member' => 225.00,
                         'capacity' => 15,
-                        'venue' => 'VAD Leuven',
-                        'speakers' => 'Leen Smits',
+                        'venue' => 'Yogacentrum Leuven',
+                        'speakers' => 'Leen Smits, MBSR-trainer',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '13:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON],
+                            ['date_offset' => 0, 'start' => '13:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Workshop Mindfulness (nieuwe datum)'],
                         ],
                     ],
                 ],
             ],
 
-            // === 9. COURSE WITH OPTIONAL SESSIONS ===
+            // === IN-PERSON 5: Course with optional sessions ===
             [
                 'title' => 'Preventie in de Praktijk',
-                'description' => 'Cursus over preventieve interventies met optionele verdiepingsmodules.',
+                'description' => 'Complete tweedaagse cursus over preventieve interventies in verschillende settings. Na de basistraining kun je kiezen uit optionele verdiepingsmodules voor specifieke doelgroepen: jongeren of ouderen. Praktijkgericht met veel tools en materialen om direct mee aan de slag te gaan.',
                 'type' => 'in-person',
+                'lessons' => [
+                    ['title' => 'Preventie basis', 'content' => 'Basisprincipes van verslavingspreventie.'],
+                    ['title' => 'Preventie praktijk', 'content' => 'Praktische toepassing van preventieve interventies.'],
+                ],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+5 weeks')),
                         'price' => 395.00,
                         'price_non_member' => 450.00,
                         'capacity' => 20,
-                        'venue' => 'VAD Brussel',
+                        'venue' => 'VAD Opleidingscentrum Brussel',
                         'speakers' => 'Team VAD Preventie',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Basisprincipes', 'optional' => false],
-                            ['date_offset' => 1, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 2: Praktijkoefeningen', 'optional' => false],
-                            ['date_offset' => 7, 'start' => '09:00', 'end' => '12:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Verdieping: Jongeren', 'optional' => true],
-                            ['date_offset' => 7, 'start' => '13:00', 'end' => '16:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Verdieping: Ouderen', 'optional' => true],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Basisprincipes preventie', 'optional' => false],
+                            ['date_offset' => 1, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 2: Praktijk en interventies', 'optional' => false],
+                            ['date_offset' => 7, 'start' => '09:00', 'end' => '12:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Verdieping: Jongeren en social media', 'optional' => true],
+                            ['date_offset' => 7, 'start' => '13:00', 'end' => '16:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Verdieping: Ouderen en medicatie', 'optional' => true],
                         ],
                     ],
                 ],
             ],
 
-            // === 10. FREE COURSE ===
+            // === IN-PERSON 6: Free introductory course ===
             [
-                'title' => 'Introductie VAD Methodieken',
-                'description' => 'Gratis introductiecursus voor nieuwe medewerkers. Kennismaking met de werkwijze en methodieken van VAD.',
+                'title' => 'Gratis Introductie: Werken bij VAD',
+                'description' => 'Gratis kennismakingsochtend voor nieuwe medewerkers en stagiairs. Je maakt kennis met de werkwijze, methodieken en het aanbod van VAD. Inclusief rondleiding en ontmoeting met collega\'s uit verschillende teams.',
                 'type' => 'in-person',
+                'lessons' => [
+                    ['title' => 'Introductie VAD', 'content' => 'Kennismaking met VAD als organisatie.'],
+                ],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+1 week')),
                         'price' => 0.00,
                         'price_non_member' => 0.00,
                         'capacity' => 30,
-                        'venue' => 'VAD Brussel',
+                        'venue' => 'VAD Hoofdkantoor Brussel',
                         'speakers' => 'Diverse VAD medewerkers',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:30', 'end' => '12:30', 'type' => SESSION_TYPE_IN_PERSON],
+                            ['date_offset' => 0, 'start' => '09:30', 'end' => '12:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Introductie en rondleiding VAD'],
+                        ],
+                    ],
+                ],
+            ],
+
+            // =========================================================================
+            // HYBRID COURSES (Combination of in-person and online)
+            // =========================================================================
+
+            // === HYBRID 1: Blended learning course ===
+            [
+                'title' => 'Dual Diagnose: Verslaving en Psychiatrie',
+                'description' => 'Hybride leertraject over de behandeling van cliënten met zowel een verslaving als een psychiatrische stoornis. Je start met een klassikale dag, vervolgens twee weken e-learning met een live webinar, en sluit af met een praktijkdag. Zo combineer je kennisoverdracht met diepgang en praktische toepassing.',
+                'type' => 'hybrid',
+                'lessons' => [
+                    ['title' => 'E-learning Dual Diagnose Module 1', 'content' => 'Online module over comorbiditeit.'],
+                    ['title' => 'E-learning Dual Diagnose Module 2', 'content' => 'Online module over geïntegreerde behandeling.'],
+                ],
+                'editions' => [
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+4 weeks')),
+                        'price' => 550.00,
+                        'price_non_member' => 650.00,
+                        'capacity' => 20,
+                        'venue' => 'VAD Brussel + Online',
+                        'speakers' => 'Dr. Katrien Maes, psychiater',
+                        'status' => 'open',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'location' => 'VAD Opleidingscentrum Brussel', 'title' => 'Introductie dual diagnose'],
+                            ['date_offset' => 3, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Psychiatrische stoornissen'],
+                            ['date_offset' => 7, 'start' => '14:00', 'end' => '16:00', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Live Q&A: Casusbespreking'],
+                            ['date_offset' => 10, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Geïntegreerde behandeling'],
+                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'location' => 'VAD Opleidingscentrum Brussel', 'title' => 'Praktijkdag: Integratie en toepassing'],
+                        ],
+                    ],
+                ],
+            ],
+
+            // =========================================================================
+            // WEBINAR COURSES
+            // =========================================================================
+
+            // === WEBINAR 1: Series ===
+            [
+                'title' => 'Webinarreeks: Actuele Thema\'s in Verslavingszorg',
+                'description' => 'Een reeks van 4 interactieve webinars over actuele onderwerpen in de verslavingszorg. Elke week een nieuw thema met een expert spreker. Je kunt live deelnemen en vragen stellen, of de opname achteraf bekijken. Inclusief handouts en extra leesmateriaal.',
+                'type' => 'webinar',
+                'lessons' => [
+                    ['title' => 'Webinar introductie', 'content' => 'Algemene informatie over de webinarreeks.'],
+                ],
+                'editions' => [
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+1 week')),
+                        'price' => 150.00,
+                        'price_non_member' => 180.00,
+                        'capacity' => 100,
+                        'venue' => 'Online (Zoom)',
+                        'speakers' => 'Diverse experts',
+                        'status' => 'open',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 1: Gaming en sociale media verslaving'],
+                            ['date_offset' => 7, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 2: Jongeren en online gokken'],
+                            ['date_offset' => 14, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 3: Medicatie-ondersteunde behandeling'],
+                            ['date_offset' => 21, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 4: Herstelondersteunende zorg'],
+                        ],
+                    ],
+                ],
+            ],
+
+            // === WEBINAR 2: Single webinar ===
+            [
+                'title' => 'Gratis Webinar: Lachgas - De Nieuwe Trend',
+                'description' => 'Gratis informatief webinar over het toenemende lachgasgebruik onder jongeren. Wat zijn de risico\'s? Hoe herken je gebruik? En hoe ga je het gesprek aan? Speciaal voor professionals in jeugdzorg, onderwijs en preventie.',
+                'type' => 'webinar',
+                'lessons' => [
+                    ['title' => 'Lachgas info', 'content' => 'Informatie over lachgas en de effecten.'],
+                ],
+                'editions' => [
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+10 days')),
+                        'price' => 0.00,
+                        'price_non_member' => 0.00,
+                        'capacity' => 200,
+                        'venue' => 'Online (Teams)',
+                        'speakers' => 'Dr. Sarah Janssen, toxicoloog',
+                        'status' => 'open',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '12:00', 'end' => '13:00', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Lunchwebinar: Lachgas - feiten en risico\'s'],
+                        ],
+                    ],
+                ],
+            ],
+
+            // =========================================================================
+            // TRAJECTORY COURSES (used in trajectories)
+            // =========================================================================
+
+            // === TRAJECTORY COURSE 1: Required foundation ===
+            [
+                'title' => 'Verslavingskunde: Fundament',
+                'description' => 'De basiscursus voor iedereen die professioneel met verslaving werkt. Dit is een verplicht onderdeel van het traject Verslavingsspecialist. Je leert de kernconcepten, hebt contact met ervaringsdeskundigen, en oefent met basis gespreksvaardigheden.',
+                'type' => 'in-person',
+                'trajectory_role' => 'required', // For reference when building trajectories
+                'lessons' => [
+                    ['title' => 'Fundament module 1', 'content' => 'Basiskennis verslavingskunde.'],
+                    ['title' => 'Fundament module 2', 'content' => 'Introductie gespreksvoering.'],
+                ],
+                'editions' => [
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+2 weeks')),
+                        'price' => 395.00,
+                        'price_non_member' => 495.00,
+                        'capacity' => 16,
+                        'venue' => 'VAD Opleidingscentrum Brussel',
+                        'speakers' => 'Team VAD Academie',
+                        'status' => 'open',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Basiskennis'],
+                            ['date_offset' => 1, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 2: Gespreksvaardigheden'],
+                        ],
+                    ],
+                ],
+            ],
+
+            // === TRAJECTORY COURSE 2: Required advanced ===
+            [
+                'title' => 'Verslavingskunde: Assessment en Diagnostiek',
+                'description' => 'Leer gestructureerd een intake afnemen, screeningsinstrumenten gebruiken en een behandelplan opstellen. Verplicht onderdeel van het traject Verslavingsspecialist.',
+                'type' => 'in-person',
+                'trajectory_role' => 'required',
+                'lessons' => [
+                    ['title' => 'Assessment theorie', 'content' => 'Screeningsinstrumenten en intake.'],
+                    ['title' => 'Diagnostiek praktijk', 'content' => 'Behandelplanning.'],
+                ],
+                'editions' => [
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+4 weeks')),
+                        'price' => 395.00,
+                        'price_non_member' => 495.00,
+                        'capacity' => 14,
+                        'venue' => 'VAD Opleidingscentrum Brussel',
+                        'speakers' => 'Dr. Tom Decorte',
+                        'status' => 'open',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Assessment en screeningsinstrumenten'],
+                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Behandelplanning en doelen stellen'],
+                        ],
+                    ],
+                ],
+            ],
+
+            // === TRAJECTORY COURSE 3: Optional elective 1 ===
+            [
+                'title' => 'Keuzecursus: Familie en Systeem',
+                'description' => 'Optionele verdieping over het betrekken van het systeem bij de behandeling. Hoe werk je met partners, ouders en kinderen van mensen met een verslaving? Keuzevak voor het traject Verslavingsspecialist.',
+                'type' => 'in-person',
+                'trajectory_role' => 'elective',
+                'lessons' => [
+                    ['title' => 'Systeemwerk module', 'content' => 'Werken met het systeem rondom de cliënt.'],
+                ],
+                'editions' => [
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+8 weeks')),
+                        'price' => 245.00,
+                        'price_non_member' => 295.00,
+                        'capacity' => 16,
+                        'venue' => 'VAD Locatie Antwerpen',
+                        'speakers' => 'Drs. Lies Verhoeven, systeemtherapeut',
+                        'status' => 'open',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Familie en systeemwerk'],
+                        ],
+                    ],
+                ],
+            ],
+
+            // === TRAJECTORY COURSE 4: Optional elective 2 ===
+            [
+                'title' => 'Keuzecursus: Groepsbehandeling',
+                'description' => 'Optionele verdieping in het geven van groepstherapie bij verslaving. Je leert groepsdynamica begrijpen, sessies structureren en omgaan met weerstand in de groep. Keuzevak voor het traject Verslavingsspecialist.',
+                'type' => 'in-person',
+                'trajectory_role' => 'elective',
+                'lessons' => [
+                    ['title' => 'Groepsdynamica', 'content' => 'Theorie en praktijk van groepstherapie.'],
+                ],
+                'editions' => [
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+9 weeks')),
+                        'price' => 245.00,
+                        'price_non_member' => 295.00,
+                        'capacity' => 12,
+                        'venue' => 'VAD Opleidingscentrum Gent',
+                        'speakers' => 'Dr. Kris Goethals',
+                        'status' => 'open',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Groepsbehandeling bij verslaving'],
+                        ],
+                    ],
+                ],
+            ],
+
+            // === TRAJECTORY COURSE 5: Optional elective 3 ===
+            [
+                'title' => 'Keuzecursus: Harm Reduction',
+                'description' => 'Verdieping in harm reduction benaderingen. Van spuitenruil tot drugscheck, van gebruikersruimtes tot naloxon-distributie. Keuzevak geschikt voor preventiewerkers en behandelaars.',
+                'type' => 'in-person',
+                'trajectory_role' => 'elective',
+                'lessons' => [
+                    ['title' => 'Harm reduction module', 'content' => 'Principes en praktijk van schadebeperking.'],
+                ],
+                'editions' => [
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+10 weeks')),
+                        'price' => 195.00,
+                        'price_non_member' => 245.00,
+                        'capacity' => 20,
+                        'venue' => 'VAD Hoofdkantoor Brussel',
+                        'speakers' => 'Peter Vander Laenen',
+                        'status' => 'open',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Harm reduction: theorie en praktijk'],
                         ],
                     ],
                 ],
@@ -428,11 +905,15 @@ class StrideSeedData {
         update_post_meta($courseId, '_sfwd-courses', ['course_price_type' => 'open']);
         update_post_meta($courseId, '_course_type', $courseData['type']);
 
-        $this->created['courses'][] = $courseId;
-        echo "  + Course: {$courseData['title']} (ID: {$courseId})\n";
+        // Assign course category based on type
+        $category = ($courseData['type'] === 'online') ? 'online' : 'in-person';
+        wp_set_object_terms($courseId, $category, 'ld_course_category');
 
-        // Create lessons
-        $lessonIds = $this->createLessonsForCourse($courseId, $courseData['title']);
+        $this->created['courses'][] = $courseId;
+        echo "  + Course: {$courseData['title']} (ID: {$courseId}) [{$category}]\n";
+
+        // Create lessons (use provided lessons or generate defaults)
+        $lessonIds = $this->createLessonsForCourse($courseId, $courseData['title'], $courseData['lessons'] ?? []);
 
         // Create editions
         foreach ($courseData['editions'] as $editionData) {
@@ -452,7 +933,7 @@ class StrideSeedData {
         $endDate = $endDate ?? $data['start_date'];
 
         $result = $this->editionRepository->create([
-            'post_title' => $postTitle,
+            'title' => $postTitle,
             'post_status' => 'publish',
             'course_id' => $courseId,
             'start_date' => $data['start_date'],
@@ -540,16 +1021,25 @@ class StrideSeedData {
         echo "      {$typeEmoji} {$sessionDate} {$sessionData['start']}-{$sessionData['end']}: {$title}\n";
     }
 
-    private function createLessonsForCourse(int $courseId, string $courseTitle): array {
+    private function createLessonsForCourse(int $courseId, string $courseTitle, array $lessonData = []): array {
         $lessonIds = [];
-        $lessons = ['Introductie', 'Theorie', 'Praktijk', 'Evaluatie'];
 
-        foreach ($lessons as $index => $title) {
+        // Use provided lessons or generate defaults
+        if (empty($lessonData)) {
+            $lessonData = [
+                ['title' => 'Introductie', 'content' => "Welkom bij deze cursus. In deze module maak je kennis met de leerdoelen en opzet van {$courseTitle}."],
+                ['title' => 'Theorie', 'content' => "In deze module behandelen we de theoretische basis van {$courseTitle}."],
+                ['title' => 'Praktijk', 'content' => "Tijd om de theorie in praktijk te brengen met oefeningen en casussen."],
+                ['title' => 'Evaluatie', 'content' => "Toets je kennis en rond de cursus af met een certificaat."],
+            ];
+        }
+
+        foreach ($lessonData as $index => $lesson) {
             $lessonId = wp_insert_post([
-                'post_title' => $title,
+                'post_title' => $lesson['title'],
                 'post_type' => 'sfwd-lessons',
                 'post_status' => 'publish',
-                'post_content' => "Les: {$title} voor {$courseTitle}",
+                'post_content' => $lesson['content'],
                 'menu_order' => $index + 1,
             ]);
 
@@ -558,6 +1048,7 @@ class StrideSeedData {
                 update_post_meta($lessonId, 'course_id', $courseId);
                 update_post_meta($lessonId, '_sfwd-lessons', ['sfwd-lessons_course' => $courseId]);
                 $lessonIds[] = $lessonId;
+                echo "      📖 Lesson: {$lesson['title']}\n";
             }
         }
 
@@ -578,39 +1069,81 @@ class StrideSeedData {
     }
 
     private function createTrajectories(): void {
-        echo "\nCreating trajectories...\n";
+        echo "\nCreating trajectories with opt-in courses...\n";
 
         if (!$this->trajectoryService) {
             echo "  ! TrajectoryService not available\n";
             return;
         }
 
-        if (count($this->created['courses']) < 6) {
-            echo "  ! Not enough courses for trajectories\n";
+        if (count($this->created['courses']) < 12) {
+            echo "  ! Not enough courses for trajectories (need 12, have " . count($this->created['courses']) . ")\n";
             return;
         }
 
         $courseIds = $this->created['courses'];
 
-        // === COHORT TRAJECTORY ===
+        // Find courses by their trajectory role (matching indices to course definitions)
+        // Indices in order of course definitions:
+        // 0-2: Online courses (E-learning Basiskennis, Alcohol, Cannabis)
+        // 3: Motiverende Gespreksvoering
+        // 4: CGT bij Verslaving
+        // 5: Masterclass Crisisinterventie
+        // 6: Workshop Mindfulness
+        // 7: Preventie in de Praktijk
+        // 8: Gratis Introductie
+        // 9: Dual Diagnose (hybrid)
+        // 10: Webinarreeks
+        // 11: Gratis Webinar Lachgas
+        // 12: Verslavingskunde Fundament (trajectory required)
+        // 13: Assessment en Diagnostiek (trajectory required)
+        // 14: Keuzecursus Familie en Systeem (trajectory elective)
+        // 15: Keuzecursus Groepsbehandeling (trajectory elective)
+        // 16: Keuzecursus Harm Reduction (trajectory elective)
+
+        // === TRAJECTORY 1: COHORT - Verslavingsspecialist (full professional training) ===
         $cohortData = [
-            'post_title' => 'Traject Verslavingsspecialist',
-            'post_content' => 'Volledige opleiding tot verslavingsspecialist. Dit cohort-traject volg je samen met een vaste groep. Je voltooit alle verplichte cursussen en kiest 2 keuzecursussen.',
+            'title' => 'Traject Verslavingsspecialist',
+            'post_content' => '<p>Word een gecertificeerd verslavingsspecialist met dit intensieve cohort-traject. Je volgt de opleiding samen met een vaste groep van maximaal 15 deelnemers, wat zorgt voor een hecht leernetwerk.</p>
+
+<h3>Programma</h3>
+<p>Het traject bestaat uit <strong>4 verplichte cursussen</strong> die de basis vormen, plus <strong>2 keuzecursussen</strong> waarin je je kunt specialiseren naar eigen interesse.</p>
+
+<h4>Verplichte cursussen</h4>
+<ul>
+<li>Verslavingskunde: Fundament (2 dagen)</li>
+<li>Assessment en Diagnostiek (2 dagen)</li>
+<li>Motiverende Gespreksvoering (1 dag)</li>
+<li>CGT bij Verslaving (3 dagen)</li>
+</ul>
+
+<h4>Keuzecursussen (kies 2 uit 3)</h4>
+<ul>
+<li>Familie en Systeem</li>
+<li>Groepsbehandeling</li>
+<li>Harm Reduction</li>
+</ul>
+
+<h3>Certificering</h3>
+<p>Na afronding van alle verplichte cursussen en 2 keuzecursussen ontvang je het certificaat "Verslavingsspecialist VAD".</p>',
             'mode' => TrajectoryMode::Cohort->value,
             'status' => TrajectoryStatus::Open->value,
             'enrollment_deadline' => date('Y-m-d', strtotime('+1 month')),
             'choice_available_date' => date('Y-m-d', strtotime('+2 weeks')),
             'choice_deadline' => date('Y-m-d', strtotime('+3 weeks')),
             'capacity' => 15,
-            'price' => 1495.00,
-            'price_non_member' => 1795.00,
+            'price' => 1695.00,
+            'price_non_member' => 1995.00,
             'courses' => json_encode([
-                ['course_id' => $courseIds[0], 'required' => true],
-                ['course_id' => $courseIds[1], 'required' => true],
-                ['course_id' => $courseIds[2], 'required' => true],
-                ['course_id' => $courseIds[3], 'required' => false, 'group' => 'Keuze (2)'],
-                ['course_id' => $courseIds[4], 'required' => false, 'group' => 'Keuze (2)'],
-                ['course_id' => $courseIds[5], 'required' => false, 'group' => 'Keuze (2)'],
+                // Required foundation courses
+                ['course_id' => $courseIds[12], 'required' => true, 'order' => 1],
+                ['course_id' => $courseIds[13], 'required' => true, 'order' => 2],
+                ['course_id' => $courseIds[3], 'required' => true, 'order' => 3], // MGV
+                ['course_id' => $courseIds[4], 'required' => true, 'order' => 4], // CGT
+                // Elective courses (choose 2 of 3)
+                ['course_id' => $courseIds[14], 'required' => false, 'group' => 'Keuzecursussen (kies 2)', 'min_choices' => 2],
+                ['course_id' => $courseIds[15], 'required' => false, 'group' => 'Keuzecursussen (kies 2)', 'min_choices' => 2],
+                ['course_id' => $courseIds[16], 'required' => false, 'group' => 'Keuzecursussen (kies 2)', 'min_choices' => 2],
             ]),
         ];
 
@@ -619,25 +1152,56 @@ class StrideSeedData {
             update_post_meta($cohortId, self::SEED_META_KEY, true);
             $this->created['trajectories'][] = $cohortId;
             echo "  + Cohort trajectory: Traject Verslavingsspecialist (ID: {$cohortId})\n";
+            echo "      Required: Fundament, Assessment, MGV, CGT\n";
+            echo "      Electives (choose 2): Familie, Groepsbehandeling, Harm Reduction\n";
         } else {
             echo "  ! Cohort trajectory failed: {$cohortId->get_error_message()}\n";
         }
 
-        // === SELF-PACED TRAJECTORY ===
+        // === TRAJECTORY 2: SELF-PACED - Preventiewerker (flexible online-first) ===
         $selfPacedData = [
-            'post_title' => 'Traject Preventiewerker',
-            'post_content' => 'Flexibel traject voor preventiewerkers. Volg de cursussen in je eigen tempo, wanneer het jou uitkomt. Ideaal te combineren met je werk.',
+            'title' => 'Traject Preventiewerker',
+            'post_content' => '<p>Flexibel traject voor (toekomstige) preventiewerkers. Combineer online cursussen met praktijkdagen, in je eigen tempo.</p>
+
+<h3>Waarom dit traject?</h3>
+<p>Dit traject is ideaal voor mensen die:</p>
+<ul>
+<li>Willen starten in de preventie</li>
+<li>Hun preventievaardigheden willen versterken</li>
+<li>Flexibel willen leren naast hun werk</li>
+</ul>
+
+<h3>Programma</h3>
+<h4>Verplichte onderdelen</h4>
+<ul>
+<li>E-learning: Basiskennis Verslavingszorg (online, eigen tempo)</li>
+<li>E-learning: Cannabis - Feiten en Fabels (online, eigen tempo)</li>
+<li>Preventie in de Praktijk (2 dagen klassikaal)</li>
+</ul>
+
+<h4>Optionele verdieping</h4>
+<p>Na de verplichte onderdelen kun je optioneel de volgende cursussen volgen voor verdere verdieping:</p>
+<ul>
+<li>E-learning: Alcohol en Gezondheid</li>
+<li>Webinarreeks: Actuele Thema\'s</li>
+</ul>
+
+<h3>Certificering</h3>
+<p>Na afronding van de verplichte onderdelen ontvang je het certificaat "Preventiewerker VAD Basis".</p>',
             'mode' => TrajectoryMode::SelfPaced->value,
             'status' => TrajectoryStatus::Open->value,
-            'enrollment_deadline' => '', // no deadline
+            'enrollment_deadline' => '', // no deadline for self-paced
             'capacity' => 0, // unlimited
-            'price' => 895.00,
-            'price_non_member' => 1095.00,
+            'price' => 595.00,
+            'price_non_member' => 745.00,
             'courses' => json_encode([
-                ['course_id' => $courseIds[4], 'required' => true],
-                ['course_id' => $courseIds[5], 'required' => true],
-                ['course_id' => $courseIds[8], 'required' => true],
-                ['course_id' => $courseIds[9], 'required' => false, 'group' => 'Optioneel'],
+                // Required courses
+                ['course_id' => $courseIds[0], 'required' => true, 'order' => 1], // E-learning Basiskennis
+                ['course_id' => $courseIds[2], 'required' => true, 'order' => 2], // E-learning Cannabis
+                ['course_id' => $courseIds[7], 'required' => true, 'order' => 3], // Preventie in de Praktijk
+                // Optional additions
+                ['course_id' => $courseIds[1], 'required' => false, 'group' => 'Optionele verdieping'], // E-learning Alcohol
+                ['course_id' => $courseIds[10], 'required' => false, 'group' => 'Optionele verdieping'], // Webinarreeks
             ]),
         ];
 
@@ -646,8 +1210,65 @@ class StrideSeedData {
             update_post_meta($selfPacedId, self::SEED_META_KEY, true);
             $this->created['trajectories'][] = $selfPacedId;
             echo "  + Self-paced trajectory: Traject Preventiewerker (ID: {$selfPacedId})\n";
+            echo "      Required: Basiskennis (online), Cannabis (online), Preventie (klassikaal)\n";
+            echo "      Optional: Alcohol (online), Webinarreeks\n";
         } else {
             echo "  ! Self-paced trajectory failed: {$selfPacedId->get_error_message()}\n";
+        }
+
+        // === TRAJECTORY 3: BLENDED - Kennismakingstraject (entry-level) ===
+        $blendedData = [
+            'title' => 'Kennismakingstraject Verslavingszorg',
+            'post_content' => '<p>Laagdrempelig kennismakingstraject voor mensen die willen ontdekken of de verslavingszorg iets voor hen is. Combinatie van gratis en betaalde onderdelen.</p>
+
+<h3>Voor wie?</h3>
+<ul>
+<li>Studenten die stage overwegen</li>
+<li>Professionals uit aanverwante sectoren</li>
+<li>Vrijwilligers en ervaringsdeskundigen</li>
+</ul>
+
+<h3>Programma</h3>
+<h4>Startonderdelen (gratis)</h4>
+<ul>
+<li>Gratis Introductie: Werken bij VAD</li>
+<li>Gratis Webinar: Lachgas - De Nieuwe Trend</li>
+</ul>
+
+<h4>Verdieping (optioneel, betaald)</h4>
+<p>Na de gratis introductie kun je ervoor kiezen om door te gaan met:</p>
+<ul>
+<li>E-learning: Basiskennis Verslavingszorg</li>
+<li>Motiverende Gespreksvoering</li>
+</ul>
+
+<h3>Doorstromen</h3>
+<p>Na dit kennismakingstraject kun je doorstromen naar het volledige Traject Verslavingsspecialist of Traject Preventiewerker.</p>',
+            'mode' => TrajectoryMode::SelfPaced->value,
+            'status' => TrajectoryStatus::Open->value,
+            'enrollment_deadline' => '',
+            'capacity' => 0,
+            'price' => 0.00, // Free entry
+            'price_non_member' => 0.00,
+            'courses' => json_encode([
+                // Free required start
+                ['course_id' => $courseIds[8], 'required' => true, 'order' => 1], // Gratis Introductie
+                ['course_id' => $courseIds[11], 'required' => true, 'order' => 2], // Gratis Webinar Lachgas
+                // Optional paid expansion
+                ['course_id' => $courseIds[0], 'required' => false, 'group' => 'Optionele verdieping (betaald)'], // Basiskennis
+                ['course_id' => $courseIds[3], 'required' => false, 'group' => 'Optionele verdieping (betaald)'], // MGV
+            ]),
+        ];
+
+        $blendedId = $this->trajectoryService->createTrajectory($blendedData);
+        if (!is_wp_error($blendedId)) {
+            update_post_meta($blendedId, self::SEED_META_KEY, true);
+            $this->created['trajectories'][] = $blendedId;
+            echo "  + Entry trajectory: Kennismakingstraject Verslavingszorg (ID: {$blendedId})\n";
+            echo "      Required (free): Introductie, Lachgas Webinar\n";
+            echo "      Optional (paid): Basiskennis, MGV\n";
+        } else {
+            echo "  ! Entry trajectory failed: {$blendedId->get_error_message()}\n";
         }
     }
 
@@ -999,12 +1620,53 @@ class StrideSeedData {
         echo "  - Vouchers: " . count($this->created['vouchers']) . "\n";
         echo "  - Quotes: " . count($this->created['quotes']) . "\n";
         echo "\n";
-        echo "Test credentials: seedpass123\n";
-        echo "Admin user (ID 1) enrolled in 3 courses with quotes.\n\n";
-        echo "Voucher codes: WELKOM2026, VAD-MEMBER, GRATIS-INTRO, KORTING50, SEEDVOUCHER10\n\n";
-        echo "E2E Test Users:\n";
-        echo "  - seed_enrolled_user@seed.test (enrolled in test-trajectory)\n";
-        echo "  - seed_completed_user@seed.test (completed test-trajectory)\n\n";
+
+        echo "=== Course Types ===\n";
+        echo "  Online (self-paced, no editions):\n";
+        echo "    - E-learning: Basiskennis Verslavingszorg (5 lessons)\n";
+        echo "    - E-learning: Alcohol en Gezondheid (5 lessons)\n";
+        echo "    - E-learning: Cannabis - Feiten en Fabels (3 lessons)\n";
+        echo "\n";
+        echo "  In-Person (with editions):\n";
+        echo "    - Motiverende Gespreksvoering (2 editions: Brussel, Antwerpen)\n";
+        echo "    - CGT bij Verslaving (2 editions, 3-day intensive)\n";
+        echo "    - Masterclass Crisisinterventie (1 full, 1 available)\n";
+        echo "    - Workshop Mindfulness (1 cancelled, 1 rescheduled)\n";
+        echo "    - Preventie in de Praktijk (optional sessions)\n";
+        echo "    - Gratis Introductie (free course)\n";
+        echo "\n";
+        echo "  Hybrid (in-person + online):\n";
+        echo "    - Dual Diagnose (klassikaal + e-learning + webinar)\n";
+        echo "\n";
+        echo "  Webinar:\n";
+        echo "    - Webinarreeks: Actuele Thema's (4 sessions)\n";
+        echo "    - Gratis Webinar: Lachgas (free, single session)\n";
+        echo "\n";
+
+        echo "=== Trajectories ===\n";
+        echo "  1. Traject Verslavingsspecialist (cohort)\n";
+        echo "     Required: 4 courses | Electives: choose 2 of 3\n";
+        echo "  2. Traject Preventiewerker (self-paced)\n";
+        echo "     Required: 3 courses | Optional: 2 courses\n";
+        echo "  3. Kennismakingstraject (free entry)\n";
+        echo "     Required: 2 free courses | Optional: 2 paid courses\n";
+        echo "\n";
+
+        echo "=== Test Credentials ===\n";
+        echo "  Password for all seed users: seedpass123\n";
+        echo "  - seed_admin@seed.test (admin)\n";
+        echo "  - instructor@seed.test (group_leader)\n";
+        echo "  - student1@seed.test, student2@seed.test, student3@seed.test\n";
+        echo "\n";
+
+        echo "=== Voucher Codes ===\n";
+        echo "  - WELKOM2026 (10% off)\n";
+        echo "  - VAD-MEMBER (15% off)\n";
+        echo "  - GRATIS-INTRO (100% off)\n";
+        echo "  - KORTING50 (€50 off)\n";
+        echo "  - SEEDVOUCHER10 (10% off)\n";
+        echo "\n";
+
         echo "To cleanup: ddev exec bash -c 'FORCE_UNSEED=1 wp eval-file scripts/unseed.php'\n";
     }
 }
