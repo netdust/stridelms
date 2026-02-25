@@ -192,8 +192,8 @@ final class EnrollmentService extends AbstractService
             return new WP_Error('already_enrolled', 'User is already enrolled in this edition');
         }
 
-        // Create registration
-        $registrationId = $this->registrations->create([
+        // Build registration data
+        $registrationData = [
             'user_id' => $userId,
             'edition_id' => $editionId,
             'status' => RegistrationStatus::Confirmed->value,
@@ -201,7 +201,20 @@ final class EnrollmentService extends AbstractService
             'enrolled_by' => $options['enrolled_by'] ?? null,
             'voucher_code' => $options['voucher_code'] ?? null,
             'notes' => $options['notes'] ?? null,
-        ]);
+        ];
+
+        // Propagate company_id from user meta if not explicitly provided
+        if (!isset($options['company_id'])) {
+            $companyId = (int) get_user_meta($userId, '_stride_company_id', true);
+            if ($companyId) {
+                $registrationData['company_id'] = $companyId;
+            }
+        } elseif ($options['company_id']) {
+            $registrationData['company_id'] = $options['company_id'];
+        }
+
+        // Create registration
+        $registrationId = $this->registrations->create($registrationData);
 
         if (is_wp_error($registrationId)) {
             return $registrationId;
