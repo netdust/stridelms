@@ -39,6 +39,7 @@ final class RegistrationTable
             selections JSON NULL COMMENT 'Session IDs or elective edition IDs',
             selections_locked_at DATETIME NULL,
             quote_id BIGINT UNSIGNED NULL,
+            company_id BIGINT UNSIGNED NULL,
             enrolled_by BIGINT UNSIGNED NULL,
             registered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             completed_at DATETIME NULL,
@@ -49,7 +50,8 @@ final class RegistrationTable
             INDEX idx_trajectory (trajectory_id),
             INDEX idx_status (status),
             INDEX idx_edition_status (edition_id, status),
-            INDEX idx_trajectory_status (trajectory_id, status)
+            INDEX idx_trajectory_status (trajectory_id, status),
+            INDEX idx_company (company_id)
         ) {$charset};";
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -102,6 +104,13 @@ final class RegistrationTable
         $hasVoucherCode = $wpdb->get_var("SHOW COLUMNS FROM {$table} LIKE 'voucher_code'");
         if ($hasVoucherCode) {
             $wpdb->query("ALTER TABLE {$table} DROP COLUMN voucher_code");
+        }
+
+        // Add company_id if missing (Partner API)
+        $hasCompanyId = $wpdb->get_var("SHOW COLUMNS FROM {$table} LIKE 'company_id'");
+        if (!$hasCompanyId) {
+            $wpdb->query("ALTER TABLE {$table} ADD COLUMN company_id BIGINT UNSIGNED NULL AFTER quote_id");
+            $wpdb->query("ALTER TABLE {$table} ADD INDEX idx_company (company_id)");
         }
     }
 }
