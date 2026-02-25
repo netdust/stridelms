@@ -44,9 +44,12 @@ return [
         \Stride\Modules\Invoicing\Admin\VoucherAdminController::class,
         \Stride\Modules\Trajectory\TrajectoryService::class,
         \Stride\Modules\Trajectory\Admin\TrajectoryAdminController::class,
+        \Stride\Modules\Trajectory\TrajectoryDashboardService::class,
         \Stride\Modules\Attendance\AttendanceService::class,
         \Stride\Modules\Completion\CompletionService::class,
         \Stride\Modules\Audit\AuditBridge::class,
+        \Stride\Modules\Course\CourseEnrollmentFieldsService::class,
+        \Stride\Modules\PartnerAPI\PartnerAPIController::class,
     ],
 
     /**
@@ -59,5 +62,6 @@ return [
         'trajectory' => [],
         'attendance' => [],
         'completion' => [],
+        'partner_api' => [],
     ],
 ];
