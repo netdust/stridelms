@@ -1,0 +1,14 @@
+{
+    "name": "netdust/netdust-mail",
+    "description": "Email template management for NTDST WordPress projects",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "require": {
+        "php": ">=8.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "Netdust\\Mail\\": "src/"
+        }
+    }
+}

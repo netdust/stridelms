@@ -4,6 +4,7 @@ web/app/plugins/*
 !web/app/plugins/sfwd-lms/
 !web/app/plugins/learndash-hub/
 !web/app/plugins/netdust-lti/
+!web/app/plugins/netdust-mail/
 !web/app/plugins/ntdst-auth/
 !web/app/plugins/ntdst-audit/
 web/app/mu-plugins/*
