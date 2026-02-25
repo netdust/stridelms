@@ -1,0 +1,82 @@
+@import url('https://api.fontshare.com/v2/css?f[]=satoshi@700,900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply font-body text-text bg-cream antialiased;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-heading;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center px-6 py-3
+           bg-navy text-text-inverse font-medium rounded
+           shadow-button hover:bg-navy-light
+           transition-all duration-200
+           hover:-translate-y-0.5 hover:shadow-hover;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center px-6 py-3
+           bg-transparent text-navy font-medium rounded
+           border-2 border-navy
+           transition-all duration-200
+           hover:bg-navy hover:text-text-inverse;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 text-navy font-medium
+           hover:text-copper transition-colors duration-200;
+  }
+
+  .card {
+    @apply bg-surface rounded-lg shadow-card p-6;
+  }
+
+  .section {
+    @apply py-20 lg:py-28;
+  }
+
+  .container {
+    @apply max-w-6xl mx-auto px-5 lg:px-8;
+  }
+
+  /* Grain overlay */
+  .grain::before {
+    content: '';
+    @apply fixed inset-0 pointer-events-none z-50 opacity-[0.03];
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  }
+
+  /* Scroll reveal utility */
+  .reveal {
+    @apply opacity-0 translate-y-5;
+  }
+
+  .reveal.visible {
+    @apply opacity-100 translate-y-0 transition-all duration-700 ease-out;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .delay-100 { transition-delay: 100ms; }
+  .delay-200 { transition-delay: 200ms; }
+  .delay-300 { transition-delay: 300ms; }
+  .delay-400 { transition-delay: 400ms; }
+}
