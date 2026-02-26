@@ -29,6 +29,9 @@ final class Plugin implements NTDST_Service_Meta
         // Activation/deactivation hooks are registered in netdust-lti.php
         // This method initializes runtime hooks and services
 
+        // Register data models first (CPTs via Data Manager)
+        ntdst_get(Data\LTIDataService::class);
+
         // Register cleanup cron handler
         add_action('netdust_lti_cleanup', [$this, 'runCleanup']);
 
