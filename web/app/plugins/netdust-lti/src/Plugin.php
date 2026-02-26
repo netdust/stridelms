@@ -35,8 +35,11 @@ final class Plugin implements NTDST_Service_Meta
         // Register cleanup cron handler
         add_action('netdust_lti_cleanup', [$this, 'runCleanup']);
 
-        // Register endpoint router for LTI requests
+        // Register endpoint router for LTI requests (Tool Provider role)
         ntdst_get(LTI\EndpointRouter::class);
+
+        // Register platform router (Platform/Consumer role - launching external tools)
+        ntdst_get(Platform\PlatformRouter::class);
 
         // Register admin UI
         if (is_admin()) {
