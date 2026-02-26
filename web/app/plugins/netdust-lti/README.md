@@ -107,6 +107,59 @@ Check logs at Settings → Netdust LTI → View Logs
 - Check the Grade Passbacks log for errors
 - Verify the LMS supports Assignment and Grade Services (AGS)
 
+## Local Testing (DDEV to DDEV)
+
+Test the Platform feature between two local DDEV sites.
+
+### Prerequisites
+
+- Two DDEV sites running (e.g., `stride.ddev.site` and `vad-vormingen.ddev.site`)
+- Plugin installed on both sites
+
+### Setup
+
+**On Platform (vad-vormingen) - the site that launches tools:**
+
+1. Go to Settings > LTI Tools
+2. Add new tool:
+   - **Name:** Stride LMS
+   - **OIDC URL:** `https://stride.ddev.site/lti/login`
+   - **Launch URL:** `https://stride.ddev.site/lti/launch`
+   - **JWKS URL:** `https://stride.ddev.site/lti/jwks`
+   - **Client ID:** `test-client-id`
+   - **Deployment ID:** `1`
+
+**On Tool Provider (stride) - the site that receives launches:**
+
+1. Go to Settings > LTI Platforms
+2. Add new platform:
+   - **Name:** VAD Vormingen
+   - **Platform ID:** `https://vad-vormingen.ddev.site`
+   - **Client ID:** `test-client-id`
+   - **Auth Endpoint:** `https://vad-vormingen.ddev.site/lti/platform/auth`
+   - **Token Endpoint:** `https://vad-vormingen.ddev.site/lti/platform/auth`
+   - **JWKS Endpoint:** `https://vad-vormingen.ddev.site/lti/jwks`
+
+### Testing
+
+1. On Platform (vad-vormingen): Go to Settings > LTI Launch Test
+2. Select "Stride LMS" tool
+3. Click "Launch in New Tab"
+4. Verify redirect to stride and user enrollment
+
+### Troubleshooting Local Testing
+
+**SSL certificate errors:**
+- Run `ddev exec mkcert -install` on both sites
+
+**Session issues:**
+- Ensure both sites have unique session names in `.ddev/config.yaml`
+
+**Routes not working:**
+- Try: `ddev exec wp rewrite flush`
+
+---
+
 ## Development
 
 ### File Structure
