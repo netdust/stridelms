@@ -1681,3 +1681,39 @@ if (!function_exists('set_query_var')) {
         $_test_query_vars[$var] = $value;
     }
 }
+
+// get_users stub for searching users by meta
+if (!function_exists('get_users')) {
+    function get_users(array $args = []): array
+    {
+        global $_test_users, $_test_user_meta;
+
+        if (empty($_test_users)) {
+            return [];
+        }
+
+        $results = [];
+        $metaKey = $args['meta_key'] ?? null;
+        $metaValue = $args['meta_value'] ?? null;
+        $number = $args['number'] ?? -1;
+
+        foreach ($_test_users as $user) {
+            // Filter by meta if specified
+            if ($metaKey !== null && $metaValue !== null) {
+                $userMeta = $_test_user_meta[$user->ID][$metaKey][0] ?? null;
+                if ($userMeta != $metaValue) {
+                    continue;
+                }
+            }
+
+            $results[] = $user;
+
+            // Apply limit
+            if ($number > 0 && count($results) >= $number) {
+                break;
+            }
+        }
+
+        return $results;
+    }
+}
