@@ -28,6 +28,13 @@ function activate_plugin(): void
 {
     Database\Migrations::run();
     generate_keys_if_needed();
+
+    // Register CPTs and routes before flushing so they're included
+    if (function_exists('ntdst_get')) {
+        ntdst_get(Data\LTIDataService::class);
+        ntdst_get(Platform\PlatformRouter::class);
+    }
+
     flush_rewrite_rules();
 
     // Schedule cleanup cron job
