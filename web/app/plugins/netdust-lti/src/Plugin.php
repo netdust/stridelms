@@ -74,19 +74,14 @@ final class Plugin implements NTDST_Service_Meta
     }
 
     /**
-     * Run cleanup of expired nonces and tokens.
+     * Run cleanup of expired data.
+     *
+     * With transients, WordPress handles cleanup automatically.
+     * This method is kept for backwards compatibility with the cron job.
      */
     public function runCleanup(): void
     {
-        $connector = new DataConnector\WPDataConnector();
-        $nonces = $connector->cleanupExpiredNonces();
-        $tokens = $connector->cleanupExpiredTokens();
-
-        if ($nonces > 0 || $tokens > 0) {
-            ntdst_log('lti')->info('Cleanup completed', [
-                'nonces_deleted' => $nonces,
-                'tokens_deleted' => $tokens,
-            ]);
-        }
+        // Nonces and access tokens now use WordPress transients
+        // which auto-expire - no manual cleanup needed
     }
 }

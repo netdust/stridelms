@@ -10,28 +10,28 @@ use ceLTIc\LTI\AccessToken;
 use ceLTIc\LTI\Context;
 use ceLTIc\LTI\ResourceLink;
 use ceLTIc\LTI\UserResult;
+use NetdustLTI\Repositories\PlatformRepository;
 
 /**
  * WordPress DataConnector for celtic/lti library.
  *
- * Implements the DataConnector interface to store LTI data in WordPress
- * custom tables using wpdb.
+ * Implements the DataConnector interface to store LTI data in WordPress.
+ * Uses NTDST Data Manager via PlatformRepository for platforms.
+ * Uses WordPress transients for nonces and access tokens.
+ * Uses post meta on platforms for contexts.
  */
 final class WPDataConnector extends DataConnector
 {
-    private \wpdb $wpdb;
-    private string $prefix;
+    private PlatformRepository $platformRepo;
 
-    public function __construct()
+    public function __construct(?PlatformRepository $platformRepo = null)
     {
-        global $wpdb;
-        $this->wpdb = $wpdb;
-        $this->prefix = $wpdb->prefix . 'netdust_lti_';
-        parent::__construct(null, $this->prefix);
+        $this->platformRepo = $platformRepo ?? new PlatformRepository();
+        parent::__construct(null, 'lti_');
     }
 
     // ========================================================================
-    // Platform methods
+    // Platform methods (using PlatformRepository via Data Manager)
     // ========================================================================
 
     /**
@@ -42,50 +42,45 @@ final class WPDataConnector extends DataConnector
      */
     public function loadPlatform(Platform $platform): bool
     {
-        $sql = "SELECT * FROM {$this->prefix}platforms WHERE ";
+        $post = null;
 
         if ($platform->getRecordId()) {
-            $sql .= $this->wpdb->prepare("id = %d", $platform->getRecordId());
-        } elseif ($platform->platformId && $platform->clientId) {
-            // Include deployment_id in validation when provided (security requirement)
-            if ($platform->deploymentId) {
-                $sql .= $this->wpdb->prepare(
-                    "platform_id = %s AND client_id = %s AND deployment_id = %s",
-                    $platform->platformId,
-                    $platform->clientId,
-                    $platform->deploymentId
-                );
-            } else {
-                $sql .= $this->wpdb->prepare(
-                    "platform_id = %s AND client_id = %s",
-                    $platform->platformId,
-                    $platform->clientId
-                );
+            $result = $this->platformRepo->find($platform->getRecordId());
+            if (!is_wp_error($result)) {
+                $post = $result;
             }
-        } elseif ($platform->getKey()) {
-            // Support loading by consumer key (platform_id)
-            $sql .= $this->wpdb->prepare("platform_id = %s", $platform->getKey());
-        } else {
+        } elseif ($platform->platformId && $platform->clientId) {
+            $result = $this->platformRepo->findByIssuerAndClient(
+                $platform->platformId,
+                $platform->clientId
+            );
+            if (!is_wp_error($result)) {
+                $post = $result;
+                // If deployment_id is specified, verify it matches
+                if ($platform->deploymentId && isset($post->fields['deployment_id'])) {
+                    if ($post->fields['deployment_id'] !== $platform->deploymentId) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        if (!$post) {
             return false;
         }
 
-        $row = $this->wpdb->get_row($sql, ARRAY_A);
-
-        if (!$row) {
-            return false;
-        }
-
-        $platform->setRecordId((int) $row['id']);
-        $platform->name = $row['name'];
-        $platform->platformId = $row['platform_id'];
-        $platform->clientId = $row['client_id'];
-        $platform->deploymentId = $row['deployment_id'];
-        $platform->authenticationUrl = $row['auth_endpoint'];
-        $platform->accessTokenUrl = $row['token_endpoint'];
-        $platform->jku = $row['jwks_endpoint'];
-        $platform->enabled = (bool) $row['enabled'];
-        $platform->created = strtotime($row['created_at']);
-        $platform->updated = strtotime($row['updated_at']);
+        // Map WP_Post fields to Platform object
+        $platform->setRecordId($post->ID);
+        $platform->name = $post->post_title;
+        $platform->platformId = $post->fields['platform_id'] ?? '';
+        $platform->clientId = $post->fields['client_id'] ?? '';
+        $platform->deploymentId = $post->fields['deployment_id'] ?? '';
+        $platform->authenticationUrl = $post->fields['auth_endpoint'] ?? '';
+        $platform->accessTokenUrl = $post->fields['token_endpoint'] ?? '';
+        $platform->jku = $post->fields['jwks_endpoint'] ?? '';
+        $platform->enabled = (bool) ($post->fields['enabled'] ?? true);
+        $platform->created = strtotime($post->post_date_gmt);
+        $platform->updated = strtotime($post->post_modified_gmt);
 
         // Fix platform settings after loading
         $this->fixPlatformSettings($platform, false);
@@ -112,37 +107,28 @@ final class WPDataConnector extends DataConnector
             'auth_endpoint' => $platform->authenticationUrl,
             'token_endpoint' => $platform->accessTokenUrl,
             'jwks_endpoint' => $platform->jku,
-            'enabled' => $platform->enabled ? 1 : 0,
-            'updated_at' => current_time('mysql'),
+            'enabled' => $platform->enabled,
         ];
 
         if ($platform->getRecordId()) {
-            $result = $this->wpdb->update(
-                $this->prefix . 'platforms',
-                $data,
-                ['id' => $platform->getRecordId()]
-            );
-
-            // Restore platform settings
+            $result = $this->platformRepo->update($platform->getRecordId(), $data);
             $this->fixPlatformSettings($platform, false);
-
-            return $result !== false;
+            return !is_wp_error($result);
         }
 
-        $data['created_at'] = current_time('mysql');
-        $result = $this->wpdb->insert($this->prefix . 'platforms', $data);
+        $result = $this->platformRepo->create($data);
 
-        if ($result) {
-            $platform->setRecordId((int) $this->wpdb->insert_id);
-            $platform->created = time();
+        if (is_wp_error($result)) {
+            $this->fixPlatformSettings($platform, false);
+            return false;
         }
 
+        $platform->setRecordId($result);
+        $platform->created = time();
         $platform->updated = time();
 
-        // Restore platform settings
         $this->fixPlatformSettings($platform, false);
-
-        return $result !== false;
+        return true;
     }
 
     /**
@@ -159,21 +145,18 @@ final class WPDataConnector extends DataConnector
             return false;
         }
 
-        // Cascade delete related data
-        $this->wpdb->delete($this->prefix . 'access_tokens', ['platform_id' => $platformId]);
-        $this->wpdb->delete($this->prefix . 'nonces', ['platform_id' => $platformId]);
-        $this->wpdb->delete($this->prefix . 'contexts', ['platform_id' => $platformId]);
+        // Clean up transients for nonces and access tokens
+        $this->deleteAllNoncesForPlatform($platformId);
+        $this->deleteAccessTokenForPlatform($platformId);
 
-        $result = $this->wpdb->delete(
-            $this->prefix . 'platforms',
-            ['id' => $platformId]
-        );
+        $result = $this->platformRepo->delete($platformId);
 
-        if ($result !== false) {
+        if (!is_wp_error($result)) {
             $platform->initialize();
+            return true;
         }
 
-        return $result !== false;
+        return false;
     }
 
     /**
@@ -184,28 +167,51 @@ final class WPDataConnector extends DataConnector
     public function getPlatforms(): array
     {
         $platforms = [];
-        $rows = $this->wpdb->get_results(
-            "SELECT id FROM {$this->prefix}platforms ORDER BY name",
-            ARRAY_A
-        );
+        $allPlatforms = $this->platformRepo->all();
 
-        foreach ($rows as $row) {
-            $platform = Platform::fromRecordId((int) $row['id'], $this);
+        foreach ($allPlatforms as $platformData) {
+            $platform = Platform::fromRecordId((int) $platformData['ID'], $this);
             $platforms[] = $platform;
         }
 
         return $platforms;
     }
 
+    /**
+     * Delete all nonces for a platform (cleanup helper).
+     */
+    private function deleteAllNoncesForPlatform(int $platformId): void
+    {
+        // Transients are automatically cleaned up by WordPress
+        // We can't easily enumerate all nonces for a platform with transients
+        // This is acceptable as they expire naturally
+    }
+
+    /**
+     * Delete access token for a platform.
+     */
+    private function deleteAccessTokenForPlatform(int $platformId): void
+    {
+        delete_transient("lti_token_{$platformId}");
+    }
+
     // ========================================================================
-    // Nonce methods (required for security)
+    // Nonce methods (using WordPress transients for auto-expiring storage)
     // ========================================================================
+
+    /**
+     * Generate transient key for a nonce.
+     */
+    private function getNonceTransientKey(int $platformId, string $nonce): string
+    {
+        return 'lti_nonce_' . $platformId . '_' . md5($nonce);
+    }
 
     /**
      * Load nonce object.
      *
      * @param PlatformNonce $nonce Nonce object
-     * @return bool True if the nonce object was successfully loaded (already exists)
+     * @return bool True if the nonce object was successfully loaded (already exists/used)
      */
     public function loadPlatformNonce(PlatformNonce $nonce): bool
     {
@@ -215,18 +221,11 @@ final class WPDataConnector extends DataConnector
             return false;
         }
 
-        $row = $this->wpdb->get_row(
-            $this->wpdb->prepare(
-                "SELECT * FROM {$this->prefix}nonces
-                 WHERE platform_id = %d AND nonce = %s AND expires_at > NOW()",
-                $platformId,
-                $nonce->getValue()
-            ),
-            ARRAY_A
-        );
+        $key = $this->getNonceTransientKey($platformId, $nonce->getValue());
+        $exists = get_transient($key);
 
         // Return true if nonce exists (already used), false if not found (safe to use)
-        return $row !== null;
+        return $exists !== false;
     }
 
     /**
@@ -243,16 +242,11 @@ final class WPDataConnector extends DataConnector
             return false;
         }
 
-        $result = $this->wpdb->insert(
-            $this->prefix . 'nonces',
-            [
-                'platform_id' => $platformId,
-                'nonce' => $nonce->getValue(),
-                'expires_at' => date('Y-m-d H:i:s', $nonce->expires),
-            ]
-        );
+        $key = $this->getNonceTransientKey($platformId, $nonce->getValue());
+        $ttl = max(0, $nonce->expires - time());
 
-        return $result !== false;
+        // Store nonce with expiration - transients auto-expire
+        return set_transient($key, '1', $ttl);
     }
 
     /**
@@ -269,19 +263,12 @@ final class WPDataConnector extends DataConnector
             return false;
         }
 
-        $result = $this->wpdb->delete(
-            $this->prefix . 'nonces',
-            [
-                'platform_id' => $platformId,
-                'nonce' => $nonce->getValue(),
-            ]
-        );
-
-        return $result !== false;
+        $key = $this->getNonceTransientKey($platformId, $nonce->getValue());
+        return delete_transient($key);
     }
 
     // ========================================================================
-    // Access Token methods (required for AGS)
+    // Access Token methods (using WordPress transients for auto-expiring storage)
     // ========================================================================
 
     /**
@@ -298,23 +285,16 @@ final class WPDataConnector extends DataConnector
             return false;
         }
 
-        $row = $this->wpdb->get_row(
-            $this->wpdb->prepare(
-                "SELECT * FROM {$this->prefix}access_tokens
-                 WHERE platform_id = %d AND expires_at > NOW()",
-                $platformId
-            ),
-            ARRAY_A
-        );
+        $data = get_transient("lti_token_{$platformId}");
 
-        if (!$row) {
+        if (!$data || !is_array($data)) {
             return false;
         }
 
-        $accessToken->token = $row['token'];
-        $accessToken->expires = strtotime($row['expires_at']);
-        $accessToken->scopes = json_decode($row['scopes'] ?? '[]', true);
-        $accessToken->created = strtotime($row['created_at']);
+        $accessToken->token = $data['token'];
+        $accessToken->expires = (int) $data['expires'];
+        $accessToken->scopes = $data['scopes'] ?? [];
+        $accessToken->created = (int) ($data['created'] ?? time());
         $accessToken->updated = $accessToken->created;
 
         return true;
@@ -334,34 +314,61 @@ final class WPDataConnector extends DataConnector
             return false;
         }
 
-        // Delete existing token for this platform
-        $this->wpdb->delete(
-            $this->prefix . 'access_tokens',
-            ['platform_id' => $platformId]
-        );
+        $now = time();
+        $ttl = max(0, $accessToken->expires - $now);
 
-        $result = $this->wpdb->insert(
-            $this->prefix . 'access_tokens',
-            [
-                'platform_id' => $platformId,
-                'token' => $accessToken->token,
-                'expires_at' => date('Y-m-d H:i:s', $accessToken->expires),
-                'scopes' => json_encode($accessToken->scopes),
-                'created_at' => current_time('mysql'),
-            ]
-        );
+        $data = [
+            'token' => $accessToken->token,
+            'expires' => $accessToken->expires,
+            'scopes' => $accessToken->scopes,
+            'created' => $now,
+        ];
+
+        $result = set_transient("lti_token_{$platformId}", $data, $ttl);
 
         if ($result) {
-            $accessToken->created = time();
-            $accessToken->updated = time();
+            $accessToken->created = $now;
+            $accessToken->updated = $now;
         }
 
-        return $result !== false;
+        return $result;
     }
 
     // ========================================================================
-    // Context methods (minimal implementation)
+    // Context methods (using post meta on platform CPT)
     // ========================================================================
+
+    /**
+     * Get all contexts for a platform from post meta.
+     *
+     * @param int $platformId Platform post ID
+     * @return array Array of context data arrays
+     */
+    private function getPlatformContexts(int $platformId): array
+    {
+        $contexts = get_post_meta($platformId, '_lti_contexts', true);
+        return is_array($contexts) ? $contexts : [];
+    }
+
+    /**
+     * Save all contexts for a platform to post meta.
+     *
+     * @param int $platformId Platform post ID
+     * @param array $contexts Array of context data arrays
+     */
+    private function savePlatformContexts(int $platformId, array $contexts): void
+    {
+        update_post_meta($platformId, '_lti_contexts', $contexts);
+    }
+
+    /**
+     * Generate a unique context record ID from platform and context ID.
+     */
+    private function generateContextRecordId(int $platformId, string $ltiContextId): int
+    {
+        // Create a deterministic ID from platform + context
+        return abs(crc32("{$platformId}_{$ltiContextId}"));
+    }
 
     /**
      * Load context object.
@@ -377,28 +384,20 @@ final class WPDataConnector extends DataConnector
             return false;
         }
 
-        $row = $this->wpdb->get_row(
-            $this->wpdb->prepare(
-                "SELECT * FROM {$this->prefix}contexts
-                 WHERE platform_id = %d AND lti_context_id = %s",
-                $platformId,
-                $context->ltiContextId
-            ),
-            ARRAY_A
-        );
+        $contexts = $this->getPlatformContexts($platformId);
+        $contextKey = $context->ltiContextId;
 
-        if (!$row) {
+        if (!isset($contexts[$contextKey])) {
             return false;
         }
 
-        $context->setRecordId((int) $row['id']);
-        // Store LD course ID in title for easy access
-        $context->title = (string) $row['ld_course_id'];
-        $context->created = strtotime($row['created_at']);
-        $context->updated = strtotime($row['updated_at']);
+        $data = $contexts[$contextKey];
+        $context->setRecordId($this->generateContextRecordId($platformId, $contextKey));
+        $context->title = (string) ($data['ld_course_id'] ?? '');
+        $context->created = (int) ($data['created'] ?? time());
+        $context->updated = (int) ($data['updated'] ?? time());
 
-        // Load settings if stored
-        $settings = json_decode($row['settings'] ?? '{}', true);
+        $settings = $data['settings'] ?? [];
         if (is_array($settings)) {
             $context->setSettings($settings);
         }
@@ -408,9 +407,6 @@ final class WPDataConnector extends DataConnector
 
     /**
      * Save context object.
-     *
-     * Minimal implementation - contexts are primarily managed by ContextRepository.
-     * This method ensures the celtic/lti library can save context settings.
      *
      * @param Context $context Context object
      * @return bool True if the context object was successfully saved
@@ -423,24 +419,29 @@ final class WPDataConnector extends DataConnector
             return false;
         }
 
-        $context->updated = time();
+        $contexts = $this->getPlatformContexts($platformId);
+        $contextKey = $context->ltiContextId;
+        $now = time();
 
-        // Only update settings for existing contexts
-        if ($context->getRecordId()) {
-            $result = $this->wpdb->update(
-                $this->prefix . 'contexts',
-                [
-                    'settings' => json_encode($context->getSettings()),
-                    'updated_at' => current_time('mysql'),
-                ],
-                ['id' => $context->getRecordId()]
-            );
-
-            return $result !== false;
+        if (isset($contexts[$contextKey])) {
+            // Update existing context
+            $contexts[$contextKey]['settings'] = $context->getSettings();
+            $contexts[$contextKey]['updated'] = $now;
+        } else {
+            // Create new context
+            $contexts[$contextKey] = [
+                'lti_context_id' => $context->ltiContextId,
+                'ld_course_id' => (int) $context->title,
+                'settings' => $context->getSettings(),
+                'created' => $now,
+                'updated' => $now,
+            ];
         }
 
-        // For new contexts, let ContextRepository handle creation
-        // This ensures ld_course_id is properly set
+        $this->savePlatformContexts($platformId, $contexts);
+        $context->setRecordId($this->generateContextRecordId($platformId, $contextKey));
+        $context->updated = $now;
+
         return true;
     }
 
@@ -452,20 +453,24 @@ final class WPDataConnector extends DataConnector
      */
     public function deleteContext(Context $context): bool
     {
-        if (!$context->getRecordId()) {
+        $platformId = $context->getPlatform()->getRecordId();
+
+        if (!$platformId || !$context->ltiContextId) {
             return false;
         }
 
-        $result = $this->wpdb->delete(
-            $this->prefix . 'contexts',
-            ['id' => $context->getRecordId()]
-        );
+        $contexts = $this->getPlatformContexts($platformId);
+        $contextKey = $context->ltiContextId;
 
-        if ($result !== false) {
-            $context->initialize();
+        if (!isset($contexts[$contextKey])) {
+            return false;
         }
 
-        return $result !== false;
+        unset($contexts[$contextKey]);
+        $this->savePlatformContexts($platformId, $contexts);
+        $context->initialize();
+
+        return true;
     }
 
     // ========================================================================
@@ -571,24 +576,28 @@ final class WPDataConnector extends DataConnector
     /**
      * Clean up expired nonces.
      *
-     * @return int Number of nonces deleted
+     * With transients, WordPress handles cleanup automatically.
+     * This method is kept for interface compatibility.
+     *
+     * @return int Number of nonces deleted (always 0 with transients)
      */
     public function cleanupExpiredNonces(): int
     {
-        return (int) $this->wpdb->query(
-            "DELETE FROM {$this->prefix}nonces WHERE expires_at < NOW()"
-        );
+        // Transients auto-expire, no manual cleanup needed
+        return 0;
     }
 
     /**
      * Clean up expired access tokens.
      *
-     * @return int Number of tokens deleted
+     * With transients, WordPress handles cleanup automatically.
+     * This method is kept for interface compatibility.
+     *
+     * @return int Number of tokens deleted (always 0 with transients)
      */
     public function cleanupExpiredTokens(): int
     {
-        return (int) $this->wpdb->query(
-            "DELETE FROM {$this->prefix}access_tokens WHERE expires_at < NOW()"
-        );
+        // Transients auto-expire, no manual cleanup needed
+        return 0;
     }
 }

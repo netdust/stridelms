@@ -7,6 +7,20 @@ use NetdustLTI\Domain\LtiClaims;
 use NetdustLTI\Repositories\ContextRepository;
 use WP_User;
 
+/**
+ * Enrolls LTI users in LearnDash courses.
+ *
+ * Current scope: Online/self-paced courses only.
+ * Grants direct LearnDash course access without creating Stride registration records.
+ * Completion is tracked via LearnDash and synced back to partner LMS via grade passback.
+ *
+ * Future: Edition-based LTI Enrollments
+ * If LTI is needed for in-person/hybrid courses with sessions:
+ * - Deep link could specify edition ID instead of course ID
+ * - This service would create a wp_vad_registrations record
+ * - Session attendance would be trackable for LTI users
+ * - Partner billing could be based on Stride registration data
+ */
 final class CourseEnroller
 {
     private const META_LTI_CONTEXT = '_netdust_lti_context_';

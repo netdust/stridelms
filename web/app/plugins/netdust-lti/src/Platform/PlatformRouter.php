@@ -5,6 +5,13 @@ namespace NetdustLTI\Platform;
 
 use NTDST_Service_Meta;
 
+use function add_action;
+use function add_filter;
+use function add_rewrite_rule;
+use function get_query_var;
+use function wp_die;
+use function ntdst_get;
+
 /**
  * Routes /lti/platform/* endpoints for when this site acts as an LTI Platform
  * launching external tools.

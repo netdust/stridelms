@@ -37,9 +37,10 @@ function activate_plugin(): void
 
     flush_rewrite_rules();
 
-    // Schedule cleanup cron job
-    if (!wp_next_scheduled('netdust_lti_cleanup')) {
-        wp_schedule_event(time(), 'hourly', 'netdust_lti_cleanup');
+    // Clean up old cron job if exists (no longer needed with transients)
+    $timestamp = wp_next_scheduled('netdust_lti_cleanup');
+    if ($timestamp) {
+        wp_unschedule_event($timestamp, 'netdust_lti_cleanup');
     }
 }
 

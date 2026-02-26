@@ -3,49 +3,54 @@ declare(strict_types=1);
 
 namespace NetdustLTI\Repositories;
 
+/**
+ * Repository for LTI nonces.
+ *
+ * Uses WordPress transients for auto-expiring storage.
+ * Nonces are short-lived (typically 5-10 minutes) so transients
+ * are ideal - they auto-expire and don't require manual cleanup.
+ */
 final class NonceRepository
 {
-    private \wpdb $wpdb;
-    private string $table;
-
-    public function __construct()
+    /**
+     * Generate transient key for a nonce.
+     */
+    private function getTransientKey(int $platformId, string $nonce): string
     {
-        global $wpdb;
-        $this->wpdb = $wpdb;
-        $this->table = $wpdb->prefix . 'netdust_lti_nonces';
+        return 'lti_nonce_' . $platformId . '_' . md5($nonce);
     }
 
+    /**
+     * Check if a nonce exists (has been used).
+     */
     public function exists(int $platformId, string $nonce): bool
     {
-        $result = $this->wpdb->get_var(
-            $this->wpdb->prepare(
-                "SELECT 1 FROM {$this->table} WHERE platform_id = %d AND nonce = %s AND expires_at > NOW()",
-                $platformId,
-                $nonce
-            )
-        );
-
-        return $result !== null;
+        $key = $this->getTransientKey($platformId, $nonce);
+        return get_transient($key) !== false;
     }
 
+    /**
+     * Save a nonce (mark as used).
+     */
     public function save(int $platformId, string $nonce, int $expiresAt): bool
     {
-        $result = $this->wpdb->insert(
-            $this->table,
-            [
-                'platform_id' => $platformId,
-                'nonce' => $nonce,
-                'expires_at' => date('Y-m-d H:i:s', $expiresAt),
-            ]
-        );
+        $key = $this->getTransientKey($platformId, $nonce);
+        $ttl = max(0, $expiresAt - time());
 
-        return $result !== false;
+        return set_transient($key, '1', $ttl);
     }
 
+    /**
+     * Clean up expired nonces.
+     *
+     * With transients, WordPress handles cleanup automatically.
+     * This method is kept for interface compatibility.
+     *
+     * @return int Always returns 0 with transients
+     */
     public function cleanup(): int
     {
-        return (int) $this->wpdb->query(
-            "DELETE FROM {$this->table} WHERE expires_at < NOW()"
-        );
+        // Transients auto-expire, no manual cleanup needed
+        return 0;
     }
 }
