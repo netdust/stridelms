@@ -116,7 +116,7 @@ final class Migrations
 
         delete_option('netdust_lti_migration_map');
 
-        if (function_exists('WP_CLI')) {
+        if (class_exists('WP_CLI')) {
             \WP_CLI::success('Dropped old platforms and contexts tables.');
         }
     }
