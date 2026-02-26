@@ -26,7 +26,6 @@ register_deactivation_hook(__FILE__, __NAMESPACE__ . '\\deactivate_plugin');
 
 function activate_plugin(): void
 {
-    Database\Migrations::run();
     generate_keys_if_needed();
 
     // Register CPTs and routes before flushing so they're included
@@ -36,12 +35,6 @@ function activate_plugin(): void
     }
 
     flush_rewrite_rules();
-
-    // Clean up old cron job if exists (no longer needed with transients)
-    $timestamp = wp_next_scheduled('netdust_lti_cleanup');
-    if ($timestamp) {
-        wp_unschedule_event($timestamp, 'netdust_lti_cleanup');
-    }
 }
 
 function deactivate_plugin(): void
