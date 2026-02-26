@@ -64,8 +64,12 @@ final class AGSReceiver
         $input = file_get_contents('php://input');
         $data = json_decode($input, true);
 
-        if (!$data) {
+        if (json_last_error() !== JSON_ERROR_NONE) {
             $this->sendJsonResponse(['error' => 'Invalid JSON body'], 400);
+        }
+
+        if (!is_array($data)) {
+            $this->sendJsonResponse(['error' => 'Expected JSON object'], 400);
         }
 
         // Extract user from claims
