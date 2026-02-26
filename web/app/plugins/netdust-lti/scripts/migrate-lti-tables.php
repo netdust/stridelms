@@ -11,6 +11,10 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+if (!class_exists('WP_CLI')) {
+    exit('This script must be run via WP-CLI.');
+}
+
 global $wpdb;
 
 $oldTable = $wpdb->prefix . 'netdust_lti_platforms';
@@ -78,9 +82,17 @@ foreach ($platforms as $platform) {
 }
 
 // Migrate contexts to post meta
-$contexts = $wpdb->get_results("SELECT * FROM {$contextTable}", ARRAY_A);
+$contextTableExists = $wpdb->get_var(
+    $wpdb->prepare("SHOW TABLES LIKE %s", $contextTable)
+);
 
-foreach ($contexts as $context) {
+if (!$contextTableExists) {
+    WP_CLI::log('No contexts table found. Skipping context migration.');
+} else {
+    $contexts = $wpdb->get_results("SELECT * FROM {$contextTable}", ARRAY_A);
+    $contextCount = 0;
+
+    foreach ($contexts as $context) {
     $oldPlatformId = $context['platform_id'];
 
     if (!isset($idMap[$oldPlatformId])) {
@@ -100,7 +112,11 @@ foreach ($contexts as $context) {
         'settings' => json_decode($context['settings'] ?? '{}', true),
     ];
 
-    update_post_meta($newPlatformId, 'lti_contexts', $existingContexts);
+        update_post_meta($newPlatformId, 'lti_contexts', $existingContexts);
+        $contextCount++;
+    }
+
+    WP_CLI::log(sprintf('Migrated %d contexts.', $contextCount));
 }
 
 WP_CLI::success(sprintf('Migration complete. Migrated %d platforms.', count($idMap)));
