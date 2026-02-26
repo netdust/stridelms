@@ -989,6 +989,13 @@ if (!function_exists('ntdst_data')) {
                         return $this;
                     }
 
+                    public function orderBy(string $field, string $direction = 'ASC'): self
+                    {
+                        // Stub: sorting is handled at the result level in tests
+                        // Real implementation would store and apply sorting
+                        return $this;
+                    }
+
                     public function first(): ?object
                     {
                         $results = $this->get();
