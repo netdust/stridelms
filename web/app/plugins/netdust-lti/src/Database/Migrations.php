@@ -95,4 +95,29 @@ final class Migrations
 
         delete_option(self::OPTION_KEY);
     }
+
+    /**
+     * Drop old platforms and contexts tables after migration to CPTs.
+     *
+     * Only drops platforms and contexts - keeps nonces and access_tokens
+     * tables for performance (high-volume, short-lived data).
+     *
+     * Run after verifying data integrity post-migration:
+     * ddev exec wp eval "\\NetdustLTI\\Database\\Migrations::dropOldTables();"
+     */
+    public static function dropOldTables(): void
+    {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'netdust_lti_';
+
+        // Only drop platforms and contexts - keep nonces and tokens
+        $wpdb->query("DROP TABLE IF EXISTS {$prefix}contexts");
+        $wpdb->query("DROP TABLE IF EXISTS {$prefix}platforms");
+
+        delete_option('netdust_lti_migration_map');
+
+        if (function_exists('WP_CLI')) {
+            \WP_CLI::success('Dropped old platforms and contexts tables.');
+        }
+    }
 }
