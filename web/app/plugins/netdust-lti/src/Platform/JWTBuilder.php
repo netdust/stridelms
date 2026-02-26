@@ -56,7 +56,7 @@ final class JWTBuilder
         $state = sanitize_text_field($_GET['state'] ?? '');
         $sessionState = $_SESSION['lti_platform_state'] ?? '';
 
-        if (empty($state) || $state !== $sessionState) {
+        if (empty($state) || empty($sessionState) || !hash_equals($sessionState, $state)) {
             wp_die('Invalid state parameter', 'LTI Platform Error', ['response' => 400]);
         }
 
