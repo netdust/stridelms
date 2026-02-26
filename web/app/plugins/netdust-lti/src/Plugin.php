@@ -49,6 +49,9 @@ final class Plugin implements NTDST_Service_Meta
             ntdst_get(LTI\DeepLinkHandler::class);
         }
 
+        // Register shortcodes
+        ntdst_get(Shortcodes\LtiLaunchShortcode::class);
+
         // Register bridges after LearnDash is loaded
         add_action('learndash_init', function () {
             ntdst_get(Bridges\LearnDashBridge::class);

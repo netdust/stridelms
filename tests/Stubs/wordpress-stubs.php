@@ -1717,3 +1717,39 @@ if (!function_exists('get_users')) {
         return $results;
     }
 }
+
+// Shortcode functions
+global $_test_shortcodes;
+$_test_shortcodes = [];
+
+if (!function_exists('add_shortcode')) {
+    function add_shortcode(string $tag, callable $callback): void
+    {
+        global $_test_shortcodes;
+        $_test_shortcodes[$tag] = $callback;
+    }
+}
+
+if (!function_exists('shortcode_atts')) {
+    function shortcode_atts(array $pairs, array|string $atts, string $shortcode = ''): array
+    {
+        $atts = (array) $atts;
+        $out = [];
+        foreach ($pairs as $name => $default) {
+            if (array_key_exists($name, $atts)) {
+                $out[$name] = $atts[$name];
+            } else {
+                $out[$name] = $default;
+            }
+        }
+        return $out;
+    }
+}
+
+if (!function_exists('wp_unique_id')) {
+    function wp_unique_id(string $prefix = ''): string
+    {
+        static $counter = 0;
+        return $prefix . (string) ++$counter;
+    }
+}
