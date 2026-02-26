@@ -27,6 +27,9 @@ if (!class_exists('WP_Post')) {
         public int $post_parent = 0;
         public string $post_name = '';
         public int $menu_order = 0;
+        // Extension fields used by NTDST Data Manager
+        public array $fields = [];
+        public array $meta = [];
 
         public function __construct(array $data = [])
         {
@@ -64,6 +67,11 @@ if (!class_exists('WP_User')) {
                     }
                 }
             }
+        }
+
+        public function exists(): bool
+        {
+            return $this->ID > 0;
         }
     }
 }
@@ -296,6 +304,84 @@ if (!function_exists('current_user_can')) {
             return $current_user_caps[$capability] ?? false;
         }
         return true; // Allow everything in tests by default
+    }
+}
+
+if (!function_exists('user_can')) {
+    function user_can($user, string $capability, ...$args): bool
+    {
+        global $current_user_caps;
+
+        $userId = is_object($user) ? $user->ID : (int) $user;
+
+        // If caps are explicitly set, use them; otherwise allow everything
+        if (isset($current_user_caps) && is_array($current_user_caps)) {
+            return $current_user_caps[$capability] ?? false;
+        }
+
+        return true; // Allow everything in tests by default
+    }
+}
+
+if (!function_exists('get_current_blog_id')) {
+    function get_current_blog_id(): int
+    {
+        return 1; // Single site default
+    }
+}
+
+if (!function_exists('wp_get_current_user')) {
+    function wp_get_current_user(): WP_User
+    {
+        global $_test_current_user_id, $_test_users;
+
+        $userId = $_test_current_user_id ?? 0;
+
+        if ($userId && isset($_test_users[$userId])) {
+            return $_test_users[$userId];
+        }
+
+        // Return an empty user (not logged in)
+        $user = new WP_User();
+        $user->ID = 0;
+        return $user;
+    }
+}
+
+if (!function_exists('wp_insert_user')) {
+    function wp_insert_user(array $userdata)
+    {
+        global $_test_users;
+        static $nextId = 1000;
+
+        if (!isset($_test_users)) {
+            $_test_users = [];
+        }
+
+        $userId = $nextId++;
+        $user = new WP_User();
+        $user->ID = $userId;
+        $user->user_login = $userdata['user_login'] ?? '';
+        $user->user_email = $userdata['user_email'] ?? '';
+        $user->display_name = $userdata['display_name'] ?? '';
+
+        $_test_users[$userId] = $user;
+
+        return $userId;
+    }
+}
+
+if (!function_exists('wp_parse_url')) {
+    function wp_parse_url(string $url, int $component = -1)
+    {
+        return parse_url($url, $component);
+    }
+}
+
+if (!function_exists('esc_url')) {
+    function esc_url(string $url, ?array $protocols = null, string $_context = 'display'): string
+    {
+        return filter_var($url, FILTER_SANITIZE_URL) ?: '';
     }
 }
 
@@ -1459,5 +1545,139 @@ if (!function_exists('has_action')) {
             }
         }
         return false;
+    }
+}
+
+// URL functions
+if (!function_exists('esc_url_raw')) {
+    function esc_url_raw(string $url, $protocols = null): string
+    {
+        return filter_var($url, FILTER_SANITIZE_URL) ?: '';
+    }
+}
+
+if (!function_exists('add_query_arg')) {
+    function add_query_arg(...$args): string
+    {
+        if (count($args) === 2 && is_array($args[0])) {
+            $params = $args[0];
+            $url = $args[1];
+        } elseif (count($args) === 3) {
+            $params = [$args[0] => $args[1]];
+            $url = $args[2];
+        } elseif (count($args) === 1 && is_array($args[0])) {
+            $params = $args[0];
+            $url = '';
+        } else {
+            return '';
+        }
+
+        $parsed = parse_url($url);
+        $query = [];
+        if (!empty($parsed['query'])) {
+            parse_str($parsed['query'], $query);
+        }
+        $query = array_merge($query, $params);
+
+        $result = '';
+        if (!empty($parsed['scheme'])) {
+            $result .= $parsed['scheme'] . '://';
+        }
+        if (!empty($parsed['host'])) {
+            $result .= $parsed['host'];
+        }
+        if (!empty($parsed['port'])) {
+            $result .= ':' . $parsed['port'];
+        }
+        if (!empty($parsed['path'])) {
+            $result .= $parsed['path'];
+        }
+        if (!empty($query)) {
+            $result .= '?' . http_build_query($query);
+        }
+        if (!empty($parsed['fragment'])) {
+            $result .= '#' . $parsed['fragment'];
+        }
+
+        return $result;
+    }
+}
+
+if (!function_exists('wp_json_encode')) {
+    function wp_json_encode($data, int $options = 0, int $depth = 512): string|false
+    {
+        return json_encode($data, $options, $depth);
+    }
+}
+
+if (!function_exists('wp_redirect')) {
+    function wp_redirect(string $location, int $status = 302, string $x_redirect_by = 'WordPress'): bool
+    {
+        global $_test_redirect_url, $_test_redirect_status;
+        $_test_redirect_url = $location;
+        $_test_redirect_status = $status;
+
+        throw new \RuntimeException('Redirect to: ' . $location);
+    }
+}
+
+if (!function_exists('wp_die')) {
+    function wp_die($message = '', $title = '', $args = []): void
+    {
+        global $_test_wp_die_called;
+        $_test_wp_die_called = [
+            'message' => $message,
+            'title' => $title,
+            'args' => $args,
+        ];
+
+        throw new \RuntimeException($message);
+    }
+}
+
+// Rewrite rules storage for testing
+global $wp_rewrite;
+if (!isset($wp_rewrite)) {
+    $wp_rewrite = new class {
+        public array $extra_rules_top = [];
+        public array $extra_permastructs = [];
+
+        public function flush_rules(): void
+        {
+            // No-op in tests
+        }
+    };
+}
+
+if (!function_exists('add_rewrite_rule')) {
+    function add_rewrite_rule(string $regex, string $query, string $after = 'bottom'): void
+    {
+        global $wp_rewrite;
+        if ($after === 'top') {
+            $wp_rewrite->extra_rules_top[$regex] = $query;
+        }
+    }
+}
+
+// Query vars storage for testing
+global $_test_query_vars;
+$_test_query_vars = [];
+
+if (!function_exists('get_query_var')) {
+    function get_query_var(string $var, $default = '')
+    {
+        global $_test_query_vars;
+        return $_test_query_vars[$var] ?? $default;
+    }
+}
+
+if (!function_exists('set_query_var')) {
+    function set_query_var(string $var, $value): void
+    {
+        global $_test_query_vars;
+        if (!isset($_test_query_vars)) {
+            $_test_query_vars = [];
+        }
+        $_test_query_vars[$var] = $value;
     }
 }

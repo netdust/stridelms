@@ -71,6 +71,174 @@ if (!function_exists('wp_die')) {
     }
 }
 
+// esc_url_raw stub
+if (!function_exists('esc_url_raw')) {
+    function esc_url_raw(string $url, $protocols = null): string
+    {
+        // Basic URL sanitization
+        return filter_var($url, FILTER_SANITIZE_URL) ?: '';
+    }
+}
+
+// wp_json_encode stub
+if (!function_exists('wp_json_encode')) {
+    function wp_json_encode($data, int $options = 0, int $depth = 512): string|false
+    {
+        return json_encode($data, $options, $depth);
+    }
+}
+
+// add_query_arg stub
+if (!function_exists('add_query_arg')) {
+    function add_query_arg(...$args): string
+    {
+        if (count($args) === 2 && is_array($args[0])) {
+            // add_query_arg(array $args, string $url)
+            $params = $args[0];
+            $url = $args[1];
+        } elseif (count($args) === 3) {
+            // add_query_arg(string $key, string $value, string $url)
+            $params = [$args[0] => $args[1]];
+            $url = $args[2];
+        } elseif (count($args) === 1 && is_array($args[0])) {
+            // add_query_arg(array $args) - uses current URL
+            $params = $args[0];
+            $url = '';
+        } else {
+            return '';
+        }
+
+        $parsed = parse_url($url);
+        $query = [];
+        if (!empty($parsed['query'])) {
+            parse_str($parsed['query'], $query);
+        }
+        $query = array_merge($query, $params);
+
+        $result = '';
+        if (!empty($parsed['scheme'])) {
+            $result .= $parsed['scheme'] . '://';
+        }
+        if (!empty($parsed['host'])) {
+            $result .= $parsed['host'];
+        }
+        if (!empty($parsed['port'])) {
+            $result .= ':' . $parsed['port'];
+        }
+        if (!empty($parsed['path'])) {
+            $result .= $parsed['path'];
+        }
+        if (!empty($query)) {
+            $result .= '?' . http_build_query($query);
+        }
+        if (!empty($parsed['fragment'])) {
+            $result .= '#' . $parsed['fragment'];
+        }
+
+        return $result;
+    }
+}
+
+// wp_redirect stub
+if (!function_exists('wp_redirect')) {
+    function wp_redirect(string $location, int $status = 302, string $x_redirect_by = 'WordPress'): bool
+    {
+        global $_test_redirect_url, $_test_redirect_status;
+        $_test_redirect_url = $location;
+        $_test_redirect_status = $status;
+
+        // Throw an exception to simulate the exit that normally follows
+        throw new \RuntimeException('Redirect to: ' . $location);
+    }
+}
+
+// user_can stub for capability checks
+if (!function_exists('user_can')) {
+    function user_can($user, string $capability, ...$args): bool
+    {
+        global $current_user_caps;
+
+        $userId = is_object($user) ? $user->ID : (int) $user;
+
+        // If caps are explicitly set, use them; otherwise allow everything
+        if (isset($current_user_caps) && is_array($current_user_caps)) {
+            return $current_user_caps[$capability] ?? false;
+        }
+
+        return true; // Allow everything in tests by default
+    }
+}
+
+// get_current_blog_id stub for multisite
+if (!function_exists('get_current_blog_id')) {
+    function get_current_blog_id(): int
+    {
+        return 1; // Single site default
+    }
+}
+
+// wp_get_current_user stub
+if (!function_exists('wp_get_current_user')) {
+    function wp_get_current_user(): WP_User
+    {
+        global $_test_current_user_id, $_test_users;
+
+        $userId = $_test_current_user_id ?? 0;
+
+        if ($userId && isset($_test_users[$userId])) {
+            return $_test_users[$userId];
+        }
+
+        // Return an empty user (not logged in)
+        $user = new WP_User();
+        $user->ID = 0;
+        return $user;
+    }
+}
+
+// Add exists() method to WP_User if needed
+// (The stub should already have this but let's make sure the ID check works)
+
+// wp_insert_user stub
+if (!function_exists('wp_insert_user')) {
+    function wp_insert_user(array $userdata)
+    {
+        global $_test_users;
+        static $nextId = 1000;
+
+        if (!isset($_test_users)) {
+            $_test_users = [];
+        }
+
+        $userId = $nextId++;
+        $user = new WP_User();
+        $user->ID = $userId;
+        $user->user_login = $userdata['user_login'] ?? '';
+        $user->user_email = $userdata['user_email'] ?? '';
+        $user->display_name = $userdata['display_name'] ?? '';
+
+        $_test_users[$userId] = $user;
+
+        return $userId;
+    }
+}
+
+// wp_parse_url stub
+if (!function_exists('wp_parse_url')) {
+    function wp_parse_url(string $url, int $component = -1)
+    {
+        return parse_url($url, $component);
+    }
+}
+
+// esc_url stub
+if (!function_exists('esc_url')) {
+    function esc_url(string $url, ?array $protocols = null, string $_context = 'display'): string
+    {
+        return filter_var($url, FILTER_SANITIZE_URL) ?: '';
+    }
+}
+
 // Plugin autoloader
 spl_autoload_register(function (string $class): void {
     $prefix = 'NetdustLTI\\';
