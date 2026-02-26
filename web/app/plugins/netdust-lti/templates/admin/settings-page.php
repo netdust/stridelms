@@ -1,15 +1,9 @@
 <div class="wrap">
     <h1>Netdust LTI Settings</h1>
 
-    <?php if (isset($_GET['saved'])): ?>
-        <div class="notice notice-success"><p>Platform saved successfully.</p></div>
-    <?php endif; ?>
+    <?php settings_errors('netdust_lti'); ?>
 
-    <?php if (isset($_GET['deleted'])): ?>
-        <div class="notice notice-success"><p>Platform deleted successfully.</p></div>
-    <?php endif; ?>
-
-    <h2>Your Tool Endpoints</h2>
+    <h2>Tool Provider Endpoints</h2>
     <p>Provide these URLs when registering your tool with an LMS platform:</p>
     <table class="form-table">
         <?php
@@ -23,11 +17,15 @@
         <?php endforeach; ?>
     </table>
 
-    <h2>Registered Platforms</h2>
+    <h2>Configuration</h2>
     <p>
-        <a href="<?php echo esc_url(admin_url('options-general.php?page=netdust-lti&action=add')); ?>" class="button button-primary">Add Platform</a>
-        <a href="<?php echo esc_url(admin_url('options-general.php?page=netdust-lti&action=logs')); ?>" class="button">View Logs</a>
+        <a href="<?php echo esc_url(admin_url('edit.php?post_type=lti_platform')); ?>" class="button button-primary">Manage Platforms</a>
+        <a href="<?php echo esc_url(admin_url('edit.php?post_type=lti_tool')); ?>" class="button">Manage Tools</a>
+        <a href="<?php echo esc_url(admin_url('options-general.php?page=lti-launch-test')); ?>" class="button">Launch Test</a>
     </p>
 
-    <?php $listTable->display(); ?>
+    <h2>Logs</h2>
+    <p>
+        <a href="<?php echo esc_url(admin_url('options-general.php?page=netdust-lti&action=logs')); ?>" class="button">View Logs</a>
+    </p>
 </div>

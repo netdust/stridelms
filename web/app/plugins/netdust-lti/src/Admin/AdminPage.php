@@ -3,19 +3,17 @@ declare(strict_types=1);
 
 namespace NetdustLTI\Admin;
 
-use NetdustLTI\Repositories\PlatformRepository;
-use NetdustLTI\Domain\Platform;
-
+/**
+ * LTI Settings Admin Page.
+ *
+ * Provides a simplified settings page that links to CPT edit screens
+ * (Data Manager auto-generates platform/tool admin UI) and log viewing.
+ */
 final class AdminPage
 {
-    private PlatformRepository $platformRepository;
-
     public function __construct()
     {
-        $this->platformRepository = ntdst_get(PlatformRepository::class);
-
         add_action('admin_menu', [$this, 'registerMenu']);
-        add_action('admin_init', [$this, 'handleFormSubmission']);
     }
 
     public function registerMenu(): void
@@ -31,130 +29,12 @@ final class AdminPage
 
     public function renderPage(): void
     {
-        $action = isset($_GET['action']) ? sanitize_key($_GET['action']) : 'list';
+        $action = isset($_GET['action']) ? sanitize_key($_GET['action']) : 'settings';
 
-        switch ($action) {
-            case 'add':
-            case 'edit':
-                $this->renderPlatformForm();
-                break;
-
-            case 'logs':
-                $this->renderLogs();
-                break;
-
-            default:
-                $this->renderPlatformList();
-        }
-    }
-
-    private function renderPlatformList(): void
-    {
-        $listTable = new PlatformListTable($this->platformRepository);
-        $listTable->prepare_items();
-
-        include dirname(__DIR__, 2) . '/templates/admin/settings-page.php';
-    }
-
-    private function renderPlatformForm(): void
-    {
-        $platform = null;
-        $platformId = isset($_GET['platform_id']) ? (int) $_GET['platform_id'] : null;
-
-        if ($platformId) {
-            $platform = $this->platformRepository->find($platformId);
-            if (is_wp_error($platform)) {
-                $platform = null;
-            }
-        }
-
-        include dirname(__DIR__, 2) . '/templates/admin/platform-form.php';
-    }
-
-    public function handleFormSubmission(): void
-    {
-        if (!isset($_POST['netdust_lti_platform_nonce'])) {
-            return;
-        }
-
-        if (!wp_verify_nonce($_POST['netdust_lti_platform_nonce'], 'netdust_lti_save_platform')) {
-            wp_die('Security check failed');
-        }
-
-        if (!current_user_can('manage_options')) {
-            wp_die('Unauthorized');
-        }
-
-        // Handle delete action
-        if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['platform_id'])) {
-            $this->handleDelete();
-            return;
-        }
-
-        // Validate HTTPS for all endpoints (security requirement)
-        $endpoints = [
-            'platform_url' => $_POST['platform_url'] ?? '',
-            'auth_endpoint' => $_POST['auth_endpoint'] ?? '',
-            'token_endpoint' => $_POST['token_endpoint'] ?? '',
-            'jwks_endpoint' => $_POST['jwks_endpoint'] ?? '',
-        ];
-
-        foreach ($endpoints as $field => $url) {
-            if (!empty($url) && !$this->isHttpsUrl($url)) {
-                add_settings_error(
-                    'netdust_lti',
-                    'https_required',
-                    sprintf(__('HTTPS is required for %s. HTTP endpoints are not secure.', 'netdust-lti'), $field)
-                );
-                return;
-            }
-        }
-
-        $platform = new Platform(
-            id: isset($_POST['platform_id']) ? (int) $_POST['platform_id'] : null,
-            name: sanitize_text_field($_POST['name'] ?? ''),
-            platformId: esc_url_raw($_POST['platform_url'] ?? ''),
-            clientId: sanitize_text_field($_POST['client_id'] ?? ''),
-            deploymentId: sanitize_text_field($_POST['deployment_id'] ?? '') ?: null,
-            authEndpoint: esc_url_raw($_POST['auth_endpoint'] ?? ''),
-            tokenEndpoint: esc_url_raw($_POST['token_endpoint'] ?? ''),
-            jwksEndpoint: esc_url_raw($_POST['jwks_endpoint'] ?? ''),
-            enabled: isset($_POST['enabled']),
-        );
-
-        if ($platform->id) {
-            $result = $this->platformRepository->update($platform->id, $platform);
+        if ($action === 'logs') {
+            $this->renderLogs();
         } else {
-            $result = $this->platformRepository->create($platform);
-        }
-
-        if (is_wp_error($result)) {
-            add_settings_error('netdust_lti', 'save_failed', $result->get_error_message());
-        } else {
-            wp_redirect(admin_url('options-general.php?page=netdust-lti&saved=1'));
-            exit;
-        }
-    }
-
-    private function handleDelete(): void
-    {
-        $platformId = (int) $_GET['platform_id'];
-
-        if (!wp_verify_nonce($_GET['_wpnonce'] ?? '', 'delete_platform_' . $platformId)) {
-            wp_die('Security check failed');
-        }
-
-        if (!current_user_can('manage_options')) {
-            wp_die('Unauthorized');
-        }
-
-        $result = $this->platformRepository->delete($platformId);
-
-        if (is_wp_error($result)) {
-            add_settings_error('netdust_lti', 'delete_failed', $result->get_error_message());
-        } else {
-            wp_redirect(admin_url('options-general.php?page=netdust-lti&deleted=1'));
-            exit;
+            include dirname(__DIR__, 2) . '/templates/admin/settings-page.php';
         }
     }
 
@@ -163,7 +43,6 @@ final class AdminPage
         $tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'launches';
         $channel = $tab === 'grades' ? 'lti-grade' : 'lti';
 
-        // Read recent log entries
         $logs = $this->readLogFile($channel, 50);
 
         include dirname(__DIR__, 2) . '/templates/admin/logs.php';
@@ -205,13 +84,5 @@ final class AdminPage
             'jwks' => home_url('/lti/jwks'),
             'deep_link' => home_url('/lti/deep-link'),
         ];
-    }
-
-    /**
-     * Check if URL uses HTTPS protocol.
-     */
-    private function isHttpsUrl(string $url): bool
-    {
-        return str_starts_with($url, 'https://');
     }
 }
