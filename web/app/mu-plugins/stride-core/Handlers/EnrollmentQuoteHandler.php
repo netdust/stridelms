@@ -19,6 +19,7 @@ final class EnrollmentQuoteHandler
     public function __construct()
     {
         add_action('stride/registration/created', [$this, 'onRegistrationCreated']);
+        add_action('stride/registration/confirmed', [$this, 'onRegistrationConfirmed']);
     }
 
     /**
@@ -32,8 +33,26 @@ final class EnrollmentQuoteHandler
         $userId = $data['user_id'] ?? 0;
         $editionId = $data['edition_id'] ?? 0;
         $enrolledBy = $data['enrolled_by'] ?? null;
+        $status = $data['status'] ?? 'confirmed';
 
         if (!$registrationId || !$userId || !$editionId) {
+            return;
+        }
+
+        // Skip quote for interest registrations
+        if ($status === 'interest') {
+            ntdst_log('invoicing')->info('Skipping quote: interest registration', [
+                'registration_id' => $registrationId,
+            ]);
+            return;
+        }
+
+        // Skip quote for pending registrations with completion tasks
+        // Quote will be created when registration is confirmed
+        if ($status === 'pending') {
+            ntdst_log('invoicing')->info('Deferring quote: pending registration with completion tasks', [
+                'registration_id' => $registrationId,
+            ]);
             return;
         }
 
@@ -122,6 +141,28 @@ final class EnrollmentQuoteHandler
                 'amount' => $price->inCents(),
             ]);
         }
+    }
+
+    /**
+     * Create quote when a pending registration is confirmed.
+     */
+    public function onRegistrationConfirmed(array $data): void
+    {
+        $registrationId = $data['registration_id'] ?? 0;
+        $userId = $data['user_id'] ?? 0;
+        $editionId = $data['edition_id'] ?? 0;
+
+        if (!$registrationId || !$userId || !$editionId) {
+            return;
+        }
+
+        // Delegate to the same creation logic
+        $this->onRegistrationCreated([
+            'registration_id' => $registrationId,
+            'user_id' => $userId,
+            'edition_id' => $editionId,
+            'status' => 'confirmed',
+        ]);
     }
 
     /**

@@ -158,7 +158,7 @@ final class EnrollmentService extends AbstractService
         $status = $this->editions->getStatus($editionId);
         if (!$status->allowsEnrollment()) {
             // Distinguish between "full" and other closed reasons
-            if ($status === \Stride\Domain\EditionStatus::Full) {
+            if ($status === \Stride\Domain\OfferingStatus::Full) {
                 ntdst_log('enrollment')->warning('Enrollment rejected: edition full', [
                     'user_id' => $userId,
                     'edition_id' => $editionId,
@@ -183,20 +183,28 @@ final class EnrollmentService extends AbstractService
             return new WP_Error('edition_full', 'This edition is full');
         }
 
-        // Check not already enrolled
-        if ($this->isEnrolled($userId, $editionId)) {
-            ntdst_log('enrollment')->warning('Enrollment rejected: already enrolled', [
+        // Check not already registered (confirmed, pending, or interest)
+        if ($this->hasActiveRegistration($userId, editionId: $editionId)) {
+            ntdst_log('enrollment')->warning('Enrollment rejected: already registered', [
                 'user_id' => $userId,
                 'edition_id' => $editionId,
             ]);
             return new WP_Error('already_enrolled', 'User is already enrolled in this edition');
         }
 
+        // Determine initial status based on completion requirements + approval setting
+        $completionService = ntdst_get(EnrollmentCompletionService::class);
+        $hasCompletionRequirements = $completionService->hasRequirements($editionId, 'vad_edition');
+
+        $initialStatus = ($hasCompletionRequirements || $this->editions->requiresApproval($editionId))
+            ? RegistrationStatus::Pending
+            : RegistrationStatus::Confirmed;
+
         // Build registration data
         $registrationData = [
             'user_id' => $userId,
             'edition_id' => $editionId,
-            'status' => RegistrationStatus::Confirmed->value,
+            'status' => $initialStatus->value,
             'enrollment_path' => $options['enrollment_path'] ?? RegistrationRepository::PATH_INDIVIDUAL,
             'enrolled_by' => $options['enrolled_by'] ?? null,
             'voucher_code' => $options['voucher_code'] ?? null,
@@ -220,10 +228,12 @@ final class EnrollmentService extends AbstractService
             return $registrationId;
         }
 
-        // Grant LMS access
-        $courseId = $this->editions->getCourseId($editionId);
-        if ($courseId) {
-            $this->lms->grantAccess($userId, $courseId);
+        // Grant LMS access only for confirmed registrations
+        if ($initialStatus === RegistrationStatus::Confirmed) {
+            $courseId = $this->editions->getCourseId($editionId);
+            if ($courseId) {
+                $this->lms->grantAccess($userId, $courseId);
+            }
         }
 
         // Fire event
@@ -232,6 +242,7 @@ final class EnrollmentService extends AbstractService
             'user_id' => $userId,
             'edition_id' => $editionId,
             'enrolled_by' => $options['enrolled_by'] ?? null,
+            'status' => $initialStatus->value,
         ]);
 
         ntdst_log('enrollment')->info('Enrollment created', [
@@ -241,7 +252,139 @@ final class EnrollmentService extends AbstractService
             'enrollment_path' => $options['enrollment_path'] ?? RegistrationRepository::PATH_INDIVIDUAL,
         ]);
 
+        // Initialize completion tasks for pending registrations with requirements
+        if ($hasCompletionRequirements) {
+            $completionService->initializeForRegistration($registrationId, $editionId, 'vad_edition');
+        }
+
         return $registrationId;
+    }
+
+    /**
+     * Register interest in an offering (announcement status).
+     *
+     * Lightweight registration: no capacity checks, no LMS access, no quote.
+     *
+     * @param array{edition_id?: int, trajectory_id?: int, notes?: string} $options
+     * @return int|WP_Error Registration ID or error
+     */
+    public function registerInterest(int $userId, array $options = []): int|WP_Error
+    {
+        $editionId = $options['edition_id'] ?? null;
+        $trajectoryId = $options['trajectory_id'] ?? null;
+
+        if (!$editionId && !$trajectoryId) {
+            return new WP_Error('invalid_input', 'Edition or trajectory ID is required');
+        }
+
+        // Validate offering exists and status is announcement
+        if ($editionId) {
+            if (!$this->editions->exists($editionId)) {
+                return new WP_Error('invalid_edition', 'Edition does not exist');
+            }
+
+            $status = $this->editions->getStatus($editionId);
+            if (!$status->allowsInterest()) {
+                return new WP_Error('interest_closed', 'Interest registration is not available for this edition');
+            }
+
+            // Check not already registered (any active status)
+            if ($this->hasActiveRegistration($userId, editionId: $editionId)) {
+                return new WP_Error('already_registered', 'Je hebt al interesse gemeld voor deze editie');
+            }
+        }
+
+        // Build registration data
+        $registrationData = [
+            'user_id' => $userId,
+            'edition_id' => $editionId,
+            'trajectory_id' => $trajectoryId,
+            'status' => RegistrationStatus::Interest->value,
+            'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
+            'notes' => $options['notes'] ?? null,
+        ];
+
+        // Propagate company_id from user meta
+        $companyId = (int) get_user_meta($userId, '_stride_company_id', true);
+        if ($companyId) {
+            $registrationData['company_id'] = $companyId;
+        }
+
+        $registrationId = $this->registrations->create($registrationData);
+
+        if (is_wp_error($registrationId)) {
+            return $registrationId;
+        }
+
+        // Fire event (no LMS access, no quote)
+        $this->dispatch('registration/interest_registered', [
+            'registration_id' => $registrationId,
+            'user_id' => $userId,
+            'edition_id' => $editionId,
+            'trajectory_id' => $trajectoryId,
+        ]);
+
+        ntdst_log('enrollment')->info('Interest registered', [
+            'user_id' => $userId,
+            'edition_id' => $editionId,
+            'trajectory_id' => $trajectoryId,
+            'registration_id' => $registrationId,
+        ]);
+
+        return $registrationId;
+    }
+
+    /**
+     * Confirm a pending registration (admin approval).
+     *
+     * @return true|WP_Error
+     */
+    public function confirmRegistration(int $registrationId): true|WP_Error
+    {
+        $registration = $this->registrations->find($registrationId);
+
+        if (is_wp_error($registration)) {
+            return $registration;
+        }
+
+        if ($registration === null) {
+            return new WP_Error('not_found', 'Registration not found');
+        }
+
+        if ($registration->status !== RegistrationStatus::Pending->value) {
+            return new WP_Error('invalid_status', 'Registration is not pending approval');
+        }
+
+        // Update status to confirmed
+        $result = $this->registrations->updateStatus($registrationId, RegistrationStatus::Confirmed);
+
+        if (!$result) {
+            return new WP_Error('update_failed', 'Failed to confirm registration');
+        }
+
+        // Grant LMS access
+        $editionId = (int) $registration->edition_id;
+        if ($editionId) {
+            $courseId = $this->editions->getCourseId($editionId);
+            if ($courseId) {
+                $this->lms->grantAccess((int) $registration->user_id, $courseId);
+            }
+        }
+
+        // Fire event
+        $this->dispatch('registration/confirmed', [
+            'registration_id' => $registrationId,
+            'user_id' => (int) $registration->user_id,
+            'edition_id' => $editionId,
+        ]);
+
+        ntdst_log('enrollment')->info('Registration confirmed by admin', [
+            'registration_id' => $registrationId,
+            'user_id' => (int) $registration->user_id,
+            'edition_id' => $editionId,
+        ]);
+
+        return true;
     }
 
     /**
@@ -253,6 +396,10 @@ final class EnrollmentService extends AbstractService
 
         if (is_wp_error($registration)) {
             return $registration;
+        }
+
+        if ($registration === null) {
+            return new WP_Error('not_found', 'Registration not found');
         }
 
         // Update status
@@ -290,7 +437,7 @@ final class EnrollmentService extends AbstractService
     }
 
     /**
-     * Check if user is enrolled in edition.
+     * Check if user is enrolled in edition (confirmed status).
      */
     public function isEnrolled(int $userId, int $editionId): bool
     {
@@ -301,6 +448,29 @@ final class EnrollmentService extends AbstractService
         }
 
         return $registration->status === RegistrationStatus::Confirmed->value;
+    }
+
+    /**
+     * Check if user has any active registration (blocks duplicate submissions).
+     *
+     * Active = confirmed, pending, or interest (anything that isn't cancelled/withdrawn).
+     */
+    public function hasActiveRegistration(int $userId, ?int $editionId = null, ?int $trajectoryId = null): bool
+    {
+        if ($editionId) {
+            $registration = $this->registrations->findByUserAndEdition($userId, $editionId);
+        } elseif ($trajectoryId) {
+            return $this->registrations->existsForTrajectory($userId, $trajectoryId);
+        } else {
+            return false;
+        }
+
+        if (!$registration) {
+            return false;
+        }
+
+        $status = RegistrationStatus::tryFrom($registration->status);
+        return $status && $status->blocksDuplicate();
     }
 
     /**
