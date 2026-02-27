@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Stride\Modules\Edition\Admin;
 
-use Stride\Domain\EditionStatus;
+use Stride\Domain\OfferingStatus;
 use Stride\Modules\Edition\EditionService;
 use WP_Post;
 
@@ -67,50 +67,26 @@ final class EditionActionsMetabox
 
             <!-- Status Change -->
             <?php $this->renderStatusSection($status); ?>
+
+            <!-- Enrollment Requirements -->
+            <?php $this->renderRequirementsSection($post); ?>
+
+            <!-- Requires Approval -->
+            <?php $this->renderApprovalSection($post); ?>
         </div>
         <?php
     }
 
-    private function getStatusConfig(EditionStatus $status): array
+    private function getStatusConfig(OfferingStatus $status): array
     {
-        return match ($status) {
-            EditionStatus::Open => [
-                'label' => __('Open voor inschrijving', 'stride'),
-                'color' => '#00a32a',
-                'bg' => '#ecf7ed',
-                'icon' => 'yes-alt',
-            ],
-            EditionStatus::Full => [
-                'label' => __('Volzet', 'stride'),
-                'color' => '#d63638',
-                'bg' => '#fcf0f1',
-                'icon' => 'warning',
-            ],
-            EditionStatus::Cancelled => [
-                'label' => __('Geannuleerd', 'stride'),
-                'color' => '#a7aaad',
-                'bg' => '#f0f0f1',
-                'icon' => 'dismiss',
-            ],
-            EditionStatus::Postponed => [
-                'label' => __('Uitgesteld', 'stride'),
-                'color' => '#dba617',
-                'bg' => '#fcf9e8',
-                'icon' => 'clock',
-            ],
-            EditionStatus::Announcement => [
-                'label' => __('Aankondiging', 'stride'),
-                'color' => '#0073aa',
-                'bg' => '#e5f5fa',
-                'icon' => 'megaphone',
-            ],
-            EditionStatus::Completed => [
-                'label' => __('Afgelopen', 'stride'),
-                'color' => '#646970',
-                'bg' => '#f6f7f7',
-                'icon' => 'flag',
-            ],
-        };
+        $badge = $status->badgeConfig();
+
+        return [
+            'label' => $status->label(),
+            'color' => $badge['color'],
+            'bg' => $badge['bg'],
+            'icon' => $badge['icon'],
+        ];
     }
 
     private function renderCapacitySection(int $capacity, int $registeredCount): void
@@ -177,13 +153,64 @@ final class EditionActionsMetabox
         <?php
     }
 
-    private function renderStatusSection(EditionStatus $currentStatus): void
+    private function renderRequirementsSection(WP_Post $post): void
+    {
+        if ($post->post_status === 'auto-draft') {
+            return;
+        }
+
+        $model = ntdst_data()->get('vad_edition');
+        $requirements = [
+            'requires_session_selection' => __('Sessiekeuze vereist', 'stride'),
+            'requires_questionnaire'     => __('Vragenlijst invullen', 'stride'),
+            'requires_documents'         => __('Documenten uploaden', 'stride'),
+        ];
+        ?>
+        <div class="stride-sidebar-section">
+            <h4><?php esc_html_e('Inschrijfvereisten', 'stride'); ?></h4>
+            <p class="description" style="margin-bottom: 8px; font-size: 11px;">
+                <?php esc_html_e('Deelnemers moeten deze stappen voltooien na inschrijving.', 'stride'); ?>
+            </p>
+            <?php foreach ($requirements as $key => $label): ?>
+                <?php $checked = (bool) $model->getMeta($post->ID, $key); ?>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
+                    <input type="hidden" name="ntdst_fields[<?= esc_attr($key) ?>]" value="0">
+                    <input type="checkbox" name="ntdst_fields[<?= esc_attr($key) ?>]" value="1"
+                           <?php checked($checked); ?>>
+                    <span style="font-size: 12px;"><?= esc_html($label) ?></span>
+                </label>
+            <?php endforeach; ?>
+        </div>
+        <?php
+    }
+
+    private function renderApprovalSection(WP_Post $post): void
+    {
+        $requiresApproval = (bool) $this->editionService->requiresApproval($post->ID);
+        ?>
+        <div class="stride-sidebar-section">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="hidden" name="ntdst_fields[requires_approval]" value="0">
+                <input type="checkbox" name="ntdst_fields[requires_approval]" value="1"
+                       <?php checked($requiresApproval); ?>>
+                <span style="font-weight: 600; font-size: 12px;">
+                    <?php esc_html_e('Goedkeuring vereist', 'stride'); ?>
+                </span>
+            </label>
+            <p class="description" style="margin-top: 6px; font-size: 11px;">
+                <?php esc_html_e('Inschrijvingen wachten op goedkeuring door een beheerder.', 'stride'); ?>
+            </p>
+        </div>
+        <?php
+    }
+
+    private function renderStatusSection(OfferingStatus $currentStatus): void
     {
         ?>
         <div class="stride-sidebar-section">
             <h4><?php esc_html_e('Status', 'stride'); ?></h4>
             <select name="stride_change_status" id="stride_change_status" class="stride-status-select">
-                <?php foreach (EditionStatus::cases() as $status): ?>
+                <?php foreach (OfferingStatus::cases() as $status): ?>
                     <option value="<?php echo esc_attr($status->value); ?>" <?php echo $currentStatus === $status ? 'selected' : ''; ?>>
                         <?php echo esc_html($status->label()); ?>
                     </option>
