@@ -112,5 +112,18 @@ final class RegistrationTable
             $wpdb->query("ALTER TABLE {$table} ADD COLUMN company_id BIGINT UNSIGNED NULL AFTER quote_id");
             $wpdb->query("ALTER TABLE {$table} ADD INDEX idx_company (company_id)");
         }
+
+        // Expand status ENUM to include 'interest' and 'pending'
+        $wpdb->query(
+            "ALTER TABLE {$table} MODIFY COLUMN status
+            ENUM('confirmed','cancelled','waitlist','completed','withdrawn','interest','pending')
+            DEFAULT 'confirmed'"
+        );
+
+        // Add completion_tasks JSON column
+        $hasCompletionTasks = $wpdb->get_var("SHOW COLUMNS FROM {$table} LIKE 'completion_tasks'");
+        if (!$hasCompletionTasks) {
+            $wpdb->query("ALTER TABLE {$table} ADD COLUMN completion_tasks JSON NULL AFTER notes");
+        }
     }
 }

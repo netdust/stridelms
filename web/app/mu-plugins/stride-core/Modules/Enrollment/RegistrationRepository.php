@@ -106,6 +106,10 @@ final class RegistrationRepository
             $row->selections = json_decode($row->selections, true);
         }
 
+        if ($row && $row->completion_tasks) {
+            $row->completion_tasks = json_decode($row->completion_tasks, true);
+        }
+
         return $row;
     }
 
@@ -126,6 +130,10 @@ final class RegistrationRepository
 
         if ($row && $row->selections) {
             $row->selections = json_decode($row->selections, true);
+        }
+
+        if ($row && $row->completion_tasks) {
+            $row->completion_tasks = json_decode($row->completion_tasks, true);
         }
 
         return $row;
@@ -418,6 +426,26 @@ final class RegistrationRepository
         return $registration && !empty($registration->selections_locked_at);
     }
 
+    // === Completion tasks ===
+
+    /**
+     * Update completion_tasks JSON for a registration.
+     */
+    public function updateCompletionTasks(int $registrationId, array $tasks): bool
+    {
+        global $wpdb;
+
+        $result = $wpdb->update(
+            $this->table(),
+            ['completion_tasks' => wp_json_encode($tasks)],
+            ['id' => $registrationId],
+            ['%s'],
+            ['%d']
+        );
+
+        return $result !== false;
+    }
+
     // === Status updates ===
 
     /**
@@ -429,13 +457,13 @@ final class RegistrationRepository
     {
         global $wpdb;
 
-        $allowed = ['status', 'selections', 'selections_locked_at', 'quote_id', 'completed_at', 'cancelled_at', 'notes'];
+        $allowed = ['status', 'selections', 'selections_locked_at', 'quote_id', 'completed_at', 'cancelled_at', 'notes', 'completion_tasks'];
         $update = [];
 
         foreach ($allowed as $field) {
             if (array_key_exists($field, $data)) {
                 $value = $data[$field];
-                if ($field === 'selections' && is_array($value)) {
+                if (($field === 'selections' || $field === 'completion_tasks') && is_array($value)) {
                     $value = wp_json_encode($value);
                 }
                 $update[$field] = $value;
