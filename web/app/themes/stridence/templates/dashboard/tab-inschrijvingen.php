@@ -21,6 +21,7 @@ use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Attendance\AttendanceService;
 use Stride\Modules\Completion\CompletionService;
+use Stride\Modules\Enrollment\EnrollmentCompletionService;
 
 $user    = $args['user'] ?? wp_get_current_user();
 $user_id = $user->ID;
@@ -31,6 +32,7 @@ $editionService    = ntdst_get(EditionService::class);
 $sessionService    = ntdst_get(SessionService::class);
 $attendanceService = ntdst_get(AttendanceService::class);
 $completionService = ntdst_get(CompletionService::class);
+$enrollmentCompletion = ntdst_get(EnrollmentCompletionService::class);
 
 // Get all user registrations
 $registrations = $registrationRepo->findByUser($user_id);
@@ -59,17 +61,18 @@ foreach ($registrations as $reg) {
     $course       = $course_id ? get_post($course_id) : null;
 
     $reg_data = [
-        'id'           => (int) $reg->id,
-        'edition_id'   => $edition_id,
-        'edition'      => $edition,
-        'course'       => $course,
-        'course_title' => $course ? $course->post_title : $edition->post_title,
-        'start_date'   => $editionModel->getMeta($edition_id, 'start_date', ''),
-        'venue'        => $editionModel->getMeta($edition_id, 'venue', ''),
-        'status'       => $reg->status,
-        'registered_at' => $reg->registered_at,
-        'sessions'     => $sessionService->getSessionsForEdition($edition_id),
-        'progress'     => $completionService->getProgress($edition_id, $user_id),
+        'id'               => (int) $reg->id,
+        'edition_id'       => $edition_id,
+        'edition'          => $edition,
+        'course'           => $course,
+        'course_title'     => $course ? $course->post_title : $edition->post_title,
+        'start_date'       => $editionModel->getMeta($edition_id, 'start_date', ''),
+        'venue'            => $editionModel->getMeta($edition_id, 'venue', ''),
+        'status'           => $reg->status,
+        'registered_at'    => $reg->registered_at,
+        'sessions'         => $sessionService->getSessionsForEdition($edition_id),
+        'progress'         => $completionService->getProgress($edition_id, $user_id),
+        'completion_tasks' => $reg->completion_tasks ?? null,
     ];
 
     // Add attendance for each session
@@ -188,14 +191,28 @@ $upcoming_sessions = array_slice($upcoming_sessions, 0, 3);
 
                         <div x-show="open" x-collapse class="border-t border-border">
                             <div class="p-4 space-y-4">
-                                <!-- Progress -->
-                                <?php
-                                get_template_part('partials/progress-bar', null, [
-                                    'attended' => $reg['progress']['attended'],
-                                    'required' => $reg['progress']['required'],
-                                    'label'    => __('Aanwezigheid', 'stridence'),
-                                ]);
-                                ?>
+                                <?php if ($reg['status'] === 'pending' && !empty($reg['completion_tasks'])): ?>
+                                    <!-- Completion Checklist -->
+                                    <?php
+                                    $taskSummary = $enrollmentCompletion->getTaskSummary($reg['id']);
+                                    $edition_slug = get_post_field('post_name', $reg['edition_id']);
+                                    $complete_url = home_url('/vormingen/' . $edition_slug . '/voltooien/');
+
+                                    get_template_part('templates/dashboard/partials/completion-checklist', null, [
+                                        'task_summary' => $taskSummary,
+                                        'complete_url' => $complete_url,
+                                    ]);
+                                    ?>
+                                <?php else: ?>
+                                    <!-- Progress -->
+                                    <?php
+                                    get_template_part('partials/progress-bar', null, [
+                                        'attended' => $reg['progress']['attended'],
+                                        'required' => $reg['progress']['required'],
+                                        'label'    => __('Aanwezigheid', 'stridence'),
+                                    ]);
+                                    ?>
+                                <?php endif; ?>
 
                                 <!-- Session List -->
                                 <?php if (!empty($reg['sessions'])) : ?>
