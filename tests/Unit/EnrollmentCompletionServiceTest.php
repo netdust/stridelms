@@ -150,4 +150,116 @@ class EnrollmentCompletionServiceTest extends TestCase
         $this->assertEquals('completed', $updated['session_selection']['status']);
         $this->assertArrayNotHasKey('data', $updated['session_selection']);
     }
+
+    /** @test */
+    public function testAvailabilityQuestionnaireAlwaysAvailable(): void
+    {
+        $tasks = [
+            'questionnaire' => ['status' => 'pending'],
+            'approval' => ['status' => 'pending'],
+        ];
+
+        $availability = $this->service->getTaskAvailability($tasks, 0);
+
+        $this->assertEquals('available', $availability['questionnaire']['state']);
+    }
+
+    /** @test */
+    public function testAvailabilityApprovalLockedUntilImmediateTasksDone(): void
+    {
+        $tasks = [
+            'questionnaire' => ['status' => 'pending'],
+            'documents' => ['status' => 'pending'],
+            'approval' => ['status' => 'pending'],
+        ];
+
+        $availability = $this->service->getTaskAvailability($tasks, 0);
+
+        $this->assertEquals('locked', $availability['approval']['state']);
+    }
+
+    /** @test */
+    public function testAvailabilityApprovalAvailableWhenImmediateTasksDone(): void
+    {
+        $tasks = [
+            'questionnaire' => ['status' => 'completed'],
+            'documents' => ['status' => 'completed'],
+            'approval' => ['status' => 'pending'],
+        ];
+
+        $availability = $this->service->getTaskAvailability($tasks, 0);
+
+        $this->assertEquals('available', $availability['approval']['state']);
+    }
+
+    /** @test */
+    public function testAvailabilitySessionSelectionLockedWithoutApproval(): void
+    {
+        $tasks = [
+            'questionnaire' => ['status' => 'completed'],
+            'approval' => ['status' => 'pending'],
+            'session_selection' => ['status' => 'pending'],
+        ];
+
+        // Even with selection_open, approval blocks it
+        $this->setDataManagerMeta('vad_edition', 100, [
+            'selection_open' => '1',
+        ]);
+
+        $availability = $this->service->getTaskAvailability($tasks, 100);
+
+        $this->assertEquals('locked', $availability['session_selection']['state']);
+        $this->assertStringContainsString('goedkeuring', strtolower($availability['session_selection']['reason']));
+    }
+
+    /** @test */
+    public function testAvailabilitySessionSelectionLockedWhenNotOpen(): void
+    {
+        $tasks = [
+            'session_selection' => ['status' => 'pending'],
+        ];
+
+        // No approval, but selection_open is false
+        $this->setDataManagerMeta('vad_edition', 100, [
+            'selection_open' => '0',
+        ]);
+
+        $availability = $this->service->getTaskAvailability($tasks, 100);
+
+        $this->assertEquals('locked', $availability['session_selection']['state']);
+        $this->assertStringContainsString('niet geopend', strtolower($availability['session_selection']['reason']));
+    }
+
+    /** @test */
+    public function testAvailabilitySessionSelectionAvailableWhenOpenAndApproved(): void
+    {
+        $tasks = [
+            'approval' => ['status' => 'completed'],
+            'session_selection' => ['status' => 'pending'],
+        ];
+
+        $this->setDataManagerMeta('vad_edition', 100, [
+            'selection_open' => '1',
+        ]);
+
+        $availability = $this->service->getTaskAvailability($tasks, 100);
+
+        $this->assertEquals('available', $availability['session_selection']['state']);
+    }
+
+    /** @test */
+    public function testAvailabilityCompletedTasksAlwaysCompleted(): void
+    {
+        $tasks = [
+            'questionnaire' => ['status' => 'completed'],
+            'approval' => ['status' => 'completed'],
+            'session_selection' => ['status' => 'completed'],
+        ];
+
+        $availability = $this->service->getTaskAvailability($tasks, 0);
+
+        $this->assertEquals('completed', $availability['questionnaire']['state']);
+        $this->assertEquals('completed', $availability['approval']['state']);
+        $this->assertEquals('completed', $availability['session_selection']['state']);
+    }
 }

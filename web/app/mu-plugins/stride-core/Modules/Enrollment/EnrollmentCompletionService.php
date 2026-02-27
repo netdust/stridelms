@@ -13,6 +13,11 @@ use WP_Error;
  *
  * Tracks requirements (session selection, questionnaire, documents, approval)
  * as JSON on the registration row. Auto-confirms when all tasks complete.
+ *
+ * Task availability follows real-world ordering:
+ * - questionnaire, documents: available immediately
+ * - approval: available when questionnaire + documents are done
+ * - session_selection: available when selection_open on edition + approval done (if exists)
  */
 final class EnrollmentCompletionService extends AbstractService
 {
@@ -91,6 +96,94 @@ final class EnrollmentCompletionService extends AbstractService
     }
 
     /**
+     * Compute availability for each task in a registration.
+     *
+     * Returns 'available', 'locked', or 'completed' per task, plus lock reason.
+     *
+     * @return array<string, array{state: string, reason: string}>
+     */
+    public function getTaskAvailability(array $tasks, int $editionId): array
+    {
+        $availability = [];
+
+        // Pre-compute: are immediate tasks (questionnaire + documents) done?
+        $immediateDone = true;
+        foreach (['questionnaire', 'documents'] as $type) {
+            if (isset($tasks[$type]) && ($tasks[$type]['status'] ?? 'pending') !== 'completed') {
+                $immediateDone = false;
+            }
+        }
+
+        $approvalDone = !isset($tasks['approval']) || ($tasks['approval']['status'] ?? 'pending') === 'completed';
+
+        // Selection window from edition meta
+        $selectionOpen = false;
+        $selectionReason = '';
+        if ($editionId && isset($tasks['session_selection'])) {
+            $model = ntdst_data()->get('vad_edition');
+            $isOpen = (bool) $model->getMeta($editionId, 'selection_open');
+            $deadline = $model->getMeta($editionId, 'selection_deadline');
+            $pastDeadline = $deadline && strtotime($deadline) < current_time('timestamp');
+
+            if (!$isOpen) {
+                $selectionReason = __('Sessiekeuze is nog niet geopend.', 'stride');
+            } elseif ($pastDeadline) {
+                $selectionReason = __('De deadline voor sessiekeuze is verstreken.', 'stride');
+            } else {
+                $selectionOpen = true;
+            }
+        }
+
+        foreach ($tasks as $type => $task) {
+            $status = $task['status'] ?? 'pending';
+
+            if ($status === 'completed') {
+                $availability[$type] = ['state' => 'completed', 'reason' => ''];
+                continue;
+            }
+
+            switch ($type) {
+                case 'questionnaire':
+                case 'documents':
+                    // Always available immediately
+                    $availability[$type] = ['state' => 'available', 'reason' => ''];
+                    break;
+
+                case 'approval':
+                    // Available when questionnaire + documents done
+                    if ($immediateDone) {
+                        $availability[$type] = ['state' => 'available', 'reason' => __('Klaar voor beoordeling.', 'stride')];
+                    } else {
+                        $availability[$type] = ['state' => 'locked', 'reason' => __('Wacht op vragenlijst en documenten.', 'stride')];
+                    }
+                    break;
+
+                case 'session_selection':
+                    // Needs: approval done (if exists) + selection window open
+                    if (!$approvalDone) {
+                        $availability[$type] = ['state' => 'locked', 'reason' => __('Wacht op goedkeuring.', 'stride')];
+                    } elseif (!$selectionOpen) {
+                        $availability[$type] = ['state' => 'locked', 'reason' => $selectionReason];
+                    } else {
+                        $availability[$type] = ['state' => 'available', 'reason' => ''];
+                        if ($deadline = ntdst_data()->get('vad_edition')->getMeta($editionId, 'selection_deadline')) {
+                            $availability[$type]['reason'] = sprintf(
+                                __('Kies voor %s', 'stride'),
+                                date_i18n('d M Y', strtotime($deadline))
+                            );
+                        }
+                    }
+                    break;
+
+                default:
+                    $availability[$type] = ['state' => 'available', 'reason' => ''];
+            }
+        }
+
+        return $availability;
+    }
+
+    /**
      * Initialize completion tasks for a registration.
      */
     public function initializeForRegistration(int $registrationId, int $postId, string $postType): void
@@ -131,6 +224,13 @@ final class EnrollmentCompletionService extends AbstractService
 
         if ($tasks[$taskType]['status'] === 'completed') {
             return true;
+        }
+
+        // Check availability — don't allow completing locked tasks
+        $editionId = (int) ($registration->edition_id ?? 0);
+        $availability = $this->getTaskAvailability($tasks, $editionId);
+        if (($availability[$taskType]['state'] ?? 'available') === 'locked') {
+            return new WP_Error('task_locked', $availability[$taskType]['reason'] ?? 'Task is not yet available');
         }
 
         $tasks = $this->markTaskComplete($tasks, $taskType, $data);
@@ -194,7 +294,7 @@ final class EnrollmentCompletionService extends AbstractService
     /**
      * Get task status summary for a registration.
      *
-     * @return array{tasks: array, total: int, completed: int, has_approval: bool, ready_for_approval: bool}
+     * @return array{tasks: array, availability: array, total: int, completed: int, has_approval: bool, ready_for_approval: bool}
      */
     public function getTaskSummary(int $registrationId): array
     {
@@ -202,6 +302,8 @@ final class EnrollmentCompletionService extends AbstractService
         $registration = $repo->find($registrationId);
 
         $tasks = $registration->completion_tasks ?? [];
+        $editionId = (int) ($registration->edition_id ?? 0);
+        $availability = $this->getTaskAvailability($tasks, $editionId);
         $total = count($tasks);
         $completed = 0;
 
@@ -213,10 +315,13 @@ final class EnrollmentCompletionService extends AbstractService
 
         return [
             'tasks' => $tasks,
+            'availability' => $availability,
             'total' => $total,
             'completed' => $completed,
             'has_approval' => isset($tasks['approval']),
-            'ready_for_approval' => isset($tasks['approval']) && $this->areUserTasksComplete($tasks),
+            'ready_for_approval' => isset($tasks['approval'])
+                && ($availability['approval']['state'] ?? '') === 'available'
+                && ($tasks['approval']['status'] ?? 'pending') !== 'completed',
         ];
     }
 
@@ -243,7 +348,7 @@ final class EnrollmentCompletionService extends AbstractService
     }
 
     /**
-     * Handle task completion -- auto-confirm if all tasks done.
+     * Handle task completion — auto-confirm if all tasks done.
      */
     public function onTaskCompleted(array $data): void
     {
@@ -254,29 +359,24 @@ final class EnrollmentCompletionService extends AbstractService
             return;
         }
 
-        if (isset($tasks['approval'])) {
-            if ($this->areUserTasksComplete($tasks) && $tasks['approval']['status'] !== 'completed') {
-                ntdst_log('enrollment')->info('All user tasks complete, awaiting admin approval', [
-                    'registration_id' => $registrationId,
-                ]);
-            }
+        // If not all tasks are complete, nothing to do
+        if (!$this->isFullyComplete($tasks)) {
             return;
         }
 
-        if ($this->isFullyComplete($tasks)) {
-            $enrollmentService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class);
-            $result = $enrollmentService->confirmRegistration($registrationId);
+        // All tasks complete — auto-confirm
+        $enrollmentService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class);
+        $result = $enrollmentService->confirmRegistration($registrationId);
 
-            if (is_wp_error($result)) {
-                ntdst_log('enrollment')->error('Auto-confirm failed', [
-                    'registration_id' => $registrationId,
-                    'error' => $result->get_error_message(),
-                ]);
-            } else {
-                ntdst_log('enrollment')->info('Registration auto-confirmed after task completion', [
-                    'registration_id' => $registrationId,
-                ]);
-            }
+        if (is_wp_error($result)) {
+            ntdst_log('enrollment')->error('Auto-confirm failed', [
+                'registration_id' => $registrationId,
+                'error' => $result->get_error_message(),
+            ]);
+        } else {
+            ntdst_log('enrollment')->info('Registration auto-confirmed after task completion', [
+                'registration_id' => $registrationId,
+            ]);
         }
     }
 
