@@ -6,7 +6,9 @@ namespace Stride\Modules\Enrollment;
 
 use NTDST_Response;
 use Stride\Contracts\EditionQueryInterface;
+use Stride\Domain\OfferingStatus;
 use Stride\Infrastructure\AbstractService;
+use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Trajectory\TrajectoryService;
 
 /**
@@ -64,6 +66,20 @@ final class EnrollmentRouterService extends AbstractService
             'index.php?stride_enrollment=edition&stride_enrollment_slug=$matches[1]',
             'top'
         );
+
+        // Edition completion: /vormingen/{slug}/voltooien/
+        add_rewrite_rule(
+            '^vormingen/([^/]+)/voltooien/?$',
+            'index.php?stride_completion=edition&stride_enrollment_slug=$matches[1]',
+            'top'
+        );
+
+        // Trajectory completion: /trajecten/{slug}/voltooien/
+        add_rewrite_rule(
+            '^trajecten/([^/]+)/voltooien/?$',
+            'index.php?stride_completion=trajectory&stride_enrollment_slug=$matches[1]',
+            'top'
+        );
     }
 
     /**
@@ -73,6 +89,7 @@ final class EnrollmentRouterService extends AbstractService
     {
         $vars[] = 'stride_enrollment';
         $vars[] = 'stride_enrollment_slug';
+        $vars[] = 'stride_completion';
         return $vars;
     }
 
@@ -81,6 +98,15 @@ final class EnrollmentRouterService extends AbstractService
      */
     public function handleEnrollmentRoutes(): void
     {
+        // Handle completion routes first
+        $completionType = get_query_var('stride_completion');
+        $completionSlug = get_query_var('stride_enrollment_slug');
+
+        if ($completionType && $completionSlug) {
+            $this->handleCompletionRoute($completionType, $completionSlug);
+            exit;
+        }
+
         $enrollmentType = get_query_var('stride_enrollment');
         $slug = get_query_var('stride_enrollment_slug');
 
@@ -119,15 +145,31 @@ final class EnrollmentRouterService extends AbstractService
             exit;
         }
 
-        // Check if enrollment is open
+        // Compute enrollment mode
         $trajectoryService = ntdst_get(TrajectoryService::class);
-        $enrollmentOpen = $trajectoryService->isEnrollmentOpen($trajectory->ID);
+        $mode = $this->computeEnrollmentMode(
+            $trajectoryService->getTrajectory($trajectory->ID)['status_enum'] ?? OfferingStatus::Draft,
+            $trajectoryService->requiresApproval($trajectory->ID),
+            $trajectoryService->isEnrollmentOpen($trajectory->ID),
+        );
+
+        // Block terminal states
+        if ($mode === 'closed') {
+            ntdst_response()
+                ->with('item', $trajectory)
+                ->with('type', 'trajectory')
+                ->with('enrollment_open', false)
+                ->with('enrollment_mode', $mode)
+                ->render('enrollment/form');
+            return;
+        }
 
         // Render the enrollment form
         ntdst_response()
             ->with('item', $trajectory)
             ->with('type', 'trajectory')
-            ->with('enrollment_open', $enrollmentOpen)
+            ->with('enrollment_open', true)
+            ->with('enrollment_mode', $mode)
             ->render('enrollment/form');
     }
 
@@ -159,16 +201,111 @@ final class EnrollmentRouterService extends AbstractService
             exit;
         }
 
-        // Check if enrollment is open via EditionQueryInterface
-        $editionService = ntdst_get(EditionQueryInterface::class);
-        $enrollmentOpen = $editionService->getStatus($edition->ID)->allowsEnrollment();
+        // Compute enrollment mode
+        $editionService = ntdst_get(EditionService::class);
+        $status = $editionService->getStatus($edition->ID);
+        $mode = $this->computeEnrollmentMode(
+            $status,
+            $editionService->requiresApproval($edition->ID),
+            $status->allowsEnrollment() && $editionService->hasAvailableSpots($edition->ID),
+        );
+
+        // Block terminal states
+        if ($mode === 'closed') {
+            ntdst_response()
+                ->with('item', $edition)
+                ->with('type', 'edition')
+                ->with('enrollment_open', false)
+                ->with('enrollment_mode', $mode)
+                ->render('enrollment/form');
+            return;
+        }
 
         // Render the enrollment form
         ntdst_response()
             ->with('item', $edition)
             ->with('type', 'edition')
-            ->with('enrollment_open', $enrollmentOpen)
+            ->with('enrollment_open', true)
+            ->with('enrollment_mode', $mode)
             ->render('enrollment/form');
+    }
+
+    /**
+     * Compute enrollment mode based on offering status and settings.
+     *
+     * @return string 'interest' | 'pending_approval' | 'enrollment' | 'closed'
+     */
+    private function computeEnrollmentMode(OfferingStatus $status, bool $requiresApproval, bool $enrollmentOpen): string
+    {
+        if ($status->allowsInterest()) {
+            return 'interest';
+        }
+
+        if ($enrollmentOpen) {
+            return $requiresApproval ? 'pending_approval' : 'enrollment';
+        }
+
+        return 'closed';
+    }
+
+    /**
+     * Handle completion page route.
+     */
+    private function handleCompletionRoute(string $type, string $slug): void
+    {
+        if (!is_user_logged_in()) {
+            $base = $type === 'trajectory' ? 'trajecten' : 'vormingen';
+            wp_safe_redirect(wp_login_url(home_url("/{$base}/{$slug}/voltooien/")));
+            exit;
+        }
+
+        $postType = $type === 'trajectory' ? 'vad_trajectory' : 'vad_edition';
+        $post = get_page_by_path($slug, OBJECT, $postType);
+
+        if (!$post && $postType === 'vad_edition' && is_numeric($slug)) {
+            $post = get_post((int) $slug);
+            if ($post && $post->post_type !== 'vad_edition') {
+                $post = null;
+            }
+        }
+
+        if (!$post) {
+            $this->trigger404();
+            return;
+        }
+
+        // Find user's pending registration
+        $userId = get_current_user_id();
+        $repo = ntdst_get(RegistrationRepository::class);
+
+        if ($postType === 'vad_edition') {
+            $registration = $repo->findByUserAndEdition($userId, $post->ID);
+        } else {
+            $regs = $repo->findByUser($userId);
+            $registration = null;
+            foreach ($regs as $r) {
+                if ((int) ($r->trajectory_id ?? 0) === $post->ID && $r->status === 'pending') {
+                    $registration = $r;
+                    break;
+                }
+            }
+        }
+
+        if (!$registration || $registration->status !== 'pending' || empty($registration->completion_tasks)) {
+            // No pending registration with tasks — redirect to the detail page
+            wp_safe_redirect(get_permalink($post->ID));
+            exit;
+        }
+
+        $completionService = ntdst_get(EnrollmentCompletionService::class);
+        $taskSummary = $completionService->getTaskSummary((int) $registration->id);
+
+        ntdst_response()
+            ->with('post', $post)
+            ->with('type', $type)
+            ->with('registration', $registration)
+            ->with('task_summary', $taskSummary)
+            ->render('forms/completion');
     }
 
     /**

@@ -42,6 +42,8 @@ final class EnrollmentCompletionService extends AbstractService
     protected function init(): void
     {
         add_action('stride/enrollment/task_completed', [$this, 'onTaskCompleted']);
+        add_action('wp_ajax_stride_complete_task', [$this, 'ajaxCompleteTask']);
+        add_action('wp_ajax_stride_upload_completion_documents', [$this, 'ajaxUploadDocuments']);
     }
 
     /**
@@ -276,5 +278,110 @@ final class EnrollmentCompletionService extends AbstractService
                 ]);
             }
         }
+    }
+
+    /**
+     * AJAX: Complete a task (questionnaire, session_selection).
+     */
+    public function ajaxCompleteTask(): void
+    {
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'stride_completion')) {
+            wp_send_json_error(['message' => __('Ongeldig token.', 'stride')]);
+        }
+
+        $registrationId = absint($_POST['registration_id'] ?? 0);
+        $taskType = sanitize_text_field($_POST['task_type'] ?? '');
+        $taskData = json_decode(stripslashes($_POST['task_data'] ?? '{}'), true) ?: [];
+
+        if (!$registrationId || !$taskType) {
+            wp_send_json_error(['message' => __('Ongeldige gegevens.', 'stride')]);
+        }
+
+        // Verify user owns this registration
+        $repo = ntdst_get(RegistrationRepository::class);
+        $reg = $repo->find($registrationId);
+
+        if (!$reg || (int) $reg->user_id !== get_current_user_id()) {
+            wp_send_json_error(['message' => __('Geen toegang.', 'stride')]);
+        }
+
+        $result = $this->completeTask($registrationId, $taskType, $taskData);
+
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+
+        wp_send_json_success(['completed' => true]);
+    }
+
+    /**
+     * AJAX: Upload documents and mark task complete.
+     */
+    public function ajaxUploadDocuments(): void
+    {
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'stride_completion')) {
+            wp_send_json_error(['message' => __('Ongeldig token.', 'stride')]);
+        }
+
+        $registrationId = absint($_POST['registration_id'] ?? 0);
+
+        if (!$registrationId) {
+            wp_send_json_error(['message' => __('Ongeldige gegevens.', 'stride')]);
+        }
+
+        // Verify user owns this registration
+        $repo = ntdst_get(RegistrationRepository::class);
+        $reg = $repo->find($registrationId);
+
+        if (!$reg || (int) $reg->user_id !== get_current_user_id()) {
+            wp_send_json_error(['message' => __('Geen toegang.', 'stride')]);
+        }
+
+        if (empty($_FILES['documents'])) {
+            wp_send_json_error(['message' => __('Geen bestanden geselecteerd.', 'stride')]);
+        }
+
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/media.php';
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+
+        $attachmentIds = [];
+        $files = $_FILES['documents'];
+
+        // Handle multiple file upload
+        $fileCount = is_array($files['name']) ? count($files['name']) : 1;
+
+        for ($i = 0; $i < $fileCount; $i++) {
+            $file = [
+                'name'     => is_array($files['name']) ? $files['name'][$i] : $files['name'],
+                'type'     => is_array($files['type']) ? $files['type'][$i] : $files['type'],
+                'tmp_name' => is_array($files['tmp_name']) ? $files['tmp_name'][$i] : $files['tmp_name'],
+                'error'    => is_array($files['error']) ? $files['error'][$i] : $files['error'],
+                'size'     => is_array($files['size']) ? $files['size'][$i] : $files['size'],
+            ];
+
+            $_FILES['upload_file'] = $file;
+            $attachmentId = media_handle_upload('upload_file', 0);
+
+            if (!is_wp_error($attachmentId)) {
+                $attachmentIds[] = $attachmentId;
+            }
+        }
+
+        if (empty($attachmentIds)) {
+            wp_send_json_error(['message' => __('Upload mislukt. Probeer opnieuw.', 'stride')]);
+        }
+
+        // Mark task complete with file IDs
+        $result = $this->completeTask($registrationId, 'documents', ['files' => $attachmentIds]);
+
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+
+        wp_send_json_success([
+            'completed' => true,
+            'attachment_ids' => $attachmentIds,
+        ]);
     }
 }

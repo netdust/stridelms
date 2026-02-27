@@ -1,0 +1,106 @@
+<?php
+/**
+ * Completion task: Document Upload.
+ *
+ * File upload area for required documents.
+ * Parent Alpine component `completionPage` provides `completeTask()`.
+ *
+ * @var array $args {
+ *     @type object  $registration  Registration row
+ *     @type array   $task          Task status data
+ *     @type WP_Post $post          Edition or trajectory post
+ * }
+ * @package stridence
+ */
+
+declare(strict_types=1);
+
+defined('ABSPATH') || exit;
+?>
+
+<div x-data="{
+    files: [],
+    uploading: false,
+
+    handleFiles(event) {
+        this.files = [...this.files, ...Array.from(event.target.files)];
+    },
+
+    removeFile(index) {
+        this.files.splice(index, 1);
+    },
+
+    async submitDocuments() {
+        if (this.files.length === 0) return;
+
+        this.uploading = true;
+        const formData = new FormData();
+        formData.append('action', 'stride_upload_completion_documents');
+        formData.append('nonce', $data.nonce);
+        formData.append('registration_id', $data.registrationId);
+
+        this.files.forEach((file, i) => {
+            formData.append('documents[]', file);
+        });
+
+        try {
+            const response = await fetch(ntdstAPI?.ajaxUrl || '/wp-admin/admin-ajax.php', {
+                method: 'POST',
+                body: formData,
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                $data.completeTask('documents', { files: result.data.attachment_ids });
+            } else {
+                $data.error = result.data?.message || 'Upload mislukt.';
+            }
+        } catch (e) {
+            $data.error = 'Verbindingsfout. Probeer opnieuw.';
+        } finally {
+            this.uploading = false;
+        }
+    }
+}">
+    <!-- Drop zone -->
+    <label class="block border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary transition-colors">
+        <input type="file" multiple class="sr-only" @change="handleFiles">
+        <?= stridence_icon('file-text', 'w-8 h-8 mx-auto text-text-muted mb-2') ?>
+        <p class="text-sm text-text-muted">
+            <?= esc_html__('Klik om bestanden te selecteren', 'stridence') ?>
+        </p>
+        <p class="text-xs text-text-muted mt-1">
+            <?= esc_html__('PDF, Word, afbeeldingen (max. 10 MB)', 'stridence') ?>
+        </p>
+    </label>
+
+    <!-- File list -->
+    <template x-if="files.length > 0">
+        <div class="mt-3 space-y-2">
+            <template x-for="(file, index) in files" :key="index">
+                <div class="flex items-center gap-2 text-sm p-2 bg-surface-alt rounded">
+                    <?= stridence_icon('file-text', 'w-4 h-4 text-text-muted shrink-0') ?>
+                    <span class="flex-1 truncate" x-text="file.name"></span>
+                    <span class="text-xs text-text-muted" x-text="(file.size / 1024 / 1024).toFixed(1) + ' MB'"></span>
+                    <button type="button" @click="removeFile(index)"
+                            class="text-red-500 hover:text-red-700 text-xs">
+                        &times;
+                    </button>
+                </div>
+            </template>
+        </div>
+    </template>
+
+    <!-- Submit -->
+    <div class="mt-4 flex items-center gap-3">
+        <button type="button"
+                @click="submitDocuments()"
+                class="btn-primary text-sm"
+                :disabled="files.length === 0 || uploading">
+            <span x-show="!uploading"><?= esc_html__('Uploaden', 'stridence') ?></span>
+            <span x-show="uploading"><?= esc_html__('Uploaden...', 'stridence') ?></span>
+        </button>
+        <span class="text-xs text-text-muted" x-show="files.length > 0"
+              x-text="files.length + ' bestand(en)'"></span>
+    </div>
+</div>
