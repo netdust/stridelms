@@ -124,6 +124,59 @@ defined('ABSPATH') || exit;
                     </div>
                 </template>
 
+                <!-- Pending Approvals -->
+                <template x-if="pendingApprovals.length > 0">
+                    <div class="stride-card" style="margin-bottom: 24px;">
+                        <div class="stride-card-header">
+                            <h3 class="stride-card-title">
+                                <span class="dashicons dashicons-shield"></span>
+                                Wachtend op goedkeuring
+                                <span class="stride-count-badge" x-text="pendingApprovals.length"></span>
+                            </h3>
+                        </div>
+                        <div class="stride-card-body" style="padding: 0;">
+                            <table class="stride-table" style="margin: 0;">
+                                <thead>
+                                    <tr>
+                                        <th style="padding: 10px 16px;">Deelnemer</th>
+                                        <th style="padding: 10px 16px;">Edition</th>
+                                        <th style="padding: 10px 16px;">Ingeschreven</th>
+                                        <th style="padding: 10px 16px;">Taken</th>
+                                        <th style="padding: 10px 16px; text-align: right;">Actie</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="approval in pendingApprovals" :key="approval.id">
+                                        <tr>
+                                            <td style="padding: 10px 16px;">
+                                                <strong x-text="approval.user_name"></strong>
+                                                <br>
+                                                <small style="color: #646970;" x-text="approval.user_email"></small>
+                                            </td>
+                                            <td style="padding: 10px 16px;" x-text="approval.edition_title"></td>
+                                            <td style="padding: 10px 16px;" x-text="formatDate(approval.registered_at)"></td>
+                                            <td style="padding: 10px 16px;">
+                                                <span style="color: #00a32a;">
+                                                    <span class="dashicons dashicons-yes-alt" style="font-size: 16px; width: 16px; height: 16px; vertical-align: middle;"></span>
+                                                    Alle taken voltooid
+                                                </span>
+                                            </td>
+                                            <td style="padding: 10px 16px; text-align: right;">
+                                                <button class="stride-btn stride-btn-primary stride-btn-sm"
+                                                        @click="approveRegistration(approval.id)"
+                                                        :disabled="approval.approving">
+                                                    <span x-show="!approval.approving">Goedkeuren</span>
+                                                    <span x-show="approval.approving">Bezig...</span>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </template>
+
                 <!-- Two Column Layout -->
                 <div class="stride-dashboard-grid">
                     <!-- Left Column -->

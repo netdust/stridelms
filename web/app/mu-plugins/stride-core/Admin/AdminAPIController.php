@@ -224,6 +224,26 @@ final class AdminAPIController extends AbstractService
                 ],
             ],
         ]);
+
+        // Pending approvals
+        register_rest_route(self::NAMESPACE, '/admin/pending-approvals', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getPendingApprovals'],
+            'permission_callback' => [$this, 'canAccessAdmin'],
+        ]);
+
+        // Approve registration
+        register_rest_route(self::NAMESPACE, '/admin/approve-registration', [
+            'methods' => 'POST',
+            'callback' => [$this, 'approveRegistration'],
+            'permission_callback' => [$this, 'canAccessAdmin'],
+            'args' => [
+                'registration_id' => [
+                    'type' => 'integer',
+                    'required' => true,
+                ],
+            ],
+        ]);
     }
 
     /**
@@ -1620,6 +1640,100 @@ final class AdminAPIController extends AbstractService
             'page' => $page,
             'perPage' => $perPage,
             'totalPages' => (int) ceil($total / $perPage),
+        ]);
+    }
+
+    /**
+     * GET /admin/pending-approvals
+     *
+     * Returns registrations where all user tasks are complete, awaiting admin approval.
+     */
+    public function getPendingApprovals(WP_REST_Request $request): WP_REST_Response
+    {
+        global $wpdb;
+
+        $table = RegistrationTable::getTableName();
+
+        if (!RegistrationTable::exists()) {
+            return new WP_REST_Response(['items' => []]);
+        }
+
+        $rows = $wpdb->get_results(
+            "SELECT * FROM {$table}
+             WHERE status = 'pending'
+               AND completion_tasks IS NOT NULL
+             ORDER BY registered_at DESC"
+        );
+
+        $completionService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletionService::class);
+        $items = [];
+
+        foreach ($rows as $row) {
+            $tasks = json_decode($row->completion_tasks ?? '{}', true) ?: [];
+
+            // Only include registrations where user tasks are done AND approval is pending
+            if (!isset($tasks['approval']) || $tasks['approval']['status'] === 'completed') {
+                continue;
+            }
+
+            if (!$completionService->areUserTasksComplete($tasks)) {
+                continue;
+            }
+
+            // Build response item
+            $userId = (int) $row->user_id;
+            $user = get_userdata($userId);
+            $editionId = (int) ($row->edition_id ?? 0);
+            $edition = $editionId ? get_post($editionId) : null;
+
+            $items[] = [
+                'id' => (int) $row->id,
+                'user_id' => $userId,
+                'user_name' => $user ? $user->display_name : __('Onbekend', 'stride'),
+                'user_email' => $user ? $user->user_email : '',
+                'edition_id' => $editionId,
+                'edition_title' => $edition ? $edition->post_title : __('Onbekend', 'stride'),
+                'registered_at' => $row->registered_at,
+                'tasks' => $tasks,
+            ];
+        }
+
+        return new WP_REST_Response(['items' => $items]);
+    }
+
+    /**
+     * POST /admin/approve-registration
+     *
+     * Marks approval task as complete and confirms the registration.
+     */
+    public function approveRegistration(WP_REST_Request $request): WP_REST_Response|WP_Error
+    {
+        $registrationId = $request->get_param('registration_id');
+
+        if (!$registrationId) {
+            return new WP_Error('missing_param', __('registration_id is verplicht.', 'stride'), ['status' => 400]);
+        }
+
+        $completionService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletionService::class);
+
+        // Mark approval task as completed
+        $result = $completionService->completeTask($registrationId, 'approval');
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        // Now confirm the registration (auto-confirm won't fire for approval tasks)
+        $enrollmentService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class);
+        $confirmResult = $enrollmentService->confirmRegistration($registrationId);
+
+        if (is_wp_error($confirmResult)) {
+            return $confirmResult;
+        }
+
+        return new WP_REST_Response([
+            'approved' => true,
+            'registration_id' => $registrationId,
         ]);
     }
 }

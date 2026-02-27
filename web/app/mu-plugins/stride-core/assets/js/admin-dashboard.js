@@ -46,6 +46,9 @@ document.addEventListener('alpine:init', () => {
         selectedTrajectory: null,
         trajectoryTab: 'details',
 
+        // Pending approvals
+        pendingApprovals: [],
+
         // Initialize
         init() {
             this.parseHash();
@@ -106,6 +109,54 @@ document.addEventListener('alpine:init', () => {
                 console.error('Failed to load stats:', e);
             }
             this.loading = false;
+            // Also load pending approvals on dashboard
+            this.loadPendingApprovals();
+        },
+
+        async loadPendingApprovals() {
+            try {
+                const response = await fetch(`${StrideConfig.apiUrl}/admin/pending-approvals`, {
+                    headers: { 'X-WP-Nonce': StrideConfig.nonce }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    this.pendingApprovals = (data.items || []).map(item => ({
+                        ...item,
+                        approving: false,
+                    }));
+                }
+            } catch (e) {
+                console.error('Failed to load pending approvals:', e);
+            }
+        },
+
+        async approveRegistration(registrationId) {
+            const approval = this.pendingApprovals.find(a => a.id === registrationId);
+            if (!approval) return;
+
+            approval.approving = true;
+            try {
+                const response = await fetch(`${StrideConfig.apiUrl}/admin/approve-registration`, {
+                    method: 'POST',
+                    headers: {
+                        'X-WP-Nonce': StrideConfig.nonce,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ registration_id: registrationId }),
+                });
+                if (response.ok) {
+                    // Remove from list
+                    this.pendingApprovals = this.pendingApprovals.filter(a => a.id !== registrationId);
+                } else {
+                    const err = await response.json();
+                    alert(err.message || 'Goedkeuring mislukt.');
+                    approval.approving = false;
+                }
+            } catch (e) {
+                console.error('Approve failed:', e);
+                alert('Verbindingsfout. Probeer opnieuw.');
+                approval.approving = false;
+            }
         },
 
         async loadEditions() {
