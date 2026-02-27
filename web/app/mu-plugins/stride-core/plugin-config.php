@@ -33,6 +33,7 @@ return [
         \Stride\Admin\StrideSettingsService::class,
         \Stride\Admin\AdminDashboardService::class,
         \Stride\Admin\AdminAPIController::class,
+        \Stride\Admin\FieldGroupSettingsPage::class,
         \Stride\Modules\Edition\EditionService::class,
         \Stride\Modules\Edition\SessionService::class,
         \Stride\Modules\Edition\Admin\EditionAdminController::class,
@@ -48,7 +49,9 @@ return [
         \Stride\Modules\Attendance\AttendanceService::class,
         \Stride\Modules\Completion\CompletionService::class,
         \Stride\Modules\Audit\AuditBridge::class,
-        \Stride\Modules\Course\CourseEnrollmentFieldsService::class,
+        \Stride\Modules\Course\CourseTaxonomyService::class,
+        \Stride\Modules\Enrollment\EnrollmentFieldGroupService::class,
+        \Stride\Modules\Enrollment\EnrollmentCompletionService::class,
         \Stride\Modules\PartnerAPI\PartnerAPIController::class,
     ],
 
