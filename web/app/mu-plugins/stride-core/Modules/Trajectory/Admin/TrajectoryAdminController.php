@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Stride\Modules\Trajectory\Admin;
 
 use Stride\Domain\TrajectoryMode;
-use Stride\Domain\TrajectoryStatus;
+use Stride\Domain\OfferingStatus;
 use Stride\Infrastructure\AbstractService;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
@@ -663,7 +663,7 @@ final class TrajectoryAdminController extends AbstractService
             return;
         }
 
-        $status = TrajectoryStatus::tryFrom($trajectory['status'] ?? '') ?? TrajectoryStatus::Draft;
+        $status = OfferingStatus::tryFrom($trajectory['status'] ?? '') ?? OfferingStatus::Draft;
         $mode = TrajectoryMode::tryFrom($trajectory['mode'] ?? '') ?? TrajectoryMode::Cohort;
         $courseCount = count($trajectory['courses'] ?? []);
 
@@ -686,7 +686,7 @@ final class TrajectoryAdminController extends AbstractService
             <div class="stride-sidebar-section">
                 <label for="trajectory_status"><?php esc_html_e('Status', 'stride'); ?></label>
                 <select id="trajectory_status" name="ntdst_fields[status]">
-                    <?php foreach (TrajectoryStatus::cases() as $statusOption): ?>
+                    <?php foreach (OfferingStatus::cases() as $statusOption): ?>
                     <option value="<?php echo esc_attr($statusOption->value); ?>" <?php selected($status->value, $statusOption->value); ?>>
                         <?php echo esc_html($statusOption->label()); ?>
                     </option>
@@ -744,6 +744,41 @@ final class TrajectoryAdminController extends AbstractService
                     </ul>
                 </div>
             <?php endif; ?>
+
+            <div class="stride-sidebar-section">
+                <h4 style="margin: 0 0 8px; font-size: 12px; font-weight: 600;"><?php esc_html_e('Inschrijfvereisten', 'stride'); ?></h4>
+                <p class="description" style="margin-bottom: 8px; font-size: 11px;">
+                    <?php esc_html_e('Deelnemers moeten deze stappen voltooien na inschrijving.', 'stride'); ?>
+                </p>
+                <?php
+                $requirementKeys = [
+                    'requires_session_selection' => __('Sessiekeuze vereist', 'stride'),
+                    'requires_questionnaire'     => __('Vragenlijst invullen', 'stride'),
+                    'requires_documents'         => __('Documenten uploaden', 'stride'),
+                ];
+                foreach ($requirementKeys as $key => $reqLabel): ?>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px; font-size: 12px; font-weight: normal; text-transform: none; color: #1d2327;">
+                        <input type="hidden" name="ntdst_fields[<?= esc_attr($key) ?>]" value="0">
+                        <input type="checkbox" name="ntdst_fields[<?= esc_attr($key) ?>]" value="1"
+                               <?php checked(!empty($trajectory[$key])); ?>>
+                        <span><?= esc_html($reqLabel) ?></span>
+                    </label>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="stride-sidebar-section">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="hidden" name="ntdst_fields[requires_approval]" value="0">
+                    <input type="checkbox" name="ntdst_fields[requires_approval]" value="1"
+                           <?php checked(!empty($trajectory['requires_approval'])); ?>>
+                    <span style="font-weight: 600; font-size: 12px;">
+                        <?php esc_html_e('Goedkeuring vereist', 'stride'); ?>
+                    </span>
+                </label>
+                <p class="description" style="margin-top: 6px; font-size: 11px;">
+                    <?php esc_html_e('Inschrijvingen wachten op goedkeuring door een beheerder.', 'stride'); ?>
+                </p>
+            </div>
         </div>
         <?php
     }
@@ -1014,7 +1049,7 @@ final class TrajectoryAdminController extends AbstractService
 
         if (isset($fields['status'])) {
             $status = sanitize_text_field($fields['status']);
-            if (TrajectoryStatus::tryFrom($status)) {
+            if (OfferingStatus::tryFrom($status)) {
                 $updateData['status'] = $status;
             }
         }
@@ -1025,6 +1060,10 @@ final class TrajectoryAdminController extends AbstractService
 
         if (isset($fields['capacity'])) {
             $updateData['capacity'] = absint($fields['capacity']);
+        }
+
+        if (isset($fields['requires_approval'])) {
+            $updateData['requires_approval'] = (bool) $fields['requires_approval'];
         }
 
         if (isset($fields['price'])) {
@@ -1452,8 +1491,8 @@ final class TrajectoryAdminController extends AbstractService
 
             case 'status':
                 $status = $this->repository->getField($postId, 'status', 'draft');
-                $statusEnum = TrajectoryStatus::tryFrom($status) ?? TrajectoryStatus::Draft;
-                $config = $this->getTrajectoryStatusConfig($statusEnum);
+                $statusEnum = OfferingStatus::tryFrom($status) ?? OfferingStatus::Draft;
+                $config = $this->getOfferingStatusConfig($statusEnum);
                 echo '<span style="display:inline-block;padding:2px 8px;border-radius:3px;background:' . $config['bg'] . ';color:' . $config['color'] . ';font-size:12px;">';
                 echo esc_html($statusEnum->label());
                 echo '</span>';
@@ -1487,15 +1526,11 @@ final class TrajectoryAdminController extends AbstractService
      *
      * @return array{color: string, bg: string}
      */
-    private function getTrajectoryStatusConfig(TrajectoryStatus $status): array
+    private function getOfferingStatusConfig(OfferingStatus $status): array
     {
-        return match ($status) {
-            TrajectoryStatus::Draft => ['color' => '#787c82', 'bg' => '#f0f0f1'],
-            TrajectoryStatus::Open => ['color' => '#00a32a', 'bg' => '#e6f4ea'],
-            TrajectoryStatus::InProgress => ['color' => '#2271b1', 'bg' => '#e5f0f8'],
-            TrajectoryStatus::Closed => ['color' => '#d63638', 'bg' => '#fcf0f1'],
-            TrajectoryStatus::Archived => ['color' => '#787c82', 'bg' => '#f0f0f1'],
-        };
+        $badge = $status->badgeConfig();
+
+        return ['color' => $badge['color'], 'bg' => $badge['bg']];
     }
 
     /**
