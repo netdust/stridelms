@@ -7,6 +7,17 @@
  * These provide basic functionality without requiring WP core.
  */
 
+// WordPress time constants
+if (!defined('DAY_IN_SECONDS')) {
+    define('DAY_IN_SECONDS', 86400);
+}
+if (!defined('HOUR_IN_SECONDS')) {
+    define('HOUR_IN_SECONDS', 3600);
+}
+if (!defined('WEEK_IN_SECONDS')) {
+    define('WEEK_IN_SECONDS', 604800);
+}
+
 if (!class_exists('WP_Post')) {
     /**
      * WordPress Post Class Stub

@@ -416,4 +416,248 @@ final class LearnDashHelper
         $materials = learndash_get_setting($courseId, 'course_materials');
         return $materials ?: '';
     }
+
+    // ──────────────────────────────────────────────────────────
+    // Access Expiration
+    // ──────────────────────────────────────────────────────────
+
+    /**
+     * Check if course has access expiration enabled.
+     */
+    public static function hasExpiration(int $courseId): bool
+    {
+        if (!self::isActive()) {
+            return false;
+        }
+
+        return learndash_get_setting($courseId, 'expire_access') === 'on';
+    }
+
+    /**
+     * Get access expiration timestamp for a user's course.
+     *
+     * @return int|null Expiration timestamp, or null if no expiration
+     */
+    public static function getAccessExpiration(int $courseId, ?int $userId = null): ?int
+    {
+        if (!self::isActive() || !self::hasExpiration($courseId)) {
+            return null;
+        }
+
+        $userId = $userId ?? get_current_user_id();
+        if (!$userId) {
+            return null;
+        }
+
+        if (!function_exists('ld_course_access_expires_on')) {
+            return null;
+        }
+
+        $expires = ld_course_access_expires_on($courseId, $userId);
+
+        return $expires > 0 ? $expires : null;
+    }
+
+    /**
+     * Get remaining access days for a user's course.
+     *
+     * @return int|null Days remaining, or null if no expiration
+     */
+    public static function getAccessDaysRemaining(int $courseId, ?int $userId = null): ?int
+    {
+        $expires = self::getAccessExpiration($courseId, $userId);
+        if ($expires === null) {
+            return null;
+        }
+
+        $remaining = $expires - time();
+
+        return max(0, (int) ceil($remaining / DAY_IN_SECONDS));
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // Prerequisites
+    // ──────────────────────────────────────────────────────────
+
+    /**
+     * Check if course has prerequisites configured.
+     */
+    public static function hasPrerequisites(int $courseId): bool
+    {
+        if (!self::isActive() || !function_exists('learndash_get_course_prerequisite_enabled')) {
+            return false;
+        }
+
+        return (bool) learndash_get_course_prerequisite_enabled($courseId);
+    }
+
+    /**
+     * Get prerequisite courses with their completion status for a user.
+     *
+     * @return array<int, array{id: int, title: string, url: string, completed: bool}>
+     */
+    public static function getPrerequisites(int $courseId, ?int $userId = null): array
+    {
+        if (!self::isActive() || !self::hasPrerequisites($courseId)) {
+            return [];
+        }
+
+        if (!function_exists('learndash_get_course_prerequisite')) {
+            return [];
+        }
+
+        $userId = $userId ?? get_current_user_id();
+        $prerequisiteIds = learndash_get_course_prerequisite($courseId);
+
+        if (empty($prerequisiteIds)) {
+            return [];
+        }
+
+        $result = [];
+        foreach ($prerequisiteIds as $preReqId) {
+            $preReqId = (int) $preReqId;
+            if (!$preReqId) {
+                continue;
+            }
+
+            $completed = false;
+            if ($userId && function_exists('learndash_course_completed')) {
+                $completed = learndash_course_completed($userId, $preReqId);
+            }
+
+            $result[] = [
+                'id' => $preReqId,
+                'title' => get_the_title($preReqId),
+                'url' => get_permalink($preReqId),
+                'completed' => $completed,
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Check if all prerequisites are met for a user.
+     */
+    public static function arePrerequisitesMet(int $courseId, ?int $userId = null): bool
+    {
+        if (!self::hasPrerequisites($courseId)) {
+            return true;
+        }
+
+        $userId = $userId ?? get_current_user_id();
+        if (!$userId) {
+            return false;
+        }
+
+        if (function_exists('learndash_is_course_prerequities_completed')) {
+            return learndash_is_course_prerequities_completed($courseId, $userId);
+        }
+
+        return true;
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // Drip-Feed Lesson Availability
+    // ──────────────────────────────────────────────────────────
+
+    /**
+     * Check if any lesson in the course uses drip-feed scheduling.
+     */
+    public static function hasDripFeed(int $courseId): bool
+    {
+        if (!self::isActive()) {
+            return false;
+        }
+
+        $lessons = learndash_get_course_lessons_list($courseId);
+
+        foreach ($lessons as $lesson) {
+            $lessonPost = $lesson['post'] ?? $lesson;
+            $lessonId = $lessonPost->ID ?? 0;
+            if (!$lessonId) {
+                continue;
+            }
+
+            $visibleAfter = learndash_get_setting($lessonId, 'visible_after');
+            $visibleAfterDate = learndash_get_setting($lessonId, 'visible_after_specific_date');
+
+            if (!empty($visibleAfter) || !empty($visibleAfterDate)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Get lessons with availability dates (for drip-feed display).
+     *
+     * @return array<int, array{id: int, title: string, url: string, completed: bool, available_from: int|null, is_available: bool}>
+     */
+    public static function getLessonsWithAvailability(int $courseId, ?int $userId = null): array
+    {
+        if (!self::isActive()) {
+            return [];
+        }
+
+        $userId = $userId ?? get_current_user_id();
+        $lessons = learndash_get_course_lessons_list($courseId);
+        $result = [];
+
+        foreach ($lessons as $lesson) {
+            $lessonPost = $lesson['post'] ?? $lesson;
+            $lessonId = is_object($lessonPost) ? $lessonPost->ID : (int) $lessonPost;
+            if (!$lessonId) {
+                continue;
+            }
+
+            $availableFrom = null;
+            $isAvailable = true;
+
+            if ($userId && function_exists('ld_lesson_access_from')) {
+                $accessFrom = ld_lesson_access_from($lessonId, $userId, $courseId);
+                if ($accessFrom && $accessFrom > time()) {
+                    $availableFrom = (int) $accessFrom;
+                    $isAvailable = false;
+                }
+            }
+
+            $completed = false;
+            if ($userId && function_exists('learndash_is_lesson_complete')) {
+                $completed = learndash_is_lesson_complete($userId, $lessonId, $courseId);
+            }
+
+            $result[] = [
+                'id' => $lessonId,
+                'title' => is_object($lessonPost) ? $lessonPost->post_title : get_the_title($lessonId),
+                'url' => get_permalink($lessonId),
+                'completed' => $completed,
+                'available_from' => $availableFrom,
+                'is_available' => $isAvailable,
+            ];
+        }
+
+        return $result;
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // Course Points
+    // ──────────────────────────────────────────────────────────
+
+    /**
+     * Get course points value.
+     *
+     * @return int Points awarded for completing this course (0 = none)
+     */
+    public static function getCoursePoints(int $courseId): int
+    {
+        if (!self::isActive()) {
+            return 0;
+        }
+
+        $points = learndash_get_setting($courseId, 'course_points');
+
+        return (int) ($points ?: 0);
+    }
 }
