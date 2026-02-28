@@ -91,6 +91,6 @@ final class LearnDashAdapter implements LMSAdapterInterface
 
         $timestamp = learndash_user_get_course_completed_date($userId, $courseId);
 
-        return $timestamp ?: null;
+        return $timestamp ? (int) $timestamp : null;
     }
 }
