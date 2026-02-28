@@ -10,7 +10,7 @@ use Stride\Tests\TestCase;
 /**
  * Unit tests for LearnDashHelper
  *
- * Tests the 10 new helper methods: access expiration (3), prerequisites (3),
+ * Tests the 9 new helper methods: access expiration (3), prerequisites (3),
  * drip-feed (2), and course points (1). Each method guards with isActive()
  * and function_exists() checks.
  */
@@ -521,10 +521,10 @@ class LearnDashHelperTest extends TestCase
     private function defineLDSetting(int $postId, string $key, string $value): void
     {
         if (!function_exists('learndash_get_setting')) {
-            eval('function learndash_get_setting(int $postId, string $key) {
+            eval('function learndash_get_setting($postId, $key, $value = null) {
                 static $settings = [];
-                if (func_num_args() === 3) {
-                    $settings[$postId . ":" . $key] = func_get_arg(2);
+                if ($value !== null) {
+                    $settings[$postId . ":" . $key] = $value;
                     return;
                 }
                 return $settings[$postId . ":" . $key] ?? "";

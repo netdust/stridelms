@@ -566,7 +566,7 @@ final class LearnDashHelper
      */
     public static function hasDripFeed(int $courseId): bool
     {
-        if (!self::isActive()) {
+        if (!self::isActive() || !function_exists('learndash_get_course_lessons_list')) {
             return false;
         }
 
@@ -597,7 +597,7 @@ final class LearnDashHelper
      */
     public static function getLessonsWithAvailability(int $courseId, ?int $userId = null): array
     {
-        if (!self::isActive()) {
+        if (!self::isActive() || !function_exists('learndash_get_course_lessons_list')) {
             return [];
         }
 
