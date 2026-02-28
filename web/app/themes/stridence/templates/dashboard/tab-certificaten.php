@@ -91,6 +91,46 @@ foreach ($registrations as $reg) {
     ];
 }
 
+// ── Online course certificates ──────────────────────────────
+$enrolled_course_ids = $lmsAdapter->getEnrolledCourses($user_id);
+
+foreach ($enrolled_course_ids as $courseId) {
+    // Skip if already covered by an edition certificate above
+    $already_covered = false;
+    foreach ($certificates as $cert) {
+        if ((int) ($cert['course_id'] ?? 0) === $courseId) {
+            $already_covered = true;
+            break;
+        }
+    }
+    if ($already_covered) {
+        continue;
+    }
+
+    // Check completion
+    if (!$lmsAdapter->isComplete($user_id, $courseId)) {
+        continue;
+    }
+
+    $course = get_post($courseId);
+    if (!$course) {
+        continue;
+    }
+
+    $certificate_url = $lmsAdapter->getCertificateLink($user_id, $courseId);
+    $completion_date = $lmsAdapter->getCompletionDate($user_id, $courseId);
+
+    $certificates[] = [
+        'edition_id'      => 0,
+        'course_id'       => $courseId,
+        'course_title'    => $course->post_title,
+        'edition_title'   => __('Online cursus', 'stridence'),
+        'completed_at'    => $completion_date ? date('Y-m-d', $completion_date) : '',
+        'certificate_url' => $certificate_url,
+        'has_certificate' => !empty($certificate_url),
+    ];
+}
+
 // Sort by completion date (newest first)
 usort($certificates, fn($a, $b) => strcmp($b['completed_at'], $a['completed_at']));
 ?>
