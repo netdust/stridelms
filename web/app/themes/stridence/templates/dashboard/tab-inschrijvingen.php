@@ -1,9 +1,9 @@
 <?php
 /**
- * Dashboard Tab: Inschrijvingen (Registrations)
+ * Dashboard Tab: Mijn opleidingen (My Courses)
  *
- * Shows user's course registrations grouped by status.
- * Uses NTDST services for data access.
+ * Shows user's classroom edition registrations AND online LearnDash courses.
+ * Three main sections: Klassikale opleidingen, Online cursussen, Afgerond (merged).
  *
  * @param array $args {
  *     @type WP_User $user Current user object
@@ -22,25 +22,28 @@ use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Attendance\AttendanceService;
 use Stride\Modules\Completion\CompletionService;
 use Stride\Modules\Enrollment\EnrollmentCompletionService;
+use Stride\Contracts\LMSAdapterInterface;
 
 $user    = $args['user'] ?? wp_get_current_user();
 $user_id = $user->ID;
 
 // Get services
-$registrationRepo  = ntdst_get(RegistrationRepository::class);
-$editionService    = ntdst_get(EditionService::class);
-$sessionService    = ntdst_get(SessionService::class);
-$attendanceService = ntdst_get(AttendanceService::class);
-$completionService = ntdst_get(CompletionService::class);
+$registrationRepo    = ntdst_get(RegistrationRepository::class);
+$editionService      = ntdst_get(EditionService::class);
+$sessionService      = ntdst_get(SessionService::class);
+$attendanceService   = ntdst_get(AttendanceService::class);
+$completionService   = ntdst_get(CompletionService::class);
 $enrollmentCompletion = ntdst_get(EnrollmentCompletionService::class);
+$lmsAdapter          = ntdst_get(LMSAdapterInterface::class);
 
 // Get all user registrations
 $registrations = $registrationRepo->findByUser($user_id);
 
 // Group registrations by status
-$active    = [];
-$completed = [];
-$cancelled = [];
+$active_editions   = [];
+$completed_items   = [];
+$cancelled_editions = [];
+$edition_course_ids = [];
 
 foreach ($registrations as $reg) {
     // Skip trajectory-only enrollments (no edition_id)
@@ -60,11 +63,17 @@ foreach ($registrations as $reg) {
     $course_id    = $editionService->getCourseId($edition_id);
     $course       = $course_id ? get_post($course_id) : null;
 
+    // Track which courses are covered by edition registrations
+    if ($course_id) {
+        $edition_course_ids[] = $course_id;
+    }
+
     $reg_data = [
         'id'               => (int) $reg->id,
         'edition_id'       => $edition_id,
         'edition'          => $edition,
         'course'           => $course,
+        'course_id'        => $course_id,
         'course_title'     => $course ? $course->post_title : $edition->post_title,
         'start_date'       => $editionModel->getMeta($edition_id, 'start_date', ''),
         'venue'            => $editionModel->getMeta($edition_id, 'venue', ''),
@@ -73,6 +82,7 @@ foreach ($registrations as $reg) {
         'sessions'         => $sessionService->getSessionsForEdition($edition_id),
         'progress'         => $completionService->getProgress($edition_id, $user_id),
         'completion_tasks' => $reg->completion_tasks ?? null,
+        'type'             => 'edition',
     ];
 
     // Add attendance for each session
@@ -86,21 +96,81 @@ foreach ($registrations as $reg) {
 
     switch ($status) {
         case RegistrationStatus::Completed:
-            $completed[] = $reg_data;
+            $reg_data['completed_at'] = $reg_data['start_date'];
+            $completed_items[] = $reg_data;
             break;
         case RegistrationStatus::Cancelled:
-            $cancelled[] = $reg_data;
+            $cancelled_editions[] = $reg_data;
             break;
         default:
-            $active[] = $reg_data;
+            $active_editions[] = $reg_data;
     }
 }
 
-// Get upcoming sessions from active registrations
+// --- Online courses (not covered by an edition) ---
+$enrolled_course_ids = $lmsAdapter->getEnrolledCourses($user_id);
+$edition_course_ids  = array_unique($edition_course_ids);
+
+$active_online = [];
+
+foreach ($enrolled_course_ids as $course_id) {
+    // Skip courses already covered by an edition registration
+    if (in_array($course_id, $edition_course_ids, true)) {
+        continue;
+    }
+
+    $course = get_post($course_id);
+    if (!$course || $course->post_status !== 'publish') {
+        continue;
+    }
+
+    $is_complete     = $lmsAdapter->isComplete($user_id, $course_id);
+    $progress        = $lmsAdapter->getProgress($user_id, $course_id);
+    $completion_date = $lmsAdapter->getCompletionDate($user_id, $course_id);
+
+    // Determine format badge from ld_course_category
+    $format_label = __('Online', 'stridence');
+    $categories = get_the_terms($course_id, 'ld_course_category');
+    if ($categories && !is_wp_error($categories)) {
+        foreach ($categories as $cat) {
+            if ($cat->slug === 'e-learning') {
+                $format_label = 'E-learning';
+            } elseif ($cat->slug === 'webinar') {
+                $format_label = 'Webinar';
+            }
+        }
+    }
+
+    $course_data = [
+        'course_id'    => $course_id,
+        'course_title' => $course->post_title,
+        'course_url'   => get_permalink($course_id),
+        'progress'     => $progress,
+        'format_label' => $format_label,
+        'type'         => 'online',
+    ];
+
+    if ($is_complete) {
+        $course_data['completed_at'] = $completion_date ? date('Y-m-d', $completion_date) : '';
+        $course_data['certificate_url'] = $lmsAdapter->getCertificateLink($user_id, $course_id);
+        $completed_items[] = $course_data;
+    } else {
+        $active_online[] = $course_data;
+    }
+}
+
+// Sort completed items by date (newest first)
+usort($completed_items, function ($a, $b) {
+    $date_a = $a['completed_at'] ?? $a['start_date'] ?? '';
+    $date_b = $b['completed_at'] ?? $b['start_date'] ?? '';
+    return strcmp($date_b, $date_a);
+});
+
+// Get upcoming sessions from active edition registrations
 $upcoming_sessions = [];
 $today = date('Y-m-d');
 
-foreach ($active as $reg) {
+foreach ($active_editions as $reg) {
     foreach ($reg['sessions'] as $session) {
         if (!empty($session['date']) && $session['date'] >= $today) {
             $upcoming_sessions[] = array_merge($session, [
@@ -146,15 +216,15 @@ $upcoming_sessions = array_slice($upcoming_sessions, 0, 3);
         </section>
     <?php endif; ?>
 
-    <!-- Active Registrations -->
+    <!-- Klassikale opleidingen (Classroom Editions) -->
     <section>
         <h2 class="font-heading text-xl font-bold text-text mb-4">
-            <?php esc_html_e('Actieve inschrijvingen', 'stridence'); ?>
+            <?php esc_html_e('Klassikale opleidingen', 'stridence'); ?>
         </h2>
 
-        <?php if (!empty($active)) : ?>
+        <?php if (!empty($active_editions)) : ?>
             <div class="space-y-4">
-                <?php foreach ($active as $reg) : ?>
+                <?php foreach ($active_editions as $reg) : ?>
                     <div class="card" x-data="expandable()">
                         <button type="button"
                                 class="w-full p-4 flex items-center justify-between gap-4 text-left"
@@ -244,8 +314,8 @@ $upcoming_sessions = array_slice($upcoming_sessions, 0, 3);
             <?php
             get_template_part('partials/empty-state', null, [
                 'icon'    => 'calendar',
-                'title'   => __('Geen actieve inschrijvingen', 'stridence'),
-                'message' => __('Je hebt momenteel geen actieve inschrijvingen. Bekijk ons aanbod en schrijf je in voor een opleiding.', 'stridence'),
+                'title'   => __('Geen klassikale inschrijvingen', 'stridence'),
+                'message' => __('Je hebt momenteel geen klassikale inschrijvingen. Bekijk ons aanbod en schrijf je in voor een opleiding.', 'stridence'),
                 'action'  => __('Bekijk opleidingen', 'stridence'),
                 'url'     => get_post_type_archive_link('sfwd-courses'),
             ]);
@@ -253,20 +323,59 @@ $upcoming_sessions = array_slice($upcoming_sessions, 0, 3);
         <?php endif; ?>
     </section>
 
-    <!-- Completed Registrations -->
-    <?php if (!empty($completed)) : ?>
+    <!-- Online cursussen -->
+    <?php if (!empty($active_online)) : ?>
+        <section>
+            <h2 class="font-heading text-xl font-bold text-text mb-4">
+                <?php esc_html_e('Online cursussen', 'stridence'); ?>
+            </h2>
+            <div class="space-y-3">
+                <?php foreach ($active_online as $course) : ?>
+                    <div class="card p-4">
+                        <div class="flex items-center justify-between gap-4">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <h3 class="font-semibold text-text truncate">
+                                        <?php echo esc_html($course['course_title']); ?>
+                                    </h3>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-accent/10 text-accent">
+                                        <?php echo esc_html($course['format_label']); ?>
+                                    </span>
+                                </div>
+                                <div class="flex items-center gap-3 mt-2">
+                                    <div class="flex-1 h-2 bg-border rounded-full overflow-hidden">
+                                        <div class="h-full bg-accent rounded-full transition-all"
+                                             style="width: <?php echo esc_attr($course['progress']); ?>%"></div>
+                                    </div>
+                                    <span class="text-sm text-text-muted whitespace-nowrap">
+                                        <?php echo esc_html($course['progress']); ?>%
+                                    </span>
+                                </div>
+                            </div>
+                            <a href="<?php echo esc_url($course['course_url']); ?>"
+                               class="btn-primary text-sm shrink-0">
+                                <?php echo $course['progress'] > 0
+                                    ? esc_html__('Verder leren', 'stridence')
+                                    : esc_html__('Start cursus', 'stridence'); ?>
+                            </a>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </section>
+    <?php endif; ?>
+
+    <!-- Afgerond (Completed - merged editions + online courses) -->
+    <?php if (!empty($completed_items)) : ?>
         <section x-data="{ open: false }">
             <button type="button"
                     class="w-full flex items-center justify-between gap-4 mb-4"
                     @click="open = !open">
                 <h2 class="font-heading text-xl font-bold text-text">
-                    <?php
-                    printf(
-                        /* translators: %d: number of completed courses */
+                    <?php printf(
                         esc_html__('Afgerond (%d)', 'stridence'),
-                        count($completed)
-                    );
-                    ?>
+                        count($completed_items)
+                    ); ?>
                 </h2>
                 <span class="text-text-muted transition-transform duration-200"
                       :class="{ 'rotate-180': open }">
@@ -276,21 +385,39 @@ $upcoming_sessions = array_slice($upcoming_sessions, 0, 3);
 
             <div x-show="open" x-collapse>
                 <div class="card divide-y divide-border">
-                    <?php foreach ($completed as $reg) : ?>
+                    <?php foreach ($completed_items as $item) : ?>
                         <div class="p-4 flex items-center justify-between gap-4">
                             <div class="flex-1 min-w-0">
-                                <h3 class="font-medium text-text truncate">
-                                    <?php echo esc_html($reg['course_title']); ?>
-                                </h3>
+                                <div class="flex items-center gap-2">
+                                    <h3 class="font-medium text-text truncate">
+                                        <?php echo esc_html($item['course_title']); ?>
+                                    </h3>
+                                    <?php if (($item['type'] ?? '') === 'online') : ?>
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-accent/10 text-accent">
+                                            <?php echo esc_html($item['format_label'] ?? __('Online', 'stridence')); ?>
+                                        </span>
+                                    <?php else : ?>
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                                            <?php esc_html_e('Klassikaal', 'stridence'); ?>
+                                        </span>
+                                    <?php endif; ?>
+                                </div>
                                 <p class="text-sm text-text-muted">
                                     <?php
-                                    if ($reg['start_date']) {
-                                        echo esc_html(stride_format_date($reg['start_date']));
+                                    $date = $item['completed_at'] ?? $item['start_date'] ?? '';
+                                    if ($date) {
+                                        echo esc_html(stride_format_date($date));
                                     }
                                     ?>
                                 </p>
                             </div>
-                            <?php if ($reg['course']) : ?>
+                            <?php
+                            $cert_url = $item['certificate_url'] ?? '';
+                            if (!$cert_url && !empty($item['course_id'])) {
+                                $cert_url = $lmsAdapter->getCertificateLink($user_id, (int) $item['course_id']) ?: '';
+                            }
+                            ?>
+                            <?php if ($cert_url) : ?>
                                 <a href="<?php echo esc_url(add_query_arg('tab', 'certificaten', get_permalink())); ?>"
                                    class="btn-ghost text-sm">
                                     <?php echo stridence_icon('award', 'w-4 h-4 mr-1'); ?>
@@ -305,7 +432,7 @@ $upcoming_sessions = array_slice($upcoming_sessions, 0, 3);
     <?php endif; ?>
 
     <!-- Cancelled Registrations -->
-    <?php if (!empty($cancelled)) : ?>
+    <?php if (!empty($cancelled_editions)) : ?>
         <section x-data="{ open: false }">
             <button type="button"
                     class="w-full flex items-center justify-between gap-4 mb-4"
@@ -315,7 +442,7 @@ $upcoming_sessions = array_slice($upcoming_sessions, 0, 3);
                     printf(
                         /* translators: %d: number of cancelled registrations */
                         esc_html__('Geannuleerd (%d)', 'stridence'),
-                        count($cancelled)
+                        count($cancelled_editions)
                     );
                     ?>
                 </h2>
@@ -327,7 +454,7 @@ $upcoming_sessions = array_slice($upcoming_sessions, 0, 3);
 
             <div x-show="open" x-collapse>
                 <div class="card divide-y divide-border">
-                    <?php foreach ($cancelled as $reg) : ?>
+                    <?php foreach ($cancelled_editions as $reg) : ?>
                         <div class="p-4 text-text-muted">
                             <h3 class="font-medium truncate">
                                 <?php echo esc_html($reg['course_title']); ?>
