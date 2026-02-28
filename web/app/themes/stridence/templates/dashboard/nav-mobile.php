@@ -19,8 +19,12 @@ $current_tab = $args['current_tab'] ?? 'inschrijvingen';
 
 $tabs = [
     'inschrijvingen' => [
-        'label' => __('Inschrijvingen', 'stridence'),
-        'icon'  => 'calendar',
+        'label' => __('Mijn opleidingen', 'stridence'),
+        'icon'  => 'book-open',
+    ],
+    'trajecten' => [
+        'label' => __('Trajecten', 'stridence'),
+        'icon'  => 'layers',
     ],
     'offertes' => [
         'label' => __('Offertes', 'stridence'),
