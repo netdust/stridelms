@@ -1,0 +1,218 @@
+<?php
+/**
+ * Course Content Template Part
+ *
+ * Main content sections for course detail page.
+ *
+ * @param array $args {
+ *     @type int  $course_id Course post ID
+ *     @type bool $is_online Whether course is online
+ * }
+ */
+
+defined('ABSPATH') || exit;
+
+use Stride\Integrations\LearnDash\LearnDashHelper;
+
+$course_id = $args['course_id'] ?? get_the_ID();
+$is_online = $args['is_online'] ?? false;
+
+?>
+
+<?php
+$user_id = get_current_user_id();
+if ($is_online && LearnDashHelper::hasPrerequisites($course_id)) :
+    $prerequisites = LearnDashHelper::getPrerequisites($course_id, $user_id ?: null);
+    $all_met = !$user_id ? false : LearnDashHelper::arePrerequisitesMet($course_id, $user_id);
+
+    if (!empty($prerequisites) && !$all_met) :
+?>
+<div class="mb-8 p-4 rounded-lg border border-amber-200 bg-amber-50">
+    <div class="flex items-start gap-3">
+        <?php echo stridence_icon('alert-circle', 'w-5 h-5 text-amber-600 mt-0.5 shrink-0'); ?>
+        <div>
+            <h3 class="font-semibold text-amber-800 mb-1">
+                <?php esc_html_e('Vereiste voorkennis', 'stridence'); ?>
+            </h3>
+            <p class="text-sm text-amber-700 mb-3">
+                <?php esc_html_e('Rond eerst de volgende cursus(sen) af om toegang te krijgen:', 'stridence'); ?>
+            </p>
+            <ul class="space-y-2">
+                <?php foreach ($prerequisites as $prereq) : ?>
+                    <li class="flex items-center gap-2 text-sm">
+                        <?php if ($prereq['completed']) : ?>
+                            <?php echo stridence_icon('check-circle', 'w-4 h-4 text-green-600'); ?>
+                            <span class="text-green-700 line-through"><?php echo esc_html($prereq['title']); ?></span>
+                        <?php else : ?>
+                            <?php echo stridence_icon('circle', 'w-4 h-4 text-amber-400'); ?>
+                            <a href="<?php echo esc_url($prereq['url']); ?>" class="text-amber-800 hover:underline font-medium">
+                                <?php echo esc_html($prereq['title']); ?>
+                            </a>
+                        <?php endif; ?>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+    </div>
+</div>
+<?php
+    endif;
+endif;
+?>
+
+<!-- Overzicht Section -->
+<section id="overzicht" class="scroll-mt-32">
+    <div class="prose-stride max-w-none">
+        <?php echo apply_filters('the_content', get_post_field('post_content', $course_id)); ?>
+    </div>
+</section>
+
+<!-- Programma Section -->
+<section id="programma" class="scroll-mt-32">
+    <h2 class="font-heading text-2xl font-bold text-text mb-6">
+        <?php esc_html_e('Programma', 'stridence'); ?>
+    </h2>
+
+    <?php
+    $current_user_id = get_current_user_id();
+    $has_drip = $is_online && $current_user_id && LearnDashHelper::hasAccess($course_id, $current_user_id) && LearnDashHelper::hasDripFeed($course_id);
+
+    if ($has_drip) :
+        $lessons_with_dates = LearnDashHelper::getLessonsWithAvailability($course_id, $current_user_id);
+        $locked_lessons = array_filter($lessons_with_dates, fn($l) => !$l['is_available']);
+
+        if (!empty($locked_lessons)) :
+    ?>
+        <div class="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800 flex items-start gap-2">
+            <?php echo stridence_icon('info', 'w-4 h-4 mt-0.5 shrink-0 text-blue-600'); ?>
+            <span>
+                <?php esc_html_e('Sommige lessen worden op een later moment beschikbaar. Bekijk de planning hieronder.', 'stridence'); ?>
+            </span>
+        </div>
+
+        <div class="mb-6 space-y-2">
+            <?php foreach ($lessons_with_dates as $lesson) : ?>
+                <div class="flex items-center gap-3 p-3 rounded-lg <?php echo $lesson['is_available'] ? 'bg-surface' : 'bg-surface-alt'; ?>">
+                    <?php if ($lesson['completed']) : ?>
+                        <?php echo stridence_icon('check-circle', 'w-5 h-5 text-green-600 shrink-0'); ?>
+                    <?php elseif (!$lesson['is_available']) : ?>
+                        <?php echo stridence_icon('clock', 'w-5 h-5 text-text-muted shrink-0'); ?>
+                    <?php else : ?>
+                        <?php echo stridence_icon('circle', 'w-5 h-5 text-primary shrink-0'); ?>
+                    <?php endif; ?>
+
+                    <div class="flex-1 min-w-0">
+                        <?php if ($lesson['is_available']) : ?>
+                            <a href="<?php echo esc_url($lesson['url']); ?>" class="text-sm font-medium text-text hover:text-primary truncate block">
+                                <?php echo esc_html($lesson['title']); ?>
+                            </a>
+                        <?php else : ?>
+                            <span class="text-sm font-medium text-text-muted truncate block">
+                                <?php echo esc_html($lesson['title']); ?>
+                            </span>
+                        <?php endif; ?>
+                    </div>
+
+                    <?php if ($lesson['available_from']) : ?>
+                        <span class="text-xs text-text-muted whitespace-nowrap">
+                            <?php echo esc_html(sprintf(
+                                __('Beschikbaar %s', 'stridence'),
+                                stride_format_date(date('Y-m-d', $lesson['available_from']))
+                            )); ?>
+                        </span>
+                    <?php elseif ($lesson['completed']) : ?>
+                        <span class="text-xs text-green-600 whitespace-nowrap">
+                            <?php esc_html_e('Afgerond', 'stridence'); ?>
+                        </span>
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php
+        endif;
+    endif;
+    ?>
+
+    <div class="learndash-course-content">
+        <?php
+        echo do_shortcode('[course_content course_id="' . esc_attr($course_id) . '"]');
+        ?>
+    </div>
+</section>
+
+<?php if (!$is_online) : ?>
+<!-- Sprekers Section (in-person only) -->
+<section id="sprekers" class="scroll-mt-32">
+    <h2 class="font-heading text-2xl font-bold text-text mb-6">
+        <?php esc_html_e('Sprekers', 'stridence'); ?>
+    </h2>
+    <?php
+    // TODO: Wire up speakers from course/edition meta
+    ?>
+    <p class="text-text-muted">
+        <?php esc_html_e('Informatie over sprekers wordt binnenkort toegevoegd.', 'stridence'); ?>
+    </p>
+</section>
+<?php endif; ?>
+
+<!-- Praktisch Section -->
+<section id="praktisch" class="scroll-mt-32">
+    <h2 class="font-heading text-2xl font-bold text-text mb-6">
+        <?php esc_html_e('Praktische informatie', 'stridence'); ?>
+    </h2>
+    <div class="grid sm:grid-cols-2 gap-4">
+        <div class="card-bordered p-5">
+            <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
+                <?php echo stridence_icon('users', 'w-5 h-5 text-primary'); ?>
+                <?php esc_html_e('Doelgroep', 'stridence'); ?>
+            </h3>
+            <p class="text-text-muted text-sm">
+                <?php esc_html_e('Zorgprofessionals', 'stridence'); ?>
+            </p>
+        </div>
+        <div class="card-bordered p-5">
+            <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
+                <?php echo stridence_icon('award', 'w-5 h-5 text-primary'); ?>
+                <?php esc_html_e('Accreditatie', 'stridence'); ?>
+            </h3>
+            <p class="text-text-muted text-sm">
+                <?php esc_html_e('In aanvraag', 'stridence'); ?>
+            </p>
+        </div>
+        <?php if ($is_online) : ?>
+        <div class="card-bordered p-5">
+            <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
+                <?php echo stridence_icon('clock', 'w-5 h-5 text-primary'); ?>
+                <?php esc_html_e('Doorlooptijd', 'stridence'); ?>
+            </h3>
+            <p class="text-text-muted text-sm">
+                <?php esc_html_e('In eigen tempo', 'stridence'); ?>
+            </p>
+        </div>
+        <div class="card-bordered p-5">
+            <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
+                <?php echo stridence_icon('device-laptop', 'w-5 h-5 text-primary'); ?>
+                <?php esc_html_e('Toegang', 'stridence'); ?>
+            </h3>
+            <p class="text-text-muted text-sm">
+                <?php esc_html_e('Online, 24/7 beschikbaar', 'stridence'); ?>
+            </p>
+        </div>
+        <?php endif; ?>
+    </div>
+
+    <?php
+    $materials = LearnDashHelper::getCourseMaterials($course_id);
+    if (!empty($materials)) :
+    ?>
+        <div class="mt-6">
+            <h3 class="font-semibold text-text mb-3 flex items-center gap-2">
+                <?php echo stridence_icon('file-text', 'w-5 h-5 text-primary'); ?>
+                <?php esc_html_e('Cursusmateriaal', 'stridence'); ?>
+            </h3>
+            <div class="prose-stride text-sm max-w-none">
+                <?php echo wp_kses_post($materials); ?>
+            </div>
+        </div>
+    <?php endif; ?>
+</section>
