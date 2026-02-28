@@ -21,6 +21,8 @@ $is_online = $args['is_online'] ?? false;
 
 <?php
 $user_id = get_current_user_id();
+
+// Prerequisites notice
 if ($is_online && LearnDashHelper::hasPrerequisites($course_id)) :
     $prerequisites = LearnDashHelper::getPrerequisites($course_id, $user_id ?: null);
     $all_met = !$user_id ? false : LearnDashHelper::arePrerequisitesMet($course_id, $user_id);
@@ -52,6 +54,31 @@ if ($is_online && LearnDashHelper::hasPrerequisites($course_id)) :
                     </li>
                 <?php endforeach; ?>
             </ul>
+        </div>
+    </div>
+</div>
+<?php
+    endif;
+endif;
+
+// Points requirement notice
+if ($is_online && LearnDashHelper::hasPointsRequirement($course_id)) :
+    $points_required = LearnDashHelper::getPointsRequired($course_id);
+    if ($points_required > 0) :
+?>
+<div class="mb-8 p-4 rounded-lg border border-blue-200 bg-blue-50">
+    <div class="flex items-start gap-3">
+        <?php echo stridence_icon('info', 'w-5 h-5 text-blue-600 mt-0.5 shrink-0'); ?>
+        <div>
+            <h3 class="font-semibold text-blue-800 mb-1">
+                <?php esc_html_e('Puntenvereiste', 'stridence'); ?>
+            </h3>
+            <p class="text-sm text-blue-700">
+                <?php echo esc_html(sprintf(
+                    __('Je hebt %d punten nodig om deze cursus te volgen.', 'stridence'),
+                    $points_required
+                )); ?>
+            </p>
         </div>
     </div>
 </div>
@@ -205,7 +232,7 @@ endif;
     $materials = LearnDashHelper::getCourseMaterials($course_id);
     if (!empty($materials)) :
     ?>
-        <div class="mt-6">
+        <div class="card-bordered p-5 mt-6">
             <h3 class="font-semibold text-text mb-3 flex items-center gap-2">
                 <?php echo stridence_icon('file-text', 'w-5 h-5 text-primary'); ?>
                 <?php esc_html_e('Cursusmateriaal', 'stridence'); ?>

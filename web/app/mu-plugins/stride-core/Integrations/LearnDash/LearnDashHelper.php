@@ -481,14 +481,29 @@ final class LearnDashHelper
 
     /**
      * Check if course has prerequisites configured.
+     *
+     * Checks both the enabled flag AND the prerequisite array,
+     * because LD stores prerequisites even when the enabled flag is off.
      */
     public static function hasPrerequisites(int $courseId): bool
     {
-        if (!self::isActive() || !function_exists('learndash_get_course_prerequisite_enabled')) {
+        if (!self::isActive()) {
             return false;
         }
 
-        return (bool) learndash_get_course_prerequisite_enabled($courseId);
+        // Check the enabled flag first
+        if (function_exists('learndash_get_course_prerequisite_enabled')
+            && learndash_get_course_prerequisite_enabled($courseId)) {
+            return true;
+        }
+
+        // Also check if prerequisite array has entries (LD stores them independently)
+        if (function_exists('learndash_get_course_prerequisite')) {
+            $prereqs = learndash_get_course_prerequisite($courseId);
+            return !empty($prereqs);
+        }
+
+        return false;
     }
 
     /**
@@ -657,6 +672,32 @@ final class LearnDashHelper
         }
 
         $points = learndash_get_setting($courseId, 'course_points');
+
+        return (int) ($points ?: 0);
+    }
+
+    /**
+     * Check if course requires points to enroll.
+     */
+    public static function hasPointsRequirement(int $courseId): bool
+    {
+        if (!self::isActive()) {
+            return false;
+        }
+
+        return learndash_get_setting($courseId, 'course_points_enabled') === 'on';
+    }
+
+    /**
+     * Get points required to access this course.
+     */
+    public static function getPointsRequired(int $courseId): int
+    {
+        if (!self::isActive() || !self::hasPointsRequirement($courseId)) {
+            return 0;
+        }
+
+        $points = learndash_get_setting($courseId, 'course_points_access');
 
         return (int) ($points ?: 0);
     }
