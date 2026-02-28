@@ -1,0 +1,160 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Stride\Tests\Unit;
+
+use Stride\Integrations\LearnDash\LearnDashAdapter;
+use Stride\Tests\TestCase;
+
+/**
+ * Unit tests for LearnDashAdapter
+ *
+ * Tests the 3 new LMS adapter methods: getEnrolledCourses, getProgress,
+ * getCompletionDate. Each method guards against missing LD functions.
+ */
+class LearnDashAdapterTest extends TestCase
+{
+    private LearnDashAdapter $adapter;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->adapter = new LearnDashAdapter();
+    }
+
+    /**
+     * @test
+     */
+    public function testGetEnrolledCoursesReturnsEmptyArrayWhenLDUnavailable(): void
+    {
+        // LearnDash functions are not defined in unit test environment
+        $result = $this->adapter->getEnrolledCourses(1);
+
+        $this->assertIsArray($result);
+        $this->assertEmpty($result);
+    }
+
+    /**
+     * @test
+     */
+    public function testGetProgressReturnsZeroWhenLDUnavailable(): void
+    {
+        $result = $this->adapter->getProgress(1, 100);
+
+        $this->assertSame(0, $result);
+    }
+
+    /**
+     * @test
+     */
+    public function testGetCompletionDateReturnsNullWhenLDUnavailable(): void
+    {
+        $result = $this->adapter->getCompletionDate(1, 100);
+
+        $this->assertNull($result);
+    }
+
+    /**
+     * @test
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function testGetEnrolledCoursesReturnsIntArrayWhenLDAvailable(): void
+    {
+        $this->adapter = new LearnDashAdapter();
+
+        if (!function_exists('learndash_user_get_enrolled_courses')) {
+            eval('
+                function learndash_user_get_enrolled_courses(int $userId): array
+                {
+                    return [101, 202, 303];
+                }
+            ');
+        }
+
+        $result = $this->adapter->getEnrolledCourses(42);
+
+        $this->assertIsArray($result);
+        $this->assertSame([101, 202, 303], $result);
+    }
+
+    /**
+     * @test
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function testGetProgressReturnsPercentageWhenLDAvailable(): void
+    {
+        $this->adapter = new LearnDashAdapter();
+
+        if (!function_exists('learndash_course_progress')) {
+            eval('
+                function learndash_course_progress(array $args): array
+                {
+                    return ["percentage" => 75];
+                }
+            ');
+        }
+
+        $result = $this->adapter->getProgress(42, 100);
+
+        $this->assertSame(75, $result);
+    }
+
+    /**
+     * @test
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function testGetCompletionDateReturnsTimestampWhenComplete(): void
+    {
+        $this->adapter = new LearnDashAdapter();
+
+        if (!function_exists('learndash_course_completed')) {
+            eval('
+                function learndash_course_completed(int $userId, int $courseId): bool
+                {
+                    return true;
+                }
+            ');
+        }
+
+        if (!function_exists('learndash_user_get_course_completed_date')) {
+            eval('
+                function learndash_user_get_course_completed_date(int $userId, int $courseId): int
+                {
+                    return 1709136000;
+                }
+            ');
+        }
+
+        $result = $this->adapter->getCompletionDate(42, 100);
+
+        $this->assertSame(1709136000, $result);
+    }
+
+    /**
+     * @test
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function testGetCompletionDateReturnsNullForIncompleteCourse(): void
+    {
+        $this->adapter = new LearnDashAdapter();
+
+        if (!function_exists('learndash_course_completed')) {
+            eval('
+                function learndash_course_completed(int $userId, int $courseId): bool
+                {
+                    return false;
+                }
+            ');
+        }
+
+        $result = $this->adapter->getCompletionDate(42, 100);
+
+        $this->assertNull($result);
+    }
+}
