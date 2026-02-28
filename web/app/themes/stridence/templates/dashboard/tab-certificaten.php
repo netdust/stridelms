@@ -107,6 +107,21 @@ foreach ($enrolled_course_ids as $courseId) {
         continue;
     }
 
+    // Only include online/e-learning/webinar courses (not classroom)
+    $categories = get_the_terms($courseId, 'ld_course_category');
+    $is_online = false;
+    if ($categories && !is_wp_error($categories)) {
+        foreach ($categories as $cat) {
+            if (in_array($cat->slug, ['online', 'e-learning', 'webinar'], true)) {
+                $is_online = true;
+                break;
+            }
+        }
+    }
+    if (!$is_online) {
+        continue;
+    }
+
     // Check completion
     if (!$lmsAdapter->isComplete($user_id, $courseId)) {
         continue;

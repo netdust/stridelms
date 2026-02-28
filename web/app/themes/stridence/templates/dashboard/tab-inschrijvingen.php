@@ -124,22 +124,29 @@ foreach ($enrolled_course_ids as $course_id) {
         continue;
     }
 
-    $is_complete     = $lmsAdapter->isComplete($user_id, $course_id);
-    $progress        = $lmsAdapter->getProgress($user_id, $course_id);
-    $completion_date = $lmsAdapter->getCompletionDate($user_id, $course_id);
-
-    // Determine format badge from ld_course_category
-    $format_label = __('Online', 'stridence');
+    // Only show courses categorized as online/e-learning/webinar
+    $format_label = '';
     $categories = get_the_terms($course_id, 'ld_course_category');
     if ($categories && !is_wp_error($categories)) {
         foreach ($categories as $cat) {
-            if ($cat->slug === 'e-learning') {
+            if ($cat->slug === 'online') {
+                $format_label = __('Online', 'stridence');
+            } elseif ($cat->slug === 'e-learning') {
                 $format_label = 'E-learning';
             } elseif ($cat->slug === 'webinar') {
                 $format_label = 'Webinar';
             }
         }
     }
+
+    // Skip classroom courses — they belong in the editions section
+    if ($format_label === '') {
+        continue;
+    }
+
+    $is_complete     = $lmsAdapter->isComplete($user_id, $course_id);
+    $progress        = $lmsAdapter->getProgress($user_id, $course_id);
+    $completion_date = $lmsAdapter->getCompletionDate($user_id, $course_id);
 
     $course_data = [
         'course_id'    => $course_id,
