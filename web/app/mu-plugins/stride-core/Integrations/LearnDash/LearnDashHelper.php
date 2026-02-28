@@ -701,4 +701,40 @@ final class LearnDashHelper
 
         return (int) ($points ?: 0);
     }
+
+    // ──────────────────────────────────────────────────────────
+    // Course Availability Window
+    // ──────────────────────────────────────────────────────────
+
+    /**
+     * Get course start date (when content becomes available).
+     *
+     * @return int|null Unix timestamp, or null if not set
+     */
+    public static function getStartDate(int $courseId): ?int
+    {
+        if (!self::isActive()) {
+            return null;
+        }
+
+        $date = learndash_get_setting($courseId, 'course_start_date');
+
+        return (!empty($date) && $date !== '0') ? (int) $date : null;
+    }
+
+    /**
+     * Get course end date (when content becomes unavailable).
+     *
+     * @return int|null Unix timestamp, or null if not set
+     */
+    public static function getEndDate(int $courseId): ?int
+    {
+        if (!self::isActive()) {
+            return null;
+        }
+
+        $date = learndash_get_setting($courseId, 'course_end_date');
+
+        return (!empty($date) && $date !== '0') ? (int) $date : null;
+    }
 }

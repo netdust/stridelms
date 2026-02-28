@@ -42,6 +42,8 @@ $expire_days_setting = $has_expiration && function_exists('learndash_get_setting
     ? (int) learndash_get_setting($course_id, 'expire_access_days') : 0;
 $points_required = LearnDashHelper::getPointsRequired($course_id);
 $has_points_requirement = LearnDashHelper::hasPointsRequirement($course_id);
+$start_date = LearnDashHelper::getStartDate($course_id);
+$end_date = LearnDashHelper::getEndDate($course_id);
 
 // For enrolled users: get their specific expiration
 $days_remaining = ($has_access && $has_expiration)
@@ -191,7 +193,7 @@ $expiration_ts = ($days_remaining !== null)
 
     <?php
     // ── Course Info Section (shows in ALL states) ──
-    $has_info = ($course_points > 0) || ($expire_days_setting > 0) || ($has_points_requirement && $points_required > 0);
+    $has_info = ($course_points > 0) || ($expire_days_setting > 0) || ($has_points_requirement && $points_required > 0) || $start_date || $end_date;
     if ($has_info) :
     ?>
         <div class="mt-6 pt-5 border-t border-border">
@@ -231,6 +233,24 @@ $expiration_ts = ($days_remaining !== null)
                                 _n('%d dag', '%d dagen', $expire_days_setting, 'stridence'),
                                 $expire_days_setting
                             )); ?>
+                        </dd>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ($start_date) : ?>
+                    <div class="flex justify-between">
+                        <dt class="text-text-muted"><?php esc_html_e('Beschikbaar vanaf', 'stridence'); ?></dt>
+                        <dd class="font-medium text-text">
+                            <?php echo esc_html(stride_format_date(date('Y-m-d', $start_date))); ?>
+                        </dd>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ($end_date) : ?>
+                    <div class="flex justify-between">
+                        <dt class="text-text-muted"><?php esc_html_e('Beschikbaar tot', 'stridence'); ?></dt>
+                        <dd class="font-medium text-text">
+                            <?php echo esc_html(stride_format_date(date('Y-m-d', $end_date))); ?>
                         </dd>
                     </div>
                 <?php endif; ?>
