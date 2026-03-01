@@ -28,6 +28,21 @@ $is_online = /* check for 'online', 'webinar', 'e-learning' slugs */;
 
 This is already used throughout the codebase (`single-sfwd-courses.php`, dashboard tabs, certificates). LearnDash course is the data store — the edition reads from it, never duplicates it.
 
+### Pricing
+
+LearnDash is the data source for pricing. A course with a price is always set to "closed" access mode in LD — the price is entered in LD course settings.
+
+The edition **inherits** the LD price by default but can **override** it:
+
+| Field | Source | Purpose |
+|---|---|---|
+| LD course `course_price` | LearnDash settings | Base price (source of truth) |
+| `_ntdst_price` on edition | Edition meta (optional) | Override price for this specific edition |
+
+Resolution: `EditionService::getPrice($editionId)` checks edition override first, falls back to LD course price.
+
+For **online editions**, the LD price drives LearnDash's native payment flow. For **in-person editions**, the resolved price drives the Stride quote flow.
+
 ### Form Selector
 
 All editions (online AND in-person) get a **form selector** field:
