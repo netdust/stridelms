@@ -19,7 +19,7 @@ $current_tab = $args['current_tab'] ?? 'inschrijvingen';
 
 $tabs = [
     'inschrijvingen' => [
-        'label' => __('Mijn opleidingen', 'stridence'),
+        'label' => __('Cursussen', 'stridence'),
         'icon'  => 'book-open',
     ],
     'trajecten' => [
@@ -41,7 +41,7 @@ $tabs = [
 ];
 ?>
 
-<nav class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border lg:hidden z-40 safe-area-bottom"
+<nav class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border lg:hidden z-50 safe-area-bottom"
      aria-label="<?php esc_attr_e('Dashboard navigatie', 'stridence'); ?>">
     <div class="flex justify-around items-center h-16">
         <?php foreach ($tabs as $slug => $tab) :
@@ -49,14 +49,14 @@ $tabs = [
             $url = add_query_arg('tab', $slug, get_permalink());
 
             $classes = $is_active
-                ? 'flex flex-col items-center justify-center gap-1 px-3 py-2 text-primary'
-                : 'flex flex-col items-center justify-center gap-1 px-3 py-2 text-text-muted hover:text-text transition-colors';
+                ? 'flex flex-col items-center justify-center gap-0.5 px-2 py-2 text-primary min-w-0'
+                : 'flex flex-col items-center justify-center gap-0.5 px-2 py-2 text-text-muted hover:text-text transition-colors min-w-0';
         ?>
             <a href="<?php echo esc_url($url); ?>"
                class="<?php echo esc_attr($classes); ?>"
                <?php echo $is_active ? 'aria-current="page"' : ''; ?>>
-                <?php echo stridence_icon($tab['icon'], 'w-6 h-6'); ?>
-                <span class="text-xs font-medium hidden sm:block"><?php echo esc_html($tab['label']); ?></span>
+                <?php echo stridence_icon($tab['icon'], 'w-5 h-5'); ?>
+                <span class="text-[10px] font-medium leading-tight truncate max-w-[64px]"><?php echo esc_html($tab['label']); ?></span>
             </a>
         <?php endforeach; ?>
     </div>

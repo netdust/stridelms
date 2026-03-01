@@ -9,8 +9,8 @@ defined('ABSPATH') || exit;
 ?>
     </main><!-- #main -->
 
-    <!-- Footer -->
-    <footer class="bg-surface-alt border-t border-border mt-auto">
+    <!-- Footer (hidden on mobile for dashboard pages with bottom nav) -->
+    <footer class="bg-surface-alt border-t border-border mt-auto <?php echo is_page_template('page-mijn-account.php') ? 'hidden lg:block' : ''; ?>">
         <div class="container py-12 lg:py-16">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
 
@@ -34,7 +34,7 @@ defined('ABSPATH') || exit;
                         <?php esc_html_e('Opleidingen', 'stridence'); ?>
                     </h4>
                     <ul class="space-y-2 text-sm">
-                        <li><a href="<?php echo esc_url(home_url('/cursussen/')); ?>" class="text-text hover:text-primary"><?php esc_html_e('Alle cursussen', 'stridence'); ?></a></li>
+                        <li><a href="<?php echo esc_url(home_url('/opleidingen/')); ?>" class="text-text hover:text-primary"><?php esc_html_e('Alle opleidingen', 'stridence'); ?></a></li>
                         <li><a href="<?php echo esc_url(home_url('/trajecten/')); ?>" class="text-text hover:text-primary"><?php esc_html_e('Trajecten', 'stridence'); ?></a></li>
                         <li><a href="<?php echo esc_url(home_url('/agenda/')); ?>" class="text-text hover:text-primary"><?php esc_html_e('Agenda', 'stridence'); ?></a></li>
                     </ul>

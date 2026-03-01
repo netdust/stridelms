@@ -21,18 +21,6 @@ if (!is_user_logged_in()) {
 
 $user = wp_get_current_user();
 
-// Check for personal trajectory dashboard route
-$trajectory_slug = get_query_var('trajectory_slug');
-if (!empty($trajectory_slug)) {
-    get_header();
-    get_template_part('templates/trajectory/dashboard', null, [
-        'trajectory_slug' => sanitize_title($trajectory_slug),
-        'user' => $user,
-    ]);
-    get_footer();
-    exit;
-}
-
 // Get current tab from URL (default: inschrijvingen)
 $valid_tabs = ['inschrijvingen', 'trajecten', 'offertes', 'certificaten', 'profiel'];
 $current_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'inschrijvingen';
@@ -44,7 +32,7 @@ if (!in_array($current_tab, $valid_tabs, true)) {
 get_header();
 ?>
 
-<div class="min-h-screen bg-surface-alt pb-20 lg:pb-0">
+<div class="min-h-screen bg-surface-alt pb-20 lg:pb-0 overflow-x-hidden">
     <!-- Page Header -->
     <div class="bg-surface border-b border-border">
         <div class="container py-6 lg:py-8">
@@ -52,8 +40,8 @@ get_header();
                 <div class="w-12 h-12 lg:w-16 lg:h-16 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                     <?php echo stridence_icon('user', 'w-6 h-6 lg:w-8 lg:h-8 text-primary'); ?>
                 </div>
-                <div>
-                    <h1 class="font-heading text-xl lg:text-2xl font-bold text-text">
+                <div class="min-w-0">
+                    <h1 class="font-heading text-xl lg:text-2xl font-bold text-text truncate">
                         <?php
                         printf(
                             /* translators: %s: user first name */
@@ -62,7 +50,7 @@ get_header();
                         );
                         ?>
                     </h1>
-                    <p class="text-sm text-text-muted">
+                    <p class="text-sm text-text-muted truncate">
                         <?php echo esc_html($user->user_email); ?>
                     </p>
                 </div>
@@ -85,7 +73,7 @@ get_header();
             </aside>
 
             <!-- Main Content Area -->
-            <main class="lg:col-span-3">
+            <main class="lg:col-span-3 min-w-0">
                 <?php
                 // Load active tab content
                 get_template_part("templates/dashboard/tab-{$current_tab}", null, [

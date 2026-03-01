@@ -48,6 +48,14 @@ foreach ($quotes as $quote) {
         'valid_until'  => $quote['valid_until'] ?? '',
         'created_at'   => $quote['post_date'] ?? '',
         'voucher_code' => $quote['voucher_code'] ?? '',
+        'billing'      => [
+            'organisation' => $quote['billing_organisation'] ?? $quote['billing']['organisation'] ?? '',
+            'email'        => $quote['billing_email'] ?? $quote['billing']['email'] ?? '',
+            'address'      => $quote['billing_address'] ?? $quote['billing']['address'] ?? '',
+            'postal_code'  => $quote['billing_postal_code'] ?? $quote['billing']['postal_code'] ?? '',
+            'city'         => $quote['billing_city'] ?? $quote['billing']['city'] ?? '',
+            'vat_number'   => $quote['billing_vat_number'] ?? $quote['billing']['vat_number'] ?? '',
+        ],
     ];
 
     if ($status === QuoteStatus::Cancelled) {
@@ -121,7 +129,7 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                         <div x-show="open" x-collapse class="border-t border-border">
                             <div class="p-4 space-y-4">
                                 <!-- Quote Details -->
-                                <dl class="grid grid-cols-2 gap-4 text-sm">
+                                <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                                     <div>
                                         <dt class="text-text-muted"><?php esc_html_e('Subtotaal', 'stridence'); ?></dt>
                                         <dd class="font-medium"><?php echo esc_html($quote['subtotal']->format()); ?></dd>
@@ -146,7 +154,7 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                                         <dd class="font-bold text-lg"><?php echo esc_html($quote['total']->format()); ?></dd>
                                     </div>
                                     <?php if ($quote['valid_until']) : ?>
-                                        <div class="col-span-2">
+                                        <div class="sm:col-span-2">
                                             <dt class="text-text-muted"><?php esc_html_e('Geldig tot', 'stridence'); ?></dt>
                                             <dd class="font-medium"><?php echo esc_html(stride_format_date($quote['valid_until'])); ?></dd>
                                         </div>
@@ -177,8 +185,154 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                                     </div>
                                 <?php endif; ?>
 
+                                <!-- Billing Info (editable for draft quotes) -->
+                                <?php if ($quote['status'] === QuoteStatus::Draft || $quote['status'] === QuoteStatus::Sent) : ?>
+                                    <div class="border-t border-border pt-4 mt-4"
+                                         x-data="inlineEditSection({
+                                             action: 'stride_update_quote',
+                                             params: { quote_id: <?php echo (int)$quote['id']; ?> },
+                                             fields: <?php echo esc_attr(json_encode([
+                                                 'organisation' => $quote['billing']['organisation'] ?? '',
+                                                 'email'        => $quote['billing']['email'] ?? '',
+                                                 'address'      => $quote['billing']['address'] ?? '',
+                                                 'postal_code'  => $quote['billing']['postal_code'] ?? '',
+                                                 'city'         => $quote['billing']['city'] ?? '',
+                                                 'vat_number'   => $quote['billing']['vat_number'] ?? '',
+                                             ])); ?>
+                                         })">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <h4 class="text-sm font-semibold text-text">
+                                                <?php esc_html_e('Facturatiegegevens', 'stridence'); ?>
+                                            </h4>
+                                            <template x-if="!editing">
+                                                <button type="button" @click="startEdit()"
+                                                        class="text-sm text-primary hover:underline">
+                                                    <?php echo stridence_icon('edit-2', 'w-3.5 h-3.5 inline mr-1'); ?>
+                                                    <?php esc_html_e('Bewerken', 'stridence'); ?>
+                                                </button>
+                                            </template>
+                                        </div>
+
+                                        <!-- Display mode -->
+                                        <dl x-show="!editing" class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                                            <div>
+                                                <dt class="text-text-muted"><?php esc_html_e('Organisatie', 'stridence'); ?></dt>
+                                                <dd x-text="fields.organisation || '-'"></dd>
+                                            </div>
+                                            <div>
+                                                <dt class="text-text-muted"><?php esc_html_e('E-mail', 'stridence'); ?></dt>
+                                                <dd x-text="fields.email || '-'"></dd>
+                                            </div>
+                                            <div class="sm:col-span-2">
+                                                <dt class="text-text-muted"><?php esc_html_e('Adres', 'stridence'); ?></dt>
+                                                <dd>
+                                                    <span x-text="fields.address"></span><template x-if="fields.address && fields.postal_code">, </template>
+                                                    <span x-text="fields.postal_code"></span>
+                                                    <span x-text="fields.city"></span>
+                                                </dd>
+                                            </div>
+                                            <div x-show="fields.vat_number">
+                                                <dt class="text-text-muted"><?php esc_html_e('BTW-nummer', 'stridence'); ?></dt>
+                                                <dd x-text="fields.vat_number"></dd>
+                                            </div>
+                                        </dl>
+
+                                        <!-- Edit mode -->
+                                        <div x-show="editing" x-transition class="space-y-3">
+                                            <div>
+                                                <label class="input-label"><?php esc_html_e('Organisatie', 'stridence'); ?></label>
+                                                <input type="text" x-model="fields.organisation" class="input-text">
+                                            </div>
+                                            <div>
+                                                <label class="input-label"><?php esc_html_e('E-mail factuur', 'stridence'); ?></label>
+                                                <input type="email" x-model="fields.email" class="input-text">
+                                            </div>
+                                            <div>
+                                                <label class="input-label"><?php esc_html_e('Adres', 'stridence'); ?></label>
+                                                <input type="text" x-model="fields.address" class="input-text">
+                                            </div>
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <div>
+                                                    <label class="input-label"><?php esc_html_e('Postcode', 'stridence'); ?></label>
+                                                    <input type="text" x-model="fields.postal_code" class="input-text">
+                                                </div>
+                                                <div>
+                                                    <label class="input-label"><?php esc_html_e('Gemeente', 'stridence'); ?></label>
+                                                    <input type="text" x-model="fields.city" class="input-text">
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label class="input-label"><?php esc_html_e('BTW-nummer', 'stridence'); ?></label>
+                                                <input type="text" x-model="fields.vat_number" class="input-text" placeholder="BE0123.456.789">
+                                            </div>
+
+                                            <!-- Error -->
+                                            <div x-show="error" class="p-2 bg-error/10 rounded text-sm text-error" x-text="error"></div>
+
+                                            <!-- Actions -->
+                                            <div class="flex justify-end gap-2 pt-2">
+                                                <button type="button" @click="cancelEdit()" class="btn-secondary btn-sm">
+                                                    <?php esc_html_e('Annuleren', 'stridence'); ?>
+                                                </button>
+                                                <button type="button" @click="saveEdit()" :disabled="saving" class="btn-primary btn-sm">
+                                                    <span x-show="!saving"><?php esc_html_e('Opslaan', 'stridence'); ?></span>
+                                                    <span x-show="saving" class="flex items-center gap-1">
+                                                        <span class="spinner w-3 h-3"></span>
+                                                        <?php esc_html_e('Opslaan...', 'stridence'); ?>
+                                                    </span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+
+                                <!-- Apply Voucher (only for Draft/Sent without existing voucher) -->
+                                <?php if (($quote['status'] === QuoteStatus::Draft || $quote['status'] === QuoteStatus::Sent) && empty($quote['voucher_code'])) : ?>
+                                    <div class="border-t border-border pt-4 mt-4"
+                                         x-data="{ code: '', loading: false, error: '', applied: false }">
+                                        <h4 class="text-sm font-semibold text-text mb-3">
+                                            <?php esc_html_e('Kortingscode toevoegen', 'stridence'); ?>
+                                        </h4>
+                                        <div class="flex gap-2" x-show="!applied">
+                                            <input type="text" x-model="code"
+                                                   class="input-text flex-1"
+                                                   placeholder="<?php esc_attr_e('Voer code in', 'stridence'); ?>"
+                                                   :disabled="loading">
+                                            <button type="button"
+                                                    @click="async () => {
+                                                        if (!code) return;
+                                                        loading = true;
+                                                        error = '';
+                                                        try {
+                                                            await ntdstAPI.call('stride_apply_quote_voucher', {
+                                                                quote_id: <?php echo (int)$quote['id']; ?>,
+                                                                code: code
+                                                            });
+                                                            applied = true;
+                                                            $dispatch('toast', { message: 'Kortingscode toegepast!', type: 'success' });
+                                                            setTimeout(() => location.reload(), 1000);
+                                                        } catch (e) {
+                                                            error = e.message || 'Code ongeldig';
+                                                        } finally {
+                                                            loading = false;
+                                                        }
+                                                    }"
+                                                    :disabled="!code || loading"
+                                                    class="btn-secondary whitespace-nowrap">
+                                                <span x-show="!loading"><?php esc_html_e('Toepassen', 'stridence'); ?></span>
+                                                <span x-show="loading" class="spinner w-4 h-4"></span>
+                                            </button>
+                                        </div>
+                                        <p x-show="error" class="text-sm text-error mt-2" x-text="error"></p>
+                                        <p x-show="applied" class="text-sm text-green-600 mt-2">
+                                            <?php echo stridence_icon('check-circle', 'w-4 h-4 inline mr-1'); ?>
+                                            <?php esc_html_e('Kortingscode toegepast!', 'stridence'); ?>
+                                        </p>
+                                    </div>
+                                <?php endif; ?>
+
                                 <!-- Actions -->
-                                <div class="flex flex-wrap gap-3 pt-2">
+                                <div class="flex flex-wrap gap-3 pt-4 border-t border-border mt-4">
                                     <a href="<?php echo esc_url(add_query_arg(['action' => 'stride_quote_pdf', 'quote_id' => $quote['id'], 'nonce' => wp_create_nonce('stride_quote_pdf')], admin_url('admin-ajax.php'))); ?>"
                                        class="btn-primary text-sm"
                                        target="_blank">

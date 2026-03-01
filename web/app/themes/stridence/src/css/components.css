@@ -246,4 +246,9 @@
   .spinner {
     @apply animate-spin h-5 w-5 border-2 border-current border-t-transparent rounded-full;
   }
+
+  /* Safe area padding for devices with home indicators (iOS notch) */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
 }
