@@ -5,38 +5,19 @@ declare(strict_types=1);
 namespace Stride\Modules\Edition;
 
 use Stride\Domain\SessionType;
-use Stride\Infrastructure\AbstractService;
 use WP_Error;
 use WP_Post;
 
 /**
  * Session business logic.
+ *
+ * Plain class — owned by EditionService.
  */
-final class SessionService extends AbstractService
+final class SessionService
 {
     public function __construct(
         private readonly SessionRepository $repository,
     ) {
-        parent::__construct();
-    }
-
-    public static function metadata(): array
-    {
-        return [
-            'name' => 'Session Service',
-            'description' => 'Manages meeting days within editions',
-            'priority' => 15,
-        ];
-    }
-
-    protected function getConfigSlug(): string
-    {
-        return 'session';
-    }
-
-    protected function init(): void
-    {
-        SessionCPT::register();
     }
 
     // === CRUD ===

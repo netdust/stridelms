@@ -5,7 +5,7 @@
  * Shows pending tasks with progress bar for registrations that need completion.
  *
  * @var array $args {
- *     @type array  $task_summary  From EnrollmentCompletionService::getTaskSummary()
+ *     @type array  $task_summary  From EnrollmentCompletion::getTaskSummary()
  *     @type string $complete_url  URL to the completion page
  * }
  * @package stridence
@@ -18,6 +18,7 @@ defined('ABSPATH') || exit;
 $summary      = $args['task_summary'] ?? [];
 $complete_url = $args['complete_url'] ?? '#';
 $tasks        = $summary['tasks'] ?? [];
+$availability = $summary['availability'] ?? [];
 $total        = $summary['total'] ?? 0;
 $completed    = $summary['completed'] ?? 0;
 
@@ -52,22 +53,19 @@ $task_actions = [
     <ul class="space-y-2 mb-4">
         <?php foreach ($tasks as $type => $task): ?>
             <?php
-            $isDone = ($task['status'] ?? 'pending') === 'completed';
-            $isApproval = $type === 'approval';
-            $userTasksDone = $summary['ready_for_approval'] ?? false;
+            $state  = $availability[$type]['state'] ?? 'available';
+            $reason = $availability[$type]['reason'] ?? '';
             ?>
             <li class="flex items-center gap-2 text-sm">
-                <?php if ($isDone): ?>
+                <?php if ($state === 'completed'): ?>
                     <?= stridence_icon('check', 'w-4 h-4 text-emerald-500') ?>
                     <span class="text-text-muted line-through"><?= esc_html($task_labels[$type] ?? $type) ?></span>
-                <?php elseif ($isApproval): ?>
+                <?php elseif ($state === 'locked'): ?>
                     <?= stridence_icon('info', 'w-4 h-4 text-text-muted') ?>
                     <span class="text-text-muted">
-                        <?= esc_html($task_labels[$type]) ?>
-                        <?php if (!$userTasksDone): ?>
-                            <span class="text-xs">(<?= esc_html__('wacht op taken', 'stridence') ?>)</span>
-                        <?php else: ?>
-                            <span class="text-xs text-amber-600">(<?= esc_html__('wacht op beheerder', 'stridence') ?>)</span>
+                        <?= esc_html($task_labels[$type] ?? $type) ?>
+                        <?php if ($reason): ?>
+                            <span class="text-xs">(<?= esc_html(mb_strtolower(rtrim($reason, '.'))) ?>)</span>
                         <?php endif; ?>
                     </span>
                 <?php else: ?>

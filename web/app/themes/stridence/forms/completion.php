@@ -3,13 +3,13 @@
  * Enrollment Completion Page (router-rendered).
  *
  * Shows pending tasks as collapsible cards for users to complete.
- * Rendered by EnrollmentRouterService via ntdst_response()->render().
+ * Rendered by EnrollmentRouter via ntdst_response()->render().
  *
  * Available variables (from ntdst_response()->with()):
  * @var WP_Post $post           The edition or trajectory post
  * @var string  $type           'edition' or 'trajectory'
  * @var object  $registration   Registration row from DB
- * @var array   $task_summary   From EnrollmentCompletionService::getTaskSummary()
+ * @var array   $task_summary   From EnrollmentCompletion::getTaskSummary()
  */
 
 defined('ABSPATH') || exit;
@@ -19,6 +19,7 @@ get_header();
 $post_id       = $post->ID ?? 0;
 $reg_id        = (int) ($registration->id ?? 0);
 $tasks         = $task_summary['tasks'] ?? [];
+$availability  = $task_summary['availability'] ?? [];
 $total         = $task_summary['total'] ?? 0;
 $completed     = $task_summary['completed'] ?? 0;
 $percentage    = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
@@ -77,22 +78,24 @@ $task_descriptions = [
     <div class="space-y-4">
         <?php foreach ($tasks as $taskType => $task): ?>
             <?php
-            $isDone = ($task['status'] ?? 'pending') === 'completed';
-            $isApproval = $taskType === 'approval';
-            $userTasksDone = $task_summary['ready_for_approval'] ?? false;
+            $state  = $availability[$taskType]['state'] ?? 'available';
+            $reason = $availability[$taskType]['reason'] ?? '';
+            $isLocked    = $state === 'locked';
+            $isCompleted = $state === 'completed';
+            $isAvailable = $state === 'available';
             ?>
-            <div class="card overflow-hidden"
-                 x-data="{ open: <?= $isDone || $isApproval ? 'false' : 'true' ?> }">
+            <div class="card overflow-hidden <?= $isLocked ? 'opacity-60' : '' ?>"
+                 x-data="{ open: <?= $isAvailable && !$isCompleted ? 'true' : 'false' ?> }">
                 <!-- Card header -->
                 <button type="button"
                         class="w-full p-4 flex items-center gap-3 text-left"
                         @click="open = !open"
-                        <?php if ($isApproval): ?>disabled<?php endif; ?>>
-                    <?php if ($isDone): ?>
+                        <?php if ($isLocked): ?>disabled<?php endif; ?>>
+                    <?php if ($isCompleted): ?>
                         <span class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
                             <?= stridence_icon('check', 'w-4 h-4 text-emerald-600') ?>
                         </span>
-                    <?php elseif ($isApproval): ?>
+                    <?php elseif ($isLocked): ?>
                         <span class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
                             <?= stridence_icon('info', 'w-4 h-4 text-text-muted') ?>
                         </span>
@@ -103,19 +106,21 @@ $task_descriptions = [
                     <?php endif; ?>
 
                     <div class="flex-1 min-w-0">
-                        <span class="font-medium text-text <?= $isDone ? 'line-through text-text-muted' : '' ?>">
+                        <span class="font-medium text-text <?= $isCompleted ? 'line-through text-text-muted' : '' ?>">
                             <?= esc_html($task_labels[$taskType] ?? $taskType) ?>
                         </span>
-                        <?php if ($isApproval && !$isDone): ?>
+                        <?php if ($isLocked && $reason): ?>
+                            <span class="text-xs text-text-muted ml-2">
+                                <?= esc_html($reason) ?>
+                            </span>
+                        <?php elseif ($isAvailable && $reason): ?>
                             <span class="text-xs text-amber-600 ml-2">
-                                <?= $userTasksDone
-                                    ? esc_html__('Wacht op beheerder', 'stridence')
-                                    : esc_html__('Wacht op taken', 'stridence') ?>
+                                <?= esc_html($reason) ?>
                             </span>
                         <?php endif; ?>
                     </div>
 
-                    <?php if (!$isApproval): ?>
+                    <?php if (!$isLocked): ?>
                         <span class="shrink-0 text-text-muted transition-transform duration-200"
                               :class="{ 'rotate-180': open }">
                             <?= stridence_icon('chevron-down', 'w-5 h-5') ?>
@@ -124,10 +129,10 @@ $task_descriptions = [
                 </button>
 
                 <!-- Card body -->
-                <?php if (!$isApproval): ?>
+                <?php if (!$isLocked): ?>
                     <div x-show="open" x-collapse class="border-t border-border">
                         <div class="p-4">
-                            <?php if ($isDone): ?>
+                            <?php if ($isCompleted): ?>
                                 <p class="text-sm text-emerald-600">
                                     <?= stridence_icon('check', 'w-4 h-4 inline-block mr-1') ?>
                                     <?= esc_html__('Voltooid', 'stridence') ?>

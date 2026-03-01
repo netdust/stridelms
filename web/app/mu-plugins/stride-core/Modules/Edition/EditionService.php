@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Stride\Modules\Edition;
 
 use Stride\Contracts\EditionQueryInterface;
-use Stride\Domain\EditionStatus;
+use Stride\Domain\OfferingStatus;
 use Stride\Domain\Money;
 use Stride\Infrastructure\AbstractService;
 use WP_Post;
@@ -41,6 +41,25 @@ final class EditionService extends AbstractService implements EditionQueryInterf
     protected function init(): void
     {
         EditionCPT::register();
+        SessionCPT::register();
+
+        // Register sub-components as singletons
+        $sessionService = new SessionService(ntdst_get(SessionRepository::class));
+        ntdst_set(SessionService::class, fn() => $sessionService);
+
+        $completion = new EditionCompletion();
+        ntdst_set(EditionCompletion::class, fn() => $completion);
+        add_action('stride/attendance/marked', [$completion, 'onAttendanceMarked']);
+
+        // Admin UI + settings (registers own hooks in constructor)
+        new \Stride\Admin\StrideSettingsService();
+        new Admin\EditionAdminController(
+            $this,
+            $this->repository,
+            $sessionService,
+            ntdst_get(SessionRepository::class),
+            ntdst_get(\Stride\Modules\Attendance\AttendanceRepository::class),
+        );
 
         // Register hooks for capacity updates
         add_action('stride/registration/created', [$this, 'onRegistrationCreated']);
@@ -70,7 +89,7 @@ final class EditionService extends AbstractService implements EditionQueryInterf
         $table = $wpdb->prefix . 'vad_registrations';
 
         return (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$table} WHERE edition_id = %d AND status = 'confirmed'",
+            "SELECT COUNT(*) FROM {$table} WHERE edition_id = %d AND status IN ('confirmed', 'completed', 'pending')",
             $editionId
         ));
     }
@@ -80,11 +99,11 @@ final class EditionService extends AbstractService implements EditionQueryInterf
         return (int) $this->repository->getField($editionId, 'capacity', 0);
     }
 
-    public function getStatus(int $editionId): EditionStatus
+    public function getStatus(int $editionId): OfferingStatus
     {
         $status = $this->repository->getField($editionId, 'status', 'open');
 
-        return EditionStatus::tryFrom($status) ?? EditionStatus::Open;
+        return OfferingStatus::tryFrom($status) ?? OfferingStatus::Open;
     }
 
     public function getCourseId(int $editionId): ?int
@@ -94,11 +113,58 @@ final class EditionService extends AbstractService implements EditionQueryInterf
         return $courseId ? (int) $courseId : null;
     }
 
+    /**
+     * Check if this edition is for an online course.
+     * Derives format from the linked LearnDash course's ld_course_category taxonomy.
+     */
+    public function isOnline(int $editionId): bool
+    {
+        $courseId = $this->getCourseId($editionId);
+        if (!$courseId) {
+            return false;
+        }
+
+        $categories = get_the_terms($courseId, 'ld_course_category');
+        if (!$categories || is_wp_error($categories)) {
+            return false;
+        }
+
+        foreach ($categories as $cat) {
+            if (in_array($cat->slug, ['online', 'webinar', 'e-learning'], true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Get the enrollment form key for this edition.
+     * Returns empty string if no form is configured.
+     */
+    public function getEnrollmentForm(int $editionId): string
+    {
+        return (string) $this->repository->getField($editionId, 'enrollment_form', '');
+    }
+
+    /**
+     * Check if this edition has an enrollment form configured.
+     */
+    public function hasEnrollmentForm(int $editionId): bool
+    {
+        return $this->getEnrollmentForm($editionId) !== '';
+    }
+
     public function exists(int $editionId): bool
     {
         $result = $this->repository->find($editionId);
 
         return !is_wp_error($result);
+    }
+
+    public function requiresApproval(int $editionId): bool
+    {
+        return (bool) $this->repository->getField($editionId, 'requires_approval', false);
     }
 
     // === Public API ===
@@ -176,7 +242,7 @@ final class EditionService extends AbstractService implements EditionQueryInterf
         $editionId = $data['edition_id'] ?? 0;
 
         if ($editionId && !$this->hasAvailableSpots($editionId)) {
-            $this->repository->updateStatus($editionId, EditionStatus::Full);
+            $this->repository->updateStatus($editionId, OfferingStatus::Full);
         }
     }
 
@@ -190,9 +256,9 @@ final class EditionService extends AbstractService implements EditionQueryInterf
         $editionId = (int) ($data['edition_id'] ?? 0);
         $currentStatus = $this->getStatus($editionId);
 
-        if ($editionId && $currentStatus === EditionStatus::Full) {
+        if ($editionId && $currentStatus === OfferingStatus::Full) {
             if ($this->hasAvailableSpots($editionId)) {
-                $this->repository->updateStatus($editionId, EditionStatus::Open);
+                $this->repository->updateStatus($editionId, OfferingStatus::Open);
             }
         }
     }

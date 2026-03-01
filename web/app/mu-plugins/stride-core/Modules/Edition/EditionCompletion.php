@@ -2,67 +2,37 @@
 
 declare(strict_types=1);
 
-namespace Stride\Modules\Completion;
+namespace Stride\Modules\Edition;
 
 use Stride\Contracts\LMSAdapterInterface;
 use Stride\Domain\CompletionMode;
-use Stride\Infrastructure\AbstractService;
 use Stride\Modules\Attendance\AttendanceService;
-use Stride\Modules\Edition\EditionService;
-use Stride\Modules\Edition\SessionService;
 use WP_Error;
 
 /**
  * Edition completion business logic.
  *
- * Determines if a user has completed an edition based on attendance.
+ * Determines if a user has completed an edition based on attendance
+ * and triggers LearnDash course completion when requirements are met.
+ *
+ * Plain class — owned by EditionService, not a standalone service.
  */
-final class CompletionService extends AbstractService
+final class EditionCompletion
 {
-    public function __construct(
-        private readonly AttendanceService $attendanceService,
-        private readonly EditionService $editionService,
-        private readonly SessionService $sessionService,
-        private readonly LMSAdapterInterface $lmsAdapter,
-    ) {
-        parent::__construct();
-    }
-
-    public static function metadata(): array
-    {
-        return [
-            'name' => 'Completion Service',
-            'description' => 'Manages edition completion based on attendance',
-            'priority' => 30,
-        ];
-    }
-
-    protected function getConfigSlug(): string
-    {
-        return 'completion';
-    }
-
-    protected function init(): void
-    {
-        // Listen for attendance events to check completion
-        add_action('stride/attendance/marked', [$this, 'onAttendanceMarked']);
-    }
-
-    // === Completion Checks ===
-
     /**
      * Check if user has completed an edition.
      */
     public function isComplete(int $editionId, int $userId): bool
     {
-        if (!$this->editionService->exists($editionId)) {
+        $editionService = ntdst_get(EditionService::class);
+        if (!$editionService->exists($editionId)) {
             return false;
         }
 
         $mode = $this->getCompletionMode($editionId);
         $threshold = $this->getCompletionThreshold($editionId);
-        $totalSessions = $this->sessionService->getSessionCount($editionId);
-        $attended = $this->attendanceService->countAttended($userId, $editionId);
+        $totalSessions = ntdst_get(SessionService::class)->getSessionCount($editionId);
+        $attended = ntdst_get(AttendanceService::class)->countAttended($userId, $editionId);
 
         return match ($mode) {
             CompletionMode::AttendAll => $attended >= $totalSessions,
@@ -78,8 +48,8 @@ final class CompletionService extends AbstractService
      */
     public function getProgress(int $editionId, int $userId): array
     {
-        $totalSessions = $this->sessionService->getSessionCount($editionId);
-        $attended = $this->attendanceService->countAttended($userId, $editionId);
+        $totalSessions = ntdst_get(SessionService::class)->getSessionCount($editionId);
+        $attended = ntdst_get(AttendanceService::class)->countAttended($userId, $editionId);
         $mode = $this->getCompletionMode($editionId);
         $threshold = $this->getCompletionThreshold($editionId);
         $isComplete = $this->isComplete($editionId, $userId);
@@ -130,8 +100,6 @@ final class CompletionService extends AbstractService
         return $threshold ? (int) $threshold : 100;
     }
 
-    // === Process Completion ===
-
     /**
      * Process completion for user in edition.
      *
@@ -143,23 +111,24 @@ final class CompletionService extends AbstractService
             return new WP_Error('not_complete', 'User has not met completion requirements');
         }
 
-        if (!$this->editionService->exists($editionId)) {
+        $editionService = ntdst_get(EditionService::class);
+        if (!$editionService->exists($editionId)) {
             return new WP_Error('invalid_edition', 'Edition not found');
         }
 
-        $courseId = $this->editionService->getCourseId($editionId);
-
+        $courseId = $editionService->getCourseId($editionId);
         if (!$courseId) {
             return new WP_Error('no_course', 'Edition has no linked course');
         }
 
+        $lmsAdapter = ntdst_get(LMSAdapterInterface::class);
+
         // Check if already complete in LearnDash
-        if ($this->lmsAdapter->isComplete($userId, $courseId)) {
+        if ($lmsAdapter->isComplete($userId, $courseId)) {
             return true;
         }
 
         // Mark complete in LearnDash
-        // Note: LearnDash uses learndash_process_mark_complete() for this
         if (function_exists('learndash_process_mark_complete')) {
             learndash_process_mark_complete($userId, $courseId);
         }
@@ -174,7 +143,7 @@ final class CompletionService extends AbstractService
     }
 
     /**
-     * Handle attendance marked event.
+     * Handle attendance marked event — auto-complete if threshold met.
      *
      * @param array<string, mixed> $data
      */
@@ -187,8 +156,6 @@ final class CompletionService extends AbstractService
             $this->processCompletion($editionId, $userId);
         }
     }
-
-    // === Configuration ===
 
     /**
      * Set completion mode for edition.

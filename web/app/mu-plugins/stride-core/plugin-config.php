@@ -8,7 +8,7 @@ declare(strict_types=1);
  * Service registration and DI bindings.
  */
 
-use Stride\Integrations\LearnDash\LearnDashAdapter;
+use Stride\Integrations\LearnDash\LearnDashService;
 use Stride\Contracts\EditionQueryInterface;
 use Stride\Contracts\LMSAdapterInterface;
 use Stride\Modules\Edition\EditionService;
@@ -20,7 +20,7 @@ return [
      * Interface => Implementation mappings
      */
     'bindings' => [
-        LMSAdapterInterface::class => LearnDashAdapter::class,
+        LMSAdapterInterface::class => LearnDashService::class,
         EditionQueryInterface::class => EditionService::class,
     ],
 
@@ -30,28 +30,14 @@ return [
      * Services are loaded in order, by priority from metadata().
      */
     'services' => [
-        \Stride\Admin\StrideSettingsService::class,
+        \Stride\Integrations\LearnDash\LearnDashService::class,
         \Stride\Admin\AdminDashboardService::class,
-        \Stride\Admin\AdminAPIController::class,
-        \Stride\Admin\FieldGroupSettingsPage::class,
         \Stride\Modules\Edition\EditionService::class,
-        \Stride\Modules\Edition\SessionService::class,
-        \Stride\Modules\Edition\Admin\EditionAdminController::class,
         \Stride\Modules\Enrollment\EnrollmentService::class,
-        \Stride\Modules\Enrollment\EnrollmentRouterService::class,
-        \Stride\Modules\Invoicing\QuoteService::class,
-        \Stride\Modules\Invoicing\VoucherService::class,
-        \Stride\Modules\Invoicing\Admin\QuoteAdminController::class,
-        \Stride\Modules\Invoicing\Admin\VoucherAdminController::class,
         \Stride\Modules\Trajectory\TrajectoryService::class,
-        \Stride\Modules\Trajectory\Admin\TrajectoryAdminController::class,
-        \Stride\Modules\Trajectory\TrajectoryDashboardService::class,
         \Stride\Modules\Attendance\AttendanceService::class,
-        \Stride\Modules\Completion\CompletionService::class,
+        \Stride\Modules\Invoicing\QuoteService::class,
         \Stride\Modules\Audit\AuditBridge::class,
-        \Stride\Modules\Course\CourseTaxonomyService::class,
-        \Stride\Modules\Enrollment\EnrollmentFieldGroupService::class,
-        \Stride\Modules\Enrollment\EnrollmentCompletionService::class,
         \Stride\Modules\PartnerAPI\PartnerAPIController::class,
     ],
 
@@ -59,12 +45,14 @@ return [
      * Module configuration
      */
     'modules' => [
+        'learndash' => [],
+        'admin_dashboard' => [],
         'edition' => [],
         'enrollment' => [],
-        'invoicing' => [],
         'trajectory' => [],
         'attendance' => [],
-        'completion' => [],
+        'invoicing' => [],
+        'audit' => [],
         'partner_api' => [],
     ],
 ];

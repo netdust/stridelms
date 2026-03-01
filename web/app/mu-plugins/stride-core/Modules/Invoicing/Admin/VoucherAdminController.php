@@ -7,7 +7,6 @@ namespace Stride\Modules\Invoicing\Admin;
 use Stride\Domain\DiscountType;
 use Stride\Domain\Money;
 use Stride\Domain\VoucherStatus;
-use Stride\Infrastructure\AbstractService;
 use Stride\Modules\Invoicing\VoucherCPT;
 use Stride\Modules\Invoicing\VoucherRepository;
 use Stride\Modules\Invoicing\VoucherService;
@@ -21,8 +20,10 @@ use WP_Post;
  * - Registers metaboxes
  * - Renders metabox content inline
  * - Handles save operations
+ *
+ * Plain class — owned by QuoteService.
  */
-final class VoucherAdminController extends AbstractService
+final class VoucherAdminController
 {
     public const NONCE_SAVE = 'stride_save_voucher';
     public const NONCE_FIELD = 'stride_voucher_nonce';
@@ -31,21 +32,7 @@ final class VoucherAdminController extends AbstractService
         private readonly VoucherService $voucherService,
         private readonly VoucherRepository $repository,
     ) {
-        parent::__construct();
-    }
-
-    public static function metadata(): array
-    {
-        return [
-            'name' => 'Voucher Admin Controller',
-            'description' => 'Admin interface for voucher management',
-            'priority' => 100,
-        ];
-    }
-
-    protected function getConfigSlug(): string
-    {
-        return 'voucher-admin';
+        $this->init();
     }
 
     protected function init(): void

@@ -10,9 +10,10 @@ use Stride\Contracts\LMSAdapterInterface;
 use Stride\Domain\TrajectoryMode;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
+use Stride\Modules\Trajectory\TrajectoryDashboardService;
+use Stride\Modules\Trajectory\TrajectoryRepository;
 use Stride\Modules\Trajectory\TrajectoryService;
 use Stride\Tests\TestCase;
-use stridence\services\frontend\TrajectoryDashboardService;
 
 /**
  * Unit tests for TrajectoryDashboardService
@@ -21,6 +22,7 @@ use stridence\services\frontend\TrajectoryDashboardService;
  */
 class TrajectoryDashboardServiceTest extends TestCase
 {
+    private TrajectoryRepository|MockInterface $repository;
     private TrajectoryService|MockInterface $trajectoryService;
     private RegistrationRepository|MockInterface $registrationRepo;
     private EditionService|MockInterface $editionService;
@@ -31,12 +33,14 @@ class TrajectoryDashboardServiceTest extends TestCase
     {
         parent::setUp();
 
+        $this->repository = Mockery::mock(TrajectoryRepository::class);
         $this->trajectoryService = Mockery::mock(TrajectoryService::class);
         $this->registrationRepo = Mockery::mock(RegistrationRepository::class);
         $this->editionService = Mockery::mock(EditionService::class);
         $this->lmsAdapter = Mockery::mock(LMSAdapterInterface::class);
 
         $this->service = new TrajectoryDashboardService(
+            $this->repository,
             $this->trajectoryService,
             $this->registrationRepo,
             $this->editionService,
@@ -51,23 +55,6 @@ class TrajectoryDashboardServiceTest extends TestCase
     }
 
     // =========================================================================
-    // metadata()
-    // =========================================================================
-
-    /**
-     * @test
-     */
-    public function metadataReturnsCorrectServiceInfo(): void
-    {
-        $metadata = TrajectoryDashboardService::metadata();
-
-        $this->assertArrayHasKey('name', $metadata);
-        $this->assertArrayHasKey('description', $metadata);
-        $this->assertArrayHasKey('priority', $metadata);
-        $this->assertEquals('Trajectory Dashboard', $metadata['name']);
-    }
-
-    // =========================================================================
     // getTrajectoryBySlug()
     // =========================================================================
 
@@ -78,17 +65,33 @@ class TrajectoryDashboardServiceTest extends TestCase
     {
         $trajectory = $this->createTrajectory(['ID' => 100, 'post_name' => 'test-trajectory']);
 
-        // Mock get_posts to return our trajectory
-        global $_test_posts;
-        $_test_posts[100] = $trajectory;
+        $this->repository
+            ->shouldReceive('findBySlug')
+            ->with('test-trajectory')
+            ->once()
+            ->andReturn($trajectory);
 
-        // Note: This method uses get_posts() which is stubbed in wordpress-stubs.php
-        // The actual test relies on the stub implementation
         $result = $this->service->getTrajectoryBySlug('test-trajectory');
 
-        // For this unit test, we verify the service doesn't throw errors
-        // Integration tests will verify actual WordPress query behavior
-        $this->assertTrue(true);
+        $this->assertNotNull($result);
+        $this->assertEquals(100, $result->ID);
+        $this->assertEquals('test-trajectory', $result->post_name);
+    }
+
+    /**
+     * @test
+     */
+    public function getTrajectoryBySlugReturnsNullWhenNotFound(): void
+    {
+        $this->repository
+            ->shouldReceive('findBySlug')
+            ->with('nonexistent')
+            ->once()
+            ->andReturn(null);
+
+        $result = $this->service->getTrajectoryBySlug('nonexistent');
+
+        $this->assertNull($result);
     }
 
     // =========================================================================
@@ -392,8 +395,11 @@ class TrajectoryDashboardServiceTest extends TestCase
     {
         $trajectoryId = 100;
 
-        global $_test_post_meta;
-        $_test_post_meta[$trajectoryId]['trajectory_messages'] = [null];
+        $this->repository
+            ->shouldReceive('getMessages')
+            ->with($trajectoryId)
+            ->once()
+            ->andReturn([]);
 
         $result = $this->service->getMessages($trajectoryId);
 
@@ -408,28 +414,32 @@ class TrajectoryDashboardServiceTest extends TestCase
     {
         $trajectoryId = 100;
 
-        $messages = [
-            [
-                'type' => 'announcement',
-                'content' => 'Old message',
-                'author' => 1,
-                'date' => '2026-02-20 10:00:00',
-            ],
+        // Repository already returns sorted messages (newest first)
+        $sortedMessages = [
             [
                 'type' => 'update',
                 'content' => 'New message',
                 'author' => 1,
                 'date' => '2026-02-24 10:00:00',
             ],
+            [
+                'type' => 'announcement',
+                'content' => 'Old message',
+                'author' => 1,
+                'date' => '2026-02-20 10:00:00',
+            ],
         ];
 
-        global $_test_post_meta;
-        $_test_post_meta[$trajectoryId]['trajectory_messages'] = [$messages];
+        $this->repository
+            ->shouldReceive('getMessages')
+            ->with($trajectoryId)
+            ->once()
+            ->andReturn($sortedMessages);
 
         $result = $this->service->getMessages($trajectoryId);
 
         $this->assertCount(2, $result);
-        // Newest first
+        // Newest first (as returned by repository)
         $this->assertEquals('New message', $result[0]['content']);
         $this->assertEquals('Old message', $result[1]['content']);
     }
@@ -441,24 +451,21 @@ class TrajectoryDashboardServiceTest extends TestCase
     {
         $trajectoryId = 100;
 
-        $messages = [
+        // Repository already filters deleted messages
+        $filteredMessages = [
             [
                 'type' => 'announcement',
                 'content' => 'Active message',
                 'author' => 1,
                 'date' => '2026-02-24 10:00:00',
             ],
-            [
-                'type' => 'announcement',
-                'content' => 'Deleted message',
-                'author' => 1,
-                'date' => '2026-02-23 10:00:00',
-                '_deleted' => true,
-            ],
         ];
 
-        global $_test_post_meta;
-        $_test_post_meta[$trajectoryId]['trajectory_messages'] = [$messages];
+        $this->repository
+            ->shouldReceive('getMessages')
+            ->with($trajectoryId)
+            ->once()
+            ->andReturn($filteredMessages);
 
         $result = $this->service->getMessages($trajectoryId);
 

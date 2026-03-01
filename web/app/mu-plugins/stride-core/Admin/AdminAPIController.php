@@ -6,7 +6,6 @@ namespace Stride\Admin;
 
 use Stride\Domain\AttendanceStatus;
 use Stride\Domain\QuoteStatus;
-use Stride\Infrastructure\AbstractService;
 use Stride\Infrastructure\BatchQueryHelper;
 use Stride\Modules\Attendance\AttendanceRepository;
 use Stride\Modules\Attendance\AttendanceTable;
@@ -23,8 +22,10 @@ use WP_REST_Response;
 
 /**
  * REST API endpoints for admin dashboard.
+ *
+ * Plain class — owned by AdminDashboardService.
  */
-final class AdminAPIController extends AbstractService
+final class AdminAPIController
 {
     private const NAMESPACE = 'stride/v1';
 
@@ -33,25 +34,10 @@ final class AdminAPIController extends AbstractService
         private readonly EditionRepository $editionRepository,
         private readonly SessionRepository $sessionRepository,
     ) {
-        parent::__construct();
+        $this->init();
     }
 
-    public static function metadata(): array
-    {
-        return [
-            'name' => 'Admin API Controller',
-            'description' => 'REST API for admin dashboard',
-            'admin_only' => true,
-            'priority' => 6,
-        ];
-    }
-
-    protected function getConfigSlug(): string
-    {
-        return 'admin_api';
-    }
-
-    protected function init(): void
+    private function init(): void
     {
         add_action('rest_api_init', [$this, 'registerRoutes']);
     }
@@ -1665,7 +1651,7 @@ final class AdminAPIController extends AbstractService
              ORDER BY registered_at DESC"
         );
 
-        $completionService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletionService::class);
+        $completionService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
         $items = [];
 
         foreach ($rows as $row) {
@@ -1714,7 +1700,7 @@ final class AdminAPIController extends AbstractService
             return new WP_Error('missing_param', __('registration_id is verplicht.', 'stride'), ['status' => 400]);
         }
 
-        $completionService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletionService::class);
+        $completionService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
 
         // Mark approval task as completed
         $result = $completionService->completeTask($registrationId, 'approval');

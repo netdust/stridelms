@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace Stride\Tests\Unit;
 
-use Stride\Modules\Enrollment\EnrollmentCompletionService;
+use Stride\Modules\Enrollment\EnrollmentCompletion;
 use Stride\Tests\TestCase;
 
-class EnrollmentCompletionServiceTest extends TestCase
+class EnrollmentCompletionTest extends TestCase
 {
-    private EnrollmentCompletionService $service;
+    private EnrollmentCompletion $service;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new EnrollmentCompletionService();
+        $this->service = new EnrollmentCompletion();
     }
 
     /** @test */

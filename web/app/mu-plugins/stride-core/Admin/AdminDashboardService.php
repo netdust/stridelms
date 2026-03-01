@@ -47,6 +47,13 @@ class AdminDashboardService extends AbstractService
      */
     protected function init(): void
     {
+        // Admin REST API (registers own hooks in constructor)
+        new AdminAPIController(
+            ntdst_get(\Stride\Modules\Attendance\AttendanceRepository::class),
+            ntdst_get(\Stride\Modules\Edition\EditionRepository::class),
+            ntdst_get(\Stride\Modules\Edition\SessionRepository::class),
+        );
+
         add_action('admin_menu', [$this, 'registerAdminPage']);
         add_action('admin_menu', [$this, 'reorderSubmenus'], 999);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
@@ -123,7 +130,8 @@ class AdminDashboardService extends AbstractService
             return $page === self::MENU_SLUG;
         }
 
-        return str_contains($screen->id, self::MENU_SLUG);
+        // Only match the actual dashboard page, not submenu pages
+        return $screen->id === 'toplevel_page_' . self::MENU_SLUG;
     }
 
     /**
@@ -131,7 +139,7 @@ class AdminDashboardService extends AbstractService
      */
     public function enqueueAssets(string $hook): void
     {
-        if (!str_contains($hook, self::MENU_SLUG)) {
+        if ($hook !== 'toplevel_page_' . self::MENU_SLUG) {
             return;
         }
 

@@ -43,10 +43,22 @@ final class EnrollmentService extends AbstractService
 
     protected function init(): void
     {
-        // Handlers are registered centrally in stride-core.php
+        // Register enrollment/completion URL routes
+        add_action('init', function () {
+            (new EnrollmentRouter())->register();
+        }, 20);
+
+        // Register plain classes as singletons (no service lifecycle)
+        ntdst_set(EnrollmentFieldGroups::class, fn() => new EnrollmentFieldGroups());
+        ntdst_set(EnrollmentCompletion::class, fn() => new EnrollmentCompletion());
+
+        // Register completion task handler (AJAX + auto-confirm hook)
+        new \Stride\Handlers\CompletionTaskHandler();
+
+        // Admin: field group settings page
+        new \Stride\Admin\FieldGroupSettingsPage();
 
         // Auto-enroll users when they access an open course lesson
-        // This ensures open courses appear in learndash_user_get_enrolled_courses()
         add_action('learndash-lesson-before', [$this, 'maybeEnrollOnLessonAccess'], 10, 3);
         add_action('learndash-topic-before', [$this, 'maybeEnrollOnLessonAccess'], 10, 3);
 
@@ -193,7 +205,7 @@ final class EnrollmentService extends AbstractService
         }
 
         // Determine initial status based on completion requirements + approval setting
-        $completionService = ntdst_get(EnrollmentCompletionService::class);
+        $completionService = ntdst_get(EnrollmentCompletion::class);
         $hasCompletionRequirements = $completionService->hasRequirements($editionId, 'vad_edition');
 
         $initialStatus = ($hasCompletionRequirements || $this->editions->requiresApproval($editionId))

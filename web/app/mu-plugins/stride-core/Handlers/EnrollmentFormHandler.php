@@ -31,6 +31,7 @@ final class EnrollmentFormHandler
     {
         // Register API action handlers
         add_filter('ntdst/api_data/stride_submit_enrollment', [$this, 'handleSubmitEnrollment'], 10, 2);
+        add_filter('ntdst/api_data/stride_register_interest', [$this, 'handleRegisterInterest'], 10, 2);
         add_filter('ntdst/api_data/stride_validate_voucher', [$this, 'handleValidateVoucher'], 10, 2);
         add_filter('ntdst/api_data/stride_save_session_selection', [$this, 'handleSaveSessionSelection'], 10, 2);
 
@@ -77,6 +78,68 @@ final class EnrollmentFormHandler
             'trajectory' => $this->processTrajectoryEnrollment($params, $userId),
             default => $this->processEditionEnrollment($params, $userId),
         };
+    }
+
+    /**
+     * Handle interest registration.
+     *
+     * @param mixed $data Existing data (unused)
+     * @param array<string, mixed> $params Request parameters
+     * @return array<string, mixed>|WP_Error
+     */
+    public function handleRegisterInterest(mixed $data, array $params): array|WP_Error
+    {
+        $userId = get_current_user_id();
+        if (!$userId) {
+            return new WP_Error('not_logged_in', __('Je moet ingelogd zijn om je interesse te melden.', 'stride'));
+        }
+
+        $itemType = sanitize_text_field($params['item_type'] ?? 'edition');
+        $editionId = absint($params['edition_id'] ?? 0);
+        $trajectoryId = absint($params['trajectory_id'] ?? 0);
+
+        // Update user profile with provided info
+        $firstName = sanitize_text_field($params['first_name'] ?? '');
+        $lastName = sanitize_text_field($params['last_name'] ?? '');
+        $phone = sanitize_text_field($params['phone'] ?? '');
+        $organisation = sanitize_text_field($params['company'] ?? '');
+        $message = sanitize_textarea_field($params['message'] ?? '');
+
+        if (empty($firstName) || empty($lastName)) {
+            return new WP_Error('validation_error', __('Voornaam en achternaam zijn vereist.', 'stride'));
+        }
+
+        // Update user meta
+        wp_update_user([
+            'ID' => $userId,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+        ]);
+        if ($phone) {
+            update_user_meta($userId, 'phone', $phone);
+        }
+        if ($organisation) {
+            update_user_meta($userId, 'company', $organisation);
+        }
+
+        // Register interest
+        $enrollment = ntdst_get(EnrollmentService::class);
+        $result = $enrollment->registerInterest($userId, [
+            'edition_id' => $editionId ?: null,
+            'trajectory_id' => $trajectoryId ?: null,
+            'notes' => $message,
+        ]);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return [
+            'success' => true,
+            'message' => __('Je interesse is geregistreerd. We houden je op de hoogte!', 'stride'),
+            'registration_id' => $result,
+            'redirect_url' => home_url('/mijn-account/'),
+        ];
     }
 
     /**
@@ -128,11 +191,26 @@ final class EnrollmentFormHandler
             return $result;
         }
 
+        // Determine response message based on resulting registration status
+        $registrationId = $result['registration_id'] ?? null;
+        $isPending = false;
+        if ($registrationId) {
+            $reg = $enrollment->getRegistration($registrationId);
+            if (!is_wp_error($reg) && $reg->status === 'pending') {
+                $isPending = true;
+            }
+        }
+
+        $message = $isPending
+            ? __('Je inschrijving is ontvangen en wacht op goedkeuring.', 'stride')
+            : __('Je inschrijving is succesvol verwerkt!', 'stride');
+
         return [
             'success' => true,
-            'message' => __('Je inschrijving is succesvol verwerkt!', 'stride'),
-            'registration_id' => $result['registration_id'] ?? null,
+            'message' => $message,
+            'registration_id' => $registrationId,
             'quote_id' => $result['quote_id'] ?? null,
+            'status' => $isPending ? 'pending' : 'confirmed',
             'redirect_url' => home_url('/mijn-account/mijn-cursussen/'),
         ];
     }
@@ -223,11 +301,18 @@ final class EnrollmentFormHandler
             'quote_id' => is_wp_error($quoteId) ? null : $quoteId,
         ]);
 
+        // Check if trajectory requires approval
+        $requiresApproval = $trajectoryService->requiresApproval($trajectoryId);
+        $message = $requiresApproval
+            ? __('Je inschrijving is ontvangen en wacht op goedkeuring.', 'stride')
+            : __('Je inschrijving voor het traject is succesvol verwerkt!', 'stride');
+
         return [
             'success' => true,
-            'message' => __('Je inschrijving voor het traject is succesvol verwerkt!', 'stride'),
+            'message' => $message,
             'enrollment_id' => $enrollmentId,
             'quote_id' => is_wp_error($quoteId) ? null : $quoteId,
+            'status' => $requiresApproval ? 'pending' : 'confirmed',
             'redirect_url' => home_url('/mijn-account/mijn-trajecten/'),
         ];
     }

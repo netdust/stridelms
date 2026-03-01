@@ -6,7 +6,6 @@ namespace Stride\Modules\Invoicing\Admin;
 
 use Stride\Domain\Money;
 use Stride\Domain\QuoteStatus;
-use Stride\Infrastructure\AbstractService;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Invoicing\QuoteCPT;
 use Stride\Modules\Invoicing\QuoteRepository;
@@ -22,8 +21,10 @@ use WP_Post;
  * - Enqueues admin assets
  * - Handles save operations
  * - AJAX endpoints for user data
+ *
+ * Plain class — owned by QuoteService.
  */
-final class QuoteAdminController extends AbstractService
+final class QuoteAdminController
 {
     public function __construct(
         private readonly QuoteService $quoteService,
@@ -31,21 +32,7 @@ final class QuoteAdminController extends AbstractService
         private readonly VoucherService $voucherService,
         private readonly EditionRepository $editionRepository,
     ) {
-        parent::__construct();
-    }
-
-    public static function metadata(): array
-    {
-        return [
-            'name' => 'Quote Admin Controller',
-            'description' => 'Admin interface for quote management',
-            'priority' => 100, // Late priority, after services
-        ];
-    }
-
-    protected function getConfigSlug(): string
-    {
-        return 'quote-admin';
+        $this->init();
     }
 
     protected function init(): void
@@ -110,38 +97,39 @@ final class QuoteAdminController extends AbstractService
             return;
         }
 
-        // Select2 (locally hosted)
+        // Select2 from CDN
         wp_enqueue_style(
             'select2',
-            get_stylesheet_directory_uri() . '/assets/vendor/select2/select2.min.css',
+            'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css',
             [],
             '4.1.0'
         );
         wp_enqueue_script(
             'select2',
-            get_stylesheet_directory_uri() . '/assets/vendor/select2/select2.min.js',
+            'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js',
             ['jquery'],
             '4.1.0',
             true
         );
 
-        // Quote admin styles
-        $cssFile = get_stylesheet_directory() . '/assets/css/admin/quote-admin.css';
+        // Quote admin styles (from stride-core mu-plugin)
+        $basePath = dirname(__DIR__, 3);
+        $cssFile = $basePath . '/assets/css/admin/quote-admin.css';
         if (file_exists($cssFile)) {
             wp_enqueue_style(
                 'stride-quote-admin',
-                get_stylesheet_directory_uri() . '/assets/css/admin/quote-admin.css',
+                plugins_url('assets/css/admin/quote-admin.css', $basePath . '/stride-core.php'),
                 [],
                 filemtime($cssFile)
             );
         }
 
-        // Quote admin scripts
-        $jsFile = get_stylesheet_directory() . '/assets/js/admin/quote-admin.js';
+        // Quote admin scripts (from stride-core mu-plugin)
+        $jsFile = $basePath . '/assets/js/admin/quote-admin.js';
         if (file_exists($jsFile)) {
             wp_enqueue_script(
                 'stride-quote-admin',
-                get_stylesheet_directory_uri() . '/assets/js/admin/quote-admin.js',
+                plugins_url('assets/js/admin/quote-admin.js', $basePath . '/stride-core.php'),
                 ['jquery', 'select2'],
                 filemtime($jsFile),
                 true

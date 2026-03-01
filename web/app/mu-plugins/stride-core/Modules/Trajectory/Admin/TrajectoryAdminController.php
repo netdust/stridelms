@@ -6,7 +6,6 @@ namespace Stride\Modules\Trajectory\Admin;
 
 use Stride\Domain\TrajectoryMode;
 use Stride\Domain\OfferingStatus;
-use Stride\Infrastructure\AbstractService;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
@@ -23,8 +22,10 @@ use WP_Post;
  * - Courses (course builder)
  * - Enrollments
  * - Sidebar (status & stats)
+ *
+ * Plain class — owned by TrajectoryService.
  */
-final class TrajectoryAdminController extends AbstractService
+final class TrajectoryAdminController
 {
     public const NONCE_SAVE = 'stride_save_trajectory';
     public const NONCE_FIELD = 'stride_trajectory_nonce';
@@ -37,21 +38,7 @@ final class TrajectoryAdminController extends AbstractService
         private readonly EditionService $editionService,
         private readonly EditionRepository $editionRepository,
     ) {
-        parent::__construct();
-    }
-
-    public static function metadata(): array
-    {
-        return [
-            'name' => 'Trajectory Admin Controller',
-            'description' => 'Admin interface for trajectory management',
-            'priority' => 100,
-        ];
-    }
-
-    protected function getConfigSlug(): string
-    {
-        return 'trajectory-admin';
+        $this->init();
     }
 
     protected function init(): void

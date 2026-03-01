@@ -6,7 +6,6 @@ namespace Stride\Modules\Edition\Admin;
 
 use Stride\Domain\AttendanceStatus;
 use Stride\Domain\SessionType;
-use Stride\Infrastructure\AbstractService;
 use Stride\Modules\Attendance\AttendanceRepository;
 use Stride\Modules\Edition\EditionCPT;
 use Stride\Modules\Edition\EditionRepository;
@@ -23,8 +22,10 @@ use WP_Post;
  * - Enqueues admin assets
  * - Handles save operations
  * - AJAX endpoints for sessions and attendance
+ *
+ * Plain class — owned by EditionService.
  */
-final class EditionAdminController extends AbstractService
+final class EditionAdminController
 {
     public const NONCE_SAVE = 'stride_save_edition';
     public const NONCE_FIELD = 'stride_edition_nonce';
@@ -38,21 +39,7 @@ final class EditionAdminController extends AbstractService
         private readonly SessionRepository $sessionRepository,
         private readonly AttendanceRepository $attendanceRepository,
     ) {
-        parent::__construct();
-    }
-
-    public static function metadata(): array
-    {
-        return [
-            'name' => 'Edition Admin Controller',
-            'description' => 'Admin interface for edition management',
-            'priority' => 100, // Late priority, after services
-        ];
-    }
-
-    protected function getConfigSlug(): string
-    {
-        return 'edition-admin';
+        $this->init();
     }
 
     protected function init(): void
@@ -75,11 +62,22 @@ final class EditionAdminController extends AbstractService
         add_action('wp_ajax_stride_mark_attendance', [$this, 'ajaxMarkAttendance']);
         add_action('wp_ajax_stride_bulk_attendance', [$this, 'ajaxBulkAttendance']);
 
+        // Registration approval AJAX endpoints
+        add_action('wp_ajax_stride_confirm_registration', [$this, 'ajaxConfirmRegistration']);
+        add_action('wp_ajax_stride_reject_registration', [$this, 'ajaxRejectRegistration']);
+
+        // Registration export
+        add_action('wp_ajax_stride_export_registrations', [$this, 'ajaxExportRegistrations']);
+
         // Admin list columns
         add_filter('manage_' . EditionCPT::POST_TYPE . '_posts_columns', [$this, 'defineListColumns']);
         add_action('manage_' . EditionCPT::POST_TYPE . '_posts_custom_column', [$this, 'renderListColumn'], 10, 2);
         add_filter('manage_edit-' . EditionCPT::POST_TYPE . '_sortable_columns', [$this, 'defineSortableColumns']);
         add_action('pre_get_posts', [$this, 'handleColumnSorting']);
+
+        // Format filter
+        add_action('restrict_manage_posts', [$this, 'renderFormatFilter']);
+        add_action('pre_get_posts', [$this, 'applyFormatFilter']);
     }
 
     public function registerMetaboxes(): void
@@ -107,11 +105,11 @@ final class EditionAdminController extends AbstractService
             'default'
         );
 
-        // Attendance metabox (only for existing editions with sessions)
+        // Registrations & Attendance metabox
         add_meta_box(
-            'stride_edition_attendance',
-            __('Aanwezigheid', 'stride'),
-            [$this, 'renderAttendanceMetabox'],
+            'stride_edition_attendance',    // keep ID for position
+            __('Deelnemers', 'stride'),
+            [$this, 'renderRegistrationMetabox'],
             EditionCPT::POST_TYPE,
             'normal',
             'default'
@@ -161,23 +159,24 @@ final class EditionAdminController extends AbstractService
             true
         );
 
-        // Edition admin styles
-        $cssFile = get_stylesheet_directory() . '/assets/css/admin/edition-admin.css';
+        // Edition admin styles (from stride-core mu-plugin)
+        $basePath = dirname(__DIR__, 3);
+        $cssFile = $basePath . '/assets/css/admin/edition-admin.css';
         if (file_exists($cssFile)) {
             wp_enqueue_style(
                 'stride-edition-admin',
-                get_stylesheet_directory_uri() . '/assets/css/admin/edition-admin.css',
+                plugins_url('assets/css/admin/edition-admin.css', $basePath . '/stride-core.php'),
                 [],
                 filemtime($cssFile)
             );
         }
 
-        // Edition admin scripts
-        $jsFile = get_stylesheet_directory() . '/assets/js/admin/edition-admin.js';
+        // Edition admin scripts (from stride-core mu-plugin)
+        $jsFile = $basePath . '/assets/js/admin/edition-admin.js';
         if (file_exists($jsFile)) {
             wp_enqueue_script(
                 'stride-edition-admin',
-                get_stylesheet_directory_uri() . '/assets/js/admin/edition-admin.js',
+                plugins_url('assets/js/admin/edition-admin.js', $basePath . '/stride-core.php'),
                 ['jquery', 'select2'],
                 filemtime($jsFile),
                 true
@@ -199,6 +198,9 @@ final class EditionAdminController extends AbstractService
                     'selectLesson' => __('Selecteer een les...', 'stride'),
                     'selectLessonOrQuiz' => __('Selecteer les of quiz...', 'stride'),
                     'noLessonsAvailable' => __('Geen lessen beschikbaar', 'stride'),
+                    // Registration i18n
+                    'confirmApproval' => __('Inschrijving goedkeuren?', 'stride'),
+                    'confirmReject' => __('Inschrijving afwijzen? Dit kan niet ongedaan gemaakt worden.', 'stride'),
                     // Notes i18n
                     'enterNote' => __('Vul een notitie in.', 'stride'),
                     'noNotes' => __('Nog geen notities toegevoegd.', 'stride'),
@@ -223,9 +225,9 @@ final class EditionAdminController extends AbstractService
         $metabox->render($post);
     }
 
-    public function renderAttendanceMetabox(WP_Post $post): void
+    public function renderRegistrationMetabox(WP_Post $post): void
     {
-        $metabox = new EditionAttendanceMetabox($this->sessionService, $this->editionService, $this->attendanceRepository);
+        $metabox = new EditionRegistrationMetabox($this->sessionService, $this->editionService, $this->attendanceRepository);
         $metabox->render($post);
     }
 
@@ -350,6 +352,7 @@ final class EditionAdminController extends AbstractService
             'capacity' => 'int',
             'venue' => 'text',
             'speakers' => 'text',
+            'enrollment_form' => 'text',
         ];
 
         foreach ($basicFields as $field => $type) {
@@ -369,6 +372,11 @@ final class EditionAdminController extends AbstractService
         }
         if (isset($fields['price_non_member'])) {
             $updateData['price_non_member'] = (int) round((float) $fields['price_non_member'] * 100);
+        }
+
+        // Process requires_approval
+        if (isset($fields['requires_approval'])) {
+            $updateData['requires_approval'] = (bool) $fields['requires_approval'];
         }
 
         // Process status
@@ -636,6 +644,164 @@ final class EditionAdminController extends AbstractService
         wp_send_json_success($totals);
     }
 
+    // === Registration Approval AJAX Endpoints ===
+
+    public function ajaxConfirmRegistration(): void
+    {
+        if (!$this->verifyAjaxNonce()) {
+            return;
+        }
+
+        $registrationId = absint($_POST['registration_id'] ?? 0);
+        if (!$registrationId) {
+            wp_send_json_error(['message' => __('Ongeldige registratie.', 'stride')], 400);
+        }
+
+        $enrollmentService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class);
+        $result = $enrollmentService->confirmRegistration($registrationId);
+
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()], 400);
+        }
+
+        wp_send_json_success(['message' => __('Inschrijving goedgekeurd.', 'stride')]);
+    }
+
+    public function ajaxRejectRegistration(): void
+    {
+        if (!$this->verifyAjaxNonce()) {
+            return;
+        }
+
+        $registrationId = absint($_POST['registration_id'] ?? 0);
+        if (!$registrationId) {
+            wp_send_json_error(['message' => __('Ongeldige registratie.', 'stride')], 400);
+        }
+
+        $enrollmentService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class);
+        $result = $enrollmentService->cancel($registrationId);
+
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()], 400);
+        }
+
+        wp_send_json_success(['message' => __('Inschrijving afgewezen.', 'stride')]);
+    }
+
+    // === Export ===
+
+    public function ajaxExportRegistrations(): void
+    {
+        if (!check_ajax_referer(self::NONCE_AJAX, 'nonce', false)) {
+            wp_die('Invalid security token', 403);
+        }
+
+        if (!current_user_can('edit_posts')) {
+            wp_die('Unauthorized', 403);
+        }
+
+        $editionId = absint($_GET['edition_id'] ?? 0);
+        if (!$editionId) {
+            wp_die('Invalid edition', 400);
+        }
+
+        $type = sanitize_key($_GET['type'] ?? 'excel');
+
+        switch ($type) {
+            case 'namecards':
+                $exporter = new EditionNamecardExporter(
+                    $this->editionService,
+                    $this->editionRepository,
+                );
+                $exporter->export($editionId);
+                break;
+
+            case 'attendance':
+                $exporter = new EditionAttendanceExporter(
+                    $this->editionService,
+                    $this->editionRepository,
+                    $this->sessionService,
+                );
+                $exporter->export($editionId);
+                break;
+
+            default: // 'excel'
+                $exporter = new EditionRegistrationExporter(
+                    $this->editionService,
+                    $this->editionRepository,
+                    $this->sessionService,
+                    $this->attendanceRepository,
+                );
+                $exporter->export($editionId);
+                break;
+        }
+    }
+
+    // === Format Filter ===
+
+    public function renderFormatFilter(string $postType): void
+    {
+        if ($postType !== EditionCPT::POST_TYPE) {
+            return;
+        }
+
+        $current = sanitize_text_field($_GET['stride_format'] ?? '');
+        ?>
+        <select name="stride_format">
+            <option value=""><?php esc_html_e('Alle formaten', 'stride'); ?></option>
+            <option value="online" <?php selected($current, 'online'); ?>><?php esc_html_e('Online', 'stride'); ?></option>
+            <option value="classroom" <?php selected($current, 'classroom'); ?>><?php esc_html_e('Klassikaal', 'stride'); ?></option>
+        </select>
+        <?php
+    }
+
+    public function applyFormatFilter(\WP_Query $query): void
+    {
+        if (!is_admin() || !$query->is_main_query()) {
+            return;
+        }
+        if (($query->get('post_type') ?? '') !== EditionCPT::POST_TYPE) {
+            return;
+        }
+
+        $format = sanitize_text_field($_GET['stride_format'] ?? '');
+        if (!$format) {
+            return;
+        }
+
+        // Get all course IDs that match the format
+        $onlineSlugs = ['online', 'webinar', 'e-learning'];
+        $courseArgs = [
+            'post_type' => 'sfwd-courses',
+            'posts_per_page' => -1,
+            'fields' => 'ids',
+            'tax_query' => [
+                [
+                    'taxonomy' => 'ld_course_category',
+                    'field' => 'slug',
+                    'terms' => $onlineSlugs,
+                    'operator' => $format === 'online' ? 'IN' : 'NOT IN',
+                ],
+            ],
+        ];
+        $courseIds = get_posts($courseArgs);
+
+        if (empty($courseIds)) {
+            // No matching courses — force empty result
+            $query->set('post__in', [0]);
+            return;
+        }
+
+        $existing = $query->get('meta_query') ?: [];
+        $existing[] = [
+            'key' => '_ntdst_course_id',
+            'value' => $courseIds,
+            'compare' => 'IN',
+            'type' => 'NUMERIC',
+        ];
+        $query->set('meta_query', $existing);
+    }
+
     // === Helper Methods ===
 
     private function verifyAjaxNonce(): bool
@@ -836,6 +1002,7 @@ final class EditionAdminController extends AbstractService
         $newColumns['cb'] = $columns['cb'] ?? '<input type="checkbox" />';
         $newColumns['title'] = __('Editie', 'stride');
         $newColumns['course'] = __('Cursus', 'stride');
+        $newColumns['format'] = __('Formaat', 'stride');
         $newColumns['start_date'] = __('Startdatum', 'stride');
         $newColumns['venue'] = __('Locatie', 'stride');
         $newColumns['capacity'] = __('Capaciteit', 'stride');
@@ -863,6 +1030,25 @@ final class EditionAdminController extends AbstractService
                 } else {
                     echo '<span style="color:#999;">—</span>';
                 }
+                break;
+
+            case 'format':
+                $courseId = (int) $this->editionRepository->getField($postId, 'course_id', 0);
+                $isOnline = false;
+                if ($courseId) {
+                    $cats = get_the_terms($courseId, 'ld_course_category');
+                    if ($cats && !is_wp_error($cats)) {
+                        foreach ($cats as $cat) {
+                            if (in_array($cat->slug, ['online', 'webinar', 'e-learning'], true)) {
+                                $isOnline = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                echo $isOnline
+                    ? '<span style="color:#0284c7">● Online</span>'
+                    : '<span style="color:#7c3aed">● Klassikaal</span>';
                 break;
 
             case 'start_date':

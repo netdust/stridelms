@@ -4,24 +4,24 @@ declare(strict_types=1);
 
 namespace Stride\Tests\Unit;
 
-use Stride\Integrations\LearnDash\LearnDashAdapter;
+use Stride\Integrations\LearnDash\LearnDashService;
 use Stride\Tests\TestCase;
 
 /**
- * Unit tests for LearnDashAdapter
+ * Unit tests for LearnDashService
  *
- * Tests the 3 new LMS adapter methods: getEnrolledCourses, getProgress,
+ * Tests the LMS adapter methods: getEnrolledCourses, getProgress,
  * getCompletionDate. Each method guards against missing LD functions.
  */
-class LearnDashAdapterTest extends TestCase
+class LearnDashServiceTest extends TestCase
 {
-    private LearnDashAdapter $adapter;
+    private LearnDashService $service;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->adapter = new LearnDashAdapter();
+        $this->service = new LearnDashService();
     }
 
     /**
@@ -29,8 +29,7 @@ class LearnDashAdapterTest extends TestCase
      */
     public function testGetEnrolledCoursesReturnsEmptyArrayWhenLDUnavailable(): void
     {
-        // LearnDash functions are not defined in unit test environment
-        $result = $this->adapter->getEnrolledCourses(1);
+        $result = $this->service->getEnrolledCourses(1);
 
         $this->assertIsArray($result);
         $this->assertEmpty($result);
@@ -41,7 +40,7 @@ class LearnDashAdapterTest extends TestCase
      */
     public function testGetProgressReturnsZeroWhenLDUnavailable(): void
     {
-        $result = $this->adapter->getProgress(1, 100);
+        $result = $this->service->getProgress(1, 100);
 
         $this->assertSame(0, $result);
     }
@@ -51,7 +50,7 @@ class LearnDashAdapterTest extends TestCase
      */
     public function testGetCompletionDateReturnsNullWhenLDUnavailable(): void
     {
-        $result = $this->adapter->getCompletionDate(1, 100);
+        $result = $this->service->getCompletionDate(1, 100);
 
         $this->assertNull($result);
     }
@@ -63,7 +62,7 @@ class LearnDashAdapterTest extends TestCase
      */
     public function testGetEnrolledCoursesReturnsIntArrayWhenLDAvailable(): void
     {
-        $this->adapter = new LearnDashAdapter();
+        $this->service = new LearnDashService();
 
         if (!function_exists('learndash_user_get_enrolled_courses')) {
             eval('
@@ -74,7 +73,7 @@ class LearnDashAdapterTest extends TestCase
             ');
         }
 
-        $result = $this->adapter->getEnrolledCourses(42);
+        $result = $this->service->getEnrolledCourses(42);
 
         $this->assertIsArray($result);
         $this->assertSame([101, 202, 303], $result);
@@ -87,7 +86,7 @@ class LearnDashAdapterTest extends TestCase
      */
     public function testGetProgressReturnsPercentageWhenLDAvailable(): void
     {
-        $this->adapter = new LearnDashAdapter();
+        $this->service = new LearnDashService();
 
         if (!function_exists('learndash_course_progress')) {
             eval('
@@ -98,7 +97,7 @@ class LearnDashAdapterTest extends TestCase
             ');
         }
 
-        $result = $this->adapter->getProgress(42, 100);
+        $result = $this->service->getProgress(42, 100);
 
         $this->assertSame(75, $result);
     }
@@ -110,7 +109,7 @@ class LearnDashAdapterTest extends TestCase
      */
     public function testGetCompletionDateReturnsTimestampWhenComplete(): void
     {
-        $this->adapter = new LearnDashAdapter();
+        $this->service = new LearnDashService();
 
         if (!function_exists('learndash_course_completed')) {
             eval('
@@ -130,7 +129,7 @@ class LearnDashAdapterTest extends TestCase
             ');
         }
 
-        $result = $this->adapter->getCompletionDate(42, 100);
+        $result = $this->service->getCompletionDate(42, 100);
 
         $this->assertSame(1709136000, $result);
     }
@@ -142,7 +141,7 @@ class LearnDashAdapterTest extends TestCase
      */
     public function testGetCompletionDateReturnsNullForIncompleteCourse(): void
     {
-        $this->adapter = new LearnDashAdapter();
+        $this->service = new LearnDashService();
 
         if (!function_exists('learndash_course_completed')) {
             eval('
@@ -153,7 +152,7 @@ class LearnDashAdapterTest extends TestCase
             ');
         }
 
-        $result = $this->adapter->getCompletionDate(42, 100);
+        $result = $this->service->getCompletionDate(42, 100);
 
         $this->assertNull($result);
     }

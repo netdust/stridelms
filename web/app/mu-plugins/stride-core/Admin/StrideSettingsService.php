@@ -4,15 +4,16 @@ declare(strict_types=1);
 
 namespace Stride\Admin;
 
-use Stride\Infrastructure\AbstractService;
-
 /**
- * Stride Settings Service
+ * Stride Settings
  *
  * Manages configurable URL slugs and other plugin settings.
  * Settings page under Stride admin menu.
+ *
+ * Plain class — owned by EditionService (slugs affect CPT registration).
+ * Static methods remain available for CPT slug lookups.
  */
-class StrideSettingsService extends AbstractService
+class StrideSettingsService
 {
     /** Option name for URL slugs */
     private const OPTION_URL_SLUGS = 'stride_url_slugs';
@@ -29,34 +30,14 @@ class StrideSettingsService extends AbstractService
         'edition' => 'vormingen',
     ];
 
-    /**
-     * {@inheritDoc}
-     */
-    public static function metadata(): array
+    public function __construct()
     {
-        return [
-            'name' => 'Stride Settings',
-            'description' => 'Configurable URL slugs and plugin settings',
-            'admin_only' => true,
-            'enabled' => true,
-            'priority' => 3, // Load early, before CPTs
-        ];
+        $this->init();
     }
 
-    /**
-     * {@inheritDoc}
-     */
-    protected function getConfigSlug(): string
+    private function init(): void
     {
-        return 'settings';
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    protected function init(): void
-    {
-        add_action('admin_menu', [$this, 'registerSettingsPage']);
+        add_action('admin_menu', [$this, 'registerSettingsPage'], 20);
         add_action('admin_init', [$this, 'registerSettings']);
         add_action('update_option_' . self::OPTION_URL_SLUGS, [$this, 'onSlugsUpdated'], 10, 2);
     }

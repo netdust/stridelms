@@ -41,6 +41,23 @@ final class QuoteService extends AbstractService
     protected function init(): void
     {
         QuoteCPT::register();
+        VoucherCPT::register();
+
+        // Register sub-components as singletons
+        $voucherService = new VoucherService(ntdst_get(VoucherRepository::class));
+        ntdst_set(VoucherService::class, fn() => $voucherService);
+
+        // Admin UI (registers own hooks in constructor)
+        new Admin\QuoteAdminController(
+            $this,
+            $this->repository,
+            $voucherService,
+            ntdst_get(\Stride\Modules\Edition\EditionRepository::class),
+        );
+        new Admin\VoucherAdminController(
+            $voucherService,
+            ntdst_get(VoucherRepository::class),
+        );
 
         // Cancel quote when registration is cancelled
         add_action('stride/registration/cancelled', [$this, 'onRegistrationCancelled']);

@@ -20,8 +20,8 @@ use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Attendance\AttendanceService;
-use Stride\Modules\Completion\CompletionService;
-use Stride\Modules\Enrollment\EnrollmentCompletionService;
+use Stride\Modules\Edition\EditionCompletion;
+use Stride\Modules\Enrollment\EnrollmentCompletion;
 use Stride\Contracts\LMSAdapterInterface;
 
 $user    = $args['user'] ?? wp_get_current_user();
@@ -32,8 +32,8 @@ $registrationRepo    = ntdst_get(RegistrationRepository::class);
 $editionService      = ntdst_get(EditionService::class);
 $sessionService      = ntdst_get(SessionService::class);
 $attendanceService   = ntdst_get(AttendanceService::class);
-$completionService   = ntdst_get(CompletionService::class);
-$enrollmentCompletion = ntdst_get(EnrollmentCompletionService::class);
+$completionService   = ntdst_get(EditionCompletion::class);
+$enrollmentCompletion = ntdst_get(EnrollmentCompletion::class);
 $lmsAdapter          = ntdst_get(LMSAdapterInterface::class);
 
 // Get all user registrations
@@ -148,10 +148,27 @@ foreach ($enrolled_course_ids as $course_id) {
     $progress        = $lmsAdapter->getProgress($user_id, $course_id);
     $completion_date = $lmsAdapter->getCompletionDate($user_id, $course_id);
 
+    // Build resume URL: first incomplete step, or fall back to course permalink
+    $resume_url = get_permalink($course_id);
+    if (function_exists('learndash_user_progress_get_first_incomplete_step')) {
+        $step_id = learndash_user_progress_get_first_incomplete_step($user_id, $course_id);
+        if ($step_id) {
+            if (function_exists('learndash_user_progress_get_parent_incomplete_step')) {
+                $step_id = learndash_user_progress_get_parent_incomplete_step($user_id, $course_id, $step_id);
+            }
+            $step_url = function_exists('learndash_get_step_permalink')
+                ? learndash_get_step_permalink($step_id, $course_id)
+                : get_permalink($step_id);
+            if ($step_url) {
+                $resume_url = $step_url;
+            }
+        }
+    }
+
     $course_data = [
         'course_id'    => $course_id,
         'course_title' => $course->post_title,
-        'course_url'   => get_permalink($course_id),
+        'course_url'   => $resume_url,
         'progress'     => $progress,
         'format_label' => $format_label,
         'type'         => 'online',

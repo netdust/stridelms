@@ -3,7 +3,7 @@
  * Dashboard Tab: Certificaten (Certificates)
  *
  * Shows user's earned certificates from completed courses.
- * Uses CompletionService and LMSAdapter for data access.
+ * Uses EditionCompletion and LMSAdapter for data access.
  *
  * @param array $args {
  *     @type WP_User $user Current user object
@@ -17,7 +17,7 @@ defined('ABSPATH') || exit;
 
 use Stride\Contracts\LMSAdapterInterface;
 use Stride\Domain\RegistrationStatus;
-use Stride\Modules\Completion\CompletionService;
+use Stride\Modules\Edition\EditionCompletion;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 
@@ -27,7 +27,7 @@ $user_id = $user->ID;
 // Get services
 $registrationRepo  = ntdst_get(RegistrationRepository::class);
 $editionService    = ntdst_get(EditionService::class);
-$completionService = ntdst_get(CompletionService::class);
+$completionService = ntdst_get(EditionCompletion::class);
 $lmsAdapter        = ntdst_get(LMSAdapterInterface::class);
 
 // Get completed registrations

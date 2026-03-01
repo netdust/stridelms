@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Stride\Modules\Trajectory;
 
 use Stride\Domain\TrajectoryMode;
-use Stride\Domain\TrajectoryStatus;
+use Stride\Domain\OfferingStatus;
 use Stride\Infrastructure\AbstractService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use WP_Error;
@@ -40,6 +40,23 @@ final class TrajectoryService extends AbstractService
     protected function init(): void
     {
         TrajectoryCPT::register();
+
+        // Register sub-components
+        ntdst_set(TrajectoryDashboardService::class, fn() => new TrajectoryDashboardService(
+            $this->repository,
+            $this,
+            $this->registrations,
+            ntdst_get(\Stride\Modules\Edition\EditionService::class),
+            ntdst_get(\Stride\Contracts\LMSAdapterInterface::class),
+        ));
+
+        new Admin\TrajectoryAdminController(
+            $this,
+            $this->repository,
+            $this->registrations,
+            ntdst_get(\Stride\Modules\Edition\EditionService::class),
+            ntdst_get(\Stride\Modules\Edition\EditionRepository::class),
+        );
     }
 
     // === CRUD ===
@@ -178,6 +195,14 @@ final class TrajectoryService extends AbstractService
         return $this->registrations->existsForTrajectory($userId, $trajectoryId);
     }
 
+    /**
+     * Check if trajectory requires admin approval for enrollment.
+     */
+    public function requiresApproval(int $trajectoryId): bool
+    {
+        return (bool) $this->repository->getField($trajectoryId, 'requires_approval', false);
+    }
+
     // === Deadline Checks ===
 
     /**
@@ -258,7 +283,7 @@ final class TrajectoryService extends AbstractService
         $mode = TrajectoryMode::tryFrom($modeValue) ?? TrajectoryMode::Cohort;
 
         $statusValue = $this->repository->getField($post->ID, 'status', 'draft');
-        $status = TrajectoryStatus::tryFrom($statusValue) ?? TrajectoryStatus::Draft;
+        $status = OfferingStatus::tryFrom($statusValue) ?? OfferingStatus::Draft;
 
         return [
             'id' => $post->ID,
@@ -274,6 +299,7 @@ final class TrajectoryService extends AbstractService
             'capacity' => (int) $this->repository->getField($post->ID, 'capacity', 0),
             'price' => (float) $this->repository->getField($post->ID, 'price', 0),
             'price_non_member' => (float) $this->repository->getField($post->ID, 'price_non_member', 0),
+            'requires_approval' => (bool) $this->repository->getField($post->ID, 'requires_approval', false),
             'courses' => $this->repository->getCourses($post->ID),
         ];
     }
@@ -287,7 +313,7 @@ final class TrajectoryService extends AbstractService
         $mode = TrajectoryMode::tryFrom($modeValue) ?? TrajectoryMode::Cohort;
 
         $statusValue = $data['meta']['status'] ?? $data['status'] ?? 'draft';
-        $status = TrajectoryStatus::tryFrom($statusValue) ?? TrajectoryStatus::Draft;
+        $status = OfferingStatus::tryFrom($statusValue) ?? OfferingStatus::Draft;
 
         $courses = $data['meta']['courses'] ?? $data['courses'] ?? [];
         if (is_string($courses)) {

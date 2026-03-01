@@ -5,14 +5,42 @@ declare(strict_types=1);
 namespace Stride\Integrations\LearnDash;
 
 use Stride\Contracts\LMSAdapterInterface;
+use Stride\Infrastructure\AbstractService;
 
 /**
- * LearnDash implementation of LMS adapter.
+ * LearnDash integration service.
  *
- * 7 methods - keeps coupling minimal.
+ * Single entry point for all LearnDash integration:
+ * - Implements LMSAdapterInterface (course access, completion, certificates)
+ * - Registers custom course taxonomies
+ * - Owns LearnDashHelper (static presentation helper)
  */
-final class LearnDashAdapter implements LMSAdapterInterface
+final class LearnDashService extends AbstractService implements LMSAdapterInterface
 {
+    public static function metadata(): array
+    {
+        return [
+            'name' => 'LearnDash Integration',
+            'description' => 'LearnDash LMS integration: access, completion, taxonomies',
+            'priority' => 5,
+        ];
+    }
+
+    protected function getConfigSlug(): string
+    {
+        return 'learndash';
+    }
+
+    protected function init(): void
+    {
+        // Register custom course taxonomies
+        add_action('init', function () {
+            (new CourseTaxonomies())->register();
+        }, 5);
+    }
+
+    // === LMSAdapterInterface ===
+
     public function grantAccess(int $userId, int $courseId): bool
     {
         if (!function_exists('ld_update_course_access')) {

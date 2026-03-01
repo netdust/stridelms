@@ -7,39 +7,20 @@ namespace Stride\Modules\Invoicing;
 use Stride\Domain\DiscountType;
 use Stride\Domain\Money;
 use Stride\Domain\VoucherStatus;
-use Stride\Infrastructure\AbstractService;
 use Stride\Modules\Invoicing\Helpers\VoucherCodeGenerator;
 use WP_Error;
 use WP_Post;
 
 /**
  * Voucher business logic.
+ *
+ * Plain class — owned by QuoteService.
  */
-final class VoucherService extends AbstractService
+final class VoucherService
 {
     public function __construct(
         private readonly VoucherRepository $repository,
     ) {
-        parent::__construct();
-    }
-
-    public static function metadata(): array
-    {
-        return [
-            'name' => 'Voucher Service',
-            'description' => 'Manages discount vouchers',
-            'priority' => 25,
-        ];
-    }
-
-    protected function getConfigSlug(): string
-    {
-        return 'vouchers';
-    }
-
-    protected function init(): void
-    {
-        VoucherCPT::register();
     }
 
     /**
