@@ -75,22 +75,204 @@ add_action('after_setup_theme', function () {
 }, 10);
 
 // ========================================
-// ROUTING / REWRITE RULES
+// MENU HIGHLIGHTING FOR DETAIL PAGES
 // ========================================
 
-// Personal trajectory dashboard routing
-add_action('init', function (): void {
-    add_rewrite_rule(
-        '^mijn-account/trajecten/([^/]+)/?$',
-        'index.php?pagename=mijn-account&trajectory_slug=$matches[1]',
-        'top'
-    );
-}, 10);
+/**
+ * Highlight parent menu item on single course/trajectory/edition pages.
+ *
+ * WordPress doesn't auto-highlight menu items for custom post types
+ * linked via custom URLs or unrelated pages. This filter maps:
+ * - sfwd-courses (online) → "Online" page menu item
+ * - sfwd-courses (classroom) → "Klassikaal" page menu item
+ * - sfwd-lessons / sfwd-topic → same as parent course
+ * - vad_trajectory → "Trajecten" custom menu item
+ * - vad_edition → follows linked course format
+ */
+add_filter('wp_nav_menu_objects', function (array $items): array {
+    if (is_admin()) {
+        return $items;
+    }
 
-add_filter('query_vars', function (array $vars): array {
-    $vars[] = 'trajectory_slug';
-    return $vars;
+    $target_slug = stridence_get_active_menu_slug();
+    if (!$target_slug) {
+        return $items;
+    }
+
+    foreach ($items as $item) {
+        $match = ($target_slug === 'trajecten')
+            ? stridence_menu_item_matches_url($item, '/trajecten/')
+            : stridence_menu_item_is_page($item, $target_slug);
+
+        if ($match) {
+            $item->classes[] = 'current-menu-item';
+        }
+    }
+
+    return $items;
 });
+
+/**
+ * Determine which menu item slug should be highlighted on detail pages.
+ */
+function stridence_get_active_menu_slug(): string
+{
+    if (is_singular('vad_trajectory')) {
+        return 'trajecten';
+    }
+
+    $course_id = 0;
+
+    if (is_singular('sfwd-courses')) {
+        $course_id = get_the_ID();
+    } elseif (is_singular(['sfwd-lessons', 'sfwd-topic']) && function_exists('learndash_get_course_id')) {
+        $course_id = learndash_get_course_id(get_the_ID());
+    } elseif (is_singular('vad_edition')) {
+        $course_id = (int) get_post_meta(get_the_ID(), '_ntdst_course_id', true);
+    }
+
+    if (!$course_id) {
+        return '';
+    }
+
+    return stridence_is_online_course($course_id) ? 'online' : 'klassikaal';
+}
+
+/**
+ * Check if a course is online based on ld_course_category taxonomy.
+ */
+function stridence_is_online_course(int $course_id): bool
+{
+    $cats = get_the_terms($course_id, 'ld_course_category');
+    if (!$cats || is_wp_error($cats)) {
+        return false;
+    }
+    foreach ($cats as $cat) {
+        if (in_array($cat->slug, ['online', 'webinar', 'e-learning'], true)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Check if menu item points to a page by slug.
+ */
+function stridence_menu_item_is_page(object $item, string $slug): bool
+{
+    if ($item->type === 'post_type' && $item->object === 'page') {
+        $page = get_post($item->object_id);
+        return $page && $page->post_name === $slug;
+    }
+    return false;
+}
+
+/**
+ * Check if menu item URL contains a path.
+ */
+function stridence_menu_item_matches_url(object $item, string $path): bool
+{
+    return str_contains($item->url ?? '', rtrim($path, '/'));
+}
+
+// ========================================
+// SCORM LESSON DETECTION
+// ========================================
+
+// Add body class when lesson contains SCORM/xAPI content
+add_filter('body_class', function (array $classes): array {
+    if (is_singular('sfwd-lessons') || is_singular('sfwd-topic')) {
+        global $post;
+        if ($post && (
+            has_shortcode($post->post_content, 'vc_snc') ||
+            strpos($post->post_content, '[vc_snc') !== false
+        )) {
+            $classes[] = 'has-scorm-content';
+
+            // Check if course has only one lesson - hide sidebar
+            if (function_exists('learndash_get_course_id')) {
+                $course_id = learndash_get_course_id($post->ID);
+                if ($course_id) {
+                    $lessons = learndash_get_course_lessons_list($course_id);
+                    if (is_array($lessons) && count($lessons) <= 1) {
+                        $classes[] = 'single-lesson-course';
+                    }
+                }
+            }
+        }
+    }
+    return $classes;
+});
+
+// ========================================
+// LEARNDASH FOCUS MODE CUSTOMIZATION
+// ========================================
+
+// Add back button to brand logo area (empty when no logo set)
+add_filter('learndash_focus_header_element', function (string $header_element, array $header, int $course_id, int $user_id): string {
+    // Only customize if no logo is set (header_element is empty)
+    if (!empty($header_element)) {
+        return $header_element;
+    }
+
+    // Create a back button with arrow icon
+    $course_url = get_permalink($course_id);
+    $course_title = get_the_title($course_id);
+
+    return sprintf(
+        '<a href="%s" class="ld-brand-back-link" title="%s">%s<span class="ld-brand-back-text">%s</span></a>',
+        esc_url($course_url),
+        esc_attr(sprintf(__('Terug naar %s', 'stridence'), $course_title)),
+        stridence_icon('chevron-left', 'ld-brand-back-icon'),
+        esc_html__('Terug', 'stridence')
+    );
+}, 10, 4);
+
+// Simplify user dropdown menu - remove LD defaults, add Stride profile link
+add_filter('learndash_focus_header_user_dropdown_items', function (array $menu_items, int $course_id, int $user_id): array {
+    // Get dashboard URL
+    $dashboard_url = home_url('/mijn-account/');
+
+    return [
+        'dashboard' => [
+            'url'   => $dashboard_url,
+            'label' => __('Mijn dashboard', 'stridence'),
+        ],
+        'profile' => [
+            'url'   => $dashboard_url . '?tab=profiel',
+            'label' => __('Profiel', 'stridence'),
+        ],
+        'course-home' => [
+            'url'   => get_permalink($course_id),
+            'label' => __('Cursus overzicht', 'stridence'),
+        ],
+        'logout' => [
+            'url'   => wp_logout_url(get_permalink($course_id)),
+            'label' => __('Uitloggen', 'stridence'),
+        ],
+    ];
+}, 10, 3);
+
+// ========================================
+// ROUTING
+// ========================================
+
+// Personal trajectory dashboard routing via ntdst_router
+add_action('init', function (): void {
+    ntdst_router()->get('mijn-account/trajecten/:slug', function (array $params) {
+        if (!is_user_logged_in()) {
+            wp_safe_redirect(wp_login_url(home_url('/mijn-account/trajecten/' . $params['slug'] . '/')));
+            exit;
+        }
+
+        get_header();
+        get_template_part('templates/trajectory/dashboard', null, [
+            'trajectory_slug' => sanitize_title($params['slug']),
+            'user' => wp_get_current_user(),
+        ]);
+        get_footer();
+    });
+}, 20);
 
 // ========================================
 // VITE ASSETS
@@ -443,6 +625,8 @@ add_shortcode('stride_enrollment', function ($atts = []) {
 /**
  * Interest form shortcode
  *
+ * Uses the unified enrollment form in interest mode.
+ *
  * Usage: [stride_interest]
  * URL parameters: ?cursus=<course_id> or ?traject=<trajectory_id>
  */
@@ -464,9 +648,11 @@ add_shortcode('stride_interest', function ($atts = []) {
         }
 
         ob_start();
-        get_template_part('templates/forms/interest-trajectory', null, [
-            'trajectory_id' => $trajectory_id,
-            'trajectory' => $trajectory,
+        get_template_part('templates/forms/enrollment', null, [
+            'item_id'         => $trajectory_id,
+            'item_type'       => 'trajectory',
+            'item_data'       => ['id' => $trajectory_id, 'title' => $trajectory->post_title],
+            'enrollment_mode' => 'interest',
         ]);
         return ob_get_clean();
     }
@@ -493,16 +679,12 @@ add_shortcode('stride_interest', function ($atts = []) {
         );
     }
 
-    // Pre-fetch course data for template
-    $course_data = [
-        'id' => $course_id,
-        'title' => $course->post_title,
-    ];
-
     ob_start();
-    get_template_part('templates/forms/interest', null, [
-        'course_id' => $course_id,
-        'course_data' => $course_data,
+    get_template_part('templates/forms/enrollment', null, [
+        'item_id'         => $course_id,
+        'item_type'       => 'edition',
+        'item_data'       => ['id' => $course_id, 'title' => $course->post_title],
+        'enrollment_mode' => 'interest',
     ]);
     return ob_get_clean();
 });
