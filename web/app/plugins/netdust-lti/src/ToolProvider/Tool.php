@@ -113,6 +113,30 @@ final class Tool extends BaseTool
         $this->redirectUrl = home_url('/lti/deep-link-picker');
     }
 
+    protected function onRegistration(): void
+    {
+        $platformInfo = [
+            'name' => $this->platform->name ?? 'Unknown Platform',
+            'platformId' => $this->platform->platformId ?? '',
+            'clientId' => $this->platform->getKey() ?? '',
+        ];
+
+        $templatePath = dirname(__DIR__, 2) . '/templates/registration-confirm.php';
+
+        if (file_exists($templatePath)) {
+            $platform = $platformInfo;
+            $confirmUrl = add_query_arg([
+                'openid_configuration' => $_GET['openid_configuration'] ?? '',
+                'registration_token' => $_GET['registration_token'] ?? '',
+                'confirm' => '1',
+            ], home_url('/lti/register'));
+
+            include $templatePath;
+        } else {
+            parent::onRegistration();
+        }
+    }
+
     protected function onError(): void
     {
         ntdst_log('lti')->error('Launch error', [

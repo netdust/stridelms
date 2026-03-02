@@ -75,6 +75,10 @@ final class Router
                 $this->handleConfigureXml();
                 break;
 
+            case 'register':
+                $this->handleRegistration();
+                break;
+
             default:
                 wp_die('Invalid LTI action', 'LTI Error', ['response' => 400]);
         }
@@ -324,6 +328,41 @@ final class Router
         </body>
         </html>
         <?php
+    }
+
+    private function handleRegistration(): void
+    {
+        // Only admins can register platforms
+        if (!current_user_can('manage_options')) {
+            wp_die(
+                __('You must be logged in as an administrator to register platforms.', 'netdust-lti'),
+                __('Unauthorized', 'netdust-lti'),
+                ['response' => 403]
+            );
+        }
+
+        $openidConfig = $_GET['openid_configuration'] ?? '';
+        $registrationToken = $_GET['registration_token'] ?? null;
+
+        if (empty($openidConfig) || !filter_var($openidConfig, FILTER_VALIDATE_URL)) {
+            wp_die(
+                __('Missing or invalid openid_configuration parameter.', 'netdust-lti'),
+                __('Registration Error', 'netdust-lti'),
+                ['response' => 400]
+            );
+        }
+
+        $dataConnector = ntdst_get(WPDataConnector::class);
+        $tool = new Tool($dataConnector);
+
+        // ceLTIc handles the registration protocol
+        $tool->handleRequest();
+
+        // If the tool generated HTML output (confirmation form), display it
+        if ($tool->errorOutput) {
+            echo $tool->errorOutput;
+            exit;
+        }
     }
 
     private function handleConfigureJson(): void
