@@ -29,6 +29,12 @@ class WPDataConnectorTest extends IntegrationTestCase
         $this->connector = ntdst_get(WPDataConnector::class);
     }
 
+    protected function tearDown(): void
+    {
+        remove_all_actions('netdust_lti_platform_registered');
+        parent::tearDown();
+    }
+
     // =========================================================================
     // Platform CRUD
     // =========================================================================
