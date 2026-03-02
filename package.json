@@ -15,7 +15,8 @@
     "test:pages": "npx playwright test pages.spec.ts",
     "test:forms": "npx playwright test forms.spec.ts",
     "test:uikit": "npx playwright test uikit.spec.ts",
-    "test:js": "npx playwright test javascript.spec.ts"
+    "test:js": "npx playwright test javascript.spec.ts",
+    "test:lti": "npx playwright test tests/frontend/lti/"
   },
   "keywords": [],
   "author": "",
