@@ -30,35 +30,40 @@ final class Plugin implements NTDST_Service_Meta
         // This method initializes runtime hooks and services
 
         // Register data models first (CPTs via Data Manager)
-        ntdst_get(Data\LTIDataService::class);
+        ntdst_get(Shared\LTIDataService::class);
 
         // Register cleanup cron handler
         add_action('netdust_lti_cleanup', [$this, 'runCleanup']);
 
         // Register endpoint router for LTI requests (Tool Provider role)
-        ntdst_get(LTI\EndpointRouter::class);
+        ntdst_get(ToolProvider\Router::class);
 
         // Register platform router (Platform/Consumer role - launching external tools)
-        ntdst_get(Platform\PlatformRouter::class);
+        ntdst_get(Platform\Router::class);
+
+        // Register AGS (Assignment and Grade Services) for grade passback
+        ntdst_get(Platform\AGSReceiver::class);
 
         // Register admin UI
         if (is_admin()) {
-            ntdst_get(Admin\AdminPage::class);
+            ntdst_get(Admin\SettingsPage::class);
             ntdst_get(Admin\CourseSettingsMetabox::class);
-            ntdst_get(Admin\LaunchTestPage::class);
-            ntdst_get(LTI\DeepLinkHandler::class);
+            ntdst_get(ToolProvider\DeepLinkHandler::class);
         }
 
+        // Logs REST endpoint (needed outside is_admin for REST API calls)
+        ntdst_get(Admin\LogsController::class);
+
         // Register shortcodes
-        ntdst_get(Shortcodes\LtiLaunchShortcode::class);
+        ntdst_get(Platform\LtiLaunchShortcode::class);
 
         // Register bridges after LearnDash is loaded
         add_action('learndash_init', function () {
-            ntdst_get(Bridges\LearnDashBridge::class);
+            ntdst_get(ToolProvider\Bridges\LearnDashBridge::class);
 
             // Register TinCanny bridge if available
             if (class_exists('UCTINCAN\Database')) {
-                ntdst_get(Bridges\TinCannyBridge::class);
+                ntdst_get(ToolProvider\Bridges\TinCannyBridge::class);
             }
         });
     }
