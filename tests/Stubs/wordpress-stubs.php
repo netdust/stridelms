@@ -742,6 +742,18 @@ if (!function_exists('register_post_type')) {
     }
 }
 
+if (!function_exists('register_post_meta')) {
+    function register_post_meta(string $post_type, string $meta_key, array $args = []): bool
+    {
+        global $_test_registered_post_meta;
+        if (!isset($_test_registered_post_meta)) {
+            $_test_registered_post_meta = [];
+        }
+        $_test_registered_post_meta[$post_type][$meta_key] = $args;
+        return true;
+    }
+}
+
 // NTDST Core interface stubs
 if (!interface_exists('NTDST_Service_Meta')) {
     interface NTDST_Service_Meta

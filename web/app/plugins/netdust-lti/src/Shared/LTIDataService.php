@@ -32,6 +32,7 @@ final class LTIDataService implements NTDST_Service_Meta
     private function init(): void
     {
         add_action('init', [$this, 'registerModels'], 5);
+        add_action('rest_api_init', [$this, 'registerRestMeta']);
         add_filter('post_row_actions', [$this, 'addResourceRowActions'], 10, 2);
         add_filter('manage_lti_resource_posts_columns', [$this, 'addResourceColumns']);
         add_action('manage_lti_resource_posts_custom_column', [$this, 'renderResourceColumn'], 10, 2);
@@ -108,13 +109,100 @@ final class LTIDataService implements NTDST_Service_Meta
         $this->registerResourceModel();
     }
 
+    /**
+     * Register all CPT meta fields for REST API access.
+     *
+     * The meta_prefix for all three CPTs is 'lti_', so field 'platform_id'
+     * is stored as 'lti_platform_id' in postmeta. We register the prefixed keys.
+     */
+    public function registerRestMeta(): void
+    {
+        $authCallback = fn() => current_user_can('manage_options');
+
+        // Platform meta fields
+        $platformStringKeys = [
+            'lti_platform_id',
+            'lti_client_id',
+            'lti_deployment_id',
+            'lti_auth_endpoint',
+            'lti_token_endpoint',
+            'lti_jwks_endpoint',
+            'lti_rsa_key',
+            'lti_kid',
+            'lti_contexts',
+            'lti_role_instructor',
+            'lti_role_learner',
+        ];
+
+        foreach ($platformStringKeys as $key) {
+            register_post_meta('lti_platform', $key, [
+                'show_in_rest'  => true,
+                'single'        => true,
+                'type'          => 'string',
+                'auth_callback' => $authCallback,
+            ]);
+        }
+
+        register_post_meta('lti_platform', 'lti_enabled', [
+            'show_in_rest'  => true,
+            'single'        => true,
+            'type'          => 'boolean',
+            'auth_callback' => $authCallback,
+        ]);
+
+        // Tool meta fields (all string)
+        $toolStringKeys = [
+            'lti_launch_url',
+            'lti_oidc_url',
+            'lti_jwks_url',
+            'lti_client_id',
+            'lti_deployment_id',
+            'lti_public_key',
+        ];
+
+        foreach ($toolStringKeys as $key) {
+            register_post_meta('lti_tool', $key, [
+                'show_in_rest'  => true,
+                'single'        => true,
+                'type'          => 'string',
+                'auth_callback' => $authCallback,
+            ]);
+        }
+
+        // Resource meta fields
+        register_post_meta('lti_resource', 'lti_tool_id', [
+            'show_in_rest'  => true,
+            'single'        => true,
+            'type'          => 'integer',
+            'auth_callback' => $authCallback,
+        ]);
+
+        $resourceStringKeys = [
+            'lti_launch_url',
+            'lti_course_id',
+            'lti_custom_params',
+            'lti_description',
+        ];
+
+        foreach ($resourceStringKeys as $key) {
+            register_post_meta('lti_resource', $key, [
+                'show_in_rest'  => true,
+                'single'        => true,
+                'type'          => 'string',
+                'auth_callback' => $authCallback,
+            ]);
+        }
+    }
+
     private function registerPlatformModel(): void
     {
         ntdst_data()->register('lti_platform', [
             'label' => 'LTI Platforms',
             'public' => false,
             'show_ui' => true,
-            'show_in_menu' => 'options-general.php',
+            'show_in_menu' => false,
+            'show_in_rest' => true,
+            'rest_base' => 'lti-platforms',
             'supports' => ['title'],
             'meta_prefix' => 'lti_',
             'fields' => [
@@ -218,7 +306,9 @@ final class LTIDataService implements NTDST_Service_Meta
             'label' => 'LTI Tools',
             'public' => false,
             'show_ui' => true,
-            'show_in_menu' => 'options-general.php',
+            'show_in_menu' => false,
+            'show_in_rest' => true,
+            'rest_base' => 'lti-tools',
             'supports' => ['title'],
             'meta_prefix' => 'lti_',
             'fields' => [
@@ -289,7 +379,9 @@ final class LTIDataService implements NTDST_Service_Meta
             ],
             'public' => false,
             'show_ui' => true,
-            'show_in_menu' => 'options-general.php',
+            'show_in_menu' => false,
+            'show_in_rest' => true,
+            'rest_base' => 'lti-resources',
             'supports' => ['title'],
             'meta_prefix' => 'lti_',
             'fields' => [

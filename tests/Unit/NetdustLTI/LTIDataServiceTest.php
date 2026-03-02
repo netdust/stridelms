@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\NetdustLTI;
 
 use Stride\Tests\TestCase;
-use NetdustLTI\Data\LTIDataService;
+use NetdustLTI\Shared\LTIDataService;
 
 class LTIDataServiceTest extends TestCase
 {
@@ -13,15 +13,17 @@ class LTIDataServiceTest extends TestCase
     {
         parent::setUp();
 
-        // Reset registered post types
-        global $_test_registered_post_types;
+        // Reset registered post types and meta
+        global $_test_registered_post_types, $_test_registered_post_meta;
         $_test_registered_post_types = [];
+        $_test_registered_post_meta = [];
     }
 
     protected function tearDown(): void
     {
-        global $_test_registered_post_types;
+        global $_test_registered_post_types, $_test_registered_post_meta;
         $_test_registered_post_types = [];
+        $_test_registered_post_meta = [];
 
         parent::tearDown();
     }
@@ -65,7 +67,9 @@ class LTIDataServiceTest extends TestCase
         $this->assertEquals('LTI Platforms', $config['label']);
         $this->assertFalse($config['public']);
         $this->assertTrue($config['show_ui']);
-        $this->assertEquals('options-general.php', $config['show_in_menu']);
+        $this->assertFalse($config['show_in_menu']);
+        $this->assertTrue($config['show_in_rest']);
+        $this->assertEquals('lti-platforms', $config['rest_base']);
         $this->assertEquals(['title'], $config['supports']);
     }
 
@@ -152,5 +156,130 @@ class LTIDataServiceTest extends TestCase
         $this->assertArrayHasKey('description', $metadata);
         $this->assertArrayHasKey('priority', $metadata);
         $this->assertEquals('LTI Data Service', $metadata['name']);
+    }
+
+    public function test_tool_cpt_has_rest_configuration(): void
+    {
+        $service = new LTIDataService();
+        do_action('init');
+
+        global $_test_registered_post_types;
+        $config = $_test_registered_post_types['lti_tool'] ?? [];
+
+        $this->assertFalse($config['show_in_menu']);
+        $this->assertTrue($config['show_in_rest']);
+        $this->assertEquals('lti-tools', $config['rest_base']);
+    }
+
+    public function test_resource_cpt_has_rest_configuration(): void
+    {
+        $service = new LTIDataService();
+        do_action('init');
+
+        global $_test_registered_post_types;
+        $config = $_test_registered_post_types['lti_resource'] ?? [];
+
+        $this->assertFalse($config['show_in_menu']);
+        $this->assertTrue($config['show_in_rest']);
+        $this->assertEquals('lti-resources', $config['rest_base']);
+    }
+
+    public function test_platform_rest_meta_is_registered(): void
+    {
+        $service = new LTIDataService();
+        do_action('rest_api_init');
+
+        global $_test_registered_post_meta;
+        $meta = $_test_registered_post_meta['lti_platform'] ?? [];
+
+        // String fields
+        $expectedStringKeys = [
+            'lti_platform_id', 'lti_client_id', 'lti_deployment_id',
+            'lti_auth_endpoint', 'lti_token_endpoint', 'lti_jwks_endpoint',
+            'lti_rsa_key', 'lti_kid', 'lti_contexts',
+            'lti_role_instructor', 'lti_role_learner',
+        ];
+
+        foreach ($expectedStringKeys as $key) {
+            $this->assertArrayHasKey($key, $meta, "Platform meta '{$key}' should be registered");
+            $this->assertTrue($meta[$key]['show_in_rest']);
+            $this->assertTrue($meta[$key]['single']);
+            $this->assertEquals('string', $meta[$key]['type']);
+        }
+
+        // Boolean field
+        $this->assertArrayHasKey('lti_enabled', $meta);
+        $this->assertEquals('boolean', $meta['lti_enabled']['type']);
+        $this->assertTrue($meta['lti_enabled']['show_in_rest']);
+    }
+
+    public function test_tool_rest_meta_is_registered(): void
+    {
+        $service = new LTIDataService();
+        do_action('rest_api_init');
+
+        global $_test_registered_post_meta;
+        $meta = $_test_registered_post_meta['lti_tool'] ?? [];
+
+        $expectedKeys = [
+            'lti_launch_url', 'lti_oidc_url', 'lti_jwks_url',
+            'lti_client_id', 'lti_deployment_id', 'lti_public_key',
+        ];
+
+        foreach ($expectedKeys as $key) {
+            $this->assertArrayHasKey($key, $meta, "Tool meta '{$key}' should be registered");
+            $this->assertTrue($meta[$key]['show_in_rest']);
+            $this->assertTrue($meta[$key]['single']);
+            $this->assertEquals('string', $meta[$key]['type']);
+        }
+    }
+
+    public function test_resource_rest_meta_is_registered(): void
+    {
+        $service = new LTIDataService();
+        do_action('rest_api_init');
+
+        global $_test_registered_post_meta;
+        $meta = $_test_registered_post_meta['lti_resource'] ?? [];
+
+        // Integer field
+        $this->assertArrayHasKey('lti_tool_id', $meta);
+        $this->assertEquals('integer', $meta['lti_tool_id']['type']);
+        $this->assertTrue($meta['lti_tool_id']['show_in_rest']);
+
+        // String fields
+        $expectedStringKeys = [
+            'lti_launch_url', 'lti_course_id',
+            'lti_custom_params', 'lti_description',
+        ];
+
+        foreach ($expectedStringKeys as $key) {
+            $this->assertArrayHasKey($key, $meta, "Resource meta '{$key}' should be registered");
+            $this->assertEquals('string', $meta[$key]['type']);
+            $this->assertTrue($meta[$key]['show_in_rest']);
+        }
+    }
+
+    public function test_rest_meta_has_auth_callback(): void
+    {
+        $service = new LTIDataService();
+        do_action('rest_api_init');
+
+        global $_test_registered_post_meta;
+
+        // Check that auth_callback is set on platform meta
+        $meta = $_test_registered_post_meta['lti_platform']['lti_platform_id'] ?? [];
+        $this->assertArrayHasKey('auth_callback', $meta);
+        $this->assertIsCallable($meta['auth_callback']);
+
+        // Check that auth_callback is set on tool meta
+        $meta = $_test_registered_post_meta['lti_tool']['lti_launch_url'] ?? [];
+        $this->assertArrayHasKey('auth_callback', $meta);
+        $this->assertIsCallable($meta['auth_callback']);
+
+        // Check that auth_callback is set on resource meta
+        $meta = $_test_registered_post_meta['lti_resource']['lti_tool_id'] ?? [];
+        $this->assertArrayHasKey('auth_callback', $meta);
+        $this->assertIsCallable($meta['auth_callback']);
     }
 }
