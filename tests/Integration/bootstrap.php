@@ -26,6 +26,21 @@ if (!defined('DOING_PHPUNIT') && !defined('WP_TESTS_DOMAIN')) {
     define('DOING_PHPUNIT', true);
 }
 
+// Ensure LTI keys are configured for integration tests
+if (!get_option('netdust_lti_private_key')) {
+    $config = ['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA];
+    $res = openssl_pkey_new($config);
+    openssl_pkey_export($res, $privateKey);
+    $details = openssl_pkey_get_details($res);
+
+    update_option('netdust_lti_private_key', $privateKey);
+    update_option('netdust_lti_public_key', $details['key']);
+    update_option('netdust_lti_kid', 'test-tool-key-1');
+}
+
+// Flush rewrite rules so /lti/* routes are registered
+flush_rewrite_rules();
+
 /**
  * Integration Test Case Base Class
  */
@@ -270,5 +285,42 @@ abstract class IntegrationTestCase extends \PHPUnit\Framework\TestCase
     {
         global $wpdb;
         $wpdb->delete($wpdb->prefix . 'vad_registrations', ['id' => $registrationId]);
+    }
+
+    /**
+     * Create a test LTI platform CPT.
+     */
+    protected function createTestLtiPlatform(array $data = []): int
+    {
+        $defaults = [
+            'post_title' => 'Test Platform ' . wp_generate_password(4, false),
+            'post_type' => 'lti_platform',
+            'post_status' => 'publish',
+        ];
+
+        $postData = array_merge($defaults, $data);
+        $postId = wp_insert_post($postData);
+
+        if (is_wp_error($postId)) {
+            throw new \RuntimeException('Failed to create test platform: ' . $postId->get_error_message());
+        }
+
+        self::$testPosts[] = $postId;
+
+        $metaDefaults = [
+            'lti_platform_id' => 'https://test-platform.test',
+            'lti_client_id' => 'test-client-' . uniqid(),
+            'lti_deployment_id' => 'test-deploy-1',
+            'lti_auth_endpoint' => 'https://test-platform.test/auth',
+            'lti_token_endpoint' => 'https://test-platform.test/token',
+            'lti_enabled' => '1',
+        ];
+
+        $meta = array_merge($metaDefaults, $data['meta'] ?? []);
+        foreach ($meta as $key => $value) {
+            update_post_meta($postId, $key, $value);
+        }
+
+        return $postId;
     }
 }
