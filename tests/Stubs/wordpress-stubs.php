@@ -66,6 +66,7 @@ if (!class_exists('WP_User')) {
         public string $display_name = '';
         public string $first_name = '';
         public string $last_name = '';
+        public array $roles = [];
 
         public function __construct($id = 0, $name = '', $site_id = '')
         {
@@ -83,6 +84,11 @@ if (!class_exists('WP_User')) {
         public function exists(): bool
         {
             return $this->ID > 0;
+        }
+
+        public function set_role(string $role): void
+        {
+            $this->roles = [$role];
         }
     }
 }
@@ -406,10 +412,13 @@ if (!function_exists('get_user_by')) {
         }
 
         foreach ($_test_users as $user) {
-            if ($field === 'ID' && $user->ID === $value) {
+            if (($field === 'ID' || $field === 'id') && $user->ID === (int) $value) {
                 return $user;
             }
             if ($field === 'email' && $user->user_email === $value) {
+                return $user;
+            }
+            if ($field === 'login' && isset($user->user_login) && $user->user_login === $value) {
                 return $user;
             }
         }
@@ -995,6 +1004,96 @@ if (!function_exists('current_time')) {
     {
         return $type === 'mysql' ? date('Y-m-d H:i:s') : date('U');
     }
+}
+
+// username_exists stub
+if (!function_exists('username_exists')) {
+    function username_exists(string $username)
+    {
+        global $_test_users;
+        if (!isset($_test_users)) {
+            return false;
+        }
+        foreach ($_test_users as $user) {
+            if (isset($user->user_login) && $user->user_login === $username) {
+                return $user->ID;
+            }
+        }
+        return false;
+    }
+}
+
+// sanitize_user stub
+if (!function_exists('sanitize_user')) {
+    function sanitize_user(string $username, bool $strict = false): string
+    {
+        if ($strict) {
+            $username = preg_replace('/[^a-zA-Z0-9 _.\-@]/', '', $username);
+        }
+        return trim($username);
+    }
+}
+
+// $wpdb stub for direct database queries in tests
+global $wpdb;
+if (!isset($wpdb) || !is_object($wpdb)) {
+    $wpdb = new class {
+        public string $usermeta = 'wp_usermeta';
+        public string $prefix = 'wp_';
+        public string $posts = 'wp_posts';
+        public string $postmeta = 'wp_postmeta';
+
+        public function prepare(string $query, ...$args): string
+        {
+            $prepared = $query;
+            foreach ($args as $arg) {
+                $prepared = preg_replace('/%[sd]/', is_string($arg) ? "'" . addslashes($arg) . "'" : (string) $arg, $prepared, 1);
+            }
+            return $prepared;
+        }
+
+        public function get_var(?string $query = null, int $x = 0, int $y = 0): ?string
+        {
+            global $_test_user_meta;
+            // Support LTI sub lookups via usermeta
+            if ($query && isset($_test_user_meta) && str_contains($query, '_netdust_lti_sub')) {
+                foreach ($_test_user_meta as $userId => $metas) {
+                    if (isset($metas['_netdust_lti_sub'])) {
+                        $storedValue = $metas['_netdust_lti_sub'][0] ?? null;
+                        if ($storedValue && str_contains($query, addslashes($storedValue))) {
+                            return (string) $userId;
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        public function get_results(?string $query = null, string $output = 'OBJECT'): ?array
+        {
+            return [];
+        }
+
+        public function get_row(?string $query = null, string $output = 'OBJECT', int $y = 0): ?object
+        {
+            return null;
+        }
+
+        public function query(string $query): bool
+        {
+            return true;
+        }
+
+        public function insert(string $table, array $data, $format = null): bool
+        {
+            return true;
+        }
+
+        public function update(string $table, array $data, array $where, $format = null, $where_format = null): bool
+        {
+            return true;
+        }
+    };
 }
 
 // Data Manager mock storage

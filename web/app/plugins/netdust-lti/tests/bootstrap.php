@@ -216,6 +216,9 @@ if (!function_exists('wp_insert_user')) {
         $user->user_login = $userdata['user_login'] ?? '';
         $user->user_email = $userdata['user_email'] ?? '';
         $user->display_name = $userdata['display_name'] ?? '';
+        $user->first_name = $userdata['first_name'] ?? '';
+        $user->last_name = $userdata['last_name'] ?? '';
+        $user->roles = isset($userdata['role']) ? [$userdata['role']] : ['subscriber'];
 
         $_test_users[$userId] = $user;
 
@@ -237,6 +240,78 @@ if (!function_exists('esc_url')) {
     {
         return filter_var($url, FILTER_SANITIZE_URL) ?: '';
     }
+}
+
+// username_exists stub
+if (!function_exists('username_exists')) {
+    function username_exists(string $username)
+    {
+        global $_test_users;
+        if (!isset($_test_users)) {
+            return false;
+        }
+        foreach ($_test_users as $user) {
+            if ($user->user_login === $username) {
+                return $user->ID;
+            }
+        }
+        return false;
+    }
+}
+
+// sanitize_user stub
+if (!function_exists('sanitize_user')) {
+    function sanitize_user(string $username, bool $strict = false): string
+    {
+        if ($strict) {
+            $username = preg_replace('/[^a-zA-Z0-9 _.\-@]/', '', $username);
+        }
+        return trim($username);
+    }
+}
+
+// $wpdb stub for UserProvisioner (findByLtiSub uses direct queries)
+global $wpdb;
+if (!isset($wpdb) || !is_object($wpdb)) {
+    $wpdb = new class {
+        public string $usermeta = 'wp_usermeta';
+        public string $prefix = 'wp_';
+        private ?string $mockResult = null;
+
+        /**
+         * Set mock result for the next get_var call (used in tests)
+         */
+        public function setMockResult(?string $result): void
+        {
+            $this->mockResult = $result;
+        }
+
+        public function prepare(string $query, ...$args): string
+        {
+            $prepared = $query;
+            foreach ($args as $arg) {
+                $prepared = preg_replace('/%[sd]/', is_string($arg) ? "'" . addslashes($arg) . "'" : (string) $arg, $prepared, 1);
+            }
+            return $prepared;
+        }
+
+        public function get_var(?string $query = null, int $x = 0, int $y = 0): ?string
+        {
+            // Check user meta for LTI sub lookups
+            global $_test_user_meta;
+            if ($query && isset($_test_user_meta) && str_contains($query, '_netdust_lti_sub')) {
+                foreach ($_test_user_meta as $userId => $metas) {
+                    if (isset($metas['_netdust_lti_sub'])) {
+                        $storedValue = $metas['_netdust_lti_sub'][0] ?? null;
+                        if ($storedValue && str_contains($query, addslashes($storedValue))) {
+                            return (string) $userId;
+                        }
+                    }
+                }
+            }
+            return $this->mockResult;
+        }
+    };
 }
 
 // Plugin autoloader
