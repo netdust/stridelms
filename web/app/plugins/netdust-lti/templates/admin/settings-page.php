@@ -12,7 +12,10 @@
         foreach ($endpoints as $name => $url): ?>
             <tr>
                 <th><?php echo esc_html(ucwords(str_replace('_', ' ', $name))); ?></th>
-                <td><code><?php echo esc_html($url); ?></code></td>
+                <td>
+                    <code id="lti-url-<?php echo esc_attr($name); ?>"><?php echo esc_html($url); ?></code>
+                    <button type="button" class="button button-small lti-copy-btn" data-target="lti-url-<?php echo esc_attr($name); ?>">Copy</button>
+                </td>
             </tr>
         <?php endforeach; ?>
     </table>
@@ -29,3 +32,17 @@
         <a href="<?php echo esc_url(admin_url('options-general.php?page=netdust-lti&action=logs')); ?>" class="button">View Logs</a>
     </p>
 </div>
+
+<script>
+document.querySelectorAll('.lti-copy-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var target = document.getElementById(this.dataset.target);
+        if (target && navigator.clipboard) {
+            navigator.clipboard.writeText(target.textContent).then(function() {
+                btn.textContent = 'Copied!';
+                setTimeout(function() { btn.textContent = 'Copy'; }, 2000);
+            });
+        }
+    });
+});
+</script>

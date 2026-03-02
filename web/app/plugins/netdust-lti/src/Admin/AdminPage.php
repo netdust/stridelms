@@ -83,6 +83,9 @@ final class AdminPage
             'launch' => home_url('/lti/launch'),
             'jwks' => home_url('/lti/jwks'),
             'deep_link' => home_url('/lti/deep-link'),
+            'json_config' => home_url('/lti/configure-json'),
+            'xml_config' => home_url('/lti/configure-xml'),
+            'dynamic_registration' => home_url('/lti/register'),
         ];
     }
 }
