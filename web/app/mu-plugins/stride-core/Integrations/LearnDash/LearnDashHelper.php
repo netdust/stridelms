@@ -60,6 +60,35 @@ final class LearnDashHelper
     }
 
     /**
+     * Check if user is explicitly enrolled (not just "open" access).
+     *
+     * For open courses, hasAccess() returns true for everyone,
+     * but isEnrolled() only returns true if the user has an actual enrollment record.
+     */
+    public static function isEnrolled(int $courseId, ?int $userId = null): bool
+    {
+        if (!self::isActive()) {
+            return false;
+        }
+
+        $userId = $userId ?? get_current_user_id();
+        if (!$userId) {
+            return false;
+        }
+
+        // Open courses: check for enrollment record OR existing progress
+        if (self::getAccessMode($courseId) === self::MODE_OPEN) {
+            if (!empty(get_user_meta($userId, 'course_' . $courseId . '_access_from', true))) {
+                return true;
+            }
+            // User started the course (has progress) but no explicit enrollment
+            return self::getProgress($courseId, $userId) > 0;
+        }
+
+        return sfwd_lms_has_access($courseId, $userId);
+    }
+
+    /**
      * Get course access mode.
      *
      * @return string One of: open, free, paynow, subscribe, closed
@@ -71,6 +100,12 @@ final class LearnDashHelper
         }
 
         $mode = learndash_get_setting($courseId, 'course_price_type');
+
+        // Fallback: single-key lookup can return empty; try full settings array
+        if (empty($mode)) {
+            $allSettings = learndash_get_setting($courseId);
+            $mode = $allSettings['course_price_type'] ?? '';
+        }
 
         return in_array($mode, [
             self::MODE_OPEN,
@@ -258,11 +293,11 @@ final class LearnDashHelper
 
         $userId = $userId ?? get_current_user_id();
 
-        // Try to get last activity
+        // Get the first incomplete step (returns post ID)
         if (function_exists('learndash_user_progress_get_first_incomplete_step')) {
-            $step = learndash_user_progress_get_first_incomplete_step($userId, $courseId);
-            if ($step && isset($step['post']->ID)) {
-                return get_permalink($step['post']->ID);
+            $stepId = learndash_user_progress_get_first_incomplete_step($userId, $courseId);
+            if ($stepId) {
+                return get_permalink($stepId);
             }
         }
 
