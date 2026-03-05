@@ -85,6 +85,21 @@
            border-none cursor-pointer;
   }
 
+  /* Payment/enrollment buttons in sidebar and mobile CTA */
+  .ld-course-buttons .learndash-wrapper {
+    @apply w-full;
+  }
+
+  .ld-course-buttons .btn-join,
+  .ld-course-buttons .learndash_checkout_button {
+    @apply bg-primary text-text-inverse font-medium
+           w-full text-center block
+           px-6 py-3 rounded-lg
+           hover:bg-primary-dark
+           transition-colors duration-fast
+           border-none cursor-pointer no-underline;
+  }
+
   .learndash-wrapper .ld-button-outline {
     @apply bg-transparent text-primary border-2 border-primary
            hover:bg-primary hover:text-text-inverse;
@@ -162,4 +177,150 @@
   .learndash-wrapper tr:hover td {
     @apply bg-surface-alt/50;
   }
+
+}
+
+/* ══════════════════════════════════════
+   FOCUS MODE HEADER CUSTOMIZATION
+   Back button + simplified profile nav
+   ══════════════════════════════════════ */
+
+/* Back button in brand logo area */
+.ld-focus .ld-brand-logo .ld-brand-back-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ld-focus-header-color, #333);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  transition: background-color 0.15s ease;
+}
+
+.ld-focus .ld-brand-logo .ld-brand-back-link:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.ld-focus .ld-brand-logo .ld-brand-back-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
+/* Hide text on mobile, show icon only */
+@media (max-width: 768px) {
+  .ld-focus .ld-brand-logo .ld-brand-back-text {
+    display: none;
+  }
+}
+
+/* User menu styling improvements */
+.ld-focus .ld-user-menu {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Hide welcome text on mobile */
+@media (max-width: 768px) {
+  .ld-focus .ld-user-welcome-text {
+    display: none;
+  }
+}
+
+/* Dropdown menu styling */
+.ld-focus .ld-user-menu-items {
+  min-width: 160px;
+}
+
+.ld-focus .ld-user-menu-items a {
+  display: block;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  color: var(--ld-focus-header-color, #333);
+  text-decoration: none;
+}
+
+.ld-focus .ld-user-menu-items a:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* ══════════════════════════════════════
+   TIN CANNY SCORM/XAPI CONTENT
+   Full-screen SCORM in Focus Mode
+   Uses body.has-scorm-content class (added via PHP)
+   ══════════════════════════════════════ */
+
+/* Prevent page scroll */
+body.has-scorm-content {
+  overflow: hidden !important;
+}
+
+/* Hide: title, breadcrumbs, bottom nav */
+body.has-scorm-content .ld-breadcrumbs,
+body.has-scorm-content .ld-content-actions,
+body.has-scorm-content .ld-focus-content h1,
+body.has-scorm-content .ld-focus-content-wrapper > h1,
+body.has-scorm-content .learndash-wrapper > h1:first-child,
+body.has-scorm-content .ld-focus-main .entry-title {
+  display: none !important;
+}
+
+/* Remove padding and max-width from content area */
+body.has-scorm-content .ld-focus-content-wrapper {
+  padding: 0 !important;
+  max-width: 100% !important;
+}
+
+body.has-scorm-content .ld-focus-content {
+  padding: 0 !important;
+  overflow: hidden !important;
+  max-width: none !important;
+}
+
+/* Hide sidebar when course has only one lesson */
+body.has-scorm-content.single-lesson-course .ld-focus-sidebar,
+body.has-scorm-content.single-lesson-course .ld-focus-sidebar-trigger {
+  display: none !important;
+}
+
+/* Content area fills remaining height */
+body.has-scorm-content .ld-focus-main {
+  height: calc(100vh - 50px) !important;
+  overflow: hidden !important;
+}
+
+/* SCORM wrapper fills content area */
+body.has-scorm-content .uo-tincanny-content {
+  width: 100% !important;
+  height: calc(100vh - 50px) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Iframe fills SCORM wrapper */
+body.has-scorm-content .uo-tincanny-content iframe,
+body.has-scorm-content iframe.AnC-iFrame {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: calc(100vh - 50px) !important;
+  border: none !important;
+  display: block;
+}
+
+/* Non-focus mode fallback */
+.uo-tincanny-content {
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.uo-tincanny-content iframe,
+iframe.AnC-iFrame {
+  width: 100% !important;
+  min-height: 70vh !important;
+  border: none !important;
+  display: block;
 }

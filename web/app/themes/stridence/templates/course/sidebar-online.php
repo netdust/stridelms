@@ -2,16 +2,16 @@
 /**
  * Course Sidebar Online Template
  *
- * Sticky sidebar for online courses. Shows enrollment-aware CTA:
- * - Not enrolled: price + enroll button (via LearnDash)
- * - Enrolled, in progress: progress bar + continue button
- * - Enrolled, completed: certificate download
+ * Sticky sidebar for online courses. Three states:
+ * 1. Completed  — certificate download + review link
+ * 2. Enrolled   — progress bar + continue/start button
+ * 3. Not enrolled — price + CTA (LD payment buttons or own fallback)
  *
- * Below the CTA, shows course info (points, expiration, requirements)
- * regardless of enrollment state.
+ * Below the CTA: course details (points, expiration, dates) in all states.
  *
  * @param array $args {
- *     @type int $course_id Course post ID
+ *     @type int    $course_id      Course post ID
+ *     @type string $enrollment_url Stride enrollment URL (edition-based)
  * }
  */
 
@@ -19,33 +19,77 @@ defined('ABSPATH') || exit;
 
 use Stride\Integrations\LearnDash\LearnDashHelper;
 
-$course_id = $args['course_id'] ?? get_the_ID();
-$user_id   = get_current_user_id();
+$course_id      = $args['course_id'] ?? get_the_ID();
+$enrollment_url = $args['enrollment_url'] ?? '';
+$user_id        = get_current_user_id();
 
-// Determine enrollment state via LearnDashHelper
-$has_access = $user_id && LearnDashHelper::hasAccess($course_id, $user_id);
-$progress   = $has_access ? LearnDashHelper::getProgress($course_id, $user_id) : 0;
+// ── Enrollment state ──
+$has_access  = $user_id && LearnDashHelper::hasAccess($course_id, $user_id);
+$is_enrolled = $user_id && LearnDashHelper::isEnrolled($course_id, $user_id);
+$progress    = $has_access ? LearnDashHelper::getProgress($course_id, $user_id) : 0;
 $is_complete = $has_access && $progress >= 100;
+$is_open     = LearnDashHelper::getAccessMode($course_id) === LearnDashHelper::MODE_OPEN;
 
-// Get course price info for non-enrolled display
-$course_price_type = [];
-if (function_exists('learndash_get_course_price')) {
-    $course_price_type = learndash_get_course_price($course_id);
+// ── Price info (for not-enrolled state) ──
+$price_info = function_exists('learndash_get_course_price')
+    ? learndash_get_course_price($course_id)
+    : [];
+$price_type   = $price_info['type'] ?? 'open';
+$course_price = $price_info['price'] ?? '';
+
+// Format price display
+$price_formatted = !empty($course_price)
+    ? '€ ' . number_format((float) $course_price, 2, ',', '.')
+    : '';
+
+// Subscription billing text
+$billing_text = '';
+$trial_text   = '';
+if ($price_type === 'subscribe' && !empty($course_price)) {
+    $freq_map = [
+        'D' => ['dag', 'dagen'],
+        'W' => ['week', 'weken'],
+        'M' => ['maand', 'maanden'],
+        'Y' => ['jaar', 'jaar'],
+    ];
+    $interval  = (int) ($price_info['interval'] ?? 1);
+    $freq_raw  = $price_info['frequency_raw'] ?? 'M';
+    $freq_pair = $freq_map[$freq_raw] ?? ['maand', 'maanden'];
+    $freq_label = $interval === 1 ? $freq_pair[0] : $freq_pair[1];
+    $billing_text = $interval === 1
+        ? sprintf('per %s', $freq_label)
+        : sprintf('per %d %s', $interval, $freq_label);
+
+    $trial_price = $price_info['trial_price'] ?? '';
+    if ($trial_price !== '' && $trial_price !== '0') {
+        $trial_text = sprintf('Proefperiode: € %s', number_format((float) $trial_price, 2, ',', '.'));
+    }
 }
-$course_price = $course_price_type['price'] ?? '';
-$price_type = $course_price_type['type'] ?? 'open';
 
-// Gather course info for all states
-$course_points = LearnDashHelper::getCoursePoints($course_id);
-$has_expiration = LearnDashHelper::hasExpiration($course_id);
-$expire_days_setting = $has_expiration && function_exists('learndash_get_setting')
+// CTA label (fallback when LD payment buttons are empty)
+$cta_label = match ($price_type) {
+    'paynow'    => __('Cursus kopen', 'stridence'),
+    'subscribe' => __('Abonneren', 'stridence'),
+    'free'      => __('Gratis inschrijven', 'stridence'),
+    default     => __('Inschrijven', 'stridence'),
+};
+
+// LD payment buttons (non-empty when Stripe/PayPal is configured)
+$ld_buttons = function_exists('learndash_payment_buttons')
+    ? trim(learndash_payment_buttons($course_id))
+    : '';
+
+// ── Course details (all states) ──
+$course_points         = LearnDashHelper::getCoursePoints($course_id);
+$has_expiration        = LearnDashHelper::hasExpiration($course_id);
+$expire_days_setting   = $has_expiration && function_exists('learndash_get_setting')
     ? (int) learndash_get_setting($course_id, 'expire_access_days') : 0;
-$points_required = LearnDashHelper::getPointsRequired($course_id);
+$points_required       = LearnDashHelper::getPointsRequired($course_id);
 $has_points_requirement = LearnDashHelper::hasPointsRequirement($course_id);
-$start_date = LearnDashHelper::getStartDate($course_id);
-$end_date = LearnDashHelper::getEndDate($course_id);
+$start_date            = LearnDashHelper::getStartDate($course_id);
+$end_date              = LearnDashHelper::getEndDate($course_id);
 
-// For enrolled users: get their specific expiration
+// Enrolled user expiration
 $days_remaining = ($has_access && $has_expiration)
     ? LearnDashHelper::getAccessDaysRemaining($course_id, $user_id) : null;
 $expiration_ts = ($days_remaining !== null)
@@ -54,7 +98,7 @@ $expiration_ts = ($days_remaining !== null)
 ?>
 <aside class="card p-6 sticky top-24">
     <?php if ($is_complete) : ?>
-        <!-- Completed state -->
+        <!-- ── Completed ── -->
         <div class="flex items-center gap-2 mb-4">
             <?php echo stridence_icon('check-circle', 'w-5 h-5 text-green-600'); ?>
             <h3 class="font-heading font-semibold text-lg text-green-700">Afgerond</h3>
@@ -87,15 +131,14 @@ $expiration_ts = ($days_remaining !== null)
             </a>
         </div>
 
-    <?php elseif ($has_access) : ?>
-        <!-- Enrolled, in progress -->
+    <?php elseif ($has_access && $is_enrolled) : ?>
+        <!-- ── Enrolled, in progress ── -->
         <div class="flex items-center gap-2 mb-4">
             <?php echo stridence_icon('check-circle', 'w-5 h-5 text-primary'); ?>
             <h3 class="font-heading font-semibold text-lg">Ingeschreven</h3>
         </div>
 
         <div class="space-y-4">
-            <!-- Progress bar -->
             <div>
                 <div class="flex justify-between text-sm text-text-muted mb-1">
                     <span>Voortgang</span>
@@ -142,24 +185,28 @@ $expiration_ts = ($days_remaining !== null)
         </div>
 
     <?php else : ?>
-        <!-- Not enrolled -->
-        <h3 class="font-heading font-semibold text-lg mb-4">
-            <?php esc_html_e('Direct starten', 'stridence'); ?>
-        </h3>
-
+        <!-- ── Not enrolled ── -->
         <div class="space-y-4">
-            <!-- Price display -->
             <?php if ($price_type === 'open' || $price_type === 'free') : ?>
                 <div class="text-2xl font-bold text-text">
                     <?php esc_html_e('Gratis', 'stridence'); ?>
                 </div>
-            <?php elseif (!empty($course_price)) : ?>
-                <div class="text-2xl font-bold text-text">
-                    <?php echo esc_html($course_price); ?>
+            <?php elseif ($price_formatted) : ?>
+                <div>
+                    <div class="text-2xl font-bold text-text">
+                        <?php echo esc_html($price_formatted); ?>
+                    </div>
+                    <?php if ($billing_text) : ?>
+                        <p class="text-sm text-text-muted mt-1">
+                            <?php echo esc_html($billing_text); ?>
+                            <?php if ($trial_text) : ?>
+                                <br><span class="text-xs"><?php echo esc_html($trial_text); ?></span>
+                            <?php endif; ?>
+                        </p>
+                    <?php endif; ?>
                 </div>
             <?php endif; ?>
 
-            <!-- Benefits list -->
             <ul class="text-sm text-text-muted space-y-2">
                 <li class="flex items-center gap-2">
                     <?php echo stridence_icon('check', 'w-4 h-4 text-green-600'); ?>
@@ -175,10 +222,23 @@ $expiration_ts = ($days_remaining !== null)
                 </li>
             </ul>
 
-            <!-- LearnDash native buttons - handles enrollment/payment -->
-            <div class="ld-course-buttons">
-                <?php echo do_shortcode('[learndash_payment_buttons course_id="' . esc_attr($course_id) . '"]'); ?>
-            </div>
+            <?php if ($is_open && $has_access) : ?>
+                <a href="<?php echo esc_url(LearnDashHelper::getFirstLessonUrl($course_id)); ?>" class="btn btn-primary w-full text-center">
+                    <?php esc_html_e('Direct starten', 'stridence'); ?>
+                </a>
+            <?php elseif ($enrollment_url) : ?>
+                <a href="<?php echo esc_url($enrollment_url); ?>" class="btn btn-primary w-full text-center">
+                    <?php esc_html_e('Inschrijven', 'stridence'); ?>
+                </a>
+            <?php elseif ($ld_buttons) : ?>
+                <div class="ld-course-buttons">
+                    <?php echo $ld_buttons; ?>
+                </div>
+            <?php else : ?>
+                <a href="<?php echo esc_url(is_user_logged_in() ? get_permalink($course_id) : wp_login_url(get_permalink($course_id))); ?>" class="btn btn-primary w-full text-center">
+                    <?php echo esc_html($cta_label); ?>
+                </a>
+            <?php endif; ?>
 
             <?php if (!is_user_logged_in()) : ?>
                 <p class="text-xs text-text-muted text-center">
@@ -192,8 +252,11 @@ $expiration_ts = ($days_remaining !== null)
     <?php endif; ?>
 
     <?php
-    // ── Course Info Section (shows in ALL states) ──
-    $has_info = ($course_points > 0) || ($expire_days_setting > 0) || ($has_points_requirement && $points_required > 0) || $start_date || $end_date;
+    // ── Course details (all states) ──
+    $has_info = ($course_points > 0) || ($expire_days_setting > 0)
+        || ($has_points_requirement && $points_required > 0)
+        || $start_date || $end_date;
+
     if ($has_info) :
     ?>
         <div class="mt-6 pt-5 border-t border-border">
