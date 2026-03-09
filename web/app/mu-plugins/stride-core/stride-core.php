@@ -59,7 +59,8 @@ add_action('ntdst/core_ready', function () use ($config): void {
     ntdst_set(\Stride\Modules\Invoicing\QuoteRepository::class);
     ntdst_set(\Stride\Modules\Invoicing\VoucherRepository::class);
     ntdst_set(\Stride\Modules\Trajectory\TrajectoryRepository::class);
-    ntdst_set(\Stride\Modules\Attendance\AttendanceRepository::class);
+
+    // AttendanceRepository registered by AttendanceService::init()
 
     // Register interface bindings
     foreach ($config['bindings'] as $interface => $implementation) {
@@ -74,6 +75,10 @@ add_action('ntdst/features_ready', function () use ($config): void {
             ntdst_get($serviceClass);
         }
     }
+
+    // Register user dashboard data service
+    ntdst_set(\Stride\Modules\User\UserDashboardService::class);
+    ntdst_get(\Stride\Modules\User\UserDashboardService::class);
 
     // Register shortcodes
     ntdst_set(\Stride\Modules\User\DashboardShortcode::class);
@@ -95,4 +100,14 @@ add_action('ntdst/features_ready', function () use ($config): void {
         ntdst_set($handlerClass);
         ntdst_get($handlerClass);
     }
+});
+
+// Register mail triggers for netdust-mail plugin
+add_filter('ndmail_triggers', function (array $triggers): array {
+    $triggers['stride/completion/attendance_complete'] = [
+        'label'   => __('Opleiding: aanwezigheid voltooid', 'stride'),
+        'source'  => 'Stride',
+        'context' => ['user_id', 'edition_id', 'registration_id'],
+    ];
+    return $triggers;
 });
