@@ -10,6 +10,7 @@
  * @var string  $type           'edition' or 'trajectory'
  * @var object  $registration   Registration row from DB
  * @var array   $task_summary   From EnrollmentCompletion::getTaskSummary()
+ * @var string  $phase          'enrollment' or 'post_course'
  */
 
 defined('ABSPATH') || exit;
@@ -20,8 +21,14 @@ $post_id       = $post->ID ?? 0;
 $reg_id        = (int) ($registration->id ?? 0);
 $tasks         = $task_summary['tasks'] ?? [];
 $availability  = $task_summary['availability'] ?? [];
-$total         = $task_summary['total'] ?? 0;
-$completed     = $task_summary['completed'] ?? 0;
+$active_phase  = $phase ?? 'enrollment';
+
+// Filter tasks to active phase only
+$phase_tasks = array_filter($tasks, fn($t) => ($t['phase'] ?? 'enrollment') === $active_phase);
+$phase_availability = array_intersect_key($availability, $phase_tasks);
+
+$total         = count($phase_tasks);
+$completed     = count(array_filter($phase_tasks, fn($t) => ($t['status'] ?? 'pending') === 'completed'));
 $percentage    = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
 
 $task_labels = [
@@ -29,6 +36,9 @@ $task_labels = [
     'questionnaire'     => __('Vragenlijst invullen', 'stridence'),
     'documents'         => __('Documenten uploaden', 'stridence'),
     'approval'          => __('Goedkeuring beheerder', 'stridence'),
+    'post_evaluation'   => __('Evaluatie invullen', 'stridence'),
+    'post_documents'    => __('Documenten uploaden', 'stridence'),
+    'post_approval'     => __('Goedkeuring beheerder', 'stridence'),
 ];
 
 $task_descriptions = [
@@ -36,13 +46,23 @@ $task_descriptions = [
     'questionnaire'     => __('Vul de vereiste vragenlijst in.', 'stridence'),
     'documents'         => __('Upload de gevraagde documenten.', 'stridence'),
     'approval'          => __('Een beheerder zal je inschrijving beoordelen.', 'stridence'),
+    'post_evaluation'   => __('Vul de evaluatie in over de opleiding.', 'stridence'),
+    'post_documents'    => __('Upload de gevraagde documenten.', 'stridence'),
+    'post_approval'     => __('Een beheerder zal je dossier beoordelen.', 'stridence'),
 ];
+
+// Map post-course task types to existing templates
+$template_map = [
+    'post_evaluation' => 'task-questionnaire',
+    'post_documents'  => 'task-documents',
+];
+
+$is_post_course = ($active_phase === 'post_course');
 ?>
 
 <main class="max-w-2xl mx-auto px-4 py-12" x-data="completionPage(<?= esc_attr(wp_json_encode([
     'registrationId' => $reg_id,
-    'nonce' => wp_create_nonce('stride_completion'),
-    'tasks' => $tasks,
+    'tasks' => $phase_tasks,
 ])) ?>)">
 
     <!-- Back link -->
@@ -55,10 +75,14 @@ $task_descriptions = [
     <!-- Header -->
     <div class="mb-8">
         <h1 class="font-heading text-2xl font-bold text-text mb-2">
-            <?= esc_html__('Inschrijving voltooien', 'stridence') ?>
+            <?= $is_post_course
+                ? esc_html__('Opleiding afronden', 'stridence')
+                : esc_html__('Inschrijving voltooien', 'stridence') ?>
         </h1>
         <p class="text-text-muted">
-            <?= esc_html__('Voltooi onderstaande stappen om je inschrijving te bevestigen.', 'stridence') ?>
+            <?= $is_post_course
+                ? esc_html__('Voltooi onderstaande stappen om je opleiding af te ronden.', 'stridence')
+                : esc_html__('Voltooi onderstaande stappen om je inschrijving te bevestigen.', 'stridence') ?>
         </p>
 
         <!-- Progress bar -->
@@ -76,10 +100,10 @@ $task_descriptions = [
 
     <!-- Task cards -->
     <div class="space-y-4">
-        <?php foreach ($tasks as $taskType => $task): ?>
+        <?php foreach ($phase_tasks as $taskType => $task): ?>
             <?php
-            $state  = $availability[$taskType]['state'] ?? 'available';
-            $reason = $availability[$taskType]['reason'] ?? '';
+            $state  = $phase_availability[$taskType]['state'] ?? 'available';
+            $reason = $phase_availability[$taskType]['reason'] ?? '';
             $isLocked    = $state === 'locked';
             $isCompleted = $state === 'completed';
             $isAvailable = $state === 'available';
@@ -145,9 +169,11 @@ $task_descriptions = [
                                     <?= esc_html($task_descriptions[$taskType] ?? '') ?>
                                 </p>
                                 <?php
-                                get_template_part('templates/forms/completion/task-' . $taskType, null, [
+                                $template = $template_map[$taskType] ?? ('task-' . $taskType);
+                                get_template_part('templates/forms/completion/' . $template, null, [
                                     'registration' => $registration,
                                     'task'         => $task,
+                                    'task_type'    => $taskType,
                                     'post'         => $post,
                                 ]);
                                 ?>
@@ -161,7 +187,7 @@ $task_descriptions = [
 
     <!-- Dashboard link -->
     <div class="mt-8 text-center">
-        <a href="<?= esc_url(home_url('/dashboard/?tab=inschrijvingen')) ?>"
+        <a href="<?= esc_url(home_url('/mijn-account/?tab=inschrijvingen')) ?>"
            class="text-sm text-text-muted hover:text-text">
             &larr; <?= esc_html__('Terug naar dashboard', 'stridence') ?>
         </a>
@@ -172,7 +198,6 @@ $task_descriptions = [
 document.addEventListener('alpine:init', () => {
     Alpine.data('completionPage', (config) => ({
         registrationId: config.registrationId,
-        nonce: config.nonce,
         tasks: config.tasks,
         loading: false,
         error: '',
@@ -195,24 +220,15 @@ document.addEventListener('alpine:init', () => {
             this.error = '';
 
             try {
-                const formData = new FormData();
-                formData.append('action', 'stride_complete_task');
-                formData.append('nonce', this.nonce);
-                formData.append('registration_id', this.registrationId);
-                formData.append('task_type', taskType);
-                formData.append('task_data', JSON.stringify(data));
-
-                const response = await fetch(ntdstAPI?.ajaxUrl || '/wp-admin/admin-ajax.php', {
-                    method: 'POST',
-                    body: formData,
+                const result = await ntdstAPI.call('stride_complete_task', {
+                    registration_id: this.registrationId,
+                    task_type: taskType,
+                    task_data: data,
                 });
-
-                const result = await response.json();
 
                 if (result.success) {
                     this.tasks[taskType] = { status: 'completed', completed_at: new Date().toISOString() };
 
-                    // Check if all done — reload to show updated state
                     if (this.completedCount === this.totalCount) {
                         window.location.reload();
                     }

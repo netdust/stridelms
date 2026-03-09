@@ -33,18 +33,34 @@ $task_labels = [
     'questionnaire'     => __('Vragenlijst invullen', 'stridence'),
     'documents'         => __('Documenten uploaden', 'stridence'),
     'approval'          => __('Goedkeuring beheerder', 'stridence'),
+    'post_evaluation'   => __('Evaluatie invullen', 'stridence'),
+    'post_documents'    => __('Documenten uploaden', 'stridence'),
+    'post_approval'     => __('Goedkeuring beheerder', 'stridence'),
 ];
 
 $task_actions = [
     'session_selection' => __('Kiezen', 'stridence'),
     'questionnaire'     => __('Invullen', 'stridence'),
     'documents'         => __('Uploaden', 'stridence'),
+    'post_evaluation'   => __('Invullen', 'stridence'),
+    'post_documents'    => __('Uploaden', 'stridence'),
 ];
+
+// Determine phase from tasks
+$has_post_course = false;
+foreach ($tasks as $task) {
+    if (($task['phase'] ?? 'enrollment') === 'post_course') {
+        $has_post_course = true;
+        break;
+    }
+}
 ?>
 
 <div class="space-y-3">
     <span class="text-sm font-medium text-text">
-        <?= esc_html__('Inschrijving voltooien:', 'stridence') ?>
+        <?= $has_post_course
+            ? esc_html__('Opleiding afronden:', 'stridence')
+            : esc_html__('Inschrijving voltooien:', 'stridence') ?>
     </span>
 
     <ul class="space-y-1.5 pl-6">
