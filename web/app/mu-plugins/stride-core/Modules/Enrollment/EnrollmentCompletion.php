@@ -17,13 +17,24 @@ use WP_Error;
  */
 final class EnrollmentCompletion
 {
-    private const TASK_TYPES = ['session_selection', 'questionnaire', 'documents', 'approval'];
+    private const TASK_TYPES = [
+        'session_selection', 'questionnaire', 'documents', 'approval',
+        'post_evaluation', 'post_documents', 'post_approval',
+    ];
 
     private const META_KEYS = [
         'session_selection' => 'requires_session_selection',
         'questionnaire'     => 'requires_questionnaire',
         'documents'         => 'requires_documents',
         'approval'          => 'requires_approval',
+    ];
+
+    private const POST_COURSE_TASK_TYPES = ['post_evaluation', 'post_documents', 'post_approval'];
+
+    private const POST_COURSE_META_KEYS = [
+        'post_evaluation' => 'post_requires_evaluation',
+        'post_documents'  => 'post_requires_documents',
+        'post_approval'   => 'post_requires_approval',
     ];
 
     /**
@@ -63,7 +74,7 @@ final class EnrollmentCompletion
 
         foreach ($reqs as $task => $enabled) {
             if ($enabled) {
-                $tasks[$task] = ['status' => 'pending'];
+                $tasks[$task] = ['status' => 'pending', 'phase' => 'enrollment'];
             }
         }
 
@@ -90,6 +101,14 @@ final class EnrollmentCompletion
         }
 
         $approvalDone = !isset($tasks['approval']) || ($tasks['approval']['status'] ?? 'pending') === 'completed';
+
+        // Pre-compute: are post-course immediate tasks (post_evaluation + post_documents) done?
+        $postImmediateDone = true;
+        foreach (['post_evaluation', 'post_documents'] as $type) {
+            if (isset($tasks[$type]) && ($tasks[$type]['status'] ?? 'pending') !== 'completed') {
+                $postImmediateDone = false;
+            }
+        }
 
         // Selection window from edition meta
         $selectionOpen = false;
@@ -147,6 +166,20 @@ final class EnrollmentCompletion
                     }
                     break;
 
+                // Post-course tasks
+                case 'post_evaluation':
+                case 'post_documents':
+                    $availability[$type] = ['state' => 'available', 'reason' => ''];
+                    break;
+
+                case 'post_approval':
+                    if ($postImmediateDone) {
+                        $availability[$type] = ['state' => 'available', 'reason' => __('Klaar voor beoordeling.', 'stride')];
+                    } else {
+                        $availability[$type] = ['state' => 'locked', 'reason' => __('Wacht op evaluatie en documenten.', 'stride')];
+                    }
+                    break;
+
                 default:
                     $availability[$type] = ['state' => 'available', 'reason' => ''];
             }
@@ -168,6 +201,116 @@ final class EnrollmentCompletion
 
         $repo = ntdst_get(RegistrationRepository::class);
         $repo->updateCompletionTasks($registrationId, $tasks);
+    }
+
+    // === Post-course phase ===
+
+    /**
+     * Get which post-course requirements are enabled for an edition/trajectory.
+     *
+     * @return array{post_evaluation: bool, post_documents: bool, post_approval: bool}
+     */
+    public function getPostCourseRequirements(int $postId, string $postType): array
+    {
+        $model = ntdst_data()->get($postType);
+        $result = [];
+
+        foreach (self::POST_COURSE_META_KEYS as $task => $metaKey) {
+            $result[$task] = (bool) $model->getMeta($postId, $metaKey);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Check if any post-course requirements are enabled.
+     */
+    public function hasPostCourseRequirements(int $postId, string $postType): bool
+    {
+        return in_array(true, array_values($this->getPostCourseRequirements($postId, $postType)), true);
+    }
+
+    /**
+     * Build post-course completion tasks for an edition/trajectory.
+     *
+     * @return array<string, array{status: string, phase: string}> Only includes enabled tasks
+     */
+    public function buildPostCourseTasks(int $postId, string $postType): array
+    {
+        $reqs = $this->getPostCourseRequirements($postId, $postType);
+        $tasks = [];
+
+        foreach ($reqs as $task => $enabled) {
+            if ($enabled) {
+                $tasks[$task] = ['status' => 'pending', 'phase' => 'post_course'];
+            }
+        }
+
+        return $tasks;
+    }
+
+    /**
+     * Initialize post-course tasks for a registration.
+     *
+     * Appends post-course tasks to existing completion_tasks JSON.
+     */
+    public function initializePostCourseTasks(int $registrationId, int $editionId): void
+    {
+        $postCourseTasks = $this->buildPostCourseTasks($editionId, 'vad_edition');
+
+        if (empty($postCourseTasks)) {
+            return;
+        }
+
+        $repo = ntdst_get(RegistrationRepository::class);
+        $registration = $repo->find($registrationId);
+
+        $existingTasks = $registration->completion_tasks ?? [];
+        $mergedTasks = array_merge($existingTasks, $postCourseTasks);
+
+        $repo->updateCompletionTasks($registrationId, $mergedTasks);
+    }
+
+    /**
+     * Check if all enrollment-phase tasks are complete.
+     */
+    public function isEnrollmentPhaseComplete(array $tasks): bool
+    {
+        $phaseTasks = $this->getTasksForPhase($tasks, 'enrollment');
+
+        foreach ($phaseTasks as $task) {
+            if (($task['status'] ?? 'pending') !== 'completed') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Check if all post-course-phase tasks are complete.
+     */
+    public function isPostCoursePhaseComplete(array $tasks): bool
+    {
+        $phaseTasks = $this->getTasksForPhase($tasks, 'post_course');
+
+        foreach ($phaseTasks as $task) {
+            if (($task['status'] ?? 'pending') !== 'completed') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Filter tasks by phase.
+     *
+     * @return array<string, array>
+     */
+    public function getTasksForPhase(array $tasks, string $phase): array
+    {
+        return array_filter($tasks, fn(array $task) => ($task['phase'] ?? 'enrollment') === $phase);
     }
 
     /**
