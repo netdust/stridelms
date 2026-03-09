@@ -68,6 +68,9 @@ final class EditionActionsMetabox
             <!-- Status Change -->
             <?php $this->renderStatusSection($status); ?>
 
+            <!-- Enrollment Warnings -->
+            <?php $this->renderWarnings($post); ?>
+
             <!-- Enrollment Requirements -->
             <?php $this->renderRequirementsSection($post); ?>
 
@@ -153,6 +156,21 @@ final class EditionActionsMetabox
         <?php
     }
 
+    private function renderWarnings(WP_Post $post): void
+    {
+        if ($post->post_status === 'auto-draft') {
+            return;
+        }
+
+        $status = $this->editionService->getStatus($post->ID);
+        if (!$status->allowsEnrollment()) {
+            return;
+        }
+
+        $model = ntdst_data()->get('vad_edition');
+        $enrollmentForm = $model->getMeta($post->ID, 'enrollment_form') ?: 'default';
+    }
+
     private function renderRequirementsSection(WP_Post $post): void
     {
         if ($post->post_status === 'auto-draft') {
@@ -160,27 +178,126 @@ final class EditionActionsMetabox
         }
 
         $model = ntdst_data()->get('vad_edition');
+
         $requirements = [
-            'requires_session_selection' => __('Sessiekeuze vereist', 'stride'),
             'requires_questionnaire'     => __('Vragenlijst invullen', 'stride'),
             'requires_documents'         => __('Documenten uploaden', 'stride'),
+            'requires_session_selection' => __('Sessiekeuze vereist', 'stride'),
         ];
+
+        $selectionOpen     = (bool) $model->getMeta($post->ID, 'selection_open');
+        $selectionDeadline = $model->getMeta($post->ID, 'selection_deadline') ?: '';
+        $hasSessionReq     = (bool) $model->getMeta($post->ID, 'requires_session_selection');
         ?>
         <div class="stride-sidebar-section">
-            <h4><?php esc_html_e('Inschrijfvereisten', 'stride'); ?></h4>
-            <p class="description" style="margin-bottom: 8px; font-size: 11px;">
-                <?php esc_html_e('Deelnemers moeten deze stappen voltooien na inschrijving.', 'stride'); ?>
-            </p>
-            <?php foreach ($requirements as $key => $label): ?>
-                <?php $checked = (bool) $model->getMeta($post->ID, $key); ?>
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
-                    <input type="hidden" name="ntdst_fields[<?= esc_attr($key) ?>]" value="0">
-                    <input type="checkbox" name="ntdst_fields[<?= esc_attr($key) ?>]" value="1"
-                           <?php checked($checked); ?>>
-                    <span style="font-size: 12px;"><?= esc_html($label) ?></span>
+            <div class="stride-classroom-only">
+                <h4><?php esc_html_e('Inschrijfvereisten', 'stride'); ?></h4>
+                <p class="description" style="margin-bottom: 8px; font-size: 11px;">
+                    <?php esc_html_e('Deelnemers moeten deze stappen voltooien na inschrijving.', 'stride'); ?>
+                </p>
+                <?php foreach ($requirements as $key => $label): ?>
+                    <?php $checked = (bool) $model->getMeta($post->ID, $key); ?>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
+                        <input type="hidden" name="ntdst_fields[<?= esc_attr($key) ?>]" value="0">
+                        <input type="checkbox" name="ntdst_fields[<?= esc_attr($key) ?>]" value="1"
+                               <?php checked($checked); ?>>
+                        <span style="font-size: 12px;"><?= esc_html($label) ?></span>
+                    </label>
+                <?php endforeach; ?>
+            </div>
+
+            <!-- Post-course requirements -->
+            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #e0e0e0;">
+                <h4><?php esc_html_e('Na afloop', 'stride'); ?></h4>
+                <p class="description" style="margin-bottom: 8px; font-size: 11px;">
+                    <?php esc_html_e('Taken die deelnemers moeten voltooien na de opleiding.', 'stride'); ?>
+                </p>
+                <?php
+                $postCourseRequirements = [
+                    'post_requires_evaluation' => __('Evaluatie invullen', 'stride'),
+                    'post_requires_documents'  => __('Documenten uploaden', 'stride'),
+                    'post_requires_approval'   => __('Goedkeuring beheerder', 'stride'),
+                ];
+                ?>
+                <?php foreach ($postCourseRequirements as $key => $label): ?>
+                    <?php $checked = (bool) $model->getMeta($post->ID, $key); ?>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
+                        <input type="hidden" name="ntdst_fields[<?= esc_attr($key) ?>]" value="0">
+                        <input type="checkbox" name="ntdst_fields[<?= esc_attr($key) ?>]" value="1"
+                               <?php checked($checked); ?>>
+                        <span style="font-size: 12px;"><?= esc_html($label) ?></span>
+                    </label>
+                <?php endforeach; ?>
+            </div>
+
+            <!-- Enrollment form -->
+            <?php $enrollmentForm = $model->getMeta($post->ID, 'enrollment_form') ?: 'default'; ?>
+            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #e0e0e0;">
+                <label style="font-size: 11px; color: #646970; display: block; margin-bottom: 2px;">
+                    <?php esc_html_e('Inschrijfformulier', 'stride'); ?>
                 </label>
-            <?php endforeach; ?>
+                <select name="ntdst_fields[enrollment_form]" style="width: 100%; font-size: 12px;">
+                    <option value="default" <?php selected($enrollmentForm, 'default'); ?>>
+                        <?php esc_html_e('Standaard formulier', 'stride'); ?>
+                    </option>
+                    <option value="minimal" <?php selected($enrollmentForm, 'minimal'); ?>>
+                        <?php esc_html_e('Minimaal formulier', 'stride'); ?>
+                    </option>
+                    <option value="direct" <?php selected($enrollmentForm, 'direct'); ?>>
+                        <?php esc_html_e('Geen (directe inschrijving)', 'stride'); ?>
+                    </option>
+                </select>
+            </div>
+
+            <!-- Active field groups (read-only) -->
+            <?php
+            $fieldGroupsService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentFieldGroups::class);
+            $activeGroups = $fieldGroupsService->getFieldGroupsForPost($post->ID, 'vad_edition');
+            if (!empty($activeGroups)) : ?>
+                <div style="margin-top: 8px;">
+                    <span style="font-size: 11px; color: #646970;"><?php esc_html_e('Actieve veldgroepen:', 'stride'); ?></span>
+                    <ul style="margin: 4px 0 0; padding: 0; list-style: none;">
+                        <?php foreach ($activeGroups as $group) : ?>
+                            <li style="font-size: 11px; padding: 2px 0; color: #50575e;">
+                                <span class="dashicons dashicons-yes-alt" style="font-size: 14px; width: 14px; height: 14px; color: #2271b1; vertical-align: text-bottom;"></span>
+                                <?php echo esc_html($group['label']); ?>
+                                <span style="color: #a0a0a0;">(<?php echo esc_html($group['step'] === 'billing' ? 'facturatie' : 'persoonlijk'); ?>)</span>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                    <a href="<?php echo esc_url(admin_url('admin.php?page=stride-field-groups')); ?>" style="font-size: 11px;">
+                        <?php esc_html_e('Veldgroepen beheren', 'stride'); ?> &rarr;
+                    </a>
+                </div>
+            <?php endif; ?>
+
+            <!-- Session selection controls (visible when session selection is required) -->
+            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #e0e0e0; <?= $hasSessionReq ? '' : 'display:none;' ?>"
+                 id="stride-selection-controls">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
+                    <input type="hidden" name="ntdst_fields[selection_open]" value="0">
+                    <input type="checkbox" name="ntdst_fields[selection_open]" value="1"
+                           <?php checked($selectionOpen); ?>>
+                    <span style="font-size: 12px; font-weight: 600;"><?php esc_html_e('Sessiekeuze geopend', 'stride'); ?></span>
+                </label>
+                <div style="margin-top: 4px;">
+                    <label style="font-size: 11px; color: #646970; display: block; margin-bottom: 2px;">
+                        <?php esc_html_e('Deadline', 'stride'); ?>
+                    </label>
+                    <input type="date" name="ntdst_fields[selection_deadline]"
+                           value="<?= esc_attr($selectionDeadline) ?>"
+                           style="width: 100%; font-size: 12px;">
+                </div>
+            </div>
         </div>
+
+        <script>
+        jQuery(function($) {
+            $('input[name="ntdst_fields[requires_session_selection]"]').on('change', function() {
+                $('#stride-selection-controls').toggle($(this).is(':checked'));
+            });
+        });
+        </script>
         <?php
     }
 
@@ -188,7 +305,7 @@ final class EditionActionsMetabox
     {
         $requiresApproval = (bool) $this->editionService->requiresApproval($post->ID);
         ?>
-        <div class="stride-sidebar-section">
+        <div class="stride-sidebar-section stride-classroom-only">
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                 <input type="hidden" name="ntdst_fields[requires_approval]" value="0">
                 <input type="checkbox" name="ntdst_fields[requires_approval]" value="1"

@@ -112,6 +112,51 @@ final class EditionCPT
                 'label' => 'Notities',
                 'description' => 'Array of edition notes',
             ],
+            'requires_approval' => [
+                'type' => 'boolean',
+                'label' => 'Goedkeuring vereist',
+                'description' => 'Enrollment requires admin approval',
+            ],
+            'requires_questionnaire' => [
+                'type' => 'boolean',
+                'label' => 'Vragenlijst vereist',
+                'description' => 'Enrollment requires questionnaire completion',
+            ],
+            'requires_documents' => [
+                'type' => 'boolean',
+                'label' => 'Documenten vereist',
+                'description' => 'Enrollment requires document upload',
+            ],
+            'requires_session_selection' => [
+                'type' => 'boolean',
+                'label' => 'Sessiekeuze vereist',
+                'description' => 'Enrollment requires session selection',
+            ],
+            'selection_open' => [
+                'type' => 'boolean',
+                'label' => 'Sessiekeuze open',
+                'description' => 'Whether session selection window is open',
+            ],
+            'post_requires_evaluation' => [
+                'type' => 'boolean',
+                'label' => 'Evaluatie vereist na afloop',
+                'description' => 'Post-course evaluation questionnaire required',
+            ],
+            'post_requires_documents' => [
+                'type' => 'boolean',
+                'label' => 'Documenten vereist na afloop',
+                'description' => 'Post-course document upload required',
+            ],
+            'post_requires_approval' => [
+                'type' => 'boolean',
+                'label' => 'Goedkeuring vereist na afloop',
+                'description' => 'Post-course admin approval required',
+            ],
+            'enrollment_form' => [
+                'type' => 'text',
+                'label' => 'Inschrijfformulier',
+                'description' => 'Which enrollment form to show for this edition',
+            ],
         ];
     }
 }
