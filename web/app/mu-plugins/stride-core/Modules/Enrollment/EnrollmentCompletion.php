@@ -376,12 +376,12 @@ final class EnrollmentCompletion
     }
 
     /**
-     * Check if all user-completable tasks are done (excludes approval).
+     * Check if all user-completable tasks are done (excludes approval types).
      */
     public function areUserTasksComplete(array $tasks): bool
     {
         foreach ($tasks as $type => $task) {
-            if ($type === 'approval') {
+            if ($type === 'approval' || $type === 'post_approval') {
                 continue;
             }
             if (($task['status'] ?? 'pending') !== 'completed') {
@@ -443,6 +443,8 @@ final class EnrollmentCompletion
     /**
      * Get all registrations with pending tasks for a user.
      *
+     * Includes both pending (enrollment phase) and confirmed (post-course phase) registrations.
+     *
      * @return array<object>
      */
     public function getPendingForUser(int $userId): array
@@ -451,14 +453,26 @@ final class EnrollmentCompletion
 
         $table = RegistrationTable::getTableName();
 
-        return $wpdb->get_results($wpdb->prepare(
+        $results = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$table}
              WHERE user_id = %d
-               AND status = %s
+               AND status IN (%s, %s)
                AND completion_tasks IS NOT NULL
              ORDER BY registered_at DESC",
             $userId,
-            RegistrationStatus::Pending->value
+            RegistrationStatus::Pending->value,
+            RegistrationStatus::Confirmed->value
         ));
+
+        // Filter: only return registrations where at least one task is incomplete
+        return array_filter($results, function (object $reg): bool {
+            $tasks = json_decode($reg->completion_tasks, true) ?: [];
+            foreach ($tasks as $task) {
+                if (($task['status'] ?? 'pending') !== 'completed') {
+                    return true;
+                }
+            }
+            return false;
+        });
     }
 }
