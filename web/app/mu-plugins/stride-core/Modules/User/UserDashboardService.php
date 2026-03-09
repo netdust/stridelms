@@ -124,6 +124,8 @@ final class UserDashboardService
             };
         }
 
+        usort($active, fn($a, $b) => strcmp($a['start_date'] ?? '', $b['start_date'] ?? ''));
+
         return [$active, $completed, $cancelled];
     }
 

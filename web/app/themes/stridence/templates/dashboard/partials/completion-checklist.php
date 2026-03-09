@@ -42,15 +42,12 @@ $task_actions = [
 ];
 ?>
 
-<div class="mt-4 pt-4 border-t border-border">
-    <div class="flex items-center gap-2 mb-3">
-        <?= stridence_icon('alert-circle', 'w-4 h-4 text-amber-500') ?>
-        <span class="text-sm font-medium text-text">
-            <?= esc_html__('Inschrijving voltooien:', 'stridence') ?>
-        </span>
-    </div>
+<div class="space-y-3">
+    <span class="text-sm font-medium text-text">
+        <?= esc_html__('Inschrijving voltooien:', 'stridence') ?>
+    </span>
 
-    <ul class="space-y-2 mb-4">
+    <ul class="space-y-1.5 pl-6">
         <?php foreach ($tasks as $type => $task): ?>
             <?php
             $state  = $availability[$type]['state'] ?? 'available';
@@ -81,11 +78,13 @@ $task_actions = [
     </ul>
 
     <!-- Progress bar -->
-    <div class="h-2 bg-surface-alt rounded-full overflow-hidden">
-        <div class="h-full bg-primary rounded-full transition-all"
-             style="width: <?= esc_attr((string) $percentage) ?>%"></div>
+    <div class="pt-2">
+        <div class="h-1.5 bg-surface-alt rounded-full overflow-hidden">
+            <div class="h-full bg-primary rounded-full transition-all"
+                 style="width: <?= esc_attr((string) $percentage) ?>%"></div>
+        </div>
+        <p class="text-xs text-text-muted mt-1">
+            <?= esc_html(sprintf('%d%% voltooid', $percentage)) ?>
+        </p>
     </div>
-    <p class="text-xs text-text-muted mt-1">
-        <?= esc_html(sprintf('%d%% voltooid', $percentage)) ?>
-    </p>
 </div>

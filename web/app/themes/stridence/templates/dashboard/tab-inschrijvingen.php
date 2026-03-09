@@ -15,199 +15,21 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
-use Stride\Domain\RegistrationStatus;
-use Stride\Modules\Enrollment\RegistrationRepository;
-use Stride\Modules\Edition\EditionService;
-use Stride\Modules\Edition\SessionService;
-use Stride\Modules\Attendance\AttendanceService;
-use Stride\Modules\Edition\EditionCompletion;
-use Stride\Modules\Enrollment\EnrollmentCompletion;
-use Stride\Contracts\LMSAdapterInterface;
+use Stride\Integrations\LearnDash\LearnDashHelper;
+use Stride\Modules\User\UserDashboardService;
 
 $user    = $args['user'] ?? wp_get_current_user();
 $user_id = $user->ID;
 
-// Get services
-$registrationRepo    = ntdst_get(RegistrationRepository::class);
-$editionService      = ntdst_get(EditionService::class);
-$sessionService      = ntdst_get(SessionService::class);
-$attendanceService   = ntdst_get(AttendanceService::class);
-$completionService   = ntdst_get(EditionCompletion::class);
-$enrollmentCompletion = ntdst_get(EnrollmentCompletion::class);
-$lmsAdapter          = ntdst_get(LMSAdapterInterface::class);
+// Get all enrollment data from service
+$dashboardService = ntdst_get(UserDashboardService::class);
+$data = $dashboardService->getEnrollmentData($user_id);
 
-// Get all user registrations
-$registrations = $registrationRepo->findByUser($user_id);
-
-// Group registrations by status
-$active_editions   = [];
-$completed_items   = [];
-$cancelled_editions = [];
-$edition_course_ids = [];
-
-foreach ($registrations as $reg) {
-    // Skip trajectory-only enrollments (no edition_id)
-    if (empty($reg->edition_id)) {
-        continue;
-    }
-
-    $edition_id = (int) $reg->edition_id;
-    $edition    = $editionService->getEdition($edition_id);
-
-    if (is_wp_error($edition)) {
-        continue;
-    }
-
-    // Get edition data
-    $editionModel = ntdst_data()->get('vad_edition');
-    $course_id    = $editionService->getCourseId($edition_id);
-    $course       = $course_id ? get_post($course_id) : null;
-
-    // Track which courses are covered by edition registrations
-    if ($course_id) {
-        $edition_course_ids[] = $course_id;
-    }
-
-    $reg_data = [
-        'id'               => (int) $reg->id,
-        'edition_id'       => $edition_id,
-        'edition'          => $edition,
-        'course'           => $course,
-        'course_id'        => $course_id,
-        'course_title'     => $course ? $course->post_title : $edition->post_title,
-        'start_date'       => $editionModel->getMeta($edition_id, 'start_date', ''),
-        'venue'            => $editionModel->getMeta($edition_id, 'venue', ''),
-        'status'           => $reg->status,
-        'registered_at'    => $reg->registered_at,
-        'sessions'         => $sessionService->getSessionsForEdition($edition_id),
-        'progress'         => $completionService->getProgress($edition_id, $user_id),
-        'completion_tasks' => $reg->completion_tasks ?? null,
-        'type'             => 'edition',
-    ];
-
-    // Add attendance for each session
-    foreach ($reg_data['sessions'] as &$session) {
-        $attendance_status = $attendanceService->getStatus((int) $session['id'], $user_id);
-        $session['attendance'] = $attendance_status?->value;
-    }
-    unset($session);
-
-    $status = RegistrationStatus::tryFrom($reg->status) ?? RegistrationStatus::Confirmed;
-
-    switch ($status) {
-        case RegistrationStatus::Completed:
-            $reg_data['completed_at'] = $reg_data['start_date'];
-            $completed_items[] = $reg_data;
-            break;
-        case RegistrationStatus::Cancelled:
-            $cancelled_editions[] = $reg_data;
-            break;
-        default:
-            $active_editions[] = $reg_data;
-    }
-}
-
-// --- Online courses (not covered by an edition) ---
-$enrolled_course_ids = $lmsAdapter->getEnrolledCourses($user_id);
-$edition_course_ids  = array_unique($edition_course_ids);
-
-$active_online = [];
-
-foreach ($enrolled_course_ids as $course_id) {
-    // Skip courses already covered by an edition registration
-    if (in_array($course_id, $edition_course_ids, true)) {
-        continue;
-    }
-
-    $course = get_post($course_id);
-    if (!$course || $course->post_status !== 'publish') {
-        continue;
-    }
-
-    // Only show courses categorized as online/e-learning/webinar
-    $format_label = '';
-    $categories = get_the_terms($course_id, 'ld_course_category');
-    if ($categories && !is_wp_error($categories)) {
-        foreach ($categories as $cat) {
-            if ($cat->slug === 'online') {
-                $format_label = __('Online', 'stridence');
-            } elseif ($cat->slug === 'e-learning') {
-                $format_label = 'E-learning';
-            } elseif ($cat->slug === 'webinar') {
-                $format_label = 'Webinar';
-            }
-        }
-    }
-
-    // Skip classroom courses — they belong in the editions section
-    if ($format_label === '') {
-        continue;
-    }
-
-    $is_complete     = $lmsAdapter->isComplete($user_id, $course_id);
-    $progress        = $lmsAdapter->getProgress($user_id, $course_id);
-    $completion_date = $lmsAdapter->getCompletionDate($user_id, $course_id);
-
-    // Build resume URL: first incomplete step, or fall back to course permalink
-    $resume_url = get_permalink($course_id);
-    if (function_exists('learndash_user_progress_get_first_incomplete_step')) {
-        $step_id = learndash_user_progress_get_first_incomplete_step($user_id, $course_id);
-        if ($step_id) {
-            if (function_exists('learndash_user_progress_get_parent_incomplete_step')) {
-                $step_id = learndash_user_progress_get_parent_incomplete_step($user_id, $course_id, $step_id);
-            }
-            $step_url = function_exists('learndash_get_step_permalink')
-                ? learndash_get_step_permalink($step_id, $course_id)
-                : get_permalink($step_id);
-            if ($step_url) {
-                $resume_url = $step_url;
-            }
-        }
-    }
-
-    $course_data = [
-        'course_id'    => $course_id,
-        'course_title' => $course->post_title,
-        'course_url'   => $resume_url,
-        'progress'     => $progress,
-        'format_label' => $format_label,
-        'type'         => 'online',
-    ];
-
-    if ($is_complete) {
-        $course_data['completed_at'] = $completion_date ? date('Y-m-d', $completion_date) : '';
-        $course_data['certificate_url'] = $lmsAdapter->getCertificateLink($user_id, $course_id);
-        $completed_items[] = $course_data;
-    } else {
-        $active_online[] = $course_data;
-    }
-}
-
-// Sort completed items by date (newest first)
-usort($completed_items, function ($a, $b) {
-    $date_a = $a['completed_at'] ?? $a['start_date'] ?? '';
-    $date_b = $b['completed_at'] ?? $b['start_date'] ?? '';
-    return strcmp($date_b, $date_a);
-});
-
-// Get upcoming sessions from active edition registrations
-$upcoming_sessions = [];
-$today = date('Y-m-d');
-
-foreach ($active_editions as $reg) {
-    foreach ($reg['sessions'] as $session) {
-        if (!empty($session['date']) && $session['date'] >= $today) {
-            $upcoming_sessions[] = array_merge($session, [
-                'course_title' => $reg['course_title'],
-                'edition_id'   => $reg['edition_id'],
-            ]);
-        }
-    }
-}
-
-// Sort by date and take first 3
-usort($upcoming_sessions, fn($a, $b) => strcmp($a['date'] ?? '', $b['date'] ?? ''));
-$upcoming_sessions = array_slice($upcoming_sessions, 0, 3);
+$upcoming_sessions  = $data['upcoming_sessions'];
+$active_editions    = $data['active_editions'];
+$active_online      = $data['active_online'];
+$completed_items    = $data['completed_items'];
+$cancelled_editions = $data['cancelled_editions'];
 ?>
 
 <div class="space-y-8">
@@ -273,9 +95,19 @@ $upcoming_sessions = array_slice($upcoming_sessions, 0, 3);
                                 </div>
                             </div>
                             <?php
-                            get_template_part('partials/badge-status', null, [
-                                'status' => $reg['status'],
-                            ]);
+                            $hasTasks = !empty($reg['completion_tasks']);
+                            $tasksComplete = $hasTasks && ($reg['task_summary']['completed'] ?? 0) === ($reg['task_summary']['total'] ?? 0);
+                            $awaitingApproval = $hasTasks && $tasksComplete && !empty($reg['completion_tasks']['approval']);
+
+                            if ($reg['status'] === 'confirmed') {
+                                // Fully enrolled — no badge needed, or subtle confirmation
+                            } elseif ($reg['status'] === 'pending' && $awaitingApproval) {
+                                get_template_part('partials/badge-status', null, ['status' => 'awaiting_approval']);
+                            } elseif ($reg['status'] === 'pending' && $hasTasks) {
+                                get_template_part('partials/badge-status', null, ['status' => 'action_required']);
+                            } else {
+                                get_template_part('partials/badge-status', null, ['status' => $reg['status']]);
+                            }
                             ?>
                             <span class="shrink-0 text-text-muted transition-transform duration-200"
                                   :class="{ 'rotate-180': open }">
@@ -284,17 +116,14 @@ $upcoming_sessions = array_slice($upcoming_sessions, 0, 3);
                         </button>
 
                         <div x-show="open" x-collapse class="border-t border-border">
+                            <!-- Status + Actions -->
                             <div class="p-4 space-y-4">
                                 <?php if ($reg['status'] === 'pending' && !empty($reg['completion_tasks'])): ?>
                                     <!-- Completion Checklist -->
                                     <?php
-                                    $taskSummary = $enrollmentCompletion->getTaskSummary($reg['id']);
-                                    $edition_slug = get_post_field('post_name', $reg['edition_id']);
-                                    $complete_url = home_url('/vormingen/' . $edition_slug . '/voltooien/');
-
                                     get_template_part('templates/dashboard/partials/completion-checklist', null, [
-                                        'task_summary' => $taskSummary,
-                                        'complete_url' => $complete_url,
+                                        'task_summary' => $reg['task_summary'],
+                                        'complete_url' => $reg['complete_url'],
                                     ]);
                                     ?>
                                 <?php else: ?>
@@ -307,28 +136,28 @@ $upcoming_sessions = array_slice($upcoming_sessions, 0, 3);
                                     ]);
                                     ?>
                                 <?php endif; ?>
+                            </div>
 
-                                <!-- Session List -->
-                                <?php if (!empty($reg['sessions'])) : ?>
-                                    <div class="divide-y divide-border rounded-lg border border-border">
-                                        <?php foreach ($reg['sessions'] as $session) : ?>
-                                            <?php
-                                            get_template_part('partials/session-row', null, [
-                                                'session'    => (object) $session,
-                                                'attendance' => $session['attendance'] ?? null,
-                                            ]);
-                                            ?>
-                                        <?php endforeach; ?>
-                                    </div>
-                                <?php endif; ?>
-
-                                <!-- Actions -->
-                                <div class="flex flex-wrap gap-3 pt-2">
-                                    <a href="<?php echo esc_url(get_permalink($reg['edition_id'])); ?>"
-                                       class="btn-ghost text-sm">
-                                        <?php esc_html_e('Bekijk details', 'stridence'); ?>
-                                    </a>
+                            <!-- Session List -->
+                            <?php if (!empty($reg['sessions'])) : ?>
+                                <div class="divide-y divide-border border-t border-border">
+                                    <?php foreach ($reg['sessions'] as $session) : ?>
+                                        <?php
+                                        get_template_part('partials/session-row', null, [
+                                            'session'    => (object) $session,
+                                            'attendance' => $session['attendance'] ?? null,
+                                        ]);
+                                        ?>
+                                    <?php endforeach; ?>
                                 </div>
+                            <?php endif; ?>
+
+                            <!-- Actions -->
+                            <div class="p-4 border-t border-border">
+                                <a href="<?php echo esc_url(get_permalink($reg['edition_id'])); ?>"
+                                   class="btn-ghost text-sm">
+                                    <?php esc_html_e('Bekijk details', 'stridence'); ?>
+                                </a>
                             </div>
                         </div>
                     </div>
@@ -341,7 +170,7 @@ $upcoming_sessions = array_slice($upcoming_sessions, 0, 3);
                 'title'   => __('Geen klassikale inschrijvingen', 'stridence'),
                 'message' => __('Je hebt momenteel geen klassikale inschrijvingen. Bekijk ons aanbod en schrijf je in voor een opleiding.', 'stridence'),
                 'action'  => __('Bekijk opleidingen', 'stridence'),
-                'url'     => get_post_type_archive_link('sfwd-courses'),
+                'url'     => home_url('/klassikaal/'),
             ]);
             ?>
         <?php endif; ?>
@@ -372,8 +201,40 @@ $upcoming_sessions = array_slice($upcoming_sessions, 0, 3);
                                              style="width: <?php echo esc_attr($course['progress']); ?>%"></div>
                                     </div>
                                     <span class="text-sm text-text-muted whitespace-nowrap">
-                                        <?php echo esc_html($course['progress']); ?>%
+                                        <?php if ($course['total_lessons'] > 0) : ?>
+                                            <?php echo esc_html($course['completed_lessons'] . '/' . $course['total_lessons']); ?>
+                                        <?php else : ?>
+                                            <?php echo esc_html($course['progress']); ?>%
+                                        <?php endif; ?>
                                     </span>
+                                </div>
+                                <div class="flex flex-wrap gap-3 mt-2 text-xs text-text-muted">
+                                    <?php if ($course['last_activity']) : ?>
+                                        <span>
+                                            <?php echo esc_html(sprintf(
+                                                __('Laatst actief: %s', 'stridence'),
+                                                date_i18n('j M', $course['last_activity'])
+                                            )); ?>
+                                        </span>
+                                    <?php endif; ?>
+                                    <?php if ($course['next_drip']) : ?>
+                                        <span>
+                                            <?php echo stridence_icon('clock', 'w-3 h-3 inline-block mr-0.5'); ?>
+                                            <?php echo esc_html(sprintf(
+                                                __('Volgende les: %s', 'stridence'),
+                                                date_i18n('j M', $course['next_drip']['available_from'])
+                                            )); ?>
+                                        </span>
+                                    <?php endif; ?>
+                                    <?php if ($course['days_remaining'] !== null && $course['days_remaining'] <= 30) : ?>
+                                        <span class="text-warning">
+                                            <?php echo stridence_icon('alert-circle', 'w-3 h-3 inline-block mr-0.5'); ?>
+                                            <?php echo esc_html(sprintf(
+                                                _n('%d dag toegang over', '%d dagen toegang over', $course['days_remaining'], 'stridence'),
+                                                $course['days_remaining']
+                                            )); ?>
+                                        </span>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                             <a href="<?php echo esc_url($course['course_url']); ?>"
@@ -438,7 +299,7 @@ $upcoming_sessions = array_slice($upcoming_sessions, 0, 3);
                             <?php
                             $cert_url = $item['certificate_url'] ?? '';
                             if (!$cert_url && !empty($item['course_id'])) {
-                                $cert_url = $lmsAdapter->getCertificateLink($user_id, (int) $item['course_id']) ?: '';
+                                $cert_url = LearnDashHelper::getCertificateLink((int) $item['course_id'], $user_id);
                             }
                             ?>
                             <?php if ($cert_url) : ?>
