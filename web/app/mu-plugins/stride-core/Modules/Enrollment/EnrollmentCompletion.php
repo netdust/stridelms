@@ -254,9 +254,9 @@ final class EnrollmentCompletion
      *
      * Appends post-course tasks to existing completion_tasks JSON.
      */
-    public function initializePostCourseTasks(int $registrationId, int $editionId): void
+    public function initializePostCourseTasks(int $registrationId, int $editionId, string $postType = 'vad_edition'): void
     {
-        $postCourseTasks = $this->buildPostCourseTasks($editionId, 'vad_edition');
+        $postCourseTasks = $this->buildPostCourseTasks($editionId, $postType);
 
         if (empty($postCourseTasks)) {
             return;
@@ -264,6 +264,10 @@ final class EnrollmentCompletion
 
         $repo = ntdst_get(RegistrationRepository::class);
         $registration = $repo->find($registrationId);
+
+        if (!$registration) {
+            return;
+        }
 
         $existingTasks = $registration->completion_tasks ?? [];
         $mergedTasks = array_merge($existingTasks, $postCourseTasks);
