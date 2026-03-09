@@ -104,6 +104,7 @@ final class EditionCompletion
      * Process completion for user in edition.
      *
      * Checks attendance and triggers LearnDash course completion if requirements met.
+     * If post-course tasks are configured, initializes them and defers LD completion.
      */
     public function processCompletion(int $editionId, int $userId): true|WP_Error
     {
@@ -121,6 +122,22 @@ final class EditionCompletion
             return new WP_Error('no_course', 'Edition has no linked course');
         }
 
+        // Check if post-course tasks are configured — defer LD completion if so
+        $enrollmentCompletion = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
+        if ($enrollmentCompletion->hasPostCourseRequirements($editionId, 'vad_edition')) {
+            $repo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+            $reg = $repo->findByUserAndEdition($userId, $editionId);
+            if ($reg) {
+                $enrollmentCompletion->initializePostCourseTasks((int) $reg->id, $editionId);
+                do_action('stride/completion/attendance_complete', [
+                    'edition_id' => $editionId,
+                    'user_id' => $userId,
+                    'registration_id' => (int) $reg->id,
+                ]);
+            }
+            return true; // Defer LD completion — will happen when all post-course tasks done
+        }
+
         $lmsAdapter = ntdst_get(LMSAdapterInterface::class);
 
         // Check if already complete in LearnDash
@@ -129,6 +146,37 @@ final class EditionCompletion
         }
 
         // Mark complete in LearnDash
+        if (function_exists('learndash_process_mark_complete')) {
+            learndash_process_mark_complete($userId, $courseId);
+        }
+
+        do_action('stride/completion/completed', [
+            'edition_id' => $editionId,
+            'user_id' => $userId,
+            'course_id' => $courseId,
+        ]);
+
+        return true;
+    }
+
+    /**
+     * Mark course complete in LearnDash (final step, no task check).
+     *
+     * Called after all post-course tasks are done.
+     */
+    public function processCompletionFinal(int $editionId, int $userId): true|WP_Error
+    {
+        $editionService = ntdst_get(EditionService::class);
+        $courseId = $editionService->getCourseId($editionId);
+        if (!$courseId) {
+            return new WP_Error('no_course', 'Edition has no linked course');
+        }
+
+        $lmsAdapter = ntdst_get(LMSAdapterInterface::class);
+        if ($lmsAdapter->isComplete($userId, $courseId)) {
+            return true;
+        }
+
         if (function_exists('learndash_process_mark_complete')) {
             learndash_process_mark_complete($userId, $courseId);
         }
