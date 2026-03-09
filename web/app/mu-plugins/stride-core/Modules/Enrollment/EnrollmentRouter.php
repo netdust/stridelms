@@ -103,6 +103,13 @@ final class EnrollmentRouter
         );
 
         $isOnline = $editionService->isOnline($edition->ID);
+        $formType = $editionService->getEnrollmentForm($edition->ID);
+
+        // Direct enrollment: skip form, enroll immediately
+        if ($formType === 'direct') {
+            $this->handleDirectEnrollment($edition, $mode);
+            return;
+        }
 
         ntdst_response()
             ->with('item', $edition)
@@ -110,6 +117,7 @@ final class EnrollmentRouter
             ->with('enrollment_open', $mode !== 'closed')
             ->with('enrollment_mode', $mode)
             ->with('is_online', $isOnline)
+            ->with('form_type', $formType)
             ->render('enrollment/form');
     }
 
@@ -145,16 +153,43 @@ final class EnrollmentRouter
             $regs = $repo->findByUser($userId);
             $registration = null;
             foreach ($regs as $r) {
-                if ((int) ($r->trajectory_id ?? 0) === $post->ID && $r->status === 'pending') {
+                if ((int) ($r->trajectory_id ?? 0) === $post->ID && in_array($r->status, ['pending', 'confirmed'], true)) {
                     $registration = $r;
                     break;
                 }
             }
         }
 
-        if (!$registration || $registration->status !== 'pending' || empty($registration->completion_tasks)) {
+        // Allow both pending (enrollment tasks) and confirmed (post-course tasks)
+        $allowedStatuses = ['pending', 'confirmed'];
+        if (!$registration || !in_array($registration->status, $allowedStatuses, true) || empty($registration->completion_tasks)) {
             wp_safe_redirect(get_permalink($post->ID));
             exit;
+        }
+
+        // Check that at least one task is incomplete
+        $tasks = is_string($registration->completion_tasks)
+            ? json_decode($registration->completion_tasks, true) ?: []
+            : (array) $registration->completion_tasks;
+        $hasIncomplete = false;
+        foreach ($tasks as $task) {
+            if (($task['status'] ?? 'pending') !== 'completed') {
+                $hasIncomplete = true;
+                break;
+            }
+        }
+        if (!$hasIncomplete) {
+            wp_safe_redirect(get_permalink($post->ID));
+            exit;
+        }
+
+        // Determine phase for template
+        $phase = 'enrollment';
+        foreach ($tasks as $task) {
+            if (($task['phase'] ?? 'enrollment') === 'post_course' && ($task['status'] ?? 'pending') !== 'completed') {
+                $phase = 'post_course';
+                break;
+            }
         }
 
         $completionService = ntdst_get(EnrollmentCompletion::class);
@@ -165,10 +200,37 @@ final class EnrollmentRouter
             ->with('type', $type)
             ->with('registration', $registration)
             ->with('task_summary', $taskSummary)
+            ->with('phase', $phase)
             ->render('forms/completion');
     }
 
     // === Helpers ===
+
+    private function handleDirectEnrollment(\WP_Post $edition, string $mode): void
+    {
+        if ($mode === 'closed') {
+            wp_safe_redirect(get_permalink($edition->ID));
+            exit;
+        }
+
+        $userId = get_current_user_id();
+        $enrollmentService = ntdst_get(EnrollmentService::class);
+
+        // Interest mode: register interest, not full enrollment
+        $options = $mode === 'interest' ? ['status_override' => 'interest'] : [];
+
+        $result = $enrollmentService->enroll($userId, $edition->ID, $options);
+
+        if (is_wp_error($result)) {
+            // Already enrolled or other error — redirect to edition page
+            wp_safe_redirect(get_permalink($edition->ID));
+            exit;
+        }
+
+        // Success — redirect to edition page with confirmation
+        wp_safe_redirect(add_query_arg('enrolled', '1', get_permalink($edition->ID)));
+        exit;
+    }
 
     private function computeEnrollmentMode(OfferingStatus $status, bool $requiresApproval, bool $enrollmentOpen): string
     {
