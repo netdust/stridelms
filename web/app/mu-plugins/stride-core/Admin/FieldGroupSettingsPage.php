@@ -92,10 +92,12 @@ final class FieldGroupSettingsPage
 
             wp_localize_script('stride-field-groups', 'strideFieldGroups', [
                 'assignments' => $this->getAssignmentOptions(),
+                'userMetaFields' => array_keys($this->getUserMetaFieldNames()),
                 'i18n' => [
                     'confirmDeleteGroup' => __('Groep en alle velden verwijderen?', 'stride'),
                     'searchPlaceholder'  => __('Zoek editie of traject...', 'stride'),
                     'noResults'          => __('Geen resultaten', 'stride'),
+                    'userMetaWarning'    => __('Let op: dit veld overschrijft gebruikersgegevens bij inschrijving.', 'stride'),
                 ],
             ]);
         }
@@ -385,7 +387,13 @@ final class FieldGroupSettingsPage
             return [];
         }
 
-        $nextId = 1;
+        $maxId = 0;
+        foreach ($rawGroups as $g) {
+            if (preg_match('/^fg_(\d+)$/', $g['id'] ?? '', $m)) {
+                $maxId = max($maxId, (int) $m[1]);
+            }
+        }
+        $nextId = $maxId + 1;
 
         foreach ($rawGroups as $group) {
             $label = sanitize_text_field($group['label'] ?? '');
@@ -469,7 +477,7 @@ final class FieldGroupSettingsPage
         // Editions
         $editions = get_posts([
             'post_type' => 'vad_edition',
-            'posts_per_page' => 100,
+            'posts_per_page' => 500,
             'orderby' => 'title',
             'order' => 'ASC',
             'post_status' => ['publish', 'draft'],
@@ -478,10 +486,13 @@ final class FieldGroupSettingsPage
         $editionOpts = [];
         foreach ($editions as $edition) {
             $courseId = (int) get_post_meta($edition->ID, '_ntdst_course_id', true);
-            $courseTitle = $courseId ? get_the_title($courseId) : '';
-            $label = $edition->post_title;
-            if ($courseTitle) {
-                $label = $courseTitle . ' — ' . $label;
+            $courseTitle = $courseId ? get_the_title($courseId) : $edition->post_title;
+            $startDate = get_post_meta($edition->ID, '_ntdst_start_date', true);
+            $dateSuffix = $startDate ? date_i18n('M Y', strtotime($startDate)) : '';
+
+            $label = $courseTitle;
+            if ($dateSuffix) {
+                $label .= ' (' . $dateSuffix . ')';
             }
 
             $editionOpts[] = [
@@ -500,7 +511,7 @@ final class FieldGroupSettingsPage
         // Trajectories
         $trajectories = get_posts([
             'post_type' => 'vad_trajectory',
-            'posts_per_page' => 100,
+            'posts_per_page' => 500,
             'orderby' => 'title',
             'order' => 'ASC',
             'post_status' => ['publish', 'draft'],
@@ -522,6 +533,25 @@ final class FieldGroupSettingsPage
         }
 
         return $options;
+    }
+
+    /**
+     * Field names that map to user meta (and will overwrite on enrollment).
+     */
+    private function getUserMetaFieldNames(): array
+    {
+        return [
+            'phone' => 'phone',
+            'organisation' => 'organisation',
+            'department' => 'department',
+            'vat_number' => 'billing_vat',
+            'address' => 'billing_address_1',
+            'postal_code' => 'billing_postcode',
+            'city' => 'billing_city',
+            'invoice_email' => 'invoice_email',
+            'gln_number' => 'gln_number',
+            'company' => 'billing_company',
+        ];
     }
 
     /**

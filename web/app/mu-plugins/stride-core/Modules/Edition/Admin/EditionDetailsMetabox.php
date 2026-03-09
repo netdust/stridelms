@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stride\Modules\Edition\Admin;
 
+use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use WP_Post;
@@ -35,7 +36,6 @@ final class EditionDetailsMetabox
         $speakers = $this->repository->getField($post->ID, 'speakers', '');
         $price = (int) $this->repository->getField($post->ID, 'price', 0);
         $priceNonMember = (int) $this->repository->getField($post->ID, 'price_non_member', 0);
-
         // Get all courses for dropdown
         $courses = $this->getCourses();
         ?>
@@ -45,11 +45,14 @@ final class EditionDetailsMetabox
                     <button type="button" class="stride-tab active" data-tab="algemeen">
                         <?php esc_html_e('Algemeen', 'stride'); ?>
                     </button>
-                    <button type="button" class="stride-tab" data-tab="informatie">
+                    <button type="button" class="stride-tab stride-classroom-only" data-tab="informatie">
                         <?php esc_html_e('Informatie', 'stride'); ?>
                     </button>
                     <button type="button" class="stride-tab" data-tab="prijzen">
                         <?php esc_html_e('Prijzen', 'stride'); ?>
+                    </button>
+                    <button type="button" class="stride-tab" data-tab="cursusinstellingen" style="display:none;">
+                        <?php esc_html_e('Cursusinstellingen', 'stride'); ?>
                     </button>
                 </div>
 
@@ -67,6 +70,12 @@ final class EditionDetailsMetabox
                 <div class="stride-tab-content" data-tab="prijzen">
                     <?php $this->renderPrijzenTab($price, $priceNonMember); ?>
                 </div>
+
+                <!-- Tab: Cursusinstellingen (online only, shown via tab system) -->
+                <div class="stride-tab-content" data-tab="cursusinstellingen">
+                    <?php $this->renderCursusinstellingenTab($courseId); ?>
+                </div>
+
             </div>
         </div>
         <?php
@@ -92,31 +101,36 @@ final class EditionDetailsMetabox
                     </div>
                 </div>
 
-                <h4><?php esc_html_e('Datum & Tijd', 'stride'); ?></h4>
-                <div class="stride-field-row two-col">
-                    <div class="stride-field">
-                        <label for="edition_start_date"><?php esc_html_e('Startdatum', 'stride'); ?></label>
-                        <input type="date" name="ntdst_fields[start_date]" id="edition_start_date"
-                               value="<?php echo esc_attr($startDate); ?>">
-                    </div>
-                    <div class="stride-field">
-                        <label for="edition_end_date"><?php esc_html_e('Einddatum', 'stride'); ?></label>
-                        <input type="date" name="ntdst_fields[end_date]" id="edition_end_date"
-                               value="<?php echo esc_attr($endDate); ?>">
+                <div class="stride-classroom-only">
+                    <h4><?php esc_html_e('Datum & Tijd', 'stride'); ?></h4>
+                    <div class="stride-field-row two-col">
+                        <div class="stride-field">
+                            <label for="edition_start_date"><?php esc_html_e('Startdatum', 'stride'); ?></label>
+                            <input type="date" name="ntdst_fields[start_date]" id="edition_start_date"
+                                   value="<?php echo esc_attr($startDate); ?>">
+                        </div>
+                        <div class="stride-field">
+                            <label for="edition_end_date"><?php esc_html_e('Einddatum', 'stride'); ?></label>
+                            <input type="date" name="ntdst_fields[end_date]" id="edition_end_date"
+                                   value="<?php echo esc_attr($endDate); ?>">
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div class="stride-edition-side">
-                <h4><?php esc_html_e('Locatie & Capaciteit', 'stride'); ?></h4>
-                <div class="stride-field-row">
-                    <div class="stride-field">
-                        <label for="edition_venue"><?php esc_html_e('Locatie', 'stride'); ?></label>
-                        <input type="text" name="ntdst_fields[venue]" id="edition_venue"
-                               value="<?php echo esc_attr($venue); ?>"
-                               placeholder="<?php esc_attr_e('bijv. Online / Kantoor Gent', 'stride'); ?>">
+                <div class="stride-classroom-only">
+                    <h4><?php esc_html_e('Locatie', 'stride'); ?></h4>
+                    <div class="stride-field-row">
+                        <div class="stride-field">
+                            <label for="edition_venue"><?php esc_html_e('Locatie', 'stride'); ?></label>
+                            <input type="text" name="ntdst_fields[venue]" id="edition_venue"
+                                   value="<?php echo esc_attr($venue); ?>"
+                                   placeholder="<?php esc_attr_e('bijv. Online / Kantoor Gent', 'stride'); ?>">
+                        </div>
                     </div>
                 </div>
+                <h4><?php esc_html_e('Capaciteit', 'stride'); ?></h4>
                 <div class="stride-field-row">
                     <div class="stride-field">
                         <label for="edition_capacity"><?php esc_html_e('Capaciteit', 'stride'); ?></label>
@@ -174,6 +188,119 @@ final class EditionDetailsMetabox
                     </div>
                 </div>
             </div>
+        </div>
+        <?php
+    }
+
+    private function renderCursusinstellingenTab(int $courseId): void
+    {
+        if (!$courseId || !LearnDashHelper::isActive()) {
+            ?>
+            <p class="description"><?php esc_html_e('Selecteer eerst een cursus om de instellingen te zien.', 'stride'); ?></p>
+            <?php
+            return;
+        }
+
+        $accessMode = LearnDashHelper::getAccessMode($courseId);
+        $price = LearnDashHelper::getCoursePrice($courseId);
+        $points = LearnDashHelper::getCoursePoints($courseId);
+        $hasExpiration = LearnDashHelper::hasExpiration($courseId);
+        $expireDays = $hasExpiration ? (int) learndash_get_setting($courseId, 'expire_access_days') : 0;
+        $hasPrereqs = LearnDashHelper::hasPrerequisites($courseId);
+        $prereqs = $hasPrereqs ? LearnDashHelper::getPrerequisites($courseId) : [];
+        $hasDrip = LearnDashHelper::hasDripFeed($courseId);
+        $hasCert = LearnDashHelper::hasCertificate($courseId);
+        $startDate = LearnDashHelper::getStartDate($courseId);
+        $endDate = LearnDashHelper::getEndDate($courseId);
+        $lessons = LearnDashHelper::getLessons($courseId);
+        $materials = LearnDashHelper::getCourseMaterials($courseId);
+
+        $modeLabels = [
+            'open' => __('Open (iedereen)', 'stride'),
+            'free' => __('Gratis (registratie vereist)', 'stride'),
+            'paynow' => __('Betaald', 'stride'),
+            'subscribe' => __('Abonnement', 'stride'),
+            'closed' => __('Gesloten (custom)', 'stride'),
+        ];
+
+        $editUrl = get_edit_post_link($courseId);
+        ?>
+        <div class="stride-readonly-settings">
+            <p class="description" style="margin-bottom: 12px;">
+                <?php esc_html_e('Alleen-lezen overzicht van de LearnDash cursusinstellingen.', 'stride'); ?>
+                <?php if ($editUrl): ?>
+                    <a href="<?php echo esc_url($editUrl); ?>" target="_blank"><?php esc_html_e('Bewerk cursus', 'stride'); ?> &rarr;</a>
+                <?php endif; ?>
+            </p>
+
+            <table class="widefat striped" style="border:0;">
+                <tbody>
+                    <tr>
+                        <th style="width:180px;"><?php esc_html_e('Toegangsmodus', 'stride'); ?></th>
+                        <td><?php echo esc_html($modeLabels[$accessMode] ?? $accessMode); ?></td>
+                    </tr>
+                    <?php if ($price['price']): ?>
+                    <tr>
+                        <th><?php esc_html_e('Prijs (LD)', 'stride'); ?></th>
+                        <td><?php echo esc_html(LearnDashHelper::formatPrice($price)); ?></td>
+                    </tr>
+                    <?php endif; ?>
+                    <tr>
+                        <th><?php esc_html_e('Lessen', 'stride'); ?></th>
+                        <td><?php echo esc_html(count($lessons)); ?></td>
+                    </tr>
+                    <?php if ($points > 0): ?>
+                    <tr>
+                        <th><?php esc_html_e('Punten', 'stride'); ?></th>
+                        <td><?php echo esc_html($points); ?></td>
+                    </tr>
+                    <?php endif; ?>
+                    <?php if ($hasExpiration): ?>
+                    <tr>
+                        <th><?php esc_html_e('Toegang verloopt', 'stride'); ?></th>
+                        <td><?php echo esc_html(sprintf(_n('%d dag', '%d dagen', $expireDays, 'stride'), $expireDays)); ?></td>
+                    </tr>
+                    <?php endif; ?>
+                    <?php if ($startDate || $endDate): ?>
+                    <tr>
+                        <th><?php esc_html_e('Beschikbaarheid', 'stride'); ?></th>
+                        <td>
+                            <?php if ($startDate): ?>
+                                <?php echo esc_html(date_i18n('j M Y', $startDate)); ?>
+                            <?php endif; ?>
+                            <?php if ($startDate && $endDate): ?> – <?php endif; ?>
+                            <?php if ($endDate): ?>
+                                <?php echo esc_html(date_i18n('j M Y', $endDate)); ?>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <?php endif; ?>
+                    <tr>
+                        <th><?php esc_html_e('Vereisten', 'stride'); ?></th>
+                        <td>
+                            <?php if ($hasPrereqs && !empty($prereqs)): ?>
+                                <?php echo esc_html(implode(', ', array_column($prereqs, 'title'))); ?>
+                            <?php else: ?>
+                                <?php esc_html_e('Geen', 'stride'); ?>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><?php esc_html_e('Drip-feed', 'stride'); ?></th>
+                        <td><?php echo $hasDrip ? esc_html__('Ja', 'stride') : esc_html__('Nee', 'stride'); ?></td>
+                    </tr>
+                    <tr>
+                        <th><?php esc_html_e('Certificaat', 'stride'); ?></th>
+                        <td><?php echo $hasCert ? esc_html__('Ja', 'stride') : esc_html__('Nee', 'stride'); ?></td>
+                    </tr>
+                    <?php if ($materials): ?>
+                    <tr>
+                        <th><?php esc_html_e('Materialen', 'stride'); ?></th>
+                        <td><?php echo wp_kses_post($materials); ?></td>
+                    </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
         </div>
         <?php
     }

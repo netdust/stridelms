@@ -176,9 +176,9 @@ final class QuoteOverviewMetabox
         ?>
         <div class="stride-field-row two-col">
             <div class="stride-field">
-                <label for="billing_organisation"><?php esc_html_e('Organisatie', 'stride'); ?></label>
-                <input type="text" id="billing_organisation" name="billing[organisation]"
-                       value="<?php echo esc_attr($billing['organisation'] ?? ''); ?>" <?php echo $readonly; ?>>
+                <label for="billing_company"><?php esc_html_e('Organisatie', 'stride'); ?></label>
+                <input type="text" id="billing_company" name="billing[company]"
+                       value="<?php echo esc_attr($billing['company'] ?? ''); ?>" <?php echo $readonly; ?>>
             </div>
             <div class="stride-field">
                 <label for="billing_email"><?php esc_html_e('Email', 'stride'); ?></label>
@@ -387,7 +387,7 @@ final class QuoteOverviewMetabox
                     <?php
                     $editions = get_posts([
                         'post_type' => 'vad_edition',
-                        'posts_per_page' => 50,
+                        'posts_per_page' => 200,
                         'orderby' => 'meta_value',
                         'meta_key' => 'start_date',
                         'order' => 'DESC',

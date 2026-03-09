@@ -75,9 +75,12 @@ final class EditionAdminController
         add_filter('manage_edit-' . EditionCPT::POST_TYPE . '_sortable_columns', [$this, 'defineSortableColumns']);
         add_action('pre_get_posts', [$this, 'handleColumnSorting']);
 
-        // Format filter
-        add_action('restrict_manage_posts', [$this, 'renderFormatFilter']);
-        add_action('pre_get_posts', [$this, 'applyFormatFilter']);
+        // List table filters
+        add_action('restrict_manage_posts', [$this, 'renderListFilters']);
+        add_action('pre_get_posts', [$this, 'applyListFilters']);
+
+        // Remove bulk actions
+        add_filter('bulk_actions-edit-' . EditionCPT::POST_TYPE, [$this, 'removeBulkActions']);
     }
 
     public function registerMetaboxes(): void
@@ -95,7 +98,7 @@ final class EditionAdminController
             'high'
         );
 
-        // Sessions metabox (only for existing editions)
+        // Sessions metabox
         add_meta_box(
             'stride_edition_sessions',
             __('Sessies', 'stride'),
@@ -188,6 +191,7 @@ final class EditionAdminController
                 'nonce' => wp_create_nonce(self::NONCE_AJAX),
                 'editionId' => $post ? $post->ID : 0,
                 'currentUser' => $currentUser->display_name ?: $currentUser->user_login,
+                'onlineCourseIds' => $this->getOnlineCourseIds(),
                 'i18n' => [
                     'searchCourse' => __('Zoek cursus...', 'stride'),
                     'noResults' => __('Geen resultaten gevonden', 'stride'),
@@ -211,6 +215,26 @@ final class EditionAdminController
                 ],
             ]);
         }
+    }
+
+    /**
+     * Get IDs of courses categorized as online.
+     * @return int[]
+     */
+    private function getOnlineCourseIds(): array
+    {
+        $courses = get_posts([
+            'post_type' => 'sfwd-courses',
+            'posts_per_page' => 500,
+            'fields' => 'ids',
+            'tax_query' => [[
+                'taxonomy' => 'stride_format',
+                'field' => 'slug',
+                'terms' => ['online', 'webinar', 'e-learning'],
+            ]],
+        ]);
+
+        return array_map('intval', $courses);
     }
 
     public function renderDetailsMetabox(WP_Post $post): void
@@ -737,25 +761,84 @@ final class EditionAdminController
         }
     }
 
-    // === Format Filter ===
+    // === List Table Filters & Bulk Actions ===
 
-    public function renderFormatFilter(string $postType): void
+    /**
+     * Remove bulk actions from edition list table.
+     */
+    public function removeBulkActions(array $actions): array
+    {
+        return [];
+    }
+
+    /**
+     * Render filter dropdowns: Course, Status, Format.
+     */
+    public function renderListFilters(string $postType): void
     {
         if ($postType !== EditionCPT::POST_TYPE) {
             return;
         }
 
-        $current = sanitize_text_field($_GET['stride_format'] ?? '');
+        // Course filter
+        $currentCourse = (int) ($_GET['stride_course'] ?? 0);
+        $courses = get_posts([
+            'post_type'      => 'sfwd-courses',
+            'posts_per_page' => 500,
+            'post_status'    => 'publish',
+            'orderby'        => 'title',
+            'order'          => 'ASC',
+        ]);
         ?>
-        <select name="stride_format">
+        <select name="stride_course">
+            <option value=""><?php esc_html_e('Alle cursussen', 'stride'); ?></option>
+            <?php foreach ($courses as $course) : ?>
+                <option value="<?php echo esc_attr($course->ID); ?>" <?php selected($currentCourse, $course->ID); ?>>
+                    <?php echo esc_html($course->post_title); ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+        <?php
+
+        // Status filter
+        $currentStatus = sanitize_text_field($_GET['stride_status'] ?? '');
+        $statuses = [
+            'draft'        => __('Concept', 'stride'),
+            'announcement' => __('Vooraankondiging', 'stride'),
+            'open'         => __('Open', 'stride'),
+            'full'         => __('Volzet', 'stride'),
+            'in_progress'  => __('Lopend', 'stride'),
+            'postponed'    => __('Uitgesteld', 'stride'),
+            'cancelled'    => __('Geannuleerd', 'stride'),
+            'completed'    => __('Afgerond', 'stride'),
+            'archived'     => __('Gearchiveerd', 'stride'),
+        ];
+        ?>
+        <select name="stride_status">
+            <option value=""><?php esc_html_e('Alle statussen', 'stride'); ?></option>
+            <?php foreach ($statuses as $value => $label) : ?>
+                <option value="<?php echo esc_attr($value); ?>" <?php selected($currentStatus, $value); ?>>
+                    <?php echo esc_html($label); ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+        <?php
+
+        // Format filter (name must NOT match taxonomy slug to avoid WP auto tax_query)
+        $currentFormat = sanitize_text_field($_GET['edition_format'] ?? '');
+        ?>
+        <select name="edition_format">
             <option value=""><?php esc_html_e('Alle formaten', 'stride'); ?></option>
-            <option value="online" <?php selected($current, 'online'); ?>><?php esc_html_e('Online', 'stride'); ?></option>
-            <option value="classroom" <?php selected($current, 'classroom'); ?>><?php esc_html_e('Klassikaal', 'stride'); ?></option>
+            <option value="online" <?php selected($currentFormat, 'online'); ?>><?php esc_html_e('Online', 'stride'); ?></option>
+            <option value="classroom" <?php selected($currentFormat, 'classroom'); ?>><?php esc_html_e('Klassikaal', 'stride'); ?></option>
         </select>
         <?php
     }
 
-    public function applyFormatFilter(\WP_Query $query): void
+    /**
+     * Apply list filters to the query.
+     */
+    public function applyListFilters(\WP_Query $query): void
     {
         if (!is_admin() || !$query->is_main_query()) {
             return;
@@ -764,42 +847,65 @@ final class EditionAdminController
             return;
         }
 
-        $format = sanitize_text_field($_GET['stride_format'] ?? '');
-        if (!$format) {
-            return;
+        $metaQuery = $query->get('meta_query') ?: [];
+
+        // Course filter
+        $courseId = (int) ($_GET['stride_course'] ?? 0);
+        if ($courseId > 0) {
+            $metaQuery[] = [
+                'key'     => '_ntdst_course_id',
+                'value'   => $courseId,
+                'compare' => '=',
+                'type'    => 'NUMERIC',
+            ];
         }
 
-        // Get all course IDs that match the format
-        $onlineSlugs = ['online', 'webinar', 'e-learning'];
-        $courseArgs = [
-            'post_type' => 'sfwd-courses',
-            'posts_per_page' => -1,
-            'fields' => 'ids',
-            'tax_query' => [
-                [
-                    'taxonomy' => 'ld_course_category',
-                    'field' => 'slug',
-                    'terms' => $onlineSlugs,
-                    'operator' => $format === 'online' ? 'IN' : 'NOT IN',
+        // Status filter
+        $status = sanitize_text_field($_GET['stride_status'] ?? '');
+        if ($status) {
+            $metaQuery[] = [
+                'key'     => '_ntdst_status',
+                'value'   => $status,
+                'compare' => '=',
+            ];
+        }
+
+        // Format filter
+        $format = sanitize_text_field($_GET['edition_format'] ?? '');
+        if ($format) {
+            $onlineSlugs = ['online', 'webinar', 'e-learning'];
+
+            $courseIds = get_posts([
+                'post_type'      => 'sfwd-courses',
+                'posts_per_page' => 500,
+                'fields'         => 'ids',
+                'tax_query'      => [
+                    [
+                        'taxonomy' => 'stride_format',
+                        'field'    => 'slug',
+                        'terms'    => $onlineSlugs,
+                        'operator' => $format === 'online' ? 'IN' : 'NOT IN',
+                    ],
                 ],
-            ],
-        ];
-        $courseIds = get_posts($courseArgs);
+            ]);
 
-        if (empty($courseIds)) {
-            // No matching courses — force empty result
-            $query->set('post__in', [0]);
-            return;
+            if (empty($courseIds)) {
+                $query->set('post__in', [0]);
+                return;
+            }
+
+            $metaQuery[] = [
+                'key'     => '_ntdst_course_id',
+                'value'   => $courseIds,
+                'compare' => 'IN',
+                'type'    => 'NUMERIC',
+            ];
         }
 
-        $existing = $query->get('meta_query') ?: [];
-        $existing[] = [
-            'key' => '_ntdst_course_id',
-            'value' => $courseIds,
-            'compare' => 'IN',
-            'type' => 'NUMERIC',
-        ];
-        $query->set('meta_query', $existing);
+        if (!empty($metaQuery)) {
+            $query->set('meta_query', $metaQuery);
+        }
+
     }
 
     // === Helper Methods ===
@@ -843,6 +949,7 @@ final class EditionAdminController
                 $data['post_title'] = sanitize_text_field($input['title'] ?? '');
                 $data['webinar_link'] = esc_url_raw($input['webinar_link'] ?? '');
                 $data['description'] = sanitize_textarea_field($input['description'] ?? '');
+                $data['location'] = 'Online';
                 break;
 
             case SessionType::Online:
@@ -853,6 +960,7 @@ final class EditionAdminController
                     $data['post_title'] = $lesson ? $lesson->post_title : '';
                     $data['lesson_ids'] = [$lessonId];
                 }
+                $data['location'] = 'Online';
                 break;
         }
 
@@ -912,6 +1020,7 @@ final class EditionAdminController
                     <?php echo esc_html($type->label()); ?>
                 </span>
             </td>
+            <td class="column-slot"><?php echo esc_html($session['slot'] ? ($session['slot']) : '-'); ?></td>
             <td class="column-location"><?php echo esc_html($session['location'] ?: '-'); ?></td>
             <td class="column-actions">
                 <button type="button" class="button-link stride-edit-session" title="<?php esc_attr_e('Bewerken', 'stride'); ?>">
@@ -999,7 +1108,6 @@ final class EditionAdminController
     public function defineListColumns(array $columns): array
     {
         $newColumns = [];
-        $newColumns['cb'] = $columns['cb'] ?? '<input type="checkbox" />';
         $newColumns['title'] = __('Editie', 'stride');
         $newColumns['course'] = __('Cursus', 'stride');
         $newColumns['format'] = __('Formaat', 'stride');
@@ -1036,7 +1144,7 @@ final class EditionAdminController
                 $courseId = (int) $this->editionRepository->getField($postId, 'course_id', 0);
                 $isOnline = false;
                 if ($courseId) {
-                    $cats = get_the_terms($courseId, 'ld_course_category');
+                    $cats = get_the_terms($courseId, 'stride_format');
                     if ($cats && !is_wp_error($cats)) {
                         foreach ($cats as $cat) {
                             if (in_array($cat->slug, ['online', 'webinar', 'e-learning'], true)) {
@@ -1085,12 +1193,16 @@ final class EditionAdminController
             case 'status':
                 $status = $this->editionRepository->getField($postId, 'status', 'draft');
                 $statusLabels = [
-                    'draft' => ['label' => __('Concept', 'stride'), 'color' => '#787c82'],
-                    'open' => ['label' => __('Open', 'stride'), 'color' => '#00a32a'],
-                    'full' => ['label' => __('Vol', 'stride'), 'color' => '#dba617'],
-                    'closed' => ['label' => __('Gesloten', 'stride'), 'color' => '#d63638'],
-                    'cancelled' => ['label' => __('Geannuleerd', 'stride'), 'color' => '#d63638'],
-                    'completed' => ['label' => __('Afgerond', 'stride'), 'color' => '#2271b1'],
+                    'draft'        => ['label' => __('Concept', 'stride'),         'color' => '#787c82'],
+                    'announcement' => ['label' => __('Vooraankondiging', 'stride'), 'color' => '#dba617'],
+                    'open'         => ['label' => __('Open', 'stride'),            'color' => '#00a32a'],
+                    'few_spots'    => ['label' => __('Bijna volzet', 'stride'),    'color' => '#dba617'],
+                    'full'         => ['label' => __('Volzet', 'stride'),          'color' => '#dba617'],
+                    'in_progress'  => ['label' => __('Lopend', 'stride'),          'color' => '#2271b1'],
+                    'postponed'    => ['label' => __('Uitgesteld', 'stride'),      'color' => '#dba617'],
+                    'cancelled'    => ['label' => __('Geannuleerd', 'stride'),     'color' => '#d63638'],
+                    'completed'    => ['label' => __('Afgerond', 'stride'),        'color' => '#646970'],
+                    'archived'     => ['label' => __('Gearchiveerd', 'stride'),    'color' => '#787c82'],
                 ];
                 $config = $statusLabels[$status] ?? ['label' => ucfirst($status), 'color' => '#787c82'];
                 echo '<span style="display:inline-block;padding:2px 8px;border-radius:3px;background:' . $config['color'] . '20;color:' . $config['color'] . ';font-size:12px;">';

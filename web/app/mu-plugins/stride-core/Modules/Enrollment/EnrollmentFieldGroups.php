@@ -66,7 +66,7 @@ final class EnrollmentFieldGroups
         foreach ($allGroups as $group) {
             $assignments = $group['assignments'] ?? [];
 
-            if (in_array($postId, $assignments, false) || ($wildcard && in_array($wildcard, $assignments, true))) {
+            if (in_array($postId, $assignments, true) || ($wildcard && in_array($wildcard, $assignments, true))) {
                 $matched[] = $group;
             }
         }
@@ -136,7 +136,7 @@ final class EnrollmentFieldGroups
 
         $courses = get_posts([
             'post_type' => 'sfwd-courses',
-            'posts_per_page' => -1,
+            'posts_per_page' => 500,
             'fields' => 'ids',
             'meta_query' => [
                 'relation' => 'OR',
@@ -192,7 +192,7 @@ final class EnrollmentFieldGroups
     {
         $editions = get_posts([
             'post_type' => 'vad_edition',
-            'posts_per_page' => -1,
+            'posts_per_page' => 500,
             'fields' => 'ids',
             'meta_query' => [
                 ['key' => '_ntdst_course_id', 'value' => $courseId, 'type' => 'NUMERIC'],

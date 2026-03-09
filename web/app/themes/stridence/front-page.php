@@ -19,7 +19,7 @@ get_header();
                 <?php esc_html_e('Versterk je kennis en vaardigheden met onze erkende trainingen. Van ouderenzorg tot GGZ, van webinar tot meerdaagse opleiding.', 'stridence'); ?>
             </p>
             <div class="flex flex-wrap gap-4">
-                <a href="<?php echo esc_url(home_url('/cursussen/')); ?>" class="btn-primary bg-white text-primary hover:bg-white/90">
+                <a href="<?php echo esc_url(home_url('/klassikaal/')); ?>" class="btn-primary bg-white text-primary hover:bg-white/90">
                     <?php esc_html_e('Bekijk opleidingen', 'stridence'); ?>
                 </a>
                 <a href="<?php echo esc_url(home_url('/trajecten/')); ?>" class="btn-ghost text-white hover:bg-white/10">
@@ -30,54 +30,114 @@ get_header();
     </div>
 </section>
 
-<!-- Quick Category Links -->
+<!-- Learning Mode Selector -->
 <section class="section">
     <div class="container">
         <h2 class="font-heading text-2xl font-bold text-center mb-8">
-            <?php esc_html_e('Opleidingen per domein', 'stridence'); ?>
+            <?php esc_html_e('Hoe wil je leren?', 'stridence'); ?>
         </h2>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="grid md:grid-cols-3 gap-6">
             <?php
-            $domains = get_terms([
-                'taxonomy' => 'stride_domain',
-                'hide_empty' => true,
-            ]);
+            // Count trajectories
+            $trajectory_count = wp_count_posts('vad_trajectory');
+            $trajectory_total = isset($trajectory_count->publish) ? (int) $trajectory_count->publish : 0;
 
-            if (!is_wp_error($domains) && !empty($domains)) :
-                foreach ($domains as $domain) :
+            // Count open editions (klassikaal) — only need the count, not the posts
+            $edition_query = new WP_Query([
+                'post_type'      => 'vad_edition',
+                'post_status'    => 'publish',
+                'posts_per_page' => 1,
+                'fields'         => 'ids',
+                'meta_query'     => [
+                    [
+                        'key'     => '_ntdst_status',
+                        'value'   => ['draft', 'completed', 'archived'],
+                        'compare' => 'NOT IN',
+                    ],
+                ],
+            ]);
+            $edition_total = $edition_query->found_posts;
+
+            // Count online courses — only need the count, not the posts
+            $online_query = new WP_Query([
+                'post_type'      => 'sfwd-courses',
+                'post_status'    => 'publish',
+                'posts_per_page' => 1,
+                'fields'         => 'ids',
+                'tax_query'      => [
+                    [
+                        'taxonomy' => 'stride_format',
+                        'field'    => 'slug',
+                        'terms'    => ['online', 'e-learning', 'webinar'],
+                        'operator' => 'IN',
+                    ],
+                ],
+            ]);
+            $online_total = $online_query->found_posts;
             ?>
-                <a href="<?php echo esc_url(get_term_link($domain)); ?>"
-                   class="card-interactive p-6 text-center">
-                    <span class="text-lg font-semibold text-text">
-                        <?php echo esc_html($domain->name); ?>
-                    </span>
-                    <span class="block text-sm text-text-muted mt-1">
-                        <?php
-                        printf(
-                            esc_html(_n('%d opleiding', '%d opleidingen', $domain->count, 'stridence')),
-                            $domain->count
-                        );
-                        ?>
-                    </span>
-                </a>
-            <?php
-                endforeach;
-            else :
-            ?>
-                <!-- Fallback categories -->
-                <a href="<?php echo esc_url(home_url('/cursussen/?domein=ouderenzorg')); ?>" class="card-interactive p-6 text-center">
-                    <span class="text-lg font-semibold text-text"><?php esc_html_e('Ouderenzorg', 'stridence'); ?></span>
-                </a>
-                <a href="<?php echo esc_url(home_url('/cursussen/?domein=ggz')); ?>" class="card-interactive p-6 text-center">
-                    <span class="text-lg font-semibold text-text"><?php esc_html_e('Geestelijke gezondheidszorg', 'stridence'); ?></span>
-                </a>
-                <a href="<?php echo esc_url(home_url('/cursussen/?domein=eerste-lijn')); ?>" class="card-interactive p-6 text-center">
-                    <span class="text-lg font-semibold text-text"><?php esc_html_e('Eerste lijn', 'stridence'); ?></span>
-                </a>
-                <a href="<?php echo esc_url(home_url('/cursussen/?domein=ziekenhuiszorg')); ?>" class="card-interactive p-6 text-center">
-                    <span class="text-lg font-semibold text-text"><?php esc_html_e('Ziekenhuiszorg', 'stridence'); ?></span>
-                </a>
-            <?php endif; ?>
+
+            <!-- Trajecten Card -->
+            <a href="<?php echo esc_url(home_url('/trajecten/')); ?>" class="card-interactive p-8 text-center group">
+                <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                    <?php echo stridence_icon('layers', 'w-8 h-8 text-primary'); ?>
+                </div>
+                <h3 class="font-heading font-semibold text-xl mb-2 text-text group-hover:text-primary transition-colors">
+                    <?php esc_html_e('Trajecten', 'stridence'); ?>
+                </h3>
+                <p class="text-text-muted mb-4">
+                    <?php esc_html_e('Volg een leertraject met meerdere cursussen en begeleiding', 'stridence'); ?>
+                </p>
+                <span class="text-sm font-medium text-primary">
+                    <?php
+                    printf(
+                        esc_html(_n('%d traject', '%d trajecten', $trajectory_total, 'stridence')),
+                        $trajectory_total
+                    );
+                    ?>
+                </span>
+            </a>
+
+            <!-- Klassikaal Card -->
+            <a href="<?php echo esc_url(home_url('/klassikaal/')); ?>" class="card-interactive p-8 text-center group">
+                <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-accent/10 flex items-center justify-center group-hover:bg-accent/20 transition-colors">
+                    <?php echo stridence_icon('users', 'w-8 h-8 text-accent'); ?>
+                </div>
+                <h3 class="font-heading font-semibold text-xl mb-2 text-text group-hover:text-accent transition-colors">
+                    <?php esc_html_e('Klassikaal', 'stridence'); ?>
+                </h3>
+                <p class="text-text-muted mb-4">
+                    <?php esc_html_e('Leer samen met anderen onder begeleiding van ervaren docenten', 'stridence'); ?>
+                </p>
+                <span class="text-sm font-medium text-accent">
+                    <?php
+                    printf(
+                        esc_html(_n('%d editie', '%d edities', $edition_total, 'stridence')),
+                        $edition_total
+                    );
+                    ?>
+                </span>
+            </a>
+
+            <!-- Online Card -->
+            <a href="<?php echo esc_url(home_url('/online/')); ?>" class="card-interactive p-8 text-center group">
+                <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-success/10 flex items-center justify-center group-hover:bg-success/20 transition-colors">
+                    <?php echo stridence_icon('monitor', 'w-8 h-8 text-success'); ?>
+                </div>
+                <h3 class="font-heading font-semibold text-xl mb-2 text-text group-hover:text-success transition-colors">
+                    <?php esc_html_e('Online', 'stridence'); ?>
+                </h3>
+                <p class="text-text-muted mb-4">
+                    <?php esc_html_e('Leer op je eigen tempo met e-learning en webinars', 'stridence'); ?>
+                </p>
+                <span class="text-sm font-medium text-success">
+                    <?php
+                    printf(
+                        esc_html(_n('%d cursus', '%d cursussen', $online_total, 'stridence')),
+                        $online_total
+                    );
+                    ?>
+                </span>
+            </a>
         </div>
     </div>
 </section>
@@ -89,8 +149,8 @@ get_header();
             <h2 class="font-heading text-2xl font-bold">
                 <?php esc_html_e('Binnenkort gepland', 'stridence'); ?>
             </h2>
-            <a href="<?php echo esc_url(home_url('/cursussen/')); ?>" class="btn-ghost">
-                <?php esc_html_e('Alle opleidingen', 'stridence'); ?> &rarr;
+            <a href="<?php echo esc_url(home_url('/klassikaal/')); ?>" class="btn-ghost">
+                <?php esc_html_e('Alle edities', 'stridence'); ?> &rarr;
             </a>
         </div>
 
