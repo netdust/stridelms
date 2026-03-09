@@ -30,9 +30,17 @@ $active_editions    = $data['active_editions'];
 $active_online      = $data['active_online'];
 $completed_items    = $data['completed_items'];
 $cancelled_editions = $data['cancelled_editions'];
+$action_items       = $data['action_items'] ?? [];
 ?>
 
 <div class="space-y-8">
+    <!-- Action Items (pending enrollment + post-course tasks) -->
+    <?php
+    get_template_part('templates/dashboard/partials/action-items', null, [
+        'items' => $action_items,
+    ]);
+    ?>
+
     <!-- Upcoming Sessions -->
     <?php if (!empty($upcoming_sessions)) : ?>
         <section>
@@ -99,8 +107,24 @@ $cancelled_editions = $data['cancelled_editions'];
                             $tasksComplete = $hasTasks && ($reg['task_summary']['completed'] ?? 0) === ($reg['task_summary']['total'] ?? 0);
                             $awaitingApproval = $hasTasks && $tasksComplete && !empty($reg['completion_tasks']['approval']);
 
-                            if ($reg['status'] === 'confirmed') {
-                                // Fully enrolled — no badge needed, or subtle confirmation
+                            // Check for post-course tasks on confirmed registrations
+                            $hasPostCourseTasks = false;
+                            if ($reg['status'] === 'confirmed' && $hasTasks) {
+                                $taskArr = is_string($reg['completion_tasks']) ? json_decode($reg['completion_tasks'], true) : $reg['completion_tasks'];
+                                if (is_array($taskArr)) {
+                                    foreach ($taskArr as $t) {
+                                        if (($t['phase'] ?? 'enrollment') === 'post_course' && ($t['status'] ?? 'pending') !== 'completed') {
+                                            $hasPostCourseTasks = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if ($reg['status'] === 'confirmed' && $hasPostCourseTasks) {
+                                get_template_part('partials/badge-status', null, ['status' => 'completing']);
+                            } elseif ($reg['status'] === 'confirmed') {
+                                // Fully enrolled — no badge needed
                             } elseif ($reg['status'] === 'pending' && $awaitingApproval) {
                                 get_template_part('partials/badge-status', null, ['status' => 'awaiting_approval']);
                             } elseif ($reg['status'] === 'pending' && $hasTasks) {
@@ -118,7 +142,7 @@ $cancelled_editions = $data['cancelled_editions'];
                         <div x-show="open" x-collapse class="border-t border-border">
                             <!-- Status + Actions -->
                             <div class="p-4 space-y-4">
-                                <?php if ($reg['status'] === 'pending' && !empty($reg['completion_tasks'])): ?>
+                                <?php if (!empty($reg['task_summary']) && in_array($reg['status'], ['pending', 'confirmed'], true)): ?>
                                     <!-- Completion Checklist -->
                                     <?php
                                     get_template_part('templates/dashboard/partials/completion-checklist', null, [

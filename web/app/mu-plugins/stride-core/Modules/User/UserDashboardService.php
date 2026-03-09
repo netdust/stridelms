@@ -40,7 +40,8 @@ final class UserDashboardService
      *   active_online: array,
      *   completed_items: array,
      *   cancelled_editions: array,
-     *   upcoming_sessions: array
+     *   upcoming_sessions: array,
+     *   action_items: array
      * }
      */
     public function getEnrollmentData(int $userId): array
@@ -57,7 +58,54 @@ final class UserDashboardService
             'completed_items'    => $completedItems,
             'cancelled_editions' => $cancelledEditions,
             'upcoming_sessions'  => $this->buildUpcomingSessions($activeEditions),
+            'action_items'       => $this->buildActionItems($userId),
         ];
+    }
+
+    /**
+     * Get pending action items for a user (both enrollment and post-course tasks).
+     *
+     * @return array{course_title: string, label: string, url: string, type: string}[]
+     */
+    private function buildActionItems(int $userId): array
+    {
+        $completion = ntdst_get(EnrollmentCompletion::class);
+        $pending = $completion->getPendingForUser($userId);
+        $items = [];
+
+        foreach ($pending as $reg) {
+            $editionId = (int) ($reg->edition_id ?? 0);
+            if (!$editionId) {
+                continue;
+            }
+
+            $tasks = is_string($reg->completion_tasks)
+                ? json_decode($reg->completion_tasks, true) ?: []
+                : (array) $reg->completion_tasks;
+
+            $phase = 'enrollment';
+            foreach ($tasks as $task) {
+                if (($task['phase'] ?? 'enrollment') === 'post_course' && ($task['status'] ?? 'pending') !== 'completed') {
+                    $phase = 'post_course';
+                    break;
+                }
+            }
+
+            $courseId = $this->editionService->getCourseId($editionId);
+            $course = $courseId ? get_post($courseId) : null;
+            $slug = get_post_field('post_name', $editionId);
+
+            $items[] = [
+                'course_title' => $course ? $course->post_title : get_the_title($editionId),
+                'label' => $phase === 'post_course'
+                    ? __('Rond opleiding af', 'stride')
+                    : __('Voltooi inschrijving', 'stride'),
+                'url' => home_url('/vormingen/' . $slug . '/voltooien/'),
+                'type' => $phase,
+            ];
+        }
+
+        return $items;
     }
 
     /**
@@ -109,7 +157,8 @@ final class UserDashboardService
                 'type'             => 'edition',
             ];
 
-            if ($reg->status === 'pending' && !empty($reg->completion_tasks)) {
+            // Populate task summary for pending (enrollment) and confirmed (post-course) registrations
+            if (!empty($reg->completion_tasks) && in_array($reg->status, ['pending', 'confirmed'], true)) {
                 $enrollment = ntdst_get(EnrollmentCompletion::class);
                 $regData['task_summary'] = $enrollment->getTaskSummary((int) $reg->id);
                 $regData['complete_url'] = home_url('/vormingen/' . get_post_field('post_name', $editionId) . '/voltooien/');

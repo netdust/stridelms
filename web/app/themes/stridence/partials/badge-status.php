@@ -38,6 +38,7 @@ $status_config = [
     'enrolled'          => ['class' => 'badge-open',      'label' => 'Ingeschreven'],
     'action_required'   => ['class' => 'badge-few',       'label' => 'Voltooi inschrijving'],
     'awaiting_approval' => ['class' => 'badge-few',       'label' => 'In afwachting'],
+    'completing'        => ['class' => 'badge-few',       'label' => 'Rond af'],
 ];
 
 // Fallback for unknown status
@@ -45,7 +46,7 @@ $config = $status_config[$status] ?? ['class' => 'badge-cancelled', 'label' => u
 
 ?>
 <span class="<?php echo esc_attr($config['class']); ?>"><?php
-if ($status === 'action_required') {
+if ($status === 'action_required' || $status === 'completing') {
     echo stridence_icon('alert-circle', 'w-3.5 h-3.5 inline-block -mt-0.5 mr-0.5');
 }
 echo esc_html($config['label']);
