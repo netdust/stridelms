@@ -2,7 +2,7 @@
 /**
  * Dashboard Tab: Offertes (Quotes)
  *
- * Shows user's quotes as clickable cards with slide-over detail panel.
+ * Shows user's quotes as clickable list items with slide-over detail panel.
  *
  * @param array $args {
  *     @type WP_User $user Current user object
@@ -43,36 +43,36 @@ function stridence_quote_status_classes(QuoteStatus $status): string
 <div class="space-y-8" x-data="slidePanel()">
     <!-- Active Quotes -->
     <section>
-        <h2 class="font-heading text-xl font-bold text-text mb-4">
+        <h3 class="dash-subheading mb-3">
             <?php esc_html_e('Mijn offertes', 'stridence'); ?>
-        </h2>
+        </h3>
 
         <?php if (!empty($active)) : ?>
-            <div class="space-y-3">
+            <div class="bg-surface-card rounded-lg border border-border/60 divide-y divide-border/60">
                 <?php foreach ($active as $quote) : ?>
                     <button type="button"
-                            class="dash-card w-full p-4 flex items-center justify-between gap-4 text-left hover:shadow-elevated transition-shadow duration-normal"
+                            class="list-item w-full text-left"
                             @click="openPanel(<?php echo (int)$quote['id']; ?>)">
                         <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2">
-                                <span class="font-mono text-sm text-text-muted">
+                            <div class="flex items-center gap-2 mb-0.5">
+                                <span class="font-mono text-xs text-text-muted">
                                     <?php echo esc_html($quote['quote_number']); ?>
                                 </span>
                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium <?php echo esc_attr(stridence_quote_status_classes($quote['status'])); ?>">
                                     <?php echo esc_html($quote['status_label']); ?>
                                 </span>
                             </div>
-                            <h3 class="font-semibold text-text truncate mt-1">
+                            <span class="font-medium text-text text-sm truncate block">
                                 <?php echo esc_html($quote['title']); ?>
-                            </h3>
-                            <div class="flex flex-wrap gap-4 mt-1 text-sm text-text-muted">
+                            </span>
+                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-0.5 text-xs text-text-muted">
                                 <?php if ($quote['created_at']) : ?>
                                     <span class="flex items-center gap-1">
-                                        <?php echo stridence_icon('calendar', 'w-4 h-4'); ?>
+                                        <?php echo stridence_icon('calendar', 'w-3.5 h-3.5'); ?>
                                         <?php echo esc_html(stride_format_date($quote['created_at'])); ?>
                                     </span>
                                 <?php endif; ?>
-                                <span class="flex items-center gap-1 font-medium text-text">
+                                <span class="font-medium text-text">
                                     <?php echo esc_html($quote['total']->format()); ?>
                                 </span>
                             </div>
@@ -130,7 +130,7 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                                     <div class="slide-panel-body">
                                         <!-- Price Breakdown -->
                                         <div class="space-y-3">
-                                            <h4 class="text-sm font-semibold text-text-muted uppercase tracking-wide">
+                                            <h4 class="dash-subheading">
                                                 <?php esc_html_e('Prijsoverzicht', 'stridence'); ?>
                                             </h4>
                                             <dl class="space-y-2 text-sm">
@@ -153,7 +153,7 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                                                     <dt class="text-text-muted"><?php esc_html_e('BTW (21%)', 'stridence'); ?></dt>
                                                     <dd class="font-medium"><?php echo esc_html($quote['tax']->format()); ?></dd>
                                                 </div>
-                                                <div class="flex justify-between pt-2 border-t border-border">
+                                                <div class="flex justify-between pt-2 border-t border-border/60">
                                                     <dt class="font-semibold"><?php esc_html_e('Totaal', 'stridence'); ?></dt>
                                                     <dd class="font-bold text-lg"><?php echo esc_html($quote['total']->format()); ?></dd>
                                                 </div>
@@ -169,12 +169,12 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                                         <!-- Line Items -->
                                         <?php if (!empty($quote['items'])) : ?>
                                             <div class="space-y-3">
-                                                <h4 class="text-sm font-semibold text-text-muted uppercase tracking-wide">
+                                                <h4 class="dash-subheading">
                                                     <?php esc_html_e('Regelitems', 'stridence'); ?>
                                                 </h4>
-                                                <div class="divide-y divide-border rounded-lg border border-border">
+                                                <div class="bg-surface-card rounded-lg border border-border/60 divide-y divide-border/60">
                                                     <?php foreach ($quote['items'] as $item) : ?>
-                                                        <div class="p-3 flex items-center justify-between gap-4">
+                                                        <div class="px-4 py-3 flex items-center justify-between gap-4">
                                                             <div class="flex-1 min-w-0">
                                                                 <p class="font-medium text-sm truncate">
                                                                     <?php echo esc_html($item['title'] ?? ''); ?>
@@ -210,7 +210,7 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                                                      ])); ?>
                                                  })">
                                                 <div class="flex items-center justify-between mb-3">
-                                                    <h4 class="text-sm font-semibold text-text-muted uppercase tracking-wide">
+                                                    <h4 class="dash-subheading">
                                                         <?php esc_html_e('Facturatiegegevens', 'stridence'); ?>
                                                     </h4>
                                                     <template x-if="!editing">
@@ -296,7 +296,7 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                                         <!-- Apply Voucher -->
                                         <?php if (($quote['status'] === QuoteStatus::Draft || $quote['status'] === QuoteStatus::Sent) && empty($quote['voucher_code'])) : ?>
                                             <div x-data="{ code: '', loading: false, error: '', applied: false }">
-                                                <h4 class="text-sm font-semibold text-text-muted uppercase tracking-wide mb-3">
+                                                <h4 class="dash-subheading mb-3">
                                                     <?php esc_html_e('Kortingscode', 'stridence'); ?>
                                                 </h4>
                                                 <div class="flex gap-2" x-show="!applied">
@@ -398,9 +398,9 @@ function stridence_quote_status_classes(QuoteStatus $status): string
     <?php if (!empty($cancelled)) : ?>
         <section x-data="{ open: false }">
             <button type="button"
-                    class="w-full flex items-center justify-between gap-4 mb-4"
+                    class="w-full flex items-center justify-between gap-4 mb-3"
                     @click="open = !open">
-                <h2 class="font-heading text-xl font-bold text-text-muted">
+                <h3 class="dash-subheading text-text-muted">
                     <?php
                     printf(
                         /* translators: %d: number of cancelled quotes */
@@ -408,37 +408,35 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                         count($cancelled)
                     );
                     ?>
-                </h2>
+                </h3>
                 <span class="text-text-muted transition-transform duration-200"
                       :class="{ 'rotate-180': open }">
-                    <?php echo stridence_icon('chevron-down', 'w-5 h-5'); ?>
+                    <?php echo stridence_icon('chevron-down', 'w-4 h-4'); ?>
                 </span>
             </button>
 
             <div x-show="open" x-collapse>
-                <div class="dash-card divide-y divide-border">
+                <div class="bg-surface-card rounded-lg border border-border/60 divide-y divide-border/60">
                     <?php foreach ($cancelled as $quote) : ?>
-                        <div class="p-4 text-text-muted">
-                            <div class="flex items-center justify-between gap-4">
-                                <div class="flex-1 min-w-0">
-                                    <span class="font-mono text-sm">
-                                        <?php echo esc_html($quote['quote_number']); ?>
-                                    </span>
-                                    <h3 class="font-medium truncate">
-                                        <?php echo esc_html($quote['title']); ?>
-                                    </h3>
-                                    <p class="text-sm">
-                                        <?php
-                                        if ($quote['created_at']) {
-                                            echo esc_html(stride_format_date($quote['created_at']));
-                                        }
-                                        ?>
-                                    </p>
-                                </div>
-                                <span class="text-sm line-through">
-                                    <?php echo esc_html($quote['total']->format()); ?>
+                        <div class="list-item-static text-text-muted">
+                            <div class="flex-1 min-w-0">
+                                <span class="font-mono text-xs block">
+                                    <?php echo esc_html($quote['quote_number']); ?>
+                                </span>
+                                <span class="font-medium text-sm truncate block">
+                                    <?php echo esc_html($quote['title']); ?>
+                                </span>
+                                <span class="text-xs">
+                                    <?php
+                                    if ($quote['created_at']) {
+                                        echo esc_html(stride_format_date($quote['created_at']));
+                                    }
+                                    ?>
                                 </span>
                             </div>
+                            <span class="text-sm line-through shrink-0">
+                                <?php echo esc_html($quote['total']->format()); ?>
+                            </span>
                         </div>
                     <?php endforeach; ?>
                 </div>

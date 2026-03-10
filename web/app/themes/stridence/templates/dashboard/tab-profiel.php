@@ -46,11 +46,10 @@ $notifications = [
 ];
 ?>
 
-<div class="space-y-6">
+<div class="space-y-8">
 
     <!-- Personal Information -->
-    <section class="dash-card"
-             x-data="inlineEditSection({
+    <section x-data="inlineEditSection({
                  action: 'stride_update_profile',
                  params: { form_type: 'personal' },
                  fields: <?php echo esc_attr(json_encode([
@@ -61,11 +60,11 @@ $notifications = [
                      'department'   => $department,
                  ])); ?>
              })">
-        <div class="p-4 border-b border-border flex items-center justify-between">
-            <h2 class="font-heading text-lg font-bold text-text flex items-center gap-2">
-                <?php echo stridence_icon('user', 'w-5 h-5 text-primary'); ?>
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="dash-subheading flex items-center gap-2">
+                <?php echo stridence_icon('user', 'w-4 h-4 text-primary'); ?>
                 <?php esc_html_e('Persoonlijke gegevens', 'stridence'); ?>
-            </h2>
+            </h3>
             <template x-if="!editing">
                 <button type="button" @click="startEdit()" class="text-sm text-primary hover:underline">
                     <?php echo stridence_icon('edit-2', 'w-3.5 h-3.5 inline mr-1'); ?>
@@ -74,28 +73,28 @@ $notifications = [
             </template>
         </div>
 
-        <div class="p-4">
+        <div class="bg-surface-card rounded-lg border border-border/60 p-4">
             <!-- Display mode -->
             <dl x-show="!editing" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                    <dt class="text-sm text-text-muted"><?php esc_html_e('Naam', 'stridence'); ?></dt>
-                    <dd class="font-medium" x-text="fields.first_name + ' ' + fields.last_name"></dd>
+                    <dt class="text-xs text-text-muted mb-0.5"><?php esc_html_e('Naam', 'stridence'); ?></dt>
+                    <dd class="text-sm font-medium text-text" x-text="fields.first_name + ' ' + fields.last_name"></dd>
                 </div>
                 <div>
-                    <dt class="text-sm text-text-muted"><?php esc_html_e('E-mailadres', 'stridence'); ?></dt>
-                    <dd class="font-medium"><?php echo esc_html($email); ?></dd>
+                    <dt class="text-xs text-text-muted mb-0.5"><?php esc_html_e('E-mailadres', 'stridence'); ?></dt>
+                    <dd class="text-sm font-medium text-text"><?php echo esc_html($email); ?></dd>
                 </div>
                 <div>
-                    <dt class="text-sm text-text-muted"><?php esc_html_e('Telefoonnummer', 'stridence'); ?></dt>
-                    <dd class="font-medium" x-text="fields.phone || '-'"></dd>
+                    <dt class="text-xs text-text-muted mb-0.5"><?php esc_html_e('Telefoonnummer', 'stridence'); ?></dt>
+                    <dd class="text-sm font-medium text-text" x-text="fields.phone || '-'"></dd>
                 </div>
                 <div>
-                    <dt class="text-sm text-text-muted"><?php esc_html_e('Organisatie', 'stridence'); ?></dt>
-                    <dd class="font-medium" x-text="fields.organisation || '-'"></dd>
+                    <dt class="text-xs text-text-muted mb-0.5"><?php esc_html_e('Organisatie', 'stridence'); ?></dt>
+                    <dd class="text-sm font-medium text-text" x-text="fields.organisation || '-'"></dd>
                 </div>
                 <div>
-                    <dt class="text-sm text-text-muted"><?php esc_html_e('Afdeling', 'stridence'); ?></dt>
-                    <dd class="font-medium" x-text="fields.department || '-'"></dd>
+                    <dt class="text-xs text-text-muted mb-0.5"><?php esc_html_e('Afdeling', 'stridence'); ?></dt>
+                    <dd class="text-sm font-medium text-text" x-text="fields.department || '-'"></dd>
                 </div>
             </dl>
 
@@ -154,8 +153,7 @@ $notifications = [
     </section>
 
     <!-- Billing Information -->
-    <section class="dash-card"
-             x-data="inlineEditSection({
+    <section x-data="inlineEditSection({
                  action: 'stride_update_profile',
                  params: { form_type: 'billing' },
                  fields: <?php echo esc_attr(json_encode([
@@ -168,13 +166,13 @@ $notifications = [
                      'gln_number'    => $billing['gln_number'],
                  ])); ?>
              })">
-        <div class="p-4 border-b border-border flex items-center justify-between">
+        <div class="flex items-center justify-between mb-3">
             <div>
-                <h2 class="font-heading text-lg font-bold text-text flex items-center gap-2">
-                    <?php echo stridence_icon('file-text', 'w-5 h-5 text-primary'); ?>
+                <h3 class="dash-subheading flex items-center gap-2">
+                    <?php echo stridence_icon('file-text', 'w-4 h-4 text-primary'); ?>
                     <?php esc_html_e('Facturatiegegevens', 'stridence'); ?>
-                </h2>
-                <p class="text-sm text-text-muted mt-1">
+                </h3>
+                <p class="text-xs text-text-muted mt-1">
                     <?php esc_html_e('Deze gegevens worden gebruikt voor offertes en facturen.', 'stridence'); ?>
                 </p>
             </div>
@@ -186,20 +184,20 @@ $notifications = [
             </template>
         </div>
 
-        <div class="p-4">
+        <div class="bg-surface-card rounded-lg border border-border/60 p-4">
             <!-- Display mode -->
             <dl x-show="!editing" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                    <dt class="text-sm text-text-muted"><?php esc_html_e('Organisatie', 'stridence'); ?></dt>
-                    <dd class="font-medium" x-text="fields.company || '-'"></dd>
+                    <dt class="text-xs text-text-muted mb-0.5"><?php esc_html_e('Organisatie', 'stridence'); ?></dt>
+                    <dd class="text-sm font-medium text-text" x-text="fields.company || '-'"></dd>
                 </div>
                 <div>
-                    <dt class="text-sm text-text-muted"><?php esc_html_e('BTW-nummer', 'stridence'); ?></dt>
-                    <dd class="font-medium" x-text="fields.vat_number || '-'"></dd>
+                    <dt class="text-xs text-text-muted mb-0.5"><?php esc_html_e('BTW-nummer', 'stridence'); ?></dt>
+                    <dd class="text-sm font-medium text-text" x-text="fields.vat_number || '-'"></dd>
                 </div>
                 <div class="sm:col-span-2">
-                    <dt class="text-sm text-text-muted"><?php esc_html_e('Adres', 'stridence'); ?></dt>
-                    <dd class="font-medium">
+                    <dt class="text-xs text-text-muted mb-0.5"><?php esc_html_e('Adres', 'stridence'); ?></dt>
+                    <dd class="text-sm font-medium text-text">
                         <template x-if="fields.address">
                             <span>
                                 <span x-text="fields.address"></span>,
@@ -213,12 +211,12 @@ $notifications = [
                     </dd>
                 </div>
                 <div>
-                    <dt class="text-sm text-text-muted"><?php esc_html_e('Facturatie e-mail', 'stridence'); ?></dt>
-                    <dd class="font-medium" x-text="fields.invoice_email || '-'"></dd>
+                    <dt class="text-xs text-text-muted mb-0.5"><?php esc_html_e('Facturatie e-mail', 'stridence'); ?></dt>
+                    <dd class="text-sm font-medium text-text" x-text="fields.invoice_email || '-'"></dd>
                 </div>
                 <div>
-                    <dt class="text-sm text-text-muted"><?php esc_html_e('GLN-nummer', 'stridence'); ?></dt>
-                    <dd class="font-medium" x-text="fields.gln_number || '-'"></dd>
+                    <dt class="text-xs text-text-muted mb-0.5"><?php esc_html_e('GLN-nummer', 'stridence'); ?></dt>
+                    <dd class="text-sm font-medium text-text" x-text="fields.gln_number || '-'"></dd>
                 </div>
             </dl>
 
@@ -287,8 +285,7 @@ $notifications = [
     </section>
 
     <!-- Notification Preferences -->
-    <section class="dash-card"
-             x-data="inlineEditSection({
+    <section x-data="inlineEditSection({
                  action: 'stride_update_profile',
                  params: { form_type: 'notifications' },
                  fields: <?php echo esc_attr(json_encode([
@@ -298,11 +295,11 @@ $notifications = [
                      'communication_language'  => $notifications['language'],
                  ])); ?>
              })">
-        <div class="p-4 border-b border-border flex items-center justify-between">
-            <h2 class="font-heading text-lg font-bold text-text flex items-center gap-2">
-                <?php echo stridence_icon('bell', 'w-5 h-5 text-primary'); ?>
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="dash-subheading flex items-center gap-2">
+                <?php echo stridence_icon('bell', 'w-4 h-4 text-primary'); ?>
                 <?php esc_html_e('Meldingsvoorkeuren', 'stridence'); ?>
-            </h2>
+            </h3>
             <template x-if="!editing">
                 <button type="button" @click="startEdit()" class="text-sm text-primary hover:underline">
                     <?php echo stridence_icon('edit-2', 'w-3.5 h-3.5 inline mr-1'); ?>
@@ -311,33 +308,33 @@ $notifications = [
             </template>
         </div>
 
-        <div class="p-4">
+        <div class="bg-surface-card rounded-lg border border-border/60 p-4">
             <!-- Display mode -->
             <dl x-show="!editing" class="space-y-3">
                 <div class="flex items-center justify-between">
-                    <dt class="text-sm"><?php esc_html_e('Herinneringen', 'stridence'); ?></dt>
+                    <dt class="text-sm text-text"><?php esc_html_e('Herinneringen', 'stridence'); ?></dt>
                     <dd>
-                        <span x-show="fields.notify_reminders" class="text-green-600 text-sm"><?php esc_html_e('Aan', 'stridence'); ?></span>
-                        <span x-show="!fields.notify_reminders" class="text-text-muted text-sm"><?php esc_html_e('Uit', 'stridence'); ?></span>
+                        <span x-show="fields.notify_reminders" class="text-success text-xs font-medium"><?php esc_html_e('Aan', 'stridence'); ?></span>
+                        <span x-show="!fields.notify_reminders" class="text-text-muted text-xs"><?php esc_html_e('Uit', 'stridence'); ?></span>
                     </dd>
                 </div>
                 <div class="flex items-center justify-between">
-                    <dt class="text-sm"><?php esc_html_e('Nieuwe opleidingen', 'stridence'); ?></dt>
+                    <dt class="text-sm text-text"><?php esc_html_e('Nieuwe opleidingen', 'stridence'); ?></dt>
                     <dd>
-                        <span x-show="fields.notify_new_courses" class="text-green-600 text-sm"><?php esc_html_e('Aan', 'stridence'); ?></span>
-                        <span x-show="!fields.notify_new_courses" class="text-text-muted text-sm"><?php esc_html_e('Uit', 'stridence'); ?></span>
+                        <span x-show="fields.notify_new_courses" class="text-success text-xs font-medium"><?php esc_html_e('Aan', 'stridence'); ?></span>
+                        <span x-show="!fields.notify_new_courses" class="text-text-muted text-xs"><?php esc_html_e('Uit', 'stridence'); ?></span>
                     </dd>
                 </div>
                 <div class="flex items-center justify-between">
-                    <dt class="text-sm"><?php esc_html_e('Nieuwsbrief', 'stridence'); ?></dt>
+                    <dt class="text-sm text-text"><?php esc_html_e('Nieuwsbrief', 'stridence'); ?></dt>
                     <dd>
-                        <span x-show="fields.notify_newsletter" class="text-green-600 text-sm"><?php esc_html_e('Aan', 'stridence'); ?></span>
-                        <span x-show="!fields.notify_newsletter" class="text-text-muted text-sm"><?php esc_html_e('Uit', 'stridence'); ?></span>
+                        <span x-show="fields.notify_newsletter" class="text-success text-xs font-medium"><?php esc_html_e('Aan', 'stridence'); ?></span>
+                        <span x-show="!fields.notify_newsletter" class="text-text-muted text-xs"><?php esc_html_e('Uit', 'stridence'); ?></span>
                     </dd>
                 </div>
-                <div class="flex items-center justify-between pt-2 border-t border-border">
-                    <dt class="text-sm"><?php esc_html_e('Communicatietaal', 'stridence'); ?></dt>
-                    <dd class="text-sm font-medium">
+                <div class="flex items-center justify-between pt-2 border-t border-border/60">
+                    <dt class="text-sm text-text"><?php esc_html_e('Communicatietaal', 'stridence'); ?></dt>
+                    <dd class="text-sm font-medium text-text">
                         <span x-show="fields.communication_language === 'nl'"><?php esc_html_e('Nederlands', 'stridence'); ?></span>
                         <span x-show="fields.communication_language === 'fr'"><?php esc_html_e('Frans', 'stridence'); ?></span>
                         <span x-show="fields.communication_language === 'en'"><?php esc_html_e('Engels', 'stridence'); ?></span>
@@ -352,7 +349,7 @@ $notifications = [
                         <input type="checkbox" x-model="fields.notify_reminders" class="input-checkbox mt-0.5">
                         <div>
                             <span class="text-sm font-medium text-text"><?php esc_html_e('Herinneringen', 'stridence'); ?></span>
-                            <p class="text-sm text-text-muted"><?php esc_html_e('Ontvang herinneringen voor aankomende sessies en deadlines.', 'stridence'); ?></p>
+                            <p class="text-xs text-text-muted"><?php esc_html_e('Ontvang herinneringen voor aankomende sessies en deadlines.', 'stridence'); ?></p>
                         </div>
                     </label>
 
@@ -360,7 +357,7 @@ $notifications = [
                         <input type="checkbox" x-model="fields.notify_new_courses" class="input-checkbox mt-0.5">
                         <div>
                             <span class="text-sm font-medium text-text"><?php esc_html_e('Nieuwe opleidingen', 'stridence'); ?></span>
-                            <p class="text-sm text-text-muted"><?php esc_html_e('Word geïnformeerd over nieuwe opleidingen in jouw vakgebied.', 'stridence'); ?></p>
+                            <p class="text-xs text-text-muted"><?php esc_html_e('Word geïnformeerd over nieuwe opleidingen in jouw vakgebied.', 'stridence'); ?></p>
                         </div>
                     </label>
 
@@ -368,12 +365,12 @@ $notifications = [
                         <input type="checkbox" x-model="fields.notify_newsletter" class="input-checkbox mt-0.5">
                         <div>
                             <span class="text-sm font-medium text-text"><?php esc_html_e('Nieuwsbrief', 'stridence'); ?></span>
-                            <p class="text-sm text-text-muted"><?php esc_html_e('Ontvang onze maandelijkse nieuwsbrief met tips en nieuws.', 'stridence'); ?></p>
+                            <p class="text-xs text-text-muted"><?php esc_html_e('Ontvang onze maandelijkse nieuwsbrief met tips en nieuws.', 'stridence'); ?></p>
                         </div>
                     </label>
                 </div>
 
-                <div class="pt-2 border-t border-border">
+                <div class="pt-2 border-t border-border/60">
                     <label class="input-label"><?php esc_html_e('Communicatietaal', 'stridence'); ?></label>
                     <select x-model="fields.communication_language" class="input-select w-full sm:w-auto">
                         <option value="nl"><?php esc_html_e('Nederlands', 'stridence'); ?></option>
@@ -399,25 +396,6 @@ $notifications = [
                     </button>
                 </div>
             </div>
-        </div>
-    </section>
-
-    <!-- Logout -->
-    <section class="dash-card p-4">
-        <div class="flex items-center justify-between">
-            <div>
-                <h3 class="font-medium text-text">
-                    <?php esc_html_e('Uitloggen', 'stridence'); ?>
-                </h3>
-                <p class="text-sm text-text-muted">
-                    <?php esc_html_e('Beëindig je huidige sessie.', 'stridence'); ?>
-                </p>
-            </div>
-            <a href="<?php echo esc_url(wp_logout_url(home_url())); ?>"
-               class="btn-ghost text-sm text-error hover:bg-error/5">
-                <?php echo stridence_icon('log-out', 'w-4 h-4 mr-2'); ?>
-                <?php esc_html_e('Uitloggen', 'stridence'); ?>
-            </a>
         </div>
     </section>
 </div>

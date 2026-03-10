@@ -44,26 +44,24 @@ $action_items       = $data['action_items'] ?? [];
     <!-- Upcoming Sessions -->
     <?php if (!empty($upcoming_sessions)) : ?>
         <section>
-            <h2 class="font-heading text-xl font-bold text-text mb-4">
+            <h3 class="dash-subheading mb-3">
                 <?php esc_html_e('Komende sessies', 'stridence'); ?>
-            </h2>
-            <div class="dash-card divide-y divide-border">
+            </h3>
+            <div class="bg-surface-card rounded-lg border border-border/60 divide-y divide-border/60">
                 <?php foreach ($upcoming_sessions as $session) : ?>
-                    <div class="p-4">
-                        <div class="flex items-start justify-between gap-4">
-                            <div class="flex-1">
-                                <?php
-                                get_template_part('partials/session-row', null, [
-                                    'session'    => (object) $session,
-                                    'attendance' => $session['attendance'] ?? null,
-                                ]);
-                                ?>
-                            </div>
-                            <a href="<?php echo esc_url(get_permalink($session['edition_id'])); ?>"
-                               class="text-sm text-primary hover:underline shrink-0">
-                                <?php echo esc_html($session['course_title']); ?>
-                            </a>
+                    <div class="list-item-static">
+                        <div class="flex-1 min-w-0">
+                            <?php
+                            get_template_part('partials/session-row', null, [
+                                'session'    => (object) $session,
+                                'attendance' => $session['attendance'] ?? null,
+                            ]);
+                            ?>
                         </div>
+                        <a href="<?php echo esc_url(get_permalink($session['edition_id'])); ?>"
+                           class="btn-ghost btn-sm shrink-0">
+                            <?php echo esc_html($session['course_title']); ?>
+                        </a>
                     </div>
                 <?php endforeach; ?>
             </div>
@@ -72,119 +70,103 @@ $action_items       = $data['action_items'] ?? [];
 
     <!-- Klassikale opleidingen (Classroom Editions) -->
     <section>
-        <h2 class="font-heading text-xl font-bold text-text mb-4">
+        <h3 class="dash-subheading mb-3">
             <?php esc_html_e('Klassikale opleidingen', 'stridence'); ?>
-        </h2>
+        </h3>
 
         <?php if (!empty($active_editions)) : ?>
-            <div class="space-y-4">
+            <div class="bg-surface-card rounded-lg border border-border/60 divide-y divide-border/60">
                 <?php foreach ($active_editions as $reg) : ?>
-                    <div class="dash-card" x-data="expandable()">
-                        <button type="button"
-                                class="w-full p-4 flex items-center justify-between gap-4 text-left"
-                                @click="toggle()">
-                            <div class="flex-1 min-w-0">
-                                <h3 class="font-semibold text-text truncate">
-                                    <?php echo esc_html($reg['course_title']); ?>
-                                </h3>
-                                <div class="flex flex-wrap gap-4 mt-1 text-sm text-text-muted">
-                                    <?php if ($reg['start_date']) : ?>
-                                        <span class="flex items-center gap-1">
-                                            <?php echo stridence_icon('calendar', 'w-4 h-4'); ?>
-                                            <?php echo esc_html(stride_format_date($reg['start_date'])); ?>
-                                        </span>
-                                    <?php endif; ?>
-                                    <?php if ($reg['venue']) : ?>
-                                        <span class="flex items-center gap-1">
-                                            <?php echo stridence_icon('map-pin', 'w-4 h-4'); ?>
-                                            <?php echo esc_html($reg['venue']); ?>
-                                        </span>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                            <?php
-                            $hasTasks = !empty($reg['completion_tasks']);
-                            $tasksComplete = $hasTasks && ($reg['task_summary']['completed'] ?? 0) === ($reg['task_summary']['total'] ?? 0);
-                            $awaitingApproval = $hasTasks && $tasksComplete && !empty($reg['completion_tasks']['approval']);
+                    <?php
+                    $hasTasks = !empty($reg['completion_tasks']);
+                    $tasksComplete = $hasTasks && ($reg['task_summary']['completed'] ?? 0) === ($reg['task_summary']['total'] ?? 0);
+                    $awaitingApproval = $hasTasks && $tasksComplete && !empty($reg['completion_tasks']['approval']);
 
-                            // Check for post-course tasks on confirmed registrations
-                            $hasPostCourseTasks = false;
-                            if ($reg['status'] === 'confirmed' && $hasTasks) {
-                                $taskArr = is_string($reg['completion_tasks']) ? json_decode($reg['completion_tasks'], true) : $reg['completion_tasks'];
-                                if (is_array($taskArr)) {
-                                    foreach ($taskArr as $t) {
-                                        if (($t['phase'] ?? 'enrollment') === 'post_course' && ($t['status'] ?? 'pending') !== 'completed') {
-                                            $hasPostCourseTasks = true;
-                                            break;
-                                        }
-                                    }
+                    // Check for post-course tasks on confirmed registrations
+                    $hasPostCourseTasks = false;
+                    if ($reg['status'] === 'confirmed' && $hasTasks) {
+                        $taskArr = is_string($reg['completion_tasks']) ? json_decode($reg['completion_tasks'], true) : $reg['completion_tasks'];
+                        if (is_array($taskArr)) {
+                            foreach ($taskArr as $t) {
+                                if (($t['phase'] ?? 'enrollment') === 'post_course' && ($t['status'] ?? 'pending') !== 'completed') {
+                                    $hasPostCourseTasks = true;
+                                    break;
                                 }
                             }
+                        }
+                    }
 
-                            if ($reg['status'] === 'confirmed' && $hasPostCourseTasks) {
-                                get_template_part('partials/badge-status', null, ['status' => 'completing']);
-                            } elseif ($reg['status'] === 'confirmed') {
-                                // Fully enrolled — no badge needed
-                            } elseif ($reg['status'] === 'pending' && $awaitingApproval) {
-                                get_template_part('partials/badge-status', null, ['status' => 'awaiting_approval']);
-                            } elseif ($reg['status'] === 'pending' && $hasTasks) {
-                                get_template_part('partials/badge-status', null, ['status' => 'action_required']);
-                            } else {
-                                get_template_part('partials/badge-status', null, ['status' => $reg['status']]);
-                            }
-                            ?>
-                            <span class="shrink-0 text-text-muted transition-transform duration-200"
-                                  :class="{ 'rotate-180': open }">
-                                <?php echo stridence_icon('chevron-down', 'w-5 h-5'); ?>
-                            </span>
-                        </button>
-
-                        <div x-show="open" x-collapse class="border-t border-border">
-                            <!-- Status + Actions -->
-                            <div class="p-4 space-y-4">
-                                <?php if (!empty($reg['task_summary']) && in_array($reg['status'], ['pending', 'confirmed'], true)): ?>
-                                    <!-- Completion Checklist -->
-                                    <?php
-                                    get_template_part('templates/dashboard/partials/completion-checklist', null, [
-                                        'task_summary' => $reg['task_summary'],
-                                        'complete_url' => $reg['complete_url'],
-                                    ]);
-                                    ?>
-                                <?php else: ?>
-                                    <!-- Progress -->
-                                    <?php
-                                    get_template_part('partials/progress-bar', null, [
-                                        'attended' => $reg['progress']['attended'],
-                                        'required' => $reg['progress']['required'],
-                                        'label'    => __('Aanwezigheid', 'stridence'),
-                                    ]);
-                                    ?>
+                    // Progress info
+                    $attended = $reg['progress']['attended'] ?? 0;
+                    $required = $reg['progress']['required'] ?? 0;
+                    $progressPct = $required > 0 ? (int) round(($attended / $required) * 100) : 0;
+                    ?>
+                    <a href="<?php echo esc_url(get_permalink($reg['edition_id'])); ?>"
+                       class="list-item">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-0.5">
+                                <span class="font-medium text-text text-sm truncate">
+                                    <?php echo esc_html($reg['course_title']); ?>
+                                </span>
+                                <?php
+                                if ($reg['status'] === 'confirmed' && $hasPostCourseTasks) {
+                                    get_template_part('partials/badge-status', null, ['status' => 'completing']);
+                                } elseif ($reg['status'] === 'pending' && $awaitingApproval) {
+                                    get_template_part('partials/badge-status', null, ['status' => 'awaiting_approval']);
+                                } elseif ($reg['status'] === 'pending' && $hasTasks) {
+                                    get_template_part('partials/badge-status', null, ['status' => 'action_required']);
+                                } elseif ($reg['status'] !== 'confirmed') {
+                                    get_template_part('partials/badge-status', null, ['status' => $reg['status']]);
+                                }
+                                ?>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted">
+                                <?php if ($reg['start_date']) : ?>
+                                    <span class="flex items-center gap-1">
+                                        <?php echo stridence_icon('calendar', 'w-3.5 h-3.5'); ?>
+                                        <?php echo esc_html(stride_format_date($reg['start_date'])); ?>
+                                    </span>
+                                <?php endif; ?>
+                                <?php if ($reg['venue']) : ?>
+                                    <span class="flex items-center gap-1">
+                                        <?php echo stridence_icon('map-pin', 'w-3.5 h-3.5'); ?>
+                                        <?php echo esc_html($reg['venue']); ?>
+                                    </span>
+                                <?php endif; ?>
+                                <?php if ($required > 0) : ?>
+                                    <span class="flex items-center gap-1">
+                                        <?php echo stridence_icon('check-square', 'w-3.5 h-3.5'); ?>
+                                        <?php echo esc_html(sprintf('%d/%d sessies', $attended, $required)); ?>
+                                    </span>
                                 <?php endif; ?>
                             </div>
-
-                            <!-- Session List -->
-                            <?php if (!empty($reg['sessions'])) : ?>
-                                <div class="divide-y divide-border border-t border-border">
-                                    <?php foreach ($reg['sessions'] as $session) : ?>
-                                        <?php
-                                        get_template_part('partials/session-row', null, [
-                                            'session'    => (object) $session,
-                                            'attendance' => $session['attendance'] ?? null,
-                                        ]);
-                                        ?>
-                                    <?php endforeach; ?>
+                            <?php if (!empty($reg['task_summary']) && in_array($reg['status'], ['pending', 'confirmed'], true)): ?>
+                                <!-- Inline completion progress -->
+                                <?php
+                                $taskTotal = $reg['task_summary']['total'] ?? 0;
+                                $taskDone = $reg['task_summary']['completed'] ?? 0;
+                                $taskPct = $taskTotal > 0 ? (int) round(($taskDone / $taskTotal) * 100) : 0;
+                                ?>
+                                <div class="flex items-center gap-2 mt-1.5">
+                                    <div class="flex-1 h-1.5 rounded-full bg-border overflow-hidden max-w-[120px]">
+                                        <div class="h-full bg-accent rounded-full transition-all" style="width: <?php echo esc_attr((string) $taskPct); ?>%"></div>
+                                    </div>
+                                    <span class="text-xs text-text-muted"><?php echo esc_html(sprintf('%d%%', $taskPct)); ?></span>
+                                </div>
+                            <?php elseif ($required > 0) : ?>
+                                <!-- Attendance progress bar -->
+                                <div class="flex items-center gap-2 mt-1.5">
+                                    <div class="flex-1 h-1.5 rounded-full bg-border overflow-hidden max-w-[120px]">
+                                        <div class="h-full bg-accent rounded-full transition-all" style="width: <?php echo esc_attr((string) $progressPct); ?>%"></div>
+                                    </div>
+                                    <span class="text-xs text-text-muted"><?php echo esc_html(sprintf('%d%%', $progressPct)); ?></span>
                                 </div>
                             <?php endif; ?>
-
-                            <!-- Actions -->
-                            <div class="p-4 border-t border-border">
-                                <a href="<?php echo esc_url(get_permalink($reg['edition_id'])); ?>"
-                                   class="btn-ghost text-sm">
-                                    <?php esc_html_e('Bekijk details', 'stridence'); ?>
-                                </a>
-                            </div>
                         </div>
-                    </div>
+                        <span class="btn-ghost btn-sm shrink-0">
+                            <?php esc_html_e('Bekijk', 'stridence'); ?> &rarr;
+                        </span>
+                    </a>
                 <?php endforeach; ?>
             </div>
         <?php else : ?>
@@ -203,72 +185,71 @@ $action_items       = $data['action_items'] ?? [];
     <!-- Online cursussen -->
     <?php if (!empty($active_online)) : ?>
         <section>
-            <h2 class="font-heading text-xl font-bold text-text mb-4">
+            <h3 class="dash-subheading mb-3">
                 <?php esc_html_e('Online cursussen', 'stridence'); ?>
-            </h2>
-            <div class="space-y-3">
+            </h3>
+            <div class="bg-surface-card rounded-lg border border-border/60 divide-y divide-border/60">
                 <?php foreach ($active_online as $course) : ?>
-                    <div class="dash-card p-4">
-                        <div class="flex items-center justify-between gap-4">
-                            <div class="flex-1 min-w-0">
-                                <div class="flex items-center gap-2 mb-1">
-                                    <h3 class="font-semibold text-text truncate">
-                                        <?php echo esc_html($course['course_title']); ?>
-                                    </h3>
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-accent/10 text-accent">
-                                        <?php echo esc_html($course['format_label']); ?>
-                                    </span>
-                                </div>
-                                <div class="flex items-center gap-3 mt-2">
-                                    <div class="flex-1 h-2 bg-border rounded-full overflow-hidden">
-                                        <div class="h-full bg-accent rounded-full transition-all"
-                                             style="width: <?php echo esc_attr($course['progress']); ?>%"></div>
-                                    </div>
-                                    <span class="text-sm text-text-muted whitespace-nowrap">
-                                        <?php if ($course['total_lessons'] > 0) : ?>
-                                            <?php echo esc_html($course['completed_lessons'] . '/' . $course['total_lessons']); ?>
-                                        <?php else : ?>
-                                            <?php echo esc_html($course['progress']); ?>%
-                                        <?php endif; ?>
-                                    </span>
-                                </div>
-                                <div class="flex flex-wrap gap-3 mt-2 text-xs text-text-muted">
-                                    <?php if ($course['last_activity']) : ?>
-                                        <span>
-                                            <?php echo esc_html(sprintf(
-                                                __('Laatst actief: %s', 'stridence'),
-                                                date_i18n('j M', $course['last_activity'])
-                                            )); ?>
-                                        </span>
-                                    <?php endif; ?>
-                                    <?php if ($course['next_drip']) : ?>
-                                        <span>
-                                            <?php echo stridence_icon('clock', 'w-3 h-3 inline-block mr-0.5'); ?>
-                                            <?php echo esc_html(sprintf(
-                                                __('Volgende les: %s', 'stridence'),
-                                                date_i18n('j M', $course['next_drip']['available_from'])
-                                            )); ?>
-                                        </span>
-                                    <?php endif; ?>
-                                    <?php if ($course['days_remaining'] !== null && $course['days_remaining'] <= 30) : ?>
-                                        <span class="text-warning">
-                                            <?php echo stridence_icon('alert-circle', 'w-3 h-3 inline-block mr-0.5'); ?>
-                                            <?php echo esc_html(sprintf(
-                                                _n('%d dag toegang over', '%d dagen toegang over', $course['days_remaining'], 'stridence'),
-                                                $course['days_remaining']
-                                            )); ?>
-                                        </span>
-                                    <?php endif; ?>
-                                </div>
+                    <a href="<?php echo esc_url($course['course_url']); ?>"
+                       class="list-item">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-0.5">
+                                <span class="font-medium text-text text-sm truncate">
+                                    <?php echo esc_html($course['course_title']); ?>
+                                </span>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-accent/10 text-accent">
+                                    <?php echo esc_html($course['format_label']); ?>
+                                </span>
                             </div>
-                            <a href="<?php echo esc_url($course['course_url']); ?>"
-                               class="btn-primary text-sm shrink-0">
-                                <?php echo $course['progress'] > 0
-                                    ? esc_html__('Verder leren', 'stridence')
-                                    : esc_html__('Start cursus', 'stridence'); ?>
-                            </a>
+                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted">
+                                <?php if ($course['last_activity']) : ?>
+                                    <span>
+                                        <?php echo esc_html(sprintf(
+                                            __('Laatst actief: %s', 'stridence'),
+                                            date_i18n('j M', $course['last_activity'])
+                                        )); ?>
+                                    </span>
+                                <?php endif; ?>
+                                <?php if ($course['next_drip']) : ?>
+                                    <span class="flex items-center gap-1">
+                                        <?php echo stridence_icon('clock', 'w-3 h-3'); ?>
+                                        <?php echo esc_html(sprintf(
+                                            __('Volgende les: %s', 'stridence'),
+                                            date_i18n('j M', $course['next_drip']['available_from'])
+                                        )); ?>
+                                    </span>
+                                <?php endif; ?>
+                                <?php if ($course['days_remaining'] !== null && $course['days_remaining'] <= 30) : ?>
+                                    <span class="text-warning flex items-center gap-1">
+                                        <?php echo stridence_icon('alert-circle', 'w-3 h-3'); ?>
+                                        <?php echo esc_html(sprintf(
+                                            _n('%d dag over', '%d dagen over', $course['days_remaining'], 'stridence'),
+                                            $course['days_remaining']
+                                        )); ?>
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                            <!-- Progress bar -->
+                            <div class="flex items-center gap-2 mt-1.5">
+                                <div class="flex-1 h-1.5 rounded-full bg-border overflow-hidden max-w-[120px]">
+                                    <div class="h-full bg-accent rounded-full transition-all"
+                                         style="width: <?php echo esc_attr($course['progress']); ?>%"></div>
+                                </div>
+                                <span class="text-xs text-text-muted whitespace-nowrap">
+                                    <?php if ($course['total_lessons'] > 0) : ?>
+                                        <?php echo esc_html($course['completed_lessons'] . '/' . $course['total_lessons']); ?>
+                                    <?php else : ?>
+                                        <?php echo esc_html($course['progress']); ?>%
+                                    <?php endif; ?>
+                                </span>
+                            </div>
                         </div>
-                    </div>
+                        <span class="btn-ghost btn-sm shrink-0">
+                            <?php echo $course['progress'] > 0
+                                ? esc_html__('Verder', 'stridence')
+                                : esc_html__('Start', 'stridence'); ?> &rarr;
+                        </span>
+                    </a>
                 <?php endforeach; ?>
             </div>
         </section>
@@ -278,29 +259,29 @@ $action_items       = $data['action_items'] ?? [];
     <?php if (!empty($completed_items)) : ?>
         <section x-data="{ open: false }">
             <button type="button"
-                    class="w-full flex items-center justify-between gap-4 mb-4"
+                    class="w-full flex items-center justify-between gap-4 mb-3"
                     @click="open = !open">
-                <h2 class="font-heading text-xl font-bold text-text">
+                <h3 class="dash-subheading">
                     <?php printf(
                         esc_html__('Afgerond (%d)', 'stridence'),
                         count($completed_items)
                     ); ?>
-                </h2>
+                </h3>
                 <span class="text-text-muted transition-transform duration-200"
                       :class="{ 'rotate-180': open }">
-                    <?php echo stridence_icon('chevron-down', 'w-5 h-5'); ?>
+                    <?php echo stridence_icon('chevron-down', 'w-4 h-4'); ?>
                 </span>
             </button>
 
             <div x-show="open" x-collapse>
-                <div class="dash-card divide-y divide-border">
+                <div class="bg-surface-card rounded-lg border border-border/60 divide-y divide-border/60">
                     <?php foreach ($completed_items as $item) : ?>
-                        <div class="p-4 flex items-center justify-between gap-4">
+                        <div class="list-item-static">
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-2">
-                                    <h3 class="font-medium text-text truncate">
+                                    <span class="font-medium text-text text-sm truncate">
                                         <?php echo esc_html($item['course_title']); ?>
-                                    </h3>
+                                    </span>
                                     <?php if (($item['type'] ?? '') === 'online') : ?>
                                         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-accent/10 text-accent">
                                             <?php echo esc_html($item['format_label'] ?? __('Online', 'stridence')); ?>
@@ -311,7 +292,7 @@ $action_items       = $data['action_items'] ?? [];
                                         </span>
                                     <?php endif; ?>
                                 </div>
-                                <p class="text-sm text-text-muted">
+                                <p class="text-xs text-text-muted mt-0.5">
                                     <?php
                                     $date = $item['completed_at'] ?? $item['start_date'] ?? '';
                                     if ($date) {
@@ -328,7 +309,7 @@ $action_items       = $data['action_items'] ?? [];
                             ?>
                             <?php if ($cert_url) : ?>
                                 <a href="<?php echo esc_url(add_query_arg('tab', 'certificaten', get_permalink())); ?>"
-                                   class="btn-ghost text-sm">
+                                   class="btn-ghost btn-sm shrink-0">
                                     <?php echo stridence_icon('award', 'w-4 h-4 mr-1'); ?>
                                     <?php esc_html_e('Certificaat', 'stridence'); ?>
                                 </a>
@@ -344,9 +325,9 @@ $action_items       = $data['action_items'] ?? [];
     <?php if (!empty($cancelled_editions)) : ?>
         <section x-data="{ open: false }">
             <button type="button"
-                    class="w-full flex items-center justify-between gap-4 mb-4"
+                    class="w-full flex items-center justify-between gap-4 mb-3"
                     @click="open = !open">
-                <h2 class="font-heading text-xl font-bold text-text-muted">
+                <h3 class="dash-subheading text-text-muted">
                     <?php
                     printf(
                         /* translators: %d: number of cancelled registrations */
@@ -354,27 +335,29 @@ $action_items       = $data['action_items'] ?? [];
                         count($cancelled_editions)
                     );
                     ?>
-                </h2>
+                </h3>
                 <span class="text-text-muted transition-transform duration-200"
                       :class="{ 'rotate-180': open }">
-                    <?php echo stridence_icon('chevron-down', 'w-5 h-5'); ?>
+                    <?php echo stridence_icon('chevron-down', 'w-4 h-4'); ?>
                 </span>
             </button>
 
             <div x-show="open" x-collapse>
-                <div class="dash-card divide-y divide-border">
+                <div class="bg-surface-card rounded-lg border border-border/60 divide-y divide-border/60">
                     <?php foreach ($cancelled_editions as $reg) : ?>
-                        <div class="p-4 text-text-muted">
-                            <h3 class="font-medium truncate">
-                                <?php echo esc_html($reg['course_title']); ?>
-                            </h3>
-                            <p class="text-sm">
-                                <?php
-                                if ($reg['start_date']) {
-                                    echo esc_html(stride_format_date($reg['start_date']));
-                                }
-                                ?>
-                            </p>
+                        <div class="list-item-static text-text-muted">
+                            <div class="flex-1 min-w-0">
+                                <span class="font-medium text-sm truncate block">
+                                    <?php echo esc_html($reg['course_title']); ?>
+                                </span>
+                                <span class="text-xs">
+                                    <?php
+                                    if ($reg['start_date']) {
+                                        echo esc_html(stride_format_date($reg['start_date']));
+                                    }
+                                    ?>
+                                </span>
+                            </div>
                         </div>
                     <?php endforeach; ?>
                 </div>
