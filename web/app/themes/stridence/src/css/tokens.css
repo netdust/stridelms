@@ -64,6 +64,19 @@
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --duration-fast: 150ms;
   --duration-normal: 250ms;
+
+  /* ── Dashboard-Specific ── */
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
+  --shadow-card-soft: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-dock: 0 2px 12px rgba(0, 0, 0, 0.08);
+  --shadow-panel: 0 8px 30px rgba(0, 0, 0, 0.12);
+
+  /* ── Dashboard Layout ── */
+  --dock-width: 56px;
+  --dock-width-expanded: 180px;
+  --dashboard-max: 56rem;
 }
 
 /* ── Reduced Motion ── */
