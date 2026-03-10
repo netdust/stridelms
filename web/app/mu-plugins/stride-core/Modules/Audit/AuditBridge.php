@@ -28,6 +28,11 @@ final class AuditBridge extends AbstractService
 
     protected function init(): void
     {
+        // Activity shortcode (deferred to ensure dependencies are available)
+        add_action('init', function () {
+            new ActivityShortcode($this->audit(), ntdst_get(\Stride\Modules\Edition\EditionService::class));
+        });
+
         // Registration events
         add_action('stride/registration/created', [$this, 'onRegistrationCreated']);
         add_action('stride/registration/cancelled', [$this, 'onRegistrationCancelled']);
@@ -35,8 +40,11 @@ final class AuditBridge extends AbstractService
         // Attendance events
         add_action('stride/attendance/marked', [$this, 'onAttendanceMarked']);
 
+        // Session events
+        add_action('stride/session/note_updated', [$this, 'onSessionNoteUpdated']);
+
         // LearnDash completion events
-        add_action('learndash_course_completed', [$this, 'onCourseCompleted'], 10, 2);
+        add_action('learndash_course_completed', [$this, 'onCourseCompleted'], 10, 1);
     }
 
     private function audit(): AuditService
@@ -98,16 +106,32 @@ final class AuditBridge extends AbstractService
         );
     }
 
-    public function onCourseCompleted(array $data, \WP_User $user): void
+    public function onSessionNoteUpdated(array $data): void
     {
+        $this->audit()->record(
+            'session',
+            (int) $data['session_id'],
+            'session.note_updated',
+            null,
+            [
+                'session_id' => $data['session_id'] ?? null,
+                'edition_id' => $data['edition_id'] ?? null,
+            ]
+        );
+    }
+
+    public function onCourseCompleted(array $data): void
+    {
+        $user = $data['user'] ?? null;
         $courseId = $data['course']->ID ?? $data['course_id'] ?? 0;
         $courseTitle = $data['course']->post_title ?? '';
+        $userId = $user instanceof \WP_User ? $user->ID : ($data['user_id'] ?? 0);
 
         $this->audit()->record(
             'completion',
             $courseId,
             'completion.course_completed',
-            $user->ID,
+            $userId ?: null,
             [
                 'course_id' => $courseId,
                 'course_title' => $courseTitle,
@@ -115,14 +139,14 @@ final class AuditBridge extends AbstractService
         );
 
         // Check if course has a certificate
-        if (function_exists('learndash_get_course_certificate_link')) {
-            $certificateLink = learndash_get_course_certificate_link($courseId, $user->ID);
+        if ($userId && function_exists('learndash_get_course_certificate_link')) {
+            $certificateLink = learndash_get_course_certificate_link($courseId, $userId);
             if (!empty($certificateLink)) {
                 $this->audit()->record(
                     'completion',
                     $courseId,
                     'completion.certificate_issued',
-                    $user->ID,
+                    $userId,
                     [
                         'course_id' => $courseId,
                         'course_title' => $courseTitle,
