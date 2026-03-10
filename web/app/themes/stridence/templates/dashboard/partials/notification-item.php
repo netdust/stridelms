@@ -66,7 +66,7 @@ if ($timestamp > 0) {
 
     <!-- Content -->
     <div class="flex-1 min-w-0">
-        <p class="text-sm font-medium text-text truncate"><?php echo esc_html($title); ?></p>
+        <p class="text-sm font-medium text-text truncate m-0"><?php echo esc_html($title); ?></p>
         <?php if ($body !== '') : ?>
             <p class="text-xs text-text-muted truncate mt-0.5"><?php echo esc_html($body); ?></p>
         <?php endif; ?>
