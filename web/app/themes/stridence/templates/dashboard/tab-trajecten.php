@@ -15,9 +15,9 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
-use Stride\Contracts\LMSAdapterInterface;
 use Stride\Domain\RegistrationStatus;
 use Stride\Domain\TrajectoryMode;
+use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Trajectory\TrajectoryService;
 use Stride\Modules\Edition\EditionService;
@@ -29,7 +29,6 @@ $user_id = $user->ID;
 $registrationRepo   = ntdst_get(RegistrationRepository::class);
 $trajectoryService  = ntdst_get(TrajectoryService::class);
 $editionService     = ntdst_get(EditionService::class);
-$lmsAdapter         = ntdst_get(LMSAdapterInterface::class);
 
 // Get user's trajectory enrollments
 $enrollments = $registrationRepo->findTrajectoryEnrollmentsByUser($user_id);
@@ -72,7 +71,7 @@ foreach ($enrollments as $enrollment) {
     // Check course completion for each required course
     foreach ($required_courses as $course) {
         $course_id = $course->ID;
-        if ($lmsAdapter->isComplete($user_id, $course_id)) {
+        if (LearnDashHelper::isComplete($course_id, $user_id)) {
             $completed_courses[] = $course_id;
         } else {
             // Check if user has active registration for any edition of this course
@@ -94,7 +93,7 @@ foreach ($enrollments as $enrollment) {
     foreach ($elective_groups as $group) {
         foreach ($group['courses'] as $course) {
             $course_id = $course->ID;
-            if ($lmsAdapter->isComplete($user_id, $course_id)) {
+            if (LearnDashHelper::isComplete($course_id, $user_id)) {
                 $completed_courses[] = $course_id;
             } else {
                 foreach ($edition_registrations as $edReg) {
@@ -150,7 +149,7 @@ foreach ($enrollments as $enrollment) {
         <?php if (!empty($active)) : ?>
             <div class="space-y-4">
                 <?php foreach ($active as $traj) : ?>
-                    <div class="card" x-data="expandable()">
+                    <div class="dash-card" x-data="expandable()">
                         <button type="button"
                                 class="w-full p-4 flex items-center justify-between gap-4 text-left"
                                 @click="toggle()">
@@ -212,7 +211,7 @@ foreach ($enrollments as $enrollment) {
                                             </h4>
                                             <div class="divide-y divide-border rounded-lg border border-border">
                                                 <?php foreach ($traj['required_courses'] as $course) :
-                                                    $is_course_complete = $lmsAdapter->isComplete($user_id, $course->ID);
+                                                    $is_course_complete = LearnDashHelper::isComplete($course->ID, $user_id);
                                                     $is_in_progress = in_array($course->ID, array_unique($in_progress_courses ?? []));
                                                 ?>
                                                     <div class="p-3 flex items-center justify-between gap-3">
@@ -264,7 +263,7 @@ foreach ($enrollments as $enrollment) {
                                         // Count completed in this group
                                         $group_completed = 0;
                                         foreach ($courses as $course) {
-                                            if ($lmsAdapter->isComplete($user_id, $course->ID)) {
+                                            if (LearnDashHelper::isComplete($course->ID, $user_id)) {
                                                 $group_completed++;
                                             }
                                         }
@@ -284,7 +283,7 @@ foreach ($enrollments as $enrollment) {
                                             </h4>
                                             <div class="divide-y divide-border rounded-lg border border-border">
                                                 <?php foreach ($courses as $course) :
-                                                    $is_course_complete = $lmsAdapter->isComplete($user_id, $course->ID);
+                                                    $is_course_complete = LearnDashHelper::isComplete($course->ID, $user_id);
                                                     $is_in_progress = false;
                                                     foreach ($traj['edition_registrations'] as $edReg) {
                                                         if ($editionService->getCourseId((int) $edReg->edition_id) === $course->ID) {
@@ -393,7 +392,7 @@ foreach ($enrollments as $enrollment) {
             </button>
 
             <div x-show="open" x-collapse>
-                <div class="card divide-y divide-border">
+                <div class="dash-card divide-y divide-border">
                     <?php foreach ($completed as $traj) : ?>
                         <div class="p-4 flex items-center justify-between gap-4">
                             <div class="flex items-center gap-3 min-w-0">

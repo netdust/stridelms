@@ -15,8 +15,8 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
-use Stride\Contracts\LMSAdapterInterface;
 use Stride\Domain\RegistrationStatus;
+use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Edition\EditionCompletion;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
@@ -28,7 +28,6 @@ $user_id = $user->ID;
 $registrationRepo  = ntdst_get(RegistrationRepository::class);
 $editionService    = ntdst_get(EditionService::class);
 $completionService = ntdst_get(EditionCompletion::class);
-$lmsAdapter        = ntdst_get(LMSAdapterInterface::class);
 
 // Get completed registrations
 $registrations = $registrationRepo->findByUser($user_id);
@@ -66,7 +65,7 @@ foreach ($registrations as $reg) {
     }
 
     // Get certificate link from LearnDash
-    $certificate_url = $lmsAdapter->getCertificateLink($user_id, $course_id);
+    $certificate_url = LearnDashHelper::getCertificateLink($course_id, $user_id);
 
     // Get edition meta for additional info
     $editionModel = ntdst_data()->get('vad_edition');
@@ -92,7 +91,7 @@ foreach ($registrations as $reg) {
 }
 
 // ── Online course certificates ──────────────────────────────
-$enrolled_course_ids = $lmsAdapter->getEnrolledCourses($user_id);
+$enrolled_course_ids = LearnDashHelper::getEnrolledCourses($user_id);
 
 foreach ($enrolled_course_ids as $courseId) {
     // Skip if already covered by an edition certificate above
@@ -107,12 +106,12 @@ foreach ($enrolled_course_ids as $courseId) {
         continue;
     }
 
-    // Only include online/e-learning/webinar courses (not classroom)
-    $categories = get_the_terms($courseId, 'ld_course_category');
+    // Only include online/e-learning/webinar courses (matches archive)
+    $formats = get_the_terms($courseId, 'stride_format');
     $is_online = false;
-    if ($categories && !is_wp_error($categories)) {
-        foreach ($categories as $cat) {
-            if (in_array($cat->slug, ['online', 'e-learning', 'webinar'], true)) {
+    if ($formats && !is_wp_error($formats)) {
+        foreach ($formats as $fmt) {
+            if (in_array($fmt->slug, ['online', 'e-learning', 'webinar'], true)) {
                 $is_online = true;
                 break;
             }
@@ -123,7 +122,7 @@ foreach ($enrolled_course_ids as $courseId) {
     }
 
     // Check completion
-    if (!$lmsAdapter->isComplete($user_id, $courseId)) {
+    if (!LearnDashHelper::isComplete($courseId, $user_id)) {
         continue;
     }
 
@@ -132,8 +131,8 @@ foreach ($enrolled_course_ids as $courseId) {
         continue;
     }
 
-    $certificate_url = $lmsAdapter->getCertificateLink($user_id, $courseId);
-    $completion_date = $lmsAdapter->getCompletionDate($user_id, $courseId);
+    $certificate_url = LearnDashHelper::getCertificateLink($courseId, $user_id);
+    $completion_date = LearnDashHelper::getCompletionDate($courseId, $user_id);
 
     $certificates[] = [
         'edition_id'      => 0,
@@ -159,7 +158,7 @@ usort($certificates, fn($a, $b) => strcmp($b['completed_at'], $a['completed_at']
         <?php if (!empty($certificates)) : ?>
             <div class="grid gap-4 sm:grid-cols-2">
                 <?php foreach ($certificates as $cert) : ?>
-                    <div class="card overflow-hidden">
+                    <div class="dash-card overflow-hidden">
                         <!-- Certificate Header -->
                         <div class="p-4 bg-gradient-to-r from-primary/10 to-primary/5">
                             <div class="flex items-center gap-3">
@@ -227,7 +226,7 @@ usort($certificates, fn($a, $b) => strcmp($b['completed_at'], $a['completed_at']
 
     <!-- Certificate Info -->
     <?php if (!empty($certificates)) : ?>
-        <section class="card p-4">
+        <section class="dash-card p-4">
             <div class="flex items-start gap-3">
                 <div class="shrink-0 mt-0.5">
                     <?php echo stridence_icon('info', 'w-5 h-5 text-blue-500'); ?>

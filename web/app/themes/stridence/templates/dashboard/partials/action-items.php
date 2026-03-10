@@ -18,7 +18,7 @@ if (empty($items)) {
 }
 ?>
 <section class="mb-8">
-    <div class="card divide-y divide-border border-amber-200 bg-amber-50/50">
+    <div class="dash-card divide-y divide-border border-amber-200 bg-amber-50/50">
         <?php foreach ($items as $item) : ?>
             <a href="<?= esc_url($item['url']) ?>"
                class="p-4 flex items-center justify-between gap-4 hover:bg-amber-50 transition-colors">

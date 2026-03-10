@@ -47,7 +47,7 @@ $action_items       = $data['action_items'] ?? [];
             <h2 class="font-heading text-xl font-bold text-text mb-4">
                 <?php esc_html_e('Komende sessies', 'stridence'); ?>
             </h2>
-            <div class="card divide-y divide-border">
+            <div class="dash-card divide-y divide-border">
                 <?php foreach ($upcoming_sessions as $session) : ?>
                     <div class="p-4">
                         <div class="flex items-start justify-between gap-4">
@@ -79,7 +79,7 @@ $action_items       = $data['action_items'] ?? [];
         <?php if (!empty($active_editions)) : ?>
             <div class="space-y-4">
                 <?php foreach ($active_editions as $reg) : ?>
-                    <div class="card" x-data="expandable()">
+                    <div class="dash-card" x-data="expandable()">
                         <button type="button"
                                 class="w-full p-4 flex items-center justify-between gap-4 text-left"
                                 @click="toggle()">
@@ -208,7 +208,7 @@ $action_items       = $data['action_items'] ?? [];
             </h2>
             <div class="space-y-3">
                 <?php foreach ($active_online as $course) : ?>
-                    <div class="card p-4">
+                    <div class="dash-card p-4">
                         <div class="flex items-center justify-between gap-4">
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-2 mb-1">
@@ -293,7 +293,7 @@ $action_items       = $data['action_items'] ?? [];
             </button>
 
             <div x-show="open" x-collapse>
-                <div class="card divide-y divide-border">
+                <div class="dash-card divide-y divide-border">
                     <?php foreach ($completed_items as $item) : ?>
                         <div class="p-4 flex items-center justify-between gap-4">
                             <div class="flex-1 min-w-0">
@@ -362,7 +362,7 @@ $action_items       = $data['action_items'] ?? [];
             </button>
 
             <div x-show="open" x-collapse>
-                <div class="card divide-y divide-border">
+                <div class="dash-card divide-y divide-border">
                     <?php foreach ($cancelled_editions as $reg) : ?>
                         <div class="p-4 text-text-muted">
                             <h3 class="font-medium truncate">
