@@ -273,4 +273,156 @@ class WPAuditBridgeTest extends TestCase
         $this->assertEquals('editor', $call['context']['new_role']);
         $this->assertEquals('subscriber', $call['context']['old_role']);
     }
+
+    // ── WP Privacy API Tests ────────────────────────────────────────
+
+    /** @test */
+    public function testOnPrivacyExportCreatedRecordsEvent(): void
+    {
+        $this->bridge->onPrivacyExportCreated('/path/to/file.zip', 'https://example.com/file.zip', 'test@example.com', 42);
+
+        $calls = $this->mockAuditService->getRecordedCalls();
+        $this->assertCount(1, $calls);
+
+        $call = $calls[0];
+        $this->assertEquals('privacy_request', $call['entity_type']);
+        $this->assertEquals(42, $call['entity_id']);
+        $this->assertEquals('privacy.export_created', $call['action']);
+        $this->assertEquals('test@example.com', $call['context']['request_email']);
+    }
+
+    /** @test */
+    public function testOnPrivacyDataErasedRecordsEvent(): void
+    {
+        $this->bridge->onPrivacyDataErased(42, 'test@example.com', 5, 2, true);
+
+        $calls = $this->mockAuditService->getRecordedCalls();
+        $this->assertCount(1, $calls);
+
+        $call = $calls[0];
+        $this->assertEquals('privacy_request', $call['entity_type']);
+        $this->assertEquals(42, $call['entity_id']);
+        $this->assertEquals('privacy.data_erased', $call['action']);
+        $this->assertEquals('test@example.com', $call['context']['request_email']);
+        $this->assertEquals(5, $call['context']['items_removed']);
+        $this->assertEquals(2, $call['context']['items_retained']);
+    }
+
+    /** @test */
+    public function testOnPrivacyRequestConfirmedRecordsEvent(): void
+    {
+        $this->bridge->onPrivacyRequestConfirmed(99);
+
+        $calls = $this->mockAuditService->getRecordedCalls();
+        $this->assertCount(1, $calls);
+
+        $call = $calls[0];
+        $this->assertEquals('privacy_request', $call['entity_type']);
+        $this->assertEquals(99, $call['entity_id']);
+        $this->assertEquals('privacy.request_confirmed', $call['action']);
+    }
+
+    // ── Admin Action Tests ──────────────────────────────────────────
+
+    /** @test */
+    public function testOnOptionUpdatedLogsSecurityOptions(): void
+    {
+        $this->bridge->onOptionUpdated('admin_email', 'old@example.com', 'new@example.com');
+
+        $calls = $this->mockAuditService->getRecordedCalls();
+        $this->assertCount(1, $calls);
+
+        $call = $calls[0];
+        $this->assertEquals('option', $call['entity_type']);
+        $this->assertEquals(0, $call['entity_id']);
+        $this->assertEquals('option.updated', $call['action']);
+        $this->assertEquals('admin_email', $call['context']['option_name']);
+    }
+
+    /** @test */
+    public function testOnOptionUpdatedIgnoresNonSecurityOptions(): void
+    {
+        $this->bridge->onOptionUpdated('_transient_feed_mod_abc', '', '12345');
+
+        $calls = $this->mockAuditService->getRecordedCalls();
+        $this->assertCount(0, $calls);
+    }
+
+    /** @test */
+    public function testOnOptionUpdatedIgnoresGenericOptions(): void
+    {
+        $this->bridge->onOptionUpdated('sidebars_widgets', [], []);
+
+        $calls = $this->mockAuditService->getRecordedCalls();
+        $this->assertCount(0, $calls);
+    }
+
+    /**
+     * @test
+     * @dataProvider securityOptionProvider
+     */
+    public function testAllSecurityOptionsAreLogged(string $option): void
+    {
+        $this->bridge->onOptionUpdated($option, 'old', 'new');
+
+        $calls = $this->mockAuditService->getRecordedCalls();
+        $this->assertCount(1, $calls, "Security option '{$option}' should be logged");
+    }
+
+    public static function securityOptionProvider(): array
+    {
+        return [
+            'blogname' => ['blogname'],
+            'admin_email' => ['admin_email'],
+            'users_can_register' => ['users_can_register'],
+            'default_role' => ['default_role'],
+            'permalink_structure' => ['permalink_structure'],
+            'blog_public' => ['blog_public'],
+            'wp_page_for_privacy_policy' => ['wp_page_for_privacy_policy'],
+        ];
+    }
+
+    /** @test */
+    public function testOnPluginActivatedRecordsEvent(): void
+    {
+        $this->bridge->onPluginActivated('my-plugin/my-plugin.php');
+
+        $calls = $this->mockAuditService->getRecordedCalls();
+        $this->assertCount(1, $calls);
+
+        $call = $calls[0];
+        $this->assertEquals('plugin', $call['entity_type']);
+        $this->assertEquals(0, $call['entity_id']);
+        $this->assertEquals('plugin.activated', $call['action']);
+        $this->assertEquals('my-plugin/my-plugin.php', $call['context']['plugin_file']);
+    }
+
+    /** @test */
+    public function testOnPluginDeactivatedRecordsEvent(): void
+    {
+        $this->bridge->onPluginDeactivated('my-plugin/my-plugin.php');
+
+        $calls = $this->mockAuditService->getRecordedCalls();
+        $this->assertCount(1, $calls);
+
+        $call = $calls[0];
+        $this->assertEquals('plugin.deactivated', $call['action']);
+        $this->assertEquals('my-plugin/my-plugin.php', $call['context']['plugin_file']);
+    }
+
+    /** @test */
+    public function testOnThemeSwitchedRecordsEvent(): void
+    {
+        $oldTheme = new \WP_Theme('old-theme');
+        $this->bridge->onThemeSwitched('new-theme', $oldTheme);
+
+        $calls = $this->mockAuditService->getRecordedCalls();
+        $this->assertCount(1, $calls);
+
+        $call = $calls[0];
+        $this->assertEquals('theme', $call['entity_type']);
+        $this->assertEquals(0, $call['entity_id']);
+        $this->assertEquals('theme.switched', $call['action']);
+        $this->assertEquals('new-theme', $call['context']['new_theme']);
+    }
 }

@@ -69,6 +69,17 @@ final class WPAuditBridge implements \NTDST_Service_Meta
         // User meta (personal data)
         add_action('updated_user_meta', [$this, 'onUserMetaUpdated'], 10, 4);
         add_action('deleted_user_meta', [$this, 'onUserMetaDeleted'], 10, 4);
+
+        // WP Privacy API
+        add_action('wp_privacy_personal_data_export_file_created', [$this, 'onPrivacyExportCreated'], 10, 4);
+        add_action('wp_privacy_personal_data_erased', [$this, 'onPrivacyDataErased'], 10, 5);
+        add_action('user_request_action_confirmed', [$this, 'onPrivacyRequestConfirmed'], 10, 1);
+
+        // Admin actions
+        add_action('updated_option', [$this, 'onOptionUpdated'], 10, 3);
+        add_action('activated_plugin', [$this, 'onPluginActivated'], 10, 1);
+        add_action('deactivated_plugin', [$this, 'onPluginDeactivated'], 10, 1);
+        add_action('switch_theme', [$this, 'onThemeSwitched'], 10, 2);
     }
 
     private function audit(): AuditService
@@ -197,6 +208,71 @@ final class WPAuditBridge implements \NTDST_Service_Meta
 
         $this->audit()->record('user', $userId, 'usermeta.deleted', null, [
             'meta_key' => $metaKey,
+        ]);
+    }
+
+    // ── WP Privacy API ──────────────────────────────────────────────
+
+    public function onPrivacyExportCreated(string $archivePath, string $archiveUrl, string $requestEmail, int $requestId): void
+    {
+        $this->audit()->record('privacy_request', $requestId, 'privacy.export_created', null, [
+            'request_email' => $requestEmail,
+        ]);
+    }
+
+    public function onPrivacyDataErased(int $requestId, string $requestEmail, int $itemsRemoved, int $itemsRetained, bool $done): void
+    {
+        $this->audit()->record('privacy_request', $requestId, 'privacy.data_erased', null, [
+            'request_email' => $requestEmail,
+            'items_removed' => $itemsRemoved,
+            'items_retained' => $itemsRetained,
+        ]);
+    }
+
+    public function onPrivacyRequestConfirmed(int $requestId): void
+    {
+        $request = get_post($requestId);
+        $actionName = $request->post_name ?? '';
+        $email = $request->post_title ?? '';
+
+        $this->audit()->record('privacy_request', $requestId, 'privacy.request_confirmed', null, [
+            'action_name' => $actionName,
+            'request_email' => $email,
+        ]);
+    }
+
+    // ── Admin Actions ──────────────────────────────────────────────
+
+    public function onOptionUpdated(string $option, mixed $oldValue, mixed $newValue): void
+    {
+        if (!in_array($option, self::SECURITY_OPTIONS, true)) {
+            return;
+        }
+
+        $this->audit()->record('option', 0, 'option.updated', null, [
+            'option_name' => $option,
+        ]);
+    }
+
+    public function onPluginActivated(string $plugin): void
+    {
+        $this->audit()->record('plugin', 0, 'plugin.activated', null, [
+            'plugin_file' => $plugin,
+        ]);
+    }
+
+    public function onPluginDeactivated(string $plugin): void
+    {
+        $this->audit()->record('plugin', 0, 'plugin.deactivated', null, [
+            'plugin_file' => $plugin,
+        ]);
+    }
+
+    public function onThemeSwitched(string $newThemeName, \WP_Theme $oldTheme): void
+    {
+        $this->audit()->record('theme', 0, 'theme.switched', null, [
+            'new_theme' => $newThemeName,
+            'old_theme' => $oldTheme->get_stylesheet(),
         ]);
     }
 }

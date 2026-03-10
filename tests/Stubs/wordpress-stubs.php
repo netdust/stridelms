@@ -1952,3 +1952,15 @@ if (!function_exists('ntdst_enqueue_admin_toolkit')) {
         // Stub
     }
 }
+
+if (!class_exists('WP_Theme')) {
+    class WP_Theme {
+        private string $stylesheet;
+        public function __construct(string $stylesheet = '') {
+            $this->stylesheet = $stylesheet;
+        }
+        public function get_stylesheet(): string {
+            return $this->stylesheet;
+        }
+    }
+}
