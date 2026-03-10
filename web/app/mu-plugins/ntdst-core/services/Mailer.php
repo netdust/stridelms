@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 
 /**
  * NTDST Mailer - Template-based Mail System
@@ -61,7 +62,7 @@ class NTDST_Mailer
     /**
      * Set recipient(s)
      */
-    public function to($email): self
+    public function to(string|array $email): self
     {
         $this->to = is_array($email) ? $email : [$email];
         return $this;
@@ -70,7 +71,7 @@ class NTDST_Mailer
     /**
      * Set CC recipients
      */
-    public function cc($email): self
+    public function cc(string|array $email): self
     {
         $this->cc = is_array($email) ? $email : [$email];
         return $this;
@@ -79,7 +80,7 @@ class NTDST_Mailer
     /**
      * Set BCC recipients
      */
-    public function bcc($email): self
+    public function bcc(string|array $email): self
     {
         $this->bcc = is_array($email) ? $email : [$email];
         return $this;
@@ -155,7 +156,7 @@ class NTDST_Mailer
                 $this->message = $this->renderTemplate($this->template, $this->template_data);
             } elseif ($this->is_html && $this->message) {
                 // Wrap HTML messages in layout if not already wrapped
-                if (strpos($this->message, '<html') === false) {
+                if (!str_contains($this->message, '<html')) {
                     $this->message = $this->wrapInLayout($this->message, []);
                 }
             }
@@ -306,12 +307,12 @@ class NTDST_Mailer
 
         // Check if template rendering resulted in error HTML
         // (Response returns error HTML string when template not found)
-        if (strpos($content, '<div style="padding:20px;background:#fee;') === 0) {
+        if (str_starts_with($content, '<div style="padding:20px;background:#fee;')) {
             return $this->getDefaultTemplate($data);
         }
 
         // Wrap in email layout if not already wrapped
-        if (strpos($content, '<html') === false) {
+        if (!str_contains($content, '<html')) {
             $content = $this->wrapInLayout($content, $data);
         }
 
@@ -522,7 +523,7 @@ add_filter('wp_mail', function ($args) {
     }
 
     // Wrap if HTML and not already wrapped
-    if ($is_html && isset($args['message']) && strpos($args['message'], '<html') === false) {
+    if ($is_html && isset($args['message']) && !str_contains($args['message'], '<html')) {
         $args['message'] = ntdst_wrap_email_in_layout($args['message'], $args['subject'] ?? '');
     }
 
