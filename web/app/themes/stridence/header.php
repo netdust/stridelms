@@ -58,11 +58,6 @@ defined('ABSPATH') || exit;
 
                 <!-- Desktop Right Section -->
                 <div class="hidden lg:flex items-center gap-3">
-                    <!-- Search Toggle -->
-                    <button type="button" class="nav-link p-2" aria-label="<?php esc_attr_e('Zoeken', 'stridence'); ?>">
-                        <?php echo stridence_icon('search', 'w-5 h-5'); ?>
-                    </button>
-
                     <!-- User Menu -->
                     <?php if (is_user_logged_in()) : ?>
                         <?php
@@ -74,22 +69,13 @@ defined('ABSPATH') || exit;
                         }
                         ?>
 
-                        <!-- Notification Bell -->
-                        <a href="<?php echo esc_url(home_url('/mijn-account/?tab=meldingen')); ?>"
-                           class="relative nav-link p-2"
-                           aria-label="<?php esc_attr_e('Meldingen', 'stridence'); ?>">
-                            <?php echo stridence_icon('bell', 'w-5 h-5'); ?>
-                            <?php if ($notif_count > 0) : ?>
-                                <span class="absolute -top-0.5 -right-0.5 bg-primary text-text-inverse text-[10px] font-semibold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-                                    <?php echo esc_html($notif_count > 9 ? '9+' : $notif_count); ?>
-                                </span>
-                            <?php endif; ?>
-                        </a>
-
                         <div x-data="dropdown()" class="relative">
                             <button @click="toggle()" class="flex items-center gap-2 nav-link">
-                                <span class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm">
+                                <span class="relative w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm">
                                     <?php echo esc_html(strtoupper(substr($current_user->display_name, 0, 1))); ?>
+                                    <?php if ($notif_count > 0) : ?>
+                                        <span class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-primary ring-2 ring-surface-card"></span>
+                                    <?php endif; ?>
                                 </span>
                                 <span class="hidden xl:inline"><?php echo esc_html($current_user->display_name); ?></span>
                                 <?php echo stridence_icon('chevron-down', 'w-4 h-4'); ?>
