@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /**
  * NTDST Logger - PSR-3 Compatible Logging System
  *
@@ -23,9 +25,10 @@
 
 defined('ABSPATH') || exit;
 
+require_once __DIR__ . '/../core/LogLevel.php';
+
 class NTDST_Logger
 {
-    protected string $channel = 'app';
     protected array $handlers = [];
     protected int $min_level = 0; // 0=debug, 1=info, 2=warning, 3=error, 4=critical
     protected static bool $model_registered = false;
@@ -38,26 +41,10 @@ class NTDST_Logger
     protected static bool $shutdownRegistered = false;
     protected static bool $batchingEnabled = true;
 
-    public const DEBUG = 0;
-    public const INFO = 1;
-    public const WARNING = 2;
-    public const ERROR = 3;
-    public const CRITICAL = 4;
-
-    protected static array $levels = [
-        self::DEBUG => 'DEBUG',
-        self::INFO => 'INFO',
-        self::WARNING => 'WARNING',
-        self::ERROR => 'ERROR',
-        self::CRITICAL => 'CRITICAL',
-    ];
-
-    public function __construct(string $channel = 'app')
+    public function __construct(protected readonly string $channel = 'app')
     {
-        $this->channel = $channel;
-
         // Set minimum level based on environment
-        $this->min_level = defined('WP_DEBUG') && WP_DEBUG ? self::DEBUG : self::WARNING;
+        $this->min_level = (defined('WP_DEBUG') && WP_DEBUG) ? LogLevel::Debug->value : LogLevel::Warning->value;
 
         // PERFORMANCE: Register shutdown handler once for batched writes
         if (!self::$shutdownRegistered) {
@@ -115,7 +102,7 @@ class NTDST_Logger
         $this->handlers['file'] = function ($level, $message, $context) {
             // Format log entry
             $timestamp = current_time('Y-m-d H:i:s');
-            $level_name = self::$levels[$level] ?? 'UNKNOWN';
+            $level_name = LogLevel::tryFrom($level)?->label() ?? 'UNKNOWN';
             $context_str = !empty($context) ? ' ' . json_encode($context) : '';
             $log_entry = "[{$timestamp}] {$this->channel}.{$level_name}: {$message}{$context_str}\n";
 
@@ -134,8 +121,8 @@ class NTDST_Logger
 
         // Error log handler (PHP error_log)
         $this->handlers['error_log'] = function ($level, $message, $context) {
-            if ($level >= self::ERROR) {
-                $level_name = self::$levels[$level] ?? 'UNKNOWN';
+            if ($level >= LogLevel::Error->value) {
+                $level_name = LogLevel::tryFrom($level)?->label() ?? 'UNKNOWN';
                 $context_str = !empty($context) ? ' ' . json_encode($context) : '';
                 error_log("[{$this->channel}] {$level_name}: {$message}{$context_str}");
             }
@@ -144,7 +131,7 @@ class NTDST_Logger
         // Database handler (for critical errors)
         // Uses Data.php for consistency with system architecture
         $this->handlers['database'] = function ($level, $message, $context) {
-            if ($level >= self::ERROR) {
+            if ($level >= LogLevel::Error->value) {
                 try {
                     $model = ntdst_data()->get('log_entry');
 
@@ -153,7 +140,7 @@ class NTDST_Logger
                         'title' => $message,                        // post_title
                         'author' => get_current_user_id() ?: 0,     // post_author
                         'channel' => $this->channel,                // meta
-                        'level' => self::$levels[$level] ?? 'UNKNOWN', // meta
+                        'level' => LogLevel::tryFrom($level)?->label() ?? 'UNKNOWN', // meta
                         'context' => $context,                      // meta (auto JSON encoded)
                         'ip_address' => $this->getClientIp(),       // meta
                         'url' => $_SERVER['REQUEST_URI'] ?? '',     // meta
@@ -283,7 +270,7 @@ class NTDST_Logger
 
         // PERFORMANCE: Critical/Error level logs bypass batching for immediate visibility
         $was_batching = self::$batchingEnabled;
-        if ($level >= self::ERROR) {
+        if ($level >= LogLevel::Error->value) {
             self::$batchingEnabled = false;
         }
 
@@ -349,9 +336,9 @@ class NTDST_Logger
     /**
      * Set minimum log level
      */
-    public function setMinLevel(int $level): self
+    public function setMinLevel(LogLevel|int $level): self
     {
-        $this->min_level = $level;
+        $this->min_level = $level instanceof LogLevel ? $level->value : $level;
         return $this;
     }
 
@@ -359,27 +346,27 @@ class NTDST_Logger
 
     public function debug(string $message, array $context = []): void
     {
-        $this->log(self::DEBUG, $message, $context);
+        $this->log(LogLevel::Debug->value, $message, $context);
     }
 
     public function info(string $message, array $context = []): void
     {
-        $this->log(self::INFO, $message, $context);
+        $this->log(LogLevel::Info->value, $message, $context);
     }
 
     public function warning(string $message, array $context = []): void
     {
-        $this->log(self::WARNING, $message, $context);
+        $this->log(LogLevel::Warning->value, $message, $context);
     }
 
     public function error(string $message, array $context = []): void
     {
-        $this->log(self::ERROR, $message, $context);
+        $this->log(LogLevel::Error->value, $message, $context);
     }
 
     public function critical(string $message, array $context = []): void
     {
-        $this->log(self::CRITICAL, $message, $context);
+        $this->log(LogLevel::Critical->value, $message, $context);
     }
 
     /**
@@ -398,7 +385,7 @@ class NTDST_Logger
 
             // Filter by level if specified
             if ($min_level !== null) {
-                $level_name = self::$levels[$min_level] ?? null;
+                $level_name = LogLevel::tryFrom($min_level)?->label();
                 if ($level_name) {
                     $query->where('level', $level_name);
                 }
