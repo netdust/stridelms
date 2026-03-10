@@ -166,8 +166,12 @@ class AuditRepository
     }
 
     /**
-     * Find audit entries where a user is the subject (in context),
-     * excluding entries where the user was the actor (self-actions).
+     * Find audit entries where a user is the subject.
+     *
+     * Matches two patterns:
+     * 1. context.user_id = userId AND actor != userId (admin actions on behalf of user)
+     * 2. completion/certificate events where actor_id = userId (LearnDash stores
+     *    the completing user as actor, not in context.user_id)
      */
     public function findBySubjectUser(int $userId, int $limit = 50, int $daysBack = 30): array
     {
@@ -177,14 +181,19 @@ class AuditRepository
 
         return $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$this->table()}
-             WHERE JSON_EXTRACT(context, '$.user_id') = %d
-               AND (actor_id IS NULL OR actor_id != %d)
-               AND created_at >= %s
+             WHERE created_at >= %s
+               AND (
+                   (JSON_EXTRACT(context, '$.user_id') = %d
+                    AND (actor_id IS NULL OR actor_id != %d))
+                   OR
+                   (actor_id = %d AND action LIKE 'completion.%%')
+               )
              ORDER BY created_at DESC
              LIMIT %d",
-            $userId,
-            $userId,
             $since,
+            $userId,
+            $userId,
+            $userId,
             $limit
         ));
     }
