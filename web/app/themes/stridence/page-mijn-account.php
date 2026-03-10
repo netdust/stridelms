@@ -58,8 +58,9 @@ $utility_nav = [
     'certificaten'    => ['label' => __('Certificaten', 'stridence'), 'icon' => 'award', 'visible' => !empty($nav_items['certificaten'])],
 ];
 
-// Notification count (hardcode 0 until NotificationService is built)
-$unread_count = 0; // TODO: Replace with NotificationService::getUnreadCount() in Task 7
+// Notification count
+$notificationService = ntdst_get(\Stride\Modules\Notification\NotificationService::class);
+$unread_count = $notificationService->getUnreadCount($user->ID);
 
 $page_titles = [
     'home'           => $greeting . ', ' . $firstName,
