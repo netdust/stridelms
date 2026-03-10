@@ -2,7 +2,7 @@
 /**
  * Template Name: Mijn Account
  *
- * Dashboard shell with floating dock navigation and centered content.
+ * Dashboard shell with sidebar navigation (desktop) and bottom nav (mobile).
  * Requires login - redirects to login page if not authenticated.
  * URL state via ?tab=xxx parameter. Default tab is home.
  *
@@ -22,7 +22,7 @@ if (!is_user_logged_in()) {
 $user = wp_get_current_user();
 
 // Get current tab from URL (default: home)
-$valid_tabs = ['home', 'inschrijvingen', 'trajecten', 'offertes', 'certificaten', 'profiel'];
+$valid_tabs = ['home', 'inschrijvingen', 'trajecten', 'offertes', 'certificaten', 'profiel', 'meldingen', 'downloads'];
 $current_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'home';
 
 if (!in_array($current_tab, $valid_tabs, true)) {
@@ -34,41 +34,95 @@ $dashboardService = ntdst_get(\Stride\Modules\User\UserDashboardService::class);
 $home_data = $dashboardService->getHomeData($user->ID);
 $nav_items = $home_data['nav_items'] ?? [];
 
+// Compute greeting variables (needed by $page_titles below)
+$firstName = explode(' ', trim($user->display_name))[0];
+$initials = strtoupper(mb_substr($user->first_name ?: $firstName, 0, 1) . mb_substr($user->last_name ?: '', 0, 1)) ?: '?';
+$hour = (int) date('G');
+$greeting = match (true) {
+    $hour < 12  => __('Goedemorgen', 'stridence'),
+    $hour < 18  => __('Goedemiddag', 'stridence'),
+    default     => __('Goedenavond', 'stridence'),
+};
+
+// Build sidebar navigation
+$primary_nav = [
+    'home'            => ['label' => __('Home', 'stridence'), 'icon' => 'home', 'visible' => true],
+    'inschrijvingen'  => ['label' => __('Mijn opleidingen', 'stridence'), 'icon' => 'book-open', 'visible' => !empty($nav_items['opleidingen'])],
+    'trajecten'       => ['label' => __('Trajecten', 'stridence'), 'icon' => 'layers', 'visible' => !empty($nav_items['trajecten'])],
+    'offertes'        => ['label' => __('Offertes', 'stridence'), 'icon' => 'file-text', 'visible' => !empty($nav_items['offertes'])],
+];
+
+$utility_nav = [
+    'meldingen'       => ['label' => __('Meldingen', 'stridence'), 'icon' => 'bell', 'visible' => true],
+    'downloads'       => ['label' => __('Downloads', 'stridence'), 'icon' => 'download', 'visible' => true],
+    'certificaten'    => ['label' => __('Certificaten', 'stridence'), 'icon' => 'award', 'visible' => !empty($nav_items['certificaten'])],
+];
+
+// Notification count (hardcode 0 until NotificationService is built)
+$unread_count = 0; // TODO: Replace with NotificationService::getUnreadCount() in Task 7
+
+$page_titles = [
+    'home'           => $greeting . ', ' . $firstName,
+    'inschrijvingen' => __('Mijn opleidingen', 'stridence'),
+    'trajecten'      => __('Trajecten', 'stridence'),
+    'offertes'       => __('Offertes', 'stridence'),
+    'certificaten'   => __('Certificaten', 'stridence'),
+    'profiel'        => __('Profiel', 'stridence'),
+    'meldingen'      => __('Meldingen', 'stridence'),
+    'downloads'      => __('Downloads', 'stridence'),
+];
+
 get_header();
 ?>
 
-<div class="min-h-screen bg-surface pb-20 lg:pb-0">
-    <!-- Floating Dock (desktop only) -->
-    <?php
-    get_template_part('templates/dashboard/nav-dock', null, [
-        'current_tab' => $current_tab,
-        'nav_items'   => $nav_items,
-    ]);
-    ?>
+<div class="min-h-screen bg-surface">
+    <!-- Sidebar (desktop only) -->
+    <div class="hidden lg:block">
+        <?php get_template_part('templates/dashboard/nav-sidebar', null, [
+            'current_tab'   => $current_tab,
+            'primary_nav'   => $primary_nav,
+            'utility_nav'   => $utility_nav,
+            'user'          => $user,
+            'unread_count'  => $unread_count,
+        ]); ?>
+    </div>
 
-    <!-- Main Content -->
-    <main class="max-w-4xl mx-auto px-6 lg:px-8 py-8 lg:py-12">
-        <?php
-        if ($current_tab === 'home') {
-            get_template_part('templates/dashboard/tab-home', null, [
-                'user'      => $user,
-                'home_data' => $home_data,
-            ]);
-        } else {
-            get_template_part("templates/dashboard/tab-{$current_tab}", null, [
-                'user' => $user,
-            ]);
-        }
-        ?>
+    <!-- Main Content Area -->
+    <main class="lg:ml-sidebar min-h-screen">
+        <!-- Top Bar -->
+        <div class="sticky top-0 z-30 bg-surface/80 backdrop-blur-sm border-b border-border/60">
+            <div class="max-w-content mx-auto px-4 md:px-6 lg:px-8 h-14 flex items-center justify-between">
+                <h1 class="text-lg font-semibold text-text tracking-tight">
+                    <?php echo esc_html($page_titles[$current_tab] ?? 'Dashboard'); ?>
+                </h1>
+            </div>
+        </div>
+
+        <!-- Page Content -->
+        <div class="max-w-content mx-auto px-4 md:px-6 lg:px-8 py-6 lg:py-8">
+            <?php
+            if ($current_tab === 'home') {
+                get_template_part('templates/dashboard/tab-home', null, [
+                    'user'      => $user,
+                    'home_data' => $home_data,
+                ]);
+            } else {
+                get_template_part("templates/dashboard/tab-{$current_tab}", null, [
+                    'user' => $user,
+                ]);
+            }
+            ?>
+        </div>
     </main>
 
-    <!-- Mobile Navigation -->
-    <?php
-    get_template_part('templates/dashboard/nav-mobile', null, [
-        'current_tab' => $current_tab,
-        'nav_items'   => $nav_items,
-    ]);
-    ?>
+    <!-- Mobile Bottom Navigation -->
+    <div class="lg:hidden">
+        <?php get_template_part('templates/dashboard/nav-mobile', null, [
+            'current_tab'  => $current_tab,
+            'nav_items'    => $nav_items,
+            'unread_count' => $unread_count,
+        ]); ?>
+    </div>
 </div>
 
 <?php get_footer(); ?>
