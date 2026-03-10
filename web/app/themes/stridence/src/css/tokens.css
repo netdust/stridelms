@@ -7,37 +7,40 @@
 
 :root {
   /* ── Brand Colors ── */
-  --color-primary: 29 78 137;        /* Deep blue */
-  --color-primary-light: 59 130 187;
-  --color-primary-dark: 15 52 96;
-  --color-accent: 0 148 133;         /* Teal */
-  --color-accent-light: 38 186 170;
+  --color-primary: 79 70 229;        /* #4F46E5 indigo-600 */
+  --color-primary-hover: 67 56 202;  /* #4338CA indigo-700 */
+  --color-primary-subtle: 238 242 255; /* #EEF2FF indigo-50 */
+  --color-primary-light: 99 102 241; /* #6366F1 indigo-500 */
+  --color-primary-dark: 55 48 163;   /* #3730A3 indigo-800 */
+  --color-accent: 13 148 136;        /* #0D9488 teal-600 */
+  --color-accent-light: 20 184 166;  /* #14B8A6 teal-500 */
 
   /* ── Neutral Colors ── */
-  --color-surface: 250 249 247;      /* Warm off-white */
-  --color-surface-alt: 243 241 237;
-  --color-surface-card: 255 255 255;
-  --color-border: 226 222 215;
-  --color-text: 41 37 36;            /* Warm charcoal */
-  --color-text-muted: 120 113 108;
+  --color-surface: 250 248 246;      /* #FAF8F6 warm off-white */
+  --color-surface-alt: 245 242 238;  /* #F5F2EE warm elevated */
+  --color-surface-card: 255 255 255; /* #FFFFFF white */
+  --color-border: 232 228 223;       /* #E8E4DF warm border */
+  --color-border-strong: 212 207 200; /* #D4CFC8 active border */
+  --color-text: 28 25 23;            /* #1C1917 stone-900 */
+  --color-text-muted: 120 113 108;   /* #78716C stone-500 */
   --color-text-inverse: 255 255 255;
 
   /* ── Status Colors ── */
-  --color-success: 22 163 74;
-  --color-warning: 234 179 8;
-  --color-error: 220 38 38;
-  --color-info: 59 130 246;
+  --color-success: 22 163 74;        /* #16A34A green-600 */
+  --color-warning: 217 119 6;        /* #D97706 amber-600 */
+  --color-error: 220 38 38;          /* #DC2626 red-600 */
+  --color-info: 79 70 229;           /* same as primary */
 
   /* ── Badge Colors ── */
-  --color-badge-open: 22 163 74;     /* Green */
-  --color-badge-few: 234 179 8;      /* Yellow */
-  --color-badge-full: 220 38 38;     /* Red */
-  --color-badge-online: 99 102 241;  /* Indigo */
-  --color-badge-free: 16 185 129;    /* Emerald */
+  --color-badge-open: 22 163 74;
+  --color-badge-few: 234 179 8;
+  --color-badge-full: 220 38 38;
+  --color-badge-online: 99 102 241;
+  --color-badge-free: 16 185 129;
 
   /* ── Typography ── */
   --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-heading: 'Plus Jakarta Sans', var(--font-sans);
+  --font-heading: var(--font-sans);
 
   /* ── Spacing ── */
   --space-section: 5rem;
@@ -46,8 +49,9 @@
 
   /* ── Layout ── */
   --container-max: 1280px;
-  --content-max: 768px;
-  --sidebar-width: 320px;
+  --content-max: 960px;
+  --sidebar-width: 240px;
+  --sidebar-collapsed: 56px;
 
   /* ── Border Radius ── */
   --radius-sm: 0.375rem;
@@ -55,28 +59,21 @@
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
 
-  /* ── Shadows ── */
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-elevated: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.06);
-  --shadow-overlay: 0 10px 25px rgba(0, 0, 0, 0.12);
+  /* ── Shadows (unified scale) ── */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 4px 8px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 8px 24px -4px rgba(0, 0, 0, 0.08);
+  --shadow-overlay: 0 16px 40px -8px rgba(0, 0, 0, 0.14);
+
+  /* Tailwind-mapped aliases (referenced in tailwind.config.js) */
+  --shadow-card: var(--shadow-xs);
+  --shadow-elevated: var(--shadow-md);
 
   /* ── Transitions ── */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --duration-fast: 150ms;
   --duration-normal: 250ms;
-
-  /* ── Dashboard-Specific ── */
-  --radius-2xl: 1rem;
-  --radius-3xl: 1.5rem;
-  --shadow-card-soft: 0 1px 3px rgba(0, 0, 0, 0.04);
-  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.06);
-  --shadow-dock: 0 2px 12px rgba(0, 0, 0, 0.08);
-  --shadow-panel: 0 8px 30px rgba(0, 0, 0, 0.12);
-
-  /* ── Dashboard Layout ── */
-  --dock-width: 56px;
-  --dock-width-expanded: 180px;
-  --dashboard-max: 56rem;
 }
 
 /* ── Reduced Motion ── */
