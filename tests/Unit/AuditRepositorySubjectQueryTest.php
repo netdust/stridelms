@@ -40,4 +40,19 @@ class AuditRepositorySubjectQueryTest extends TestCase
         $result = $this->repository->findBySubjectUser(456, 10, 7);
         $this->assertIsArray($result);
     }
+
+    /** @test */
+    public function testFindSessionNoteUpdatesReturnsEntriesForEditions(): void
+    {
+        $result = $this->repository->findSessionNoteUpdates([10, 20, 30], 30);
+        $this->assertIsArray($result);
+    }
+
+    /** @test */
+    public function testFindSessionNoteUpdatesReturnsEmptyForNoEditions(): void
+    {
+        $result = $this->repository->findSessionNoteUpdates([], 30);
+        $this->assertIsArray($result);
+        $this->assertEmpty($result);
+    }
 }
