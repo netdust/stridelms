@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 
 /**
  * NTDST Data Layer - Minimal ORM
@@ -114,7 +115,7 @@ class NTDST_Data_Model
     /**
      * Sanitize field value based on schema
      */
-    protected function sanitizeField(string $field, $value)
+    protected function sanitizeField(string $field, mixed $value): mixed
     {
         if (!isset($this->sanitizers[$field])) {
             return sanitize_text_field($value);
@@ -169,7 +170,7 @@ class NTDST_Data_Model
      * @param mixed $value Raw repeater data from database
      * @return array Formatted repeater data
      */
-    protected function formatRepeaterField($value): array
+    protected function formatRepeaterField(mixed $value): array
     {
         // Handle null/empty
         if (empty($value)) {
@@ -238,7 +239,7 @@ class NTDST_Data_Model
      * @param bool $isUpdate Whether this is an update operation (skips required validation for missing fields)
      * @return true|WP_Error True if valid, WP_Error if validation fails
      */
-    protected function validateData(array $data, bool $isUpdate = false)
+    protected function validateData(array $data, bool $isUpdate = false): true|\WP_Error
     {
         $errors = [];
 
@@ -304,7 +305,7 @@ class NTDST_Data_Model
      * @param array $data Post and meta data
      * @return object|WP_Error Post object or error
      */
-    public function create(array $data)
+    public function create(array $data): \WP_Post|\WP_Error
     {
         // Validate input
         $validation = $this->validateData($data);
@@ -347,7 +348,7 @@ class NTDST_Data_Model
      * @param array $data Data to update
      * @return object|WP_Error Post object or error
      */
-    public function update(int $id, array $data)
+    public function update(int $id, array $data): \WP_Post|\WP_Error
     {
         // Check if post exists
         $existing = get_post($id);
@@ -399,7 +400,7 @@ class NTDST_Data_Model
      * @param bool $skipCache Skip cache (use after mutations)
      * @return object|WP_Error Post object or error
      */
-    public function find(int $id, bool $skipCache = false)
+    public function find(int $id, bool $skipCache = false): \WP_Post|\WP_Error
     {
         // Use our super-fast query system with meta included
         // Skip cache after mutations to ensure fresh data is returned
@@ -439,7 +440,7 @@ class NTDST_Data_Model
      * @param mixed $default Default value if not found or error
      * @return mixed Meta value, all meta array, or default
      */
-    public function getMeta(int $id, ?string $key = null, $default = null)
+    public function getMeta(int $id, ?string $key = null, mixed $default = null): mixed
     {
         $post = $this->find($id);
 
@@ -467,7 +468,7 @@ class NTDST_Data_Model
      * @param mixed $value Meta value
      * @return bool|WP_Error True on success, WP_Error on failure
      */
-    public function updateMeta(int $id, string $key, $value)
+    public function updateMeta(int $id, string $key, mixed $value): bool|\WP_Error
     {
         // Verify post exists
         $post = get_post($id);
@@ -549,7 +550,7 @@ class NTDST_Data_Model
      * @param string $key Meta key (unprefixed - prefix applied automatically)
      * @return bool|WP_Error True on success, WP_Error on failure
      */
-    public function deleteMeta(int $id, string $key)
+    public function deleteMeta(int $id, string $key): bool|\WP_Error
     {
         // Verify post exists
         $post = get_post($id);
@@ -574,7 +575,7 @@ class NTDST_Data_Model
      * @param bool $force Force delete (bypass trash)
      * @return bool|WP_Error Success or error
      */
-    public function delete(int $id, bool $force = false)
+    public function delete(int $id, bool $force = false): true|\WP_Error
     {
         // Check if post exists
         $existing = get_post($id);
@@ -604,7 +605,7 @@ class NTDST_Data_Model
     /**
      * Query builder - where clause
      */
-    public function where(string $field, $value): self
+    public function where(string $field, mixed $value): self
     {
         // List of WordPress core post table fields that should be queried directly
         $core_fields = [
@@ -615,7 +616,9 @@ class NTDST_Data_Model
 
         if (in_array($field, $core_fields)) {
             // Core WordPress field - add directly to query_args
-            $this->query_args[$field] = $value;
+            // Map post_name to 'name' for WP_Query compatibility
+            $queryKey = ($field === 'post_name') ? 'name' : $field;
+            $this->query_args[$queryKey] = $value;
         } else {
             // Custom meta field - use meta_query with prefix
             if (!isset($this->query_args['meta_query'])) {
@@ -637,7 +640,7 @@ class NTDST_Data_Model
      * For core fields: uses post__not_in for IDs, or excludes via post_status array.
      * For meta fields: uses meta_query with != compare.
      */
-    public function whereNot(string $field, $value): self
+    public function whereNot(string $field, mixed $value): self
     {
         // List of WordPress core post table fields
         $core_fields = [
@@ -784,7 +787,7 @@ class NTDST_Data_Model
      * $model->whereTax('category', 'web-design')->get();
      * $model->whereTax('category', ['web-design', 'mobile'], 'slug', 'AND')->get();
      */
-    public function whereTax(string $taxonomy, $terms, string $field = 'slug', string $operator = 'IN'): self
+    public function whereTax(string $taxonomy, mixed $terms, string $field = 'slug', string $operator = 'IN'): self
     {
         if (!isset($this->query_args['tax_query'])) {
             $this->query_args['tax_query'] = [];
@@ -812,7 +815,7 @@ class NTDST_Data_Model
      * $model->whereDate('post_date', '>=', '2024-01-01')->get();
      * $model->whereDate('post_date', 'BETWEEN', ['2024-01-01', '2024-12-31'])->get();
      */
-    public function whereDate(string $column = 'post_date', string $compare = '=', $value = null): self
+    public function whereDate(string $column = 'post_date', string $compare = '=', mixed $value = null): self
     {
         if (!isset($this->query_args['date_query'])) {
             $this->query_args['date_query'] = [];
@@ -847,7 +850,7 @@ class NTDST_Data_Model
      * ->orWhere('price', ['<', 100])
      * ->get();
      */
-    public function orWhere(string $field, $value): self
+    public function orWhere(string $field, mixed $value): self
     {
         if (!isset($this->query_args['meta_query'])) {
             $this->query_args['meta_query'] = ['relation' => 'OR'];
@@ -876,7 +879,7 @@ class NTDST_Data_Model
      * Example:
      * $model->attachTerms(123, 'category', [1, 2, 3]);
      */
-    public function attachTerms(int $post_id, string $taxonomy, array $term_ids, bool $append = true)
+    public function attachTerms(int $post_id, string $taxonomy, array $term_ids, bool $append = true): true|\WP_Error
     {
         $result = wp_set_post_terms($post_id, $term_ids, $taxonomy, $append);
 
@@ -900,7 +903,7 @@ class NTDST_Data_Model
      * Example:
      * $model->syncTerms(123, 'category', [1, 2, 3]);
      */
-    public function syncTerms(int $post_id, string $taxonomy, array $term_ids)
+    public function syncTerms(int $post_id, string $taxonomy, array $term_ids): true|\WP_Error
     {
         return $this->attachTerms($post_id, $taxonomy, $term_ids, false);
     }
@@ -917,7 +920,7 @@ class NTDST_Data_Model
      * $model->detachTerms(123, 'category', [1, 2]);
      * $model->detachTerms(123, 'category', []); // Remove all
      */
-    public function detachTerms(int $post_id, string $taxonomy, array $term_ids = [])
+    public function detachTerms(int $post_id, string $taxonomy, array $term_ids = []): true|\WP_Error
     {
         if (empty($term_ids)) {
             $result = wp_set_post_terms($post_id, [], $taxonomy, false);
@@ -998,7 +1001,7 @@ class NTDST_Data_Model
     /**
      * Get first result
      */
-    public function first()
+    public function first(): ?object
     {
         $results = $this->limit(1)->get();
         return $results ? (object) $results[0] : null;
@@ -1620,7 +1623,7 @@ class NTDST_Data_Manager
      * @param int|null $post_id Specific post ID to clear, or null for all
      * @return void
      */
-    public static function clearCache(int $post_id = null): void
+    public static function clearCache(?int $post_id = null): void
     {
         $cache_group = 'ntdst_posts';
 
