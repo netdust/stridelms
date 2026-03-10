@@ -73,7 +73,7 @@ $page_titles = [
     'downloads'      => __('Downloads', 'stridence'),
 ];
 
-get_header();
+get_header('dashboard');
 ?>
 
 <div class="min-h-screen bg-surface">
@@ -128,4 +128,4 @@ get_header();
     <?php get_template_part('templates/dashboard/partials/toast'); ?>
 </div>
 
-<?php get_footer(); ?>
+<?php get_footer('dashboard'); ?>

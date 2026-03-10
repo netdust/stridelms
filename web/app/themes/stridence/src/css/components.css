@@ -262,6 +262,30 @@
     transition: width var(--duration-normal) var(--ease-out);
   }
 
+  /* Account for WP admin bar when logged in */
+  .admin-bar .sidebar {
+    top: 32px;
+    height: calc(100vh - 32px);
+  }
+
+  @media screen and (max-width: 782px) {
+    .admin-bar .sidebar {
+      top: 46px;
+      height: calc(100vh - 46px);
+    }
+  }
+
+  /* Top bar must also offset for admin bar */
+  .admin-bar .lg\:ml-sidebar .sticky {
+    top: 32px;
+  }
+
+  @media screen and (max-width: 782px) {
+    .admin-bar .lg\:ml-sidebar .sticky {
+      top: 46px;
+    }
+  }
+
   .sidebar-collapsed {
     width: var(--sidebar-collapsed);
   }

@@ -87,11 +87,8 @@ $statusLine = !empty($statusParts) ? implode(' · ', $statusParts) : __('Je bent
 <div class="space-y-8" x-data="dashboardHome()">
     <?php if ($hasContent) : ?>
 
-        <!-- Greeting + status line -->
-        <div>
-            <h2 class="text-base font-semibold text-text"><?php echo esc_html($greeting); ?></h2>
-            <p class="text-sm text-text-muted mt-0.5"><?php echo esc_html($statusLine); ?></p>
-        </div>
+        <!-- Status summary (greeting is in the top bar) -->
+        <p class="text-sm text-text-muted"><?php echo esc_html($statusLine); ?></p>
 
         <!-- Stat cards -->
         <?php if (!empty($stats)) : ?>
