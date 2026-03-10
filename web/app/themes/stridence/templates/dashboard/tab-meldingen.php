@@ -2,7 +2,7 @@
 /**
  * Dashboard Tab: Meldingen (Notifications)
  *
- * Displays user notifications derived from dashboard actions.
+ * Displays user notifications derived from audit log events.
  * Grouped by "Vandaag" / "Eerder" with mark-all-read capability.
  *
  * @param array $args {
