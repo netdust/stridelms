@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * NTDST Query Cache - Centralized caching for data queries
  *
@@ -11,7 +13,7 @@
 
 defined('ABSPATH') || exit;
 
-class NTDST_Query_Cache
+final class NTDST_Query_Cache
 {
     private static ?self $instance = null;
     private bool $hooks_registered = false;

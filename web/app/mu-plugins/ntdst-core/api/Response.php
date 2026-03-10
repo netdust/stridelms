@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 
 /**
  * NTDST Response - Fast template rendering
@@ -94,7 +95,7 @@ class NTDST_Response
     /**
      * Set data
      */
-    public function with(string $key, $value): self
+    public function with(string $key, mixed $value): self
     {
         $this->data[$key] = $value;
         return $this;
@@ -169,6 +170,25 @@ class NTDST_Response
             ]);
         }
 
+        exit;
+    }
+
+    /**
+     * Redirect to URL
+     *
+     * Uses wp_safe_redirect() for internal URLs.
+     * If error is set, appends ?error= query param to the URL.
+     *
+     * @example ntdst_response()->redirect(home_url('/dashboard'));
+     * @example ntdst_response()->error('Invalid token.')->redirect(home_url('/login'));
+     */
+    public function redirect(string $url): never
+    {
+        if ($this->error) {
+            $url = add_query_arg('error', $this->error, $url);
+        }
+
+        wp_safe_redirect($url, $this->status ?: 302);
         exit;
     }
 
@@ -362,6 +382,17 @@ function ntdst_response(): NTDST_Response
 }
 
 /**
+ * Quick redirect
+ *
+ * @example ntdst_redirect(home_url('/dashboard'));
+ */
+function ntdst_redirect(string $url, int $status = 302): never
+{
+    wp_safe_redirect($url, $status);
+    exit;
+}
+
+/**
  * Quick file download
  *
  * @example ntdst_download($content, 'file.pdf');
@@ -385,7 +416,7 @@ function ntdst_inline(string $content, string $filename, ?string $contentType = 
 // TEMPLATE LOADER
 // =============================================================================
 
-class NTDST_Template_Loader
+final class NTDST_Template_Loader
 {
     protected static array $custom_paths = [];
 
