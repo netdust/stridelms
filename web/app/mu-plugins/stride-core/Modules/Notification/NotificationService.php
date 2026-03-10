@@ -4,15 +4,17 @@ declare(strict_types=1);
 
 namespace Stride\Modules\Notification;
 
-use Stride\Modules\User\UserDashboardService;
+use NTDST\Audit\AuditService;
+use Stride\Modules\Enrollment\RegistrationRepository;
 use WP_Error;
 
 /**
- * Notification Service — derives notifications from dashboard action data.
+ * Notification Service — derives notifications from audit log events.
  *
- * Does NOT store notifications. It transforms the action list from
- * UserDashboardService into a notification format with read/unread state.
- * Read state is persisted in user meta.
+ * Queries wp_audit_log for events where the user is the subject
+ * (context.user_id) but not the actor (excludes self-actions).
+ * Also includes session note updates for editions the user is enrolled in.
+ * Read state persisted in user meta.
  */
 final class NotificationService implements \NTDST_Service_Meta
 {
@@ -22,13 +24,14 @@ final class NotificationService implements \NTDST_Service_Meta
     {
         return [
             'name'        => 'Notification Service',
-            'description' => 'Derives user notifications from dashboard action data',
+            'description' => 'Event notifications from audit log',
             'priority'    => 20,
         ];
     }
 
     public function __construct(
-        private readonly UserDashboardService $dashboardService,
+        private readonly AuditService $auditService,
+        private readonly RegistrationRepository $registrationRepo,
     ) {
         $this->init();
     }
@@ -39,34 +42,40 @@ final class NotificationService implements \NTDST_Service_Meta
     }
 
     /**
-     * Get all notifications for a user, derived from dashboard actions.
+     * Get notifications for a user from audit log.
      *
      * @return array<int, array{id: string, type: string, title: string, body: string, url: string, timestamp: int, read: bool}>
      */
     public function getNotifications(int $userId): array
     {
-        $homeData = $this->dashboardService->getHomeData($userId);
-        $actions  = $homeData['actions'] ?? [];
-        $readMap  = $this->getReadMap($userId);
-        $now      = time();
+        $readMap = $this->getReadMap($userId);
 
+        // 1. Get audit entries where user is the subject (not actor)
+        $entries = $this->auditService->getForSubjectUser($userId, 50, 30);
+
+        // 2. Get session note updates for editions user is enrolled in
+        $editionIds = $this->getEnrolledEditionIds($userId);
+        $sessionNotes = $this->auditService->getSessionNoteUpdates($editionIds, 30);
+
+        // 3. Merge and deduplicate
+        $allEntries = array_merge($entries, $sessionNotes);
+
+        // 4. Map to notification format
         $notifications = [];
+        $seenIds = [];
 
-        foreach ($actions as $index => $action) {
-            $id    = 'action_' . md5($action['label'] ?? (string) $index);
-            $type  = $this->resolveType($action);
-            $title = $this->resolveTitle($action);
-            $body  = $this->resolveBody($action);
+        foreach ($allEntries as $entry) {
+            $notification = NotificationMapper::fromAuditEntry($entry);
+            $id = $notification['id'];
 
-            $notifications[] = [
-                'id'        => $id,
-                'type'      => $type,
-                'title'     => $title,
-                'body'      => $body,
-                'url'       => $action['url'] ?? '',
-                'timestamp' => $this->resolveTimestamp($action, $now, $index),
-                'read'      => isset($readMap[$id]),
-            ];
+            // Deduplicate
+            if (isset($seenIds[$id])) {
+                continue;
+            }
+            $seenIds[$id] = true;
+
+            $notification['read'] = isset($readMap[$id]);
+            $notifications[] = $notification;
         }
 
         // Sort newest first
@@ -76,13 +85,14 @@ final class NotificationService implements \NTDST_Service_Meta
     }
 
     /**
-     * Count unread notifications for a user.
+     * Count unread notifications.
      */
     public function getUnreadCount(int $userId): int
     {
-        $notifications = $this->getNotifications($userId);
-
-        return count(array_filter($notifications, fn(array $n): bool => !$n['read']));
+        return count(array_filter(
+            $this->getNotifications($userId),
+            fn(array $n): bool => !$n['read']
+        ));
     }
 
     /**
@@ -91,8 +101,8 @@ final class NotificationService implements \NTDST_Service_Meta
     public function markAllRead(int $userId): void
     {
         $notifications = $this->getNotifications($userId);
-        $readMap       = $this->getReadMap($userId);
-        $now           = time();
+        $readMap = $this->getReadMap($userId);
+        $now = time();
 
         foreach ($notifications as $notification) {
             if (!isset($readMap[$notification['id']])) {
@@ -117,11 +127,7 @@ final class NotificationService implements \NTDST_Service_Meta
     }
 
     /**
-     * API handler: mark all notifications read for the current user.
-     *
-     * @param mixed              $data   Existing filter data (unused)
-     * @param array<string,mixed> $params Request parameters (unused)
-     * @return array<string,bool>|WP_Error
+     * API handler: mark all notifications read.
      */
     public function handleMarkAllRead(mixed $data, array $params): array|WP_Error
     {
@@ -137,8 +143,6 @@ final class NotificationService implements \NTDST_Service_Meta
     }
 
     /**
-     * Get the read-state map from user meta.
-     *
      * @return array<string, int> notification_id => timestamp
      */
     private function getReadMap(int $userId): array
@@ -155,71 +159,21 @@ final class NotificationService implements \NTDST_Service_Meta
     }
 
     /**
-     * Map action type to notification type.
-     */
-    private function resolveType(array $action): string
-    {
-        $actionType = $action['type'] ?? '';
-
-        return match ($actionType) {
-            'upcoming_session'              => 'session',
-            'certificate'                   => 'certificate',
-            'unsigned_quote'                => 'quote',
-            'action_item', 'enrollment', 'post_course' => 'action',
-            default                         => 'action',
-        };
-    }
-
-    /**
-     * Extract a clean title from the action label.
+     * Get edition IDs the user is currently enrolled in.
      *
-     * Action labels use " -- " separators. The first segment is the title.
+     * @return int[]
      */
-    private function resolveTitle(array $action): string
+    private function getEnrolledEditionIds(int $userId): array
     {
-        $label = $action['label'] ?? '';
+        $registrations = $this->registrationRepo->findByUser($userId);
 
-        // Labels often use " — " (em-dash) as separator, e.g. "Cursus A — 15 maart 2026"
-        $parts = explode(' — ', $label, 2);
-
-        return trim($parts[0]);
-    }
-
-    /**
-     * Extract secondary text from the action label.
-     */
-    private function resolveBody(array $action): string
-    {
-        $label = $action['label'] ?? '';
-        $parts = explode(' — ', $label, 2);
-
-        return isset($parts[1]) ? trim($parts[1]) : '';
-    }
-
-    /**
-     * Compute a stable timestamp for sorting.
-     *
-     * Session actions have a date embedded; others get a recent timestamp
-     * spread across seconds so ordering is stable.
-     */
-    private function resolveTimestamp(array $action, int $now, int $index): int
-    {
-        $type = $action['type'] ?? '';
-
-        // Upcoming sessions: try to parse the date from the label
-        if ($type === 'upcoming_session') {
-            $label = $action['label'] ?? '';
-            // Label format: "Course Title — 2026-03-15"
-            $parts = explode(' — ', $label, 2);
-            if (isset($parts[1])) {
-                $parsed = strtotime(trim($parts[1]));
-                if ($parsed !== false) {
-                    return $parsed;
-                }
+        $ids = [];
+        foreach ($registrations as $reg) {
+            if (!empty($reg->edition_id)) {
+                $ids[] = (int) $reg->edition_id;
             }
         }
 
-        // Spread remaining items across recent seconds for stable ordering
-        return $now - ($index * 60);
+        return array_unique($ids);
     }
 }

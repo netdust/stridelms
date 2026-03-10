@@ -165,6 +165,27 @@ namespace NTDST\Audit {
             {
                 return end($this->recordedCalls) ?: null;
             }
+
+            /**
+             * Get audit entries where user is the subject (not actor).
+             *
+             * @return array<object>
+             */
+            public function getForSubjectUser(int $userId, int $limit = 50, int $daysBack = 30): array
+            {
+                return [];
+            }
+
+            /**
+             * Get session note update entries for given edition IDs.
+             *
+             * @param int[] $editionIds
+             * @return array<object>
+             */
+            public function getSessionNoteUpdates(array $editionIds, int $daysBack = 30): array
+            {
+                return [];
+            }
         }
     }
 
