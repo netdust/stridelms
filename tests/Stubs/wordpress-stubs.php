@@ -638,6 +638,28 @@ if (!function_exists('get_the_title')) {
     }
 }
 
+if (!function_exists('get_permalink')) {
+    function get_permalink($post = null): string|false
+    {
+        $post = get_post($post);
+        if (!$post) {
+            return false;
+        }
+        return home_url('/?p=' . $post->ID);
+    }
+}
+
+if (!function_exists('stride_format_date')) {
+    function stride_format_date(string $date, string $format = 'j F Y'): string
+    {
+        $timestamp = strtotime($date);
+        if ($timestamp === false) {
+            return '';
+        }
+        return date($format, $timestamp);
+    }
+}
+
 if (!function_exists('get_stylesheet_directory')) {
     function get_stylesheet_directory(): string
     {
@@ -1873,5 +1895,51 @@ if (!function_exists('wp_unique_id')) {
     {
         static $counter = 0;
         return $prefix . (string) ++$counter;
+    }
+}
+
+if (!function_exists('add_options_page')) {
+    function add_options_page(string $page_title, string $menu_title, string $capability, string $menu_slug, callable $callback = null, int $position = null): string
+    {
+        global $_test_options_pages;
+        if (!isset($_test_options_pages)) {
+            $_test_options_pages = [];
+        }
+        $_test_options_pages[$menu_slug] = [
+            'page_title' => $page_title,
+            'menu_title' => $menu_title,
+            'capability' => $capability,
+            'menu_slug' => $menu_slug,
+            'callback' => $callback,
+        ];
+        return 'settings_page_' . $menu_slug;
+    }
+}
+
+if (!function_exists('get_current_screen')) {
+    function get_current_screen(): ?object
+    {
+        return null;
+    }
+}
+
+if (!function_exists('wp_enqueue_editor')) {
+    function wp_enqueue_editor(): void
+    {
+        // Stub
+    }
+}
+
+if (!function_exists('rest_url')) {
+    function rest_url(string $path = ''): string
+    {
+        return 'https://example.com/wp-json/' . ltrim($path, '/');
+    }
+}
+
+if (!function_exists('ntdst_enqueue_admin_toolkit')) {
+    function ntdst_enqueue_admin_toolkit(): void
+    {
+        // Stub
     }
 }
