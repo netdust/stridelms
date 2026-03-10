@@ -94,7 +94,7 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                      x-transition:leave-end="opacity-0"
                      @click.self="close()"
                      @keydown.escape.window="close()">
-                    <div class="slide-panel"
+                    <div class="dash-panel"
                          x-show="isOpen"
                          x-transition:enter="transition ease-out duration-300"
                          x-transition:enter-start="translate-x-full"
