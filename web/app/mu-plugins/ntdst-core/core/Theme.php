@@ -1,4 +1,7 @@
 <?php
+declare(strict_types=1);
+
+defined('ABSPATH') || exit;
 
 // ========================================
 // THEME BOOTSTRAP CLASS
@@ -6,8 +9,8 @@
 
 class NTDST_Theme
 {
-    private $config;
-    private $mixins = [];
+    private array $config;
+    private array $mixins = [];
 
     public function __construct(array $config = [])
     {
@@ -38,7 +41,7 @@ class NTDST_Theme
             ->mixin('mail', ntdst_mail());        // Mailer: $theme->mail()->to()->send()
     }
 
-    private function init()
+    private function init(): void
     {
         // Theme setup
         add_action('after_setup_theme', [$this, 'setup_theme']);
@@ -47,7 +50,7 @@ class NTDST_Theme
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets'], 9999);
     }
 
-    public function setup_theme()
+    public function setup_theme(): void
     {
         // Load text domain for translations
         if (!empty($this->config['textdomain'])) {
@@ -115,7 +118,7 @@ class NTDST_Theme
         });
     }
 
-    public function enqueue_assets()
+    public function enqueue_assets(): void
     {
         // Allow filtering assets before enqueueing
         $assets = apply_filters('ntdst_theme_assets', $this->config['assets']);
@@ -211,7 +214,7 @@ class NTDST_Theme
         ]);
     }
 
-    public function enqueue_admin_assets()
+    public function enqueue_admin_assets(): void
     {
         // Allow filtering assets before enqueueing
         $assets = apply_filters('ntdst_theme_assets', $this->config['assets']);
@@ -377,13 +380,13 @@ class NTDST_Theme
      *       return $config;
      *   });
      */
-    public function module(string $module)
+    public function module(string $module): object
     {
         return new class ($module, $this) {
-            private $module;
-            private $theme;
+            private readonly string $module;
+            private readonly NTDST_Theme $theme;
 
-            public function __construct($module, $theme)
+            public function __construct(string $module, NTDST_Theme $theme)
             {
                 $this->module = sanitize_key($module);
                 $this->theme = $theme;
@@ -406,42 +409,42 @@ class NTDST_Theme
             }
 
             // Configure module settings
-            public function config(callable $callback, int $priority = 20)
+            public function config(callable $callback, int $priority = 20): NTDST_Theme
             {
                 add_filter("netdust_{$this->module}_config", $callback, $priority);
                 return $this->theme;
             }
 
             // Customize module asset path
-            public function path(callable $callback, int $priority = 10)
+            public function path(callable $callback, int $priority = 10): NTDST_Theme
             {
                 add_filter("netdust_{$this->module}_path", $callback, $priority);
                 return $this->theme;
             }
 
             // Add custom actions before module initialization
-            public function before(callable $callback, int $priority = 10)
+            public function before(callable $callback, int $priority = 10): NTDST_Theme
             {
                 add_action("netdust_{$this->module}_before", $callback, $priority);
                 return $this->theme;
             }
 
             // Add custom actions after module initialization
-            public function after(callable $callback, int $priority = 10)
+            public function after(callable $callback, int $priority = 10): NTDST_Theme
             {
                 add_action("netdust_{$this->module}_after", $callback, $priority);
                 return $this->theme;
             }
 
             // Disable module programmatically
-            public function disable()
+            public function disable(): NTDST_Theme
             {
                 add_filter("netdust_{$this->module}_enabled", '__return_false', 999);
                 return $this->theme;
             }
 
             // Enable module programmatically
-            public function enable()
+            public function enable(): NTDST_Theme
             {
                 add_filter("netdust_{$this->module}_enabled", '__return_true', 999);
                 return $this->theme;
@@ -471,7 +474,7 @@ class NTDST_Theme
      *       echo '<div>Footer content</div>';
      *   });
      */
-    public function on(string $action, callable $callback, int $priority = 10, int $args = 1)
+    public function on(string $action, callable $callback, int $priority = 10, int $args = 1): self
     {
         add_action(sanitize_key($action), $callback, $priority, $args);
         return $this;
@@ -492,7 +495,7 @@ class NTDST_Theme
      *       return $classes;
      *   });
      */
-    public function filter(string $filter, callable $callback, int $priority = 10, int $args = 1)
+    public function filter(string $filter, callable $callback, int $priority = 10, int $args = 1): self
     {
         add_filter(sanitize_key($filter), $callback, $priority, $args);
         return $this;
@@ -510,7 +513,7 @@ class NTDST_Theme
      *       $theme->module('barba')->config(fn($c) => array_merge($c, ['animationDuration' => 400]));
      *   });
      */
-    public function when(callable $condition, callable $callback)
+    public function when(callable $condition, callable $callback): self
     {
         if ($condition()) {
             $callback($this);
@@ -543,7 +546,7 @@ class NTDST_Theme
      *   ntdstAPI.call('get_portfolio', { category: 'design' })
      *       .then(data => console.log(data.posts));
      */
-    public function apiAction(string $action, callable $callback, $args = 10): self
+    public function apiAction(string $action, callable $callback, array|int $args = 10): self
     {
         // Parse arguments
         $priority = 10;
@@ -607,7 +610,7 @@ class NTDST_Theme
      *       'hierarchical' => true,
      *   ]);
      */
-    public function taxonomy(string $taxonomy, $post_types, array $args = []): self
+    public function taxonomy(string $taxonomy, string|array $post_types, array $args = []): self
     {
         $defaults = [
             'public' => true,
@@ -653,7 +656,7 @@ class NTDST_Theme
      *       return ntdst_response()->with('project', $post)->template('project/detail');
      *   });
      */
-    public function single($post_type = null, ?callable $callback = null): self
+    public function single(string|callable|null $post_type = null, ?callable $callback = null): self
     {
         $this->router()->single($post_type, $callback);
         return $this;
@@ -671,7 +674,7 @@ class NTDST_Theme
      *       return get_template_directory() . '/templates/about.php';
      *   });
      */
-    public function page($slug, ?callable $callback = null): self
+    public function page(string|callable $slug, ?callable $callback = null): self
     {
         $this->router()->page($slug, $callback);
         return $this;
@@ -690,7 +693,7 @@ class NTDST_Theme
      *       return ntdst_response()->with('projects', $projects)->template('project/archive');
      *   });
      */
-    public function archive($post_type = null, ?callable $callback = null): self
+    public function archive(string|callable|null $post_type = null, ?callable $callback = null): self
     {
         $this->router()->archive($post_type, $callback);
         return $this;
@@ -722,7 +725,7 @@ class NTDST_Theme
      *   $theme->mixin(new ThemeHelpers());
      *   $theme->formatDate('2024-01-01');  // Direct method call
      */
-    public function mixin($nameOrInstance, ?object $instance = null): self
+    public function mixin(string|object $nameOrInstance, ?object $instance = null): self
     {
         // Pattern 1: Instance proxying (named)
         if (is_string($nameOrInstance) && $instance !== null) {
@@ -761,7 +764,7 @@ class NTDST_Theme
      * @param array $arguments Method arguments
      * @return mixed
      */
-    public function __call(string $name, array $arguments)
+    public function __call(string $name, array $arguments): mixed
     {
         if (!isset($this->mixins[$name])) {
             throw new BadMethodCallException("Method or mixin '{$name}' does not exist on " . static::class);

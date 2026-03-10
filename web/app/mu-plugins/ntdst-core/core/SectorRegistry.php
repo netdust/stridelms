@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 
 /**
  * NTDST Sector Registry
@@ -14,7 +15,7 @@
 
 defined('ABSPATH') || exit;
 
-class NTDST_SectorRegistry
+final class NTDST_SectorRegistry
 {
     /**
      * Singleton instance
@@ -425,7 +426,7 @@ class NTDST_SectorRegistry
      * @param array|string|null $requirements Service sector requirements from metadata
      * @return bool
      */
-    public function checkRequirements($requirements): bool
+    public function checkRequirements(array|string|null $requirements): bool
     {
         // No requirements = always load (core/universal service, backwards compatible)
         if ($requirements === null) {
