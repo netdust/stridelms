@@ -39,9 +39,28 @@ $initials  = $userData['initials'] ?? '?';
 $permalink = get_permalink();
 
 $hasContent = $hero || !empty($actions) || !empty($enrollments) || !empty($trajectories) || !empty($certificates);
+
+// Prepare enrollment data as JSON for Alpine panel
+$enrollmentsJson = [];
+foreach ($enrollments as $enrollment) {
+    $item = $enrollment;
+    // Add formatted dates for display in the panel
+    if (!empty($item['start_date'])) {
+        $item['start_date_formatted'] = stride_format_date($item['start_date']);
+    }
+    if (!empty($item['sessions']) && is_array($item['sessions'])) {
+        foreach ($item['sessions'] as &$session) {
+            if (!empty($session['date'])) {
+                $session['date_formatted'] = stride_format_date($session['date']);
+            }
+        }
+        unset($session);
+    }
+    $enrollmentsJson[] = $item;
+}
 ?>
 
-<div class="space-y-8">
+<div class="space-y-8" x-data="dashboardHome()">
     <!-- Greeting Header -->
     <header class="flex items-center gap-4">
         <div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
@@ -99,10 +118,11 @@ $hasContent = $hero || !empty($actions) || !empty($enrollments) || !empty($traje
                     </a>
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <?php foreach (array_slice($enrollments, 0, 4) as $enrollment) : ?>
+                    <?php foreach (array_slice($enrollmentsJson, 0, 4) as $enrollment) : ?>
                         <?php
                         get_template_part('templates/dashboard/partials/enrollment-card', null, [
-                            'enrollment' => $enrollment,
+                            'enrollment'    => $enrollment,
+                            'panel_enabled' => true,
                         ]);
                         ?>
                     <?php endforeach; ?>
@@ -192,5 +212,10 @@ $hasContent = $hero || !empty($actions) || !empty($enrollments) || !empty($traje
         ]);
         ?>
 
+    <?php endif; ?>
+
+    <!-- Enrollment Side Panel -->
+    <?php if (!empty($enrollments)) : ?>
+        <?php get_template_part('templates/dashboard/partials/panel-enrollment'); ?>
     <?php endif; ?>
 </div>

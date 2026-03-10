@@ -21,6 +21,9 @@ if (empty($enrollment)) {
     return;
 }
 
+// When embedded in dashboardHome, cards open the side panel instead of linking
+$panelEnabled = !empty($args['panel_enabled']);
+
 $type     = $enrollment['type'] ?? 'edition';
 $title    = $enrollment['course_title'] ?? '';
 $progress = (int) ($enrollment['progress']['attended'] ?? $enrollment['progress'] ?? 0);
@@ -56,7 +59,13 @@ if ($type === 'online') {
 }
 ?>
 
-<div class="dash-card-interactive relative">
+<div class="dash-card-interactive relative"
+     <?php if ($panelEnabled) : ?>
+         @click="openPanel(<?php echo esc_attr(wp_json_encode($enrollment)); ?>)"
+         role="button"
+         tabindex="0"
+         @keydown.enter="openPanel(<?php echo esc_attr(wp_json_encode($enrollment)); ?>)"
+     <?php endif; ?>>
     <!-- Type badge -->
     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium <?php echo esc_attr($badgeClass); ?> mb-2">
         <?php echo esc_html($badgeLabel); ?>
