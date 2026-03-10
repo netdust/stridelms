@@ -195,7 +195,8 @@ final class UserDashboardService
             }
         }
 
-        return $actions;
+        // Cap at 6 items to prevent overwhelming the home screen
+        return array_slice($actions, 0, 6);
     }
 
     /**

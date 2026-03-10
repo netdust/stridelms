@@ -67,7 +67,7 @@ foreach ($enrollments as $enrollment) {
             <span class="text-primary font-semibold text-sm"><?php echo esc_html($initials); ?></span>
         </div>
         <div>
-            <h1 class="font-heading text-2xl font-bold text-text">
+            <h1 class="text-2xl font-medium text-text">
                 <?php echo esc_html($greeting . ', ' . $firstName); ?>
             </h1>
             <p class="text-sm text-text-muted">
@@ -90,7 +90,7 @@ foreach ($enrollments as $enrollment) {
         <!-- Acties (nudges) -->
         <?php if (!empty($actions)) : ?>
             <section>
-                <h2 class="font-heading text-lg font-bold text-text mb-3">
+                <h2 class="text-lg font-medium text-text mb-3">
                     <?php esc_html_e('Acties', 'stridence'); ?>
                 </h2>
                 <div class="space-y-2">
@@ -109,7 +109,7 @@ foreach ($enrollments as $enrollment) {
         <?php if (!empty($enrollments)) : ?>
             <section>
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="font-heading text-lg font-bold text-text">
+                    <h2 class="text-lg font-medium text-text">
                         <?php esc_html_e('Mijn opleidingen', 'stridence'); ?>
                     </h2>
                     <a href="<?php echo esc_url(add_query_arg('tab', 'inschrijvingen', $permalink)); ?>"
@@ -134,7 +134,7 @@ foreach ($enrollments as $enrollment) {
         <?php if (!empty($trajectories)) : ?>
             <section>
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="font-heading text-lg font-bold text-text">
+                    <h2 class="text-lg font-medium text-text">
                         <?php esc_html_e('Mijn trajecten', 'stridence'); ?>
                     </h2>
                     <a href="<?php echo esc_url(add_query_arg('tab', 'trajecten', $permalink)); ?>"
@@ -161,7 +161,7 @@ foreach ($enrollments as $enrollment) {
         <?php if (!empty($certificates)) : ?>
             <section>
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="font-heading text-lg font-bold text-text">
+                    <h2 class="text-lg font-medium text-text">
                         <?php esc_html_e('Recent behaald', 'stridence'); ?>
                     </h2>
                     <a href="<?php echo esc_url(add_query_arg('tab', 'certificaten', $permalink)); ?>"
