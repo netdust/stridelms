@@ -124,6 +124,8 @@ get_header();
             'unread_count' => $unread_count,
         ]); ?>
     </div>
+
+    <?php get_template_part('templates/dashboard/partials/toast'); ?>
 </div>
 
 <?php get_footer(); ?>
