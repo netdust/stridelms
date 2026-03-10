@@ -52,7 +52,7 @@ if ($timestamp > 0) {
 }
 ?>
 <a href="<?php echo esc_url($url); ?>"
-   class="flex items-start gap-3 px-4 py-3 rounded-lg border border-border/60 bg-surface-card hover:border-primary/25 transition-colors cursor-pointer">
+   class="flex items-center gap-3 px-4 py-3 rounded-lg border border-border/60 bg-surface-card hover:border-primary/25 transition-colors cursor-pointer">
 
     <!-- Unread dot + icon -->
     <div class="relative shrink-0">
@@ -74,7 +74,7 @@ if ($timestamp > 0) {
 
     <!-- Timestamp -->
     <?php if ($timeAgo !== '') : ?>
-        <span class="text-xs text-text-muted whitespace-nowrap shrink-0 pt-0.5">
+        <span class="text-xs text-text-muted whitespace-nowrap shrink-0">
             <?php echo esc_html($timeAgo); ?>
         </span>
     <?php endif; ?>
