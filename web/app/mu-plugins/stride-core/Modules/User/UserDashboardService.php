@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stride\Modules\User;
 
+use Stride\Domain\QuoteStatus;
 use Stride\Domain\RegistrationStatus;
 use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Attendance\AttendanceService;
@@ -12,6 +13,7 @@ use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Enrollment\EnrollmentCompletion;
 use Stride\Modules\Enrollment\RegistrationRepository;
+use WP_User;
 
 /**
  * User Dashboard Data Aggregation
@@ -30,6 +32,226 @@ final class UserDashboardService
         private readonly AttendanceService $attendanceService,
         private readonly EditionCompletion $completionService,
     ) {
+    }
+
+    /**
+     * Get aggregated data for the dashboard home screen.
+     *
+     * Reuses getEnrollmentData() and getQuoteData() internally so existing
+     * tab views keep working while the home screen adds a unified overview.
+     *
+     * @return array{
+     *   user: array{name: string, initials: string, email: string},
+     *   hero: ?array,
+     *   actions: array,
+     *   active_enrollments: array,
+     *   active_trajectories: array,
+     *   recent_certificates: array,
+     *   nav_items: array{opleidingen: bool, trajecten: bool, agenda: bool, offertes: bool, certificaten: bool},
+     * }
+     */
+    public function getHomeData(int $userId): array
+    {
+        $user = get_userdata($userId);
+
+        $enrollmentData = $this->getEnrollmentData($userId);
+        $quoteData      = $this->getQuoteData($userId);
+
+        $activeEnrollments = array_merge(
+            $enrollmentData['active_editions'],
+            $enrollmentData['active_online']
+        );
+
+        $actions      = $this->buildActionList($enrollmentData, $quoteData);
+        $trajectories = $this->buildActiveTrajectories($userId);
+        $certificates = array_slice($enrollmentData['completed_items'], 0, 3);
+
+        return [
+            'user' => [
+                'name'     => $user ? trim($user->first_name . ' ' . $user->last_name) ?: $user->display_name : '',
+                'initials' => $this->getInitials($user ?: null),
+                'email'    => $user ? $user->user_email : '',
+            ],
+            'hero'                 => $this->resolveHero(
+                $enrollmentData['upcoming_sessions'],
+                $enrollmentData['action_items'],
+                $activeEnrollments,
+                $certificates,
+            ),
+            'actions'              => $actions,
+            'active_enrollments'   => $activeEnrollments,
+            'active_trajectories'  => $trajectories,
+            'recent_certificates'  => $certificates,
+            'nav_items'            => [
+                'opleidingen'  => !empty($activeEnrollments) || !empty($enrollmentData['completed_items']),
+                'trajecten'    => !empty($trajectories),
+                'agenda'       => !empty($enrollmentData['upcoming_sessions']),
+                'offertes'     => !empty($quoteData['active']) || !empty($quoteData['cancelled']),
+                'certificaten' => !empty($enrollmentData['completed_items']),
+            ],
+        ];
+    }
+
+    /**
+     * Resolve the single most important hero action for the dashboard.
+     *
+     * Priority order:
+     * 1. Session today or tomorrow
+     * 2. Pending action items (enrollment/post-course tasks)
+     * 3. In-progress online course (progress > 0)
+     * 4. First active enrollment
+     * 5. Recent certificate
+     * 6. Nothing
+     */
+    private function resolveHero(array $upcomingSessions, array $actionItems, array $activeEnrollments, array $certificates): ?array
+    {
+        $tomorrow = date('Y-m-d', strtotime('+1 day'));
+
+        // 1. Session today or tomorrow
+        foreach ($upcomingSessions as $session) {
+            if (!empty($session['date']) && $session['date'] <= $tomorrow) {
+                return ['type' => 'upcoming_session', 'data' => $session];
+            }
+        }
+
+        // 2. Pending action items
+        if (!empty($actionItems)) {
+            return ['type' => 'action_required', 'data' => $actionItems[0]];
+        }
+
+        // 3. In-progress online course (progress > 0)
+        foreach ($activeEnrollments as $enrollment) {
+            if (($enrollment['type'] ?? '') === 'online' && ($enrollment['progress'] ?? 0) > 0) {
+                return ['type' => 'continue_course', 'data' => $enrollment];
+            }
+        }
+
+        // 4. First active enrollment
+        if (!empty($activeEnrollments)) {
+            return ['type' => 'active_enrollment', 'data' => $activeEnrollments[0]];
+        }
+
+        // 5. Recent certificate
+        if (!empty($certificates)) {
+            return ['type' => 'certificate_ready', 'data' => $certificates[0]];
+        }
+
+        return null;
+    }
+
+    /**
+     * Build unified action list with colored nudges for dashboard display.
+     *
+     * @return array<array{type: string, color: string, label: string, url: string}>
+     */
+    private function buildActionList(array $enrollmentData, array $quoteData): array
+    {
+        $actions = [];
+
+        // Upcoming sessions (blue)
+        foreach ($enrollmentData['upcoming_sessions'] as $session) {
+            $actions[] = [
+                'type'  => 'upcoming_session',
+                'color' => 'blue',
+                'label' => ($session['course_title'] ?? __('Sessie', 'stride'))
+                    . ' — ' . ($session['date'] ?? ''),
+                'url'   => home_url('/mijn-account/?tab=agenda'),
+            ];
+        }
+
+        // Enrollment/post-course action items (amber)
+        foreach ($enrollmentData['action_items'] as $item) {
+            $actions[] = [
+                'type'  => $item['type'] ?? 'action_item',
+                'color' => 'amber',
+                'label' => $item['label'] . ': ' . $item['course_title'],
+                'url'   => $item['url'],
+            ];
+        }
+
+        // Unsigned quotes (amber)
+        foreach ($quoteData['active'] as $quote) {
+            $status = $quote['status'] ?? null;
+            if ($status === QuoteStatus::Draft || $status === QuoteStatus::Sent) {
+                $actions[] = [
+                    'type'  => 'unsigned_quote',
+                    'color' => 'amber',
+                    'label' => __('Offerte', 'stride') . ' ' . ($quote['quote_number'] ?? '') . ' — ' . ($status?->label() ?? ''),
+                    'url'   => home_url('/mijn-account/?tab=offertes'),
+                ];
+            }
+        }
+
+        // Recent certificates (green)
+        foreach (array_slice($enrollmentData['completed_items'], 0, 3) as $cert) {
+            $certUrl = $cert['certificate_url'] ?? '';
+            if (!empty($certUrl)) {
+                $actions[] = [
+                    'type'  => 'certificate',
+                    'color' => 'green',
+                    'label' => __('Certificaat beschikbaar', 'stride') . ': ' . ($cert['course_title'] ?? ''),
+                    'url'   => $certUrl,
+                ];
+            }
+        }
+
+        return $actions;
+    }
+
+    /**
+     * Fetch active trajectory enrollments for the dashboard.
+     *
+     * @return array<array{id: int, title: string, slug: string, url: string}>
+     */
+    private function buildActiveTrajectories(int $userId): array
+    {
+        $enrollments = $this->registrationRepo->findTrajectoryEnrollmentsByUser($userId);
+        $trajectories = [];
+
+        foreach ($enrollments as $reg) {
+            $trajectoryId = (int) ($reg->trajectory_id ?? 0);
+            if (!$trajectoryId) {
+                continue;
+            }
+
+            $post = get_post($trajectoryId);
+            if (!$post || $post->post_status !== 'publish') {
+                continue;
+            }
+
+            $trajectories[] = [
+                'id'    => $trajectoryId,
+                'title' => $post->post_title,
+                'slug'  => $post->post_name,
+                'url'   => home_url('/trajecten/' . $post->post_name . '/'),
+            ];
+        }
+
+        return $trajectories;
+    }
+
+    /**
+     * Get uppercase initials from a WP_User.
+     *
+     * Returns first letter of first_name + first letter of last_name.
+     * Falls back to first letter of display_name. Returns '?' for null user.
+     */
+    private function getInitials(?WP_User $user): string
+    {
+        if (!$user) {
+            return '?';
+        }
+
+        $first = mb_substr(trim($user->first_name ?? ''), 0, 1);
+        $last  = mb_substr(trim($user->last_name ?? ''), 0, 1);
+
+        if ($first !== '' || $last !== '') {
+            return mb_strtoupper($first . $last);
+        }
+
+        $display = mb_substr(trim($user->display_name ?? ''), 0, 1);
+
+        return $display !== '' ? mb_strtoupper($display) : '?';
     }
 
     /**
