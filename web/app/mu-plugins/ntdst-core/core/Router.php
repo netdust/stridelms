@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 
 /**
  * NTDST Router - Minimal URL routing
@@ -39,7 +40,7 @@ class NTDST_Router
     /**
      * Prevent WordPress from redirecting URLs that match our routes
      */
-    public function preventRedirectForRoutes($redirect_url, $requested_url = null)
+    public function preventRedirectForRoutes(string|false $redirect_url, ?string $requested_url = null): string|false
     {
         // Check both current URL and redirect target
         $urls_to_check = [
@@ -169,7 +170,7 @@ class NTDST_Router
     /**
      * Shorthand for page template
      */
-    public function page($slug_or_callback, ?callable $callback = null): self
+    public function page(string|callable $slug_or_callback, ?callable $callback = null): self
     {
         // page('about', fn() => ...) or page(fn() => ...)
         if (is_callable($slug_or_callback)) {
@@ -233,7 +234,7 @@ class NTDST_Router
      * Handle template_include filter
      * Matches URL patterns and executes callbacks
      */
-    public function handleTemplateInclude($template)
+    public function handleTemplateInclude(string $template): string
     {
         $url = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
         $method = $_SERVER['REQUEST_METHOD'];
@@ -307,7 +308,7 @@ class NTDST_Router
     /**
      * Redirect to URL
      */
-    public function redirect(string $url, int $status = 302): void
+    public function redirect(string $url, int $status = 302): never
     {
         wp_redirect($url, $status);
         exit;

@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 
 /**
  * NTDST Dependency Injection Container
@@ -67,7 +68,7 @@ class NTDST_Container
     /**
      * Register a service (value, class, or factory)
      */
-    public function set(string $id, $value = null): self
+    public function set(string $id, mixed $value = null): self
     {
         $this->services[$id] = $value ?? $id;
         unset($this->resolved[$id]); // Clear cache
@@ -77,7 +78,7 @@ class NTDST_Container
     /**
      * Get service as singleton (cached after first call)
      */
-    public function get(string $id)
+    public function get(string $id): mixed
     {
         // Return cached if exists
         if (isset($this->resolved[$id])) {
@@ -94,7 +95,7 @@ class NTDST_Container
     /**
      * Create fresh instance (autowired, not cached)
      */
-    public function make(string $id, array $params = [])
+    public function make(string $id, array $params = []): object
     {
         if (!class_exists($id)) {
             throw new RuntimeException("Class {$id} does not exist");
@@ -114,7 +115,7 @@ class NTDST_Container
     /**
      * Resolve a service
      */
-    protected function resolve(string $id)
+    protected function resolve(string $id): mixed
     {
         // If not registered, try to resolve as class
         if (!isset($this->services[$id])) {
@@ -131,9 +132,9 @@ class NTDST_Container
             return $this->resolveFactory($service);
         }
 
-        // If string and is a class, resolve it
+        // If string and is a class: reuse singleton for aliases, resolve for self-references
         if (is_string($service) && class_exists($service)) {
-            return $this->resolveClass($service);
+            return $service === $id ? $this->resolveClass($service) : $this->get($service);
         }
 
         // Return as-is (primitive value)
@@ -143,8 +144,13 @@ class NTDST_Container
     /**
      * Resolve factory closure
      * PERFORMANCE: Caches reflection analysis to avoid repeated introspection
+     *
+     * If the factory has at least one parameter, the container is passed.
+     * This allows both typed and untyped parameter styles:
+     *   - function (NTDST_Container $c) { ... }
+     *   - function ($c) { ... }
      */
-    protected function resolveFactory(Closure $factory)
+    protected function resolveFactory(Closure $factory): mixed
     {
         // PERFORMANCE: Use object hash as cache key for closures
         $hash = spl_object_hash($factory);
@@ -153,14 +159,8 @@ class NTDST_Container
             $reflection = new ReflectionFunction($factory);
             $params = $reflection->getParameters();
 
-            // Cache whether this factory expects container injection
-            $expectsContainer = false;
-            if (isset($params[0])) {
-                $type = $params[0]->getType();
-                $expectsContainer = $type && $type->getName() === self::class;
-            }
-
-            $this->factoryCache[$hash] = $expectsContainer;
+            // Pass container if factory expects any parameter
+            $this->factoryCache[$hash] = isset($params[0]);
         }
 
         // Use cached result
@@ -170,7 +170,7 @@ class NTDST_Container
     /**
      * Resolve class with autowiring
      */
-    protected function resolveClass(string $class, array $params = [])
+    protected function resolveClass(string $class, array $params = []): object
     {
         $reflection = $this->getReflection($class);
 
@@ -249,7 +249,7 @@ class NTDST_Container
      * Call method/function with dependency injection
      * PERFORMANCE: Caches reflection for repeated calls to same callable
      */
-    public function call(callable $callback, array $params = [])
+    public function call(callable $callback, array $params = []): mixed
     {
         // Generate cache key based on callable type
         if (is_array($callback)) {
@@ -329,7 +329,7 @@ function ntdst_container(): NTDST_Container
 /**
  * Quick register helper
  */
-function ntdst_set(string $id, $value = null): NTDST_Container
+function ntdst_set(string $id, mixed $value = null): NTDST_Container
 {
     return ntdst_container()->set($id, $value);
 }
@@ -337,7 +337,7 @@ function ntdst_set(string $id, $value = null): NTDST_Container
 /**
  * Quick get helper (singleton)
  */
-function ntdst_get(string $id)
+function ntdst_get(string $id): mixed
 {
     return ntdst_container()->get($id);
 }
@@ -345,7 +345,7 @@ function ntdst_get(string $id)
 /**
  * Quick make helper (fresh instance)
  */
-function ntdst_make(string $id, array $params = [])
+function ntdst_make(string $id, array $params = []): object
 {
     return ntdst_container()->make($id, $params);
 }

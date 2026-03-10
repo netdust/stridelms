@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 
 /**
  * NTDST Bootstrap
@@ -28,7 +29,7 @@ class NTDST_Bootstrap
     /**
      * Sector registry for sector-aware service loading
      */
-    private NTDST_SectorRegistry $sectors;
+    private readonly NTDST_SectorRegistry $sectors;
 
     /**
      * PERFORMANCE: Cache for service slugs to avoid repeated regex operations
@@ -629,7 +630,7 @@ class NTDST_Bootstrap
      * @param mixed $default Default value
      * @return mixed
      */
-    public function config(?string $key = null, $default = null)
+    public function config(?string $key = null, mixed $default = null): mixed
     {
         if ($key === null) {
             return $this->config;
