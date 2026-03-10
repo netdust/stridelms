@@ -167,6 +167,24 @@ namespace NTDST\Audit {
             }
         }
     }
+
+    if (!class_exists(AuditTable::class)) {
+        /**
+         * AuditTable stub for testing
+         *
+         * Returns a predictable table name without touching the real database.
+         */
+        class AuditTable
+        {
+            public const TABLE_NAME = 'audit_log';
+
+            public static function getTableName(): string
+            {
+                global $wpdb;
+                return $wpdb->prefix . self::TABLE_NAME;
+            }
+        }
+    }
 }
 
 // Global namespace for ntdst_log function
