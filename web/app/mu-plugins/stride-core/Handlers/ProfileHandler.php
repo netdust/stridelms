@@ -22,6 +22,8 @@ final class ProfileHandler
     private function init(): void
     {
         add_filter('ntdst/api_data/stride_update_profile', [$this, 'handleUpdateProfile'], 10, 2);
+        add_filter('ntdst/api_data/stride_gdpr_export', [$this, 'handleGdprExport'], 10, 2);
+        add_filter('ntdst/api_data/stride_gdpr_erase', [$this, 'handleGdprErase'], 10, 2);
     }
 
     /**
@@ -60,7 +62,6 @@ final class ProfileHandler
     {
         $firstName = sanitize_text_field($params['first_name'] ?? '');
         $lastName = sanitize_text_field($params['last_name'] ?? '');
-        $phone = sanitize_text_field($params['phone'] ?? '');
 
         $result = wp_update_user([
             'ID' => $userId,
@@ -73,7 +74,15 @@ final class ProfileHandler
             return $result;
         }
 
-        update_user_meta($userId, 'phone', $phone);
+        $metaFields = [
+            'phone' => sanitize_text_field($params['phone'] ?? ''),
+            'organisation' => sanitize_text_field($params['organisation'] ?? ''),
+            'department' => sanitize_text_field($params['department'] ?? ''),
+        ];
+
+        foreach ($metaFields as $key => $value) {
+            update_user_meta($userId, $key, $value);
+        }
 
         ntdst_log('profile')->info('Personal profile updated', [
             'user_id' => $userId,
@@ -95,28 +104,17 @@ final class ProfileHandler
     private function updateBilling(int $userId, array $params): array|WP_Error
     {
         $billingFields = [
-            'invoice_organization_name' => sanitize_text_field($params['billing_company'] ?? ''),
-            'vat_number' => sanitize_text_field($params['billing_vat'] ?? ''),
-            'invoice_address' => sanitize_text_field($params['billing_address'] ?? ''),
-            'invoice_postal_code' => sanitize_text_field($params['billing_postal_code'] ?? ''),
-            'invoice_city' => sanitize_text_field($params['billing_city'] ?? ''),
-            'invoice_email' => sanitize_email($params['billing_email'] ?? ''),
-            'gln_number' => sanitize_text_field($params['billing_gln'] ?? ''),
+            'billing_company' => sanitize_text_field($params['company'] ?? ''),
+            'billing_vat' => sanitize_text_field($params['vat_number'] ?? ''),
+            'billing_address_1' => sanitize_text_field($params['address'] ?? ''),
+            'billing_postcode' => sanitize_text_field($params['postal_code'] ?? ''),
+            'billing_city' => sanitize_text_field($params['city'] ?? ''),
+            'invoice_email' => sanitize_email($params['invoice_email'] ?? ''),
+            'gln_number' => sanitize_text_field($params['gln_number'] ?? ''),
         ];
 
-        $legacyMappings = [
-            'invoice_organization_name' => 'company',
-            'invoice_address' => 'address_line_1',
-            'invoice_postal_code' => 'postal_code',
-            'invoice_city' => 'city',
-        ];
-
-        foreach ($billingFields as $key => $value) {
-            update_user_meta($userId, $key, $value);
-
-            if (isset($legacyMappings[$key])) {
-                update_user_meta($userId, $legacyMappings[$key], $value);
-            }
+        foreach ($billingFields as $metaKey => $value) {
+            update_user_meta($userId, $metaKey, $value);
         }
 
         ntdst_log('profile')->info('Billing profile updated', [
@@ -126,6 +124,66 @@ final class ProfileHandler
         return [
             'success' => true,
             'message' => __('Facturatiegegevens bijgewerkt.', 'stride'),
+        ];
+    }
+
+    /**
+     * Handle GDPR data export request.
+     *
+     * Uses WordPress built-in privacy request system (GDPR export_personal_data).
+     * Sends a confirmation email to the user; once confirmed, WP generates the export.
+     */
+    public function handleGdprExport(mixed $data, array $params): array|WP_Error
+    {
+        $userId = get_current_user_id();
+        if (!$userId) {
+            return new WP_Error('not_logged_in', __('Je moet ingelogd zijn.', 'stride'));
+        }
+
+        $user = get_userdata($userId);
+        $requestId = wp_create_user_request($user->user_email, 'export_personal_data');
+
+        if (is_wp_error($requestId)) {
+            return $requestId;
+        }
+
+        wp_send_user_request($requestId);
+
+        ntdst_log('profile')->info('GDPR export requested', ['user_id' => $userId]);
+
+        return [
+            'success' => true,
+            'message' => __('Je ontvangt een bevestigingsmail om de export te starten.', 'stride'),
+        ];
+    }
+
+    /**
+     * Handle GDPR account erasure request.
+     *
+     * Uses WordPress built-in privacy request system (GDPR remove_personal_data).
+     * Sends a confirmation email to the user; once confirmed, WP processes the erasure.
+     */
+    public function handleGdprErase(mixed $data, array $params): array|WP_Error
+    {
+        $userId = get_current_user_id();
+        if (!$userId) {
+            return new WP_Error('not_logged_in', __('Je moet ingelogd zijn.', 'stride'));
+        }
+
+        $user = get_userdata($userId);
+        $requestId = wp_create_user_request($user->user_email, 'remove_personal_data');
+
+        if (is_wp_error($requestId)) {
+            return $requestId;
+        }
+
+        wp_send_user_request($requestId);
+
+        ntdst_log('profile')->info('GDPR erasure requested', ['user_id' => $userId]);
+
+        return [
+            'success' => true,
+            'message' => __('Je ontvangt een bevestigingsmail om de verwijdering te bevestigen.', 'stride'),
         ];
     }
 

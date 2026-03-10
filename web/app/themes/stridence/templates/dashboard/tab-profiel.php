@@ -73,7 +73,7 @@ $notifications = [
             </template>
         </div>
 
-        <div class="bg-surface-card rounded-lg border border-border/60 p-4">
+        <div class="bg-surface-card rounded-xl border border-border shadow-sm p-4">
             <!-- Display mode -->
             <dl x-show="!editing" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -114,7 +114,7 @@ $notifications = [
                     <div>
                         <label class="input-label"><?php esc_html_e('E-mailadres', 'stridence'); ?></label>
                         <input type="email" value="<?php echo esc_attr($email); ?>" class="input-text bg-surface-alt cursor-not-allowed" disabled>
-                        <p class="input-hint"><?php esc_html_e('Neem contact op om je e-mailadres te wijzigen.', 'stridence'); ?></p>
+                        <span class="input-hint block"><?php esc_html_e('Neem contact op om je e-mailadres te wijzigen.', 'stridence'); ?></span>
                     </div>
                     <div>
                         <label class="input-label"><?php esc_html_e('Telefoonnummer', 'stridence'); ?></label>
@@ -172,9 +172,9 @@ $notifications = [
                     <?php echo stridence_icon('file-text', 'w-4 h-4 text-primary'); ?>
                     <?php esc_html_e('Facturatiegegevens', 'stridence'); ?>
                 </h3>
-                <p class="text-xs text-text-muted mt-1">
+                <span class="text-xs text-text-muted mt-1 block">
                     <?php esc_html_e('Deze gegevens worden gebruikt voor offertes en facturen.', 'stridence'); ?>
-                </p>
+                </span>
             </div>
             <template x-if="!editing">
                 <button type="button" @click="startEdit()" class="text-sm text-primary hover:underline shrink-0">
@@ -184,7 +184,7 @@ $notifications = [
             </template>
         </div>
 
-        <div class="bg-surface-card rounded-lg border border-border/60 p-4">
+        <div class="bg-surface-card rounded-xl border border-border shadow-sm p-4">
             <!-- Display mode -->
             <dl x-show="!editing" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -253,7 +253,7 @@ $notifications = [
                     <div>
                         <label class="input-label"><?php esc_html_e('Facturatie e-mail', 'stridence'); ?></label>
                         <input type="email" x-model="fields.invoice_email" class="input-text" placeholder="<?php echo esc_attr($email); ?>">
-                        <p class="input-hint"><?php esc_html_e('Laat leeg om je hoofde-mailadres te gebruiken.', 'stridence'); ?></p>
+                        <span class="input-hint block"><?php esc_html_e('Laat leeg om je hoofde-mailadres te gebruiken.', 'stridence'); ?></span>
                     </div>
                     <div>
                         <label class="input-label">
@@ -284,6 +284,87 @@ $notifications = [
         </div>
     </section>
 
+    <!-- Privacy & GDPR -->
+    <section x-data="{ exportRequested: false, deleteRequested: false, deleteConfirm: false, error: '', saving: false }">
+        <div class="mb-3">
+            <h3 class="dash-subheading flex items-center gap-2">
+                <?php echo stridence_icon('shield', 'w-4 h-4 text-primary'); ?>
+                <?php esc_html_e('Privacy & GDPR', 'stridence'); ?>
+            </h3>
+            <span class="text-xs text-text-muted mt-1 block">
+                <?php esc_html_e('Beheer je persoonsgegevens conform de AVG/GDPR-wetgeving.', 'stridence'); ?>
+            </span>
+        </div>
+
+        <div class="bg-surface-card rounded-xl border border-border shadow-sm p-4 space-y-4">
+            <!-- Export personal data -->
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <p class="text-sm font-medium text-text m-0"><?php esc_html_e('Persoonsgegevens exporteren', 'stridence'); ?></p>
+                    <p class="text-xs text-text-muted mt-0.5"><?php esc_html_e('Ontvang een kopie van al je opgeslagen gegevens per e-mail.', 'stridence'); ?></p>
+                </div>
+                <template x-if="!exportRequested">
+                    <button type="button"
+                            :disabled="saving"
+                            @click="saving = true; error = '';
+                                ntdstAPI.call('stride_gdpr_export').then(() => { exportRequested = true; }).catch(e => { error = e.message; }).finally(() => { saving = false; })"
+                            class="btn-secondary btn-sm shrink-0">
+                        <?php echo stridence_icon('download', 'w-3.5 h-3.5 inline mr-1'); ?>
+                        <?php esc_html_e('Exporteren', 'stridence'); ?>
+                    </button>
+                </template>
+                <template x-if="exportRequested">
+                    <span class="text-xs text-success font-medium shrink-0 flex items-center gap-1">
+                        <?php echo stridence_icon('check', 'w-3.5 h-3.5'); ?>
+                        <?php esc_html_e('Aanvraag verstuurd', 'stridence'); ?>
+                    </span>
+                </template>
+            </div>
+
+            <hr class="border-border">
+
+            <!-- Delete account -->
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <p class="text-sm font-medium text-text m-0"><?php esc_html_e('Account verwijderen', 'stridence'); ?></p>
+                    <p class="text-xs text-text-muted mt-0.5"><?php esc_html_e('Vraag verwijdering van je account en alle bijbehorende gegevens aan. Dit kan niet ongedaan worden gemaakt.', 'stridence'); ?></p>
+                </div>
+                <template x-if="!deleteRequested">
+                    <div class="shrink-0">
+                        <template x-if="!deleteConfirm">
+                            <button type="button" @click="deleteConfirm = true" class="btn-secondary btn-sm text-error border-error/30 hover:bg-error/5">
+                                <?php esc_html_e('Verwijderen', 'stridence'); ?>
+                            </button>
+                        </template>
+                        <template x-if="deleteConfirm">
+                            <div class="flex items-center gap-2">
+                                <button type="button" @click="deleteConfirm = false" class="btn-secondary btn-sm">
+                                    <?php esc_html_e('Annuleren', 'stridence'); ?>
+                                </button>
+                                <button type="button"
+                                        :disabled="saving"
+                                        @click="saving = true; error = '';
+                                            ntdstAPI.call('stride_gdpr_erase').then(() => { deleteRequested = true; deleteConfirm = false; }).catch(e => { error = e.message; }).finally(() => { saving = false; })"
+                                        class="btn-primary btn-sm !bg-error hover:!bg-error/90">
+                                    <?php esc_html_e('Bevestig verwijdering', 'stridence'); ?>
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+                <template x-if="deleteRequested">
+                    <span class="text-xs text-success font-medium shrink-0 flex items-center gap-1">
+                        <?php echo stridence_icon('check', 'w-3.5 h-3.5'); ?>
+                        <?php esc_html_e('Aanvraag verstuurd', 'stridence'); ?>
+                    </span>
+                </template>
+            </div>
+
+            <!-- Error -->
+            <div x-show="error" class="p-2 bg-error/10 rounded text-sm text-error" x-text="error"></div>
+        </div>
+    </section>
+
     <!-- Notification Preferences -->
     <section x-data="inlineEditSection({
                  action: 'stride_update_profile',
@@ -308,7 +389,7 @@ $notifications = [
             </template>
         </div>
 
-        <div class="bg-surface-card rounded-lg border border-border/60 p-4">
+        <div class="bg-surface-card rounded-xl border border-border shadow-sm p-4">
             <!-- Display mode -->
             <dl x-show="!editing" class="space-y-3">
                 <div class="flex items-center justify-between">
@@ -332,7 +413,7 @@ $notifications = [
                         <span x-show="!fields.notify_newsletter" class="text-text-muted text-xs"><?php esc_html_e('Uit', 'stridence'); ?></span>
                     </dd>
                 </div>
-                <div class="flex items-center justify-between pt-2 border-t border-border/60">
+                <div class="flex items-center justify-between pt-2 border-t border-border">
                     <dt class="text-sm text-text"><?php esc_html_e('Communicatietaal', 'stridence'); ?></dt>
                     <dd class="text-sm font-medium text-text">
                         <span x-show="fields.communication_language === 'nl'"><?php esc_html_e('Nederlands', 'stridence'); ?></span>
@@ -349,7 +430,7 @@ $notifications = [
                         <input type="checkbox" x-model="fields.notify_reminders" class="input-checkbox mt-0.5">
                         <div>
                             <span class="text-sm font-medium text-text"><?php esc_html_e('Herinneringen', 'stridence'); ?></span>
-                            <p class="text-xs text-text-muted"><?php esc_html_e('Ontvang herinneringen voor aankomende sessies en deadlines.', 'stridence'); ?></p>
+                            <span class="text-xs text-text-muted block"><?php esc_html_e('Ontvang herinneringen voor aankomende sessies en deadlines.', 'stridence'); ?></span>
                         </div>
                     </label>
 
@@ -357,7 +438,7 @@ $notifications = [
                         <input type="checkbox" x-model="fields.notify_new_courses" class="input-checkbox mt-0.5">
                         <div>
                             <span class="text-sm font-medium text-text"><?php esc_html_e('Nieuwe opleidingen', 'stridence'); ?></span>
-                            <p class="text-xs text-text-muted"><?php esc_html_e('Word geïnformeerd over nieuwe opleidingen in jouw vakgebied.', 'stridence'); ?></p>
+                            <span class="text-xs text-text-muted block"><?php esc_html_e('Word geïnformeerd over nieuwe opleidingen in jouw vakgebied.', 'stridence'); ?></span>
                         </div>
                     </label>
 
@@ -365,12 +446,12 @@ $notifications = [
                         <input type="checkbox" x-model="fields.notify_newsletter" class="input-checkbox mt-0.5">
                         <div>
                             <span class="text-sm font-medium text-text"><?php esc_html_e('Nieuwsbrief', 'stridence'); ?></span>
-                            <p class="text-xs text-text-muted"><?php esc_html_e('Ontvang onze maandelijkse nieuwsbrief met tips en nieuws.', 'stridence'); ?></p>
+                            <span class="text-xs text-text-muted block"><?php esc_html_e('Ontvang onze maandelijkse nieuwsbrief met tips en nieuws.', 'stridence'); ?></span>
                         </div>
                     </label>
                 </div>
 
-                <div class="pt-2 border-t border-border/60">
+                <div class="pt-2 border-t border-border">
                     <label class="input-label"><?php esc_html_e('Communicatietaal', 'stridence'); ?></label>
                     <select x-model="fields.communication_language" class="input-select w-full sm:w-auto">
                         <option value="nl"><?php esc_html_e('Nederlands', 'stridence'); ?></option>
