@@ -35,15 +35,8 @@ $initials = strtoupper(
 
 <aside class="sidebar" aria-label="<?php esc_attr_e('Dashboard navigatie', 'stridence'); ?>">
 
-    <!-- Brand -->
-    <div class="px-4 py-5">
-        <a href="<?php echo esc_url(home_url('/')); ?>" class="text-lg font-bold tracking-tight text-text hover:text-primary transition-colors">
-            Stride
-        </a>
-    </div>
-
     <!-- Primary Navigation -->
-    <nav class="px-3 space-y-0.5">
+    <nav class="pt-4 px-3 space-y-0.5">
         <?php foreach ($primary_nav as $slug => $item) :
             if (empty($item['visible'])) continue;
 

@@ -34,13 +34,13 @@ $certCount   = count($certificates);
 
 $stats = [];
 if ($activeCount > 0) {
-    $stats[] = ['value' => $activeCount, 'label' => __('Actieve opleidingen', 'stridence')];
+    $stats[] = ['value' => $activeCount, 'label' => __('Actieve opleidingen', 'stridence'), 'icon' => 'book-open', 'color' => 'primary'];
 }
 if ($actionCount > 0) {
-    $stats[] = ['value' => $actionCount, 'label' => __('Acties vereist', 'stridence')];
+    $stats[] = ['value' => $actionCount, 'label' => __('Acties vereist', 'stridence'), 'icon' => 'alert-circle', 'color' => 'warning'];
 }
 if ($certCount > 0) {
-    $stats[] = ['value' => $certCount, 'label' => __('Certificaten', 'stridence')];
+    $stats[] = ['value' => $certCount, 'label' => __('Certificaten', 'stridence'), 'icon' => 'award', 'color' => 'success'];
 }
 
 // Prepare enrollment data as JSON for Alpine panel
@@ -101,14 +101,27 @@ $statusLine = !empty($statusParts) ? implode(' · ', $statusParts) : __('Je bent
 
         <!-- Acties -->
         <?php if (!empty($actions)) : ?>
+            <?php
+            $actionIconMap = [
+                'blue'  => ['icon' => 'calendar', 'bg' => 'bg-blue-50', 'text' => 'text-blue-600'],
+                'amber' => ['icon' => 'alert-circle', 'bg' => 'bg-amber-50', 'text' => 'text-amber-600'],
+                'green' => ['icon' => 'file-text', 'bg' => 'bg-emerald-50', 'text' => 'text-emerald-600'],
+            ];
+            ?>
             <section>
                 <h3 class="text-base font-semibold text-text mb-3">
                     <?php esc_html_e('Acties', 'stridence'); ?>
                 </h3>
                 <div class="space-y-2">
-                    <?php foreach ($actions as $action) : ?>
+                    <?php foreach ($actions as $action) :
+                        $color = $action['color'] ?? 'blue';
+                        $ic = $actionIconMap[$color] ?? $actionIconMap['blue'];
+                    ?>
                         <a href="<?php echo esc_url($action['url']); ?>"
-                           class="action-item action-border-<?php echo esc_attr($action['color']); ?>">
+                           class="action-item action-border-<?php echo esc_attr($color); ?>">
+                            <span class="w-8 h-8 rounded-lg <?php echo esc_attr($ic['bg']); ?> flex items-center justify-center shrink-0">
+                                <?php echo stridence_icon($ic['icon'], 'w-4 h-4 ' . $ic['text']); ?>
+                            </span>
                             <span class="flex-1 text-sm text-text"><?php echo esc_html($action['label']); ?></span>
                             <?php echo stridence_icon('chevron-right', 'w-4 h-4 text-text-muted shrink-0'); ?>
                         </a>
@@ -130,103 +143,11 @@ $statusLine = !empty($statusParts) ? implode(' · ', $statusParts) : __('Je bent
                     </a>
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <?php foreach (array_slice($enrollmentsJson, 0, 4) as $enrollment) :
-                        $type          = $enrollment['type'] ?? 'edition';
-                        $title         = $enrollment['course_title'] ?? '';
-                        $courseUrl     = $enrollment['course_url'] ?? '';
-                        $badgeLabel    = $type === 'edition' ? __('Klassikaal', 'stridence') : ($enrollment['format_label'] ?? __('E-learning', 'stridence'));
-                        $badgeClass    = $type === 'edition' ? 'bg-primary/10 text-primary' : 'bg-accent/10 text-accent';
-
-                        // Progress for online
-                        $progress         = 0;
-                        $totalLessons     = (int) ($enrollment['total_lessons'] ?? 0);
-                        $completedLessons = (int) ($enrollment['completed_lessons'] ?? 0);
-                        if ($type === 'online') {
-                            $progress = (int) ($enrollment['progress'] ?? 0);
-                        }
-
-                        // Session info for edition
-                        $startDate = $enrollment['start_date_formatted'] ?? ($enrollment['start_date'] ?? '');
-                        $venue     = $enrollment['venue'] ?? '';
-                        $sessions  = $enrollment['sessions'] ?? [];
-                        $nextSession = null;
-                        $today = date('Y-m-d');
-                        foreach ($sessions as $s) {
-                            if (!empty($s['date']) && $s['date'] >= $today) {
-                                $nextSession = $s;
-                                break;
-                            }
-                        }
-
-                        // CTA
-                        $ctaLabel = $progress > 0 ? __('Doorgaan', 'stridence') : __('Starten', 'stridence');
-                        $ctaUrl   = $type === 'online' ? $courseUrl : '';
-                    ?>
-                        <div class="dash-card p-4 flex flex-col gap-3 cursor-pointer hover:border-primary/25 transition-colors"
-                             @click="openPanel(<?php echo esc_attr(wp_json_encode($enrollment)); ?>)"
-                             role="button"
-                             tabindex="0"
-                             @keydown.enter="openPanel(<?php echo esc_attr(wp_json_encode($enrollment)); ?>)">
-
-                            <!-- Title + badge -->
-                            <div class="flex items-start justify-between gap-2">
-                                <h4 class="font-medium text-text text-sm line-clamp-2 flex-1">
-                                    <?php echo esc_html($title); ?>
-                                </h4>
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold <?php echo esc_attr($badgeClass); ?> shrink-0">
-                                    <?php echo esc_html($badgeLabel); ?>
-                                </span>
-                            </div>
-
-                            <?php if ($type === 'online' && $totalLessons > 0) : ?>
-                                <!-- Progress bar for e-learning -->
-                                <div>
-                                    <div class="flex items-center justify-between text-xs text-text-muted mb-1">
-                                        <span><?php echo esc_html(sprintf(__('%d van %d lessen', 'stridence'), $completedLessons, $totalLessons)); ?></span>
-                                        <span><?php echo esc_html($progress . '%'); ?></span>
-                                    </div>
-                                    <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
-                                        <div class="h-full bg-accent rounded-full transition-all" style="width: <?php echo esc_attr((string) $progress); ?>%"></div>
-                                    </div>
-                                </div>
-                            <?php elseif ($type === 'edition') : ?>
-                                <!-- Session info for classroom -->
-                                <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted">
-                                    <?php if ($nextSession) : ?>
-                                        <span class="flex items-center gap-1">
-                                            <?php echo stridence_icon('calendar', 'w-3.5 h-3.5'); ?>
-                                            <?php echo esc_html($nextSession['date_formatted'] ?? stride_format_date($nextSession['date'])); ?>
-                                        </span>
-                                    <?php elseif ($startDate) : ?>
-                                        <span class="flex items-center gap-1">
-                                            <?php echo stridence_icon('calendar', 'w-3.5 h-3.5'); ?>
-                                            <?php echo esc_html($startDate); ?>
-                                        </span>
-                                    <?php endif; ?>
-                                    <?php if ($venue) : ?>
-                                        <span class="flex items-center gap-1">
-                                            <?php echo stridence_icon('map-pin', 'w-3.5 h-3.5'); ?>
-                                            <?php echo esc_html($venue); ?>
-                                        </span>
-                                    <?php endif; ?>
-                                    <?php if (!empty($sessions)) : ?>
-                                        <span class="flex items-center gap-1">
-                                            <?php echo stridence_icon('layers', 'w-3.5 h-3.5'); ?>
-                                            <?php echo esc_html(sprintf(_n('%d sessie', '%d sessies', count($sessions), 'stridence'), count($sessions))); ?>
-                                        </span>
-                                    <?php endif; ?>
-                                </div>
-                            <?php endif; ?>
-
-                            <!-- CTA -->
-                            <?php if ($type === 'online' && $ctaUrl) : ?>
-                                <a href="<?php echo esc_url($ctaUrl); ?>"
-                                   class="btn-ghost btn-sm self-start mt-auto"
-                                   @click.stop>
-                                    <?php echo esc_html($ctaLabel); ?> &rarr;
-                                </a>
-                            <?php endif; ?>
-                        </div>
+                    <?php foreach (array_slice($enrollmentsJson, 0, 4) as $enrollment) : ?>
+                        <?php get_template_part('templates/dashboard/partials/enrollment-card', null, [
+                            'enrollment'    => $enrollment,
+                            'panel_enabled' => true,
+                        ]); ?>
                     <?php endforeach; ?>
                 </div>
             </section>

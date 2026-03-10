@@ -73,7 +73,7 @@ $page_titles = [
     'downloads'      => __('Downloads', 'stridence'),
 ];
 
-get_header('dashboard');
+get_header();
 ?>
 
 <div class="min-h-screen bg-surface">
