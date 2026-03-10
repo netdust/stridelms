@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * Auto Metabox Generator
  *
@@ -9,10 +11,12 @@
  * @version 1.0.0
  */
 
-class NTDST_MetaboxGenerator
+defined('ABSPATH') || exit;
+
+final class NTDST_MetaboxGenerator
 {
-    private static $instance = null;
-    private $registered_models = [];
+    private static ?self $instance = null;
+    private array $registered_models = [];
 
     private function __construct()
     {
@@ -612,7 +616,7 @@ class NTDST_MetaboxGenerator
     /**
      * Render individual field based on type
      */
-    private function render_field(string $name, $type, $value): void
+    private function render_field(string $name, mixed $type, mixed $value): void
     {
         $label = ucwords(str_replace('_', ' ', $name));
         $field_id = "ntdst_field_{$name}";
@@ -760,7 +764,7 @@ class NTDST_MetaboxGenerator
     /**
      * Render relation field (autocomplete post/user selector)
      */
-    private function render_relation_field(string $field_id, string $field_name, string $name, $value, array $options): void
+    private function render_relation_field(string $field_id, string $field_name, string $name, mixed $value, array $options): void
     {
         $post_type = $options['post_type'] ?? 'post';
         $multiple = $options['multiple'] ?? true;
@@ -847,7 +851,7 @@ class NTDST_MetaboxGenerator
     /**
      * Render gallery field (image selector with drag & drop reordering)
      */
-    private function render_gallery_field(string $field_id, string $field_name, string $name, $value, array $options): void
+    private function render_gallery_field(string $field_id, string $field_name, string $name, mixed $value, array $options): void
     {
         static $gallery_js_loaded = false;
 
@@ -1047,7 +1051,7 @@ class NTDST_MetaboxGenerator
     /**
      * Render repeater field (multi-row data with sub-fields)
      */
-    private function render_repeater_field(string $field_id, string $field_name, string $name, $value, array $options): void
+    private function render_repeater_field(string $field_id, string $field_name, string $name, mixed $value, array $options): void
     {
         static $repeater_js_loaded = false;
 
@@ -1227,6 +1231,70 @@ class NTDST_MetaboxGenerator
                 }
             </style>';
 
+            // JavaScript for repeater add/remove functionality
+            echo '<script>
+            jQuery(document).ready(function($) {
+                // Add row button click handler
+                $(document).on("click", ".ntdst-repeater-add", function(e) {
+                    e.preventDefault();
+
+                    var $field = $(this).closest(".ntdst-repeater-field");
+                    var fieldId = $field.data("field-id");
+                    var maxRows = $field.data("max-rows");
+                    var $tbody = $field.find(".ntdst-repeater-rows");
+                    var $template = $("#" + fieldId + "_template");
+
+                    // Check max rows limit
+                    if (maxRows && $tbody.find("tr").length >= maxRows) {
+                        alert("Maximum number of rows reached (" + maxRows + ")");
+                        return;
+                    }
+
+                    // Get next index
+                    var nextIndex = 0;
+                    $tbody.find("tr").each(function() {
+                        var idx = parseInt($(this).data("index"), 10);
+                        if (!isNaN(idx) && idx >= nextIndex) {
+                            nextIndex = idx + 1;
+                        }
+                    });
+
+                    // Clone template and replace __INDEX__ placeholder
+                    var templateHtml = $template.html();
+                    var newRow = templateHtml.replace(/__INDEX__/g, nextIndex);
+                    $tbody.append(newRow);
+
+                    // Trigger change event for any listeners
+                    $tbody.trigger("repeater:row-added");
+                });
+
+                // Remove row button click handler
+                $(document).on("click", ".ntdst-repeater-remove", function(e) {
+                    e.preventDefault();
+
+                    var $row = $(this).closest("tr");
+                    var $tbody = $row.closest("tbody");
+
+                    $row.fadeOut(200, function() {
+                        $(this).remove();
+                        $tbody.trigger("repeater:row-removed");
+                    });
+                });
+
+                // Enable drag-and-drop sorting if jQuery UI sortable is available
+                if ($.fn.sortable) {
+                    $(".ntdst-repeater-rows").sortable({
+                        handle: ".ntdst-repeater-drag-handle",
+                        placeholder: "ntdst-repeater-row ui-sortable-placeholder",
+                        axis: "y",
+                        update: function(event, ui) {
+                            $(this).trigger("repeater:row-reordered");
+                        }
+                    });
+                }
+            });
+            </script>';
+
             $repeater_js_loaded = true;
         }
     }
@@ -1234,7 +1302,7 @@ class NTDST_MetaboxGenerator
     /**
      * Render a single repeater row (table row format)
      */
-    private function render_repeater_row(string $field_name, string $name, $row_index, array $row_data, array $sub_fields): void
+    private function render_repeater_row(string $field_name, string $name, mixed $row_index, array $row_data, array $sub_fields): void
     {
         echo '<tr class="ntdst-repeater-row" data-index="' . esc_attr($row_index) . '">';
 
@@ -1455,7 +1523,7 @@ class NTDST_MetaboxGenerator
      * @param string $type The field type
      * @param array|string $field_config Full field config (for repeater sub_fields)
      */
-    private function sanitize_field($value, string $type, $field_config = [])
+    private function sanitize_field(mixed $value, string $type, mixed $field_config = []): mixed
     {
         switch ($type) {
             case 'email':
