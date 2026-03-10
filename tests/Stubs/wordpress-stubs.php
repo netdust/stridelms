@@ -66,6 +66,8 @@ if (!class_exists('WP_User')) {
         public string $display_name = '';
         public string $first_name = '';
         public string $last_name = '';
+        public string $nickname = '';
+        public string $description = '';
         public array $roles = [];
 
         public function __construct($id = 0, $name = '', $site_id = '')

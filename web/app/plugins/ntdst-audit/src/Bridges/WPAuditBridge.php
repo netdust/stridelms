@@ -59,6 +59,16 @@ final class WPAuditBridge implements \NTDST_Service_Meta
         add_action('wp_login', [$this, 'onLogin'], 10, 2);
         add_action('wp_logout', [$this, 'onLogout'], 10, 1);
         add_action('wp_login_failed', [$this, 'onLoginFailed'], 10, 1);
+
+        // User lifecycle
+        add_action('user_register', [$this, 'onUserCreated'], 10, 1);
+        add_action('delete_user', [$this, 'onUserDeleted'], 10, 2);
+        add_action('profile_update', [$this, 'onProfileUpdated'], 10, 2);
+        add_action('set_user_role', [$this, 'onRoleChanged'], 10, 3);
+
+        // User meta (personal data)
+        add_action('updated_user_meta', [$this, 'onUserMetaUpdated'], 10, 4);
+        add_action('deleted_user_meta', [$this, 'onUserMetaDeleted'], 10, 4);
     }
 
     private function audit(): AuditService
@@ -109,5 +119,84 @@ final class WPAuditBridge implements \NTDST_Service_Meta
                 'ip_hash' => $this->hashedIp(),
             ]
         );
+    }
+
+    // ── User Lifecycle ─────────────────────────────────────────────
+
+    public function onUserCreated(int $userId): void
+    {
+        $user = get_userdata($userId);
+        $roles = $user ? $user->roles : [];
+
+        $this->audit()->record('user', $userId, 'user.created', null, [
+            'roles' => $roles,
+        ]);
+    }
+
+    public function onUserDeleted(int $userId, ?int $reassignTo): void
+    {
+        $this->audit()->record('user', $userId, 'user.deleted', null, [
+            'reassign_to' => $reassignTo,
+        ]);
+    }
+
+    public function onProfileUpdated(int $userId, WP_User $oldUser): void
+    {
+        $trackFields = ['first_name', 'last_name', 'nickname', 'user_email', 'display_name', 'description'];
+        $changed = [];
+
+        foreach ($trackFields as $field) {
+            $oldValue = $oldUser->$field ?? '';
+            $newValue = get_user_meta($userId, $field, true);
+
+            if (in_array($field, ['user_email', 'display_name'], true)) {
+                $newUser = get_userdata($userId);
+                $newValue = $newUser ? ($newUser->$field ?? '') : '';
+            }
+
+            if ((string) $oldValue !== (string) $newValue) {
+                $changed[] = $field;
+            }
+        }
+
+        if (empty($changed)) {
+            return;
+        }
+
+        $this->audit()->record('user', $userId, 'user.profile_updated', null, [
+            'changed_fields' => $changed,
+        ]);
+    }
+
+    public function onRoleChanged(int $userId, string $newRole, array $oldRoles): void
+    {
+        $this->audit()->record('user', $userId, 'user.role_changed', null, [
+            'new_role' => $newRole,
+            'old_role' => $oldRoles[0] ?? '',
+        ]);
+    }
+
+    // ── User Meta ───────────────────────────────────────────────────
+
+    public function onUserMetaUpdated(int $metaId, int $userId, string $metaKey, mixed $metaValue): void
+    {
+        if (!in_array($metaKey, self::GDPR_META_KEYS, true)) {
+            return;
+        }
+
+        $this->audit()->record('user', $userId, 'usermeta.updated', null, [
+            'meta_key' => $metaKey,
+        ]);
+    }
+
+    public function onUserMetaDeleted(array $metaIds, int $userId, string $metaKey, mixed $metaValue): void
+    {
+        if (!in_array($metaKey, self::GDPR_META_KEYS, true)) {
+            return;
+        }
+
+        $this->audit()->record('user', $userId, 'usermeta.deleted', null, [
+            'meta_key' => $metaKey,
+        ]);
     }
 }
