@@ -7,7 +7,7 @@
  * @param array $args {
  *     @type array $notification {
  *         @type string $id        Notification ID
- *         @type string $type      Type: 'session', 'action', 'certificate', 'quote'
+ *         @type string $type      Type: 'enrollment', 'attendance', 'completion', 'certificate', 'session'
  *         @type string $title     Main text
  *         @type string $body      Secondary text (can be empty)
  *         @type string $url       Link URL
@@ -37,9 +37,11 @@ $read      = (bool) ($notification['read'] ?? false);
 
 // Icon and color per type
 [$icon, $iconColor, $iconBg] = match ($type) {
-    'session'     => ['calendar', 'text-blue-600', 'bg-blue-50'],
-    'certificate' => ['award', 'text-green-600', 'bg-green-50'],
-    'quote'       => ['file-text', 'text-amber-600', 'bg-amber-50'],
+    'enrollment'  => ['check-circle', 'text-green-600', 'bg-green-50'],
+    'attendance'  => ['check', 'text-blue-600', 'bg-blue-50'],
+    'completion'  => ['award', 'text-green-600', 'bg-green-50'],
+    'certificate' => ['file-text', 'text-green-600', 'bg-green-50'],
+    'session'     => ['info', 'text-blue-600', 'bg-blue-50'],
     default       => ['bell', 'text-primary', 'bg-primary/10'],
 };
 
@@ -50,7 +52,7 @@ if ($timestamp > 0) {
 }
 ?>
 <a href="<?php echo esc_url($url); ?>"
-   class="notification-item flex items-start gap-3 px-4 py-3 rounded-lg border border-border/60 bg-surface-card hover:border-primary/25 transition-colors<?php echo !$read ? ' notification-unread' : ''; ?>">
+   class="flex items-start gap-3 px-4 py-3 rounded-lg border border-border/60 bg-surface-card hover:border-primary/25 transition-colors cursor-pointer">
 
     <!-- Unread dot + icon -->
     <div class="relative shrink-0">
