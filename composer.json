@@ -45,7 +45,9 @@
     "wpackagist-plugin/fluentform": "^6.1",
     "wpackagist-plugin/fluent-smtp": "^2.2",
     "dompdf/dompdf": "^3.1",
-    "wpackagist-theme/kadence": "^1.4"
+    "wpackagist-theme/kadence": "^1.4",
+    "openspout/openspout": "^4",
+    "phpoffice/phpword": "^1"
   },
   "require-dev": {
     "laravel/pint": "^1.18",
@@ -65,7 +67,8 @@
   },
   "autoload-dev": {
     "psr-4": {
-      "Stride\\Tests\\": "tests/"
+      "Stride\\Tests\\": "tests/",
+      "NTDST\\Audit\\Bridges\\": "web/app/plugins/ntdst-audit/src/Bridges/"
     }
   },
   "config": {

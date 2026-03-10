@@ -776,6 +776,13 @@ if (!function_exists('register_post_meta')) {
     }
 }
 
+if (!function_exists('wp_hash')) {
+    function wp_hash(string $data, string $scheme = 'auth'): string
+    {
+        return hash('sha256', $data . $scheme);
+    }
+}
+
 // NTDST Core interface stubs
 if (!interface_exists('NTDST_Service_Meta')) {
     interface NTDST_Service_Meta
