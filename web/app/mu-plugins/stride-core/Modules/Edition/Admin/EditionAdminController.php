@@ -486,6 +486,9 @@ final class EditionAdminController
             wp_send_json_error(['message' => $result->get_error_message()], 400);
         }
 
+        // Clear cache so renderSessionsTableBody gets fresh meta
+        ntdst_invalidate_post_type('vad_session');
+
         wp_send_json_success([
             'session_id' => $result,
             'html' => $this->renderSessionsTableBody($editionId),
@@ -515,6 +518,8 @@ final class EditionAdminController
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()], 400);
         }
+
+        ntdst_invalidate_post_type('vad_session');
 
         wp_send_json_success([
             'html' => $this->renderSessionsTableBody($session['edition_id']),
@@ -1020,7 +1025,8 @@ final class EditionAdminController
             data-title="<?php echo esc_attr($session['title'] ?? ''); ?>"
             data-description="<?php echo esc_attr($session['description'] ?? ''); ?>"
             data-webinar-link="<?php echo esc_attr($session['webinar_link'] ?? ''); ?>"
-            data-lesson-ids="<?php echo esc_attr($lessonIds); ?>">
+            data-lesson-ids="<?php echo esc_attr($lessonIds); ?>"
+            data-price-modifier="<?php echo esc_attr((string) ($session['price_modifier'] ?? 0)); ?>">
             <td class="column-date"><?php echo esc_html($dateFormatted); ?></td>
             <td class="column-time"><?php echo esc_html($timeFormatted ?: '-'); ?></td>
             <td class="column-type">
@@ -1030,6 +1036,17 @@ final class EditionAdminController
             </td>
             <td class="column-slot"><?php echo esc_html($session['slot'] ? ($session['slot']) : '-'); ?></td>
             <td class="column-location"><?php echo esc_html($session['location'] ?: '-'); ?></td>
+            <td class="column-price-mod">
+                <?php
+                $modifier = (int) ($session['price_modifier'] ?? 0);
+                if ($modifier !== 0):
+                    $sign = $modifier > 0 ? '+' : '';
+                    echo esc_html($sign . number_format($modifier / 100, 2, ',', '.'));
+                else:
+                    echo '-';
+                endif;
+                ?>
+            </td>
             <td class="column-actions">
                 <button type="button" class="button-link stride-edit-session" title="<?php esc_attr_e('Bewerken', 'stride'); ?>">
                     <span class="dashicons dashicons-edit"></span>

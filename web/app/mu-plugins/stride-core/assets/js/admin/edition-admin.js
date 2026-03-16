@@ -219,10 +219,10 @@
                     $formRow.find('select[name="session_slot"]').val(sessionSlot);
                 }
 
-                // Set price modifier (convert cents to euro)
+                // Set price modifier (convert cents to euro — use dot decimal for type="number")
                 var priceModifier = parseInt($editRow.data('price-modifier') || 0, 10);
                 if (priceModifier !== 0) {
-                    $formRow.find('input[name="session_price_modifier"]').val((priceModifier / 100).toFixed(2).replace('.', ','));
+                    $formRow.find('input[name="session_price_modifier"]').val((priceModifier / 100).toFixed(2));
                 } else {
                     $formRow.find('input[name="session_price_modifier"]').val('');
                 }
