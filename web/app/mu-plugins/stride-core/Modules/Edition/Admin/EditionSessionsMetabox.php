@@ -43,7 +43,6 @@ final class EditionSessionsMetabox
         if (is_string($sessionSlots)) {
             $sessionSlots = json_decode($sessionSlots, true) ?: [];
         }
-        $selectionDeadline = $this->editionRepository->getField($post->ID, 'selection_deadline', '');
         ?>
         <div class="stride-sessions-admin">
             <!-- Header with Add button -->
@@ -63,13 +62,14 @@ final class EditionSessionsMetabox
                         <th class="column-type"><?php esc_html_e('Type', 'stride'); ?></th>
                         <th class="column-slot"><?php esc_html_e('Slot', 'stride'); ?></th>
                         <th class="column-location"><?php esc_html_e('Locatie', 'stride'); ?></th>
+                        <th class="column-price-mod"><?php esc_html_e('Prijs ±', 'stride'); ?></th>
                         <th class="column-actions"><?php esc_html_e('Acties', 'stride'); ?></th>
                     </tr>
                 </thead>
                 <tbody id="stride-sessions-body">
                     <?php if (empty($sessions)): ?>
                         <tr class="no-sessions-row">
-                            <td colspan="6" class="no-sessions">
+                            <td colspan="7" class="no-sessions">
                                 <?php esc_html_e('Nog geen sessies toegevoegd.', 'stride'); ?>
                             </td>
                         </tr>
@@ -82,7 +82,7 @@ final class EditionSessionsMetabox
             </table>
 
             <!-- Slot Configuration -->
-            <?php $this->renderSlotConfiguration($selectionDeadline, $sessionSlots); ?>
+            <?php $this->renderSlotConfiguration($sessionSlots); ?>
         </div>
 
         <!-- Session Form Template (hidden, used by JS) -->
@@ -118,6 +118,12 @@ final class EditionSessionsMetabox
                 $slotLabel = $slotValue; // Fallback to slot key if label not found
             }
         }
+
+        // Prepare lesson_ids as comma-separated string
+        $lessonIds = '';
+        if (!empty($session['lesson_ids']) && is_array($session['lesson_ids'])) {
+            $lessonIds = implode(',', array_map('intval', $session['lesson_ids']));
+        }
         ?>
         <tr class="session-row"
             data-session-id="<?php echo esc_attr($session['id']); ?>"
@@ -126,7 +132,12 @@ final class EditionSessionsMetabox
             data-end-time="<?php echo esc_attr($session['end_time']); ?>"
             data-location="<?php echo esc_attr($session['location'] ?? ''); ?>"
             data-session-type="<?php echo esc_attr($session['type']); ?>"
-            data-session-slot="<?php echo esc_attr($session['slot'] ?? ''); ?>">
+            data-session-slot="<?php echo esc_attr($session['slot'] ?? ''); ?>"
+            data-title="<?php echo esc_attr($session['title'] ?? ''); ?>"
+            data-description="<?php echo esc_attr($session['description'] ?? ''); ?>"
+            data-webinar-link="<?php echo esc_attr($session['webinar_link'] ?? ''); ?>"
+            data-lesson-ids="<?php echo esc_attr($lessonIds); ?>"
+            data-price-modifier="<?php echo esc_attr((string) ($session['price_modifier'] ?? 0)); ?>">
             <td class="column-date"><?php echo esc_html($dateFormatted); ?></td>
             <td class="column-time"><?php echo esc_html($timeFormatted ?: '-'); ?></td>
             <td class="column-type">
@@ -136,6 +147,17 @@ final class EditionSessionsMetabox
             </td>
             <td class="column-slot"><?php echo esc_html($slotLabel ?: '-'); ?></td>
             <td class="column-location"><?php echo esc_html($session['location'] ?: '-'); ?></td>
+            <td class="column-price-mod">
+                <?php
+                $modifier = (int) ($session['price_modifier'] ?? 0);
+                if ($modifier !== 0):
+                    $sign = $modifier > 0 ? '+' : '';
+                    echo esc_html($sign . number_format($modifier / 100, 2, ',', '.'));
+                else:
+                    echo '-';
+                endif;
+                ?>
+            </td>
             <td class="column-actions">
                 <button type="button" class="button-link stride-edit-session" title="<?php esc_attr_e('Bewerken', 'stride'); ?>">
                     <span class="dashicons dashicons-edit"></span>
@@ -152,7 +174,7 @@ final class EditionSessionsMetabox
     {
         ?>
         <tr class="stride-session-form-row">
-            <td colspan="6">
+            <td colspan="7">
                 <div class="stride-session-form">
                     <input type="hidden" name="session_id" value="">
 
@@ -183,6 +205,14 @@ final class EditionSessionsMetabox
                                 </select>
                             </div>
                         <?php endif; ?>
+                        <div class="stride-field">
+                            <label><?php esc_html_e('Prijswijziging (€)', 'stride'); ?></label>
+                            <input type="number" name="session_price_modifier" step="0.01" placeholder="0,00"
+                                   style="width: 100px;">
+                            <p class="description" id="stride-price-modifier-hint" style="display: none; font-size: 11px; color: #646970;">
+                                <?php esc_html_e('Alleen actief bij sessiekeuze', 'stride'); ?>
+                            </p>
+                        </div>
                     </div>
 
                     <!-- Session Type Section -->
@@ -282,7 +312,7 @@ final class EditionSessionsMetabox
         };
     }
 
-    private function renderSlotConfiguration(string $selectionDeadline, array $sessionSlots): void
+    private function renderSlotConfiguration(array $sessionSlots): void
     {
         ?>
         <div class="stride-session-slots-config">
@@ -290,14 +320,6 @@ final class EditionSessionsMetabox
             <p class="description">
                 <?php esc_html_e('Definieer tijdslots zodat deelnemers kunnen kiezen welke sessies ze volgen.', 'stride'); ?>
             </p>
-
-            <div class="stride-field-row">
-                <div class="stride-field" style="max-width: 250px;">
-                    <label for="edition_selection_deadline"><?php esc_html_e('Selectie deadline', 'stride'); ?></label>
-                    <input type="date" name="ntdst_fields[selection_deadline]" id="edition_selection_deadline"
-                           value="<?php echo esc_attr($selectionDeadline); ?>">
-                </div>
-            </div>
 
             <div class="stride-session-slots-wrapper">
                 <div id="stride-session-slots-list">

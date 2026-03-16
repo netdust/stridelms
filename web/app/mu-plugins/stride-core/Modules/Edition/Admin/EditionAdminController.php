@@ -935,6 +935,14 @@ final class EditionAdminController
             'type' => sanitize_text_field($input['session_type'] ?? 'in_person'),
         ];
 
+        // Convert euro input to cents for storage
+        $priceModifierInput = $input['price_modifier'] ?? '';
+        if ($priceModifierInput !== '' && $priceModifierInput !== null) {
+            $data['price_modifier'] = (int) round(floatval(str_replace(',', '.', (string) $priceModifierInput)) * 100);
+        } else {
+            $data['price_modifier'] = 0;
+        }
+
         // Type-specific fields
         $type = SessionType::tryFrom($data['type']) ?? SessionType::InPerson;
 
