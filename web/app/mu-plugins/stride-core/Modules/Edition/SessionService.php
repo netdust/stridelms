@@ -228,6 +228,7 @@ final class SessionService
             'type_enum' => $type,
             'capacity' => (int) $this->repository->getField($post->ID, 'capacity', 0),
             'optional' => (bool) $this->repository->getField($post->ID, 'optional', false),
+            'price_modifier' => (int) $this->repository->getField($post->ID, 'price_modifier', 0),
         ];
     }
 
@@ -275,6 +276,7 @@ final class SessionService
             'description' => $meta['_ntdst_description'] ?? $meta['description'] ?? '',
             'webinar_link' => $meta['_ntdst_webinar_link'] ?? $meta['webinar_link'] ?? '',
             'lesson_ids' => array_map('intval', $lessonIds),
+            'price_modifier' => (int) ($meta['_ntdst_price_modifier'] ?? $meta['price_modifier'] ?? 0),
         ];
     }
 }

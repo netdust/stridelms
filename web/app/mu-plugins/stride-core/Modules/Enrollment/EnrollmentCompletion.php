@@ -342,6 +342,17 @@ final class EnrollmentCompletion
         }
 
         if ($tasks[$taskType]['status'] === 'completed') {
+            // Session selection allows re-submission to update quote pricing
+            if ($taskType === 'session_selection') {
+                $tasks = $this->markTaskComplete($tasks, $taskType, $data);
+                $repo->updateCompletionTasks($registrationId, $tasks);
+
+                do_action('stride/enrollment/task_completed', [
+                    'registration_id' => $registrationId,
+                    'task_type' => $taskType,
+                    'tasks' => $tasks,
+                ]);
+            }
             return true;
         }
 
