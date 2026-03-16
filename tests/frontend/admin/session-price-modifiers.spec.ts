@@ -5,7 +5,7 @@
  * Edition admin screen:
  *
  *   1. Price modifier field exists in the session form
- *   2. Column header "Prijs ±" is present in the sessions table
+ *   2. Column header "€ ±" is present in the sessions table
  *   3. Positive, negative, and zero modifiers display correctly
  *   4. Price modifier persists when editing an existing session
  *   5. Hint text toggles based on slot selection
@@ -142,8 +142,8 @@ test.describe('Price modifier field in session form', () => {
 // 2. PRIJS ± COLUMN HEADER
 // ============================================================================
 
-test.describe('Prijs ± column header', () => {
-  test('sessions table has "Prijs ±" column header', async ({ page }) => {
+test.describe('€ ± column header', () => {
+  test('sessions table has "€ ±" column header', async ({ page }) => {
     await openFirstEdition(page);
 
     const sessionsTable = page.locator('.stride-sessions-table');
@@ -151,7 +151,7 @@ test.describe('Prijs ± column header', () => {
 
     const priceModHeader = sessionsTable.locator('thead th.column-price-mod');
     await expect(priceModHeader).toBeVisible();
-    await expect(priceModHeader).toHaveText('Prijs ±');
+    await expect(priceModHeader).toHaveText('€ ±');
   });
 });
 

@@ -1036,7 +1036,7 @@ final class EditionAdminController
             </td>
             <td class="column-slot"><?php echo esc_html($session['slot'] ? ($session['slot']) : '-'); ?></td>
             <td class="column-location"><?php echo esc_html($session['location'] ?: '-'); ?></td>
-            <td class="column-price-mod">
+            <td class="column-price-mod" style="white-space: nowrap;">
                 <?php
                 $modifier = (int) ($session['price_modifier'] ?? 0);
                 if ($modifier !== 0):

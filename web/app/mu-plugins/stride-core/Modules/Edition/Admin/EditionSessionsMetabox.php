@@ -62,7 +62,7 @@ final class EditionSessionsMetabox
                         <th class="column-type"><?php esc_html_e('Type', 'stride'); ?></th>
                         <th class="column-slot"><?php esc_html_e('Slot', 'stride'); ?></th>
                         <th class="column-location"><?php esc_html_e('Locatie', 'stride'); ?></th>
-                        <th class="column-price-mod"><?php esc_html_e('Prijs ±', 'stride'); ?></th>
+                        <th class="column-price-mod" style="min-width: 90px; white-space: nowrap;"><?php esc_html_e('€ ±', 'stride'); ?></th>
                         <th class="column-actions"><?php esc_html_e('Acties', 'stride'); ?></th>
                     </tr>
                 </thead>
@@ -147,7 +147,7 @@ final class EditionSessionsMetabox
             </td>
             <td class="column-slot"><?php echo esc_html($slotLabel ?: '-'); ?></td>
             <td class="column-location"><?php echo esc_html($session['location'] ?: '-'); ?></td>
-            <td class="column-price-mod">
+            <td class="column-price-mod" style="white-space: nowrap;">
                 <?php
                 $modifier = (int) ($session['price_modifier'] ?? 0);
                 if ($modifier !== 0):
