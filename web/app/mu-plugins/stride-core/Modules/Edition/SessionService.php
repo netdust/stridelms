@@ -65,7 +65,7 @@ final class SessionService
         // Check if description changed (for audit notification)
         $descriptionChanged = false;
         if (array_key_exists('description', $data)) {
-            $oldDescription = $this->repository->getMeta($sessionId, 'description') ?? '';
+            $oldDescription = $this->repository->getField($sessionId, 'description') ?? '';
             $descriptionChanged = $data['description'] !== $oldDescription;
         }
 
@@ -77,7 +77,7 @@ final class SessionService
 
         // Fire audit hook if description changed
         if ($descriptionChanged) {
-            $editionId = $this->repository->getMeta($sessionId, 'edition_id');
+            $editionId = $this->repository->getField($sessionId, 'edition_id');
             do_action('stride/session/note_updated', [
                 'session_id' => $sessionId,
                 'edition_id' => (int) $editionId,
