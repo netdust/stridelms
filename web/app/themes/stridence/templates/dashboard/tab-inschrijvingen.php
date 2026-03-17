@@ -61,9 +61,9 @@ $cancelled_editions = $data['cancelled_editions'];
                     $completeUrl = $reg['complete_url'] ?? '';
                     $ctaUrl = '';
                     $ctaLabel = '';
+                    $tasks = $taskSummary['tasks'] ?? [];
                     if ($pendingTasks > 0 && $completeUrl) {
                         $ctaUrl = $completeUrl;
-                        $tasks = $taskSummary['tasks'] ?? [];
                         $hasSessionSelection = isset($tasks['session_selection']) && ($tasks['session_selection']['status'] ?? '') !== 'completed';
                         $hasPostCourse = false;
                         foreach (['post_evaluation', 'post_documents', 'post_approval'] as $pt) {
@@ -77,6 +77,20 @@ $cancelled_editions = $data['cancelled_editions'];
                             $hasPostCourse       => __('Vorming afronden', 'stridence'),
                             default              => __('Inschrijving voltooien', 'stridence'),
                         };
+                    } elseif (!empty($tasks['session_selection']) && $completeUrl) {
+                        // Session selection done — check if re-editable
+                        $editionId = (int) $reg['edition_id'];
+                        $editionModel = ntdst_data()->get('vad_edition');
+                        $selOpen = (bool) $editionModel->getMeta($editionId, 'selection_open');
+                        $deadline = $editionModel->getMeta($editionId, 'selection_deadline');
+                        $startDate = $editionModel->getMeta($editionId, 'start_date');
+                        $pastDeadline = $deadline && strtotime($deadline) < current_time('timestamp');
+                        $courseStarted = $startDate && strtotime($startDate) < current_time('timestamp');
+
+                        if ($selOpen && !$pastDeadline && !$courseStarted) {
+                            $ctaUrl = $completeUrl;
+                            $ctaLabel = __('Sessiekeuze wijzigen', 'stridence');
+                        }
                     }
 
                     // Next session info
