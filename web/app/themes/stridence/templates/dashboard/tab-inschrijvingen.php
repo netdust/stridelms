@@ -57,41 +57,8 @@ $cancelled_editions = $data['cancelled_editions'];
                         )
                         : '';
 
-                    // CTA
-                    $completeUrl = $reg['complete_url'] ?? '';
-                    $ctaUrl = '';
-                    $ctaLabel = '';
-                    $tasks = $taskSummary['tasks'] ?? [];
-                    if ($pendingTasks > 0 && $completeUrl) {
-                        $ctaUrl = $completeUrl;
-                        $hasSessionSelection = isset($tasks['session_selection']) && ($tasks['session_selection']['status'] ?? '') !== 'completed';
-                        $hasPostCourse = false;
-                        foreach (['post_evaluation', 'post_documents', 'post_approval'] as $pt) {
-                            if (isset($tasks[$pt]) && ($tasks[$pt]['status'] ?? '') !== 'completed') {
-                                $hasPostCourse = true;
-                                break;
-                            }
-                        }
-                        $ctaLabel = match (true) {
-                            $hasSessionSelection => __('Sessiekeuze maken', 'stridence'),
-                            $hasPostCourse       => __('Vorming afronden', 'stridence'),
-                            default              => __('Inschrijving voltooien', 'stridence'),
-                        };
-                    } elseif (!empty($tasks['session_selection']) && $completeUrl) {
-                        // Session selection done — check if re-editable
-                        $editionId = (int) $reg['edition_id'];
-                        $editionModel = ntdst_data()->get('vad_edition');
-                        $selOpen = (bool) $editionModel->getMeta($editionId, 'selection_open');
-                        $deadline = $editionModel->getMeta($editionId, 'selection_deadline');
-                        $startDate = $editionModel->getMeta($editionId, 'start_date');
-                        $pastDeadline = $deadline && strtotime($deadline) < current_time('timestamp');
-                        $courseStarted = $startDate && strtotime($startDate) < current_time('timestamp');
-
-                        if ($selOpen && !$pastDeadline && !$courseStarted) {
-                            $ctaUrl = $completeUrl;
-                            $ctaLabel = __('Sessiekeuze wijzigen', 'stridence');
-                        }
-                    }
+                    // CTA (pre-calculated by UserDashboardService)
+                    $cta = $reg['cta'] ?? null;
 
                     // Next session info
                     $nextSession = $reg['next_session'] ?? null;
@@ -156,14 +123,9 @@ $cancelled_editions = $data['cancelled_editions'];
                                     )); ?>"></span>
                                 <?php endif; ?>
                             </div>
-                            <?php if ($progressPct > 0) : ?>
-                                <div class="mt-3">
-                                    <div class="h-1 bg-surface-alt rounded-full overflow-hidden">
-                                        <div class="h-full <?php echo $progressPct >= 100 ? 'bg-success' : 'bg-primary'; ?> rounded-full transition-all duration-500"
-                                             style="width: <?php echo esc_attr(min(100, $progressPct)); ?>%"></div>
-                                    </div>
-                                </div>
-                            <?php endif; ?>
+                            <?php get_template_part('templates/dashboard/partials/progress-bar', null, [
+                                    'percentage' => $progressPct,
+                                ]); ?>
                         </div>
 
                         <!-- Sessions (collapsible) -->
@@ -174,24 +136,11 @@ $cancelled_editions = $data['cancelled_editions'];
                         <?php endif; ?>
 
                         <!-- Footer -->
-                        <div class="flex items-center gap-3 px-4 py-2 border-t border-border bg-surface-alt/60 rounded-b-xl">
-                            <?php if ($ctaUrl) : ?>
-                                <a href="<?php echo esc_url($ctaUrl); ?>"
-                                   class="text-xs font-semibold text-primary hover:underline">
-                                    <?php echo esc_html($ctaLabel); ?>
-                                </a>
-                            <?php endif; ?>
-                            <a href="<?php echo esc_url($detailUrl); ?>"
-                               class="text-xs text-text-muted hover:text-text transition-colors">
-                                <?php esc_html_e('Bekijk', 'stridence'); ?>
-                            </a>
-                            <button type="button"
-                                    class="ml-auto text-text-muted hover:text-primary transition-colors cursor-pointer"
-                                    @click="downloadIcal(<?php echo (int) $reg['edition_id']; ?>)"
-                                    title="<?php esc_attr_e('Toevoegen aan agenda', 'stridence'); ?>">
-                                <?php echo stridence_icon('calendar', 'w-3.5 h-3.5'); ?>
-                            </button>
-                        </div>
+                        <?php get_template_part('templates/dashboard/partials/enrollment-footer', null, [
+                            'cta'        => $cta,
+                            'detail_url' => $detailUrl,
+                            'edition_id' => (int) $reg['edition_id'],
+                        ]); ?>
                     </div>
                 <?php endforeach; ?>
             </div>
@@ -238,26 +187,16 @@ $cancelled_editions = $data['cancelled_editions'];
                                     </div>
                                 </div>
                             </div>
-                            <?php if ($progress > 0) : ?>
-                                <div class="mt-3">
-                                    <div class="h-1 bg-surface-alt rounded-full overflow-hidden">
-                                        <div class="h-full <?php echo $progress >= 100 ? 'bg-success' : 'bg-primary'; ?> rounded-full transition-all duration-500"
-                                             style="width: <?php echo esc_attr(min(100, $progress)); ?>%"></div>
-                                    </div>
-                                </div>
-                            <?php endif; ?>
+                            <?php get_template_part('templates/dashboard/partials/progress-bar', null, [
+                                'percentage' => $progress,
+                            ]); ?>
                         </div>
                         <!-- Footer -->
-                        <div class="flex items-center gap-3 px-4 py-2 border-t border-border bg-surface-alt/60 rounded-b-xl">
-                            <a href="<?php echo esc_url($course['course_url']); ?>"
-                               class="text-xs font-semibold text-primary hover:underline">
-                                <?php echo esc_html($ctaLabel); ?>
-                            </a>
-                            <a href="<?php echo esc_url(get_permalink($course['course_id'])); ?>"
-                               class="text-xs text-text-muted hover:text-text transition-colors">
-                                <?php esc_html_e('Bekijk', 'stridence'); ?>
-                            </a>
-                        </div>
+                        <?php get_template_part('templates/dashboard/partials/enrollment-footer', null, [
+                            'cta'        => ['url' => $course['course_url'], 'label' => $ctaLabel],
+                            'detail_url' => get_permalink($course['course_id']),
+                            'edition_id' => 0,
+                        ]); ?>
                     </div>
                 <?php endforeach; ?>
             </div>

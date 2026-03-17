@@ -493,6 +493,7 @@ final class UserDashboardService
                 'complete_url'     => null,
                 'quote'            => $quoteSummary,
                 'type'             => 'edition',
+                'cta'              => null,
             ];
 
             // Populate task summary for pending (enrollment) and confirmed (post-course) registrations
@@ -500,6 +501,7 @@ final class UserDashboardService
                 $enrollment = ntdst_get(EnrollmentCompletion::class);
                 $regData['task_summary'] = $enrollment->getTaskSummary((int) $reg->id);
                 $regData['complete_url'] = home_url('/vormingen/' . get_post_field('post_name', $editionId) . '/voltooien/');
+                $regData['cta'] = $this->calculateEditionCTA($regData['task_summary'], $regData['complete_url'], $editionId);
             }
 
             $regStatus = RegistrationStatus::tryFrom($reg->status) ?? RegistrationStatus::Confirmed;
@@ -519,6 +521,65 @@ final class UserDashboardService
         });
 
         return [$active, $completed, $cancelled];
+    }
+
+    /**
+     * Calculate the CTA (call-to-action) for an edition enrollment.
+     *
+     * Rules:
+     * - If pending tasks > 0: label based on task type (session_selection / post_course / default)
+     * - If session_selection done but re-editable (selection_open, deadline not passed, course not started): "Sessiekeuze wijzigen"
+     * - Otherwise: null (no CTA)
+     *
+     * @return array{url: string, label: string}|null
+     */
+    private function calculateEditionCTA(?array $taskSummary, ?string $completeUrl, int $editionId): ?array
+    {
+        if (!$taskSummary || !$completeUrl) {
+            return null;
+        }
+
+        $total     = (int) ($taskSummary['total'] ?? 0);
+        $completed = (int) ($taskSummary['completed'] ?? 0);
+        $pending   = $total - $completed;
+        $tasks     = $taskSummary['tasks'] ?? [];
+
+        // Pending tasks: determine CTA label by task type
+        if ($pending > 0) {
+            $hasSessionSelection = isset($tasks['session_selection'])
+                && ($tasks['session_selection']['status'] ?? '') !== 'completed';
+            $hasPostCourse = false;
+            foreach (['post_evaluation', 'post_documents', 'post_approval'] as $pt) {
+                if (isset($tasks[$pt]) && ($tasks[$pt]['status'] ?? '') !== 'completed') {
+                    $hasPostCourse = true;
+                    break;
+                }
+            }
+
+            $label = match (true) {
+                $hasSessionSelection => __('Sessiekeuze maken', 'stridence'),
+                $hasPostCourse       => __('Vorming afronden', 'stridence'),
+                default              => __('Inschrijving voltooien', 'stridence'),
+            };
+
+            return ['url' => $completeUrl, 'label' => $label];
+        }
+
+        // Session selection done — check if re-editable
+        if (!empty($tasks['session_selection'])) {
+            $editionModel  = ntdst_data()->get('vad_edition');
+            $selOpen       = (bool) $editionModel->getMeta($editionId, 'selection_open');
+            $deadline      = $editionModel->getMeta($editionId, 'selection_deadline');
+            $startDate     = $editionModel->getMeta($editionId, 'start_date');
+            $pastDeadline  = $deadline && strtotime($deadline) < current_time('timestamp');
+            $courseStarted = $startDate && strtotime($startDate) < current_time('timestamp');
+
+            if ($selOpen && !$pastDeadline && !$courseStarted) {
+                return ['url' => $completeUrl, 'label' => __('Sessiekeuze wijzigen', 'stridence')];
+            }
+        }
+
+        return null;
     }
 
     /**

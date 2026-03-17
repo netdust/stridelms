@@ -220,45 +220,16 @@ foreach ($enrollments as $enrollment) {
                         $eSessions = $enrollment['sessions'] ?? [];
                         $futureSessions = array_filter($eSessions, fn($s) => ($s['date'] ?? '') >= date('Y-m-d'));
 
-                        // CTA — specific label based on pending task type
-                        $ctaUrl = '';
-                        $ctaLabel = '';
+                        // CTA — editions use pre-calculated CTA, online computed inline
+                        $cta = null;
                         if ($isOnline) {
                             $ctaUrl = $enrollment['course_url'] ?? '';
                             if (!$ctaUrl) {
                                 $ctaUrl = get_permalink((int) ($enrollment['course_id'] ?? 0)) ?: '';
                             }
-                            $ctaLabel = $progress > 0 ? __('Verder leren', 'stridence') : __('Start cursus', 'stridence');
-                        } elseif ($pendingTasks > 0 && $completeUrl) {
-                            $ctaUrl = $completeUrl;
-                            $tasks = $taskSummary['tasks'] ?? [];
-                            $hasSessionSelection = isset($tasks['session_selection']) && ($tasks['session_selection']['status'] ?? '') !== 'completed';
-                            $hasPostCourse = false;
-                            foreach (['post_evaluation', 'post_documents', 'post_approval'] as $pt) {
-                                if (isset($tasks[$pt]) && ($tasks[$pt]['status'] ?? '') !== 'completed') {
-                                    $hasPostCourse = true;
-                                    break;
-                                }
-                            }
-                            $ctaLabel = match (true) {
-                                $hasSessionSelection => __('Sessiekeuze maken', 'stridence'),
-                                $hasPostCourse       => __('Vorming afronden', 'stridence'),
-                                default              => __('Inschrijving voltooien', 'stridence'),
-                            };
-                        } elseif (!$isOnline && !empty(($taskSummary['tasks'] ?? [])['session_selection']) && $completeUrl) {
-                            // Session selection done — check if re-editable
-                            $editionId = (int) ($enrollment['edition_id'] ?? 0);
-                            $editionModel = ntdst_data()->get('vad_edition');
-                            $selOpen = (bool) $editionModel->getMeta($editionId, 'selection_open');
-                            $deadline = $editionModel->getMeta($editionId, 'selection_deadline');
-                            $startDate = $editionModel->getMeta($editionId, 'start_date');
-                            $pastDeadline = $deadline && strtotime($deadline) < current_time('timestamp');
-                            $courseStarted = $startDate && strtotime($startDate) < current_time('timestamp');
-
-                            if ($selOpen && !$pastDeadline && !$courseStarted) {
-                                $ctaUrl = $completeUrl;
-                                $ctaLabel = __('Sessiekeuze wijzigen', 'stridence');
-                            }
+                            $cta = $ctaUrl ? ['url' => $ctaUrl, 'label' => $progress > 0 ? __('Verder leren', 'stridence') : __('Start cursus', 'stridence')] : null;
+                        } else {
+                            $cta = $enrollment['cta'] ?? null;
                         }
 
                         // Detail link
@@ -317,14 +288,9 @@ foreach ($enrollments as $enrollment) {
                                 </div>
 
                                 <!-- Progress bar -->
-                                <?php if ($progress > 0) : ?>
-                                    <div class="mt-3">
-                                        <div class="h-1 bg-surface-alt rounded-full overflow-hidden">
-                                            <div class="h-full <?php echo $progress >= 100 ? 'bg-success' : 'bg-primary'; ?> rounded-full transition-all duration-500"
-                                                 style="width: <?php echo esc_attr(min(100, $progress)); ?>%"></div>
-                                        </div>
-                                    </div>
-                                <?php endif; ?>
+                                <?php get_template_part('templates/dashboard/partials/progress-bar', null, [
+                                    'percentage' => $progress,
+                                ]); ?>
                             </div>
 
                             <!-- Sessions (collapsible, editions only) -->
@@ -336,28 +302,11 @@ foreach ($enrollments as $enrollment) {
                             <?php endif; ?>
 
                             <!-- Footer -->
-                            <div class="flex items-center gap-3 px-4 py-2 border-t border-border bg-surface-alt/60 rounded-b-xl">
-                                <?php if ($ctaUrl) : ?>
-                                    <a href="<?php echo esc_url($ctaUrl); ?>"
-                                       class="text-xs font-semibold text-primary hover:underline">
-                                        <?php echo esc_html($ctaLabel); ?>
-                                    </a>
-                                <?php endif; ?>
-                                <?php if ($detailUrl) : ?>
-                                    <a href="<?php echo esc_url($detailUrl); ?>"
-                                       class="text-xs text-text-muted hover:text-text transition-colors">
-                                        <?php esc_html_e('Bekijk', 'stridence'); ?>
-                                    </a>
-                                <?php endif; ?>
-                                <?php if (!$isOnline) : ?>
-                                    <button type="button"
-                                            class="ml-auto text-text-muted hover:text-primary transition-colors cursor-pointer"
-                                            @click="downloadIcal(<?php echo (int) ($enrollment['edition_id'] ?? 0); ?>)"
-                                            title="<?php esc_attr_e('Toevoegen aan agenda', 'stridence'); ?>">
-                                        <?php echo stridence_icon('calendar', 'w-3.5 h-3.5'); ?>
-                                    </button>
-                                <?php endif; ?>
-                            </div>
+                            <?php get_template_part('templates/dashboard/partials/enrollment-footer', null, [
+                                'cta'        => $cta,
+                                'detail_url' => $detailUrl,
+                                'edition_id' => !$isOnline ? (int) ($enrollment['edition_id'] ?? 0) : 0,
+                            ]); ?>
                         </div>
                     <?php endforeach; ?>
                 </div>
