@@ -442,11 +442,7 @@ final class UserDashboardService
             $courseId = $this->editionService->getCourseId($editionId);
             $course   = $courseId ? get_post($courseId) : null;
             $sessions = $this->sessionService->getSessionsForEdition($editionId);
-            $selections = $reg->selections ?? [];
-            if (is_string($selections)) {
-                $selections = json_decode($selections, true) ?: [];
-            }
-            $selectedIds = array_map('intval', $selections);
+            $selectedIds = array_map('intval', $reg->selections ?? []);
 
             foreach ($sessions as &$session) {
                 $status = $this->attendanceService->getStatus((int) $session['id'], $userId);
