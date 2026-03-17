@@ -227,10 +227,11 @@ document.addEventListener('alpine:init', () => {
                 });
 
                 if (result.completed) {
+                    const wasAlreadyDone = this.completedCount === this.totalCount;
                     this.tasks[taskType] = { status: 'completed', completed_at: new Date().toISOString() };
 
-                    if (this.completedCount === this.totalCount) {
-                        window.location.reload();
+                    if (this.completedCount === this.totalCount || wasAlreadyDone) {
+                        window.location.href = '<?= esc_url(home_url('/mijn-account/?tab=inschrijvingen')) ?>';
                     }
                 } else {
                     this.error = result.data?.message || 'Er ging iets mis.';
