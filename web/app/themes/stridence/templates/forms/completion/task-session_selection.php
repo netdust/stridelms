@@ -236,7 +236,7 @@ $renderOption = function (array $session) {
                 @click="submitSessions()"
                 class="btn-primary text-sm"
                 :disabled="selected.length === 0 || loading">
-            <span x-show="!loading"><?= esc_html__('Sessies bevestigen', 'stridence') ?></span>
+            <span x-show="!loading"><?= !empty($selectedIds) ? esc_html__('Sessiekeuze bijwerken', 'stridence') : esc_html__('Sessies bevestigen', 'stridence') ?></span>
             <span x-show="loading"><?= esc_html__('Opslaan...', 'stridence') ?></span>
         </button>
         <span class="text-xs text-text-muted"

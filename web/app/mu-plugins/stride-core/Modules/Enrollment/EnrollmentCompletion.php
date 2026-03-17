@@ -131,6 +131,17 @@ final class EnrollmentCompletion
         foreach ($tasks as $type => $task) {
             $status = $task['status'] ?? 'pending';
 
+            // Session selection: allow re-editing even when completed
+            if ($status === 'completed' && $type === 'session_selection' && $selectionOpen) {
+                $startDate = $editionId ? ntdst_data()->get('vad_edition')->getMeta($editionId, 'start_date') : null;
+                $courseStarted = $startDate && strtotime($startDate) < current_time('timestamp');
+
+                if (!$courseStarted) {
+                    $availability[$type] = ['state' => 'available', 'reason' => __('Je kunt je keuze nog wijzigen.', 'stride')];
+                    continue;
+                }
+            }
+
             if ($status === 'completed') {
                 $availability[$type] = ['state' => 'completed', 'reason' => ''];
                 continue;
