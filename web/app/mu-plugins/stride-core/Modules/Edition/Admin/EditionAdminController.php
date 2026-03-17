@@ -65,6 +65,7 @@ final class EditionAdminController
         // Registration approval AJAX endpoints
         add_action('wp_ajax_stride_confirm_registration', [$this, 'ajaxConfirmRegistration']);
         add_action('wp_ajax_stride_reject_registration', [$this, 'ajaxRejectRegistration']);
+        add_action('wp_ajax_stride_approve_post_course', [$this, 'ajaxApprovePostCourse']);
 
         // Registration export
         add_action('wp_ajax_stride_export_registrations', [$this, 'ajaxExportRegistrations']);
@@ -715,6 +716,27 @@ final class EditionAdminController
         }
 
         wp_send_json_success(['message' => __('Inschrijving afgewezen.', 'stride')]);
+    }
+
+    public function ajaxApprovePostCourse(): void
+    {
+        if (!$this->verifyAjaxNonce()) {
+            return;
+        }
+
+        $registrationId = absint($_POST['registration_id'] ?? 0);
+        if (!$registrationId) {
+            wp_send_json_error(['message' => __('Ongeldige registratie.', 'stride')], 400);
+        }
+
+        $completion = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
+        $result = $completion->completeTask($registrationId, 'post_approval');
+
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()], 400);
+        }
+
+        wp_send_json_success(['message' => __('Dossier afgetekend.', 'stride')]);
     }
 
     // === Export ===

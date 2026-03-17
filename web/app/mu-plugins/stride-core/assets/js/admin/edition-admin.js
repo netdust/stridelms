@@ -962,7 +962,7 @@
             // Toggle detail row (clicking anywhere on the registration row)
             $(document).on('click', 'tr.stride-toggle-detail', function(e) {
                 // Don't toggle when clicking action buttons
-                if ($(e.target).closest('.stride-confirm-reg, .stride-reject-reg').length) {
+                if ($(e.target).closest('.stride-confirm-reg, .stride-reject-reg, .stride-approve-post-course').length) {
                     return;
                 }
                 var regId = $(this).data('reg-id');
@@ -994,6 +994,40 @@
                             .addClass('confirmed')
                             .text('Bevestigd');
                         $row.find('.stride-confirm-reg, .stride-reject-reg').remove();
+                    } else {
+                        alert(response.data.message || i18n.error);
+                        $btn.prop('disabled', false);
+                    }
+                }).fail(function() {
+                    alert(i18n.error || 'Er ging iets mis.');
+                    $btn.prop('disabled', false);
+                });
+            });
+
+            // Approve post-course (aftekenen)
+            $(document).on('click', '.stride-approve-post-course', function(e) {
+                e.preventDefault();
+                var $btn = $(this);
+                var $row = $btn.closest('tr');
+                var regId = $row.data('reg-id');
+
+                if (!confirm('Dossier aftekenen voor deze deelnemer?')) {
+                    return;
+                }
+
+                $btn.prop('disabled', true);
+
+                $.post(strideEditionAdmin.ajaxurl, {
+                    action: 'stride_approve_post_course',
+                    nonce: strideEditionAdmin.nonce,
+                    registration_id: regId
+                }, function(response) {
+                    if (response.success) {
+                        $row.find('.stride-status-badge')
+                            .removeClass('confirmed')
+                            .addClass('completed')
+                            .text('Voltooid');
+                        $btn.remove();
                     } else {
                         alert(response.data.message || i18n.error);
                         $btn.prop('disabled', false);
