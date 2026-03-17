@@ -231,7 +231,6 @@ foreach ($enrollments as $enrollment) {
                             $ctaLabel = $progress > 0 ? __('Verder leren', 'stridence') : __('Start cursus', 'stridence');
                         } elseif ($pendingTasks > 0 && $completeUrl) {
                             $ctaUrl = $completeUrl;
-                            // Determine specific CTA from first pending task
                             $tasks = $taskSummary['tasks'] ?? [];
                             $hasSessionSelection = isset($tasks['session_selection']) && ($tasks['session_selection']['status'] ?? '') !== 'completed';
                             $hasPostCourse = false;
@@ -246,6 +245,20 @@ foreach ($enrollments as $enrollment) {
                                 $hasPostCourse       => __('Vorming afronden', 'stridence'),
                                 default              => __('Inschrijving voltooien', 'stridence'),
                             };
+                        } elseif (!$isOnline && !empty(($taskSummary['tasks'] ?? [])['session_selection']) && $completeUrl) {
+                            // Session selection done — check if re-editable
+                            $editionId = (int) ($enrollment['edition_id'] ?? 0);
+                            $editionModel = ntdst_data()->get('vad_edition');
+                            $selOpen = (bool) $editionModel->getMeta($editionId, 'selection_open');
+                            $deadline = $editionModel->getMeta($editionId, 'selection_deadline');
+                            $startDate = $editionModel->getMeta($editionId, 'start_date');
+                            $pastDeadline = $deadline && strtotime($deadline) < current_time('timestamp');
+                            $courseStarted = $startDate && strtotime($startDate) < current_time('timestamp');
+
+                            if ($selOpen && !$pastDeadline && !$courseStarted) {
+                                $ctaUrl = $completeUrl;
+                                $ctaLabel = __('Sessiekeuze wijzigen', 'stridence');
+                            }
                         }
 
                         // Detail link
@@ -316,51 +329,10 @@ foreach ($enrollments as $enrollment) {
 
                             <!-- Sessions (collapsible, editions only) -->
                             <?php if (!$isOnline && !empty($futureSessions)) : ?>
-                                <div class="border-t border-border/50">
-                                    <button @click="sessionsOpen = !sessionsOpen"
-                                            class="w-full flex items-center justify-between px-4 py-2 text-xs text-text-muted hover:text-text transition-colors cursor-pointer">
-                                        <span><?php echo esc_html(sprintf(
-                                            _n('%d komende sessie', '%d komende sessies', count($futureSessions), 'stridence'),
-                                            count($futureSessions)
-                                        )); ?></span>
-                                        <span class="transition-transform duration-200" :class="{ 'rotate-180': sessionsOpen }">
-                                            <?php echo stridence_icon('chevron-down', 'w-4 h-4'); ?>
-                                        </span>
-                                    </button>
-                                    <div x-show="sessionsOpen" x-collapse x-cloak>
-                                        <div class="px-4 pb-3 space-y-1">
-                                            <?php
-                                            $hasSelections = !empty(array_filter(array_column($futureSessions, 'selected')));
-                                            foreach (array_slice(array_values($futureSessions), 0, 5) as $s) :
-                                                $sDate = $s['date'] ?? '';
-                                                $sStart = $s['start_time'] ?? '';
-                                                $sTitle = $s['title'] ?? '';
-                                                $sAttendance = $s['attendance'] ?? null;
-                                                $sSelected = !empty($s['selected']);
-                                                $notChosen = $hasSelections && !$sSelected && !empty($s['slot'] ?? '');
-                                            ?>
-                                                <div class="flex items-center gap-2 text-xs <?php echo $notChosen ? 'opacity-40 line-through' : ''; ?>">
-                                                    <?php if ($sAttendance === 'present') : ?>
-                                                        <?php echo stridence_icon('check', 'w-3.5 h-3.5 text-success shrink-0'); ?>
-                                                    <?php elseif ($sAttendance === 'absent') : ?>
-                                                        <?php echo stridence_icon('x', 'w-3.5 h-3.5 text-error shrink-0'); ?>
-                                                    <?php else : ?>
-                                                        <span class="w-1.5 h-1.5 rounded-full bg-border shrink-0"></span>
-                                                    <?php endif; ?>
-                                                    <span class="text-text-muted w-16 shrink-0">
-                                                        <?php echo esc_html($sDate ? date_i18n('j M', strtotime($sDate)) : ''); ?>
-                                                    </span>
-                                                    <span class="text-text-muted shrink-0">
-                                                        <?php if ($sStart) echo esc_html($sStart); ?>
-                                                    </span>
-                                                    <?php if ($sTitle) : ?>
-                                                        <span class="text-text truncate"><?php echo esc_html($sTitle); ?></span>
-                                                    <?php endif; ?>
-                                                </div>
-                                            <?php endforeach; ?>
-                                        </div>
-                                    </div>
-                                </div>
+                                <?php get_template_part('templates/dashboard/partials/session-list-inline', null, [
+                                    'sessions' => $futureSessions,
+                                    'limit' => 5,
+                                ]); ?>
                             <?php endif; ?>
 
                             <!-- Footer -->
