@@ -121,7 +121,8 @@ $permalink = get_permalink();
                         </h4>
                         <div class="space-y-2">
                             <template x-for="session in activeEnrollment.sessions" :key="session.id || session.date">
-                                <div class="flex items-center gap-3 py-2 px-3 rounded-lg bg-surface-alt/50">
+                                <div class="flex items-center gap-3 py-2 px-3 rounded-lg bg-surface-alt/50"
+                                     :class="{ 'opacity-40 line-through': activeEnrollment.sessions.some(s => s.selected) && !session.selected && session.slot }">
                                     <!-- Attendance dot -->
                                     <span class="w-2.5 h-2.5 rounded-full shrink-0"
                                           :class="{
@@ -138,23 +139,15 @@ $permalink = get_permalink();
                                         </template>
                                     </div>
                                     <!-- Status label -->
-                                    <template x-if="session.selected">
-                                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary shrink-0">
-                                            <?php echo stridence_icon('check', 'w-3 h-3'); ?>
-                                            <?php esc_html_e('Gekozen', 'stridence'); ?>
-                                        </span>
-                                    </template>
-                                    <template x-if="!session.selected">
-                                        <span class="text-xs shrink-0"
-                                              :class="{
-                                                  'text-success': session.attendance === 'present',
-                                                  'text-error': session.attendance === 'absent',
-                                                  'text-text-muted': !session.attendance || session.attendance === 'pending'
-                                              }"
-                                              x-text="session.attendance === 'present' ? '<?php esc_attr_e('Aanwezig', 'stridence'); ?>'
-                                                  : session.attendance === 'absent' ? '<?php esc_attr_e('Afwezig', 'stridence'); ?>'
-                                                  : '<?php esc_attr_e('Gepland', 'stridence'); ?>'"></span>
-                                    </template>
+                                    <span class="text-xs shrink-0"
+                                          :class="{
+                                              'text-success': session.attendance === 'present',
+                                              'text-error': session.attendance === 'absent',
+                                              'text-text-muted': !session.attendance || session.attendance === 'pending'
+                                          }"
+                                          x-text="session.attendance === 'present' ? '<?php esc_attr_e('Aanwezig', 'stridence'); ?>'
+                                              : session.attendance === 'absent' ? '<?php esc_attr_e('Afwezig', 'stridence'); ?>'
+                                              : '<?php esc_attr_e('Gepland', 'stridence'); ?>'"></span>
                                 </div>
                             </template>
                         </div>

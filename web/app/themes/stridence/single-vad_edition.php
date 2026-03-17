@@ -208,12 +208,18 @@ get_header();
 
                     <?php if (!empty($scheduled_sessions)) : ?>
                         <div class="card divide-y divide-border">
-                            <?php foreach ($scheduled_sessions as $session) : ?>
+                            <?php
+                            $hasSelections = !empty($selected_session_ids);
+                            foreach ($scheduled_sessions as $session) :
+                                $isSelected = in_array((int) $session['id'], $selected_session_ids, true);
+                                $notChosen = $hasSelections && !$isSelected && !empty($session['slot']);
+                            ?>
                                 <?php
                                 get_template_part('partials/session-row', null, [
                                     'session'    => (object) $session,
                                     'attendance' => null,
-                                    'selected'   => in_array((int) $session['id'], $selected_session_ids, true),
+                                    'selected'   => $isSelected,
+                                    'not_chosen' => $notChosen,
                                 ]);
                                 ?>
                             <?php endforeach; ?>
@@ -234,12 +240,16 @@ get_header();
                             <?php esc_html_e('Online modules', 'stridence'); ?>
                         </h3>
                         <div class="card divide-y divide-border">
-                            <?php foreach ($online_sessions as $session) : ?>
+                            <?php foreach ($online_sessions as $session) :
+                                $isSelected = in_array((int) $session['id'], $selected_session_ids, true);
+                                $notChosen = $hasSelections && !$isSelected && !empty($session['slot']);
+                            ?>
                                 <?php
                                 get_template_part('partials/session-row', null, [
                                     'session'    => (object) $session,
                                     'attendance' => null,
-                                    'selected'   => in_array((int) $session['id'], $selected_session_ids, true),
+                                    'selected'   => $isSelected,
+                                    'not_chosen' => $notChosen,
                                 ]);
                                 ?>
                             <?php endforeach; ?>

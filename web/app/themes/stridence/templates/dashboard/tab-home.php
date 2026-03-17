@@ -329,17 +329,18 @@ foreach ($enrollments as $enrollment) {
                                     </button>
                                     <div x-show="sessionsOpen" x-collapse x-cloak>
                                         <div class="px-4 pb-3 space-y-1">
-                                            <?php foreach (array_slice(array_values($futureSessions), 0, 5) as $s) :
+                                            <?php
+                                            $hasSelections = !empty(array_filter(array_column($futureSessions, 'selected')));
+                                            foreach (array_slice(array_values($futureSessions), 0, 5) as $s) :
                                                 $sDate = $s['date'] ?? '';
                                                 $sStart = $s['start_time'] ?? '';
                                                 $sTitle = $s['title'] ?? '';
                                                 $sAttendance = $s['attendance'] ?? null;
                                                 $sSelected = !empty($s['selected']);
+                                                $notChosen = $hasSelections && !$sSelected && !empty($s['slot'] ?? '');
                                             ?>
-                                                <div class="flex items-center gap-2 text-xs">
-                                                    <?php if ($sSelected) : ?>
-                                                        <?php echo stridence_icon('check', 'w-3.5 h-3.5 text-primary shrink-0'); ?>
-                                                    <?php elseif ($sAttendance === 'present') : ?>
+                                                <div class="flex items-center gap-2 text-xs <?php echo $notChosen ? 'opacity-40 line-through' : ''; ?>">
+                                                    <?php if ($sAttendance === 'present') : ?>
                                                         <?php echo stridence_icon('check', 'w-3.5 h-3.5 text-success shrink-0'); ?>
                                                     <?php elseif ($sAttendance === 'absent') : ?>
                                                         <?php echo stridence_icon('x', 'w-3.5 h-3.5 text-error shrink-0'); ?>
@@ -353,7 +354,7 @@ foreach ($enrollments as $enrollment) {
                                                         <?php if ($sStart) echo esc_html($sStart); ?>
                                                     </span>
                                                     <?php if ($sTitle) : ?>
-                                                        <span class="text-text truncate <?php echo $sSelected ? 'font-medium text-primary' : ''; ?>"><?php echo esc_html($sTitle); ?></span>
+                                                        <span class="text-text truncate"><?php echo esc_html($sTitle); ?></span>
                                                     <?php endif; ?>
                                                 </div>
                                             <?php endforeach; ?>
