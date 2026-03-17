@@ -399,9 +399,21 @@ final class EditionAdminController
             $updateData['price_non_member'] = (int) round((float) $fields['price_non_member'] * 100);
         }
 
-        // Process requires_approval
-        if (isset($fields['requires_approval'])) {
-            $updateData['requires_approval'] = (bool) $fields['requires_approval'];
+        // Process boolean checkbox fields (sidebar requirements)
+        $booleanFields = [
+            'requires_approval',
+            'requires_questionnaire',
+            'requires_documents',
+            'requires_session_selection',
+            'selection_open',
+            'post_requires_evaluation',
+            'post_requires_documents',
+            'post_requires_approval',
+        ];
+        foreach ($booleanFields as $boolField) {
+            if (isset($fields[$boolField])) {
+                $updateData[$boolField] = (bool) $fields[$boolField];
+            }
         }
 
         // Process status
