@@ -161,6 +161,46 @@ final class StrideMailBridge extends AbstractService
             ],
         ];
 
+        $codes['completion'] = [
+            'label' => __('Taken', 'stride'),
+            'codes' => [
+                'url' => [
+                    'label' => __('Voltooien URL', 'stride'),
+                    'callback' => function ($ctx) {
+                        $editionId = $this->resolveEditionId($ctx);
+                        if (!$editionId) return null;
+                        $slug = get_post_field('post_name', $editionId);
+                        return $slug ? home_url('/vormingen/' . $slug . '/voltooien/') : null;
+                    },
+                ],
+                'summary' => [
+                    'label' => __('Taken overzicht', 'stride'),
+                    'callback' => function ($ctx) {
+                        $regId = (int) ($ctx['registration_id'] ?? 0);
+                        if (!$regId) return null;
+                        $reg = $this->registrationRepo->find($regId);
+                        if (!$reg || empty($reg->completion_tasks)) return null;
+                        $tasks = is_string($reg->completion_tasks) ? json_decode($reg->completion_tasks, true) : $reg->completion_tasks;
+                        if (empty($tasks)) return null;
+                        $labels = [
+                            'questionnaire' => 'Vragenlijst invullen',
+                            'documents' => 'Documenten uploaden',
+                            'session_selection' => 'Sessiekeuze maken',
+                            'approval' => 'Goedkeuring beheerder',
+                        ];
+                        $lines = [];
+                        foreach ($tasks as $type => $task) {
+                            if (($task['phase'] ?? 'enrollment') !== 'enrollment') continue;
+                            $label = $labels[$type] ?? $type;
+                            $status = ($task['status'] ?? 'pending') === 'completed' ? '✓' : '○';
+                            $lines[] = $status . ' ' . $label;
+                        }
+                        return implode("\n", $lines);
+                    },
+                ],
+            ],
+        ];
+
         $codes['quote'] = [
             'label' => __('Offerte', 'stride'),
             'codes' => [
@@ -416,7 +456,8 @@ final class StrideMailBridge extends AbstractService
                     . '<p>Je inschrijving voor <strong>{{edition.title}}</strong> is ontvangen.</p>'
                     . '<p><strong>Startdatum:</strong> {{edition.start_date}}<br>'
                     . '<strong>Locatie:</strong> {{edition.venue}}</p>'
-                    . '<p>Je ontvangt bericht zodra je inschrijving is bevestigd.</p>'
+                    . '<p>Om je inschrijving te voltooien, dien je nog enkele stappen af te ronden:</p>'
+                    . '<p><a href="{{completion.url}}" class="button">Inschrijving voltooien</a></p>'
                     . '<p>Met vriendelijke groet,<br>{{site.name}}</p>',
             ],
             'stride-enrollment-created-admin' => [
@@ -438,6 +479,8 @@ final class StrideMailBridge extends AbstractService
                     . '<p>Je inschrijving voor <strong>{{edition.title}}</strong> is bevestigd!</p>'
                     . '<p><strong>Startdatum:</strong> {{edition.start_date}}<br>'
                     . '<strong>Locatie:</strong> {{edition.venue}}</p>'
+                    . '<p>Bekijk je inschrijving en eventuele volgende stappen (zoals sessiekeuze) in je dashboard:</p>'
+                    . '<p><a href="{{completion.url}}" class="button">Naar mijn inschrijving</a></p>'
                     . '<p>We kijken ernaar uit je te verwelkomen.</p>'
                     . '<p>Met vriendelijke groet,<br>{{site.name}}</p>',
             ],
