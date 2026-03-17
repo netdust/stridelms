@@ -134,9 +134,14 @@ document.addEventListener('alpine:init', () => {
             const approval = this.pendingApprovals.find(a => a.id === registrationId);
             if (!approval) return;
 
+            // Use different endpoint for post-course vs enrollment approval
+            const endpoint = approval.type === 'post_approval'
+                ? '/admin/approve-post-course'
+                : '/admin/approve-registration';
+
             approval.approving = true;
             try {
-                const response = await fetch(`${StrideConfig.apiUrl}/admin/approve-registration`, {
+                const response = await fetch(`${StrideConfig.apiUrl}${endpoint}`, {
                     method: 'POST',
                     headers: {
                         'X-WP-Nonce': StrideConfig.nonce,
@@ -145,7 +150,6 @@ document.addEventListener('alpine:init', () => {
                     body: JSON.stringify({ registration_id: registrationId }),
                 });
                 if (response.ok) {
-                    // Remove from list
                     this.pendingApprovals = this.pendingApprovals.filter(a => a.id !== registrationId);
                 } else {
                     const err = await response.json();
