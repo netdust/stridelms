@@ -14,6 +14,7 @@ defined('ABSPATH') || exit;
 
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionService;
+use Stride\Integrations\LearnDash\LearnDashHelper;
 
 $edition_id = get_the_ID();
 
@@ -39,8 +40,46 @@ $course_id  = $editionService->getCourseId($edition_id);
 $course     = $course_id ? get_post($course_id) : null;
 $status     = $editionService->getStatus($edition_id);
 $price      = $editionService->getPrice($edition_id);
-$can_enroll = $editionService->canEnroll($edition_id);
-$capacity   = $editionService->getCapacity($edition_id);
+$can_enroll  = $editionService->canEnroll($edition_id);
+$capacity    = $editionService->getCapacity($edition_id);
+$enrollmentService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class);
+$is_enrolled = is_user_logged_in() && $enrollmentService->isEnrolled(get_current_user_id(), $edition_id);
+$is_online = $editionService->isOnline($edition_id);
+
+// Get user's registration (for pending tasks + session selections)
+$has_pending_tasks = false;
+$complete_url = null;
+$selected_session_ids = [];
+$reg = null;
+if (is_user_logged_in()) {
+    $reg = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class)
+        ->findByUserAndEdition(get_current_user_id(), $edition_id);
+    if ($reg) {
+        $selected_session_ids = array_map('intval', $reg->selections ?? []);
+        $complete_url = home_url('/vormingen/' . get_post_field('post_name', $edition_id) . '/voltooien/');
+        if (!$is_enrolled && $reg->status === 'pending' && !empty($reg->completion_tasks)) {
+            $has_pending_tasks = true;
+        }
+    }
+}
+
+// Enrolled CTA
+$enrolled_cta = null;
+if ($has_pending_tasks) {
+    $enrolled_cta = ['label' => __('Voltooi inschrijving', 'stridence'), 'url' => $complete_url];
+} elseif ($is_enrolled && $course_id) {
+    // Certificate available → always show, regardless of format
+    $certificate = LearnDashHelper::getCertificateLink($course_id);
+    if ($certificate) {
+        $enrolled_cta = ['label' => __('Certificaat bekijken', 'stridence'), 'url' => $certificate];
+    } elseif ($is_online && LearnDashHelper::hasAccess($course_id)) {
+        // Online/blended with LD content → show course action
+        $ld_action = LearnDashHelper::getCourseAction($course_id);
+        if (in_array($ld_action['action'], ['start', 'continue', 'view'], true)) {
+            $enrolled_cta = ['label' => $ld_action['label'], 'url' => $ld_action['url']];
+        }
+    }
+}
 
 // Get raw meta fields via Data Manager
 // Note: These could be added to EditionService if needed frequently
@@ -49,8 +88,22 @@ $start_date   = $editionModel->getMeta($edition_id, 'start_date', '');
 $venue        = $editionModel->getMeta($edition_id, 'venue', '');
 $spots        = $editionModel->getMeta($edition_id, 'spots_remaining');
 
-// Get sessions via SessionService
-$sessions = $sessionService->getSessionsForEdition($edition_id);
+// Get sessions via SessionService and group by type
+$all_sessions = $sessionService->getSessionsForEdition($edition_id);
+$has_sessions = !empty($all_sessions);
+
+// Split into scheduled (in_person, webinar) and online (online, assignment)
+$scheduled_sessions = [];
+$online_sessions = [];
+foreach ($all_sessions as $session) {
+    $type = \Stride\Domain\SessionType::tryFrom($session['type'] ?? 'in_person')
+        ?? \Stride\Domain\SessionType::InPerson;
+    if ($type->isScheduled()) {
+        $scheduled_sessions[] = $session;
+    } else {
+        $online_sessions[] = $session;
+    }
+}
 
 // Breadcrumb items
 $breadcrumbs = [
@@ -75,6 +128,14 @@ get_header();
                 'items' => $breadcrumbs,
             ]);
             ?>
+
+            <!-- Format badge -->
+            <div class="flex items-center gap-2 mb-4">
+                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-primary text-white">
+                    <?php echo stridence_icon('map-pin', 'w-3 h-3'); ?>
+                    <?php esc_html_e('Klassikaal', 'stridence'); ?>
+                </span>
+            </div>
 
             <div class="flex flex-wrap items-start gap-4 mb-4">
                 <h1 class="font-heading text-3xl lg:text-4xl font-bold text-text flex-1">
@@ -113,46 +174,137 @@ get_header();
         </div>
     </div>
 
+    <!-- Sticky Tab Bar -->
+    <?php
+    get_template_part('templates/edition/tabs', null, [
+        'has_sessions' => $has_sessions,
+    ]);
+    ?>
+
     <!-- Two Column Layout -->
     <div class="container py-8 lg:py-12">
         <div class="grid lg:grid-cols-3 gap-8 lg:gap-12">
             <!-- Main Content (2/3) -->
-            <div class="lg:col-span-2 space-y-8">
-                <!-- Sessions Section -->
-                <section>
-                    <h2 class="font-heading text-2xl font-bold text-text mb-4">
+            <div class="lg:col-span-2 space-y-12">
+                <!-- Overzicht Section -->
+                <section id="overzicht" class="scroll-mt-32">
+                    <?php if ($course) : ?>
+                        <div class="prose-stride max-w-none">
+                            <?php echo apply_filters('the_content', $course->post_content); ?>
+                        </div>
+                    <?php else : ?>
+                        <p class="text-text-muted">
+                            <?php esc_html_e('Beschrijving wordt binnenkort toegevoegd.', 'stridence'); ?>
+                        </p>
+                    <?php endif; ?>
+                </section>
+
+                <!-- Sessies Section -->
+                <?php if ($has_sessions) : ?>
+                <section id="sessies" class="scroll-mt-32">
+                    <h2 class="font-heading text-2xl font-bold text-text mb-6">
                         <?php esc_html_e('Sessies', 'stridence'); ?>
                     </h2>
 
-                    <?php if (!empty($sessions)) : ?>
+                    <?php if (!empty($scheduled_sessions)) : ?>
                         <div class="card divide-y divide-border">
-                            <?php foreach ($sessions as $session) : ?>
+                            <?php foreach ($scheduled_sessions as $session) : ?>
                                 <?php
                                 get_template_part('partials/session-row', null, [
                                     'session'    => (object) $session,
                                     'attendance' => null,
+                                    'selected'   => in_array((int) $session['id'], $selected_session_ids, true),
                                 ]);
                                 ?>
                             <?php endforeach; ?>
                         </div>
-                    <?php else : ?>
-                        <div class="card p-6 text-center text-text-muted">
-                            <?php esc_html_e('Sessiedetails worden binnenkort gepubliceerd.', 'stridence'); ?>
+                        <?php if (!empty($selected_session_ids) && $complete_url) : ?>
+                            <div class="mt-2 text-right">
+                                <a href="<?php echo esc_url($complete_url); ?>"
+                                   class="text-sm text-primary hover:underline inline-flex items-center gap-1">
+                                    <?php echo stridence_icon('edit-2', 'w-3.5 h-3.5'); ?>
+                                    <?php esc_html_e('Sessiekeuze wijzigen', 'stridence'); ?>
+                                </a>
+                            </div>
+                        <?php endif; ?>
+                    <?php endif; ?>
+
+                    <?php if (!empty($online_sessions)) : ?>
+                        <h3 class="font-heading text-lg font-semibold text-text mt-8 mb-4">
+                            <?php esc_html_e('Online modules', 'stridence'); ?>
+                        </h3>
+                        <div class="card divide-y divide-border">
+                            <?php foreach ($online_sessions as $session) : ?>
+                                <?php
+                                get_template_part('partials/session-row', null, [
+                                    'session'    => (object) $session,
+                                    'attendance' => null,
+                                    'selected'   => in_array((int) $session['id'], $selected_session_ids, true),
+                                ]);
+                                ?>
+                            <?php endforeach; ?>
                         </div>
                     <?php endif; ?>
                 </section>
-
-                <!-- Course Description -->
-                <?php if ($course) : ?>
-                    <section>
-                        <h2 class="font-heading text-2xl font-bold text-text mb-4">
-                            <?php esc_html_e('Over deze opleiding', 'stridence'); ?>
-                        </h2>
-                        <div class="prose-stride max-w-none">
-                            <?php echo apply_filters('the_content', $course->post_content); ?>
-                        </div>
-                    </section>
                 <?php endif; ?>
+
+                <!-- Sprekers Section -->
+                <section id="sprekers" class="scroll-mt-32">
+                    <h2 class="font-heading text-2xl font-bold text-text mb-6">
+                        <?php esc_html_e('Sprekers', 'stridence'); ?>
+                    </h2>
+                    <?php
+                    // TODO: Wire up speakers from course/edition meta
+                    ?>
+                    <p class="text-text-muted">
+                        <?php esc_html_e('Informatie over sprekers wordt binnenkort toegevoegd.', 'stridence'); ?>
+                    </p>
+                </section>
+
+                <!-- Praktisch Section -->
+                <section id="praktisch" class="scroll-mt-32">
+                    <h2 class="font-heading text-2xl font-bold text-text mb-6">
+                        <?php esc_html_e('Praktische informatie', 'stridence'); ?>
+                    </h2>
+                    <div class="grid sm:grid-cols-2 gap-4">
+                        <div class="card-bordered p-5">
+                            <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
+                                <?php echo stridence_icon('users', 'w-5 h-5 text-primary'); ?>
+                                <?php esc_html_e('Doelgroep', 'stridence'); ?>
+                            </h3>
+                            <p class="text-text-muted text-sm">
+                                <?php esc_html_e('Zorgprofessionals', 'stridence'); ?>
+                            </p>
+                        </div>
+                        <div class="card-bordered p-5">
+                            <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
+                                <?php echo stridence_icon('award', 'w-5 h-5 text-primary'); ?>
+                                <?php esc_html_e('Accreditatie', 'stridence'); ?>
+                            </h3>
+                            <p class="text-text-muted text-sm">
+                                <?php esc_html_e('In aanvraag', 'stridence'); ?>
+                            </p>
+                        </div>
+                        <div class="card-bordered p-5">
+                            <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
+                                <?php echo stridence_icon('map-pin', 'w-5 h-5 text-primary'); ?>
+                                <?php esc_html_e('Locatie', 'stridence'); ?>
+                            </h3>
+                            <p class="text-text-muted text-sm">
+                                <?php echo $venue ? esc_html($venue) : esc_html__('Wordt nog bekendgemaakt', 'stridence'); ?>
+                            </p>
+                        </div>
+                        <div class="card-bordered p-5">
+                            <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
+                                <?php echo stridence_icon('calendar', 'w-5 h-5 text-primary'); ?>
+                                <?php esc_html_e('Startdatum', 'stridence'); ?>
+                            </h3>
+                            <p class="text-text-muted text-sm">
+                                <?php echo $start_date ? esc_html(stride_format_date($start_date)) : esc_html__('Wordt nog bekendgemaakt', 'stridence'); ?>
+                            </p>
+                        </div>
+                    </div>
+                </section>
             </div>
 
             <!-- Sidebar (1/3) - Enrollment Card -->
@@ -198,19 +350,29 @@ get_header();
                         <?php endif; ?>
                     </div>
 
-                    <?php if ($can_enroll) : ?>
+                    <?php if ($enrolled_cta) : ?>
+                        <a href="<?php echo esc_url($enrolled_cta['url']); ?>" class="btn-primary w-full text-center">
+                            <?php echo esc_html($enrolled_cta['label']); ?>
+                        </a>
+                    <?php elseif ($is_enrolled) : ?>
+                        <span class="btn-secondary w-full text-center block">
+                            <?php esc_html_e('Ingeschreven', 'stridence'); ?>
+                        </span>
+                    <?php elseif ($can_enroll) : ?>
                         <a href="<?php echo esc_url(stride_enrollment_url($edition_id)); ?>" class="btn-primary w-full text-center">
                             <?php esc_html_e('Nu inschrijven', 'stridence'); ?>
                         </a>
+                    <?php elseif ($status->allowsInterest()) : ?>
+                        <a href="<?php echo esc_url(stride_enrollment_url($edition_id)); ?>" class="btn-primary w-full text-center block">
+                            <?php esc_html_e('Interesse melden', 'stridence'); ?>
+                        </a>
+                        <p class="text-xs text-text-muted mt-3 text-center">
+                            <?php esc_html_e('Deze editie is nog in voorbereiding. Meld je interesse en we houden je op de hoogte.', 'stridence'); ?>
+                        </p>
                     <?php else : ?>
                         <button type="button" class="btn-secondary w-full text-center opacity-50 cursor-not-allowed" disabled>
                             <?php esc_html_e('Niet beschikbaar', 'stridence'); ?>
                         </button>
-                        <?php if ($course_id) : ?>
-                            <a href="<?php echo esc_url(stride_interest_url($course_id)); ?>" class="btn-ghost w-full text-center mt-3 block">
-                                <?php esc_html_e('Interesse melden', 'stridence'); ?>
-                            </a>
-                        <?php endif; ?>
                     <?php endif; ?>
                 </div>
             </div>
@@ -218,10 +380,22 @@ get_header();
     </div>
 
     <!-- Mobile Sticky CTA (hidden on lg+) -->
-    <?php if ($can_enroll) : ?>
+    <?php if ($enrolled_cta) : ?>
+        <div class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 lg:hidden z-40 safe-area-bottom">
+            <a href="<?php echo esc_url($enrolled_cta['url']); ?>" class="btn-primary w-full text-center">
+                <?php echo esc_html($enrolled_cta['label']); ?>
+            </a>
+        </div>
+    <?php elseif ($can_enroll) : ?>
         <div class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 lg:hidden z-40 safe-area-bottom">
             <a href="<?php echo esc_url(stride_enrollment_url($edition_id)); ?>" class="btn-primary w-full text-center">
                 <?php esc_html_e('Nu inschrijven', 'stridence'); ?>
+            </a>
+        </div>
+    <?php elseif ($status->allowsInterest()) : ?>
+        <div class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 lg:hidden z-40 safe-area-bottom">
+            <a href="<?php echo esc_url(stride_enrollment_url($edition_id)); ?>" class="btn-primary w-full text-center">
+                <?php esc_html_e('Interesse melden', 'stridence'); ?>
             </a>
         </div>
     <?php endif; ?>

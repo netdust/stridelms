@@ -138,15 +138,23 @@ $permalink = get_permalink();
                                         </template>
                                     </div>
                                     <!-- Status label -->
-                                    <span class="text-xs shrink-0"
-                                          :class="{
-                                              'text-success': session.attendance === 'present',
-                                              'text-error': session.attendance === 'absent',
-                                              'text-text-muted': !session.attendance || session.attendance === 'pending'
-                                          }"
-                                          x-text="session.attendance === 'present' ? '<?php esc_attr_e('Aanwezig', 'stridence'); ?>'
-                                              : session.attendance === 'absent' ? '<?php esc_attr_e('Afwezig', 'stridence'); ?>'
-                                              : '<?php esc_attr_e('Gepland', 'stridence'); ?>'"></span>
+                                    <template x-if="session.selected">
+                                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary shrink-0">
+                                            <?php echo stridence_icon('check', 'w-3 h-3'); ?>
+                                            <?php esc_html_e('Gekozen', 'stridence'); ?>
+                                        </span>
+                                    </template>
+                                    <template x-if="!session.selected">
+                                        <span class="text-xs shrink-0"
+                                              :class="{
+                                                  'text-success': session.attendance === 'present',
+                                                  'text-error': session.attendance === 'absent',
+                                                  'text-text-muted': !session.attendance || session.attendance === 'pending'
+                                              }"
+                                              x-text="session.attendance === 'present' ? '<?php esc_attr_e('Aanwezig', 'stridence'); ?>'
+                                                  : session.attendance === 'absent' ? '<?php esc_attr_e('Afwezig', 'stridence'); ?>'
+                                                  : '<?php esc_attr_e('Gepland', 'stridence'); ?>'"></span>
+                                    </template>
                                 </div>
                             </template>
                         </div>

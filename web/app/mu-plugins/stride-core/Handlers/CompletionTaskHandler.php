@@ -63,6 +63,12 @@ final class CompletionTaskHandler
             return $result;
         }
 
+        // Persist session selections to the registration's selections column
+        if ($taskType === 'session_selection' && !empty($taskData['session_ids'])) {
+            $sessionIds = array_map('intval', $taskData['session_ids']);
+            $repo->setSelections($registrationId, $sessionIds);
+        }
+
         return ['completed' => true];
     }
 

@@ -187,7 +187,7 @@ $is_post_course = ($active_phase === 'post_course');
 
     <!-- Dashboard link -->
     <div class="mt-8 text-center">
-        <a href="<?= esc_url(home_url('/mijn-account/?tab=inschrijvingen')) ?>"
+        <a href="<?= esc_url(home_url('/mijn-account/')) ?>"
            class="text-sm text-text-muted hover:text-text">
             &larr; <?= esc_html__('Terug naar dashboard', 'stridence') ?>
         </a>
@@ -226,7 +226,7 @@ document.addEventListener('alpine:init', () => {
                     task_data: data,
                 });
 
-                if (result.success) {
+                if (result.completed) {
                     this.tasks[taskType] = { status: 'completed', completed_at: new Date().toISOString() };
 
                     if (this.completedCount === this.totalCount) {
