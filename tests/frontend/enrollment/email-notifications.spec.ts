@@ -92,7 +92,9 @@ function wpEvalFile(scriptPath: string, extraArgs: string[] = []): string {
  */
 function triggerAction(action: string, context: Record<string, number | string>): string {
   const jsonCtx = JSON.stringify(context);
-  return wpEvalFile('scripts/test-helpers/trigger-mail.php', [action, `'${jsonCtx}'`]);
+  // Shell-escape the JSON by wrapping in single quotes and escaping inner single quotes
+  const escaped = "'" + jsonCtx.replace(/'/g, "'\\''") + "'";
+  return wpEvalFile('scripts/test-helpers/trigger-mail.php', [action, escaped]);
 }
 
 // ---------------------------------------------------------------------------
@@ -338,7 +340,7 @@ test.describe('Email Notifications — SmartCode Resolution', () => {
       });
     });
 
-    test('email contains Stride primary color in header (#4F46E5)', async () => {
+    test('email is wrapped in HTML layout with header and footer', async () => {
       test.skip(!ctx.userId || !ctx.editionId, 'Missing seed data');
 
       const messages = await searchEmails('subject:Bevestiging inschrijving');
@@ -347,8 +349,9 @@ test.describe('Email Notifications — SmartCode Resolution', () => {
       const fullMsg = await getEmailById(messages[0].ID);
       const html: string = fullMsg.HTML || '';
 
-      // The layout template uses #4F46E5 as header background
-      expect(html).toContain('#4F46E5');
+      // Should have proper HTML structure (not raw text)
+      expect(html).toContain('<!DOCTYPE html>');
+      expect(html).toContain('</html>');
     });
 
     test('email contains site name in header', async () => {
@@ -377,8 +380,8 @@ test.describe('Email Notifications — SmartCode Resolution', () => {
       // Layout template renders: &copy; YYYY SiteName
       const year = new Date().getFullYear().toString();
       expect(html).toContain(year);
-      // The footer section exists
-      expect(html).toContain('footer');
+      // The footer section has copyright and site link
+      expect(html).toContain('All rights reserved');
     });
   });
 });

@@ -21,9 +21,31 @@
 
 global $wpdb;
 
-// Find seed_student1 user
-$user = get_user_by('email', 'seed_student1@seed.test');
-$userId = $user ? (int) $user->ID : 0;
+// Find a user that has registrations
+$userId = 0;
+$user = null;
+
+// Try users in order: seed students, seed admin, WP admin
+$candidates = ['seed_student1@seed.test', 'seed_admin@seed.test'];
+foreach ($candidates as $email) {
+    $candidate = get_user_by('email', $email);
+    if ($candidate) {
+        $hasReg = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}vad_registrations WHERE user_id = %d",
+            $candidate->ID
+        ));
+        if ($hasReg > 0) {
+            $user = $candidate;
+            $userId = (int) $candidate->ID;
+            break;
+        }
+    }
+}
+// Fall back to WP admin (user 1) who typically has registrations
+if (!$userId) {
+    $user = get_userdata(1);
+    $userId = $user ? (int) $user->ID : 0;
+}
 $userFirstName = $user ? get_user_meta($userId, 'first_name', true) : '';
 $userDisplayName = $user ? $user->display_name : '';
 
@@ -48,18 +70,18 @@ if ($userId) {
     );
 }
 
-// Find a seed quote
+// Find a quote (any published quote)
 $quoteId = 0;
 $quoteNumber = '';
 $quoteRow = $wpdb->get_row(
     "SELECT p.ID FROM {$wpdb->posts} p
-     JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_stride_seed_data'
      WHERE p.post_type = 'vad_quote' AND p.post_status = 'publish'
      LIMIT 1"
 );
 if ($quoteRow) {
     $quoteId = (int) $quoteRow->ID;
-    $quoteNumber = get_post_meta($quoteId, 'quote_number', true) ?: '';
+    $model = ntdst_data()->get('vad_quote');
+    $quoteNumber = $model->getMeta($quoteId, 'quote_number') ?: '';
 }
 
 // Check if mail templates are seeded

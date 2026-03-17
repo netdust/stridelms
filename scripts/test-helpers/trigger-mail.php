@@ -9,9 +9,9 @@
  *     stride/registration/created '{"user_id":1,"edition_id":7880,"registration_id":2090}'
  */
 
-// WP-CLI passes extra args after -- in $args
-$action  = $args[0] ?? '';
-$jsonCtx = $args[1] ?? '{}';
+// WP-CLI passes extra args after -- in $args (args[0] is "--" itself)
+$action  = $args[1] ?? '';
+$jsonCtx = $args[2] ?? '{}';
 
 if (empty($action)) {
     WP_CLI::error('Usage: wp eval-file trigger-mail.php -- <action> <json_context>');
