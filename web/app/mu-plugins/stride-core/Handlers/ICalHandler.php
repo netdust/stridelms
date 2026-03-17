@@ -81,18 +81,40 @@ final class ICalHandler
             if (!$registration) {
                 return $this->buildIcal([]); // Return empty calendar if not enrolled
             }
-            // All sessions for edition
+            $selectedIds = array_map('intval', $registration->selections ?? []);
             $sessions = $sessionService->getSessionsForEdition($editionId);
             foreach ($sessions as $session) {
+                if (!$this->isScheduledSession($session)) {
+                    continue;
+                }
+                // If user has selections, only include selected + non-slot sessions
+                if (!empty($selectedIds) && !empty($session['slot']) && !in_array((int) $session['id'], $selectedIds, true)) {
+                    continue;
+                }
                 $events[] = $this->sessionToEvent($session, $editionService);
             }
         } else {
-            // All user's upcoming sessions (already filtered by user's registrations)
-            $registrations = $registrationRepo->findByUser($userId, 'confirmed');
+            // All user's upcoming scheduled sessions (pending + confirmed)
+            $registrations = $registrationRepo->findByUser($userId);
+            $activeStatuses = ['pending', 'confirmed'];
 
             foreach ($registrations as $reg) {
-                $sessions = $sessionService->getSessionsForEdition((int) $reg->edition_id);
+                if (!in_array($reg->status ?? '', $activeStatuses, true)) {
+                    continue;
+                }
+                $edId = (int) ($reg->edition_id ?? 0);
+                if (!$edId) {
+                    continue;
+                }
+                $selectedIds = array_map('intval', $reg->selections ?? []);
+                $sessions = $sessionService->getSessionsForEdition($edId);
                 foreach ($sessions as $session) {
+                    if (!$this->isScheduledSession($session)) {
+                        continue;
+                    }
+                    if (!empty($selectedIds) && !empty($session['slot']) && !in_array((int) $session['id'], $selectedIds, true)) {
+                        continue;
+                    }
                     $events[] = $this->sessionToEvent($session, $editionService);
                 }
             }
@@ -120,13 +142,17 @@ final class ICalHandler
             $venue = $editionRepository->getField($edition->ID, 'venue', '');
         }
 
+        $date = $session['date'] ?? '';
+        $startTime = $session['start_time'] ?? '';
+        $endTime = $session['end_time'] ?? '';
+
         return [
             'uid' => 'session-' . $session['id'] . '@stride',
             'summary' => $course ? $course->post_title : 'Stride Training',
             'description' => $session['description'] ?? '',
             'location' => $session['location'] ?: $venue,
-            'start' => $session['start_time'] ?? '',
-            'end' => $session['end_time'] ?? '',
+            'start' => $date && $startTime ? ($date . ' ' . $startTime) : '',
+            'end' => $date && $endTime ? ($date . ' ' . $endTime) : '',
         ];
     }
 
@@ -168,6 +194,19 @@ final class ICalHandler
         $ical .= "END:VCALENDAR\r\n";
 
         return $ical;
+    }
+
+    /**
+     * Check if session has a scheduled date+time (not self-paced online/assignment).
+     */
+    private function isScheduledSession(array $session): bool
+    {
+        $type = $session['type'] ?? 'in_person';
+        if (in_array($type, ['online', 'assignment'], true)) {
+            return false;
+        }
+
+        return !empty($session['date']) && !empty($session['start_time']);
     }
 
     /**
