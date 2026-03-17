@@ -55,6 +55,7 @@ $task_descriptions = [
 $template_map = [
     'post_evaluation' => 'task-questionnaire',
     'post_documents'  => 'task-documents',
+    'post_approval'   => 'task-approval',
 ];
 
 $is_post_course = ($active_phase === 'post_course');

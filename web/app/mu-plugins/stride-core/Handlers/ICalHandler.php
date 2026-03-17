@@ -223,6 +223,6 @@ final class ICalHandler
     private function formatIcalDate(string $datetime): string
     {
         $timestamp = strtotime($datetime);
-        return gmdate('Ymd\THis\Z', $timestamp);
+        return $timestamp ? gmdate('Ymd\THis\Z', $timestamp) : '';
     }
 }

@@ -26,15 +26,15 @@ final class VoucherCodeGenerator
         ?callable $existsCheck = null,
         int $maxAttempts = 10
     ): string {
-        $attempt = 0;
-
-        do {
+        for ($i = 0; $i < $maxAttempts; $i++) {
             $code = self::buildCode($prefix);
-            $exists = $existsCheck ? $existsCheck($code) : false;
-            $attempt++;
-        } while ($exists && $attempt < $maxAttempts);
+            if (!$existsCheck || !$existsCheck($code)) {
+                return $code;
+            }
+        }
 
-        return $code;
+        // Fallback: append timestamp to guarantee uniqueness
+        return self::buildCode($prefix) . '-' . time();
     }
 
     /**

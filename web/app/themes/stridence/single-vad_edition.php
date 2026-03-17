@@ -259,17 +259,17 @@ get_header();
                 <?php endif; ?>
 
                 <!-- Sprekers Section -->
+                <?php $speakers = $editionModel->getMeta($edition_id, 'speakers', ''); ?>
+                <?php if ($speakers) : ?>
                 <section id="sprekers" class="scroll-mt-32">
                     <h2 class="font-heading text-2xl font-bold text-text mb-6">
                         <?php esc_html_e('Sprekers', 'stridence'); ?>
                     </h2>
-                    <?php
-                    // TODO: Wire up speakers from course/edition meta
-                    ?>
                     <p class="text-text-muted">
-                        <?php esc_html_e('Informatie over sprekers wordt binnenkort toegevoegd.', 'stridence'); ?>
+                        <?php echo esc_html($speakers); ?>
                     </p>
                 </section>
+                <?php endif; ?>
 
                 <!-- Praktisch Section -->
                 <section id="praktisch" class="scroll-mt-32">

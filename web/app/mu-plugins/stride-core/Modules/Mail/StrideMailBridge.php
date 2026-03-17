@@ -54,6 +54,9 @@ final class StrideMailBridge extends AbstractService
         // Conditional dispatch for task-specific emails
         add_action('stride/enrollment/task_completed', [$this, 'onTaskCompleted']);
 
+        // Quote send email (triggered from admin)
+        add_action('stride/quote/send_email', [$this, 'onQuoteSendEmail'], 10, 3);
+
         // Seed templates on admin init (once)
         add_action('admin_init', [$this, 'maybeSeedTemplates']);
     }
@@ -313,6 +316,32 @@ final class StrideMailBridge extends AbstractService
                 ndmail_send('stride-task-approval-needed', $context, ['to' => $adminEmail]);
             }
         }
+    }
+
+    /**
+     * Send quote email (triggered from admin "Send Quote" action).
+     */
+    public function onQuoteSendEmail(int $quoteId, string $sendTo, string $sendCc = ''): void
+    {
+        $quoteService = ntdst_get(QuoteService::class);
+        $quote = $quoteService->getQuote($quoteId);
+        if (!$quote || is_wp_error($quote)) {
+            return;
+        }
+
+        $context = [
+            'quote_id'        => $quoteId,
+            'user_id'         => (int) ($quote['user_id'] ?? 0),
+            'edition_id'      => (int) ($quote['edition_id'] ?? 0),
+            'registration_id' => (int) ($quote['registration_id'] ?? 0),
+        ];
+
+        $options = ['to' => $sendTo];
+        if ($sendCc) {
+            $options['cc'] = $sendCc;
+        }
+
+        ndmail_send('stride-quote-sent', $context, $options);
     }
 
     /**
