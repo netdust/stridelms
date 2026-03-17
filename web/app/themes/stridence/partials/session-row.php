@@ -74,7 +74,7 @@ $type_config = match ($type) {
 
 <?php if ($type->trackedByLMS()) : ?>
     <!-- Online / Assignment session -->
-    <div class="flex items-center gap-4 py-4 <?php echo $not_chosen ? 'opacity-40 line-through' : ''; ?>" style="padding-left:5px;padding-right:20px">
+    <div class="flex items-center gap-4 py-4" style="padding-left:5px;padding-right:20px">
         <!-- Icon -->
         <div class="flex items-center justify-center rounded-lg bg-surface-alt shrink-0" style="width:60px;height:60px">
             <?php echo stridence_icon($type_config['icon'], 'w-6 h-6 text-text-muted'); ?>
@@ -96,7 +96,12 @@ $type_config = match ($type) {
                 </div>
             <?php endif; ?>
         </div>
-        <?php if ($att) : ?>
+        <?php if ($selected) : ?>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary shrink-0">
+                <?php echo stridence_icon('check', 'w-3 h-3'); ?>
+                <?php esc_html_e('Gekozen', 'stridence'); ?>
+            </span>
+        <?php elseif ($att) : ?>
             <div class="flex items-center gap-1 <?php echo esc_attr($att['class']); ?> shrink-0" title="<?php echo esc_attr($att['label']); ?>">
                 <?php echo stridence_icon($att['icon'], 'w-5 h-5'); ?>
             </div>
@@ -105,7 +110,7 @@ $type_config = match ($type) {
 
 <?php else : ?>
     <!-- In-person / Webinar session -->
-    <div class="py-4 <?php echo $not_chosen ? 'opacity-40 line-through' : ''; ?>" style="padding-left:5px;padding-right:20px" <?php if ($has_details) : ?>x-data="{ open: false }"<?php endif; ?>>
+    <div class="py-4" style="padding-left:5px;padding-right:20px" <?php if ($has_details) : ?>x-data="{ open: false }"<?php endif; ?>>
         <div class="flex items-center gap-4 <?php echo $has_details ? 'cursor-pointer' : ''; ?>"
              <?php if ($has_details) : ?>@click="open = !open"<?php endif; ?>>
             <!-- Date block -->
@@ -140,8 +145,13 @@ $type_config = match ($type) {
                     <?php endif; ?>
                 </div>
             </div>
-            <!-- Right side: attendance or expand icon -->
-            <?php if ($att) : ?>
+            <!-- Right side: selected badge, attendance, or expand icon -->
+            <?php if ($selected) : ?>
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary shrink-0">
+                    <?php echo stridence_icon('check', 'w-3 h-3'); ?>
+                    <?php esc_html_e('Gekozen', 'stridence'); ?>
+                </span>
+            <?php elseif ($att) : ?>
                 <div class="flex items-center gap-1 <?php echo esc_attr($att['class']); ?> shrink-0" title="<?php echo esc_attr($att['label']); ?>">
                     <?php echo stridence_icon($att['icon'], 'w-5 h-5'); ?>
                 </div>
