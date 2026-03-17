@@ -167,18 +167,19 @@ final class EnrollmentRouter
             exit;
         }
 
-        // Check that at least one task is incomplete
+        // Check that at least one task is incomplete, or session_selection allows re-edit
         $tasks = is_string($registration->completion_tasks)
             ? json_decode($registration->completion_tasks, true) ?: []
             : (array) $registration->completion_tasks;
         $hasIncomplete = false;
+        $hasSessionSelection = isset($tasks['session_selection']);
         foreach ($tasks as $task) {
             if (($task['status'] ?? 'pending') !== 'completed') {
                 $hasIncomplete = true;
                 break;
             }
         }
-        if (!$hasIncomplete) {
+        if (!$hasIncomplete && !$hasSessionSelection) {
             wp_safe_redirect(get_permalink($post->ID));
             exit;
         }
