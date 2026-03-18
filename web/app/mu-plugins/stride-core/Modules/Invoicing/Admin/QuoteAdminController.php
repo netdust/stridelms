@@ -372,22 +372,34 @@ final class QuoteAdminController
                     __('Offerte verzonden naar %s.', 'stride'),
                     $sendTo
                 ));
+                $this->suppressDefaultNotice();
             }
         }
 
         // Handle PDF regeneration
         if (!empty($_POST['stride_regenerate_pdf'])) {
-            $result = do_action('stride/quote/regenerate_pdf', $postId);
+            do_action('stride/quote/regenerate_pdf', $postId);
             $pdfPath = get_post_meta($postId, 'pdf_path', true);
             if ($pdfPath) {
                 $this->setAdminNotice('success', __('PDF is opnieuw gegenereerd.', 'stride'));
             } else {
                 $this->setAdminNotice('error', __('PDF genereren mislukt.', 'stride'));
             }
+            $this->suppressDefaultNotice();
         }
 
         // Handle voucher/discount actions
         $this->handleVoucherActions($postId);
+    }
+
+    /**
+     * Suppress WP's default "Post updated" notice by stripping the message query arg.
+     */
+    private function suppressDefaultNotice(): void
+    {
+        add_filter('redirect_post_location', function (string $location): string {
+            return remove_query_arg('message', $location);
+        });
     }
 
     /**
