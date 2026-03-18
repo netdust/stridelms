@@ -194,7 +194,12 @@ final class RegistrationRepository
      */
     public function existsForEdition(int $userId, int $editionId): bool
     {
-        return $this->findByUserAndEdition($userId, $editionId) !== null;
+        global $wpdb;
+        return (bool) $wpdb->get_var($wpdb->prepare(
+            "SELECT 1 FROM {$this->table()} WHERE user_id = %d AND edition_id = %d LIMIT 1",
+            $userId,
+            $editionId
+        ));
     }
 
     /**
@@ -259,7 +264,12 @@ final class RegistrationRepository
      */
     public function existsForTrajectory(int $userId, int $trajectoryId): bool
     {
-        return $this->findByUserAndTrajectory($userId, $trajectoryId) !== null;
+        global $wpdb;
+        return (bool) $wpdb->get_var($wpdb->prepare(
+            "SELECT 1 FROM {$this->table()} WHERE user_id = %d AND trajectory_id = %d AND edition_id IS NULL LIMIT 1",
+            $userId,
+            $trajectoryId
+        ));
     }
 
     /**
