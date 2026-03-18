@@ -53,7 +53,7 @@ final class CompletionTaskHandler
 
         $registrationId = absint($params['registration_id'] ?? 0);
         $taskType = sanitize_text_field($params['task_type'] ?? '');
-        $taskData = is_array($params['task_data'] ?? null) ? $params['task_data'] : [];
+        $taskData = is_array($params['task_data'] ?? null) ? $this->sanitizeTaskData($params['task_data']) : [];
 
         if (!$registrationId || !$taskType) {
             return new WP_Error('invalid_input', __('Ongeldige gegevens.', 'stride'));
@@ -249,5 +249,24 @@ final class CompletionTaskHandler
                 ]);
             }
         }
+    }
+
+    /**
+     * Recursively sanitize task data from user input.
+     */
+    private function sanitizeTaskData(array $data): array
+    {
+        $sanitized = [];
+        foreach ($data as $key => $value) {
+            $safeKey = sanitize_key($key);
+            if (is_array($value)) {
+                $sanitized[$safeKey] = $this->sanitizeTaskData($value);
+            } elseif (is_int($value) || ctype_digit((string) $value)) {
+                $sanitized[$safeKey] = (int) $value;
+            } else {
+                $sanitized[$safeKey] = sanitize_text_field((string) $value);
+            }
+        }
+        return $sanitized;
     }
 }

@@ -35,7 +35,6 @@ final class Endpoints
     private array $public_actions = [
         'get_recent_posts',
         'search_posts',
-        'search_users',
         'send_magic_link',
     ];
 

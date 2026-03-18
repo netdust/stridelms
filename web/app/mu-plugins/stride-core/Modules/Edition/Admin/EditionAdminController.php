@@ -502,6 +502,10 @@ final class EditionAdminController
             wp_send_json_error(['message' => __('Ongeldige editie.', 'stride')], 400);
         }
 
+        if (!current_user_can('edit_post', $editionId)) {
+            wp_send_json_error(['message' => __('Geen toegang.', 'stride')], 403);
+        }
+
         $data = $this->sanitizeSessionData($_POST);
         $data['edition_id'] = $editionId;
 
@@ -534,6 +538,11 @@ final class EditionAdminController
         $session = $this->sessionService->getSession($sessionId);
         if (!$session) {
             wp_send_json_error(['message' => __('Sessie niet gevonden.', 'stride')], 404);
+        }
+
+        $editionId = (int) ($session['edition_id'] ?? 0);
+        if (!current_user_can('edit_post', $editionId)) {
+            wp_send_json_error(['message' => __('Geen toegang.', 'stride')], 403);
         }
 
         $data = $this->sanitizeSessionData($_POST);

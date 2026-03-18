@@ -422,6 +422,10 @@ final class EnrollmentFormHandler
      */
     public function handleValidateVoucher(mixed $data, array $params): array|WP_Error
     {
+        if (!get_current_user_id()) {
+            return new WP_Error('not_logged_in', __('Je moet ingelogd zijn.', 'stride'));
+        }
+
         $code = sanitize_text_field($params['code'] ?? '');
         $itemType = sanitize_text_field($params['item_type'] ?? 'edition');
         $itemId = absint($params['edition_id'] ?? $params['trajectory_id'] ?? 0);

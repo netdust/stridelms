@@ -237,7 +237,9 @@ final class QuoteUpdateHandler
 
         foreach ($allowed as $field) {
             if (isset($billing[$field])) {
-                $sanitized[$field] = sanitize_text_field($billing[$field]);
+                $sanitized[$field] = $field === 'email'
+                    ? sanitize_email($billing[$field])
+                    : sanitize_text_field($billing[$field]);
             }
         }
 
