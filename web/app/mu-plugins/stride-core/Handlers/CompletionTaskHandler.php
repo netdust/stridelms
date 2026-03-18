@@ -15,6 +15,16 @@ use WP_Error;
  */
 final class CompletionTaskHandler
 {
+    private const ALLOWED_MIME_TYPES = [
+        'application/pdf',
+        'image/jpeg',
+        'image/png',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ];
+    private const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    private const MAX_FILE_COUNT = 5;
+
     public function __construct()
     {
         $this->init();
@@ -105,12 +115,44 @@ final class CompletionTaskHandler
             return new WP_Error('no_files', __('Geen bestanden geselecteerd.', 'stride'));
         }
 
+        $fileCount = is_array($files['name']) ? count($files['name']) : 1;
+
+        if ($fileCount > self::MAX_FILE_COUNT) {
+            return new WP_Error('too_many_files', sprintf(
+                __('Maximaal %d bestanden per upload.', 'stride'),
+                self::MAX_FILE_COUNT
+            ));
+        }
+
+        // Validate each file before uploading
+        for ($i = 0; $i < $fileCount; $i++) {
+            $size = is_array($files['size']) ? $files['size'][$i] : $files['size'];
+            $name = is_array($files['name']) ? $files['name'][$i] : $files['name'];
+
+            if ($size > self::MAX_FILE_SIZE) {
+                return new WP_Error('file_too_large', sprintf(
+                    __('%s is te groot. Maximum is 10 MB.', 'stride'),
+                    $name
+                ));
+            }
+
+            $finfo = new \finfo(FILEINFO_MIME_TYPE);
+            $tmpName = is_array($files['tmp_name']) ? $files['tmp_name'][$i] : $files['tmp_name'];
+            $mimeType = $finfo->file($tmpName);
+
+            if (!in_array($mimeType, self::ALLOWED_MIME_TYPES, true)) {
+                return new WP_Error('invalid_file_type', sprintf(
+                    __('%s: ongeldig bestandstype. Toegestaan: PDF, JPG, PNG, DOC, DOCX.', 'stride'),
+                    $name
+                ));
+            }
+        }
+
         require_once ABSPATH . 'wp-admin/includes/file.php';
         require_once ABSPATH . 'wp-admin/includes/media.php';
         require_once ABSPATH . 'wp-admin/includes/image.php';
 
         $attachmentIds = [];
-        $fileCount = is_array($files['name']) ? count($files['name']) : 1;
 
         $errors = [];
 
