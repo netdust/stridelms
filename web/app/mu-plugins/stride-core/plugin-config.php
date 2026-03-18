@@ -41,6 +41,7 @@ return [
         \Stride\Modules\Audit\AuditBridge::class,
         \Stride\Modules\Mail\StrideMailBridge::class,
         \Stride\Modules\PartnerAPI\PartnerAPIController::class,
+        \Stride\Modules\User\ProfileTypeService::class,
     ],
 
     /**
