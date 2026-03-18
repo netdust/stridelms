@@ -198,27 +198,85 @@ final class PartnerAPIController
 
         $result = $this->registrationRepository->findByCompany($companyId, $filters);
 
-        $data = array_map(function ($row) {
-            $user = get_userdata($row->user_id);
+        $rows = $result['data'];
+
+        // Collect IDs for batch fetching
+        $userIds = array_unique(array_map(fn($r) => (int) $r->user_id, $rows));
+        $editionIds = array_filter(array_unique(array_map(fn($r) => (int) ($r->edition_id ?? 0), $rows)));
+
+        // Batch-fetch users
+        $users = [];
+        if (!empty($userIds)) {
+            $userQuery = new \WP_User_Query(['include' => $userIds, 'fields' => ['ID', 'user_email']]);
+            foreach ($userQuery->get_results() as $u) {
+                $users[(int) $u->ID] = $u;
+            }
+        }
+
+        // Batch-fetch editions + their course IDs
+        $editions = [];
+        $editionCourseMap = [];
+        $courseIds = [];
+        if (!empty($editionIds)) {
+            $editionPosts = get_posts([
+                'post_type' => 'vad_edition',
+                'post__in' => $editionIds,
+                'posts_per_page' => count($editionIds),
+                'post_status' => 'any',
+            ]);
+            foreach ($editionPosts as $ep) {
+                $editions[$ep->ID] = $ep;
+            }
+
+            // Batch-fetch course IDs from meta
+            global $wpdb;
+            $editionIdList = implode(',', array_map('intval', $editionIds));
+            $metaRows = $wpdb->get_results(
+                "SELECT post_id, meta_value FROM {$wpdb->postmeta}
+                 WHERE post_id IN ({$editionIdList}) AND meta_key = '_ntdst_course_id'"
+            );
+            foreach ($metaRows as $mr) {
+                $cid = (int) $mr->meta_value;
+                $editionCourseMap[(int) $mr->post_id] = $cid;
+                if ($cid) {
+                    $courseIds[] = $cid;
+                }
+            }
+        }
+
+        // Batch-fetch courses
+        $courses = [];
+        $courseIds = array_unique(array_filter($courseIds));
+        if (!empty($courseIds)) {
+            $coursePosts = get_posts([
+                'post_type' => 'sfwd-courses',
+                'post__in' => $courseIds,
+                'posts_per_page' => count($courseIds),
+                'post_status' => 'any',
+            ]);
+            foreach ($coursePosts as $cp) {
+                $courses[$cp->ID] = $cp;
+            }
+        }
+
+        // Map results using pre-fetched data
+        $data = array_map(function ($row) use ($users, $editions, $editionCourseMap, $courses) {
             $editionId = $row->edition_id ? (int) $row->edition_id : 0;
-            $edition = $editionId ? $this->editionService->getEdition($editionId) : null;
-            $editionIsValid = $edition instanceof \WP_Post;
-            $courseId = $editionIsValid ? $this->editionService->getCourseId($editionId) : 0;
-            $course = $courseId ? get_post($courseId) : null;
+            $courseId = $editionCourseMap[$editionId] ?? 0;
 
             return [
                 'id' => (int) $row->id,
                 'user_id' => (int) $row->user_id,
-                'user_email' => $user ? $user->user_email : null,
-                'edition_id' => $row->edition_id ? (int) $row->edition_id : null,
-                'edition_title' => $editionIsValid ? $edition->post_title : null,
-                'course_title' => $course ? $course->post_title : null,
+                'user_email' => ($users[(int) $row->user_id] ?? null)?->user_email,
+                'edition_id' => $editionId ?: null,
+                'edition_title' => ($editions[$editionId] ?? null)?->post_title,
+                'course_title' => ($courses[$courseId] ?? null)?->post_title,
                 'trajectory_id' => $row->trajectory_id ? (int) $row->trajectory_id : null,
                 'status' => $row->status,
                 'registered_at' => $row->registered_at ? gmdate('c', strtotime($row->registered_at)) : null,
                 'completed_at' => $row->completed_at ? gmdate('c', strtotime($row->completed_at)) : null,
             ];
-        }, $result['data']);
+        }, $rows);
 
         return new WP_REST_Response([
             'data' => $data,
