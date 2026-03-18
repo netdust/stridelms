@@ -352,34 +352,25 @@ class UserDashboardServiceTest extends TestCase
     // ================================================================
 
     /** @test */
-    public function testBuildActionListUpcomingSessions(): void
+    public function testBuildActionListReturnsEmptyForNoActionItems(): void
     {
         $enrollmentData = [
-            'upcoming_sessions' => [
-                ['course_title' => 'EHBO Basis', 'date' => '2026-04-01'],
-            ],
-            'action_items'     => [],
-            'completed_items'  => [],
+            'action_items' => [],
         ];
         $quoteData = ['active' => [], 'cancelled' => []];
 
         $result = $this->invokePrivate('buildActionList', [$enrollmentData, $quoteData]);
 
-        $this->assertCount(1, $result);
-        $this->assertEquals('upcoming_session', $result[0]['type']);
-        $this->assertEquals('blue', $result[0]['color']);
-        $this->assertStringContains('EHBO Basis', $result[0]['label']);
+        $this->assertCount(0, $result);
     }
 
     /** @test */
-    public function testBuildActionListActionItems(): void
+    public function testBuildActionListReturnsActionItems(): void
     {
         $enrollmentData = [
-            'upcoming_sessions' => [],
-            'action_items'     => [
+            'action_items' => [
                 ['type' => 'enrollment', 'label' => 'Voltooi inschrijving', 'course_title' => 'EHBO', 'url' => '/test'],
             ],
-            'completed_items'  => [],
         ];
         $quoteData = ['active' => [], 'cancelled' => []];
 
@@ -387,68 +378,65 @@ class UserDashboardServiceTest extends TestCase
 
         $this->assertCount(1, $result);
         $this->assertEquals('enrollment', $result[0]['type']);
-        $this->assertEquals('amber', $result[0]['color']);
+        $this->assertEquals('EHBO', $result[0]['course_title']);
     }
 
     /** @test */
-    public function testBuildActionListUnsignedQuotes(): void
+    public function testBuildActionListTasksBeforeLessons(): void
     {
         $enrollmentData = [
-            'upcoming_sessions' => [],
-            'action_items'     => [],
-            'completed_items'  => [],
-        ];
-        $quoteData = [
-            'active' => [
-                ['status' => QuoteStatus::Draft, 'quote_number' => 'Q-001'],
-                ['status' => QuoteStatus::Sent, 'quote_number' => 'Q-002'],
-                ['status' => QuoteStatus::Exported, 'quote_number' => 'Q-003'],
-            ],
-            'cancelled' => [],
-        ];
-
-        $result = $this->invokePrivate('buildActionList', [$enrollmentData, $quoteData]);
-
-        // Only Draft and Sent should appear, not Exported
-        $this->assertCount(2, $result);
-        $this->assertEquals('unsigned_quote', $result[0]['type']);
-        $this->assertEquals('amber', $result[0]['color']);
-        $this->assertEquals('unsigned_quote', $result[1]['type']);
-    }
-
-    /** @test */
-    public function testBuildActionListCertificatesWithUrl(): void
-    {
-        $enrollmentData = [
-            'upcoming_sessions' => [],
-            'action_items'     => [],
-            'completed_items'  => [
-                ['course_title' => 'EHBO Compleet', 'certificate_url' => 'https://example.com/cert/1'],
-                ['course_title' => 'No Cert', 'certificate_url' => ''],
+            'action_items' => [
+                ['type' => 'online_lesson', 'label' => 'Les 1', 'course_title' => 'Online', 'url' => '/les1'],
+                ['type' => 'enrollment', 'label' => 'Inschrijving', 'course_title' => 'EHBO', 'url' => '/test'],
+                ['type' => 'online_lesson', 'label' => 'Les 2', 'course_title' => 'Online', 'url' => '/les2'],
             ],
         ];
         $quoteData = ['active' => [], 'cancelled' => []];
 
         $result = $this->invokePrivate('buildActionList', [$enrollmentData, $quoteData]);
 
-        // Only the one with a certificate_url
-        $this->assertCount(1, $result);
-        $this->assertEquals('certificate', $result[0]['type']);
-        $this->assertEquals('green', $result[0]['color']);
-        $this->assertStringContains('EHBO Compleet', $result[0]['label']);
+        $this->assertCount(3, $result);
+        // Task first, then lessons
+        $this->assertEquals('enrollment', $result[0]['type']);
+        $this->assertEquals('online_lesson', $result[1]['type']);
+        $this->assertEquals('online_lesson', $result[2]['type']);
     }
 
     /** @test */
-    public function testBuildActionListMixedItems(): void
+    public function testBuildActionListLimitsLessonsToSixTotal(): void
     {
         $enrollmentData = [
+            'action_items' => [
+                ['type' => 'enrollment', 'label' => 'Task 1', 'course_title' => 'A', 'url' => '/1'],
+                ['type' => 'enrollment', 'label' => 'Task 2', 'course_title' => 'B', 'url' => '/2'],
+                ['type' => 'online_lesson', 'label' => 'Les 1', 'course_title' => 'C', 'url' => '/l1'],
+                ['type' => 'online_lesson', 'label' => 'Les 2', 'course_title' => 'C', 'url' => '/l2'],
+                ['type' => 'online_lesson', 'label' => 'Les 3', 'course_title' => 'C', 'url' => '/l3'],
+                ['type' => 'online_lesson', 'label' => 'Les 4', 'course_title' => 'C', 'url' => '/l4'],
+                ['type' => 'online_lesson', 'label' => 'Les 5', 'course_title' => 'C', 'url' => '/l5'],
+            ],
+        ];
+        $quoteData = ['active' => [], 'cancelled' => []];
+
+        $result = $this->invokePrivate('buildActionList', [$enrollmentData, $quoteData]);
+
+        // 2 tasks + 4 lessons = 6 (max), 5th lesson dropped
+        $this->assertCount(6, $result);
+        $this->assertEquals('enrollment', $result[0]['type']);
+        $this->assertEquals('enrollment', $result[1]['type']);
+        $this->assertEquals('online_lesson', $result[2]['type']);
+    }
+
+    /** @test */
+    public function testBuildActionListIgnoresQuotesAndSessions(): void
+    {
+        // buildActionList only processes action_items, not sessions or quotes
+        $enrollmentData = [
             'upcoming_sessions' => [
-                ['course_title' => 'Sessie', 'date' => '2026-04-01'],
+                ['course_title' => 'EHBO', 'date' => '2026-04-01'],
             ],
-            'action_items'     => [
-                ['type' => 'enrollment', 'label' => 'Voltooi', 'course_title' => 'EHBO', 'url' => '/test'],
-            ],
-            'completed_items'  => [
+            'action_items' => [],
+            'completed_items' => [
                 ['course_title' => 'Done', 'certificate_url' => 'https://example.com/cert'],
             ],
         ];
@@ -461,12 +449,8 @@ class UserDashboardServiceTest extends TestCase
 
         $result = $this->invokePrivate('buildActionList', [$enrollmentData, $quoteData]);
 
-        // 1 session + 1 action + 1 quote + 1 cert = 4
-        $this->assertCount(4, $result);
-        $this->assertEquals('blue', $result[0]['color']);   // session
-        $this->assertEquals('amber', $result[1]['color']);  // action item
-        $this->assertEquals('amber', $result[2]['color']);  // quote
-        $this->assertEquals('green', $result[3]['color']);  // cert
+        // Sessions, quotes, certificates are handled separately in getHomeData()
+        $this->assertCount(0, $result);
     }
 
     // ================================================================
