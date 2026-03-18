@@ -315,28 +315,25 @@ final class QuoteActionsMetabox
             <div class="stride-sidebar-actions">
                 <div class="stride-action-row">
                     <?php if ($isLocked): ?>
-                        <button type="button" class="button" id="stride-unlock-btn">
+                        <button type="button" class="button" id="stride-unlock-btn" title="<?php esc_attr_e('Ontgrendelen', 'stride'); ?>">
                             <span class="dashicons dashicons-unlock"></span>
-                            <?php esc_html_e('Ontgrendelen', 'stride'); ?>
                         </button>
                     <?php else: ?>
-                        <button type="button" class="button" id="stride-lock-btn">
+                        <button type="button" class="button" id="stride-lock-btn" title="<?php esc_attr_e('Vergrendelen', 'stride'); ?>">
                             <span class="dashicons dashicons-lock"></span>
-                            <?php esc_html_e('Vergrendelen', 'stride'); ?>
                         </button>
                     <?php endif; ?>
 
-                    <?php
-                    $pdfPath = $quote['pdf_path'] ?? '';
-                    if (!empty($pdfPath)): ?>
-                        <a href="<?php echo esc_url(content_url($pdfPath)); ?>" class="button" target="_blank" title="<?php esc_attr_e('PDF bekijken', 'stride'); ?>">
-                            <span class="dashicons dashicons-pdf"></span>
-                            <?php esc_html_e('PDF', 'stride'); ?>
-                        </a>
-                    <?php endif; ?>
+                    <?php $pdfPath = $quote['pdf_path'] ?? ''; ?>
+                    <a href="<?php echo !empty($pdfPath) ? esc_url(content_url($pdfPath)) : '#'; ?>"
+                       class="button<?php echo empty($pdfPath) ? ' disabled' : ''; ?>"
+                       <?php echo !empty($pdfPath) ? 'target="_blank"' : ''; ?>
+                       title="<?php esc_attr_e('PDF bekijken', 'stride'); ?>"
+                       <?php echo empty($pdfPath) ? 'aria-disabled="true" onclick="return false;"' : ''; ?>>
+                        <span class="dashicons dashicons-pdf"></span>
+                    </a>
                     <button type="button" class="button" id="stride-regenerate-pdf-btn" title="<?php esc_attr_e('PDF opnieuw genereren', 'stride'); ?>">
                         <span class="dashicons dashicons-update"></span>
-                        <?php esc_html_e('Genereer', 'stride'); ?>
                     </button>
                 </div>
             </div>
