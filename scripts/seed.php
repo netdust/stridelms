@@ -95,6 +95,7 @@ class StrideSeedData {
         $this->createTrajectoryTestData();
 
         $this->saveSeedManifest();
+        $this->seedCompanyDetails();
         $this->printSummary();
     }
 
@@ -1883,6 +1884,28 @@ class StrideSeedData {
     private function saveSeedManifest(): void {
         update_option('stride_seed_manifest', $this->created);
         update_option('stride_seed_timestamp', current_time('mysql'));
+    }
+
+    private function seedCompanyDetails(): void {
+        // =========================================================================
+        // Company Details
+        // =========================================================================
+        echo "\n--- Company Details ---\n";
+
+        $companyDetails = [
+            'name'         => 'VAD vzw',
+            'address'      => 'Vanderlindenstraat 15',
+            'postal_code'  => '1030',
+            'city'         => 'Brussel',
+            'country'      => 'België',
+            'vat'          => 'BE0420.798.935',
+            'email'        => 'info@vad.be',
+            'phone'        => '+32 2 423 03 33',
+            'bank_account' => 'BE68 0682 0553 5765',
+        ];
+
+        update_option('stride_company_details', $companyDetails);
+        echo "  - Company details seeded: {$companyDetails['name']}\n";
     }
 
     private function printSummary(): void {

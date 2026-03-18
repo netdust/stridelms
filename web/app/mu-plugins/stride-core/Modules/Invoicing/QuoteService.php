@@ -59,6 +59,9 @@ final class QuoteService extends AbstractService
             ntdst_get(VoucherRepository::class),
         );
 
+        // PDF generator (registers own hooks)
+        new QuotePDFGenerator();
+
         // Cancel quote when registration is cancelled
         add_action('stride/registration/cancelled', [$this, 'onRegistrationCancelled']);
 
@@ -392,6 +395,9 @@ final class QuoteService extends AbstractService
             'edition_id' => $editionId,
             'total' => $totals['total']->inCents(),
         ]);
+
+        // Auto-generate PDF
+        do_action('stride/quote/regenerate_pdf', $quoteId);
 
         return $quoteId;
     }
