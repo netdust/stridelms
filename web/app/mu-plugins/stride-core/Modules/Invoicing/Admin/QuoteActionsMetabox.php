@@ -190,8 +190,8 @@ final class QuoteActionsMetabox
 
                 <p class="help-text"><?php esc_html_e('De offerte PDF wordt als bijlage verzonden.', 'stride'); ?></p>
 
-                <button type="button" class="button button-primary" id="stride-send-quote-btn" style="width: 100%;">
-                    <span class="dashicons dashicons-email"></span>
+                <button type="button" class="button button-primary" id="stride-send-quote-btn" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                    <span class="dashicons dashicons-email" style="font-size: 16px; width: 16px; height: 16px; line-height: 16px;"></span>
                     <?php esc_html_e('Verzenden', 'stride'); ?>
                 </button>
             </div>
