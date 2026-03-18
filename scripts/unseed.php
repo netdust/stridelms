@@ -19,8 +19,8 @@ if (!defined('ABSPATH')) {
 }
 
 // Prevent accidental runs in production
-if (defined('WP_ENV') && WP_ENV === 'production') {
-    echo "ERROR: Cannot run unseed script in production!\n";
+if (!defined('WP_ENV') || !in_array(WP_ENV, ['development', 'local'], true)) {
+    echo "ERROR: Seed script only allowed in development/local environments!\n";
     exit(1);
 }
 
