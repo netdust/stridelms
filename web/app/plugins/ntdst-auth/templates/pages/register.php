@@ -55,6 +55,28 @@ $fields = $settings['registration_fields'] ?? ['email', 'first_name', 'last_name
                 </div>
                 <?php endif; ?>
 
+                <?php
+                // Profile type selection (only if types are configured)
+                $profileTypes = [];
+                if (function_exists('ntdst_get') && class_exists(\Stride\Modules\User\ProfileTypeService::class)) {
+                    $profileTypeService = ntdst_get(\Stride\Modules\User\ProfileTypeService::class);
+                    $profileTypes = $profileTypeService->getTypes();
+                }
+                if (!empty($profileTypes)):
+                ?>
+                <div class="uk-margin">
+                    <label class="uk-form-label" for="profile_type"><?php esc_html_e('Ik ben een...', 'ntdst-auth'); ?> *</label>
+                    <select class="uk-select" id="profile_type" x-model="profileType" required>
+                        <option value=""><?php esc_html_e('Selecteer je profieltype...', 'ntdst-auth'); ?></option>
+                        <?php foreach ($profileTypes as $type): ?>
+                            <option value="<?php echo esc_attr($type['slug']); ?>">
+                                <?php echo esc_html($type['label']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php endif; ?>
+
                 <div class="uk-margin">
                     <label class="uk-form-label" for="email"><?php esc_html_e('Email', 'ntdst-auth'); ?></label>
                     <input class="uk-input" type="email" id="email" x-model="email" required>

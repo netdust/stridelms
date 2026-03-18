@@ -27,10 +27,10 @@ function authLogin() {
 
                 if (response.success) {
                     this.success = true;
-                    this.message = response.data.message;
+                    this.message = response.data?.message || '';
                 } else {
                     this.error = true;
-                    this.message = response.data.message || 'An error occurred.';
+                    this.message = response.error || response.data?.message || 'An error occurred.';
                 }
             } catch (e) {
                 this.error = true;
@@ -40,34 +40,34 @@ function authLogin() {
             this.loading = false;
         },
 
-        async loginPassword() {
+        loginPassword() {
+            // Submit as traditional form POST — server handles auth + redirect.
+            // This avoids stale cached pages from AJAX + JS redirect.
             this.loading = true;
             this.error = false;
-            this.success = false;
 
-            try {
-                const response = await this.post('ntdst_auth_login_password', {
-                    email: this.email,
-                    password: this.password
-                });
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = window.ntdstAuth?.ajaxUrl || '/wp/wp-admin/admin-ajax.php';
 
-                if (response.success) {
-                    this.success = true;
-                    this.message = response.data.message;
-                    // Redirect after short delay
-                    setTimeout(() => {
-                        window.location.href = response.data.redirect || '/';
-                    }, 500);
-                } else {
-                    this.error = true;
-                    this.message = response.data.message || 'Invalid credentials.';
-                }
-            } catch (e) {
-                this.error = true;
-                this.message = 'Network error. Please try again.';
+            const fields = {
+                action: 'ntdst_auth_login_password',
+                nonce: window.ntdstAuth?.nonce || '',
+                email: this.email,
+                password: this.password,
+                _redirect: '1',
+            };
+
+            for (const [key, value] of Object.entries(fields)) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = value;
+                form.appendChild(input);
             }
 
-            this.loading = false;
+            document.body.appendChild(form);
+            form.submit();
         },
 
         async post(action, data) {
@@ -98,6 +98,7 @@ function authRegister() {
         firstName: '',
         lastName: '',
         email: '',
+        profileType: '',
         consentTerms: false,
         consentPrivacy: false,
         loading: false,
@@ -111,6 +112,13 @@ function authRegister() {
             this.success = false;
 
             // Client-side validation
+            if (this.profileType === '' && document.getElementById('profile_type')) {
+                this.error = true;
+                this.message = 'Kies een profieltype.';
+                this.loading = false;
+                return;
+            }
+
             if (!this.consentTerms || !this.consentPrivacy) {
                 this.error = true;
                 this.message = 'Please accept the terms and privacy policy.';
@@ -123,16 +131,17 @@ function authRegister() {
                     first_name: this.firstName,
                     last_name: this.lastName,
                     email: this.email,
+                    profile_type: this.profileType,
                     consent_terms: this.consentTerms ? '1' : '',
                     consent_privacy: this.consentPrivacy ? '1' : ''
                 });
 
                 if (response.success) {
                     this.success = true;
-                    this.message = response.data.message;
+                    this.message = response.data?.message || '';
                 } else {
                     this.error = true;
-                    this.message = response.data.message || 'Registration failed.';
+                    this.message = response.error || response.data?.message || 'Registration failed.';
                 }
             } catch (e) {
                 this.error = true;
