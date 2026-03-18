@@ -459,15 +459,17 @@ final class PartnerAPIController
             return new WP_Error('user_not_found', __('User not found.', 'stride'), ['status' => 404]);
         }
 
-        // Verify user belongs to partner's company
+        // Verify user belongs to partner's company — never auto-assign
         $userCompanyId = (int) get_user_meta($user->ID, '_stride_company_id', true);
-        if ($userCompanyId && $userCompanyId !== $companyId) {
-            return new WP_Error('forbidden', __('User belongs to another company.', 'stride'), ['status' => 403]);
-        }
-
-        // Set company_id if not set
         if (!$userCompanyId) {
-            update_user_meta($user->ID, '_stride_company_id', $companyId);
+            return new WP_Error(
+                'user_not_affiliated',
+                __('User is not affiliated with any company. Contact an administrator.', 'stride'),
+                ['status' => 422]
+            );
+        }
+        if ($userCompanyId !== $companyId) {
+            return new WP_Error('forbidden', __('User belongs to another company.', 'stride'), ['status' => 403]);
         }
 
         // Create registration
