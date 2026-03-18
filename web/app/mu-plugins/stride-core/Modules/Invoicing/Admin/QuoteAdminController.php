@@ -44,6 +44,7 @@ final class QuoteAdminController
         add_action('add_meta_boxes', [$this, 'registerMetaboxes']);
         add_action('save_post_' . QuoteCPT::POST_TYPE, [$this, 'handleSave'], 10, 2);
         add_action('admin_notices', [$this, 'showAdminNotices']);
+        add_filter('post_updated_messages', [$this, 'customizeUpdateMessages']);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
         add_action('wp_ajax_stride_get_user_data', [$this, 'ajaxGetUserData']);
 
@@ -399,6 +400,28 @@ final class QuoteAdminController
             ['type' => $type, 'message' => $message],
             30
         );
+    }
+
+    /**
+     * Replace default "Post updated" with quote-specific messages.
+     */
+    public function customizeUpdateMessages(array $messages): array
+    {
+        $messages[QuoteCPT::POST_TYPE] = [
+            0  => '',
+            1  => __('Offerte opgeslagen.', 'stride'),
+            2  => __('Offerte opgeslagen.', 'stride'),
+            3  => __('Offerte opgeslagen.', 'stride'),
+            4  => __('Offerte opgeslagen.', 'stride'),
+            5  => __('Offerte opgeslagen.', 'stride'),
+            6  => __('Offerte opgeslagen.', 'stride'),
+            7  => __('Offerte opgeslagen.', 'stride'),
+            8  => __('Offerte opgeslagen.', 'stride'),
+            9  => __('Offerte opgeslagen.', 'stride'),
+            10 => __('Offerte opgeslagen.', 'stride'),
+        ];
+
+        return $messages;
     }
 
     /**
