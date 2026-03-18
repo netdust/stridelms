@@ -170,11 +170,19 @@ class AdminDashboardService extends AbstractService
 
         wp_enqueue_script(
             'alpinejs',
-            'https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js',
+            'https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js',
             ['flatpickr'],
-            '3.14.0',
+            '3.14.9',
             ['strategy' => 'defer']
         );
+
+        // Add crossorigin for CDN scripts (required for SRI)
+        add_filter('script_loader_tag', function (string $tag, string $handle): string {
+            if (in_array($handle, ['alpinejs', 'flatpickr', 'flatpickr-nl'], true)) {
+                return str_replace(' src=', ' crossorigin="anonymous" src=', $tag);
+            }
+            return $tag;
+        }, 10, 2);
 
         $user = wp_get_current_user();
 
