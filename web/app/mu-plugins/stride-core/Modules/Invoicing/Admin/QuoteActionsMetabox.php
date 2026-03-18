@@ -168,33 +168,7 @@ final class QuoteActionsMetabox
 
     private function renderViewActions(WP_Post $post, array $quote): void
     {
-        $pdfPath = $quote['pdf_path'] ?? '';
-        $formUrl = home_url('/offerte/' . $post->ID . '/');
-        ?>
-        <div class="stride-sidebar-section">
-            <h4><?php esc_html_e('Bekijken', 'stride'); ?></h4>
-            <div class="stride-sidebar-actions">
-                <div class="stride-action-row">
-                    <?php if (!empty($pdfPath)): ?>
-                        <a href="<?php echo esc_url(content_url($pdfPath)); ?>" class="button" target="_blank">
-                            <span class="dashicons dashicons-pdf"></span>
-                            <?php esc_html_e('PDF', 'stride'); ?>
-                        </a>
-                    <?php else: ?>
-                        <button type="button" class="button" disabled title="<?php esc_attr_e('PDF nog niet gegenereerd', 'stride'); ?>">
-                            <span class="dashicons dashicons-pdf"></span>
-                            <?php esc_html_e('PDF', 'stride'); ?>
-                        </button>
-                    <?php endif; ?>
-
-                    <a href="<?php echo esc_url($formUrl); ?>" class="button" target="_blank">
-                        <span class="dashicons dashicons-visibility"></span>
-                        <?php esc_html_e('Formulier', 'stride'); ?>
-                    </a>
-                </div>
-            </div>
-        </div>
-        <?php
+        // Removed: PDF view + Formulier buttons — PDF is accessed via regenerate button
     }
 
     private function renderSendSection(string $defaultEmail): void
@@ -352,9 +326,17 @@ final class QuoteActionsMetabox
                         </button>
                     <?php endif; ?>
 
+                    <?php
+                    $pdfPath = $quote['pdf_path'] ?? '';
+                    if (!empty($pdfPath)): ?>
+                        <a href="<?php echo esc_url(content_url($pdfPath)); ?>" class="button" target="_blank" title="<?php esc_attr_e('PDF bekijken', 'stride'); ?>">
+                            <span class="dashicons dashicons-pdf"></span>
+                            <?php esc_html_e('PDF', 'stride'); ?>
+                        </a>
+                    <?php endif; ?>
                     <button type="button" class="button" id="stride-regenerate-pdf-btn" title="<?php esc_attr_e('PDF opnieuw genereren', 'stride'); ?>">
                         <span class="dashicons dashicons-update"></span>
-                        <?php esc_html_e('PDF', 'stride'); ?>
+                        <?php esc_html_e('Genereer', 'stride'); ?>
                     </button>
                 </div>
             </div>
