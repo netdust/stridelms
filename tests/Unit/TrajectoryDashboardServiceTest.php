@@ -114,10 +114,10 @@ class TrajectoryDashboardServiceTest extends TestCase
         ];
 
         $this->registrationRepo
-            ->shouldReceive('findTrajectoryEnrollmentsByUser')
-            ->with($userId)
+            ->shouldReceive('findByUserAndTrajectory')
+            ->with($userId, $trajectoryId)
             ->once()
-            ->andReturn([$enrollment]);
+            ->andReturn($enrollment);
 
         $result = $this->service->getEnrollmentForUser($userId, $trajectoryId);
 
@@ -134,18 +134,11 @@ class TrajectoryDashboardServiceTest extends TestCase
         $userId = 1;
         $trajectoryId = 100;
 
-        $otherEnrollment = (object) [
-            'id' => 51,
-            'user_id' => $userId,
-            'trajectory_id' => 999, // Different trajectory
-            'status' => 'confirmed',
-        ];
-
         $this->registrationRepo
-            ->shouldReceive('findTrajectoryEnrollmentsByUser')
-            ->with($userId)
+            ->shouldReceive('findByUserAndTrajectory')
+            ->with($userId, $trajectoryId)
             ->once()
-            ->andReturn([$otherEnrollment]);
+            ->andReturn(null);
 
         $result = $this->service->getEnrollmentForUser($userId, $trajectoryId);
 
@@ -161,10 +154,10 @@ class TrajectoryDashboardServiceTest extends TestCase
         $trajectoryId = 100;
 
         $this->registrationRepo
-            ->shouldReceive('findTrajectoryEnrollmentsByUser')
-            ->with($userId)
+            ->shouldReceive('findByUserAndTrajectory')
+            ->with($userId, $trajectoryId)
             ->once()
-            ->andReturn([]);
+            ->andReturn(null);
 
         $result = $this->service->getEnrollmentForUser($userId, $trajectoryId);
 
