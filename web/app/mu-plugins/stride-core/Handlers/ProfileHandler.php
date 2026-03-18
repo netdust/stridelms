@@ -47,6 +47,7 @@ final class ProfileHandler
         return match ($formType) {
             'billing' => $this->updateBilling($userId, $params),
             'notifications' => $this->updateNotifications($userId, $params),
+            'profile_type' => $this->updateProfileType($userId, $params),
             default => $this->updatePersonal($userId, $params),
         };
     }
@@ -184,6 +185,38 @@ final class ProfileHandler
         return [
             'success' => true,
             'message' => __('Je ontvangt een bevestigingsmail om de verwijdering te bevestigen.', 'stride'),
+        ];
+    }
+
+    /**
+     * Update user's profile type.
+     *
+     * @param int $userId User ID
+     * @param array<string, mixed> $params Request parameters
+     * @return array<string, mixed>|WP_Error
+     */
+    private function updateProfileType(int $userId, array $params): array|WP_Error
+    {
+        $slug = sanitize_text_field($params['profile_type'] ?? '');
+
+        if (empty($slug)) {
+            return new WP_Error('missing_type', __('Kies een profieltype.', 'stride'));
+        }
+
+        $service = ntdst_get(\Stride\Modules\User\ProfileTypeService::class);
+
+        if (!$service->setUserType($userId, $slug)) {
+            return new WP_Error('invalid_type', __('Ongeldig profieltype.', 'stride'));
+        }
+
+        ntdst_log('profile')->info('Profile type updated', [
+            'user_id' => $userId,
+            'profile_type' => $slug,
+        ]);
+
+        return [
+            'success' => true,
+            'message' => __('Profieltype bijgewerkt.', 'stride'),
         ];
     }
 

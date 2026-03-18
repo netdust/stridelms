@@ -26,6 +26,11 @@ $phone        = get_user_meta($user_id, 'phone', true);
 $organisation = get_user_meta($user_id, 'organisation', true);
 $department   = get_user_meta($user_id, 'department', true);
 
+// Profile type data
+$profileTypeService = ntdst_get(\Stride\Modules\User\ProfileTypeService::class);
+$profileTypes = $profileTypeService->getTypes();
+$currentProfileType = $profileTypeService->getUserType($user_id);
+
 // Billing data (meta keys match getUserMetaMapping)
 $billing = [
     'company'     => get_user_meta($user_id, 'billing_company', true),
@@ -151,6 +156,80 @@ $notifications = [
             </div>
         </div>
     </section>
+
+    <?php if (!empty($profileTypes)): ?>
+    <!-- Profile Type -->
+    <section x-data="inlineEditSection({
+                 action: 'stride_update_profile',
+                 params: { form_type: 'profile_type' },
+                 fields: <?php echo esc_attr(json_encode([
+                     'profile_type' => $currentProfileType['slug'] ?? '',
+                 ])); ?>
+             })">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="dash-subheading flex items-center gap-2">
+                <?php echo stridence_icon('users', 'w-4 h-4 text-primary'); ?>
+                <?php esc_html_e('Profieltype', 'stridence'); ?>
+            </h3>
+            <template x-if="!editing">
+                <button type="button" @click="startEdit()" class="text-sm text-primary hover:underline">
+                    <?php echo stridence_icon('edit-2', 'w-3.5 h-3.5 inline mr-1'); ?>
+                    <?php esc_html_e('Bewerken', 'stridence'); ?>
+                </button>
+            </template>
+        </div>
+
+        <div class="bg-surface-card rounded-xl border border-border shadow-sm p-4">
+            <!-- Display mode -->
+            <dl x-show="!editing" class="grid grid-cols-1 gap-4">
+                <div>
+                    <dt class="text-xs text-text-muted mb-0.5"><?php esc_html_e('Profieltype', 'stridence'); ?></dt>
+                    <dd class="text-sm font-medium text-text">
+                        <?php if ($currentProfileType): ?>
+                            <span class="inline-block w-2.5 h-2.5 rounded-full mr-1 align-middle"
+                                  style="background-color: <?php echo esc_attr($currentProfileType['color']); ?>"></span>
+                            <?php echo esc_html($currentProfileType['label']); ?>
+                        <?php else: ?>
+                            <span class="text-text-muted"><?php esc_html_e('Niet ingesteld', 'stridence'); ?></span>
+                        <?php endif; ?>
+                    </dd>
+                </div>
+            </dl>
+
+            <!-- Edit mode -->
+            <div x-show="editing" x-transition class="space-y-4">
+                <div>
+                    <label class="input-label"><?php esc_html_e('Profieltype', 'stridence'); ?></label>
+                    <select x-model="fields.profile_type" class="input-select">
+                        <option value=""><?php esc_html_e('Selecteer je profieltype...', 'stridence'); ?></option>
+                        <?php foreach ($profileTypes as $type): ?>
+                            <option value="<?php echo esc_attr($type['slug']); ?>">
+                                <?php echo esc_html($type['label']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <!-- Error -->
+                <div x-show="error" class="p-2 bg-error/10 rounded text-sm text-error" x-text="error"></div>
+
+                <!-- Actions -->
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" @click="cancelEdit()" class="btn-secondary btn-sm">
+                        <?php esc_html_e('Annuleren', 'stridence'); ?>
+                    </button>
+                    <button type="button" @click="saveEdit()" :disabled="saving" class="btn-primary btn-sm">
+                        <span x-show="!saving"><?php esc_html_e('Opslaan', 'stridence'); ?></span>
+                        <span x-show="saving" class="flex items-center gap-1">
+                            <span class="spinner w-3 h-3"></span>
+                            <?php esc_html_e('Opslaan...', 'stridence'); ?>
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+    <?php endif; ?>
 
     <!-- Billing Information -->
     <section x-data="inlineEditSection({
