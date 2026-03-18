@@ -186,59 +186,75 @@ final class EnrollmentService extends AbstractService
             return new WP_Error('enrollment_closed', 'Enrollment is not open for this edition');
         }
 
-        // Check capacity (redundant when status is correctly maintained, but defensive)
-        if (!$this->editions->hasAvailableSpots($editionId)) {
-            ntdst_log('enrollment')->warning('Enrollment rejected: edition full', [
-                'user_id' => $userId,
-                'edition_id' => $editionId,
-            ]);
-            return new WP_Error('edition_full', 'This edition is full');
-        }
+        // Begin atomic enrollment — lock capacity rows to prevent race conditions
+        global $wpdb;
+        $wpdb->query('START TRANSACTION');
 
-        // Check not already registered (confirmed, pending, or interest)
-        if ($this->hasActiveRegistration($userId, editionId: $editionId)) {
-            ntdst_log('enrollment')->warning('Enrollment rejected: already registered', [
-                'user_id' => $userId,
-                'edition_id' => $editionId,
-            ]);
-            return new WP_Error('already_enrolled', 'User is already enrolled in this edition');
-        }
-
-        // Determine initial status based on completion requirements + approval setting
-        $completionService = ntdst_get(EnrollmentCompletion::class);
-        $hasCompletionRequirements = $completionService->hasRequirements($editionId, 'vad_edition');
-
-        $initialStatus = ($hasCompletionRequirements || $this->editions->requiresApproval($editionId))
-            ? RegistrationStatus::Pending
-            : RegistrationStatus::Confirmed;
-
-        // Build registration data
-        $registrationData = [
-            'user_id' => $userId,
-            'edition_id' => $editionId,
-            'status' => $initialStatus->value,
-            'enrollment_path' => $options['enrollment_path'] ?? RegistrationRepository::PATH_INDIVIDUAL,
-            'enrolled_by' => $options['enrolled_by'] ?? null,
-            'voucher_code' => $options['voucher_code'] ?? null,
-            'notes' => $options['notes'] ?? null,
-            'enrollment_data' => $options['enrollment_data'] ?? null,
-        ];
-
-        // Propagate company_id from user meta if not explicitly provided
-        if (!isset($options['company_id'])) {
-            $companyId = (int) get_user_meta($userId, '_stride_company_id', true);
-            if ($companyId) {
-                $registrationData['company_id'] = $companyId;
+        try {
+            // Lock capacity check with FOR UPDATE
+            $confirmedCount = $this->registrations->countConfirmedForUpdate($editionId);
+            $capacity = $this->editions->getCapacity($editionId);
+            if ($capacity > 0 && $confirmedCount >= $capacity) {
+                $wpdb->query('ROLLBACK');
+                ntdst_log('enrollment')->warning('Enrollment rejected: edition full', [
+                    'user_id' => $userId,
+                    'edition_id' => $editionId,
+                ]);
+                return new WP_Error('edition_full', 'This edition is full');
             }
-        } elseif ($options['company_id']) {
-            $registrationData['company_id'] = $options['company_id'];
-        }
 
-        // Create registration
-        $registrationId = $this->registrations->create($registrationData);
+            // Check not already registered (within transaction)
+            if ($this->hasActiveRegistration($userId, editionId: $editionId)) {
+                $wpdb->query('ROLLBACK');
+                ntdst_log('enrollment')->warning('Enrollment rejected: already registered', [
+                    'user_id' => $userId,
+                    'edition_id' => $editionId,
+                ]);
+                return new WP_Error('already_enrolled', 'User is already enrolled in this edition');
+            }
 
-        if (is_wp_error($registrationId)) {
-            return $registrationId;
+            // Determine initial status based on completion requirements + approval setting
+            $completionService = ntdst_get(EnrollmentCompletion::class);
+            $hasCompletionRequirements = $completionService->hasRequirements($editionId, 'vad_edition');
+
+            $initialStatus = ($hasCompletionRequirements || $this->editions->requiresApproval($editionId))
+                ? RegistrationStatus::Pending
+                : RegistrationStatus::Confirmed;
+
+            // Build registration data
+            $registrationData = [
+                'user_id' => $userId,
+                'edition_id' => $editionId,
+                'status' => $initialStatus->value,
+                'enrollment_path' => $options['enrollment_path'] ?? RegistrationRepository::PATH_INDIVIDUAL,
+                'enrolled_by' => $options['enrolled_by'] ?? null,
+                'voucher_code' => $options['voucher_code'] ?? null,
+                'notes' => $options['notes'] ?? null,
+                'enrollment_data' => $options['enrollment_data'] ?? null,
+            ];
+
+            // Propagate company_id from user meta if not explicitly provided
+            if (!isset($options['company_id'])) {
+                $companyId = (int) get_user_meta($userId, '_stride_company_id', true);
+                if ($companyId) {
+                    $registrationData['company_id'] = $companyId;
+                }
+            } elseif ($options['company_id']) {
+                $registrationData['company_id'] = $options['company_id'];
+            }
+
+            // Create registration
+            $registrationId = $this->registrations->create($registrationData);
+
+            if (is_wp_error($registrationId)) {
+                $wpdb->query('ROLLBACK');
+                return $registrationId;
+            }
+
+            $wpdb->query('COMMIT');
+        } catch (\Throwable $e) {
+            $wpdb->query('ROLLBACK');
+            throw $e;
         }
 
         // Grant LMS access only for confirmed registrations

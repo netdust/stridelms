@@ -244,6 +244,19 @@ final class RegistrationRepository
         ));
     }
 
+    /**
+     * Count confirmed registrations with row-level lock (FOR UPDATE).
+     * Must be called within a transaction.
+     */
+    public function countConfirmedForUpdate(int $editionId): int
+    {
+        global $wpdb;
+        return (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$this->table()} WHERE edition_id = %d AND status = 'confirmed' FOR UPDATE",
+            $editionId
+        ));
+    }
+
     // === Trajectory queries ===
 
     /**
