@@ -18,6 +18,9 @@ final class RegistrationRepository
     public const PATH_COLLEAGUE = 'colleague';
     public const PATH_TRAJECTORY = 'trajectory';
 
+    /** @var array<string, array<object>> Per-request cache for findByUser results */
+    private array $findByUserCache = [];
+
     private function table(): string
     {
         return RegistrationTable::getTableName();
@@ -79,6 +82,8 @@ final class RegistrationRepository
                     return new WP_Error('db_error', 'Failed to reactivate registration');
                 }
 
+                $this->clearCache();
+
                 do_action('stride/registration/created', [
                     'registration_id' => (int) $existing->id,
                     'user_id' => (int) $data['user_id'],
@@ -116,6 +121,8 @@ final class RegistrationRepository
         if ($result === false) {
             return new WP_Error('db_error', 'Failed to create registration');
         }
+
+        $this->clearCache();
 
         $registrationId = (int) $wpdb->insert_id;
 
@@ -337,6 +344,11 @@ final class RegistrationRepository
      */
     public function findByUser(int $userId, ?string $status = null): array
     {
+        $cacheKey = $userId . ':' . ($status ?? '*');
+        if (isset($this->findByUserCache[$cacheKey])) {
+            return $this->findByUserCache[$cacheKey];
+        }
+
         global $wpdb;
 
         $sql = "SELECT * FROM {$this->table()} WHERE user_id = %d";
@@ -359,6 +371,8 @@ final class RegistrationRepository
                 $row->completion_tasks = json_decode($row->completion_tasks, true);
             }
         }
+
+        $this->findByUserCache[$cacheKey] = $results;
 
         return $results;
     }
@@ -450,11 +464,17 @@ final class RegistrationRepository
     {
         global $wpdb;
 
-        return $wpdb->update(
+        $result = $wpdb->update(
             $this->table(),
             ['selections' => wp_json_encode($selections)],
             ['id' => $registrationId]
         ) !== false;
+
+        if ($result) {
+            $this->clearCache();
+        }
+
+        return $result;
     }
 
     /**
@@ -545,7 +565,13 @@ final class RegistrationRepository
             return true;
         }
 
-        return $wpdb->update($this->table(), $update, ['id' => $id]) !== false;
+        $result = $wpdb->update($this->table(), $update, ['id' => $id]) !== false;
+
+        if ($result) {
+            $this->clearCache();
+        }
+
+        return $result;
     }
 
     /**
@@ -588,6 +614,16 @@ final class RegistrationRepository
         }
 
         return $result;
+    }
+
+    // === Cache management ===
+
+    /**
+     * Clear per-request memoization cache.
+     */
+    public function clearCache(): void
+    {
+        $this->findByUserCache = [];
     }
 
     // === Legacy aliases ===
