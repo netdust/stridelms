@@ -363,43 +363,74 @@ final class PartnerAPIController
             ]);
         }
 
-        // Get completed courses from LearnDash
-        if (!function_exists('learndash_user_get_course_completed_date')) {
-            return new WP_Error(
-                'rest_unavailable',
-                __('Certificate service unavailable.', 'stride'),
-                ['status' => 503]
-            );
+        $certificates = [];
+
+        // Query LearnDash activity table directly for completed courses
+        global $wpdb;
+        $userIdList = implode(',', array_map('intval', $userIds));
+        $completions = $wpdb->get_results(
+            "SELECT user_id, post_id AS course_id, activity_completed AS completed_at
+             FROM {$wpdb->prefix}learndash_user_activity
+             WHERE user_id IN ({$userIdList})
+               AND activity_type = 'course'
+               AND activity_completed > 0
+             ORDER BY activity_completed DESC"
+        );
+
+        if (empty($completions)) {
+            return new WP_REST_Response([
+                'data' => [],
+                'total' => 0,
+                'page' => $page,
+                'per_page' => $perPage,
+            ]);
         }
 
-        $certificates = [];
-        foreach ($userIds as $userId) {
-            $courses = learndash_user_get_enrolled_courses($userId);
-            foreach ($courses as $courseId) {
-                $completedDate = learndash_user_get_course_completed_date($userId, $courseId);
-                if ($completedDate) {
-                    $user = get_userdata($userId);
-                    $course = get_post($courseId);
-                    $certificateLink = learndash_get_course_certificate_link($courseId, $userId);
+        // DB-level pagination
+        $total = count($completions);
+        $offset = ($page - 1) * $perPage;
+        $pageResults = array_slice($completions, $offset, $perPage);
 
-                    $certificates[] = [
-                        'user_id' => (int) $userId,
-                        'user_email' => $user ? $user->user_email : null,
-                        'course_id' => (int) $courseId,
-                        'course_title' => $course ? $course->post_title : null,
-                        'completed_at' => gmdate('c', $completedDate),
-                        'certificate_url' => $certificateLink ?: null,
-                    ];
-                }
+        // Batch-fetch users and courses for this page only
+        $pageUserIds = array_unique(array_column($pageResults, 'user_id'));
+        $pageCourseIds = array_unique(array_column($pageResults, 'course_id'));
+
+        $users = [];
+        if (!empty($pageUserIds)) {
+            $userQuery = new \WP_User_Query(['include' => $pageUserIds, 'fields' => ['ID', 'user_email']]);
+            foreach ($userQuery->get_results() as $u) {
+                $users[(int) $u->ID] = $u;
             }
         }
 
-        // Sort by completed_at DESC
-        usort($certificates, fn($a, $b) => strcmp($b['completed_at'], $a['completed_at']));
+        $coursePosts = [];
+        if (!empty($pageCourseIds)) {
+            $posts = get_posts([
+                'post_type' => 'sfwd-courses',
+                'post__in' => array_map('intval', $pageCourseIds),
+                'posts_per_page' => count($pageCourseIds),
+                'post_status' => 'any',
+            ]);
+            foreach ($posts as $p) {
+                $coursePosts[$p->ID] = $p;
+            }
+        }
 
-        $total = count($certificates);
-        $offset = ($page - 1) * $perPage;
-        $data = array_slice($certificates, $offset, $perPage);
+        $data = array_map(function ($row) use ($users, $coursePosts) {
+            $userId = (int) $row->user_id;
+            $courseId = (int) $row->course_id;
+
+            return [
+                'user_id' => $userId,
+                'user_email' => ($users[$userId] ?? null)?->user_email,
+                'course_id' => $courseId,
+                'course_title' => ($coursePosts[$courseId] ?? null)?->post_title,
+                'completed_at' => gmdate('c', (int) $row->completed_at),
+                'certificate_url' => function_exists('learndash_get_course_certificate_link')
+                    ? (learndash_get_course_certificate_link($courseId, $userId) ?: null)
+                    : null,
+            ];
+        }, $pageResults);
 
         return new WP_REST_Response([
             'data' => $data,
