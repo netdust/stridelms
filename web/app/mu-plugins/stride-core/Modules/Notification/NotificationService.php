@@ -20,6 +20,9 @@ final class NotificationService implements \NTDST_Service_Meta
 {
     private const META_KEY = '_stride_notifications_read';
 
+    /** @var array<int, array> Per-request notification cache */
+    private array $cache = [];
+
     public static function metadata(): array
     {
         return [
@@ -48,6 +51,10 @@ final class NotificationService implements \NTDST_Service_Meta
      */
     public function getNotifications(int $userId): array
     {
+        if (isset($this->cache[$userId])) {
+            return $this->cache[$userId];
+        }
+
         $readMap = $this->getReadMap($userId);
 
         // 1. Get audit entries where user is the subject (not actor)
@@ -81,6 +88,8 @@ final class NotificationService implements \NTDST_Service_Meta
         // Sort newest first
         usort($notifications, fn(array $a, array $b): int => $b['timestamp'] <=> $a['timestamp']);
 
+        $this->cache[$userId] = $notifications;
+
         return $notifications;
     }
 
@@ -111,6 +120,7 @@ final class NotificationService implements \NTDST_Service_Meta
         }
 
         update_user_meta($userId, self::META_KEY, wp_json_encode($readMap));
+        unset($this->cache[$userId]);
     }
 
     /**
