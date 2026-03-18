@@ -163,6 +163,7 @@ defined('ABSPATH') || exit;
                                             </td>
                                             <td style="padding: 10px 16px; text-align: right;">
                                                 <button class="stride-btn stride-btn-primary stride-btn-sm"
+                                                        x-show="canManage"
                                                         @click="approveRegistration(approval.id)"
                                                         :disabled="approval.approving">
                                                     <span x-show="!approval.approving" x-text="approval.type === 'post_approval' ? 'Aftekenen' : 'Goedkeuren'"></span>
@@ -309,22 +310,28 @@ defined('ABSPATH') || exit;
                                 </h3>
                             </div>
                             <div class="stride-card-body stride-quick-actions">
+                                <?php if (current_user_can('stride_manage')): ?>
                                 <a href="<?php echo esc_url($admin_url . 'post-new.php?post_type=vad_edition'); ?>" class="stride-quick-action">
                                     <span class="dashicons dashicons-plus-alt"></span>
                                     <span>Nieuwe Edition</span>
                                 </a>
+                                <?php endif; ?>
+                                <?php if (current_user_can('stride_manage')): ?>
                                 <a href="<?php echo esc_url($admin_url . 'post-new.php?post_type=vad_trajectory'); ?>" class="stride-quick-action">
                                     <span class="dashicons dashicons-networking"></span>
                                     <span>Nieuw Traject</span>
                                 </a>
+                                <?php endif; ?>
                                 <a href="#/quotes" @click.prevent="view = 'quotes'" class="stride-quick-action">
                                     <span class="dashicons dashicons-media-document"></span>
                                     <span>Bekijk Offertes</span>
                                 </a>
+                                <?php if (current_user_can('stride_manage')): ?>
                                 <a href="<?php echo esc_url($admin_url . 'users.php'); ?>" class="stride-quick-action">
                                     <span class="dashicons dashicons-admin-users"></span>
                                     <span>Gebruikers</span>
                                 </a>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
@@ -337,10 +344,12 @@ defined('ABSPATH') || exit;
             <div>
                 <div class="stride-page-header">
                     <h2 class="stride-page-title">Editions</h2>
+                    <?php if (current_user_can('stride_manage')): ?>
                     <a href="<?php echo esc_url($admin_url . 'post-new.php?post_type=vad_edition'); ?>" class="stride-btn stride-btn-primary">
                         <span class="dashicons dashicons-plus-alt2"></span>
                         New Edition
                     </a>
+                    <?php endif; ?>
                 </div>
 
                 <!-- Filters -->
@@ -439,7 +448,7 @@ defined('ABSPATH') || exit;
                                                 <span class="stride-badge" :class="'stride-badge-' + item.status" x-text="item.status"></span>
                                             </td>
                                             <td>
-                                                <a :href="item.editUrl" class="stride-btn stride-btn-sm stride-btn-outline" @click.stop>
+                                                <a :href="item.editUrl" class="stride-btn stride-btn-sm stride-btn-outline" @click.stop x-show="canManage">
                                                     Edit
                                                 </a>
                                             </td>
@@ -487,7 +496,7 @@ defined('ABSPATH') || exit;
                                                 <span class="stride-badge" :class="'stride-badge-' + edition.status" x-text="edition.status"></span>
                                             </td>
                                             <td>
-                                                <a :href="edition.editUrl" class="stride-btn stride-btn-sm stride-btn-outline" @click.stop>
+                                                <a :href="edition.editUrl" class="stride-btn stride-btn-sm stride-btn-outline" @click.stop x-show="canManage">
                                                     Edit
                                                 </a>
                                             </td>
@@ -576,6 +585,7 @@ defined('ABSPATH') || exit;
                                                                 <td x-text="reg.name || 'Unknown'"></td>
                                                                 <template x-for="session in selectedEdition.sessions" :key="session.id">
                                                                     <td class="stride-attendance-cell">
+                                                                        <template x-if="canManage">
                                                                         <button
                                                                             class="stride-attendance-btn"
                                                                             :class="{
@@ -598,6 +608,12 @@ defined('ABSPATH') || exit;
                                                                                 <span class="dashicons dashicons-minus"></span>
                                                                             </template>
                                                                         </button>
+                                                                        </template>
+                                                                        <template x-if="!canManage">
+                                                                            <span class="stride-attendance-status"
+                                                                                  x-text="(reg.attendance && reg.attendance[session.id]) ? reg.attendance[session.id] : '—'">
+                                                                            </span>
+                                                                        </template>
                                                                     </td>
                                                                 </template>
                                                             </tr>
@@ -798,7 +814,7 @@ defined('ABSPATH') || exit;
                                             <span class="stride-amount-lg" x-text="formatCurrency(selectedQuote.total)"></span>
                                         </div>
                                         <div class="stride-info-actions">
-                                            <a :href="selectedQuote.editUrl" class="stride-btn stride-btn-primary">
+                                            <a :href="selectedQuote.editUrl" class="stride-btn stride-btn-primary" x-show="canManage">
                                                 Edit in WP Admin
                                             </a>
                                         </div>
@@ -984,7 +1000,7 @@ defined('ABSPATH') || exit;
                                             <span x-text="formatDate(selectedTrajectory.choiceDeadline)"></span>
                                         </div>
                                         <div class="stride-info-actions">
-                                            <a :href="selectedTrajectory.editUrl" class="stride-btn stride-btn-primary">
+                                            <a :href="selectedTrajectory.editUrl" class="stride-btn stride-btn-primary" x-show="canManage">
                                                 Bewerken in WP Admin
                                             </a>
                                         </div>
