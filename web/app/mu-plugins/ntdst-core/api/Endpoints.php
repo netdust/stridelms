@@ -167,39 +167,35 @@ final class Endpoints
     }
 
     /**
-     * Verify request origin for CSRF protection
-     * Only allows requests from same origin or with valid referer
+     * Verify request origin for CSRF protection.
+     * Only allows requests from same origin or with valid referer.
+     * Rejects missing Origin+Referer when auth cookies are present.
      */
     private function verifyOrigin(): bool
     {
-        // Get origin header
         $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
         $referer = $_SERVER['HTTP_REFERER'] ?? '';
 
-        // If no origin/referer, this is likely a same-origin request
+        // If no origin/referer, only allow if no auth cookie present.
+        // Browsers always send Origin on cross-origin requests with credentials.
         if (empty($origin) && empty($referer)) {
-            return true;
+            return !$this->hasCookieAuth();
         }
 
-        $home_url = home_url();
-        $site_url = site_url();
+        $homeHost = parse_url(home_url(), PHP_URL_HOST);
+        $siteHost = parse_url(site_url(), PHP_URL_HOST);
 
-        // Check if origin matches our site
+        // Exact hostname match on Origin header
         if (!empty($origin)) {
-            if (str_contains($origin, parse_url($home_url, PHP_URL_HOST))) {
-                return true;
-            }
-            if (str_contains($origin, parse_url($site_url, PHP_URL_HOST))) {
+            $originHost = parse_url($origin, PHP_URL_HOST);
+            if ($originHost === $homeHost || $originHost === $siteHost) {
                 return true;
             }
         }
 
-        // Check if referer matches our site
+        // Referer must start with our full URL (existing logic is correct)
         if (!empty($referer)) {
-            if (str_starts_with($referer, $home_url)) {
-                return true;
-            }
-            if (str_starts_with($referer, $site_url)) {
+            if (str_starts_with($referer, home_url()) || str_starts_with($referer, site_url())) {
                 return true;
             }
         }
@@ -210,6 +206,19 @@ final class Endpoints
             return true;
         }
 
+        return false;
+    }
+
+    /**
+     * Check if the request contains WordPress authentication cookies.
+     */
+    private function hasCookieAuth(): bool
+    {
+        foreach ($_COOKIE as $name => $value) {
+            if (str_starts_with($name, 'wordpress_logged_in_')) {
+                return true;
+            }
+        }
         return false;
     }
 
