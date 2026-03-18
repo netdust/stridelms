@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Stride\Tests\Unit;
 
 use Stride\Modules\PartnerAPI\PartnerAPIController;
+use Stride\Modules\Enrollment\EnrollmentService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Attendance\AttendanceRepository;
 use Stride\Modules\Edition\EditionService;
@@ -25,6 +26,7 @@ class PartnerAPIControllerTest extends TestCase
     private RegistrationRepository $mockRegRepo;
     private AttendanceRepository $mockAttendanceRepo;
     private EditionService $mockEditionService;
+    private EnrollmentService $mockEnrollmentService;
 
     protected function setUp(): void
     {
@@ -40,6 +42,11 @@ class PartnerAPIControllerTest extends TestCase
         $this->mockRegRepo = $this->createMock(RegistrationRepository::class);
         $this->mockAttendanceRepo = $this->createMock(AttendanceRepository::class);
         $this->mockEditionService = $this->createMock(EditionService::class);
+        $this->mockEnrollmentService = $this->createMock(EnrollmentService::class);
+
+        // Register EnrollmentService mock in the DI container
+        // (createEnrollment() resolves it via ntdst_get())
+        ntdst_set(EnrollmentService::class, $this->mockEnrollmentService);
 
         // Create controller with mocked dependencies
         $this->controller = new PartnerAPIController(
@@ -467,13 +474,8 @@ class PartnerAPIControllerTest extends TestCase
             ->with(789)
             ->willReturn($editionPost);
 
-        $this->mockEditionService
-            ->method('getCourseId')
-            ->with(789)
-            ->willReturn(0);
-
-        $this->mockRegRepo
-            ->method('create')
+        $this->mockEnrollmentService
+            ->method('enroll')
             ->willReturn(123);
 
         $request = new WP_REST_Request('POST', '/stride/v1/partner/enrollments');
@@ -516,13 +518,8 @@ class PartnerAPIControllerTest extends TestCase
             ->with(789)
             ->willReturn($editionPost);
 
-        $this->mockEditionService
-            ->method('getCourseId')
-            ->with(789)
-            ->willReturn(0);
-
-        $this->mockRegRepo
-            ->method('create')
+        $this->mockEnrollmentService
+            ->method('enroll')
             ->willReturn(456);
 
         $request = new WP_REST_Request('POST', '/stride/v1/partner/enrollments');
@@ -557,9 +554,9 @@ class PartnerAPIControllerTest extends TestCase
             ->with(789)
             ->willReturn($editionPost);
 
-        $this->mockRegRepo
-            ->method('create')
-            ->willReturn(new \WP_Error('duplicate', 'User already enrolled'));
+        $this->mockEnrollmentService
+            ->method('enroll')
+            ->willReturn(new \WP_Error('already_enrolled', 'User is already enrolled in this edition'));
 
         $request = new WP_REST_Request('POST', '/stride/v1/partner/enrollments');
         $request->set_param('user_email', 'member@company.com');
@@ -568,7 +565,7 @@ class PartnerAPIControllerTest extends TestCase
         $response = $this->controller->createEnrollment($request);
 
         $this->assertInstanceOf(WP_Error::class, $response);
-        $this->assertEquals('duplicate', $response->get_error_code());
+        $this->assertEquals('already_enrolled', $response->get_error_code());
         $this->assertEquals(409, $response->get_error_data()['status']);
     }
 
