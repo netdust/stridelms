@@ -98,7 +98,7 @@ final class QuoteActionsMetabox
         <?php $this->renderVoucherSection($quote, $discount, $isEditable); ?>
 
         <!-- Status Change -->
-        <?php $this->renderStatusSection($statusEnum, $isLocked); ?>
+        <?php $this->renderStatusSection($statusEnum, $isLocked, $quote); ?>
         <?php
     }
 
@@ -264,7 +264,7 @@ final class QuoteActionsMetabox
         <?php
     }
 
-    private function renderStatusSection(QuoteStatus $status, bool $isLocked): void
+    private function renderStatusSection(QuoteStatus $status, bool $isLocked, array $quote = []): void
     {
         $isCancelled = $status === QuoteStatus::Cancelled;
         ?>
