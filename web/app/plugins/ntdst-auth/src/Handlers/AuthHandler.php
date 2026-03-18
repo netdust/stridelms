@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NTDST\Auth\Handlers;
 
 use NTDST\Auth\AuthService;
+use NTDST\Auth\Helpers\Config;
 use NTDST\Auth\RegistrationService;
 
 defined('ABSPATH') || exit;
@@ -12,7 +13,7 @@ defined('ABSPATH') || exit;
 /**
  * AJAX handler for authentication actions.
  *
- * Thin handler - validates input, delegates to services, returns JSON.
+ * Thin handler - validates input, delegates to services, returns response.
  */
 final class AuthHandler implements \NTDST_Service_Meta
 {
@@ -47,52 +48,75 @@ final class AuthHandler implements \NTDST_Service_Meta
     public function ajaxRequestMagicLink(): void
     {
         if (!$this->verifyNonce('ntdst_auth_login')) {
-            wp_send_json_error(['message' => __('Invalid security token.', 'ntdst-auth')]);
+            ntdst_response()->error(__('Invalid security token.', 'ntdst-auth'))->json();
         }
 
         $email = sanitize_email($_POST['email'] ?? '');
 
         if (empty($email)) {
-            wp_send_json_error(['message' => __('Please enter your email address.', 'ntdst-auth')]);
+            ntdst_response()->error(__('Please enter your email address.', 'ntdst-auth'))->json();
         }
 
         $authService = ntdst_get(AuthService::class);
         $result = $authService->requestMagicLink($email);
 
         if ($result['success']) {
-            wp_send_json_success(['message' => $result['message']]);
+            ntdst_response()->with('message', $result['message'])->json();
         } else {
-            wp_send_json_error(['message' => $result['message']]);
+            ntdst_response()->error($result['message'])->json();
         }
     }
 
     /**
      * AJAX: Login with password.
+     *
+     * Supports two modes:
+     * - AJAX (default): returns JSON response
+     * - Redirect (_redirect=1): server-side 302 redirect after login
      */
     public function ajaxLoginPassword(): void
     {
+        $isRedirect = !empty($_POST['_redirect']);
+        $loginUrl = home_url(Config::get('login_url', '/login'));
+
         if (!$this->verifyNonce('ntdst_auth_login')) {
-            wp_send_json_error(['message' => __('Invalid security token.', 'ntdst-auth')]);
+            $msg = __('Invalid security token. Please try again.', 'ntdst-auth');
+            if ($isRedirect) {
+                ntdst_response()->error($msg)->redirect($loginUrl);
+            }
+            ntdst_response()->error($msg)->json();
         }
 
         $email = sanitize_email($_POST['email'] ?? '');
         $password = $_POST['password'] ?? '';
 
         if (empty($email) || empty($password)) {
-            wp_send_json_error(['message' => __('Please enter both email and password.', 'ntdst-auth')]);
+            $msg = __('Please enter both email and password.', 'ntdst-auth');
+            if ($isRedirect) {
+                ntdst_response()->error($msg)->redirect($loginUrl);
+            }
+            ntdst_response()->error($msg)->json();
         }
 
         $authService = ntdst_get(AuthService::class);
         $result = $authService->loginWithPassword($email, $password);
 
         if (is_wp_error($result)) {
-            wp_send_json_error(['message' => $result->get_error_message()]);
+            $msg = $result->get_error_message();
+            if ($isRedirect) {
+                ntdst_response()->error($msg)->redirect($loginUrl);
+            }
+            ntdst_response()->error($msg)->json();
         }
 
-        wp_send_json_success([
-            'message' => __('Login successful!', 'ntdst-auth'),
-            'redirect' => $result['redirect'],
-        ]);
+        if ($isRedirect) {
+            ntdst_redirect($result['redirect']);
+        }
+
+        ntdst_response()
+            ->with('message', __('Login successful!', 'ntdst-auth'))
+            ->with('redirect', $result['redirect'])
+            ->json();
     }
 
     /**
@@ -101,29 +125,30 @@ final class AuthHandler implements \NTDST_Service_Meta
     public function ajaxRegister(): void
     {
         if (!$this->verifyNonce('ntdst_auth_register')) {
-            wp_send_json_error(['message' => __('Invalid security token.', 'ntdst-auth')]);
+            ntdst_response()->error(__('Invalid security token.', 'ntdst-auth'))->json();
         }
 
         $data = [
             'email' => sanitize_email($_POST['email'] ?? ''),
             'first_name' => sanitize_text_field($_POST['first_name'] ?? ''),
             'last_name' => sanitize_text_field($_POST['last_name'] ?? ''),
+            'profile_type' => sanitize_text_field($_POST['profile_type'] ?? ''),
             'consent_terms' => !empty($_POST['consent_terms']),
             'consent_privacy' => !empty($_POST['consent_privacy']),
         ];
 
         if (empty($data['email'])) {
-            wp_send_json_error(['message' => __('Please enter your email address.', 'ntdst-auth')]);
+            ntdst_response()->error(__('Please enter your email address.', 'ntdst-auth'))->json();
         }
 
         $registration = ntdst_get(RegistrationService::class);
         $result = $registration->register($data);
 
         if (is_wp_error($result)) {
-            wp_send_json_error(['message' => $result->get_error_message()]);
+            ntdst_response()->error($result->get_error_message())->json();
         }
 
-        wp_send_json_success(['message' => $result['message']]);
+        ntdst_response()->with('message', $result['message'])->json();
     }
 
     /**

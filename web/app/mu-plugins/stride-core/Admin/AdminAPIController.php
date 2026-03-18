@@ -218,10 +218,23 @@ final class AdminAPIController
             'permission_callback' => [$this, 'canAccessAdmin'],
         ]);
 
-        // Approve registration
+        // Approve registration (enrollment phase)
         register_rest_route(self::NAMESPACE, '/admin/approve-registration', [
             'methods' => 'POST',
             'callback' => [$this, 'approveRegistration'],
+            'permission_callback' => [$this, 'canAccessAdmin'],
+            'args' => [
+                'registration_id' => [
+                    'type' => 'integer',
+                    'required' => true,
+                ],
+            ],
+        ]);
+
+        // Approve post-course (aftekenen)
+        register_rest_route(self::NAMESPACE, '/admin/approve-post-course', [
+            'methods' => 'POST',
+            'callback' => [$this, 'approvePostCourse'],
             'permission_callback' => [$this, 'canAccessAdmin'],
             'args' => [
                 'registration_id' => [
@@ -408,10 +421,10 @@ final class AdminAPIController
         if ($registrationTableExists) {
             $weekAgo = wp_date('Y-m-d H:i:s', strtotime('-7 days'));
             $recentRegs = $wpdb->get_results($wpdb->prepare(
-                "SELECT r.id, r.user_id, r.edition_id, r.status, r.created_at
+                "SELECT r.id, r.user_id, r.edition_id, r.status, r.registered_at
                  FROM {$registrationTable} r
-                 WHERE r.created_at >= %s
-                 ORDER BY r.created_at DESC
+                 WHERE r.registered_at >= %s
+                 ORDER BY r.registered_at DESC
                  LIMIT 10",
                 $weekAgo
             ));
@@ -441,7 +454,7 @@ final class AdminAPIController
                         'userEmail' => $user ? $user->user_email : '',
                         'editionTitle' => $edition ? $edition->post_title : 'Unknown',
                         'status' => $reg->status,
-                        'createdAt' => $reg->created_at,
+                        'createdAt' => $reg->registered_at,
                     ];
                 }
             }
@@ -456,11 +469,11 @@ final class AdminAPIController
 
         if ($registrationTableExists) {
             $registrationsThisWeek = (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM {$registrationTable} WHERE created_at >= %s",
+                "SELECT COUNT(*) FROM {$registrationTable} WHERE registered_at >= %s",
                 $thisWeekStart
             ));
             $registrationsLastWeek = (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM {$registrationTable} WHERE created_at >= %s AND created_at < %s",
+                "SELECT COUNT(*) FROM {$registrationTable} WHERE registered_at >= %s AND registered_at < %s",
                 $lastWeekStart,
                 $thisWeekStart
             ));
@@ -1644,44 +1657,60 @@ final class AdminAPIController
             return new WP_REST_Response(['items' => []]);
         }
 
-        $rows = $wpdb->get_results(
+        // Enrollment phase: pending registrations with approval task
+        $pendingRows = $wpdb->get_results(
             "SELECT * FROM {$table}
              WHERE status = 'pending'
                AND completion_tasks IS NOT NULL
              ORDER BY registered_at DESC"
         );
 
+        // Post-course phase: confirmed registrations with post_approval task
+        $confirmedRows = $wpdb->get_results(
+            "SELECT * FROM {$table}
+             WHERE status = 'confirmed'
+               AND completion_tasks IS NOT NULL
+               AND completion_tasks LIKE '%post_approval%'
+             ORDER BY registered_at DESC"
+        );
+
         $completionService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
         $items = [];
 
-        foreach ($rows as $row) {
+        // Enrollment approvals
+        foreach ($pendingRows as $row) {
             $tasks = json_decode($row->completion_tasks ?? '{}', true) ?: [];
 
-            // Only include registrations where user tasks are done AND approval is pending
             if (!isset($tasks['approval']) || $tasks['approval']['status'] === 'completed') {
                 continue;
             }
-
             if (!$completionService->areUserTasksComplete($tasks)) {
                 continue;
             }
 
-            // Build response item
-            $userId = (int) $row->user_id;
-            $user = get_userdata($userId);
-            $editionId = (int) ($row->edition_id ?? 0);
-            $edition = $editionId ? get_post($editionId) : null;
+            $items[] = $this->buildApprovalItem($row, $tasks, 'approval');
+        }
 
-            $items[] = [
-                'id' => (int) $row->id,
-                'user_id' => $userId,
-                'user_name' => $user ? $user->display_name : __('Onbekend', 'stride'),
-                'user_email' => $user ? $user->user_email : '',
-                'edition_id' => $editionId,
-                'edition_title' => $edition ? $edition->post_title : __('Onbekend', 'stride'),
-                'registered_at' => $row->registered_at,
-                'tasks' => $tasks,
-            ];
+        // Post-course approvals
+        foreach ($confirmedRows as $row) {
+            $tasks = json_decode($row->completion_tasks ?? '{}', true) ?: [];
+
+            if (!isset($tasks['post_approval']) || $tasks['post_approval']['status'] === 'completed') {
+                continue;
+            }
+            // Check post-course user tasks done
+            $postUserDone = true;
+            foreach (['post_evaluation', 'post_documents'] as $pt) {
+                if (isset($tasks[$pt]) && ($tasks[$pt]['status'] ?? 'pending') !== 'completed') {
+                    $postUserDone = false;
+                    break;
+                }
+            }
+            if (!$postUserDone) {
+                continue;
+            }
+
+            $items[] = $this->buildApprovalItem($row, $tasks, 'post_approval');
         }
 
         return new WP_REST_Response(['items' => $items]);
@@ -1721,5 +1750,54 @@ final class AdminAPIController
             'approved' => true,
             'registration_id' => $registrationId,
         ]);
+    }
+
+    /**
+     * POST /admin/approve-post-course
+     *
+     * Marks post_approval task as complete (triggers LD completion + status change).
+     */
+    public function approvePostCourse(WP_REST_Request $request): WP_REST_Response|WP_Error
+    {
+        $registrationId = $request->get_param('registration_id');
+
+        if (!$registrationId) {
+            return new WP_Error('missing_param', __('registration_id is verplicht.', 'stride'), ['status' => 400]);
+        }
+
+        $completionService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
+        $result = $completionService->completeTask($registrationId, 'post_approval');
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return new WP_REST_Response([
+            'approved' => true,
+            'registration_id' => $registrationId,
+        ]);
+    }
+
+    /**
+     * Build a pending approval item for the REST response.
+     */
+    private function buildApprovalItem(object $row, array $tasks, string $type): array
+    {
+        $userId = (int) $row->user_id;
+        $user = get_userdata($userId);
+        $editionId = (int) ($row->edition_id ?? 0);
+        $edition = $editionId ? get_post($editionId) : null;
+
+        return [
+            'id' => (int) $row->id,
+            'type' => $type,
+            'user_id' => $userId,
+            'user_name' => $user ? $user->display_name : __('Onbekend', 'stride'),
+            'user_email' => $user ? $user->user_email : '',
+            'edition_id' => $editionId,
+            'edition_title' => $edition ? $edition->post_title : __('Onbekend', 'stride'),
+            'registered_at' => $row->registered_at,
+            'tasks' => $tasks,
+        ];
     }
 }

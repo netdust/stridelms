@@ -1,7 +1,7 @@
 /**
  * LTI Admin Settings — Alpine.js Application
  *
- * Single-page app for managing LTI Platforms, Tools, Resources, and Logs.
+ * Single-page app for managing LTI Platforms and Logs.
  * Communicates with WP REST API via LtiConfig (wp_localize_script).
  */
 document.addEventListener('alpine:init', () => {
@@ -10,7 +10,7 @@ document.addEventListener('alpine:init', () => {
         tab: 'dashboard',
 
         // ── Dashboard State ────────────────────────────────
-        stats: { platforms: 0, tools: 0, resources: 0 },
+        stats: { platforms: 0 },
         copied: null,
 
         // ── Platforms State ────────────────────────────────
@@ -31,35 +31,6 @@ document.addEventListener('alpine:init', () => {
             enabled: true,
             role_instructor: 'administrator',
             role_learner: 'subscriber',
-        },
-
-        // ── Tools State ───────────────────────────────────
-        tools: [],
-        toolsLoading: false,
-        showToolModal: false,
-        editingToolId: null,
-        toolForm: {
-            title: '',
-            client_id: '',
-            deployment_id: '',
-            launch_url: '',
-            oidc_url: '',
-            jwks_url: '',
-            public_key: '',
-        },
-
-        // ── Resources State ───────────────────────────────
-        resources: [],
-        resourcesLoading: false,
-        showResourceModal: false,
-        editingResourceId: null,
-        resourceForm: {
-            title: '',
-            tool_id: '',
-            launch_url: '',
-            course_id: '',
-            description: '',
-            custom_params: '',
         },
 
         // ── Logs State ────────────────────────────────────
@@ -84,7 +55,7 @@ document.addEventListener('alpine:init', () => {
 
         parseHash() {
             const hash = window.location.hash.replace('#', '');
-            const validTabs = ['dashboard', 'platforms', 'tools', 'resources', 'logs', 'howto'];
+            const validTabs = ['dashboard', 'platforms', 'logs', 'howto'];
             if (hash && validTabs.includes(hash)) {
                 this.tab = hash;
                 this.loadTabData(hash);
@@ -101,13 +72,6 @@ document.addEventListener('alpine:init', () => {
             switch (t) {
                 case 'platforms':
                     if (this.platforms.length === 0) this.loadPlatforms();
-                    break;
-                case 'tools':
-                    if (this.tools.length === 0) this.loadTools();
-                    break;
-                case 'resources':
-                    if (this.resources.length === 0) this.loadResources();
-                    if (this.tools.length === 0) this.loadTools();
                     break;
                 case 'logs':
                     if (this.logs.length === 0) this.loadLogs();
@@ -139,14 +103,8 @@ document.addEventListener('alpine:init', () => {
         // ── Dashboard ─────────────────────────────────────
         async loadStats() {
             try {
-                const [platformRes, toolRes, resourceRes] = await Promise.all([
-                    this.apiFetch(LtiConfig.restUrl + '/lti-platforms?per_page=1'),
-                    this.apiFetch(LtiConfig.restUrl + '/lti-tools?per_page=1'),
-                    this.apiFetch(LtiConfig.restUrl + '/lti-resources?per_page=1'),
-                ]);
+                const platformRes = await this.apiFetch(LtiConfig.restUrl + '/lti-platforms?per_page=1');
                 this.stats.platforms = parseInt(platformRes.headers.get('X-WP-Total')) || 0;
-                this.stats.tools = parseInt(toolRes.headers.get('X-WP-Total')) || 0;
-                this.stats.resources = parseInt(resourceRes.headers.get('X-WP-Total')) || 0;
             } catch (e) {
                 console.error('Failed to load stats:', e);
             }
@@ -267,225 +225,6 @@ document.addEventListener('alpine:init', () => {
             } catch (e) {
                 this.notify('Failed to delete platform: ' + e.message, 'error');
             }
-        },
-
-        // ── Tools CRUD ────────────────────────────────────
-        async loadTools() {
-            this.toolsLoading = true;
-            try {
-                this.tools = await this.apiFetchJSON(
-                    LtiConfig.restUrl + '/lti-tools?per_page=100'
-                );
-            } catch (e) {
-                this.notify('Failed to load tools: ' + e.message, 'error');
-            } finally {
-                this.toolsLoading = false;
-            }
-        },
-
-        newTool() {
-            this.editingToolId = null;
-            this.toolForm = {
-                title: '',
-                client_id: '',
-                deployment_id: '',
-                launch_url: '',
-                oidc_url: '',
-                jwks_url: '',
-                public_key: '',
-            };
-            this.showToolModal = true;
-        },
-
-        editTool(tool) {
-            this.editingToolId = tool.id;
-            this.toolForm = {
-                title: tool.title.rendered,
-                client_id: tool.meta.lti_client_id || '',
-                deployment_id: tool.meta.lti_deployment_id || '',
-                launch_url: tool.meta.lti_launch_url || '',
-                oidc_url: tool.meta.lti_oidc_url || '',
-                jwks_url: tool.meta.lti_jwks_url || '',
-                public_key: tool.meta.lti_public_key || '',
-            };
-            this.showToolModal = true;
-        },
-
-        async saveTool() {
-            this.saving = true;
-            const body = {
-                title: this.toolForm.title,
-                status: 'publish',
-                meta: {
-                    lti_client_id: this.toolForm.client_id,
-                    lti_deployment_id: this.toolForm.deployment_id,
-                    lti_launch_url: this.toolForm.launch_url,
-                    lti_oidc_url: this.toolForm.oidc_url,
-                    lti_jwks_url: this.toolForm.jwks_url,
-                    lti_public_key: this.toolForm.public_key,
-                },
-            };
-
-            try {
-                const url = this.editingToolId
-                    ? LtiConfig.restUrl + '/lti-tools/' + this.editingToolId
-                    : LtiConfig.restUrl + '/lti-tools';
-                const method = this.editingToolId ? 'PUT' : 'POST';
-
-                await this.apiFetchJSON(url, {
-                    method,
-                    body: JSON.stringify(body),
-                });
-
-                this.showToolModal = false;
-                this.notify(this.editingToolId ? 'Tool updated' : 'Tool created');
-                await this.loadTools();
-                await this.loadStats();
-            } catch (e) {
-                this.notify('Failed to save tool: ' + e.message, 'error');
-            } finally {
-                this.saving = false;
-            }
-        },
-
-        async deleteTool(id) {
-            if (!confirm('Delete this tool? This cannot be undone.')) return;
-            try {
-                await this.apiFetchJSON(
-                    LtiConfig.restUrl + '/lti-tools/' + id + '?force=true',
-                    { method: 'DELETE' }
-                );
-                this.notify('Tool deleted');
-                await this.loadTools();
-                await this.loadStats();
-            } catch (e) {
-                this.notify('Failed to delete tool: ' + e.message, 'error');
-            }
-        },
-
-        testLaunchTool(tool) {
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = LtiConfig.homeUrl + '/lti/platform/launch';
-            form.target = '_blank';
-
-            const fields = {
-                _wpnonce: LtiConfig.nonce,
-                tool_id: tool.id,
-                message_type: 'LtiResourceLinkRequest',
-            };
-
-            for (const [name, value] of Object.entries(fields)) {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = name;
-                input.value = value;
-                form.appendChild(input);
-            }
-
-            document.body.appendChild(form);
-            form.submit();
-            form.remove();
-        },
-
-        // ── Resources CRUD ────────────────────────────────
-        async loadResources() {
-            this.resourcesLoading = true;
-            try {
-                this.resources = await this.apiFetchJSON(
-                    LtiConfig.restUrl + '/lti-resources?per_page=100'
-                );
-            } catch (e) {
-                this.notify('Failed to load resources: ' + e.message, 'error');
-            } finally {
-                this.resourcesLoading = false;
-            }
-        },
-
-        newResource() {
-            this.editingResourceId = null;
-            this.resourceForm = {
-                title: '',
-                tool_id: '',
-                launch_url: '',
-                course_id: '',
-                description: '',
-                custom_params: '',
-            };
-            this.showResourceModal = true;
-        },
-
-        editResource(resource) {
-            this.editingResourceId = resource.id;
-            this.resourceForm = {
-                title: resource.title.rendered,
-                tool_id: resource.meta.lti_tool_id || '',
-                launch_url: resource.meta.lti_launch_url || '',
-                course_id: resource.meta.lti_course_id || '',
-                description: resource.meta.lti_description || '',
-                custom_params: resource.meta.lti_custom_params || '',
-            };
-            this.showResourceModal = true;
-        },
-
-        async saveResource() {
-            this.saving = true;
-            const body = {
-                title: this.resourceForm.title,
-                status: 'publish',
-                meta: {
-                    lti_tool_id: this.resourceForm.tool_id ? parseInt(this.resourceForm.tool_id) : 0,
-                    lti_launch_url: this.resourceForm.launch_url,
-                    lti_course_id: this.resourceForm.course_id,
-                    lti_description: this.resourceForm.description,
-                    lti_custom_params: this.resourceForm.custom_params,
-                },
-            };
-
-            try {
-                const url = this.editingResourceId
-                    ? LtiConfig.restUrl + '/lti-resources/' + this.editingResourceId
-                    : LtiConfig.restUrl + '/lti-resources';
-                const method = this.editingResourceId ? 'PUT' : 'POST';
-
-                await this.apiFetchJSON(url, {
-                    method,
-                    body: JSON.stringify(body),
-                });
-
-                this.showResourceModal = false;
-                this.notify(this.editingResourceId ? 'Resource updated' : 'Resource created');
-                await this.loadResources();
-                await this.loadStats();
-            } catch (e) {
-                this.notify('Failed to save resource: ' + e.message, 'error');
-            } finally {
-                this.saving = false;
-            }
-        },
-
-        async deleteResource(id) {
-            if (!confirm('Delete this resource? This cannot be undone.')) return;
-            try {
-                await this.apiFetchJSON(
-                    LtiConfig.restUrl + '/lti-resources/' + id + '?force=true',
-                    { method: 'DELETE' }
-                );
-                this.notify('Resource deleted');
-                await this.loadResources();
-                await this.loadStats();
-            } catch (e) {
-                this.notify('Failed to delete resource: ' + e.message, 'error');
-            }
-        },
-
-        launchResource(resource) {
-            window.open(LtiConfig.homeUrl + '/lti/launch/' + resource.id, '_blank');
-        },
-
-        getToolName(toolId) {
-            const tool = this.tools.find(t => t.id === parseInt(toolId));
-            return tool ? tool.title.rendered : '-';
         },
 
         // ── Logs ──────────────────────────────────────────

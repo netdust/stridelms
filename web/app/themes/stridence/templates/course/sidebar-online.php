@@ -19,13 +19,15 @@ defined('ABSPATH') || exit;
 
 use Stride\Integrations\LearnDash\LearnDashHelper;
 
-$course_id      = $args['course_id'] ?? get_the_ID();
-$enrollment_url = $args['enrollment_url'] ?? '';
-$user_id        = get_current_user_id();
+$course_id       = $args['course_id'] ?? get_the_ID();
+$enrollment_url  = $args['enrollment_url'] ?? '';
+$stride_enrolled = $args['user_enrolled'] ?? false;
+$user_id         = get_current_user_id();
 
 // ── Enrollment state ──
-$has_access  = $user_id && LearnDashHelper::hasAccess($course_id, $user_id);
-$is_enrolled = $user_id && LearnDashHelper::isEnrolled($course_id, $user_id);
+// Check both LearnDash access AND Stride registration (covers sync delays)
+$has_access  = $user_id && (LearnDashHelper::hasAccess($course_id, $user_id) || $stride_enrolled);
+$is_enrolled = $user_id && (LearnDashHelper::isEnrolled($course_id, $user_id) || $stride_enrolled);
 $progress    = $has_access ? LearnDashHelper::getProgress($course_id, $user_id) : 0;
 $is_complete = $has_access && $progress >= 100;
 $is_open     = LearnDashHelper::getAccessMode($course_id) === LearnDashHelper::MODE_OPEN;

@@ -97,6 +97,24 @@ final class AuditService implements \NTDST_Service_Meta
     }
 
     /**
+     * Get audit entries where user is the subject (not actor).
+     */
+    public function getForSubjectUser(int $userId, int $limit = 50, int $daysBack = 30): array
+    {
+        return $this->repository->findBySubjectUser($userId, $limit, $daysBack);
+    }
+
+    /**
+     * Get session note updates for editions.
+     *
+     * @param int[] $editionIds
+     */
+    public function getSessionNoteUpdates(array $editionIds, int $daysBack = 30): array
+    {
+        return $this->repository->findSessionNoteUpdates($editionIds, $daysBack);
+    }
+
+    /**
      * Get repository for advanced queries.
      */
     public function getRepository(): AuditRepository

@@ -52,6 +52,7 @@ final class AuthService implements \NTDST_Service_Meta
         // Admin settings
         add_action('admin_menu', [$this, 'addSettingsPage']);
         add_action('admin_init', [$this, 'registerSettings']);
+        add_action('admin_enqueue_scripts', [$this, 'enqueueAdminAssets']);
 
         // Privacy tools
         add_filter('wp_privacy_personal_data_exporters', [$this, 'registerPrivacyExporter']);
@@ -311,6 +312,15 @@ final class AuthService implements \NTDST_Service_Meta
         ]);
     }
 
+    public function enqueueAdminAssets(string $hook): void
+    {
+        if ($hook !== 'settings_page_ntdst-auth') {
+            return;
+        }
+
+        ntdst_enqueue_admin_toolkit();
+    }
+
     public function renderSettingsPage(): void
     {
         if (!current_user_can('manage_options')) {
@@ -400,6 +410,7 @@ final class AuthService implements \NTDST_Service_Meta
     private function renderPage(string $template, array $data = []): void
     {
         status_header(200);
+        nocache_headers();
 
         $paths = [
             get_stylesheet_directory() . '/ntdst-auth/pages/' . $template . '.php',

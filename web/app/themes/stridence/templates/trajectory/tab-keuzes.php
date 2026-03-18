@@ -63,7 +63,7 @@ $selections = $enrollment->selections ? json_decode($enrollment->selections, tru
 
     <?php if (empty($electiveGroups)) : ?>
         <?php
-        get_template_part('partials/empty-state', null, [
+        stridence_template_part('partials/empty-state', null, [
             'icon' => 'check-square',
             'title' => __('Geen keuzevakken', 'stridence'),
             'message' => __('Dit traject heeft geen keuzecursussen.', 'stridence'),

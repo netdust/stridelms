@@ -134,6 +134,10 @@ Config::define('WP_POST_REVISIONS', env('WP_POST_REVISIONS') ?? true);
 // Disable script concatenation
 Config::define('CONCATENATE_SCRIPTS', false);
 
+// Fix cookie path for Bedrock (WP lives at /wp/, site at /)
+Config::define('COOKIEPATH', '/');
+Config::define('ADMIN_COOKIE_PATH', '/wp/wp-admin');
+
 /**
  * Debugging Settings
  */

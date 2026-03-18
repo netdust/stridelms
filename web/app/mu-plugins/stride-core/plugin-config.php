@@ -37,8 +37,11 @@ return [
         \Stride\Modules\Trajectory\TrajectoryService::class,
         \Stride\Modules\Attendance\AttendanceService::class,
         \Stride\Modules\Invoicing\QuoteService::class,
+        \Stride\Modules\Notification\NotificationService::class,
         \Stride\Modules\Audit\AuditBridge::class,
+        \Stride\Modules\Mail\StrideMailBridge::class,
         \Stride\Modules\PartnerAPI\PartnerAPIController::class,
+        \Stride\Modules\User\ProfileTypeService::class,
     ],
 
     /**
@@ -52,6 +55,7 @@ return [
         'trajectory' => [],
         'attendance' => [],
         'invoicing' => [],
+        'notification' => [],
         'audit' => [],
         'partner_api' => [],
     ],

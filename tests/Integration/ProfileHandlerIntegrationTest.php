@@ -128,32 +128,26 @@ class ProfileHandlerIntegrationTest extends IntegrationTestCase
     {
         $result = $this->handler->handleUpdateProfile([], [
             'form_type' => 'billing',
-            'billing_company' => 'Test Company BV',
-            'billing_vat' => 'NL123456789B01',
-            'billing_address' => 'Teststraat 123',
-            'billing_postal_code' => '1234 AB',
-            'billing_city' => 'Amsterdam',
-            'billing_email' => 'billing@test.local',
-            'billing_gln' => '1234567890123',
+            'company' => 'Test Company BV',
+            'vat_number' => 'NL123456789B01',
+            'address' => 'Teststraat 123',
+            'postal_code' => '1234 AB',
+            'city' => 'Amsterdam',
+            'invoice_email' => 'billing@test.local',
+            'gln_number' => '1234567890123',
         ]);
 
         $this->assertIsArray($result);
         $this->assertTrue($result['success']);
 
-        // Verify primary fields
-        $this->assertUserMeta(self::$testUserId, 'invoice_organization_name', 'Test Company BV');
-        $this->assertUserMeta(self::$testUserId, 'vat_number', 'NL123456789B01');
-        $this->assertUserMeta(self::$testUserId, 'invoice_address', 'Teststraat 123');
-        $this->assertUserMeta(self::$testUserId, 'invoice_postal_code', '1234 AB');
-        $this->assertUserMeta(self::$testUserId, 'invoice_city', 'Amsterdam');
+        // Verify billing meta fields
+        $this->assertUserMeta(self::$testUserId, 'billing_company', 'Test Company BV');
+        $this->assertUserMeta(self::$testUserId, 'billing_vat', 'NL123456789B01');
+        $this->assertUserMeta(self::$testUserId, 'billing_address_1', 'Teststraat 123');
+        $this->assertUserMeta(self::$testUserId, 'billing_postcode', '1234 AB');
+        $this->assertUserMeta(self::$testUserId, 'billing_city', 'Amsterdam');
         $this->assertUserMeta(self::$testUserId, 'invoice_email', 'billing@test.local');
         $this->assertUserMeta(self::$testUserId, 'gln_number', '1234567890123');
-
-        // Verify legacy field mapping
-        $this->assertUserMeta(self::$testUserId, 'company', 'Test Company BV');
-        $this->assertUserMeta(self::$testUserId, 'address_line_1', 'Teststraat 123');
-        $this->assertUserMeta(self::$testUserId, 'postal_code', '1234 AB');
-        $this->assertUserMeta(self::$testUserId, 'city', 'Amsterdam');
     }
 
     /**
@@ -162,19 +156,19 @@ class ProfileHandlerIntegrationTest extends IntegrationTestCase
     public function handlesEmptyBillingFields(): void
     {
         // First set some values
-        update_user_meta(self::$testUserId, 'invoice_organization_name', 'Old Company');
+        update_user_meta(self::$testUserId, 'billing_company', 'Old Company');
 
         // Then clear them
         $result = $this->handler->handleUpdateProfile([], [
             'form_type' => 'billing',
-            'billing_company' => '',
+            'company' => '',
         ]);
 
         $this->assertIsArray($result);
         $this->assertTrue($result['success']);
 
         // Empty string should be saved (clearing the field)
-        $this->assertUserMeta(self::$testUserId, 'invoice_organization_name', '');
+        $this->assertUserMeta(self::$testUserId, 'billing_company', '');
     }
 
     // =========================================================================

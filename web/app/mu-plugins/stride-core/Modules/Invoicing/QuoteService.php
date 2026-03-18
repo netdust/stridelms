@@ -61,6 +61,9 @@ final class QuoteService extends AbstractService
 
         // Cancel quote when registration is cancelled
         add_action('stride/registration/cancelled', [$this, 'onRegistrationCancelled']);
+
+        // Update quote modifiers when session selection changes
+        add_action('stride/enrollment/task_completed', [$this, 'onSessionSelectionCompleted']);
     }
 
     /**
@@ -108,6 +111,209 @@ final class QuoteService extends AbstractService
                 'quote_id' => $quoteId,
             ]);
         }
+    }
+
+    /**
+     * Handle session selection completion — update quote with price modifiers.
+     *
+     * When a user completes (or re-submits) session selection, this recalculates
+     * the quote line items based on selected sessions' price modifiers.
+     *
+     * @param array{registration_id: int, task_type: string, tasks: array} $data Event data
+     */
+    public function onSessionSelectionCompleted(array $data): void
+    {
+        // Only handle session_selection task completions
+        if (($data['task_type'] ?? '') !== 'session_selection') {
+            return;
+        }
+
+        $registrationId = (int) ($data['registration_id'] ?? 0);
+        if (!$registrationId) {
+            return;
+        }
+
+        $sessionIds = $data['tasks']['session_selection']['data']['session_ids'] ?? [];
+        if (!is_array($sessionIds)) {
+            return;
+        }
+        $sessionIds = array_map('intval', $sessionIds);
+
+        // Find quote for this registration
+        $quote = $this->getQuoteByRegistration($registrationId);
+
+        if (!$quote) {
+            ntdst_log('invoicing')->info('No quote found for session selection update', [
+                'registration_id' => $registrationId,
+            ]);
+            return;
+        }
+
+        $quoteId = (int) $quote['id'];
+        $status = $quote['status_enum'] ?? QuoteStatus::tryFrom($quote['status'] ?? '');
+
+        // Cancelled quotes — silent return
+        if ($status === QuoteStatus::Cancelled) {
+            return;
+        }
+
+        // Get registration to determine edition
+        $registration = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class)?->find($registrationId);
+        if (!$registration) {
+            return;
+        }
+        $editionId = (int) ($registration->edition_id ?? $registration->fields['edition_id'] ?? 0);
+        if (!$editionId) {
+            return;
+        }
+
+        // Get all sessions for the edition
+        $allSessions = ntdst_get(\Stride\Modules\Edition\SessionService::class)?->getSessionsForEdition($editionId) ?? [];
+
+        // Build modifier items from selected sessions
+        $modifierItems = $this->buildModifierItems($sessionIds, $allSessions, $editionId);
+
+        // Non-draft quotes: block changes, fire event for manual resolution
+        if ($status !== QuoteStatus::Draft) {
+            if (!empty($modifierItems)) {
+                $modifiers = array_map(fn(array $item) => [
+                    'session_id' => $item['id'],
+                    'title' => $item['title'],
+                    'amount_cents' => $item['unit_price'],
+                ], $modifierItems);
+
+                do_action('stride/quote/session_modifier_blocked', [
+                    'quote_id' => $quoteId,
+                    'registration_id' => $registrationId,
+                    'user_id' => (int) ($quote['user_id'] ?? 0),
+                    'modifiers' => $modifiers,
+                ]);
+
+                ntdst_log('invoicing')->warning('Session modifier change blocked: quote not in draft', [
+                    'quote_id' => $quoteId,
+                    'registration_id' => $registrationId,
+                    'status' => $status->value ?? $status,
+                ]);
+            }
+            return;
+        }
+
+        // Get existing items and check if there are current modifiers
+        $existingItems = $quote['items'] ?? [];
+        if (is_string($existingItems)) {
+            $existingItems = json_decode($existingItems, true) ?: [];
+        }
+
+        $hadModifiers = !empty(array_filter($existingItems, fn(array $item) => ($item['type'] ?? 'edition') === 'session_modifier'));
+
+        // Nothing to do if no modifiers exist and none to add
+        if (!$hadModifiers && empty($modifierItems)) {
+            return;
+        }
+
+        // Replace modifier items, preserving edition items
+        $updatedItems = $this->replaceModifierItems($existingItems, $modifierItems);
+
+        // Recalculate totals from raw cents (supports negative modifiers)
+        $subtotalCents = 0;
+        foreach ($updatedItems as $item) {
+            $subtotalCents += (int) ($item['unit_price'] ?? 0) * (int) ($item['quantity'] ?? 1);
+        }
+
+        $discountCents = (int) ($quote['discount'] ?? 0);
+        $taxableCents = max(0, $subtotalCents - $discountCents);
+        $taxCents = (int) round($taxableCents * 0.21);
+        $totalCents = $taxableCents + $taxCents;
+
+        // Update quote
+        $this->repository->updateMeta($quoteId, [
+            'items' => $updatedItems,
+            'subtotal' => $subtotalCents,
+            'tax' => $taxCents,
+            'total' => $totalCents,
+        ]);
+
+        ntdst_log('invoicing')->info('Quote updated with session modifiers', [
+            'quote_id' => $quoteId,
+            'registration_id' => $registrationId,
+            'modifier_count' => count($modifierItems),
+            'new_subtotal' => $subtotalCents,
+            'new_total' => $totalCents,
+        ]);
+
+        $this->dispatch('quote/modifiers_applied', [
+            'quote_id' => $quoteId,
+            'registration_id' => $registrationId,
+            'modifier_count' => count($modifierItems),
+            'subtotal' => $subtotalCents,
+            'total' => $totalCents,
+        ]);
+    }
+
+    /**
+     * Build modifier line items from selected sessions.
+     *
+     * Only sessions that belong to the edition, have a non-empty slot,
+     * and have a non-zero price_modifier produce items.
+     *
+     * @param int[]   $selectedIds  Session IDs the user selected
+     * @param array[] $allSessions  All sessions for the edition
+     * @param int     $editionId    The edition to scope to
+     * @return array[] Line items with type=session_modifier
+     */
+    private function buildModifierItems(array $selectedIds, array $allSessions, int $editionId): array
+    {
+        $selectedSet = array_flip($selectedIds);
+        $items = [];
+
+        foreach ($allSessions as $session) {
+            $sessionId = (int) $session['id'];
+
+            if (!isset($selectedSet[$sessionId])) {
+                continue;
+            }
+
+            if ((int) $session['edition_id'] !== $editionId) {
+                continue;
+            }
+
+            if (empty($session['slot'])) {
+                continue;
+            }
+
+            $modifier = (int) $session['price_modifier'];
+            if ($modifier === 0) {
+                continue;
+            }
+
+            $items[] = [
+                'id' => $sessionId,
+                'type' => 'session_modifier',
+                'title' => 'Sessie: ' . ($session['title'] ?? ''),
+                'quantity' => 1,
+                'unit_price' => $modifier,
+                'total' => $modifier,
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
+     * Replace session_modifier items in existing quote items.
+     *
+     * Strips all old session_modifier items and appends the new ones.
+     * Non-modifier items (edition, etc.) are preserved in original order.
+     *
+     * @param array[] $existingItems Current quote items
+     * @param array[] $newModifiers  New modifier items to append
+     * @return array[] Updated items list
+     */
+    private function replaceModifierItems(array $existingItems, array $newModifiers): array
+    {
+        $kept = array_filter($existingItems, fn(array $item) => ($item['type'] ?? 'edition') !== 'session_modifier');
+
+        return array_values(array_merge($kept, $newModifiers));
     }
 
     /**

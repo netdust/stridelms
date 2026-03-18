@@ -165,6 +165,45 @@ namespace NTDST\Audit {
             {
                 return end($this->recordedCalls) ?: null;
             }
+
+            /**
+             * Get audit entries where user is the subject (not actor).
+             *
+             * @return array<object>
+             */
+            public function getForSubjectUser(int $userId, int $limit = 50, int $daysBack = 30): array
+            {
+                return [];
+            }
+
+            /**
+             * Get session note update entries for given edition IDs.
+             *
+             * @param int[] $editionIds
+             * @return array<object>
+             */
+            public function getSessionNoteUpdates(array $editionIds, int $daysBack = 30): array
+            {
+                return [];
+            }
+        }
+    }
+
+    if (!class_exists(AuditTable::class)) {
+        /**
+         * AuditTable stub for testing
+         *
+         * Returns a predictable table name without touching the real database.
+         */
+        class AuditTable
+        {
+            public const TABLE_NAME = 'audit_log';
+
+            public static function getTableName(): string
+            {
+                global $wpdb;
+                return $wpdb->prefix . self::TABLE_NAME;
+            }
         }
     }
 }

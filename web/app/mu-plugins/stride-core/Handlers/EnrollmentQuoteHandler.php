@@ -106,7 +106,7 @@ final class EnrollmentQuoteHandler
         ];
 
         // Check for pending billing from enrollment form
-        $pendingBilling = $this->consumePendingBilling($quoteUserId, $editionId);
+        $pendingBilling = $this->getPendingBilling($quoteUserId, $editionId);
         $billing = $pendingBilling ?: $this->getUserBilling($quoteUserId);
 
         // Get voucher code and calculate discount if provided
@@ -133,6 +133,9 @@ final class EnrollmentQuoteHandler
         );
 
         if (!is_wp_error($quoteId)) {
+            // Clear billing transient only after successful quote creation
+            $this->clearPendingBilling($quoteUserId, $editionId);
+
             ntdst_log('invoicing')->info('Quote created for registration', [
                 'registration_id' => $registrationId,
                 'quote_id' => $quoteId,
@@ -166,16 +169,23 @@ final class EnrollmentQuoteHandler
     }
 
     /**
-     * Consume pending billing data from enrollment form.
+     * Get pending billing data from enrollment form (non-destructive read).
      *
      * @return array<string, mixed>|null
      */
-    private function consumePendingBilling(int $userId, int $editionId): ?array
+    private function getPendingBilling(int $userId, int $editionId): ?array
     {
         $key = 'stride_pending_billing_' . $userId . '_' . $editionId;
         $billing = get_transient($key);
-        delete_transient($key);
         return $billing ?: null;
+    }
+
+    /**
+     * Clear pending billing transient after successful quote creation.
+     */
+    private function clearPendingBilling(int $userId, int $editionId): void
+    {
+        delete_transient('stride_pending_billing_' . $userId . '_' . $editionId);
     }
 
     /**
@@ -207,10 +217,13 @@ final class EnrollmentQuoteHandler
 
         return [
             'name' => $user->display_name,
-            'email' => $user->user_email,
-            'company' => get_user_meta($userId, 'company', true) ?: '',
-            'address' => get_user_meta($userId, 'billing_address', true) ?: '',
-            'vat_number' => get_user_meta($userId, 'vat_number', true) ?: '',
+            'email' => get_user_meta($userId, 'invoice_email', true) ?: '',
+            'company' => get_user_meta($userId, 'billing_company', true) ?: '',
+            'address' => get_user_meta($userId, 'billing_address_1', true) ?: '',
+            'postal_code' => get_user_meta($userId, 'billing_postcode', true) ?: '',
+            'city' => get_user_meta($userId, 'billing_city', true) ?: '',
+            'vat_number' => get_user_meta($userId, 'billing_vat', true) ?: '',
+            'gln_number' => get_user_meta($userId, 'gln_number', true) ?: '',
         ];
     }
 }

@@ -33,7 +33,7 @@ final class TrajectoryCPT
             'show_ui' => true,
             'show_in_menu' => 'stride-dashboard',
             'menu_icon' => 'dashicons-networking',
-            'supports' => ['title', 'editor'],
+            'supports' => ['title', 'editor', 'excerpt', 'thumbnail'],
             'auto_metabox' => false,
             'rewrite' => [
                 'slug' => StrideSettingsService::getTrajectorySlug(),
@@ -92,6 +92,21 @@ final class TrajectoryCPT
                 'type' => 'text',
                 'label' => 'Beschrijving',
             ],
+            'tagline' => [
+                'type' => 'text',
+                'label' => 'Tagline',
+                'description' => 'Korte pakkende zin over het traject',
+            ],
+            'target_audience' => [
+                'type' => 'text',
+                'label' => 'Doelgroep',
+                'description' => 'Voor wie is dit traject bedoeld?',
+            ],
+            'duration' => [
+                'type' => 'text',
+                'label' => 'Duur',
+                'description' => 'Bijv. "6 maanden" of "1 jaar"',
+            ],
             'deadline_months' => [
                 'type' => 'int',
                 'label' => 'Deadline maanden',
@@ -102,6 +117,11 @@ final class TrajectoryCPT
                 'label' => 'Gekoppelde edities',
                 'description' => 'JSON array of course-edition mappings',
             ],
+            'requires_approval' => [
+                'type' => 'boolean',
+                'label' => 'Goedkeuring vereist',
+                'description' => 'Enrollment requires admin approval',
+            ],
         ];
     }
 
@@ -110,7 +130,7 @@ final class TrajectoryCPT
         return [
             'trajectory_details' => [
                 'title' => 'Traject Details',
-                'fields' => ['mode', 'status', 'capacity'],
+                'fields' => ['mode', 'status', 'capacity', 'requires_approval'],
             ],
             'trajectory_deadlines' => [
                 'title' => 'Deadlines',

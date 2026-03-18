@@ -1214,7 +1214,7 @@ foreach ($completedRegistrations as $reg) {
 
 ## Enrollment Form Structure
 
-Multi-step FluentForms form with conditional fields.
+Multi-step  form with conditional fields.
 
 ### Step 0: Enrollment Type Selection
 

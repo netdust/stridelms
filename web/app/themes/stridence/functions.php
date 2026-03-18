@@ -23,6 +23,7 @@ define('STRIDENCE_URI', get_stylesheet_directory_uri());
 
 require_once STRIDENCE_DIR . '/helpers/icons.php';
 require_once STRIDENCE_DIR . '/helpers/formatting.php';
+require_once STRIDENCE_DIR . '/helpers/templates.php';
 
 // ========================================
 // BOOTSTRAP (NTDST Core Integration)
@@ -139,16 +140,16 @@ function stridence_get_active_menu_slug(): string
 }
 
 /**
- * Check if a course is online based on ld_course_category taxonomy.
+ * Check if a course is online based on stride_format taxonomy.
  */
 function stridence_is_online_course(int $course_id): bool
 {
-    $cats = get_the_terms($course_id, 'ld_course_category');
-    if (!$cats || is_wp_error($cats)) {
+    $formats = get_the_terms($course_id, 'stride_format');
+    if (!$formats || is_wp_error($formats)) {
         return false;
     }
-    foreach ($cats as $cat) {
-        if (in_array($cat->slug, ['online', 'webinar', 'e-learning'], true)) {
+    foreach ($formats as $fmt) {
+        if (in_array($fmt->slug, ['online', 'webinar', 'e-learning'], true)) {
             return true;
         }
     }
@@ -266,7 +267,7 @@ add_action('init', function (): void {
         }
 
         get_header();
-        get_template_part('templates/trajectory/dashboard', null, [
+        stridence_template_part('templates/trajectory/dashboard', null, [
             'trajectory_slug' => sanitize_title($params['slug']),
             'user' => wp_get_current_user(),
         ]);
@@ -317,6 +318,9 @@ function stridence_get_manifest(): ?array
 add_action('wp_enqueue_scripts', function () {
     if (stridence_is_vite_dev()) {
         // Development: Load from Vite dev server
+        // Register a dummy handle so wp_add_inline_script works
+        wp_register_script('stridence-main', false);
+        wp_enqueue_script('stridence-main');
         add_action('wp_head', function () {
             echo '<script type="module" src="http://localhost:5173/@vite/client"></script>';
             echo '<script type="module" src="http://localhost:5173/main.js"></script>';
@@ -361,8 +365,6 @@ add_action('wp_enqueue_scripts', function () {
 
     // Localize script with config
     wp_add_inline_script('stridence-main', 'window.strideConfig = ' . wp_json_encode([
-        'ajaxUrl' => admin_url('admin-ajax.php'),
-        'nonce' => wp_create_nonce('stride_frontend'),
         'restNonce' => wp_create_nonce('wp_rest'),
         'debug' => defined('WP_DEBUG') && WP_DEBUG,
         'strings' => [
@@ -395,14 +397,31 @@ add_action('wp_head', function () {
 remove_action('wp_head', 'print_emoji_detection_script', 7);
 remove_action('wp_print_styles', 'print_emoji_styles');
 
-// No-cache headers in development
-if (defined('WP_DEBUG') && WP_DEBUG) {
-    add_action('send_headers', function () {
-        if (!is_admin()) {
-            nocache_headers();
-        }
-    });
-}
+// Disable WordPress 6.9 Speculation Rules (prefetch/prerender).
+// Brave browser strips cookies from prefetched requests, causing
+// pages to load as unauthenticated. This makes enrollment state,
+// dashboard content, and login state appear stale on first visit.
+add_filter('wp_speculation_rules_configuration', '__return_null');
+
+// Prevent browser from caching pages (stale logged-in/out state)
+add_action('send_headers', function () {
+    if (!is_admin()) {
+        nocache_headers();
+        header('Vary: Cookie', false);
+    }
+});
+
+// Block browser-initiated prefetch requests (Brave, Chrome).
+// These requests strip cookies, so the server renders unauthenticated
+// content. The browser then serves this stale response when the user
+// navigates, showing wrong enrollment/login state until refresh.
+add_action('init', function () {
+    $purpose = $_SERVER['HTTP_PURPOSE'] ?? $_SERVER['HTTP_SEC_PURPOSE'] ?? '';
+    if (stripos($purpose, 'prefetch') !== false) {
+        status_header(503);
+        exit;
+    }
+}, 1);
 
 // ========================================
 // NAVIGATION WALKERS
@@ -614,7 +633,7 @@ add_shortcode('stride_enrollment', function ($atts = []) {
     ];
 
     ob_start();
-    get_template_part('templates/forms/enrollment', null, [
+    stridence_template_part('templates/forms/enrollment', null, [
         'item_id' => $edition_id,
         'item_type' => 'edition',
         'item_data' => $item_data,
@@ -648,7 +667,7 @@ add_shortcode('stride_interest', function ($atts = []) {
         }
 
         ob_start();
-        get_template_part('templates/forms/enrollment', null, [
+        stridence_template_part('templates/forms/enrollment', null, [
             'item_id'         => $trajectory_id,
             'item_type'       => 'trajectory',
             'item_data'       => ['id' => $trajectory_id, 'title' => $trajectory->post_title],
@@ -680,7 +699,7 @@ add_shortcode('stride_interest', function ($atts = []) {
     }
 
     ob_start();
-    get_template_part('templates/forms/enrollment', null, [
+    stridence_template_part('templates/forms/enrollment', null, [
         'item_id'         => $course_id,
         'item_type'       => 'edition',
         'item_data'       => ['id' => $course_id, 'title' => $course->post_title],
@@ -717,29 +736,3 @@ function stridence_render_error_state(string $icon, string $title, string $messa
 // HELPER FUNCTIONS
 // ========================================
 
-/**
- * Get service from container
- */
-function stride_service(string $class)
-{
-    if (function_exists('ntdst_get')) {
-        return ntdst_get($class);
-    }
-    return null;
-}
-
-/**
- * Get the theme instance
- */
-function stride_theme()
-{
-    return ntdst_get(NTDST_Theme::class);
-}
-
-/**
- * Get the bootstrap instance
- */
-function stride_bootstrap()
-{
-    return ntdst_get(NTDST_Bootstrap::class);
-}

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Stride\Tests\Unit;
 
 use Stride\Domain\TrajectoryMode;
-use Stride\Domain\TrajectoryStatus;
+use Stride\Domain\OfferingStatus;
 use Stride\Tests\TestCase;
 
 /**
@@ -47,7 +47,7 @@ class TrajectoryMetaAccessTest extends TestCase
     /**
      * @test
      */
-    public function testTrajectoryStatusReadViaDataManager(): void
+    public function testOfferingStatusReadViaDataManager(): void
     {
         global $_test_posts;
 
@@ -60,16 +60,16 @@ class TrajectoryMetaAccessTest extends TestCase
         $_test_posts[101] = $trajectory;
 
         $this->setDataManagerMeta('vad_trajectory', 101, [
-            'status' => TrajectoryStatus::Open->value,
+            'status' => OfferingStatus::Open->value,
         ]);
 
         $model = ntdst_data()->get('vad_trajectory');
         $status = $model->getMeta(101, 'status');
 
-        $this->assertEquals(TrajectoryStatus::Open->value, $status);
+        $this->assertEquals(OfferingStatus::Open->value, $status);
 
-        $statusEnum = TrajectoryStatus::tryFrom($status);
-        $this->assertEquals(TrajectoryStatus::Open, $statusEnum);
+        $statusEnum = OfferingStatus::tryFrom($status);
+        $this->assertEquals(OfferingStatus::Open, $statusEnum);
     }
 
     /**
@@ -200,7 +200,7 @@ class TrajectoryMetaAccessTest extends TestCase
 
         // Simulate old data with _stride_ prefix
         $_test_post_meta[105]['_stride_mode'] = [TrajectoryMode::Cohort->value];
-        $_test_post_meta[105]['_stride_status'] = [TrajectoryStatus::Open->value];
+        $_test_post_meta[105]['_stride_status'] = [OfferingStatus::Open->value];
 
         // Data Manager should NOT find this
         $model = ntdst_data()->get('vad_trajectory');
@@ -232,7 +232,7 @@ class TrajectoryMetaAccessTest extends TestCase
         // Update via Data Manager
         $result = $model->updateMetaBatch(106, [
             'mode' => TrajectoryMode::SelfPaced->value,
-            'status' => TrajectoryStatus::InProgress->value,
+            'status' => OfferingStatus::InProgress->value,
             'capacity' => 50,
         ]);
 
@@ -240,7 +240,7 @@ class TrajectoryMetaAccessTest extends TestCase
 
         // Verify updates
         $this->assertEquals(TrajectoryMode::SelfPaced->value, $model->getMeta(106, 'mode'));
-        $this->assertEquals(TrajectoryStatus::InProgress->value, $model->getMeta(106, 'status'));
+        $this->assertEquals(OfferingStatus::InProgress->value, $model->getMeta(106, 'status'));
         $this->assertEquals(50, $model->getMeta(106, 'capacity'));
     }
 
@@ -283,7 +283,7 @@ class TrajectoryMetaAccessTest extends TestCase
      * @test
      * @dataProvider trajectoryStatusProvider
      */
-    public function testAllTrajectoryStatusesCanBeStoredAndRetrieved(TrajectoryStatus $status): void
+    public function testAllOfferingStatusesCanBeStoredAndRetrieved(OfferingStatus $status): void
     {
         global $_test_posts;
 
@@ -302,18 +302,22 @@ class TrajectoryMetaAccessTest extends TestCase
         $retrieved = $model->getMeta($id, 'status');
         $this->assertEquals($status->value, $retrieved);
 
-        $parsed = TrajectoryStatus::tryFrom($retrieved);
+        $parsed = OfferingStatus::tryFrom($retrieved);
         $this->assertEquals($status, $parsed);
     }
 
     public static function trajectoryStatusProvider(): array
     {
         return [
-            'draft' => [TrajectoryStatus::Draft],
-            'open' => [TrajectoryStatus::Open],
-            'in_progress' => [TrajectoryStatus::InProgress],
-            'closed' => [TrajectoryStatus::Closed],
-            'archived' => [TrajectoryStatus::Archived],
+            'draft' => [OfferingStatus::Draft],
+            'announcement' => [OfferingStatus::Announcement],
+            'open' => [OfferingStatus::Open],
+            'full' => [OfferingStatus::Full],
+            'in_progress' => [OfferingStatus::InProgress],
+            'postponed' => [OfferingStatus::Postponed],
+            'cancelled' => [OfferingStatus::Cancelled],
+            'completed' => [OfferingStatus::Completed],
+            'archived' => [OfferingStatus::Archived],
         ];
     }
 }

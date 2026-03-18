@@ -22,7 +22,15 @@ $enableRegistration = $settings['enable_registration'] ?? true;
     <link rel="stylesheet" href="<?php echo esc_url(NTDST_AUTH_URL . 'assets/css/auth.css'); ?>">
 </head>
 <body class="ntdst-auth-page">
-    <div class="uk-flex uk-flex-center uk-flex-middle uk-height-viewport uk-padding" x-data="authLogin()">
+    <?php
+    // WordPress overwrites $_GET on custom routes — parse from QUERY_STRING instead
+    $queryParams = [];
+    if (!empty($_SERVER['QUERY_STRING'])) {
+        parse_str($_SERVER['QUERY_STRING'], $queryParams);
+    }
+    $serverError = isset($queryParams['error']) ? sanitize_text_field($queryParams['error']) : '';
+    ?>
+    <div class="uk-flex uk-flex-center uk-flex-middle uk-height-viewport uk-padding" x-data="authLogin()" x-init="<?php if ($serverError): ?>error = true; message = <?php echo esc_attr(wp_json_encode($serverError)); ?><?php endif; ?>">
         <div class="uk-card uk-card-default uk-card-body uk-width-medium">
             <!-- Logo slot -->
             <div class="uk-text-center uk-margin-medium-bottom">

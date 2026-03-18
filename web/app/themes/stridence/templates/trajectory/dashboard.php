@@ -16,7 +16,7 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
-use stridence\services\frontend\TrajectoryDashboardService;
+use Stride\Modules\Trajectory\TrajectoryDashboardService;
 
 $trajectory_slug = $args['trajectory_slug'] ?? '';
 $user = $args['user'] ?? wp_get_current_user();
@@ -35,7 +35,7 @@ if (!$trajectory) {
     global $wp_query;
     $wp_query->set_404();
     status_header(404);
-    get_template_part('404');
+    stridence_template_part('404');
     exit;
 }
 
@@ -140,7 +140,7 @@ $tabs = [
     <!-- Tab Content -->
     <div class="container py-6 lg:py-8">
         <?php
-        get_template_part("templates/trajectory/tab-{$current_tab}", null, [
+        stridence_template_part("templates/trajectory/tab-{$current_tab}", null, [
             'trajectory' => $trajectory,
             'enrollment' => $enrollment,
             'user' => $user,

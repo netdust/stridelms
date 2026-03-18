@@ -246,13 +246,13 @@ class AuditBridgeTest extends TestCase
             'post_title' => 'Test Course Title',
         ];
 
+        // LearnDash passes a single array with user inside
         $data = [
+            'user' => new WP_User(['ID' => 456]),
             'course' => $course,
         ];
 
-        $user = new WP_User(['ID' => 456]);
-
-        $this->bridge->onCourseCompleted($data, $user);
+        $this->bridge->onCourseCompleted($data);
 
         $calls = $this->mockAuditService->getRecordedCalls();
         $this->assertCount(1, $calls);
@@ -275,12 +275,11 @@ class AuditBridgeTest extends TestCase
     {
         // When course object is not fully available, fall back to course_id
         $data = [
+            'user' => new WP_User(['ID' => 456]),
             'course_id' => 2002,
         ];
 
-        $user = new WP_User(['ID' => 456]);
-
-        $this->bridge->onCourseCompleted($data, $user);
+        $this->bridge->onCourseCompleted($data);
 
         $calls = $this->mockAuditService->getRecordedCalls();
         $this->assertCount(1, $calls);
@@ -321,12 +320,11 @@ class AuditBridgeTest extends TestCase
         ];
 
         $data = [
+            'user' => new WP_User(['ID' => 456]),
             'course' => $course,
         ];
 
-        $user = new WP_User(['ID' => 456]);
-
-        $this->bridge->onCourseCompleted($data, $user);
+        $this->bridge->onCourseCompleted($data);
 
         $calls = $this->mockAuditService->getRecordedCalls();
         // Should record both completion and certificate issuance
@@ -343,5 +341,28 @@ class AuditBridgeTest extends TestCase
         $this->assertEquals(456, $call['actor_id']);
         $this->assertArrayHasKey('certificate_link', $call['context']);
         $this->assertEquals('https://example.com/certificate/1001/456', $call['context']['certificate_link']);
+    }
+
+    /** @test */
+    public function testOnSessionNoteUpdatedRecordsCorrectData(): void
+    {
+        $data = [
+            'session_id' => 100,
+            'edition_id' => 200,
+        ];
+
+        $this->bridge->onSessionNoteUpdated($data);
+
+        $calls = $this->mockAuditService->getRecordedCalls();
+        $this->assertCount(1, $calls);
+
+        $call = $calls[0];
+        $this->assertEquals('session', $call['entity_type']);
+        $this->assertEquals(100, $call['entity_id']);
+        $this->assertEquals('session.note_updated', $call['action']);
+        $this->assertEquals([
+            'session_id' => 100,
+            'edition_id' => 200,
+        ], $call['context']);
     }
 }

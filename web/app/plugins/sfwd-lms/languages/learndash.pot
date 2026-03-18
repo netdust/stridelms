@@ -2,14 +2,14 @@
 # This file is distributed under the same license as the LearnDash LMS plugin.
 msgid ""
 msgstr ""
-"Project-Id-Version: LearnDash LMS 5.0.1.1\n"
+"Project-Id-Version: LearnDash LMS 5.0.3\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/learndash-core\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-02-16T15:22:41+00:00\n"
+"POT-Creation-Date: 2026-03-09T15:28:44+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: learndash\n"
@@ -544,7 +544,7 @@ msgstr ""
 #: includes/admin/class-learndash-admin-groups-users-list.php:241
 #: includes/admin/class-learndash-admin-groups-users-list.php:255
 #: includes/admin/classes-posts-edits/class-learndash-admin-assignment-edit.php:243
-#: includes/class-ld-translations.php:533
+#: includes/class-ld-translations.php:598
 #: src/Core/Modules/Payments/Orders/Admin/Edit.php:103
 msgid "Actions"
 msgstr ""
@@ -2798,7 +2798,7 @@ msgstr ""
 #: includes/class-ld-cpt-instance.php:119
 #: includes/class-ld-lms.php:1829
 #: includes/class-ld-lms.php:2301
-#: includes/course-grid/includes/class-utilities.php:609
+#: includes/course-grid/includes/class-utilities.php:594
 #: includes/lib/wp-pro-quiz/lib/view/WpProQuiz_View_QuestionEdit.php:71
 #: includes/lib/wp-pro-quiz/lib/view/WpProQuiz_View_QuizOverall.php:102
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-course-display-content.php:450
@@ -3094,7 +3094,7 @@ msgstr ""
 #: includes/admin/classes-posts-edits/class-learndash-admin-assignment-edit.php:219
 #: includes/admin/classes-posts-edits/class-learndash-admin-essay-edit.php:318
 #: includes/admin/classes-posts-edits/class-learndash-admin-essay-edit.php:319
-#: includes/class-ld-translations.php:626
+#: includes/class-ld-translations.php:703
 #: includes/settings/settings-sections/class-ld-settings-section-bulk-edit.php:146
 #: includes/settings/settings-sections/class-ld-settings-section-questions-management-display.php:121
 #: includes/settings/settings-sections/class-ld-settings-section-questions-taxonomies.php:165
@@ -3129,7 +3129,7 @@ msgstr ""
 #: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:720
 #: includes/admin/classes-posts-listings/class-learndash-admin-essays-listing.php:529
 #: includes/admin/classes-posts-listings/class-learndash-admin-essays-listing.php:586
-#: includes/class-ld-translations.php:532
+#: includes/class-ld-translations.php:597
 #: includes/reports/templates/ld-propanel-reporting-download-button.php:22
 #: includes/settings/settings-sections/class-ld-settings-section-import-export.php:125
 #: includes/settings/settings-sections/class-ld-settings-section-logs.php:270
@@ -4518,7 +4518,7 @@ msgid "All Gateways"
 msgstr ""
 
 #: includes/admin/classes-posts-listings/class-learndash-admin-transactions-listing.php:132
-#: includes/course-grid/includes/class-utilities.php:605
+#: includes/course-grid/includes/class-utilities.php:590
 #: includes/settings/settings-fields/class-ld-settings-fields-quiz-custom-fields.php:66
 #: includes/gutenberg/blocks/ld-user-status/index.js:134
 msgid "ID"
@@ -5525,7 +5525,7 @@ msgstr ""
 #: includes/class-ld-cpt-instance.php:121
 #: includes/class-ld-lms.php:1831
 #: includes/class-ld-lms.php:2303
-#: includes/course-grid/includes/class-utilities.php:625
+#: includes/course-grid/includes/class-utilities.php:610
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-course-display-content.php:452
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-group-display-content.php:392
 #: includes/settings/settings-sections/class-ld-settings-section-courses-management-display.php:355
@@ -6460,7 +6460,7 @@ msgstr ""
 
 #: includes/class-ld-gdpr.php:269
 #: includes/settings/settings-sections/settings-sections-payments/class-ld-settings-section-paypal-checkout.php:315
-#: src/Core/Modules/Payments/Gateways/Paypal/Assets.php:527
+#: src/Core/Modules/Payments/Gateways/Paypal/Assets.php:535
 #: src/Core/Modules/Payments/Gateways/Paypal/Profile_Handler.php:145
 #: assets/js/setup-wizard/src/screen/step-3.jsx:147
 msgid "PayPal"
@@ -9502,109 +9502,116 @@ msgid "Setup Wizard"
 msgstr ""
 
 #. translators: placeholders: Language Name, Language code.
-#: includes/class-ld-translations.php:250
+#: includes/class-ld-translations.php:264
 #, php-format
 msgctxt "placeholders: Language Name, Language code"
 msgid "Translation installed: %1$s (%2$s)"
 msgstr ""
 
 #. translators: placeholders: Language Name, Language code.
-#: includes/class-ld-translations.php:363
+#: includes/class-ld-translations.php:387
 #, php-format
 msgctxt "placeholders: Language Name, Language code"
 msgid "Translation updated: %1$s (%2$s)"
 msgstr ""
 
 #. translators: placeholders: Language Name, Language code.
-#: includes/class-ld-translations.php:403
+#: includes/class-ld-translations.php:432
 #, php-format
 msgctxt "placeholders: Language Name, Language code"
 msgid "Translation removed: %1$s (%2$s)"
 msgstr ""
 
-#: includes/class-ld-translations.php:441
+#. translators: placeholders: Language code.
+#: includes/class-ld-translations.php:453
+#, php-format
+msgctxt "placeholder: Language code"
+msgid "Translation removed: %s"
+msgstr ""
+
+#: includes/class-ld-translations.php:492
 msgid "No translations available for this plugin."
 msgstr ""
 
-#: includes/class-ld-translations.php:517
+#: includes/class-ld-translations.php:582
 msgid "Download the original strings (POT) File."
 msgstr ""
 
-#: includes/class-ld-translations.php:519
+#: includes/class-ld-translations.php:584
 msgid "Download POT File from your server."
 msgstr ""
 
-#: includes/class-ld-translations.php:519
+#: includes/class-ld-translations.php:584
 msgid "POT"
 msgstr ""
 
-#: includes/class-ld-translations.php:526
+#: includes/class-ld-translations.php:591
 msgid "Installed Translations"
 msgstr ""
 
-#: includes/class-ld-translations.php:530
+#: includes/class-ld-translations.php:595
 msgid "Locale"
 msgstr ""
 
-#: includes/class-ld-translations.php:531
+#: includes/class-ld-translations.php:596
 msgid "Name / Native"
 msgstr ""
 
-#: includes/class-ld-translations.php:564
+#: includes/class-ld-translations.php:641
 msgid "No Translations installed"
 msgstr ""
 
 #. translators: placeholder: Language directory.
-#: includes/class-ld-translations.php:575
+#: includes/class-ld-translations.php:652
 #, php-format
 msgctxt "placeholder: Language directory"
 msgid "All translations are stored into the directory: %s"
 msgstr ""
 
-#: includes/class-ld-translations.php:582
+#: includes/class-ld-translations.php:659
 msgid "The language directory is not writable"
 msgstr ""
 
-#: includes/class-ld-translations.php:607
+#: includes/class-ld-translations.php:684
 msgid "Not from LearnDash"
 msgstr ""
 
-#: includes/class-ld-translations.php:615
+#: includes/class-ld-translations.php:692
 msgid "Download PO File from your server."
 msgstr ""
 
-#: includes/class-ld-translations.php:615
+#: includes/class-ld-translations.php:692
 msgid "PO"
 msgstr ""
 
-#: includes/class-ld-translations.php:621
+#: includes/class-ld-translations.php:698
 msgid "Remove translation from server"
 msgstr ""
 
-#: includes/class-ld-translations.php:626
+#: includes/class-ld-translations.php:703
 msgid "Update translation from LearnDash"
 msgstr ""
 
-#: includes/class-ld-translations.php:680
+#: includes/class-ld-translations.php:771
 msgid "Available Translations"
 msgstr ""
 
-#: includes/class-ld-translations.php:682
+#: includes/class-ld-translations.php:773
 msgid "-- Install Translation --"
 msgstr ""
 
-#: includes/class-ld-translations.php:691
+#: includes/class-ld-translations.php:785
 msgid "Recommended"
 msgstr ""
 
-#: includes/class-ld-translations.php:709
+#: includes/class-ld-translations.php:803
 #: includes/course-grid/includes/functions.php:436
 #: includes/licensing/assets/scripts/projects.js:2805
 #: includes/licensing/frontend/src/Plugins/Projects.jsx:371
 msgid "Available"
 msgstr ""
 
-#: includes/class-ld-translations.php:725
+#: includes/class-ld-translations.php:819
 #: includes/licensing/assets/scripts/projects.js:2855
 #: includes/licensing/assets/scripts/projects.js:2915
 #: includes/licensing/frontend/src/Dashboard/Main.jsx:78
@@ -9792,31 +9799,31 @@ msgstr ""
 msgid "LearnDash LMS - Course Grid"
 msgstr ""
 
-#: includes/course-grid/includes/class-utilities.php:613
+#: includes/course-grid/includes/class-utilities.php:598
 msgid "Published Date"
 msgstr ""
 
-#: includes/course-grid/includes/class-utilities.php:617
+#: includes/course-grid/includes/class-utilities.php:602
 msgid "Modified Date"
 msgstr ""
 
-#: includes/course-grid/includes/class-utilities.php:621
+#: includes/course-grid/includes/class-utilities.php:606
 msgid "Author"
 msgstr ""
 
-#: includes/course-grid/includes/class-utilities.php:691
+#: includes/course-grid/includes/class-utilities.php:676
 msgid "Load More Button"
 msgstr ""
 
-#: includes/course-grid/includes/class-utilities.php:695
+#: includes/course-grid/includes/class-utilities.php:680
 msgid "Infinite Scrolling"
 msgstr ""
 
-#: includes/course-grid/includes/class-utilities.php:699
+#: includes/course-grid/includes/class-utilities.php:684
 msgid "Disable"
 msgstr ""
 
-#: includes/course-grid/includes/class-utilities.php:739
+#: includes/course-grid/includes/class-utilities.php:724
 #, php-format
 msgctxt "Duration, e.g. 1 hour 30 minutes"
 msgid "%1$d h %2$d min"
@@ -10267,7 +10274,7 @@ msgstr ""
 #. translators: placeholder: Course.
 #: includes/gutenberg/blocks/ld-certificate/index.php:157
 #: includes/gutenberg/blocks/ld-course-content/index.php:138
-#: includes/gutenberg/blocks/ld-course-expire-status/index.php:94
+#: includes/gutenberg/blocks/ld-course-expire-status/index.php:93
 #: includes/gutenberg/blocks/ld-course-progress/index.php:87
 #: includes/gutenberg/blocks/ld-course-resume/index.php:97
 #: includes/gutenberg/blocks/ld-courseinfo/index.php:107
@@ -13332,21 +13339,21 @@ msgstr ""
 msgid "You can also find them listed <a class=\"text-blue-500\" target=\"_blank\" href=\"%s\">on your account.</a>"
 msgstr ""
 
-#: includes/licensing/src/component/class-projects.php:127
-#: includes/licensing/src/component/class-projects.php:150
-#: includes/licensing/src/component/class-projects.php:171
+#: includes/licensing/src/component/class-projects.php:172
+#: includes/licensing/src/component/class-projects.php:195
+#: includes/licensing/src/component/class-projects.php:216
 msgid "Invalid plugin file."
 msgstr ""
 
-#: includes/licensing/src/component/class-projects.php:131
+#: includes/licensing/src/component/class-projects.php:176
 msgid "Filesystem credentials are required to proceed"
 msgstr ""
 
-#: includes/licensing/src/component/class-projects.php:205
+#: includes/licensing/src/component/class-projects.php:250
 msgid "Plugin update failed."
 msgstr ""
 
-#: includes/licensing/src/component/class-projects.php:236
+#: includes/licensing/src/component/class-projects.php:281
 msgid "Plugin install failed"
 msgstr ""
 
@@ -22240,32 +22247,44 @@ msgstr ""
 msgid "Appearance"
 msgstr ""
 
+#. translators: placeholder: Course.
+#: includes/settings/settings-sections/class-ld-settings-section-general-appearance.php:93
+#, php-format
+msgid "Tabs in Modern mode appear only when multiple sections have content. If just one section (%1$s, Materials, or Reviews) is populated, the tab navigation is hidden."
+msgstr ""
+
+#. translators: placeholder: Group.
+#: includes/settings/settings-sections/class-ld-settings-section-general-appearance.php:108
+#, php-format
+msgid "Tabs in Modern mode appear only when multiple sections have content. If just one section (%1$s or Materials) is populated, the tab navigation is hidden."
+msgstr ""
+
 #. translators: placeholder: %1$s = Course custom label
 #. translators: placeholder: %1$s = Group custom label
-#: includes/settings/settings-sections/class-ld-settings-section-general-appearance.php:124
-#: includes/settings/settings-sections/class-ld-settings-section-general-appearance.php:138
+#: includes/settings/settings-sections/class-ld-settings-section-general-appearance.php:136
+#: includes/settings/settings-sections/class-ld-settings-section-general-appearance.php:150
 #, php-format
 msgid "%1$s Page"
 msgstr ""
 
 #. translators: placeholder: %1$s = course custom label
-#: includes/settings/settings-sections/class-ld-settings-section-general-appearance.php:129
+#: includes/settings/settings-sections/class-ld-settings-section-general-appearance.php:141
 #, php-format
 msgid "When active, Modern LearnDash Styles will be used for all %1$s, %2$s, and %3$s pages"
 msgstr ""
 
 #. translators: placeholder: %1$s = group custom label
-#: includes/settings/settings-sections/class-ld-settings-section-general-appearance.php:143
+#: includes/settings/settings-sections/class-ld-settings-section-general-appearance.php:155
 #, php-format
 msgid "When active, Modern LearnDash Styles will be used for all %1$s pages"
 msgstr ""
 
-#: includes/settings/settings-sections/class-ld-settings-section-general-appearance.php:166
+#: includes/settings/settings-sections/class-ld-settings-section-general-appearance.php:178
 #: themes/ld30/includes/class-ld-settings-section-theme-ld30.php:204
 msgid "Login & Registration"
 msgstr ""
 
-#: includes/settings/settings-sections/class-ld-settings-section-general-appearance.php:167
+#: includes/settings/settings-sections/class-ld-settings-section-general-appearance.php:179
 msgid "When active, the Modern LearnDash Styles will be used for user login and registration pages"
 msgstr ""
 
@@ -30088,7 +30107,7 @@ msgid "Invalid hash."
 msgstr ""
 
 #. translators: %s: payment type.
-#: src/Core/Modules/Payments/Gateways/Paypal/Assets.php:523
+#: src/Core/Modules/Payments/Gateways/Paypal/Assets.php:531
 #, php-format
 msgid "Card (%s)"
 msgstr ""

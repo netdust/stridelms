@@ -21,8 +21,10 @@ defined('ABSPATH') || exit;
 <div x-data="{
     files: [],
     uploading: false,
+    uploadError: '',
 
     handleFiles(event) {
+        this.uploadError = '';
         this.files = [...this.files, ...Array.from(event.target.files)];
     },
 
@@ -34,29 +36,24 @@ defined('ABSPATH') || exit;
         if (this.files.length === 0) return;
 
         this.uploading = true;
+        this.uploadError = '';
         const formData = new FormData();
-        formData.append('action', 'stride_upload_completion_documents');
-        formData.append('nonce', $data.nonce);
         formData.append('registration_id', $data.registrationId);
 
-        this.files.forEach((file, i) => {
+        this.files.forEach(file => {
             formData.append('documents[]', file);
         });
 
         try {
-            const response = await fetch(ntdstAPI?.ajaxUrl || '/wp-admin/admin-ajax.php', {
-                method: 'POST',
-                body: formData,
-            });
-            const result = await response.json();
+            const result = await ntdstAPI.upload('stride_upload_completion_documents', formData);
+            this.files = [];
+            $data.tasks['documents'] = { status: 'completed', completed_at: new Date().toISOString() };
 
-            if (result.success) {
-                $data.completeTask('documents', { files: result.data.attachment_ids });
-            } else {
-                $data.error = result.data?.message || 'Upload mislukt.';
+            if ($data.completedCount === $data.totalCount) {
+                window.location.reload();
             }
         } catch (e) {
-            $data.error = 'Verbindingsfout. Probeer opnieuw.';
+            this.uploadError = e.message || 'Upload mislukt. Probeer opnieuw.';
         } finally {
             this.uploading = false;
         }
@@ -89,6 +86,11 @@ defined('ABSPATH') || exit;
                 </div>
             </template>
         </div>
+    </template>
+
+    <!-- Error message -->
+    <template x-if="uploadError">
+        <div class="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" x-text="uploadError"></div>
     </template>
 
     <!-- Submit -->

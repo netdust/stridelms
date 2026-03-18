@@ -1,3 +1,20 @@
+= [5.0.3] 2026-03-11 =
+
+* Fix - Resolved an issue where the `[ld_course_resume]` shortcode/block could redirect users to the wrong course step.
+* Tweak - Updated functions: `learndash_user_progress_get_first_incomplete_step`.
+
+= [5.0.2] 2026-02-25 =
+
+* Compatibility - Improved blocks compatibility with PHP 8.4.
+* Fix - Fixed courses filtering by progress status in the `LearnDash Course Grid` block.
+* Fix - Number input fields now properly return a number via the REST API if the field is saved with no value.
+* Fix - Prevented PayPal scripts from being enqueued on Checkout and Profile pages when PayPal Checkout is disabled.
+* Fix - Resolved an issue where cloning a Lesson, Topic, or Course built with Elementor would result in a broken layout.
+* Fix - Resolved an issue where locally installed translations without remote GlotPress data were not displayed and could not be removed on the Translations page.
+* Fix - Resolved an issue where non LearnDash plugins could be visible on the Add-ons page.
+* Tweak - Added hints to the Modern Course and Modern Group fields to clarify tabs behavior.
+* Tweak - Added filters: `learndash_hub_installed_projects`.
+
 = [5.0.1.1] 2026-02-17 =
 
 * Fix - Resolved an issue where downloaded Report CSVs would only contain the header row.

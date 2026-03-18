@@ -2,9 +2,9 @@
 /**
  * Template Name: Mijn Account
  *
- * Dashboard shell with tabbed interface.
+ * Dashboard shell with sidebar navigation (desktop) and bottom nav (mobile).
  * Requires login - redirects to login page if not authenticated.
- * URL state via ?tab=xxx parameter.
+ * URL state via ?tab=xxx parameter. Default tab is home.
  *
  * @package stridence
  */
@@ -21,75 +21,116 @@ if (!is_user_logged_in()) {
 
 $user = wp_get_current_user();
 
-// Get current tab from URL (default: inschrijvingen)
-$valid_tabs = ['inschrijvingen', 'trajecten', 'offertes', 'certificaten', 'profiel'];
-$current_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'inschrijvingen';
+// Get current tab from URL (default: home)
+$valid_tabs = ['home', 'inschrijvingen', 'trajecten', 'offertes', 'certificaten', 'profiel', 'meldingen', 'downloads'];
+$current_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'home';
 
 if (!in_array($current_tab, $valid_tabs, true)) {
-    $current_tab = 'inschrijvingen';
+    $current_tab = 'home';
 }
+
+// Fetch home data for nav_items (and home tab content)
+$dashboardService = ntdst_get(\Stride\Modules\User\UserDashboardService::class);
+$home_data = $dashboardService->getHomeData($user->ID);
+$nav_items = $home_data['nav_items'] ?? [];
+
+// Compute greeting variables (needed by $page_titles below)
+$firstName = explode(' ', trim($user->display_name))[0];
+$initials = strtoupper(mb_substr($user->first_name ?: $firstName, 0, 1) . mb_substr($user->last_name ?: '', 0, 1)) ?: '?';
+$hour = (int) date('G');
+$greeting = match (true) {
+    $hour < 12  => __('Goedemorgen', 'stridence'),
+    $hour < 18  => __('Goedemiddag', 'stridence'),
+    default     => __('Goedenavond', 'stridence'),
+};
+
+// Build sidebar navigation
+$primary_nav = [
+    'home'            => ['label' => __('Home', 'stridence'), 'icon' => 'home', 'visible' => true],
+    'inschrijvingen'  => ['label' => __('Opleidingen', 'stridence'), 'icon' => 'book-open', 'visible' => !empty($nav_items['opleidingen'])],
+    'trajecten'       => ['label' => __('Trajecten', 'stridence'), 'icon' => 'layers', 'visible' => !empty($nav_items['trajecten'])],
+    'offertes'        => ['label' => __('Offertes', 'stridence'), 'icon' => 'file-text', 'visible' => !empty($nav_items['offertes'])],
+];
+
+$utility_nav = [
+    'meldingen'       => ['label' => __('Meldingen', 'stridence'), 'icon' => 'bell', 'visible' => true],
+    'downloads'       => ['label' => __('Downloads', 'stridence'), 'icon' => 'download', 'visible' => true],
+    'certificaten'    => ['label' => __('Certificaten', 'stridence'), 'icon' => 'award', 'visible' => !empty($nav_items['certificaten'])],
+];
+
+// Notification count
+$notificationService = ntdst_get(\Stride\Modules\Notification\NotificationService::class);
+$unread_count = $notificationService->getUnreadCount($user->ID);
+
+$page_titles = [
+    'home'           => $greeting . ', ' . $firstName,
+    'inschrijvingen' => '',
+    'trajecten'      => __('Trajecten', 'stridence'),
+    'offertes'       => __('Offertes', 'stridence'),
+    'certificaten'   => __('Certificaten', 'stridence'),
+    'profiel'        => __('Profiel', 'stridence'),
+    'meldingen'      => '',
+    'downloads'      => __('Downloads', 'stridence'),
+];
 
 get_header();
 ?>
 
-<div class="min-h-screen bg-surface-alt pb-20 lg:pb-0 overflow-x-hidden">
-    <!-- Page Header -->
-    <div class="bg-surface border-b border-border">
-        <div class="container py-6 lg:py-8">
-            <div class="flex items-center gap-4">
-                <div class="w-12 h-12 lg:w-16 lg:h-16 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <?php echo stridence_icon('user', 'w-6 h-6 lg:w-8 lg:h-8 text-primary'); ?>
-                </div>
-                <div class="min-w-0">
-                    <h1 class="font-heading text-xl lg:text-2xl font-bold text-text truncate">
-                        <?php
-                        printf(
-                            /* translators: %s: user first name */
-                            esc_html__('Welkom, %s', 'stridence'),
-                            esc_html($user->first_name ?: $user->display_name)
-                        );
-                        ?>
-                    </h1>
-                    <p class="text-sm text-text-muted truncate">
-                        <?php echo esc_html($user->user_email); ?>
-                    </p>
-                </div>
-            </div>
-        </div>
-    </div>
+<div class="min-h-screen bg-surface">
+    <div class="max-w-container mx-auto px-4 md:px-6 lg:px-8">
+        <div class="lg:flex lg:gap-8 py-6 lg:py-8">
 
-    <!-- Dashboard Layout -->
-    <div class="container py-6 lg:py-8">
-        <div class="grid lg:grid-cols-4 gap-6 lg:gap-8">
-            <!-- Sidebar Navigation (Desktop) -->
-            <aside class="hidden lg:block">
-                <div class="sticky top-24">
-                    <?php
-                    get_template_part('templates/dashboard/nav-sidebar', null, [
-                        'current_tab' => $current_tab,
-                    ]);
-                    ?>
-                </div>
-            </aside>
+            <!-- Sidebar (desktop only) -->
+            <div class="hidden lg:block">
+                <?php stridence_template_part('templates/dashboard/nav-sidebar', null, [
+                    'current_tab'   => $current_tab,
+                    'primary_nav'   => $primary_nav,
+                    'utility_nav'   => $utility_nav,
+                    'user'          => $user,
+                    'unread_count'  => $unread_count,
+                ]); ?>
+            </div>
 
             <!-- Main Content Area -->
-            <main class="lg:col-span-3 min-w-0">
+            <main class="flex-1 min-w-0">
+                <!-- Page Header -->
+                <?php $pageTitle = $page_titles[$current_tab] ?? ''; ?>
+                <?php if ($pageTitle) : ?>
+                    <div class="mb-6">
+                        <h1 class="text-lg font-semibold text-text tracking-tight">
+                            <?php echo esc_html($pageTitle); ?>
+                        </h1>
+                    </div>
+                <?php endif; ?>
+
+                <!-- Page Content -->
                 <?php
-                // Load active tab content
-                get_template_part("templates/dashboard/tab-{$current_tab}", null, [
-                    'user' => $user,
-                ]);
+                if ($current_tab === 'home') {
+                    stridence_template_part('templates/dashboard/tab-home', null, [
+                        'user'      => $user,
+                        'home_data' => $home_data,
+                    ]);
+                } else {
+                    stridence_template_part("templates/dashboard/tab-{$current_tab}", null, [
+                        'user' => $user,
+                    ]);
+                }
                 ?>
             </main>
+
         </div>
     </div>
 
-    <!-- Mobile Navigation -->
-    <?php
-    get_template_part('templates/dashboard/nav-mobile', null, [
-        'current_tab' => $current_tab,
-    ]);
-    ?>
+    <!-- Mobile Bottom Navigation -->
+    <div class="lg:hidden">
+        <?php stridence_template_part('templates/dashboard/nav-mobile', null, [
+            'current_tab'  => $current_tab,
+            'nav_items'    => $nav_items,
+            'unread_count' => $unread_count,
+        ]); ?>
+    </div>
+
+    <?php stridence_template_part('templates/dashboard/partials/toast'); ?>
 </div>
 
-<?php get_footer(); ?>
+<?php get_footer('dashboard'); ?>

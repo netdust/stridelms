@@ -48,11 +48,52 @@ final class RegistrationRepository
         $editionId = isset($data['edition_id']) ? absint($data['edition_id']) : null;
         $trajectoryId = isset($data['trajectory_id']) ? absint($data['trajectory_id']) : null;
 
-        if ($editionId && $this->existsForEdition((int) $data['user_id'], $editionId)) {
-            return new WP_Error('duplicate', 'User already registered for this edition');
+        // Check for existing registration (unique constraint on user+edition)
+        $existing = null;
+        if ($editionId) {
+            $existing = $this->findByUserAndEdition((int) $data['user_id'], $editionId);
+        } elseif ($trajectoryId) {
+            $existing = $this->findByUserAndTrajectory((int) $data['user_id'], $trajectoryId);
         }
 
-        if ($trajectoryId && !$editionId && $this->existsForTrajectory((int) $data['user_id'], $trajectoryId)) {
+        if ($existing) {
+            $existingStatus = RegistrationStatus::tryFrom($existing->status);
+
+            // If cancelled (or withdrawn — DB enum value not in PHP enum), reactivate
+            if ($existingStatus === RegistrationStatus::Cancelled || $existing->status === 'withdrawn') {
+                $reactivate = [
+                    'status' => $data['status'] ?? RegistrationStatus::Confirmed->value,
+                    'registered_at' => current_time('mysql'),
+                    'cancelled_at' => null,
+                    'notes' => isset($data['notes']) ? sanitize_textarea_field($data['notes']) : null,
+                    'enrollment_data' => isset($data['enrollment_data']) ? wp_json_encode($data['enrollment_data']) : null,
+                    'quote_id' => isset($data['quote_id']) ? absint($data['quote_id']) : null,
+                    'selections' => isset($data['selections']) ? wp_json_encode($data['selections']) : null,
+                    'completion_tasks' => null,
+                    'completed_at' => null,
+                ];
+
+                $result = $wpdb->update($this->table(), $reactivate, ['id' => (int) $existing->id]);
+
+                if ($result === false) {
+                    return new WP_Error('db_error', 'Failed to reactivate registration');
+                }
+
+                do_action('stride/registration/created', [
+                    'registration_id' => (int) $existing->id,
+                    'user_id' => (int) $data['user_id'],
+                    'edition_id' => $editionId,
+                    'trajectory_id' => $trajectoryId,
+                    'enrollment_path' => $data['enrollment_path'] ?? self::PATH_INDIVIDUAL,
+                ]);
+
+                return (int) $existing->id;
+            }
+
+            // Active registration exists — block duplicate
+            if ($editionId) {
+                return new WP_Error('duplicate', 'User already registered for this edition');
+            }
             return new WP_Error('duplicate', 'User already enrolled in this trajectory');
         }
 
@@ -67,6 +108,7 @@ final class RegistrationRepository
             'quote_id' => isset($data['quote_id']) ? absint($data['quote_id']) : null,
             'enrolled_by' => isset($data['enrolled_by']) ? absint($data['enrolled_by']) : null,
             'notes' => isset($data['notes']) ? sanitize_textarea_field($data['notes']) : null,
+            'enrollment_data' => isset($data['enrollment_data']) ? wp_json_encode($data['enrollment_data']) : null,
         ];
 
         $result = $wpdb->insert($this->table(), $insert);
@@ -110,6 +152,10 @@ final class RegistrationRepository
             $row->completion_tasks = json_decode($row->completion_tasks, true);
         }
 
+        if ($row && isset($row->enrollment_data) && $row->enrollment_data) {
+            $row->enrollment_data = json_decode($row->enrollment_data, true);
+        }
+
         return $row;
     }
 
@@ -134,6 +180,10 @@ final class RegistrationRepository
 
         if ($row && $row->completion_tasks) {
             $row->completion_tasks = json_decode($row->completion_tasks, true);
+        }
+
+        if ($row && isset($row->enrollment_data) && $row->enrollment_data) {
+            $row->enrollment_data = json_decode($row->enrollment_data, true);
         }
 
         return $row;
@@ -289,7 +339,18 @@ final class RegistrationRepository
 
         $sql .= " ORDER BY registered_at DESC";
 
-        return $wpdb->get_results($wpdb->prepare($sql, ...$params));
+        $results = $wpdb->get_results($wpdb->prepare($sql, ...$params));
+
+        foreach ($results as $row) {
+            if (!empty($row->selections) && is_string($row->selections)) {
+                $row->selections = json_decode($row->selections, true);
+            }
+            if (!empty($row->completion_tasks) && is_string($row->completion_tasks)) {
+                $row->completion_tasks = json_decode($row->completion_tasks, true);
+            }
+        }
+
+        return $results;
     }
 
     /**
@@ -457,13 +518,13 @@ final class RegistrationRepository
     {
         global $wpdb;
 
-        $allowed = ['status', 'selections', 'selections_locked_at', 'quote_id', 'completed_at', 'cancelled_at', 'notes', 'completion_tasks'];
+        $allowed = ['status', 'selections', 'selections_locked_at', 'quote_id', 'completed_at', 'cancelled_at', 'notes', 'completion_tasks', 'enrollment_data'];
         $update = [];
 
         foreach ($allowed as $field) {
             if (array_key_exists($field, $data)) {
                 $value = $data[$field];
-                if (($field === 'selections' || $field === 'completion_tasks') && is_array($value)) {
+                if (in_array($field, ['selections', 'completion_tasks', 'enrollment_data'], true) && is_array($value)) {
                     $value = wp_json_encode($value);
                 }
                 $update[$field] = $value;

@@ -21,6 +21,17 @@ module.exports = {
           muted: '#64748b',
           inverse: '#ffffff',
         },
+        // New colors for Phase 1
+        success: {
+          DEFAULT: '#22c55e',
+          light: '#86efac',
+          dark: '#16a34a',
+        },
+        accent: {
+          DEFAULT: '#3b82f6',
+          light: '#93c5fd',
+          dark: '#2563eb',
+        },
       },
       fontFamily: {
         heading: ['Satoshi', 'system-ui', 'sans-serif'],
@@ -30,20 +41,26 @@ module.exports = {
         '5xl': ['3rem', { lineHeight: '1.1', letterSpacing: '-0.02em' }],
         '6xl': ['3.75rem', { lineHeight: '1.05', letterSpacing: '-0.02em' }],
         '7xl': ['4.5rem', { lineHeight: '1', letterSpacing: '-0.03em' }],
+        '8xl': ['5.5rem', { lineHeight: '0.95', letterSpacing: '-0.03em' }],
       },
       borderRadius: {
         DEFAULT: '8px',
         lg: '12px',
         xl: '16px',
+        '2xl': '20px',
       },
       boxShadow: {
         card: '0 4px 24px rgba(26,39,68,0.08)',
         hover: '0 8px 32px rgba(26,39,68,0.12)',
         button: '0 2px 8px rgba(26,39,68,0.15)',
+        'float': '0 20px 40px rgba(26,39,68,0.15)',
       },
       animation: {
         'fade-up': 'fadeUp 0.6s ease-out forwards',
         'fade-in': 'fadeIn 0.6s ease-out forwards',
+        'float': 'float 4s ease-in-out infinite',
+        'float-delayed': 'float 4s ease-in-out infinite 2s',
+        'pulse-slow': 'pulse 3s ease-in-out infinite',
       },
       keyframes: {
         fadeUp: {
@@ -53,6 +70,10 @@ module.exports = {
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
+        },
+        float: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-10px)' },
         },
       },
     },

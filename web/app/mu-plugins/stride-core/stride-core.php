@@ -102,12 +102,4 @@ add_action('ntdst/features_ready', function () use ($config): void {
     }
 });
 
-// Register mail triggers for netdust-mail plugin
-add_filter('ndmail_triggers', function (array $triggers): array {
-    $triggers['stride/completion/attendance_complete'] = [
-        'label'   => __('Opleiding: aanwezigheid voltooid', 'stride'),
-        'source'  => 'Stride',
-        'context' => ['user_id', 'edition_id', 'registration_id'],
-    ];
-    return $triggers;
-});
+// Mail triggers now registered by StrideMailBridge service

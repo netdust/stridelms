@@ -17,7 +17,7 @@
     </li>
 </ol>
 
-<div class="lti-callout lti-callout-tip">
+<div class="ntdst-callout ntdst-callout-tip">
     <p><strong>Tip:</strong> Use the JSON or XML config URLs to auto-configure compatible LMS platforms.
     Most modern LMS platforms support JSON auto-configuration.</p>
 </div>
@@ -42,70 +42,70 @@
     <tbody>
         <tr>
             <td><strong>OIDC Login</strong></td>
-            <td><code class="lti-endpoint-url" x-text="LtiConfig.toolEndpoints.oidc_login"></code></td>
+            <td><code class="ntdst-endpoint-url" x-text="LtiConfig.toolEndpoints.oidc_login"></code></td>
             <td>Initial authentication redirect</td>
             <td>
-                <button class="lti-copy-btn" :class="{ 'lti-copied': copied === 'doc_oidc' }"
+                <button class="ntdst-copy-btn" :class="{ 'ntdst-copied': copied === 'doc_oidc' }"
                         @click="copyToClipboard(LtiConfig.toolEndpoints.oidc_login, 'doc_oidc')"
                         x-text="copied === 'doc_oidc' ? 'Copied!' : 'Copy'"></button>
             </td>
         </tr>
         <tr>
             <td><strong>Launch</strong></td>
-            <td><code class="lti-endpoint-url" x-text="LtiConfig.toolEndpoints.launch"></code></td>
+            <td><code class="ntdst-endpoint-url" x-text="LtiConfig.toolEndpoints.launch"></code></td>
             <td>Resource link launch handler</td>
             <td>
-                <button class="lti-copy-btn" :class="{ 'lti-copied': copied === 'doc_launch' }"
+                <button class="ntdst-copy-btn" :class="{ 'ntdst-copied': copied === 'doc_launch' }"
                         @click="copyToClipboard(LtiConfig.toolEndpoints.launch, 'doc_launch')"
                         x-text="copied === 'doc_launch' ? 'Copied!' : 'Copy'"></button>
             </td>
         </tr>
         <tr>
             <td><strong>JWKS</strong></td>
-            <td><code class="lti-endpoint-url" x-text="LtiConfig.toolEndpoints.jwks"></code></td>
+            <td><code class="ntdst-endpoint-url" x-text="LtiConfig.toolEndpoints.jwks"></code></td>
             <td>Public key set for signature verification</td>
             <td>
-                <button class="lti-copy-btn" :class="{ 'lti-copied': copied === 'doc_jwks' }"
+                <button class="ntdst-copy-btn" :class="{ 'ntdst-copied': copied === 'doc_jwks' }"
                         @click="copyToClipboard(LtiConfig.toolEndpoints.jwks, 'doc_jwks')"
                         x-text="copied === 'doc_jwks' ? 'Copied!' : 'Copy'"></button>
             </td>
         </tr>
         <tr>
             <td><strong>Deep Link</strong></td>
-            <td><code class="lti-endpoint-url" x-text="LtiConfig.toolEndpoints.deep_link"></code></td>
+            <td><code class="ntdst-endpoint-url" x-text="LtiConfig.toolEndpoints.deep_link"></code></td>
             <td>Content item selection flow</td>
             <td>
-                <button class="lti-copy-btn" :class="{ 'lti-copied': copied === 'doc_deeplink' }"
+                <button class="ntdst-copy-btn" :class="{ 'ntdst-copied': copied === 'doc_deeplink' }"
                         @click="copyToClipboard(LtiConfig.toolEndpoints.deep_link, 'doc_deeplink')"
                         x-text="copied === 'doc_deeplink' ? 'Copied!' : 'Copy'"></button>
             </td>
         </tr>
         <tr>
             <td><strong>JSON Config</strong></td>
-            <td><code class="lti-endpoint-url" x-text="LtiConfig.toolEndpoints.json_config"></code></td>
+            <td><code class="ntdst-endpoint-url" x-text="LtiConfig.toolEndpoints.json_config"></code></td>
             <td>Auto-configuration document (IMS spec)</td>
             <td>
-                <button class="lti-copy-btn" :class="{ 'lti-copied': copied === 'doc_json' }"
+                <button class="ntdst-copy-btn" :class="{ 'ntdst-copied': copied === 'doc_json' }"
                         @click="copyToClipboard(LtiConfig.toolEndpoints.json_config, 'doc_json')"
                         x-text="copied === 'doc_json' ? 'Copied!' : 'Copy'"></button>
             </td>
         </tr>
         <tr>
             <td><strong>XML Config</strong></td>
-            <td><code class="lti-endpoint-url" x-text="LtiConfig.toolEndpoints.xml_config"></code></td>
+            <td><code class="ntdst-endpoint-url" x-text="LtiConfig.toolEndpoints.xml_config"></code></td>
             <td>XML configuration document</td>
             <td>
-                <button class="lti-copy-btn" :class="{ 'lti-copied': copied === 'doc_xml' }"
+                <button class="ntdst-copy-btn" :class="{ 'ntdst-copied': copied === 'doc_xml' }"
                         @click="copyToClipboard(LtiConfig.toolEndpoints.xml_config, 'doc_xml')"
                         x-text="copied === 'doc_xml' ? 'Copied!' : 'Copy'"></button>
             </td>
         </tr>
         <tr>
             <td><strong>Dynamic Registration</strong></td>
-            <td><code class="lti-endpoint-url" x-text="LtiConfig.toolEndpoints.dynamic_registration"></code></td>
+            <td><code class="ntdst-endpoint-url" x-text="LtiConfig.toolEndpoints.dynamic_registration"></code></td>
             <td>Auto-registration flow (IMS spec)</td>
             <td>
-                <button class="lti-copy-btn" :class="{ 'lti-copied': copied === 'doc_dynreg' }"
+                <button class="ntdst-copy-btn" :class="{ 'ntdst-copied': copied === 'doc_dynreg' }"
                         @click="copyToClipboard(LtiConfig.toolEndpoints.dynamic_registration, 'doc_dynreg')"
                         x-text="copied === 'doc_dynreg' ? 'Copied!' : 'Copy'"></button>
             </td>
@@ -127,7 +127,7 @@
     <li>After saving, use the <strong>"Test Launch"</strong> button on the tool row to verify the connection.</li>
 </ol>
 
-<div class="lti-callout lti-callout-info">
+<div class="ntdst-callout ntdst-callout-info">
     <p><strong>Note:</strong> After adding a tool, create a <em>Resource</em> on the Resources tab to link the tool
     to a specific LearnDash course. Resources define what content gets launched and which course receives completion data.</p>
 </div>
@@ -187,7 +187,7 @@
     <li>When a learner completes the trigger, scores are automatically sent back to the launching LMS.</li>
 </ol>
 
-<div class="lti-callout lti-callout-warning">
+<div class="ntdst-callout ntdst-callout-warning">
     <p><strong>Requirement:</strong> The launching LMS must support AGS (Assignment and Grade Services).
     Grade passback only works for learners who entered via an LTI launch — it needs the
     platform's AGS endpoint URL from the original launch claim.</p>

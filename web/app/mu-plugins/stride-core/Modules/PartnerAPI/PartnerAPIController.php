@@ -22,20 +22,10 @@ use WP_REST_Response;
  * - GET /stride/v1/partner/attendance
  * - POST /stride/v1/partner/enrollments
  */
-final class PartnerAPIController implements \NTDST_Service_Meta
+final class PartnerAPIController
 {
     private const NAMESPACE = 'stride/v1';
     private const ROUTE_PREFIX = 'partner';
-
-    public static function metadata(): array
-    {
-        return [
-            'name' => 'Partner API Controller',
-            'description' => 'REST API for partner organizations',
-            'priority' => 20,
-            'enabled' => true,
-        ];
-    }
 
     public function __construct(
         private readonly RegistrationRepository $registrationRepository,
@@ -210,15 +200,18 @@ final class PartnerAPIController implements \NTDST_Service_Meta
 
         $data = array_map(function ($row) {
             $user = get_userdata($row->user_id);
-            $edition = $row->edition_id ? $this->editionService->getEdition($row->edition_id) : null;
-            $course = $edition ? get_post($edition['course_id'] ?? 0) : null;
+            $editionId = $row->edition_id ? (int) $row->edition_id : 0;
+            $edition = $editionId ? $this->editionService->getEdition($editionId) : null;
+            $editionIsValid = $edition instanceof \WP_Post;
+            $courseId = $editionIsValid ? $this->editionService->getCourseId($editionId) : 0;
+            $course = $courseId ? get_post($courseId) : null;
 
             return [
                 'id' => (int) $row->id,
                 'user_id' => (int) $row->user_id,
                 'user_email' => $user ? $user->user_email : null,
                 'edition_id' => $row->edition_id ? (int) $row->edition_id : null,
-                'edition_title' => $edition['title'] ?? null,
+                'edition_title' => $editionIsValid ? $edition->post_title : null,
                 'course_title' => $course ? $course->post_title : null,
                 'trajectory_id' => $row->trajectory_id ? (int) $row->trajectory_id : null,
                 'status' => $row->status,
@@ -263,8 +256,11 @@ final class PartnerAPIController implements \NTDST_Service_Meta
         }
 
         $user = get_userdata($registration->user_id);
-        $edition = $registration->edition_id ? $this->editionService->getEdition($registration->edition_id) : null;
-        $course = $edition ? get_post($edition['course_id'] ?? 0) : null;
+        $editionId = $registration->edition_id ? (int) $registration->edition_id : 0;
+        $edition = $editionId ? $this->editionService->getEdition($editionId) : null;
+        $editionIsValid = $edition instanceof \WP_Post;
+        $courseId = $editionIsValid ? $this->editionService->getCourseId($editionId) : 0;
+        $course = $courseId ? get_post($courseId) : null;
 
         return new WP_REST_Response([
             'id' => (int) $registration->id,
@@ -272,7 +268,7 @@ final class PartnerAPIController implements \NTDST_Service_Meta
             'user_email' => $user ? $user->user_email : null,
             'user_name' => $user ? trim($user->first_name . ' ' . $user->last_name) : null,
             'edition_id' => $registration->edition_id ? (int) $registration->edition_id : null,
-            'edition_title' => $edition['title'] ?? null,
+            'edition_title' => $editionIsValid ? $edition->post_title : null,
             'course_title' => $course ? $course->post_title : null,
             'trajectory_id' => $registration->trajectory_id ? (int) $registration->trajectory_id : null,
             'status' => $registration->status,
@@ -436,7 +432,7 @@ final class PartnerAPIController implements \NTDST_Service_Meta
         // Validate edition exists
         if ($editionId) {
             $edition = $this->editionService->getEdition($editionId);
-            if (!$edition) {
+            if (is_wp_error($edition)) {
                 return new WP_Error('not_found', __('Edition not found.', 'stride'), ['status' => 404]);
             }
         }
@@ -492,9 +488,9 @@ final class PartnerAPIController implements \NTDST_Service_Meta
 
         // Grant LearnDash course access if edition has course_id
         if ($editionId) {
-            $edition = $this->editionService->getEdition($editionId);
-            if (!empty($edition['course_id']) && function_exists('ld_update_course_access')) {
-                ld_update_course_access($user->ID, $edition['course_id'], false);
+            $courseId = $this->editionService->getCourseId($editionId);
+            if ($courseId && function_exists('ld_update_course_access')) {
+                ld_update_course_access($user->ID, $courseId, false);
             }
         }
 

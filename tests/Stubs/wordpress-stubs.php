@@ -66,6 +66,8 @@ if (!class_exists('WP_User')) {
         public string $display_name = '';
         public string $first_name = '';
         public string $last_name = '';
+        public string $nickname = '';
+        public string $description = '';
         public array $roles = [];
 
         public function __construct($id = 0, $name = '', $site_id = '')
@@ -638,6 +640,28 @@ if (!function_exists('get_the_title')) {
     }
 }
 
+if (!function_exists('get_permalink')) {
+    function get_permalink($post = null): string|false
+    {
+        $post = get_post($post);
+        if (!$post) {
+            return false;
+        }
+        return home_url('/?p=' . $post->ID);
+    }
+}
+
+if (!function_exists('stride_format_date')) {
+    function stride_format_date(string $date, string $format = 'j F Y'): string
+    {
+        $timestamp = strtotime($date);
+        if ($timestamp === false) {
+            return '';
+        }
+        return date($format, $timestamp);
+    }
+}
+
 if (!function_exists('get_stylesheet_directory')) {
     function get_stylesheet_directory(): string
     {
@@ -751,6 +775,13 @@ if (!function_exists('register_post_meta')) {
         }
         $_test_registered_post_meta[$post_type][$meta_key] = $args;
         return true;
+    }
+}
+
+if (!function_exists('wp_hash')) {
+    function wp_hash(string $data, string $scheme = 'auth'): string
+    {
+        return hash('sha256', $data . $scheme);
     }
 }
 
@@ -1873,5 +1904,63 @@ if (!function_exists('wp_unique_id')) {
     {
         static $counter = 0;
         return $prefix . (string) ++$counter;
+    }
+}
+
+if (!function_exists('add_options_page')) {
+    function add_options_page(string $page_title, string $menu_title, string $capability, string $menu_slug, callable $callback = null, int $position = null): string
+    {
+        global $_test_options_pages;
+        if (!isset($_test_options_pages)) {
+            $_test_options_pages = [];
+        }
+        $_test_options_pages[$menu_slug] = [
+            'page_title' => $page_title,
+            'menu_title' => $menu_title,
+            'capability' => $capability,
+            'menu_slug' => $menu_slug,
+            'callback' => $callback,
+        ];
+        return 'settings_page_' . $menu_slug;
+    }
+}
+
+if (!function_exists('get_current_screen')) {
+    function get_current_screen(): ?object
+    {
+        return null;
+    }
+}
+
+if (!function_exists('wp_enqueue_editor')) {
+    function wp_enqueue_editor(): void
+    {
+        // Stub
+    }
+}
+
+if (!function_exists('rest_url')) {
+    function rest_url(string $path = ''): string
+    {
+        return 'https://example.com/wp-json/' . ltrim($path, '/');
+    }
+}
+
+if (!function_exists('ntdst_enqueue_admin_toolkit')) {
+    function ntdst_enqueue_admin_toolkit(): void
+    {
+        // Stub
+    }
+}
+
+if (!class_exists('WP_Theme')) {
+    class WP_Theme {
+        private string $stylesheet;
+        public function __construct(string $stylesheet = '') {
+            $this->stylesheet = $stylesheet;
+        }
+        public function get_stylesheet(): string {
+            return $this->stylesheet;
+        }
     }
 }

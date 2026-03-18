@@ -54,23 +54,32 @@ function stride_format_money(int $cents): string
 }
 
 /**
- * Get enrollment URL for an edition
+ * Get enrollment URL for an edition or trajectory.
  *
- * @param int $editionId Edition post ID
- * @return string        URL
+ * Uses the router clean URLs:
+ * - Edition: /vormingen/{slug}/inschrijving/
+ * - Trajectory: /trajecten/{slug}/inschrijving/
+ *
+ * Works for all modes (enrollment, interest, pending approval) since
+ * the form adapts based on offering status and requires_approval setting.
+ *
+ * @param int    $id   Post ID (edition or trajectory)
+ * @param string $type 'edition' or 'trajectory'
+ * @return string      URL
  */
-function stride_enrollment_url(int $editionId): string
+function stride_enrollment_url(int $id, string $type = 'edition'): string
 {
-    return home_url('/inschrijven/?editie=' . $editionId);
+    $post = get_post($id);
+    if (!$post) {
+        return home_url('/');
+    }
+
+    $slug = $post->post_name;
+
+    if ($type === 'trajectory') {
+        return home_url('/trajecten/' . $slug . '/inschrijving/');
+    }
+
+    return home_url('/vormingen/' . $slug . '/inschrijving/');
 }
 
-/**
- * Get interest registration URL for a course
- *
- * @param int $courseId Course post ID
- * @return string       URL
- */
-function stride_interest_url(int $courseId): string
-{
-    return home_url('/interesse/?cursus=' . $courseId);
-}

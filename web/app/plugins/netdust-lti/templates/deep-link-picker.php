@@ -18,8 +18,7 @@ defined('ABSPATH') || exit;
             <p><?php esc_html_e('No published courses found. Please create and publish a LearnDash course first.', 'netdust-lti'); ?></p>
         </div>
     <?php else : ?>
-        <form method="post" action="">
-            <?php wp_nonce_field('netdust_lti_deep_link', 'netdust_lti_deep_link_nonce'); ?>
+        <form method="post" action="<?php echo esc_url(home_url('/lti/deep-link-submit')); ?>">
 
             <table class="widefat striped">
                 <thead>

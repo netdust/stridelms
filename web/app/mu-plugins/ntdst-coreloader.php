@@ -42,3 +42,19 @@ require_once NTDST_PATH . '/services/RelationField.php';
 
 // Register singleton instances that can't be auto-wired
 ntdst_set(NTDST_SectorRegistry::class, fn() => ntdst_sectors());
+
+/**
+ * Enqueue the shared NTDST admin toolkit CSS.
+ *
+ * Call from admin_enqueue_scripts (or admin_head) on your plugin's settings page.
+ * Uses wp_enqueue_style to prevent duplicates when multiple plugins load it.
+ */
+function ntdst_enqueue_admin_toolkit(): void
+{
+    wp_enqueue_style(
+        'ntdst-admin-toolkit',
+        NTDST_URL . '/assets/css/admin-toolkit.css',
+        [],
+        '1.0.0'
+    );
+}

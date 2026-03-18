@@ -166,6 +166,69 @@ class AuditRepository
     }
 
     /**
+     * Find audit entries where a user is the subject.
+     *
+     * Matches two patterns:
+     * 1. context.user_id = userId AND actor != userId (admin actions on behalf of user)
+     * 2. completion/certificate events where actor_id = userId (LearnDash stores
+     *    the completing user as actor, not in context.user_id)
+     */
+    public function findBySubjectUser(int $userId, int $limit = 50, int $daysBack = 30): array
+    {
+        global $wpdb;
+
+        $since = (new \DateTime("-{$daysBack} days"))->format('Y-m-d H:i:s');
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$this->table()}
+             WHERE created_at >= %s
+               AND (
+                   (JSON_EXTRACT(context, '$.user_id') = %d
+                    AND (actor_id IS NULL OR actor_id != %d))
+                   OR
+                   (actor_id = %d AND action LIKE 'completion.%%')
+               )
+             ORDER BY created_at DESC
+             LIMIT %d",
+            $since,
+            $userId,
+            $userId,
+            $userId,
+            $limit
+        ));
+    }
+
+    /**
+     * Find session note update entries for a set of edition IDs.
+     * Used to notify enrolled users about session changes.
+     *
+     * @param int[] $editionIds
+     */
+    public function findSessionNoteUpdates(array $editionIds, int $daysBack = 30): array
+    {
+        if (empty($editionIds)) {
+            return [];
+        }
+
+        global $wpdb;
+
+        $since = (new \DateTime("-{$daysBack} days"))->format('Y-m-d H:i:s');
+        $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
+
+        $params = $editionIds;
+        $params[] = $since;
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$this->table()}
+             WHERE action = 'session.note_updated'
+               AND JSON_EXTRACT(context, '$.edition_id') IN ({$placeholders})
+               AND created_at >= %s
+             ORDER BY created_at DESC",
+            ...$params
+        ));
+    }
+
+    /**
      * Delete entries older than retention period. For cron cleanup only.
      */
     public function deleteOlderThan(DateTime $before): int

@@ -15,8 +15,8 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
-use Stride\Contracts\LMSAdapterInterface;
 use Stride\Domain\RegistrationStatus;
+use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Edition\EditionCompletion;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
@@ -28,7 +28,6 @@ $user_id = $user->ID;
 $registrationRepo  = ntdst_get(RegistrationRepository::class);
 $editionService    = ntdst_get(EditionService::class);
 $completionService = ntdst_get(EditionCompletion::class);
-$lmsAdapter        = ntdst_get(LMSAdapterInterface::class);
 
 // Get completed registrations
 $registrations = $registrationRepo->findByUser($user_id);
@@ -66,7 +65,7 @@ foreach ($registrations as $reg) {
     }
 
     // Get certificate link from LearnDash
-    $certificate_url = $lmsAdapter->getCertificateLink($user_id, $course_id);
+    $certificate_url = LearnDashHelper::getCertificateLink($course_id, $user_id);
 
     // Get edition meta for additional info
     $editionModel = ntdst_data()->get('vad_edition');
@@ -92,7 +91,7 @@ foreach ($registrations as $reg) {
 }
 
 // ── Online course certificates ──────────────────────────────
-$enrolled_course_ids = $lmsAdapter->getEnrolledCourses($user_id);
+$enrolled_course_ids = LearnDashHelper::getEnrolledCourses($user_id);
 
 foreach ($enrolled_course_ids as $courseId) {
     // Skip if already covered by an edition certificate above
@@ -107,12 +106,12 @@ foreach ($enrolled_course_ids as $courseId) {
         continue;
     }
 
-    // Only include online/e-learning/webinar courses (not classroom)
-    $categories = get_the_terms($courseId, 'ld_course_category');
+    // Only include online/e-learning/webinar courses (matches archive)
+    $formats = get_the_terms($courseId, 'stride_format');
     $is_online = false;
-    if ($categories && !is_wp_error($categories)) {
-        foreach ($categories as $cat) {
-            if (in_array($cat->slug, ['online', 'e-learning', 'webinar'], true)) {
+    if ($formats && !is_wp_error($formats)) {
+        foreach ($formats as $fmt) {
+            if (in_array($fmt->slug, ['online', 'e-learning', 'webinar'], true)) {
                 $is_online = true;
                 break;
             }
@@ -123,7 +122,7 @@ foreach ($enrolled_course_ids as $courseId) {
     }
 
     // Check completion
-    if (!$lmsAdapter->isComplete($user_id, $courseId)) {
+    if (!LearnDashHelper::isComplete($courseId, $user_id)) {
         continue;
     }
 
@@ -132,8 +131,8 @@ foreach ($enrolled_course_ids as $courseId) {
         continue;
     }
 
-    $certificate_url = $lmsAdapter->getCertificateLink($user_id, $courseId);
-    $completion_date = $lmsAdapter->getCompletionDate($user_id, $courseId);
+    $certificate_url = LearnDashHelper::getCertificateLink($courseId, $user_id);
+    $completion_date = LearnDashHelper::getCompletionDate($courseId, $user_id);
 
     $certificates[] = [
         'edition_id'      => 0,
@@ -150,29 +149,25 @@ foreach ($enrolled_course_ids as $courseId) {
 usort($certificates, fn($a, $b) => strcmp($b['completed_at'], $a['completed_at']));
 ?>
 
-<div class="space-y-6">
+<div class="space-y-8">
     <section>
-        <h2 class="font-heading text-xl font-bold text-text mb-4">
-            <?php esc_html_e('Mijn certificaten', 'stridence'); ?>
-        </h2>
-
         <?php if (!empty($certificates)) : ?>
             <div class="grid gap-4 sm:grid-cols-2">
                 <?php foreach ($certificates as $cert) : ?>
-                    <div class="card overflow-hidden">
+                    <div class="bg-surface-card rounded-xl border border-border shadow-sm overflow-hidden">
                         <!-- Certificate Header -->
-                        <div class="p-4 bg-gradient-to-r from-primary/10 to-primary/5">
+                        <div class="p-4 bg-gradient-to-r from-primary/8 to-primary/3">
                             <div class="flex items-center gap-3">
-                                <div class="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-                                    <?php echo stridence_icon('award', 'w-6 h-6 text-primary'); ?>
+                                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                                    <?php echo stridence_icon('award', 'w-5 h-5 text-primary'); ?>
                                 </div>
                                 <div class="flex-1 min-w-0">
-                                    <h3 class="font-semibold text-text truncate">
+                                    <h4 class="font-medium text-text text-sm truncate">
                                         <?php echo esc_html($cert['course_title']); ?>
-                                    </h3>
-                                    <p class="text-sm text-text-muted truncate">
+                                    </h4>
+                                    <span class="text-xs text-text-muted truncate block">
                                         <?php echo esc_html($cert['edition_title']); ?>
-                                    </p>
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -180,8 +175,8 @@ usort($certificates, fn($a, $b) => strcmp($b['completed_at'], $a['completed_at']
                         <!-- Certificate Details -->
                         <div class="p-4 space-y-3">
                             <?php if ($cert['completed_at']) : ?>
-                                <div class="flex items-center gap-2 text-sm text-text-muted">
-                                    <?php echo stridence_icon('check-circle', 'w-4 h-4 text-green-500'); ?>
+                                <div class="flex items-center gap-2 text-xs text-text-muted">
+                                    <?php echo stridence_icon('check-circle', 'w-3.5 h-3.5 text-success'); ?>
                                     <span>
                                         <?php
                                         printf(
@@ -196,15 +191,15 @@ usort($certificates, fn($a, $b) => strcmp($b['completed_at'], $a['completed_at']
 
                             <?php if ($cert['has_certificate']) : ?>
                                 <a href="<?php echo esc_url($cert['certificate_url']); ?>"
-                                   class="btn-primary w-full text-sm"
+                                   class="btn-ghost btn-sm w-full"
                                    target="_blank"
                                    rel="noopener">
-                                    <?php echo stridence_icon('download', 'w-4 h-4 mr-2'); ?>
+                                    <?php echo stridence_icon('download', 'w-4 h-4 mr-1'); ?>
                                     <?php esc_html_e('Download certificaat', 'stridence'); ?>
                                 </a>
                             <?php else : ?>
-                                <div class="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
-                                    <?php echo stridence_icon('clock', 'w-4 h-4'); ?>
+                                <div class="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+                                    <?php echo stridence_icon('clock', 'w-3.5 h-3.5'); ?>
                                     <span><?php esc_html_e('Certificaat wordt gegenereerd...', 'stridence'); ?></span>
                                 </div>
                             <?php endif; ?>
@@ -214,7 +209,7 @@ usort($certificates, fn($a, $b) => strcmp($b['completed_at'], $a['completed_at']
             </div>
         <?php else : ?>
             <?php
-            get_template_part('partials/empty-state', null, [
+            stridence_template_part('partials/empty-state', null, [
                 'icon'    => 'award',
                 'title'   => __('Nog geen certificaten', 'stridence'),
                 'message' => __('Je hebt nog geen certificaten behaald. Rond een opleiding succesvol af om je eerste certificaat te verdienen.', 'stridence'),
@@ -227,18 +222,18 @@ usort($certificates, fn($a, $b) => strcmp($b['completed_at'], $a['completed_at']
 
     <!-- Certificate Info -->
     <?php if (!empty($certificates)) : ?>
-        <section class="card p-4">
+        <section class="bg-surface-card rounded-xl border border-border shadow-sm p-4">
             <div class="flex items-start gap-3">
                 <div class="shrink-0 mt-0.5">
-                    <?php echo stridence_icon('info', 'w-5 h-5 text-blue-500'); ?>
+                    <?php echo stridence_icon('info', 'w-5 h-5 text-primary'); ?>
                 </div>
                 <div class="text-sm text-text-muted space-y-1">
-                    <p class="font-medium text-text">
+                    <span class="font-medium text-text block">
                         <?php esc_html_e('Over je certificaten', 'stridence'); ?>
-                    </p>
-                    <p>
+                    </span>
+                    <span class="block">
                         <?php esc_html_e('Certificaten worden automatisch gegenereerd zodra je een opleiding hebt afgerond. Je kunt ze hier downloaden en gebruiken als bewijs van je behaalde competenties.', 'stridence'); ?>
-                    </p>
+                    </span>
                 </div>
             </div>
         </section>

@@ -115,7 +115,7 @@ final class EditionService extends AbstractService implements EditionQueryInterf
 
     /**
      * Check if this edition is for an online course.
-     * Derives format from the linked LearnDash course's ld_course_category taxonomy.
+     * Derives format from the linked LearnDash course's stride_format taxonomy.
      */
     public function isOnline(int $editionId): bool
     {
@@ -124,13 +124,13 @@ final class EditionService extends AbstractService implements EditionQueryInterf
             return false;
         }
 
-        $categories = get_the_terms($courseId, 'ld_course_category');
-        if (!$categories || is_wp_error($categories)) {
+        $formats = get_the_terms($courseId, 'stride_format');
+        if (!$formats || is_wp_error($formats)) {
             return false;
         }
 
-        foreach ($categories as $cat) {
-            if (in_array($cat->slug, ['online', 'webinar', 'e-learning'], true)) {
+        foreach ($formats as $fmt) {
+            if (in_array($fmt->slug, ['online', 'webinar', 'e-learning'], true)) {
                 return true;
             }
         }
@@ -144,7 +144,7 @@ final class EditionService extends AbstractService implements EditionQueryInterf
      */
     public function getEnrollmentForm(int $editionId): string
     {
-        return (string) $this->repository->getField($editionId, 'enrollment_form', '');
+        return (string) $this->repository->getField($editionId, 'enrollment_form', 'default');
     }
 
     /**

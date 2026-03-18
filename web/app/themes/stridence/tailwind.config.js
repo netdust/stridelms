@@ -12,6 +12,8 @@ export default {
       colors: {
         primary: {
           DEFAULT: 'rgb(var(--color-primary) / <alpha-value>)',
+          hover: 'rgb(var(--color-primary-hover) / <alpha-value>)',
+          subtle: 'rgb(var(--color-primary-subtle) / <alpha-value>)',
           light: 'rgb(var(--color-primary-light) / <alpha-value>)',
           dark: 'rgb(var(--color-primary-dark) / <alpha-value>)',
         },
@@ -24,7 +26,10 @@ export default {
           alt: 'rgb(var(--color-surface-alt) / <alpha-value>)',
           card: 'rgb(var(--color-surface-card) / <alpha-value>)',
         },
-        border: 'rgb(var(--color-border) / <alpha-value>)',
+        border: {
+          DEFAULT: 'rgb(var(--color-border) / <alpha-value>)',
+          strong: 'rgb(var(--color-border-strong) / <alpha-value>)',
+        },
         text: {
           DEFAULT: 'rgb(var(--color-text) / <alpha-value>)',
           muted: 'rgb(var(--color-text-muted) / <alpha-value>)',
@@ -73,6 +78,7 @@ export default {
         block: 'var(--space-block)',
         element: 'var(--space-element)',
         sidebar: 'var(--sidebar-width)',
+        'sidebar-collapsed': 'var(--sidebar-collapsed)',
       },
     },
   },

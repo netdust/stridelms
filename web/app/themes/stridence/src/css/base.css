@@ -13,6 +13,11 @@
 @import './learndash.css';
 
 @layer base {
+  /* ── Alpine.js cloak ── */
+  [x-cloak] {
+    display: none !important;
+  }
+
   /* ── Reset ── */
   *,
   *::before,

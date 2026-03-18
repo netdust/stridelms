@@ -1,7 +1,8 @@
 /**
  * Stride Component Classes
  *
- * Reusable UI components following the design system.
+ * Reusable UI components built on the design token system.
+ * Border-first card design with subtle shadows on interaction.
  */
 
 @layer components {
@@ -12,19 +13,19 @@
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2
            bg-primary text-text-inverse font-medium
-           px-5 py-2.5 rounded-lg
-           hover:bg-primary-dark
-           focus:outline-none focus:ring-2 focus:ring-primary/50
+           px-5 py-2.5 rounded-lg cursor-pointer
+           hover:bg-primary-hover
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2
            disabled:opacity-50 disabled:cursor-not-allowed
            transition-colors duration-fast;
   }
 
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2
-           bg-surface-alt text-text font-medium
-           px-5 py-2.5 rounded-lg border border-border
-           hover:bg-border/50
-           focus:outline-none focus:ring-2 focus:ring-primary/50
+           bg-surface-card text-text font-medium
+           px-5 py-2.5 rounded-lg border border-border cursor-pointer
+           hover:bg-surface-alt hover:border-border
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2
            disabled:opacity-50 disabled:cursor-not-allowed
            transition-colors duration-fast;
   }
@@ -32,22 +33,22 @@
   .btn-ghost {
     @apply inline-flex items-center justify-center gap-2
            text-primary font-medium
-           px-5 py-2.5 rounded-lg
+           px-5 py-2.5 rounded-lg cursor-pointer
            hover:bg-primary/5
-           focus:outline-none focus:ring-2 focus:ring-primary/50
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50
            transition-colors duration-fast;
   }
 
   .btn-danger {
     @apply inline-flex items-center justify-center gap-2
            text-error font-medium
-           px-5 py-2.5 rounded-lg
+           px-5 py-2.5 rounded-lg cursor-pointer
            hover:bg-error/5
            transition-colors duration-fast;
   }
 
   .btn-sm {
-    @apply px-3 py-1.5 text-sm;
+    @apply px-3.5 py-2 text-sm;
   }
 
   .btn-lg {
@@ -61,9 +62,9 @@
   .input-text {
     @apply w-full px-3.5 py-2.5 rounded-lg
            border border-border bg-surface-card text-text
-           placeholder:text-text-muted
-           focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary
-           transition-colors duration-fast;
+           placeholder:text-text-muted/60
+           focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary
+           transition-all duration-fast;
   }
 
   .input-select {
@@ -92,19 +93,59 @@
   }
 
   /* ══════════════════════════════════════
-     CARDS
+     GENERAL CARDS
      ══════════════════════════════════════ */
 
   .card {
-    @apply bg-surface-card rounded-xl shadow-card;
+    @apply bg-surface-card rounded-xl border border-border/60;
+    box-shadow: var(--shadow-xs);
   }
 
   .card-interactive {
-    @apply card hover:shadow-elevated transition-shadow duration-normal cursor-pointer;
+    @apply card cursor-pointer;
+    transition: border-color var(--duration-fast),
+                box-shadow var(--duration-normal) var(--ease-out),
+                transform var(--duration-normal) var(--ease-out);
+  }
+
+  .card-interactive:hover {
+    @apply border-border;
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-1px);
   }
 
   .card-bordered {
-    @apply card border border-border shadow-none;
+    @apply card border-border shadow-none;
+  }
+
+  /* ══════════════════════════════════════
+     DASHBOARD CARDS
+     ══════════════════════════════════════ */
+
+  .dash-card {
+    @apply bg-surface-card rounded-xl border border-border/60;
+    box-shadow: var(--shadow-xs);
+    transition: border-color var(--duration-fast),
+                box-shadow var(--duration-normal) var(--ease-out),
+                transform var(--duration-normal) var(--ease-out);
+  }
+
+  .dash-card-interactive {
+    @apply dash-card cursor-pointer;
+  }
+
+  .dash-card-interactive:hover {
+    border-color: rgb(var(--color-primary) / 0.25);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-1px);
+  }
+
+  .dash-card-hero {
+    @apply bg-surface-card rounded-xl p-6 lg:p-8;
+    border: 1px solid rgb(var(--color-primary) / 0.15);
+    border-left: 3px solid rgb(var(--color-primary));
+    background: linear-gradient(135deg, rgb(var(--color-primary) / 0.02), rgb(var(--color-primary) / 0.07));
+    box-shadow: var(--shadow-sm);
   }
 
   /* ══════════════════════════════════════
@@ -116,35 +157,35 @@
   }
 
   .badge-open {
-    @apply badge bg-green-100 text-green-800;
+    @apply badge bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20;
   }
 
   .badge-few {
-    @apply badge bg-yellow-100 text-yellow-800;
+    @apply badge bg-yellow-50 text-yellow-700 ring-1 ring-inset ring-yellow-600/20;
   }
 
   .badge-full {
-    @apply badge bg-red-100 text-red-800;
+    @apply badge bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20;
   }
 
   .badge-cancelled {
-    @apply badge bg-gray-100 text-gray-500;
+    @apply badge bg-gray-50 text-gray-500 ring-1 ring-inset ring-gray-500/20;
   }
 
   .badge-online {
-    @apply badge bg-indigo-100 text-indigo-700;
+    @apply badge bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20;
   }
 
   .badge-free {
-    @apply badge bg-emerald-100 text-emerald-700;
+    @apply badge bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20;
   }
 
   .badge-primary {
-    @apply badge bg-primary/10 text-primary;
+    @apply badge bg-primary/10 text-primary ring-1 ring-inset ring-primary/20;
   }
 
   /* ══════════════════════════════════════
-     SECTIONS
+     SECTIONS & LAYOUT
      ══════════════════════════════════════ */
 
   .section {
@@ -210,6 +251,49 @@
   }
 
   /* ══════════════════════════════════════
+     SIDEBAR NAVIGATION
+     ══════════════════════════════════════ */
+
+  .sidebar {
+    @apply sticky w-sidebar shrink-0
+           flex flex-col self-start;
+    top: 6rem; /* below sticky header (lg:h-20 + gap) */
+    height: calc(100vh - 7rem);
+  }
+
+  .admin-bar .sidebar {
+    top: calc(6rem + 32px);
+    height: calc(100vh - 7rem - 32px);
+  }
+
+  .sidebar-nav-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg
+           text-sm font-medium text-text-muted
+           cursor-pointer
+           hover:text-text hover:bg-surface-alt
+           transition-colors duration-fast;
+  }
+
+  .sidebar-nav-item-active {
+    @apply text-primary bg-primary-subtle;
+  }
+
+  .sidebar-nav-badge {
+    @apply ml-auto text-xs font-semibold
+           bg-primary text-text-inverse
+           rounded-full min-w-[20px] h-5
+           flex items-center justify-center px-1.5;
+  }
+
+  .sidebar-divider {
+    @apply border-t border-border my-2 mx-3;
+  }
+
+  .sidebar-user {
+    @apply flex items-center gap-3 px-3 py-3;
+  }
+
+  /* ══════════════════════════════════════
      TAB NAVIGATION
      ══════════════════════════════════════ */
 
@@ -222,6 +306,121 @@
 
   .tab-active {
     @apply border-primary text-primary;
+  }
+
+  /* ══════════════════════════════════════
+     SLIDE PANEL
+     ══════════════════════════════════════ */
+
+  .slide-panel-backdrop {
+    @apply fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px];
+    transition: opacity var(--duration-normal) var(--ease-out);
+  }
+
+  .slide-panel {
+    @apply fixed inset-y-0 right-0 z-50
+           w-full sm:max-w-md
+           bg-surface-card
+           flex flex-col;
+    box-shadow: var(--shadow-overlay);
+    transition: transform var(--duration-normal) var(--ease-out);
+  }
+
+  .slide-panel-header {
+    @apply flex items-center justify-between gap-4
+           px-5 py-4 border-b border-border
+           shrink-0;
+  }
+
+  .slide-panel-header h3 {
+    @apply text-lg font-heading font-bold text-text truncate m-0;
+  }
+
+  .slide-panel-body {
+    @apply flex-1 overflow-y-auto overscroll-contain
+           px-5 py-5 space-y-5;
+  }
+
+  .slide-panel-footer {
+    @apply shrink-0 px-5 py-4 border-t border-border bg-surface-alt/50;
+  }
+
+  /* Dashboard panel variant (bottom sheet on mobile) */
+  .dash-panel {
+    @apply fixed inset-y-0 right-0 z-50
+           w-full sm:max-w-md
+           bg-surface-card
+           flex flex-col;
+    box-shadow: var(--shadow-overlay);
+    transition: transform var(--duration-normal) var(--ease-out);
+  }
+
+  .admin-bar .dash-panel {
+    top: 32px;
+  }
+
+  @media (max-width: 639px) {
+    .dash-panel {
+      @apply inset-x-0 top-auto bottom-0;
+      max-height: 90vh;
+      border-radius: 1rem 1rem 0 0;
+    }
+    .admin-bar .dash-panel {
+      top: auto;
+    }
+  }
+
+  /* ══════════════════════════════════════
+     TOAST NOTIFICATIONS
+     ══════════════════════════════════════ */
+
+  .toast {
+    @apply fixed bottom-6 right-6 z-[60]
+           bg-surface-card border border-border
+           rounded-lg px-4 py-3
+           flex items-center gap-3
+           text-sm text-text;
+    box-shadow: var(--shadow-elevated);
+  }
+
+  .toast-success {
+    border-left: 3px solid rgb(var(--color-success));
+  }
+
+  .toast-error {
+    border-left: 3px solid rgb(var(--color-error));
+  }
+
+  /* ══════════════════════════════════════
+     NOTIFICATION LIST
+     ══════════════════════════════════════ */
+
+  /* notification-item styling is inline in the partial */
+
+  /* ══════════════════════════════════════
+     FLAT LIST ITEMS
+     ══════════════════════════════════════ */
+
+  .list-item {
+    @apply flex items-center gap-4 px-4 py-3.5
+           border-b border-border/60 last:border-b-0
+           cursor-pointer
+           hover:bg-surface-alt
+           transition-colors duration-fast;
+  }
+
+  .list-item-static {
+    @apply list-item cursor-default hover:bg-transparent;
+  }
+
+  /* (action cards use standard utility classes — no custom CSS needed) */
+
+  /* ══════════════════════════════════════
+     PROGRESS RING (SVG-based)
+     ══════════════════════════════════════ */
+
+  .progress-ring circle {
+    transition: stroke-dashoffset 700ms var(--ease-out);
   }
 
   /* ══════════════════════════════════════
@@ -247,8 +446,23 @@
     @apply animate-spin h-5 w-5 border-2 border-current border-t-transparent rounded-full;
   }
 
-  /* Safe area padding for devices with home indicators (iOS notch) */
+  /* Skeleton loading */
+  .skeleton {
+    @apply bg-surface-alt rounded-lg animate-pulse;
+  }
+
+  /* Safe area padding for iOS home indicator */
   .safe-area-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Section heading — consistent style across dashboard */
+  .dash-heading {
+    @apply text-lg font-semibold text-text tracking-tight;
+  }
+
+  /* Sub-heading for panel/card sections */
+  .dash-subheading {
+    @apply text-xs font-semibold text-text-muted uppercase tracking-wider;
   }
 }

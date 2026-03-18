@@ -62,10 +62,26 @@ final class SessionService
      */
     public function updateSession(int $sessionId, array $data): true|WP_Error
     {
+        // Check if description changed (for audit notification)
+        $descriptionChanged = false;
+        if (array_key_exists('description', $data)) {
+            $oldDescription = $this->repository->getField($sessionId, 'description') ?? '';
+            $descriptionChanged = $data['description'] !== $oldDescription;
+        }
+
         $result = $this->repository->update($sessionId, $data);
 
         if (is_wp_error($result)) {
             return $result;
+        }
+
+        // Fire audit hook if description changed
+        if ($descriptionChanged) {
+            $editionId = $this->repository->getField($sessionId, 'edition_id');
+            do_action('stride/session/note_updated', [
+                'session_id' => $sessionId,
+                'edition_id' => (int) $editionId,
+            ]);
         }
 
         return true;
@@ -212,6 +228,7 @@ final class SessionService
             'type_enum' => $type,
             'capacity' => (int) $this->repository->getField($post->ID, 'capacity', 0),
             'optional' => (bool) $this->repository->getField($post->ID, 'optional', false),
+            'price_modifier' => (int) $this->repository->getField($post->ID, 'price_modifier', 0),
         ];
     }
 
@@ -234,6 +251,15 @@ final class SessionService
         // NTDST_Data_Manager::getPostsFast returns 'id' (lowercase)
         $id = (int) ($data['id'] ?? $data['ID'] ?? 0);
 
+        // lesson_ids may be serialized array or raw array
+        $lessonIds = $meta['_ntdst_lesson_ids'] ?? $meta['lesson_ids'] ?? [];
+        if (is_string($lessonIds)) {
+            $lessonIds = maybe_unserialize($lessonIds);
+        }
+        if (!is_array($lessonIds)) {
+            $lessonIds = $lessonIds ? [$lessonIds] : [];
+        }
+
         return [
             'id' => $id,
             'edition_id' => (int) ($meta['_ntdst_edition_id'] ?? $meta['edition_id'] ?? 0),
@@ -247,6 +273,10 @@ final class SessionService
             'capacity' => (int) ($meta['_ntdst_capacity'] ?? $meta['capacity'] ?? 0),
             'optional' => (bool) ($meta['_ntdst_optional'] ?? $meta['optional'] ?? false),
             'title' => $meta['_ntdst_post_title'] ?? $data['title'] ?? '',
+            'description' => $meta['_ntdst_description'] ?? $meta['description'] ?? '',
+            'webinar_link' => $meta['_ntdst_webinar_link'] ?? $meta['webinar_link'] ?? '',
+            'lesson_ids' => array_map('intval', $lessonIds),
+            'price_modifier' => (int) ($meta['_ntdst_price_modifier'] ?? $meta['price_modifier'] ?? 0),
         ];
     }
 }

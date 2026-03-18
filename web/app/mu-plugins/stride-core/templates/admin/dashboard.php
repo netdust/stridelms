@@ -158,14 +158,14 @@ defined('ABSPATH') || exit;
                                             <td style="padding: 10px 16px;">
                                                 <span style="color: #00a32a;">
                                                     <span class="dashicons dashicons-yes-alt" style="font-size: 16px; width: 16px; height: 16px; vertical-align: middle;"></span>
-                                                    Alle taken voltooid
+                                                    <span x-text="approval.type === 'post_approval' ? 'Na afloop — klaar voor aftekenen' : 'Alle taken voltooid'"></span>
                                                 </span>
                                             </td>
                                             <td style="padding: 10px 16px; text-align: right;">
                                                 <button class="stride-btn stride-btn-primary stride-btn-sm"
                                                         @click="approveRegistration(approval.id)"
                                                         :disabled="approval.approving">
-                                                    <span x-show="!approval.approving">Goedkeuren</span>
+                                                    <span x-show="!approval.approving" x-text="approval.type === 'post_approval' ? 'Aftekenen' : 'Goedkeuren'"></span>
                                                     <span x-show="approval.approving">Bezig...</span>
                                                 </button>
                                             </td>

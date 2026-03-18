@@ -3,6 +3,9 @@
  * Course Sidebar Edition Template
  *
  * Sticky sidebar card showing scheduled editions for a course.
+ * Shows enrollment-aware CTA per edition:
+ * - Enrolled: "Ingeschreven" label + dashboard/calendar links
+ * - Not enrolled: price + enroll button
  *
  * @param array $args {
  *     @type array $editions  Array of edition objects/arrays
@@ -12,14 +15,14 @@
 
 defined('ABSPATH') || exit;
 
+use Stride\Modules\Enrollment\EnrollmentService;
+
 $editions  = $args['editions'] ?? [];
 $course_id = $args['course_id'] ?? 0;
+$user_id   = get_current_user_id();
 
-// TODO: Wire up EditionService when not passed
-// if (empty($editions) && $course_id) {
-//     $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
-//     $editions = $editionService->getEditionsForCourse($course_id);
-// }
+// Check enrollment status for logged-in users
+$enrollmentService = $user_id ? ntdst_get(EnrollmentService::class) : null;
 
 ?>
 <aside class="card p-6 sticky top-24">
@@ -48,10 +51,13 @@ $course_id = $args['course_id'] ?? 0;
                 $spots_remaining = $get('spots_remaining');
                 $status          = $get('status', 'open');
 
+                // Check if current user is enrolled in this edition
+                $is_enrolled = $edition_id && $enrollmentService && $enrollmentService->isEnrolled($user_id, (int) $edition_id);
+
                 // Determine if enrollment is available
-                $can_enroll = in_array($status, ['open', 'few_spots'], true);
+                $can_enroll = !$is_enrolled && in_array($status, ['open', 'few_spots'], true);
                 ?>
-                <div class="p-4 border border-border rounded-lg">
+                <div class="p-4 border border-border rounded-lg <?php echo $is_enrolled ? 'border-primary/30 bg-primary/5' : ''; ?>">
                     <!-- Date and status -->
                     <div class="flex items-start justify-between mb-2">
                         <div class="font-medium text-text">
@@ -61,12 +67,19 @@ $course_id = $args['course_id'] ?? 0;
                                 <span class="text-text-muted">Datum nog niet bekend</span>
                             <?php endif; ?>
                         </div>
-                        <?php
-                        get_template_part('partials/badge-status', null, [
-                            'status' => $status,
-                            'spots'  => $spots_remaining,
-                        ]);
-                        ?>
+                        <?php if ($is_enrolled) : ?>
+                            <span class="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                                <?php echo stridence_icon('check-circle', 'w-3.5 h-3.5'); ?>
+                                Ingeschreven
+                            </span>
+                        <?php else : ?>
+                            <?php
+                            stridence_template_part('partials/badge-status', null, [
+                                'status' => $status,
+                                'spots'  => $spots_remaining,
+                            ]);
+                            ?>
+                        <?php endif; ?>
                     </div>
 
                     <?php if ($venue) : ?>
@@ -77,20 +90,39 @@ $course_id = $args['course_id'] ?? 0;
                         </div>
                     <?php endif; ?>
 
-                    <!-- Price and CTA -->
-                    <div class="flex items-center justify-between mt-3">
-                        <?php if ($price !== null) : ?>
-                            <span class="font-semibold text-text">
-                                <?php echo esc_html(stride_format_money((int) $price)); ?>
-                            </span>
+                    <!-- CTA -->
+                    <div class="mt-3">
+                        <?php if ($is_enrolled) : ?>
+                            <!-- Enrolled: show dashboard + calendar links -->
+                            <div class="flex items-center gap-2">
+                                <a href="<?php echo esc_url(home_url('/mijn-account/')); ?>" class="btn-ghost text-sm px-3 py-1.5 flex items-center gap-1.5">
+                                    <?php echo stridence_icon('layout-dashboard', 'w-4 h-4'); ?>
+                                    Mijn dashboard
+                                </a>
+                                <button type="button"
+                                    class="btn-ghost text-sm px-3 py-1.5 flex items-center gap-1.5"
+                                    title="Toevoegen aan agenda"
+                                    onclick="ntdstAPI.call('stride_download_ical', { edition_id: <?php echo (int) $edition_id; ?> })">
+                                    <?php echo stridence_icon('calendar', 'w-4 h-4'); ?>
+                                </button>
+                            </div>
                         <?php else : ?>
-                            <span class="text-sm text-text-muted">Prijs op aanvraag</span>
-                        <?php endif; ?>
+                            <!-- Not enrolled: price + enroll -->
+                            <div class="flex items-center justify-between">
+                                <?php if ($price !== null) : ?>
+                                    <span class="font-semibold text-text">
+                                        <?php echo esc_html(stride_format_money((int) ($price * 100))); ?>
+                                    </span>
+                                <?php else : ?>
+                                    <span class="text-sm text-text-muted">Prijs op aanvraag</span>
+                                <?php endif; ?>
 
-                        <?php if ($can_enroll && $edition_id) : ?>
-                            <a href="<?php echo esc_url(stride_enrollment_url((int) $edition_id)); ?>" class="btn-primary text-sm px-4 py-2">
-                                Inschrijven
-                            </a>
+                                <?php if ($can_enroll && $edition_id) : ?>
+                                    <a href="<?php echo esc_url(stride_enrollment_url((int) $edition_id)); ?>" class="btn-primary text-sm px-4 py-2">
+                                        Inschrijven
+                                    </a>
+                                <?php endif; ?>
+                            </div>
                         <?php endif; ?>
                     </div>
                 </div>

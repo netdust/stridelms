@@ -3,6 +3,7 @@
  */
 function strideAuditApp() {
     return {
+        tab: 'log',
         entries: [],
         loading: false,
         page: 1,
@@ -10,6 +11,8 @@ function strideAuditApp() {
         totalPages: 1,
         totalEntries: 0,
         userResults: [],
+        notification: null,
+        notificationType: 'success',
         filters: {
             from: '',
             to: '',
@@ -83,7 +86,7 @@ function strideAuditApp() {
 
             } catch (error) {
                 console.error('Error loading audit entries:', error);
-                alert('Error loading audit entries');
+                this.notify('Error loading audit entries', 'error');
             } finally {
                 this.loading = false;
             }
@@ -158,6 +161,12 @@ function strideAuditApp() {
             } catch {
                 return contextStr;
             }
-        }
+        },
+
+        notify(message, type = 'success') {
+            this.notification = message;
+            this.notificationType = type;
+            setTimeout(() => { this.notification = null; }, 4000);
+        },
     };
 }

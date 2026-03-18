@@ -54,6 +54,9 @@ class AdminDashboardService extends AbstractService
             ntdst_get(\Stride\Modules\Edition\SessionRepository::class),
         );
 
+        // Admin guide page (registers own menu hook)
+        new AdminGuidePage();
+
         add_action('admin_menu', [$this, 'registerAdminPage']);
         add_action('admin_menu', [$this, 'reorderSubmenus'], 999);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);

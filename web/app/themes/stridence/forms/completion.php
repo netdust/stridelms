@@ -55,6 +55,7 @@ $task_descriptions = [
 $template_map = [
     'post_evaluation' => 'task-questionnaire',
     'post_documents'  => 'task-documents',
+    'post_approval'   => 'task-approval',
 ];
 
 $is_post_course = ($active_phase === 'post_course');
@@ -170,7 +171,7 @@ $is_post_course = ($active_phase === 'post_course');
                                 </p>
                                 <?php
                                 $template = $template_map[$taskType] ?? ('task-' . $taskType);
-                                get_template_part('templates/forms/completion/' . $template, null, [
+                                stridence_template_part('templates/forms/completion/' . $template, null, [
                                     'registration' => $registration,
                                     'task'         => $task,
                                     'task_type'    => $taskType,
@@ -187,7 +188,7 @@ $is_post_course = ($active_phase === 'post_course');
 
     <!-- Dashboard link -->
     <div class="mt-8 text-center">
-        <a href="<?= esc_url(home_url('/mijn-account/?tab=inschrijvingen')) ?>"
+        <a href="<?= esc_url(home_url('/mijn-account/')) ?>"
            class="text-sm text-text-muted hover:text-text">
             &larr; <?= esc_html__('Terug naar dashboard', 'stridence') ?>
         </a>
@@ -226,11 +227,12 @@ document.addEventListener('alpine:init', () => {
                     task_data: data,
                 });
 
-                if (result.success) {
+                if (result.completed) {
+                    const wasAlreadyDone = this.completedCount === this.totalCount;
                     this.tasks[taskType] = { status: 'completed', completed_at: new Date().toISOString() };
 
-                    if (this.completedCount === this.totalCount) {
-                        window.location.reload();
+                    if (this.completedCount === this.totalCount || wasAlreadyDone) {
+                        window.location.href = '<?= esc_url(home_url('/mijn-account/?tab=inschrijvingen')) ?>';
                     }
                 } else {
                     this.error = result.data?.message || 'Er ging iets mis.';

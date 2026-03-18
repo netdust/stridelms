@@ -71,11 +71,11 @@ final class EditionActionsMetabox
             <!-- Enrollment Warnings -->
             <?php $this->renderWarnings($post); ?>
 
-            <!-- Enrollment Requirements -->
-            <?php $this->renderRequirementsSection($post); ?>
-
             <!-- Requires Approval -->
             <?php $this->renderApprovalSection($post); ?>
+
+            <!-- Enrollment Requirements -->
+            <?php $this->renderRequirementsSection($post); ?>
         </div>
         <?php
     }
@@ -203,30 +203,25 @@ final class EditionActionsMetabox
                                <?php checked($checked); ?>>
                         <span style="font-size: 12px;"><?= esc_html($label) ?></span>
                     </label>
-                <?php endforeach; ?>
-            </div>
-
-            <!-- Post-course requirements -->
-            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #e0e0e0;">
-                <h4><?php esc_html_e('Na afloop', 'stride'); ?></h4>
-                <p class="description" style="margin-bottom: 8px; font-size: 11px;">
-                    <?php esc_html_e('Taken die deelnemers moeten voltooien na de opleiding.', 'stride'); ?>
-                </p>
-                <?php
-                $postCourseRequirements = [
-                    'post_requires_evaluation' => __('Evaluatie invullen', 'stride'),
-                    'post_requires_documents'  => __('Documenten uploaden', 'stride'),
-                    'post_requires_approval'   => __('Goedkeuring beheerder', 'stride'),
-                ];
-                ?>
-                <?php foreach ($postCourseRequirements as $key => $label): ?>
-                    <?php $checked = (bool) $model->getMeta($post->ID, $key); ?>
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
-                        <input type="hidden" name="ntdst_fields[<?= esc_attr($key) ?>]" value="0">
-                        <input type="checkbox" name="ntdst_fields[<?= esc_attr($key) ?>]" value="1"
-                               <?php checked($checked); ?>>
-                        <span style="font-size: 12px;"><?= esc_html($label) ?></span>
-                    </label>
+                    <?php if ($key === 'requires_session_selection'): ?>
+                        <div style="margin-bottom: 8px; <?= $hasSessionReq ? '' : 'display:none;' ?>"
+                             id="stride-selection-controls">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
+                                <input type="hidden" name="ntdst_fields[selection_open]" value="0">
+                                <input type="checkbox" name="ntdst_fields[selection_open]" value="1"
+                                       <?php checked($selectionOpen); ?>>
+                                <span style="font-size: 12px; font-weight: 600;"><?php esc_html_e('Sessiekeuze geopend', 'stride'); ?></span>
+                            </label>
+                            <div style="margin-top: 4px;">
+                                <label style="font-size: 11px; color: #646970; display: block; margin-bottom: 2px;">
+                                    <?php esc_html_e('Deadline', 'stride'); ?>
+                                </label>
+                                <input type="date" name="ntdst_fields[selection_deadline]"
+                                       value="<?= esc_attr($selectionDeadline) ?>"
+                                       style="width: 100%; font-size: 12px;">
+                            </div>
+                        </div>
+                    <?php endif; ?>
                 <?php endforeach; ?>
             </div>
 
@@ -271,24 +266,30 @@ final class EditionActionsMetabox
                 </div>
             <?php endif; ?>
 
-            <!-- Session selection controls (visible when session selection is required) -->
-            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #e0e0e0; <?= $hasSessionReq ? '' : 'display:none;' ?>"
-                 id="stride-selection-controls">
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
-                    <input type="hidden" name="ntdst_fields[selection_open]" value="0">
-                    <input type="checkbox" name="ntdst_fields[selection_open]" value="1"
-                           <?php checked($selectionOpen); ?>>
-                    <span style="font-size: 12px; font-weight: 600;"><?php esc_html_e('Sessiekeuze geopend', 'stride'); ?></span>
-                </label>
-                <div style="margin-top: 4px;">
-                    <label style="font-size: 11px; color: #646970; display: block; margin-bottom: 2px;">
-                        <?php esc_html_e('Deadline', 'stride'); ?>
+            <!-- Post-course requirements -->
+            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #e0e0e0;">
+                <h4><?php esc_html_e('Na afloop', 'stride'); ?></h4>
+                <p class="description" style="margin-bottom: 8px; font-size: 11px;">
+                    <?php esc_html_e('Taken die deelnemers moeten voltooien na de opleiding.', 'stride'); ?>
+                </p>
+                <?php
+                $postCourseRequirements = [
+                    'post_requires_evaluation' => __('Evaluatie invullen', 'stride'),
+                    'post_requires_documents'  => __('Documenten uploaden', 'stride'),
+                    'post_requires_approval'   => __('Aftekenen door beheerder', 'stride'),
+                ];
+                ?>
+                <?php foreach ($postCourseRequirements as $key => $label): ?>
+                    <?php $checked = (bool) $model->getMeta($post->ID, $key); ?>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
+                        <input type="hidden" name="ntdst_fields[<?= esc_attr($key) ?>]" value="0">
+                        <input type="checkbox" name="ntdst_fields[<?= esc_attr($key) ?>]" value="1"
+                               <?php checked($checked); ?>>
+                        <span style="font-size: 12px;"><?= esc_html($label) ?></span>
                     </label>
-                    <input type="date" name="ntdst_fields[selection_deadline]"
-                           value="<?= esc_attr($selectionDeadline) ?>"
-                           style="width: 100%; font-size: 12px;">
-                </div>
+                <?php endforeach; ?>
             </div>
+
         </div>
 
         <script>

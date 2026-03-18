@@ -1,0 +1,613 @@
+/**
+ * Trajectory Admin Styles
+ *
+ * Styles for the trajectory admin interface with mode-based tabs.
+ * Follows patterns from edition-admin.css for consistency.
+ *
+ * @package stride
+ */
+
+/* ==========================================================================
+   Trajectory Admin Container
+   ========================================================================== */
+
+.stride-trajectory-admin {
+    background: #fff;
+    max-width: 900px;
+}
+
+/* ==========================================================================
+   Tab Navigation
+   ========================================================================== */
+
+.stride-trajectory-tabs {
+    max-width: 700px;
+}
+
+.stride-tabs-nav {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid #c3c4c7;
+    margin-bottom: 16px;
+}
+
+.stride-tab {
+    padding: 10px 18px;
+    background: #f0f0f1;
+    border: 1px solid #c3c4c7;
+    border-bottom: none;
+    margin-bottom: -1px;
+    margin-right: -1px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: #646970;
+    transition: all 0.15s ease;
+}
+
+.stride-tab:first-child {
+    border-radius: 3px 0 0 0;
+}
+
+.stride-tab:last-child {
+    border-radius: 0 3px 0 0;
+    margin-right: 0;
+}
+
+.stride-tab:hover {
+    background: #f6f7f7;
+    color: #1d2327;
+}
+
+.stride-tab.active {
+    background: #fff;
+    border-bottom: 1px solid #fff;
+    color: #1d2327;
+}
+
+.stride-tab.hidden {
+    display: none;
+}
+
+.stride-tab-content {
+    display: none;
+}
+
+.stride-tab-content.active {
+    display: block;
+}
+
+.stride-tab-content.hidden {
+    display: none !important;
+}
+
+/* ==========================================================================
+   Form Fields
+   ========================================================================== */
+
+.stride-field-row {
+    margin-bottom: 12px;
+}
+
+.stride-field-row.two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.stride-field label {
+    display: block;
+    font-weight: 600;
+    font-size: 12px;
+    color: #1d2327;
+    margin-bottom: 4px;
+}
+
+.stride-field input[type="text"],
+.stride-field input[type="email"],
+.stride-field input[type="number"],
+.stride-field input[type="date"],
+.stride-field input[type="time"],
+.stride-field select,
+.stride-field textarea {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #8c8f94;
+    border-radius: 3px;
+    font-size: 13px;
+}
+
+.stride-field textarea {
+    resize: vertical;
+    min-height: 60px;
+    font-family: inherit;
+}
+
+.stride-field input[readonly],
+.stride-field select[disabled] {
+    background: #f6f7f7;
+    color: #646970;
+}
+
+.stride-field .description {
+    font-size: 11px;
+    color: #646970;
+    margin-top: 3px;
+}
+
+/* ==========================================================================
+   Mode Selection
+   ========================================================================== */
+
+.stride-mode-select {
+    max-width: 200px;
+}
+
+.mode-description {
+    display: block;
+    margin-top: 6px;
+    font-style: italic;
+}
+
+.mode-description.hidden {
+    display: none;
+}
+
+.stride-self-paced-only.hidden,
+.stride-cohort-only.hidden {
+    display: none;
+}
+
+/* ==========================================================================
+   Courses Section
+   ========================================================================== */
+
+.stride-courses-section {
+    padding: 10px 0;
+}
+
+.stride-courses-preview {
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 12px;
+    margin-top: 12px;
+}
+
+.stride-courses-preview h4 {
+    margin: 0 0 12px 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.stride-course-group {
+    margin-bottom: 12px;
+}
+
+.stride-course-group:last-child {
+    margin-bottom: 0;
+}
+
+.stride-course-group h5 {
+    margin: 0 0 6px 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: #50575e;
+}
+
+.stride-course-group ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.stride-course-group li {
+    font-size: 12px;
+    color: #1d2327;
+    margin-bottom: 2px;
+}
+
+.stride-course-group .pick-count {
+    color: #2271b1;
+    font-style: italic;
+    font-size: 11px;
+}
+
+.no-courses {
+    color: #646970;
+    font-style: italic;
+}
+
+/* Course Builder - Enhanced */
+.stride-courses-section h4 {
+    margin: 0 0 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.stride-course-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.stride-course-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background: #f6f7f7;
+    border: 1px solid #dcdcde;
+    margin-bottom: 4px;
+    border-radius: 3px;
+}
+
+.stride-course-item .course-title {
+    flex: 1;
+}
+
+.stride-course-item .remove-course {
+    color: #b32d2e;
+    cursor: pointer;
+}
+
+.stride-course-item .remove-course:hover {
+    color: #a00;
+}
+
+.stride-add-course {
+    margin-top: 8px;
+    display: flex;
+    gap: 8px;
+}
+
+.stride-add-course .select2-container {
+    flex: 1;
+}
+
+.stride-elective-group {
+    border: 1px solid #c3c4c7;
+    padding: 16px;
+    margin-bottom: 16px;
+    border-radius: 4px;
+    background: #fafafa;
+}
+
+.stride-elective-group .group-header {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+    align-items: flex-end;
+}
+
+.stride-elective-group .group-header .stride-field {
+    margin-bottom: 0;
+}
+
+.stride-elective-group .group-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
+}
+
+.stride-no-courses {
+    color: #646970;
+    font-style: italic;
+    padding: 12px;
+    background: #f6f7f7;
+    border-radius: 3px;
+}
+
+/* Course Search Select2 */
+.stride-course-select {
+    min-width: 300px;
+}
+
+/* ==========================================================================
+   Hybrid Course/Edition Items
+   ========================================================================== */
+
+/* Type-specific left border styling */
+.stride-item-edition {
+    border-left: 3px solid #2271b1;
+}
+
+.stride-item-online {
+    border-left: 3px solid #00a32a;
+}
+
+/* Item icon */
+.stride-course-item .item-icon {
+    color: #646970;
+    margin-right: 8px;
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}
+
+.stride-item-edition .item-icon {
+    color: #2271b1;
+}
+
+.stride-item-online .item-icon {
+    color: #00a32a;
+}
+
+/* Type badges */
+.stride-course-item .item-badge {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-left: 8px;
+    margin-right: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.stride-badge-edition {
+    background: #e5f0f8;
+    color: #2271b1;
+}
+
+.stride-badge-online {
+    background: #e6f4ea;
+    color: #00a32a;
+}
+
+/* Select2 optgroup styling for hybrid dropdown */
+.select2-results__group {
+    font-weight: 600;
+    font-size: 11px;
+    color: #1d2327;
+    padding: 8px 12px 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    background: #f6f7f7;
+    border-top: 1px solid #dcdcde;
+}
+
+.select2-results__group:first-child {
+    border-top: none;
+}
+
+/* Custom option rendering in Select2 */
+.stride-select-option {
+    display: flex;
+    align-items: center;
+}
+
+.stride-select-option .dashicons {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+    line-height: 14px;
+}
+
+/* ==========================================================================
+   Enrollments Tab
+   ========================================================================== */
+
+.stride-enrollments-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.stride-enrollments-filters {
+    display: flex;
+    gap: 12px;
+}
+
+.stride-enrollments-filters input,
+.stride-enrollments-filters select {
+    padding: 4px 8px;
+}
+
+.stride-enrollment-count {
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.stride-progress-bar {
+    width: 100px;
+    height: 12px;
+    background: #dcdcde;
+    border-radius: 6px;
+    overflow: hidden;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.stride-progress-bar-fill {
+    height: 100%;
+    background: #00a32a;
+    transition: width 0.3s;
+}
+
+.stride-progress-text {
+    margin-left: 8px;
+    font-size: 11px;
+    color: #646970;
+}
+
+.stride-status-badge {
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.stride-status-enrolled {
+    background: #d4edda;
+    color: #155724;
+}
+
+.stride-status-completed {
+    background: #cce5ff;
+    color: #004085;
+}
+
+.stride-status-paused {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.stride-status-cancelled {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.stride-enrollments-empty {
+    text-align: center;
+    padding: 40px;
+    color: #646970;
+}
+
+/* ==========================================================================
+   Info Box
+   ========================================================================== */
+
+.stride-info-box {
+    background: #f0f6fc;
+    border-left: 4px solid #72aee6;
+    padding: 12px 16px;
+    margin: 16px 0;
+}
+
+.stride-info-box p {
+    margin: 0;
+}
+
+.stride-info-box p + p {
+    margin-top: 6px;
+}
+
+/* ==========================================================================
+   Select2 Overrides
+   ========================================================================== */
+
+.stride-trajectory-admin .select2-container {
+    min-width: 200px;
+}
+
+.stride-trajectory-admin .select2-container--default .select2-selection--single {
+    height: 32px;
+    border-color: #8c8f94;
+}
+
+.stride-trajectory-admin .select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 30px;
+}
+
+.stride-trajectory-admin .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 30px;
+}
+
+/* ==========================================================================
+   Linked Editions
+   ========================================================================== */
+
+.stride-linked-editions {
+    margin-top: 12px;
+}
+
+.stride-linked-editions table {
+    width: 100%;
+}
+
+.stride-linked-editions th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    padding: 8px;
+}
+
+.stride-linked-editions td {
+    padding: 8px;
+    vertical-align: middle;
+}
+
+.stride-edition-select {
+    width: 100%;
+    max-width: 300px;
+}
+
+/* ==========================================================================
+   Sidebar
+   ========================================================================== */
+
+.stride-trajectory-sidebar {
+    padding: 0;
+}
+
+.stride-sidebar-section {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #ddd;
+}
+
+.stride-sidebar-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.stride-sidebar-section label {
+    display: block;
+    font-weight: 600;
+    font-size: 12px;
+    color: #1d2327;
+    margin-bottom: 6px;
+}
+
+.stride-sidebar-section h4 {
+    margin: 0 0 8px 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: #50575e;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.stride-status-select {
+    width: 100%;
+}
+
+.stride-sidebar-meta {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.stride-sidebar-meta li {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 12px;
+    border-bottom: 1px dotted #ddd;
+}
+
+.stride-sidebar-meta li:last-child {
+    border-bottom: none;
+}
+
+.stride-sidebar-meta .meta-label {
+    color: #646970;
+}
+
+.stride-sidebar-meta .meta-value {
+    font-weight: 600;
+    color: #1d2327;
+}
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+
+@media screen and (max-width: 782px) {
+    .stride-field-row.two-col {
+        grid-template-columns: 1fr;
+    }
+}

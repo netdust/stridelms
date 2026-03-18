@@ -95,7 +95,7 @@ foreach ($tasks as $task) {
 
     <!-- Progress bar -->
     <div class="pt-2">
-        <div class="h-1.5 bg-surface-alt rounded-full overflow-hidden">
+        <div class="h-2 bg-surface-alt rounded-full overflow-hidden">
             <div class="h-full bg-primary rounded-full transition-all"
                  style="width: <?= esc_attr((string) $percentage) ?>%"></div>
         </div>

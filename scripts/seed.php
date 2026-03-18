@@ -534,14 +534,17 @@ class StrideSeedData {
                         'venue' => 'VAD Opleidingscentrum Brussel',
                         'speakers' => 'Team VAD Preventie',
                         'status' => 'open',
+                        'requires_session_selection' => true,
+                        'selection_open' => true,
                         // Selection deadline: must choose sessions 1 week before start
                         'selection_deadline' => date('Y-m-d', strtotime('+4 weeks')),
                         // Session slots: define which sessions are alternatives
                         'session_slots' => json_encode([
                             [
-                                'name' => 'Verdieping (kies 1)',
+                                'slot' => 'Verdieping (kies 1)',
+                                'label' => 'Verdieping (kies 1)',
                                 'required' => true,
-                                'sessions' => [], // Will be filled with session IDs after creation
+                                'pick_count' => 1,
                             ],
                         ]),
                         'sessions' => [
@@ -996,13 +999,13 @@ class StrideSeedData {
         // Create lessons
         $lessonIds = $this->createLessonsForCourse($courseId, $courseData['title'], $courseData['lessons'] ?? []);
 
-        // Create editions
+        // Create editions (pass lessonIds so online sessions can link to them)
         foreach ($courseData['editions'] as $editionData) {
-            $this->createEdition($courseId, $courseData['title'], $editionData);
+            $this->createEdition($courseId, $courseData['title'], $editionData, $lessonIds);
         }
     }
 
-    private function createEdition(int $courseId, string $courseTitle, array $data): void {
+    private function createEdition(int $courseId, string $courseTitle, array $data, array $lessonIds = []): void {
         if (!$this->editionRepository) return;
 
         $postTitle = $courseTitle . ' - ' . date('j M Y', strtotime($data['start_date']));
@@ -1041,7 +1044,7 @@ class StrideSeedData {
         }
 
         // Set completion requirements if specified (enrollment phase)
-        foreach (['requires_questionnaire', 'requires_documents', 'requires_approval'] as $reqKey) {
+        foreach (['requires_session_selection', 'requires_questionnaire', 'requires_documents', 'requires_approval'] as $reqKey) {
             if (!empty($data[$reqKey])) {
                 update_post_meta($editionId, '_ntdst_' . $reqKey, '1');
             }
@@ -1054,7 +1057,10 @@ class StrideSeedData {
             }
         }
 
-        // Set selection deadline if specified
+        // Set selection open/deadline if specified
+        if (!empty($data['selection_open'])) {
+            update_post_meta($editionId, '_ntdst_selection_open', '1');
+        }
         if (!empty($data['selection_deadline'])) {
             update_post_meta($editionId, '_ntdst_selection_deadline', $data['selection_deadline']);
         }
@@ -1092,13 +1098,22 @@ class StrideSeedData {
         }
         echo "\n";
 
-        // Create sessions
+        // Create sessions (pass lessonIds for online session linking)
+        $onlineLessonIndex = 0;
         foreach ($data['sessions'] as $sessionData) {
-            $this->createSession($editionId, $data, $sessionData);
+            $sessionLessonIds = [];
+            if (($sessionData['type'] ?? '') === SESSION_TYPE_ONLINE && !empty($lessonIds)) {
+                // Link each online session to the next available lesson
+                if (isset($lessonIds[$onlineLessonIndex])) {
+                    $sessionLessonIds = [$lessonIds[$onlineLessonIndex]];
+                    $onlineLessonIndex++;
+                }
+            }
+            $this->createSession($editionId, $data, $sessionData, $sessionLessonIds);
         }
     }
 
-    private function createSession(int $editionId, array $editionData, array $sessionData): void {
+    private function createSession(int $editionId, array $editionData, array $sessionData, array $lessonIds = []): void {
         if (!$this->sessionService) return;
 
         $sessionDate = date('Y-m-d', strtotime($editionData['start_date'] . " +{$sessionData['date_offset']} days"));
@@ -1117,6 +1132,10 @@ class StrideSeedData {
             $createData['title'] = $sessionData['title'];
         }
 
+        if (!empty($sessionData['slot'])) {
+            $createData['slot'] = $sessionData['slot'];
+        }
+
         $sessionId = $this->sessionService->createSession($createData);
 
         if (is_wp_error($sessionId)) {
@@ -1125,6 +1144,14 @@ class StrideSeedData {
         }
 
         update_post_meta($sessionId, self::SEED_META_KEY, true);
+
+        // Link online sessions to LearnDash lessons
+        if (!empty($lessonIds)) {
+            update_post_meta($sessionId, '_ntdst_lesson_ids', $lessonIds);
+            $lessonTitles = array_map(fn($id) => get_the_title($id), $lessonIds);
+            echo "        🔗 Linked lessons: " . implode(', ', $lessonTitles) . "\n";
+        }
+
         $this->created['sessions'][] = $sessionId;
 
         $typeEmoji = match($sessionData['type']) {
@@ -1410,11 +1437,69 @@ class StrideSeedData {
                             ld_update_course_access($this->adminUserId, $courseId, false);
                         }
                     }
+
+                    // Initialize completion_tasks if edition has requirements
+                    $completion = new EnrollmentCompletion();
+                    $tasks = $completion->buildInitialTasks($editionId, 'vad_edition');
+                    if (!empty($tasks)) {
+                        global $wpdb;
+                        $wpdb->update(
+                            $wpdb->prefix . 'vad_registrations',
+                            ['completion_tasks' => wp_json_encode($tasks)],
+                            ['id' => $regId]
+                        );
+                        echo "    + Completion tasks: " . implode(', ', array_keys($tasks)) . "\n";
+                    }
                 }
             }
 
             // Create quote
             $this->createQuoteForEdition($editionId, $this->adminUserId);
+        }
+
+        // === Enroll admin in editions that have enrollment requirements (for task testing) ===
+        foreach ($openEditions as $editionId) {
+            $reqS = get_post_meta($editionId, '_ntdst_requires_session_selection', true);
+            $reqQ = get_post_meta($editionId, '_ntdst_requires_questionnaire', true);
+            $reqD = get_post_meta($editionId, '_ntdst_requires_documents', true);
+            $reqA = get_post_meta($editionId, '_ntdst_requires_approval', true);
+
+            if (!$reqS && !$reqQ && !$reqD && !$reqA) {
+                continue;
+            }
+
+            if ($this->regRepo && !$this->regRepo->exists($this->adminUserId, $editionId)) {
+                $regId = $this->regRepo->create([
+                    'user_id' => $this->adminUserId,
+                    'edition_id' => $editionId,
+                    'status' => RegistrationStatus::Pending->value,
+                    'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
+                    'notes' => 'Seeded: edition with enrollment requirements',
+                ]);
+
+                if (!is_wp_error($regId)) {
+                    $this->created['registrations'][] = $regId;
+
+                    $completion = new EnrollmentCompletion();
+                    $tasks = $completion->buildInitialTasks($editionId, 'vad_edition');
+                    if (!empty($tasks)) {
+                        global $wpdb;
+                        $wpdb->update(
+                            $wpdb->prefix . 'vad_registrations',
+                            ['completion_tasks' => wp_json_encode($tasks)],
+                            ['id' => $regId]
+                        );
+                        echo "  + Registration for edition {$editionId} with tasks: " . implode(', ', array_keys($tasks)) . "\n";
+                    }
+
+                    if ($this->editionService && function_exists('ld_update_course_access')) {
+                        $courseId = $this->editionService->getCourseId($editionId);
+                        if ($courseId) {
+                            ld_update_course_access($this->adminUserId, $courseId, false);
+                        }
+                    }
+                }
+            }
         }
 
         // === Enroll admin in some ONLINE open courses (LD native) ===
@@ -1424,6 +1509,38 @@ class StrideSeedData {
             if (function_exists('ld_update_course_access')) {
                 ld_update_course_access($this->adminUserId, $courseId, false);
                 echo "  + LD enrollment: admin -> course {$courseId} (online open)\n";
+            }
+        }
+
+        // === Enroll admin in hybrid course (INDEX 13) to test online lesson actions ===
+        // The hybrid course has online sessions linked to lessons
+        if (isset($this->created['courses'][13])) {
+            $hybridCourseId = $this->created['courses'][13];
+            // Find the edition for this course
+            $hybridEditions = array_filter($openEditions, function ($editionId) use ($hybridCourseId) {
+                return (int) get_post_meta($editionId, '_ntdst_course_id', true) === $hybridCourseId;
+            });
+
+            foreach ($hybridEditions as $editionId) {
+                if ($this->regRepo && !$this->regRepo->exists($this->adminUserId, $editionId)) {
+                    $regId = $this->regRepo->create([
+                        'user_id' => $this->adminUserId,
+                        'edition_id' => $editionId,
+                        'status' => RegistrationStatus::Confirmed->value,
+                        'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
+                        'notes' => 'Seeded: hybrid course for online lesson testing',
+                    ]);
+
+                    if (!is_wp_error($regId)) {
+                        $this->created['registrations'][] = $regId;
+                        echo "  + Registration for hybrid edition {$editionId} (online lesson testing)\n";
+
+                        if (function_exists('ld_update_course_access')) {
+                            ld_update_course_access($this->adminUserId, $hybridCourseId, false);
+                            echo "    + Granted LD access to hybrid course {$hybridCourseId}\n";
+                        }
+                    }
+                }
             }
         }
 

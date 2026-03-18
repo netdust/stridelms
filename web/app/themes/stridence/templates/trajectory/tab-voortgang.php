@@ -17,9 +17,9 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
-use Stride\Contracts\LMSAdapterInterface;
 use Stride\Domain\TrajectoryMode;
-use stridence\services\frontend\TrajectoryDashboardService;
+use Stride\Integrations\LearnDash\LearnDashHelper;
+use Stride\Modules\Trajectory\TrajectoryDashboardService;
 
 $trajectory = $args['trajectory'];
 $enrollment = $args['enrollment'];
@@ -28,7 +28,6 @@ $dashboardService = $args['dashboard_service'];
 
 // Get progress data
 $progress = $dashboardService->getProgressData($user->ID, $trajectory->ID);
-$lmsAdapter = ntdst_get(LMSAdapterInterface::class);
 
 $completedCount = $progress['completed_count'];
 $totalRequired = $progress['total_required'];
@@ -64,7 +63,7 @@ $progressPercent = $totalRequired > 0 ? round(($completedCount / $totalRequired)
 
         <!-- Progress Bar -->
         <?php
-        get_template_part('partials/progress-bar', null, [
+        stridence_template_part('partials/progress-bar', null, [
             'attended' => $completedCount,
             'required' => $totalRequired,
             'label' => __('Totale voortgang', 'stridence'),
@@ -80,7 +79,7 @@ $progressPercent = $totalRequired > 0 ? round(($completedCount / $totalRequired)
             </h3>
             <div class="card divide-y divide-border">
                 <?php foreach ($progress['required_courses'] as $course) :
-                    $isComplete = $lmsAdapter->isComplete($user->ID, $course->ID);
+                    $isComplete = LearnDashHelper::isComplete($course->ID, $user->ID);
                     $isInProgress = in_array($course->ID, $progress['in_progress_courses'], true);
                 ?>
                     <div class="p-4 flex items-center justify-between gap-4">
@@ -141,7 +140,7 @@ $progressPercent = $totalRequired > 0 ? round(($completedCount / $totalRequired)
         // Count completed in this group
         $groupCompleted = 0;
         foreach ($courses as $course) {
-            if ($lmsAdapter->isComplete($user->ID, $course->ID)) {
+            if (LearnDashHelper::isComplete($course->ID, $user->ID)) {
                 $groupCompleted++;
             }
         }
@@ -160,7 +159,7 @@ $progressPercent = $totalRequired > 0 ? round(($completedCount / $totalRequired)
 
             <div class="card divide-y divide-border">
                 <?php foreach ($courses as $course) :
-                    $isComplete = $lmsAdapter->isComplete($user->ID, $course->ID);
+                    $isComplete = LearnDashHelper::isComplete($course->ID, $user->ID);
                     $isInProgress = in_array($course->ID, $progress['in_progress_courses'], true);
                 ?>
                     <div class="p-4 flex items-center justify-between gap-4">
