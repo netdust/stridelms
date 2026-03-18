@@ -405,7 +405,7 @@ add_filter('wp_speculation_rules_configuration', '__return_null');
 
 // Prevent browser from caching pages (stale logged-in/out state)
 add_action('send_headers', function () {
-    if (!is_admin()) {
+    if (!is_admin() && is_user_logged_in()) {
         nocache_headers();
         header('Vary: Cookie', false);
     }
