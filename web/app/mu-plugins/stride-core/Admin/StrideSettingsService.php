@@ -132,12 +132,13 @@ class StrideSettingsService
         }
 
         if (file_exists($jsFile)) {
+            // Load settings.js BEFORE Alpine so the component function is defined
             wp_enqueue_script(
                 'stride-settings',
                 plugins_url('assets/js/admin/settings.js', $basePath . '/stride-core.php'),
-                ['alpinejs'],
+                [],
                 (string) filemtime($jsFile),
-                true
+                false // in <head>, not footer
             );
         }
 

@@ -7,8 +7,8 @@
  * @package stride
  */
 
-document.addEventListener('alpine:init', () => {
-    Alpine.data('strideSettingsApp', () => ({
+function strideSettingsApp() {
+    return {
 
         // State
         activeTab: 'general',
@@ -288,5 +288,5 @@ document.addEventListener('alpine:init', () => {
 
             return result.data || result;
         },
-    }));
-});
+    };
+}
