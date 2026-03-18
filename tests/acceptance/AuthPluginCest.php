@@ -74,19 +74,46 @@ class AuthPluginCest
     /**
      * SCENARIO: Magic link request shows success regardless of email existence
      *   GIVEN: I am on /login
-     *   WHEN: I enter any email and submit
+     *   WHEN: I switch to magic link tab, enter any email and submit
      *   THEN: I see success message (anti-enumeration)
+     *
+     * When password auth is enabled (current DB config), the login page defaults
+     * to password mode. Click "Sign in with email link instead" to switch to
+     * magic link mode, which shows the #email-magic input.
      */
     public function magicLinkRequestShowsSuccessForAnyEmail(AcceptanceTester $I): void
     {
         $I->wantTo('verify magic link request shows success for any email');
         $I->amOnPage('/login');
 
-        // Fill the email input by id
-        $I->fillField('#email', 'nonexistent-email-12345@example.com');
-        $I->click('button[type="submit"]');
+        // Wait for Alpine.js to initialize
+        $I->waitForElement('input[type="email"]', 5);
 
-        // Wait for AJAX response - message is "If an account exists with this email, you will receive a login link shortly."
+        // Switch to magic link mode if password form is showing
+        // The link text contains "email link" — click it to toggle mode
+        $magicLinkToggle = $I->grabMultiple('a', 'text');
+        $I->executeJS("
+            const links = document.querySelectorAll('a');
+            for (const link of links) {
+                if (link.textContent.includes('email link')) {
+                    link.click();
+                    break;
+                }
+            }
+        ");
+
+        // Wait for magic link form to appear
+        $I->waitForElement('#email-magic', 5);
+
+        // Fill the magic link email and submit via Alpine component
+        $I->executeJS("
+            const container = document.querySelector('[x-data]');
+            const comp = Alpine.\$data(container);
+            comp.email = 'nonexistent-email-12345@example.com';
+            comp.requestMagicLink();
+        ");
+
+        // Wait for AJAX response
         $I->waitForText('login link', 10);
         $I->see('login link');
         $I->dontSee('not found');
@@ -100,23 +127,49 @@ class AuthPluginCest
     /**
      * SCENARIO: Registration shows success message
      *   GIVEN: I am on /register
-     *   WHEN: I fill required fields and accept terms
+     *   WHEN: I fill required fields (including profile type) and accept terms
      *   THEN: I see "inbox" message
+     *
+     * Register form IDs: #first_name, #last_name, #email, #profile_type,
+     *   #consent_terms, #consent_privacy
+     * Alpine component: authRegister() submits via AJAX to ntdst_auth_register action.
+     * Profile type select is required when ProfileTypeService has types configured.
      */
     public function registrationShowsSuccessMessage(AcceptanceTester $I): void
     {
         $I->wantTo('verify registration shows success message');
         $I->amOnPage('/register');
 
+        // Wait for Alpine.js to initialize
+        $I->waitForElement('#email', 5);
+
         // Generate unique email for this test
         $testEmail = 'test-' . time() . '@example.com';
 
-        // Fill fields by id
-        $I->fillField('#email', $testEmail);
+        // Fill fields by id (Alpine x-model binds to these)
         $I->fillField('#first_name', 'Test');
         $I->fillField('#last_name', 'User');
+        $I->fillField('#email', $testEmail);
+
+        // Select profile type if the select exists (required when ProfileTypeService has types)
+        $profileTypeSelects = $I->grabMultiple('#profile_type');
+        if (!empty($profileTypeSelects)) {
+            // Select the first non-empty option via JS
+            $I->executeJS("
+                const select = document.getElementById('profile_type');
+                if (select && select.options.length > 1) {
+                    select.value = select.options[1].value;
+                    select.dispatchEvent(new Event('input', { bubbles: true }));
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            ");
+        }
+
+        // Accept terms checkboxes
         $I->checkOption('#consent_terms');
         $I->checkOption('#consent_privacy');
+
+        // Submit form
         $I->click('button[type="submit"]');
 
         // Wait for AJAX response - message is "Check your inbox for instructions..."

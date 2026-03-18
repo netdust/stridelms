@@ -31,7 +31,7 @@ return [
      */
     'services' => [
         \Stride\Integrations\LearnDash\LearnDashService::class,
-        // \Stride\Admin\AdminDashboardService::class, // Disabled: not needed for production
+        \Stride\Admin\AdminDashboardService::class,
         \Stride\Modules\Edition\EditionService::class,
         \Stride\Modules\Enrollment\EnrollmentService::class,
         \Stride\Modules\Trajectory\TrajectoryService::class,

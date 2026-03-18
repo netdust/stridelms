@@ -48,14 +48,14 @@ final class AdminAPIController
         register_rest_route(self::NAMESPACE, '/admin/stats', [
             'methods' => 'GET',
             'callback' => [$this, 'getStats'],
-            'permission_callback' => [$this, 'canAccessAdmin'],
+            'permission_callback' => [$this, 'canViewAdmin'],
         ]);
 
         // Editions list
         register_rest_route(self::NAMESPACE, '/admin/editions', [
             'methods' => 'GET',
             'callback' => [$this, 'getEditions'],
-            'permission_callback' => [$this, 'canAccessAdmin'],
+            'permission_callback' => [$this, 'canViewAdmin'],
             'args' => [
                 'page' => [
                     'type' => 'integer',
@@ -100,7 +100,7 @@ final class AdminAPIController
         register_rest_route(self::NAMESPACE, '/admin/editions/(?P<id>\d+)', [
             'methods' => 'GET',
             'callback' => [$this, 'getEdition'],
-            'permission_callback' => [$this, 'canAccessAdmin'],
+            'permission_callback' => [$this, 'canViewAdmin'],
             'args' => [
                 'id' => [
                     'type' => 'integer',
@@ -113,7 +113,7 @@ final class AdminAPIController
         register_rest_route(self::NAMESPACE, '/admin/editions/(?P<id>\d+)/registrations', [
             'methods' => 'GET',
             'callback' => [$this, 'getEditionRegistrations'],
-            'permission_callback' => [$this, 'canAccessAdmin'],
+            'permission_callback' => [$this, 'canViewAdmin'],
             'args' => [
                 'id' => [
                     'type' => 'integer',
@@ -126,14 +126,14 @@ final class AdminAPIController
         register_rest_route(self::NAMESPACE, '/admin/course-tags', [
             'methods' => 'GET',
             'callback' => [$this, 'getCourseTags'],
-            'permission_callback' => [$this, 'canAccessAdmin'],
+            'permission_callback' => [$this, 'canViewAdmin'],
         ]);
 
         // Mark attendance
         register_rest_route(self::NAMESPACE, '/admin/attendance', [
             'methods' => 'POST',
             'callback' => [$this, 'markAttendance'],
-            'permission_callback' => [$this, 'canAccessAdmin'],
+            'permission_callback' => [$this, 'canManageAdmin'],
             'args' => [
                 'session_id' => [
                     'type' => 'integer',
@@ -155,7 +155,7 @@ final class AdminAPIController
         register_rest_route(self::NAMESPACE, '/admin/quotes', [
             'methods' => 'GET',
             'callback' => [$this, 'getQuotes'],
-            'permission_callback' => [$this, 'canAccessAdmin'],
+            'permission_callback' => [$this, 'canViewAdmin'],
             'args' => [
                 'page' => [
                     'type' => 'integer',
@@ -187,7 +187,7 @@ final class AdminAPIController
         register_rest_route(self::NAMESPACE, '/admin/trajectories', [
             'methods' => 'GET',
             'callback' => [$this, 'getTrajectories'],
-            'permission_callback' => [$this, 'canAccessAdmin'],
+            'permission_callback' => [$this, 'canViewAdmin'],
             'args' => [
                 'page' => [
                     'type' => 'integer',
@@ -215,14 +215,14 @@ final class AdminAPIController
         register_rest_route(self::NAMESPACE, '/admin/pending-approvals', [
             'methods' => 'GET',
             'callback' => [$this, 'getPendingApprovals'],
-            'permission_callback' => [$this, 'canAccessAdmin'],
+            'permission_callback' => [$this, 'canViewAdmin'],
         ]);
 
         // Approve registration (enrollment phase)
         register_rest_route(self::NAMESPACE, '/admin/approve-registration', [
             'methods' => 'POST',
             'callback' => [$this, 'approveRegistration'],
-            'permission_callback' => [$this, 'canAccessAdmin'],
+            'permission_callback' => [$this, 'canManageAdmin'],
             'args' => [
                 'registration_id' => [
                     'type' => 'integer',
@@ -235,7 +235,7 @@ final class AdminAPIController
         register_rest_route(self::NAMESPACE, '/admin/approve-post-course', [
             'methods' => 'POST',
             'callback' => [$this, 'approvePostCourse'],
-            'permission_callback' => [$this, 'canAccessAdmin'],
+            'permission_callback' => [$this, 'canManageAdmin'],
             'args' => [
                 'registration_id' => [
                     'type' => 'integer',
@@ -246,11 +246,19 @@ final class AdminAPIController
     }
 
     /**
-     * Permission callback for admin endpoints.
+     * Permission callback for read-only admin endpoints.
      */
-    public function canAccessAdmin(): bool
+    public function canViewAdmin(): bool
     {
-        return current_user_can('edit_others_posts');
+        return current_user_can('stride_view');
+    }
+
+    /**
+     * Permission callback for mutation admin endpoints.
+     */
+    public function canManageAdmin(): bool
+    {
+        return current_user_can('stride_manage');
     }
 
     /**

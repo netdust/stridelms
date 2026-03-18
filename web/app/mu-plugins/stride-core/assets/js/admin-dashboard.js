@@ -2,6 +2,7 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('strideApp', () => ({
         // State
         user: StrideConfig.user,
+        canManage: StrideConfig.canManage,
         view: 'dashboard',
         loading: true,
 

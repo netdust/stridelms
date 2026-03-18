@@ -250,6 +250,13 @@ class NTDST_Router
                 // Extract named parameters
                 $params = array_filter($matches, 'is_string', ARRAY_FILTER_USE_KEY);
 
+                // Reset 404 state — WordPress marked this as 404 before routing
+                global $wp_query;
+                if ($wp_query && $wp_query->is_404()) {
+                    $wp_query->is_404 = false;
+                    status_header(200);
+                }
+
                 // Execute callback
                 $result = call_user_func($route['callback'], $params, $template);
 
