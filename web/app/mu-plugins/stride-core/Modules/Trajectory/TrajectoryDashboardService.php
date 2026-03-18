@@ -44,15 +44,7 @@ final class TrajectoryDashboardService
      */
     public function getEnrollmentForUser(int $userId, int $trajectoryId): ?object
     {
-        $enrollments = $this->registrationRepo->findTrajectoryEnrollmentsByUser($userId);
-
-        foreach ($enrollments as $enrollment) {
-            if ((int) $enrollment->trajectory_id === $trajectoryId) {
-                return $enrollment;
-            }
-        }
-
-        return null;
+        return $this->registrationRepo->findByUserAndTrajectory($userId, $trajectoryId);
     }
 
     /**
@@ -87,6 +79,13 @@ final class TrajectoryDashboardService
         // Get user's edition registrations for this trajectory
         $editionRegs = $this->registrationRepo->findEditionsByTrajectory($userId, $trajectoryId);
 
+        // Pre-build edition → courseId map to avoid N+1 getCourseId calls
+        $editionCourseMap = [];
+        foreach ($editionRegs as $edReg) {
+            $edId = (int) $edReg->edition_id;
+            $editionCourseMap[$edId] = $this->editionService->getCourseId($edId);
+        }
+
         // Calculate completion
         $completedCourses = [];
         $inProgressCourses = [];
@@ -96,6 +95,7 @@ final class TrajectoryDashboardService
                 $userId,
                 $course->ID,
                 $editionRegs,
+                $editionCourseMap,
                 $completedCourses,
                 $inProgressCourses
             );
@@ -107,6 +107,7 @@ final class TrajectoryDashboardService
                     $userId,
                     $course->ID,
                     $editionRegs,
+                    $editionCourseMap,
                     $completedCourses,
                     $inProgressCourses
                 );
@@ -133,6 +134,7 @@ final class TrajectoryDashboardService
         int $userId,
         int $courseId,
         array $editionRegs,
+        array $editionCourseMap,
         array &$completedCourses,
         array &$inProgressCourses
     ): void {
@@ -144,7 +146,7 @@ final class TrajectoryDashboardService
 
         // Check if enrolled in any edition for this course
         foreach ($editionRegs as $edReg) {
-            $edCourseId = $this->editionService->getCourseId((int) $edReg->edition_id);
+            $edCourseId = $editionCourseMap[(int) $edReg->edition_id] ?? 0;
             if ($edCourseId === $courseId) {
                 $inProgressCourses[] = $courseId;
 
