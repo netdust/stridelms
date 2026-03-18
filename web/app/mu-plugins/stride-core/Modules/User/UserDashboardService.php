@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stride\Modules\User;
 
+use Stride\Domain\AttendanceStatus;
 use Stride\Domain\QuoteStatus;
 use Stride\Domain\RegistrationStatus;
 use Stride\Integrations\LearnDash\LearnDashHelper;
@@ -91,6 +92,40 @@ final class UserDashboardService
                 'certificaten' => !empty($enrollmentData['completed_items']),
             ],
         ];
+    }
+
+    /**
+     * Get lightweight navigation data without loading full enrollment/quote data.
+     *
+     * Uses existence checks (COUNT/LIMIT 1) instead of fetching all records.
+     * For use on non-home dashboard tabs that only need nav visibility flags.
+     *
+     * @return array{opleidingen: bool, trajecten: bool, agenda: bool, offertes: bool, certificaten: bool}
+     */
+    public function getNavData(int $userId): array
+    {
+        $hasRegistrations = $this->registrationRepo->hasActiveRegistrations($userId);
+        $hasTrajectories = $this->registrationRepo->hasTrajectoryEnrollments($userId);
+        $hasQuotes = $this->hasQuotes($userId);
+
+        return [
+            'opleidingen'  => $hasRegistrations,
+            'trajecten'    => $hasTrajectories,
+            'agenda'       => $hasRegistrations,
+            'offertes'     => $hasQuotes,
+            'certificaten' => $hasRegistrations,
+        ];
+    }
+
+    /**
+     * Check if user has any quotes (published).
+     */
+    private function hasQuotes(int $userId): bool
+    {
+        $quoteService = ntdst_get(\Stride\Modules\Invoicing\QuoteService::class);
+        $quotes = $quoteService->getUserQuotes($userId);
+
+        return !empty($quotes);
     }
 
     /**
@@ -477,6 +512,33 @@ final class UserDashboardService
             }
         }
 
+        // Batch-prefetch all attendance records for this user (keyed by session_id)
+        $allAttendance = $this->attendanceService->getRepository()->getByUser($userId);
+        $attendanceMap = [];
+        foreach ($allAttendance as $record) {
+            $attendanceMap[(int) $record->session_id] = AttendanceStatus::tryFrom($record->status);
+        }
+
+        // Batch-prefetch all sessions for these editions
+        $allSessions = [];
+        foreach (array_unique($editionIds) as $eid) {
+            $allSessions[$eid] = $this->sessionService->getSessionsForEdition($eid);
+        }
+
+        // Batch-prefetch quotes for all registration IDs (keyed by registration_id)
+        $registrationIds = array_map(fn($r) => (int) $r->id, $registrations);
+        $quoteService = ntdst_get(\Stride\Modules\Invoicing\QuoteService::class);
+        $allQuotes = [];
+        if ($quoteService) {
+            $userQuotes = $quoteService->getUserQuotes($userId);
+            foreach ($userQuotes as $q) {
+                $regId = (int) ($q['registration_id'] ?? 0);
+                if ($regId) {
+                    $allQuotes[$regId] = $q;
+                }
+            }
+        }
+
         foreach ($registrations as $reg) {
             if (empty($reg->edition_id)) {
                 continue;
@@ -501,19 +563,17 @@ final class UserDashboardService
             }
 
             $course = $courseId ? ($courseMap[$courseId] ?? null) : null;
-            $sessions = $this->sessionService->getSessionsForEdition($editionId);
+            $sessions = $allSessions[$editionId] ?? [];
             $selectedIds = array_map('intval', $reg->selections ?? []);
 
             foreach ($sessions as &$session) {
-                $status = $this->attendanceService->getStatus((int) $session['id'], $userId);
-                $session['attendance'] = $status?->value;
+                $session['attendance'] = ($attendanceMap[(int) $session['id']] ?? null)?->value;
                 $session['selected'] = in_array((int) $session['id'], $selectedIds, true);
             }
             unset($session);
 
-            // Attach quote summary if one exists for this registration
-            $quoteService = ntdst_get(\Stride\Modules\Invoicing\QuoteService::class);
-            $quote = $quoteService->getQuoteByRegistration((int) $reg->id);
+            // Use batch-prefetched quote for this registration
+            $quote = $allQuotes[(int) $reg->id] ?? null;
             $quoteSummary = null;
             if ($quote) {
                 $totalMoney = $quote['total_money'] ?? null;
@@ -558,8 +618,7 @@ final class UserDashboardService
 
             // Populate task summary for pending (enrollment) and confirmed (post-course) registrations
             if (!empty($reg->completion_tasks) && in_array($reg->status, ['pending', 'confirmed'], true)) {
-                $enrollment = ntdst_get(EnrollmentCompletion::class);
-                $regData['task_summary'] = $enrollment->getTaskSummary((int) $reg->id);
+                $regData['task_summary'] = $this->buildTaskSummaryFromData($reg->completion_tasks, $editionId);
                 $regData['complete_url'] = home_url('/vormingen/' . get_post_field('post_name', $editionId) . '/voltooien/');
                 $regData['cta'] = $this->calculateEditionCTA($regData['task_summary'], $regData['complete_url'], $editionId);
             }
@@ -581,6 +640,41 @@ final class UserDashboardService
         });
 
         return [$active, $completed, $cancelled];
+    }
+
+    /**
+     * Build task summary from already-loaded registration data.
+     *
+     * Matches the return format of EnrollmentCompletion::getTaskSummary()
+     * but avoids re-fetching the registration from the database.
+     *
+     * @param array $tasks  Decoded completion_tasks from registration
+     * @param int   $editionId Edition ID for availability calculation
+     * @return array{tasks: array, availability: array, total: int, completed: int, has_approval: bool, ready_for_approval: bool}
+     */
+    private function buildTaskSummaryFromData(array $tasks, int $editionId): array
+    {
+        $enrollment = ntdst_get(EnrollmentCompletion::class);
+        $availability = $enrollment->getTaskAvailability($tasks, $editionId);
+        $total = count($tasks);
+        $completed = 0;
+
+        foreach ($tasks as $task) {
+            if (($task['status'] ?? 'pending') === 'completed') {
+                $completed++;
+            }
+        }
+
+        return [
+            'tasks' => $tasks,
+            'availability' => $availability,
+            'total' => $total,
+            'completed' => $completed,
+            'has_approval' => isset($tasks['approval']),
+            'ready_for_approval' => isset($tasks['approval'])
+                && ($availability['approval']['state'] ?? '') === 'available'
+                && ($tasks['approval']['status'] ?? 'pending') !== 'completed',
+        ];
     }
 
     /**

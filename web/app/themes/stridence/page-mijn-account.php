@@ -29,10 +29,16 @@ if (!in_array($current_tab, $valid_tabs, true)) {
     $current_tab = 'home';
 }
 
-// Fetch home data for nav_items (and home tab content)
+// Only fetch full home data on home tab; other tabs just need nav items
 $dashboardService = ntdst_get(\Stride\Modules\User\UserDashboardService::class);
-$home_data = $dashboardService->getHomeData($user->ID);
-$nav_items = $home_data['nav_items'] ?? [];
+
+if ($current_tab === 'home') {
+    $home_data = $dashboardService->getHomeData($user->ID);
+    $nav_items = $home_data['nav_items'] ?? [];
+} else {
+    $home_data = null;
+    $nav_items = $dashboardService->getNavData($user->ID);
+}
 
 // Compute greeting variables (needed by $page_titles below)
 $firstName = explode(' ', trim($user->display_name))[0];

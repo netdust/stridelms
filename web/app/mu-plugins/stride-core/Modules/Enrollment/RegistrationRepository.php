@@ -351,6 +351,34 @@ final class RegistrationRepository
     // === User queries ===
 
     /**
+     * Check if user has any active registrations (not cancelled).
+     */
+    public function hasActiveRegistrations(int $userId): bool
+    {
+        global $wpdb;
+        $table = $this->table();
+        $result = $wpdb->get_var($wpdb->prepare(
+            "SELECT 1 FROM {$table} WHERE user_id = %d AND status != 'cancelled' LIMIT 1",
+            $userId
+        ));
+        return (bool) $result;
+    }
+
+    /**
+     * Check if user has any trajectory enrollments.
+     */
+    public function hasTrajectoryEnrollments(int $userId): bool
+    {
+        global $wpdb;
+        $table = $this->table();
+        $result = $wpdb->get_var($wpdb->prepare(
+            "SELECT 1 FROM {$table} WHERE user_id = %d AND trajectory_id IS NOT NULL AND trajectory_id > 0 AND status != 'cancelled' LIMIT 1",
+            $userId
+        ));
+        return (bool) $result;
+    }
+
+    /**
      * Get all registrations for a user.
      *
      * @return array<object>

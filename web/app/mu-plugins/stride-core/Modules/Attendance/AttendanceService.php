@@ -41,6 +41,14 @@ final class AttendanceService extends AbstractService
         ntdst_set(AttendanceRepository::class, fn() => $this->repository);
     }
 
+    /**
+     * Get the attendance repository for batch queries.
+     */
+    public function getRepository(): AttendanceRepository
+    {
+        return $this->repository;
+    }
+
     // === Mark Attendance ===
 
     /**
