@@ -17,6 +17,9 @@ use WP_Error;
  */
 final class ICalHandler
 {
+    /** @var array<int, array{courseTitle: string, venue: string}> Per-edition cache */
+    private array $editionCache = [];
+
     public function __construct()
     {
         $this->init();
@@ -131,26 +134,33 @@ final class ICalHandler
      */
     private function sessionToEvent(array $session, EditionService $editionService): array
     {
-        $edition = $editionService->getEdition($session['edition_id']);
-        $courseId = is_wp_error($edition) ? 0 : $editionService->getCourseId($session['edition_id']);
-        $course = $courseId ? get_post($courseId) : null;
+        $editionId = (int) $session['edition_id'];
 
-        // Get venue from edition via repository
-        $venue = '';
-        if (!is_wp_error($edition)) {
+        if (!isset($this->editionCache[$editionId])) {
+            $edition = $editionService->getEdition($editionId);
+            $courseId = is_wp_error($edition) ? 0 : $editionService->getCourseId($editionId);
+            $course = $courseId ? get_post($courseId) : null;
             $editionRepository = ntdst_get(EditionRepository::class);
-            $venue = $editionRepository->getField($edition->ID, 'venue', '');
+            $venue = !is_wp_error($edition)
+                ? $editionRepository->getField($edition->ID, 'venue', '')
+                : '';
+
+            $this->editionCache[$editionId] = [
+                'courseTitle' => $course ? $course->post_title : 'Stride Training',
+                'venue' => $venue,
+            ];
         }
 
+        $cached = $this->editionCache[$editionId];
         $date = $session['date'] ?? '';
         $startTime = $session['start_time'] ?? '';
         $endTime = $session['end_time'] ?? '';
 
         return [
             'uid' => 'session-' . $session['id'] . '@stride',
-            'summary' => $course ? $course->post_title : 'Stride Training',
+            'summary' => $cached['courseTitle'],
             'description' => $session['description'] ?? '',
-            'location' => $session['location'] ?: $venue,
+            'location' => $session['location'] ?: $cached['venue'],
             'start' => $date && $startTime ? ($date . ' ' . $startTime) : '',
             'end' => $date && $endTime ? ($date . ' ' . $endTime) : '',
         ];
