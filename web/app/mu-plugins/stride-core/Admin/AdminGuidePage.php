@@ -15,7 +15,7 @@ namespace Stride\Admin;
 final class AdminGuidePage
 {
     private const PAGE_SLUG = 'stride-handleiding';
-    private const CAPABILITY = 'edit_others_posts';
+    private const CAPABILITY = 'stride_view';
 
     public function __construct()
     {

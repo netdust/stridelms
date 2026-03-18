@@ -18,7 +18,7 @@ class AdminDashboardService extends AbstractService
     private const MENU_SLUG = 'stride-dashboard';
 
     /** Capability required to access */
-    private const CAPABILITY = 'edit_others_posts';
+    private const CAPABILITY = 'stride_view';
 
     /**
      * {@inheritDoc}
@@ -194,6 +194,7 @@ class AdminDashboardService extends AbstractService
                 'name' => $user->display_name,
                 'email' => $user->user_email,
             ],
+            'canManage' => current_user_can('stride_manage'),
         ]);
     }
 
