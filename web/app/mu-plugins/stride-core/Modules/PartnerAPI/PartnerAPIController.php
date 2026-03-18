@@ -472,28 +472,30 @@ final class PartnerAPIController
             return new WP_Error('forbidden', __('User belongs to another company.', 'stride'), ['status' => 403]);
         }
 
-        // Create registration
-        $data = [
-            'user_id' => $user->ID,
-            'edition_id' => $editionId ?: null,
-            'trajectory_id' => $trajectoryId ?: null,
-            'company_id' => $companyId,
-            'enrollment_path' => 'individual',
-        ];
-
-        $result = $this->registrationRepository->create($data);
-
-        if (is_wp_error($result)) {
-            $status = $result->get_error_code() === 'duplicate' ? 409 : 400;
-            return new WP_Error($result->get_error_code(), $result->get_error_message(), ['status' => $status]);
+        // Route through validated enrollment paths for capacity, duplicate, and status checks
+        if ($editionId) {
+            $enrollmentService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class);
+            $result = $enrollmentService->enroll($user->ID, $editionId, [
+                'company_id' => $companyId,
+                'enrollment_path' => 'individual',
+                'notes' => sprintf('Enrolled via Partner API by user #%d', get_current_user_id()),
+            ]);
+        } elseif ($trajectoryId) {
+            $selectionService = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::class);
+            $result = $selectionService->enroll($user->ID, $trajectoryId);
+        } else {
+            return new WP_Error('invalid_input', __('Either edition_id or trajectory_id is required.', 'stride'), ['status' => 400]);
         }
 
-        // Grant LearnDash course access if edition has course_id
-        if ($editionId) {
-            $courseId = $this->editionService->getCourseId($editionId);
-            if ($courseId && function_exists('ld_update_course_access')) {
-                ld_update_course_access($user->ID, $courseId, false);
-            }
+        if (is_wp_error($result)) {
+            $statusMap = [
+                'already_enrolled' => 409,
+                'edition_full' => 409,
+                'enrollment_closed' => 422,
+                'invalid_edition' => 404,
+            ];
+            $status = $statusMap[$result->get_error_code()] ?? 400;
+            return new WP_Error($result->get_error_code(), $result->get_error_message(), ['status' => $status]);
         }
 
         ntdst_log('partner-api')->info('Enrollment created via Partner API', [
