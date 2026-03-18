@@ -330,23 +330,22 @@ final class QuoteAdminController
 
         // Handle notes update
         if (isset($_POST['ntdst_fields']['notes'])) {
-            $notesRaw = $_POST['ntdst_fields']['notes'];
+            $notesRaw = wp_unslash($_POST['ntdst_fields']['notes']);
             $notes = is_string($notesRaw) ? json_decode($notesRaw, true) : $notesRaw;
             if (is_array($notes)) {
-                // Sanitize each note
-                $updateData['notes'] = array_values(array_filter(
-                    array_map(function (array $note): ?array {
-                        if (!empty($note['_deleted'])) {
-                            return null;
-                        }
-                        return [
-                            'content' => sanitize_textarea_field($note['content'] ?? ''),
-                            'type'    => in_array($note['type'] ?? '', ['admin', 'customer'], true) ? $note['type'] : 'admin',
-                            'author'  => sanitize_text_field($note['author'] ?? ''),
-                            'date'    => sanitize_text_field($note['date'] ?? ''),
-                        ];
-                    }, $notes)
-                ));
+                $sanitized = [];
+                foreach ($notes as $note) {
+                    if (!is_array($note) || !empty($note['_deleted'])) {
+                        continue;
+                    }
+                    $sanitized[] = [
+                        'content' => sanitize_textarea_field($note['content'] ?? ''),
+                        'type'    => in_array($note['type'] ?? '', ['admin', 'customer'], true) ? $note['type'] : 'admin',
+                        'author'  => sanitize_text_field($note['author'] ?? ''),
+                        'date'    => sanitize_text_field($note['date'] ?? ''),
+                    ];
+                }
+                $updateData['notes'] = $sanitized;
             }
         }
 

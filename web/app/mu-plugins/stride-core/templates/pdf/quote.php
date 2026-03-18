@@ -462,7 +462,18 @@ $companyEmail = $company['email'] ?? '';
         </div>
         <?php endif; ?>
 
-        <!-- Notes -->
+        <!-- Customer Notes -->
+        <?php $customerNotes = $quote['customer_notes'] ?? []; ?>
+        <?php if (!empty($customerNotes)): ?>
+        <div class="notes-section" style="margin-bottom: 5mm;">
+            <h3 style="font-size: 10pt; margin-bottom: 3mm; color: #333;"><?php esc_html_e('Opmerkingen', 'stride'); ?></h3>
+            <?php foreach ($customerNotes as $note): ?>
+            <p style="font-size: 9pt; margin: 0 0 2mm; color: #444;"><?php echo esc_html($note['content']); ?></p>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+
+        <!-- Validity -->
         <div class="notes-section">
             <p class="valid-until">
                 <?php if (!empty($validUntilDate) && !empty($companyEmail)): ?>

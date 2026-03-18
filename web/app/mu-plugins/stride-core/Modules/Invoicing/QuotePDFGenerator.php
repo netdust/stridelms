@@ -185,7 +185,27 @@ final class QuotePDFGenerator
                 'email' => $user ? $user->user_email : '',
             ],
             'company'             => $this->enrichCompanyDetails(),
+            'customer_notes'      => $this->extractCustomerNotes($quote),
         ];
+    }
+
+    /**
+     * Extract customer-facing notes (excludes internal/admin notes).
+     *
+     * @return array<array{content: string, date: string}>
+     */
+    private function extractCustomerNotes(array $quote): array
+    {
+        $notes = $quote['notes'] ?? [];
+        if (is_string($notes)) {
+            $notes = json_decode($notes, true) ?: [];
+        }
+
+        return array_values(array_filter($notes, function (array $note): bool {
+            return ($note['type'] ?? '') === 'customer'
+                && !empty($note['content'])
+                && empty($note['_deleted']);
+        }));
     }
 
     /**
