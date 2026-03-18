@@ -35,21 +35,6 @@ final class EnrollmentFormHandler
         add_filter('ntdst/api_data/stride_register_interest', [$this, 'handleRegisterInterest'], 10, 2);
         add_filter('ntdst/api_data/stride_validate_voucher', [$this, 'handleValidateVoucher'], 10, 2);
         add_filter('ntdst/api_data/stride_save_session_selection', [$this, 'handleSaveSessionSelection'], 10, 2);
-
-        // Register voucher validation as public action (can validate before login)
-        add_filter('ntdst/api/public_actions', [$this, 'registerPublicActions']);
-    }
-
-    /**
-     * Register public API actions that don't require authentication.
-     *
-     * @param array<string> $actions Existing public actions
-     * @return array<string>
-     */
-    public function registerPublicActions(array $actions): array
-    {
-        $actions[] = 'stride_validate_voucher';
-        return $actions;
     }
 
     /**
@@ -481,7 +466,6 @@ final class EnrollmentFormHandler
             'valid' => true,
             'discount' => $discount->inCents() / 100,
             'discount_formatted' => '€ ' . number_format($discount->inCents() / 100, 2, ',', '.'),
-            'discount_type' => $validation['discount_type'],
             'message' => sprintf(__('Korting toegepast: -€ %s', 'stride'), number_format($discount->inCents() / 100, 2, ',', '.')),
         ];
     }
