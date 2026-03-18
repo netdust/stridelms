@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Stride\Admin;
 
+use Stride\Modules\User\ProfileTypeService;
+use WP_Error;
+
 /**
- * Stride Settings
+ * Stride Settings Hub
  *
- * Manages configurable URL slugs and other plugin settings.
- * Settings page under Stride admin menu.
+ * Alpine.js tabbed settings page with AJAX save per tab.
+ * Tabs: "Algemeen" (URL slugs), "Profieltypes" (profile type CRUD).
  *
  * Plain class — owned by EditionService (slugs affect CPT registration).
  * Static methods remain available for CPT slug lookups.
@@ -38,9 +41,13 @@ class StrideSettingsService
     private function init(): void
     {
         add_action('admin_menu', [$this, 'registerSettingsPage'], 20);
-        add_action('admin_init', [$this, 'registerSettings']);
-        add_action('update_option_' . self::OPTION_URL_SLUGS, [$this, 'onSlugsUpdated'], 10, 2);
+        add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
+        add_filter('ntdst/api_data/stride_save_settings', [$this, 'handleSaveSettings'], 10, 2);
     }
+
+    // =========================================================================
+    // STATIC SLUG ACCESSORS (unchanged — used by CPT registration)
+    // =========================================================================
 
     /**
      * Get the trajectory URL slug.
@@ -74,6 +81,10 @@ class StrideSettingsService
         return get_option(self::OPTION_URL_SLUGS, self::DEFAULT_SLUGS);
     }
 
+    // =========================================================================
+    // ADMIN PAGE
+    // =========================================================================
+
     /**
      * Register settings submenu page under Stride menu.
      */
@@ -90,118 +101,51 @@ class StrideSettingsService
     }
 
     /**
-     * Register settings fields.
+     * Enqueue Alpine.js, settings CSS and JS on settings page only.
      */
-    public function registerSettings(): void
+    public function enqueueAssets(string $hook): void
     {
-        register_setting(
-            'stride_settings_group',
-            self::OPTION_URL_SLUGS,
-            [
-                'type' => 'array',
-                'sanitize_callback' => [$this, 'sanitizeSlugs'],
-                'default' => self::DEFAULT_SLUGS,
-            ]
+        if (!str_contains($hook, self::SETTINGS_SLUG)) {
+            return;
+        }
+
+        // Alpine.js from CDN (deferred)
+        wp_enqueue_script(
+            'alpinejs',
+            'https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js',
+            [],
+            '3',
+            ['strategy' => 'defer']
         );
 
-        add_settings_section(
-            'stride_url_slugs_section',
-            'URL Slugs',
-            [$this, 'renderUrlSlugsSection'],
-            self::SETTINGS_SLUG
-        );
+        $basePath = dirname(__DIR__);
+        $cssFile = $basePath . '/assets/css/admin/settings.css';
+        $jsFile = $basePath . '/assets/js/admin/settings.js';
 
-        add_settings_field(
-            'trajectory_slug',
-            'Trajecten URL',
-            [$this, 'renderTrajectorySlugField'],
-            self::SETTINGS_SLUG,
-            'stride_url_slugs_section'
-        );
+        if (file_exists($cssFile)) {
+            wp_enqueue_style(
+                'stride-settings',
+                plugins_url('assets/css/admin/settings.css', $basePath . '/stride-core.php'),
+                [],
+                (string) filemtime($cssFile)
+            );
+        }
 
-        add_settings_field(
-            'edition_slug',
-            'Vormingen URL',
-            [$this, 'renderEditionSlugField'],
-            self::SETTINGS_SLUG,
-            'stride_url_slugs_section'
-        );
+        if (file_exists($jsFile)) {
+            wp_enqueue_script(
+                'stride-settings',
+                plugins_url('assets/js/admin/settings.js', $basePath . '/stride-core.php'),
+                ['alpinejs'],
+                (string) filemtime($jsFile),
+                true
+            );
+        }
+
+        wp_localize_script('stride-settings', 'strideSettings', $this->getLocalizedData());
     }
 
     /**
-     * Sanitize slug values.
-     */
-    public function sanitizeSlugs(array $input): array
-    {
-        $sanitized = [];
-
-        $sanitized['trajectory'] = isset($input['trajectory'])
-            ? sanitize_title($input['trajectory'])
-            : self::DEFAULT_SLUGS['trajectory'];
-
-        $sanitized['edition'] = isset($input['edition'])
-            ? sanitize_title($input['edition'])
-            : self::DEFAULT_SLUGS['edition'];
-
-        return $sanitized;
-    }
-
-    /**
-     * Flush rewrite rules when slugs are updated.
-     */
-    public function onSlugsUpdated($old_value, $new_value): void
-    {
-        // Schedule rewrite rules flush on next page load
-        delete_option('rewrite_rules');
-    }
-
-    /**
-     * Render URL slugs section description.
-     */
-    public function renderUrlSlugsSection(): void
-    {
-        echo '<p>Configureer de URL slugs voor trajecten en vormingen. Wijzigingen worden direct toegepast.</p>';
-        echo '<p><strong>Let op:</strong> Na wijzigen van URL slugs kan het nodig zijn om de permalinks opnieuw op te slaan (Instellingen → Permalinks → Opslaan).</p>';
-    }
-
-    /**
-     * Render trajectory slug field.
-     */
-    public function renderTrajectorySlugField(): void
-    {
-        $slug = self::getTrajectorySlug();
-        printf(
-            '<input type="text" name="%s[trajectory]" value="%s" class="regular-text" />',
-            esc_attr(self::OPTION_URL_SLUGS),
-            esc_attr($slug)
-        );
-        printf(
-            '<p class="description">URL: %s/<strong>%s</strong>/traject-naam/</p>',
-            esc_url(home_url()),
-            esc_html($slug)
-        );
-    }
-
-    /**
-     * Render edition slug field.
-     */
-    public function renderEditionSlugField(): void
-    {
-        $slug = self::getEditionSlug();
-        printf(
-            '<input type="text" name="%s[edition]" value="%s" class="regular-text" />',
-            esc_attr(self::OPTION_URL_SLUGS),
-            esc_attr($slug)
-        );
-        printf(
-            '<p class="description">URL: %s/<strong>%s</strong>/editie-naam/</p>',
-            esc_url(home_url()),
-            esc_html($slug)
-        );
-    }
-
-    /**
-     * Render settings page.
+     * Render settings page shell (capability check + template include).
      */
     public function renderSettingsPage(): void
     {
@@ -209,39 +153,195 @@ class StrideSettingsService
             return;
         }
 
-        // Check if settings were saved
-        if (isset($_GET['settings-updated'])) {
-            add_settings_error(
-                'stride_messages',
-                'stride_message',
-                'Instellingen opgeslagen. Vergeet niet de permalinks opnieuw op te slaan als je URL slugs hebt gewijzigd.',
-                'updated'
-            );
+        $templatePath = dirname(__DIR__) . '/templates/admin/settings.php';
+
+        if (file_exists($templatePath)) {
+            include $templatePath;
+        }
+    }
+
+    // =========================================================================
+    // AJAX SAVE HANDLER
+    // =========================================================================
+
+    /**
+     * Handle AJAX settings save via ntdst/api_data filter.
+     *
+     * @param mixed $data Existing filter data (unused)
+     * @param array<string, mixed> $params Request parameters (includes 'tab')
+     * @return array<string, mixed>|WP_Error
+     */
+    public function handleSaveSettings(mixed $data, array $params): array|WP_Error
+    {
+        if (!current_user_can(self::CAPABILITY)) {
+            return new WP_Error('forbidden', __('Onvoldoende rechten.', 'stride'));
         }
 
-        ?>
-        <div class="wrap">
-            <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
+        $tab = sanitize_text_field($params['tab'] ?? '');
 
-            <?php settings_errors('stride_messages'); ?>
+        return match ($tab) {
+            'general' => $this->saveGeneralSettings($params),
+            'profile-types' => $this->saveProfileTypes($params),
+            default => new WP_Error('invalid_tab', __('Onbekend tabblad.', 'stride')),
+        };
+    }
 
-            <form action="options.php" method="post">
-                <?php
-                settings_fields('stride_settings_group');
-                do_settings_sections(self::SETTINGS_SLUG);
-                submit_button('Opslaan');
-                ?>
-            </form>
+    /**
+     * Save general (URL slug) settings.
+     *
+     * @return array{message: string}
+     */
+    private function saveGeneralSettings(array $params): array
+    {
+        $slugs = [
+            'trajectory' => !empty($params['trajectory_slug'])
+                ? sanitize_title($params['trajectory_slug'])
+                : self::DEFAULT_SLUGS['trajectory'],
+            'edition' => !empty($params['edition_slug'])
+                ? sanitize_title($params['edition_slug'])
+                : self::DEFAULT_SLUGS['edition'],
+        ];
 
-            <hr />
+        update_option(self::OPTION_URL_SLUGS, $slugs);
 
-            <h2>Rewrite Rules</h2>
-            <p>
-                <a href="<?php echo esc_url(admin_url('options-permalink.php')); ?>" class="button">
-                    Permalinks opnieuw opslaan
-                </a>
-            </p>
-        </div>
-        <?php
+        // Flush rewrite rules so new slugs take effect
+        delete_option('rewrite_rules');
+
+        return ['message' => 'Instellingen opgeslagen.'];
+    }
+
+    /**
+     * Save profile types.
+     *
+     * @return array{message: string, types: array}|WP_Error
+     */
+    private function saveProfileTypes(array $params): array|WP_Error
+    {
+        $rawTypes = $params['types'] ?? '[]';
+
+        if (is_string($rawTypes)) {
+            $decoded = json_decode($rawTypes, true);
+            if (!is_array($decoded)) {
+                return new WP_Error('invalid_json', __('Ongeldige JSON-data.', 'stride'));
+            }
+            $rawTypes = $decoded;
+        }
+
+        if (!is_array($rawTypes)) {
+            return new WP_Error('invalid_data', __('Ongeldige data.', 'stride'));
+        }
+
+        $types = $this->sanitizeProfileTypes($rawTypes);
+
+        update_option('stride_profile_types', $types);
+
+        // Return types with fresh user counts
+        $profileService = ntdst_get(ProfileTypeService::class);
+        $typesWithCounts = array_map(function (array $type) use ($profileService): array {
+            $type['userCount'] = $profileService->countUsersWithType($type['slug']);
+            return $type;
+        }, $types);
+
+        return [
+            'message' => 'Profieltypes opgeslagen.',
+            'types' => $typesWithCounts,
+        ];
+    }
+
+    /**
+     * Sanitize profile types array.
+     *
+     * Deduplicates slugs, sanitizes fields, skips entries without label.
+     *
+     * @param array<int, array<string, mixed>> $types
+     * @return array<int, array{slug: string, label: string, description: string, color: string, icon: string, order: int}>
+     */
+    private function sanitizeProfileTypes(array $types): array
+    {
+        $sanitized = [];
+        $seenSlugs = [];
+
+        foreach ($types as $index => $type) {
+            $label = trim(sanitize_text_field($type['label'] ?? ''));
+            if ($label === '') {
+                continue;
+            }
+
+            $slug = !empty($type['slug'])
+                ? sanitize_title($type['slug'])
+                : sanitize_title($label);
+
+            // Deduplicate slugs
+            $baseSlug = $slug;
+            $counter = 2;
+            while (in_array($slug, $seenSlugs, true)) {
+                $slug = $baseSlug . '-' . $counter;
+                $counter++;
+            }
+            $seenSlugs[] = $slug;
+
+            $sanitized[] = [
+                'slug' => $slug,
+                'label' => $label,
+                'description' => sanitize_text_field($type['description'] ?? ''),
+                'color' => sanitize_hex_color($type['color'] ?? '#3B82F6') ?: '#3B82F6',
+                'icon' => sanitize_text_field($type['icon'] ?? 'users'),
+                'order' => (int) ($type['order'] ?? $index),
+            ];
+        }
+
+        // Sort by order
+        usort($sanitized, fn(array $a, array $b) => $a['order'] <=> $b['order']);
+
+        return $sanitized;
+    }
+
+    // =========================================================================
+    // LOCALIZED DATA
+    // =========================================================================
+
+    /**
+     * Build data passed to JS via wp_localize_script.
+     *
+     * @return array{general: array, profileTypes: array}
+     */
+    private function getLocalizedData(): array
+    {
+        $slugs = self::getAllSlugs();
+
+        // Profile types with user counts
+        $profileService = ntdst_get(ProfileTypeService::class);
+        $types = $profileService->getTypes();
+
+        $typesWithCounts = array_map(function (array $type) use ($profileService): array {
+            $type['userCount'] = $profileService->countUsersWithType($type['slug']);
+            return $type;
+        }, $types);
+
+        // Available icons from theme
+        $iconDir = get_theme_root() . '/' . get_stylesheet() . '/icons';
+        $availableIcons = [];
+        if (is_dir($iconDir)) {
+            $files = glob($iconDir . '/*.svg');
+            if ($files) {
+                $availableIcons = array_map(
+                    fn(string $file) => basename($file, '.svg'),
+                    $files
+                );
+                sort($availableIcons);
+            }
+        }
+
+        return [
+            'general' => [
+                'trajectory_slug' => $slugs['trajectory'] ?? self::DEFAULT_SLUGS['trajectory'],
+                'edition_slug' => $slugs['edition'] ?? self::DEFAULT_SLUGS['edition'],
+                'siteUrl' => home_url(),
+            ],
+            'profileTypes' => [
+                'types' => array_values($typesWithCounts),
+                'availableIcons' => $availableIcons,
+            ],
+        ];
     }
 }

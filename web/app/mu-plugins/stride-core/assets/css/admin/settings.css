@@ -1,0 +1,297 @@
+/**
+ * Stride Settings — Admin CSS
+ *
+ * Styles for the Alpine.js tabbed settings hub.
+ */
+
+/* Hide until Alpine initializes */
+[x-cloak] {
+    display: none !important;
+}
+
+/* =========================================================================
+   Layout
+   ========================================================================= */
+
+.stride-settings__layout {
+    display: flex;
+    gap: 20px;
+    margin-top: 20px;
+}
+
+/* =========================================================================
+   Nav Sidebar
+   ========================================================================= */
+
+.stride-settings__nav {
+    width: 200px;
+    flex-shrink: 0;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 4px;
+    align-self: flex-start;
+}
+
+.stride-settings__nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: #1d2327;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.stride-settings__nav-item:hover {
+    background: #f0f0f1;
+}
+
+.stride-settings__nav-item.is-active {
+    background: #2271b1;
+    color: #fff;
+}
+
+.stride-settings__nav-item .dashicons {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+}
+
+/* =========================================================================
+   Content Area
+   ========================================================================= */
+
+.stride-settings__content {
+    flex: 1;
+    min-width: 0;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 20px 24px;
+}
+
+.stride-settings__content h2 {
+    margin-top: 0;
+    padding-top: 0;
+}
+
+/* =========================================================================
+   Status Message
+   ========================================================================= */
+
+.stride-settings__message {
+    margin: 12px 0;
+}
+
+/* =========================================================================
+   Profile Types Table
+   ========================================================================= */
+
+.stride-profile-types-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+}
+
+.stride-profile-types-table th {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 2px solid #c3c4c7;
+    font-size: 13px;
+    color: #50575e;
+}
+
+.stride-profile-types-table td {
+    padding: 10px;
+    border-bottom: 1px solid #f0f0f1;
+    font-size: 13px;
+    vertical-align: middle;
+}
+
+.stride-profile-types-table tbody tr:hover {
+    background: #f6f7f7;
+}
+
+/* Color dot badge */
+.stride-type-color {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    vertical-align: middle;
+    margin-right: 6px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Monospace slug text */
+.stride-type-slug {
+    font-family: Consolas, Monaco, monospace;
+    font-size: 12px;
+    color: #787c82;
+    background: #f0f0f1;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+/* Action button group */
+.stride-type-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.stride-type-actions button {
+    background: none;
+    border: none;
+    color: #2271b1;
+    cursor: pointer;
+    padding: 2px 4px;
+    font-size: 13px;
+}
+
+.stride-type-actions button:hover {
+    color: #135e96;
+    text-decoration: underline;
+}
+
+.stride-type-actions button.is-destructive {
+    color: #d63638;
+}
+
+.stride-type-actions button.is-destructive:hover {
+    color: #a00;
+}
+
+/* Inline edit row */
+.stride-type-edit-row {
+    background: #f9f9f9 !important;
+}
+
+.stride-type-edit-row td {
+    padding: 12px 10px;
+}
+
+.stride-type-edit-row .stride-edit-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.stride-type-edit-row .stride-edit-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.stride-type-edit-row .stride-edit-field label {
+    font-weight: 600;
+    font-size: 12px;
+    color: #50575e;
+}
+
+.stride-type-edit-row .stride-edit-field input,
+.stride-type-edit-row .stride-edit-field select,
+.stride-type-edit-row .stride-edit-field textarea {
+    width: 100%;
+}
+
+.stride-type-edit-row .stride-edit-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+/* =========================================================================
+   Empty State
+   ========================================================================= */
+
+.stride-empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #787c82;
+}
+
+.stride-empty-state p {
+    margin: 8px 0 0;
+    font-size: 14px;
+}
+
+.stride-empty-state .dashicons {
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+    color: #c3c4c7;
+}
+
+/* =========================================================================
+   Delete Confirmation Modal
+   ========================================================================= */
+
+.stride-confirm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100000;
+}
+
+.stride-confirm-dialog {
+    background: #fff;
+    border-radius: 6px;
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.stride-confirm-dialog h3 {
+    margin: 0 0 8px;
+    font-size: 16px;
+}
+
+.stride-confirm-dialog p {
+    margin: 0 0 20px;
+    color: #50575e;
+}
+
+.stride-confirm-dialog .stride-confirm-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+/* =========================================================================
+   Responsive
+   ========================================================================= */
+
+@media screen and (max-width: 782px) {
+    .stride-settings__layout {
+        flex-direction: column;
+    }
+
+    .stride-settings__nav {
+        width: 100%;
+        display: flex;
+        gap: 4px;
+        overflow-x: auto;
+    }
+
+    .stride-settings__nav-item {
+        white-space: nowrap;
+    }
+
+    .stride-type-edit-row .stride-edit-fields {
+        grid-template-columns: 1fr;
+    }
+}
