@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Stride\Modules\Edition;
 
-use Stride\Domain\EditionStatus;
+use Stride\Domain\OfferingStatus;
 use Stride\Infrastructure\AbstractRepository;
 
 /**
@@ -41,7 +41,7 @@ final class EditionRepository extends AbstractRepository
         return $this->model()
             ->where('start_date', ['>=', $today])
             ->where('post_status', 'publish')
-            ->whereNot('status', EditionStatus::Cancelled->value)
+            ->whereNot('status', OfferingStatus::Cancelled->value)
             ->orderBy('start_date', 'ASC')
             ->limit($limit)
             ->withMeta()
@@ -56,7 +56,7 @@ final class EditionRepository extends AbstractRepository
     public function findWithAvailability(): array
     {
         return $this->model()
-            ->where('status', EditionStatus::Open->value)
+            ->where('status', OfferingStatus::Open->value)
             ->where('post_status', 'publish')
             ->orderBy('start_date', 'ASC')
             ->withMeta()
@@ -74,7 +74,7 @@ final class EditionRepository extends AbstractRepository
     /**
      * Update edition status.
      */
-    public function updateStatus(int $editionId, EditionStatus $status): void
+    public function updateStatus(int $editionId, OfferingStatus $status): void
     {
         $this->model()->updateMetaBatch($editionId, ['status' => $status->value]);
     }

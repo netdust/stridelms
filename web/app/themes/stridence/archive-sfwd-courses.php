@@ -145,7 +145,7 @@ get_header();
         <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             <?php foreach ($trajectories as $trajectory) : ?>
                 <?php
-                get_template_part('partials/card-trajectory', null, [
+                stridence_template_part('partials/card-trajectory', null, [
                     'trajectory' => $trajectory,
                 ]);
                 ?>
@@ -172,7 +172,7 @@ get_header();
             <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 <?php foreach ($classroom_editions as $edition) : ?>
                     <?php
-                    get_template_part('partials/card-edition', null, [
+                    stridence_template_part('partials/card-edition', null, [
                         'edition' => $edition,
                     ]);
                     ?>
@@ -180,7 +180,7 @@ get_header();
             </div>
         <?php else : ?>
             <?php
-            get_template_part('partials/empty-state', null, [
+            stridence_template_part('partials/empty-state', null, [
                 'icon'    => 'calendar',
                 'title'   => __('Geen geplande opleidingen', 'stridence'),
                 'message' => __('Er zijn momenteel geen klassikale opleidingen gepland.', 'stridence'),
@@ -207,7 +207,7 @@ get_header();
             <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 <?php foreach ($online_courses as $course) : ?>
                     <?php
-                    get_template_part('partials/card-course', null, [
+                    stridence_template_part('partials/card-course', null, [
                         'course' => $course,
                     ]);
                     ?>
@@ -215,7 +215,7 @@ get_header();
             </div>
         <?php else : ?>
             <?php
-            get_template_part('partials/empty-state', null, [
+            stridence_template_part('partials/empty-state', null, [
                 'icon'    => 'monitor',
                 'title'   => __('Geen online cursussen', 'stridence'),
                 'message' => __('Er zijn momenteel geen online cursussen beschikbaar.', 'stridence'),

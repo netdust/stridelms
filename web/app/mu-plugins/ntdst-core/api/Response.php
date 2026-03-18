@@ -188,7 +188,7 @@ class NTDST_Response
             $url = add_query_arg('error', $this->error, $url);
         }
 
-        wp_safe_redirect($url, $this->status ?: 302);
+        wp_safe_redirect($url, 302);
         exit;
     }
 

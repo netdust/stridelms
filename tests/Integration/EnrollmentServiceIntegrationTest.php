@@ -93,8 +93,7 @@ class EnrollmentServiceIntegrationTest extends IntegrationTestCase
      */
     public function enrollmentRejectsClosedEdition(): void
     {
-        // Use 'cancelled' status as there is no 'closed' in EditionStatus enum
-        // Valid non-enrollment statuses: cancelled, full, postponed, announcement, completed
+        // Use 'cancelled' status — only 'open' allows enrollment in OfferingStatus
         $editionId = $this->createTestEdition([
             'meta' => ['_ntdst_status' => 'cancelled'],
         ]);

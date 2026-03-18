@@ -79,7 +79,7 @@ class LearnDash_Course_Grid_Filter extends LearnDash_Gutenberg_Block {
 	 *
 	 * @return string Block output.
 	 */
-	public function render_block( $attributes = array(), $block_content = '', WP_Block $block = null ) {
+	public function render_block( $attributes = array(), $block_content = '', ?WP_Block $block = null ) {
 		$attributes = $this->preprocess_block_attributes( $attributes );
 
 		/**

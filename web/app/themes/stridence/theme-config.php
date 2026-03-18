@@ -98,7 +98,7 @@ return [
     // Frontend services live in the theme (presentation layer)
     'services' => [
         'core' => [
-            \stridence\services\frontend\TrajectoryDashboardService::class,
+            // Business logic services moved to stride-core mu-plugin
         ],
         'handlers' => [],
         'admin' => [],

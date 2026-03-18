@@ -20,3 +20,4 @@ ini_set('display_errors', '1');
 
 // Enable plugin and theme updates and installation from the admin
 Config::define('DISALLOW_FILE_MODS', false);
+Config::define('WP_CACHE', false);

@@ -43,18 +43,14 @@ function stridence_quote_status_classes(QuoteStatus $status): string
 <div class="space-y-8" x-data="slidePanel()">
     <!-- Active Quotes -->
     <section>
-        <h3 class="dash-subheading mb-3">
-            <?php esc_html_e('Mijn offertes', 'stridence'); ?>
-        </h3>
-
         <?php if (!empty($active)) : ?>
-            <div class="bg-surface-card rounded-lg border border-border/60 divide-y divide-border/60">
+            <div class="bg-surface-card rounded-xl border border-border shadow-sm">
                 <?php foreach ($active as $quote) : ?>
                     <button type="button"
-                            class="list-item w-full text-left"
+                            class="flex items-center gap-4 px-4 py-3.5 border-b border-border/60 last:border-b-0 cursor-pointer hover:bg-surface-alt transition-colors w-full text-left"
                             @click="openPanel(<?php echo (int)$quote['id']; ?>)">
                         <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 mb-0.5">
+                            <div class="flex items-center gap-2">
                                 <span class="font-mono text-xs text-text-muted">
                                     <?php echo esc_html($quote['quote_number']); ?>
                                 </span>
@@ -65,7 +61,7 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                             <span class="font-medium text-text text-sm truncate block">
                                 <?php echo esc_html($quote['title']); ?>
                             </span>
-                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-0.5 text-xs text-text-muted">
+                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted">
                                 <?php if ($quote['created_at']) : ?>
                                     <span class="flex items-center gap-1">
                                         <?php echo stridence_icon('calendar', 'w-3.5 h-3.5'); ?>
@@ -108,22 +104,26 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                             <template x-if="activeId === <?php echo (int)$quote['id']; ?>">
                                 <div class="flex flex-col h-full">
                                     <!-- Header -->
-                                    <div class="slide-panel-header">
-                                        <div class="min-w-0">
-                                            <div class="flex items-center gap-2 mb-1">
-                                                <span class="font-mono text-sm text-text-muted">
-                                                    <?php echo esc_html($quote['quote_number']); ?>
-                                                </span>
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium <?php echo esc_attr(stridence_quote_status_classes($quote['status'])); ?>">
-                                                    <?php echo esc_html($quote['status_label']); ?>
-                                                </span>
+                                    <div class="shrink-0 px-5 pt-5 pb-4 border-b border-border">
+                                        <div class="flex items-start justify-between gap-4">
+                                            <div class="min-w-0">
+                                                <div class="flex items-center gap-2 mb-1.5">
+                                                    <span class="font-mono text-xs text-text-muted">
+                                                        <?php echo esc_html($quote['quote_number']); ?>
+                                                    </span>
+                                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium <?php echo esc_attr(stridence_quote_status_classes($quote['status'])); ?>">
+                                                        <?php echo esc_html($quote['status_label']); ?>
+                                                    </span>
+                                                </div>
+                                                <h3 class="text-lg font-heading font-bold text-text m-0 leading-snug">
+                                                    <?php echo esc_html($quote['title']); ?>
+                                                </h3>
                                             </div>
-                                            <h3><?php echo esc_html($quote['title']); ?></h3>
+                                            <button type="button" @click="close()"
+                                                    class="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-text-muted hover:bg-surface-alt hover:text-text transition-colors">
+                                                <?php echo stridence_icon('x', 'w-5 h-5'); ?>
+                                            </button>
                                         </div>
-                                        <button type="button" @click="close()"
-                                                class="shrink-0 p-1.5 -m-1.5 rounded-lg text-text-muted hover:bg-surface-alt hover:text-text transition-colors">
-                                            <?php echo stridence_icon('x', 'w-5 h-5'); ?>
-                                        </button>
                                     </div>
 
                                     <!-- Body -->
@@ -153,16 +153,16 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                                                     <dt class="text-text-muted"><?php esc_html_e('BTW (21%)', 'stridence'); ?></dt>
                                                     <dd class="font-medium"><?php echo esc_html($quote['tax']->format()); ?></dd>
                                                 </div>
-                                                <div class="flex justify-between pt-2 border-t border-border/60">
+                                                <div class="flex justify-between pt-2 border-t border-border">
                                                     <dt class="font-semibold"><?php esc_html_e('Totaal', 'stridence'); ?></dt>
                                                     <dd class="font-bold text-lg"><?php echo esc_html($quote['total']->format()); ?></dd>
                                                 </div>
                                             </dl>
                                             <?php if ($quote['valid_until']) : ?>
-                                                <p class="text-xs text-text-muted">
+                                                <span class="text-xs text-text-muted block">
                                                     <?php esc_html_e('Geldig tot', 'stridence'); ?>
                                                     <?php echo esc_html(stride_format_date($quote['valid_until'])); ?>
-                                                </p>
+                                                </span>
                                             <?php endif; ?>
                                         </div>
 
@@ -172,18 +172,18 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                                                 <h4 class="dash-subheading">
                                                     <?php esc_html_e('Regelitems', 'stridence'); ?>
                                                 </h4>
-                                                <div class="bg-surface-card rounded-lg border border-border/60 divide-y divide-border/60">
+                                                <div class="bg-surface-card rounded-xl border border-border shadow-sm divide-y divide-border">
                                                     <?php foreach ($quote['items'] as $item) : ?>
                                                         <div class="px-4 py-3 flex items-center justify-between gap-4">
                                                             <div class="flex-1 min-w-0">
-                                                                <p class="font-medium text-sm truncate">
+                                                                <span class="font-medium text-sm truncate block">
                                                                     <?php echo esc_html($item['title'] ?? ''); ?>
-                                                                </p>
+                                                                </span>
                                                                 <?php if (($item['quantity'] ?? 1) > 1) : ?>
-                                                                    <p class="text-xs text-text-muted">
+                                                                    <span class="text-xs text-text-muted block">
                                                                         <?php echo esc_html($item['quantity']); ?> &times;
                                                                         <?php echo esc_html(stride_format_money($item['unit_price'] ?? 0)); ?>
-                                                                    </p>
+                                                                    </span>
                                                                 <?php endif; ?>
                                                             </div>
                                                             <span class="text-sm font-medium">
@@ -329,11 +329,11 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                                                         <span x-show="loading" class="spinner w-4 h-4"></span>
                                                     </button>
                                                 </div>
-                                                <p x-show="error" class="text-sm text-error mt-2" x-text="error"></p>
-                                                <p x-show="applied" class="text-sm text-green-600 mt-2">
+                                                <span x-show="error" class="text-sm text-error mt-2 block" x-text="error"></span>
+                                                <span x-show="applied" class="text-sm text-green-600 mt-2 block">
                                                     <?php echo stridence_icon('check-circle', 'w-4 h-4 inline mr-1'); ?>
                                                     <?php esc_html_e('Kortingscode toegepast!', 'stridence'); ?>
-                                                </p>
+                                                </span>
                                             </div>
                                         <?php endif; ?>
                                     </div>
@@ -383,7 +383,7 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                 </div>
         <?php else : ?>
             <?php
-            get_template_part('partials/empty-state', null, [
+            stridence_template_part('partials/empty-state', null, [
                 'icon'    => 'file-text',
                 'title'   => __('Geen offertes', 'stridence'),
                 'message' => __('Je hebt nog geen offertes. Offertes worden automatisch aangemaakt wanneer je je inschrijft voor een opleiding.', 'stridence'),
@@ -416,9 +416,9 @@ function stridence_quote_status_classes(QuoteStatus $status): string
             </button>
 
             <div x-show="open" x-collapse>
-                <div class="bg-surface-card rounded-lg border border-border/60 divide-y divide-border/60">
+                <div class="bg-surface-card rounded-xl border border-border shadow-sm">
                     <?php foreach ($cancelled as $quote) : ?>
-                        <div class="list-item-static text-text-muted">
+                        <div class="flex items-center gap-4 px-4 py-3.5 border-b border-border/60 last:border-b-0 transition-colors text-text-muted">
                             <div class="flex-1 min-w-0">
                                 <span class="font-mono text-xs block">
                                     <?php echo esc_html($quote['quote_number']); ?>

@@ -1,0 +1,183 @@
+/* Field Groups Settings Page */
+
+.stride-field-groups-wrap .description {
+    margin-bottom: 16px;
+}
+
+.stride-add-group-wrap {
+    margin: 16px 0;
+}
+
+/* Group block */
+.stride-group-block {
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    margin-bottom: 16px;
+    background: #fff;
+}
+
+.stride-group-block.ui-sortable-placeholder {
+    border: 2px dashed #c3c4c7;
+    background: #f6f7f7;
+    visibility: visible !important;
+    height: 60px;
+}
+
+/* Group header */
+.stride-group-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: #f6f7f7;
+    border-bottom: 1px solid #c3c4c7;
+    border-radius: 4px 4px 0 0;
+}
+
+.stride-group-header .stride-drag-handle {
+    cursor: move;
+    color: #999;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.stride-group-header .stride-group-label {
+    flex: 1;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 4px 8px;
+}
+
+.stride-step-select {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+.stride-step-select select {
+    min-width: 120px;
+}
+
+.stride-remove-group {
+    background: none;
+    border: none;
+    color: #a00;
+    cursor: pointer;
+    font-size: 22px;
+    padding: 0 6px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.stride-remove-group:hover {
+    color: #dc3232;
+}
+
+/* Group body */
+.stride-group-body {
+    padding: 12px;
+}
+
+/* Assignments row */
+.stride-assignments-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.stride-assignments-label {
+    font-weight: 500;
+    font-size: 13px;
+    padding-top: 6px;
+    flex-shrink: 0;
+    min-width: 110px;
+}
+
+.stride-assignments-select {
+    flex: 1;
+    min-width: 300px;
+}
+
+/* Select2 tweaks */
+.stride-group-body .select2-container {
+    flex: 1;
+    min-width: 300px;
+}
+
+.stride-group-body .select2-container--default .select2-selection--multiple {
+    border-color: #8c8f94;
+    min-height: 34px;
+}
+
+.stride-group-body .select2-container--default .select2-selection--multiple .select2-selection__choice {
+    background-color: #2271b1;
+    border-color: #2271b1;
+    color: #fff;
+    font-size: 12px;
+}
+
+.stride-group-body .select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.stride-group-body .select2-container--default .select2-selection--multiple .select2-selection__choice__remove:hover {
+    color: #fff;
+}
+
+/* Fields table */
+.stride-repeater-table {
+    border: none;
+    box-shadow: none;
+    margin-top: 4px;
+}
+
+.stride-repeater-table td,
+.stride-repeater-table th {
+    padding: 6px 8px;
+    vertical-align: top;
+}
+
+.stride-repeater-table thead th {
+    font-size: 12px;
+    font-weight: 600;
+    color: #50575e;
+}
+
+.stride-repeater-table input[type="text"],
+.stride-repeater-table select {
+    width: 100%;
+}
+
+.stride-repeater-table .stride-drag-handle {
+    cursor: move;
+    color: #999;
+    font-size: 16px;
+}
+
+.stride-repeater-table .stride-remove-row {
+    color: #a00;
+    cursor: pointer;
+    font-size: 18px;
+}
+
+.stride-repeater-table .stride-remove-row:hover {
+    color: #dc3232;
+}
+
+.stride-options-hint {
+    font-size: 11px;
+    color: #666;
+    font-style: italic;
+}
+
+.stride-field-row.ui-sortable-placeholder {
+    visibility: visible !important;
+    background: #f0f6fc;
+}
+
+.stride-add-field-wrap {
+    margin: 8px 0 0 30px;
+}

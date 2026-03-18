@@ -8,8 +8,8 @@ use NetdustLTI\Plugin;
 /**
  * Unified LTI Settings Page
  *
- * Single Alpine.js-powered admin page replacing all scattered LTI admin pages.
- * Manages Platforms, Tools, Resources inline with CRUD via WP REST API.
+ * Single Alpine.js-powered admin page for LTI tool provider configuration.
+ * Manages Platforms (external LMS connections) inline with CRUD via WP REST API.
  */
 final class SettingsPage
 {
@@ -51,6 +51,8 @@ final class SettingsPage
             return;
         }
 
+        ntdst_enqueue_admin_toolkit();
+
         wp_enqueue_script(
             'alpinejs',
             'https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js',
@@ -65,7 +67,6 @@ final class SettingsPage
             'homeUrl' => home_url(),
             'adminUrl' => admin_url(),
             'toolEndpoints' => $this->getToolEndpoints(),
-            'platformEndpoints' => $this->getPlatformEndpoints(),
             'keyStatus' => $this->getKeyStatus(),
         ]);
     }
@@ -73,7 +74,7 @@ final class SettingsPage
     public function addBodyClasses(string $classes): string
     {
         if ($this->isLtiPage()) {
-            $classes .= ' lti-settings-page folded';
+            $classes .= ' lti-settings-page';
         }
         return $classes;
     }
@@ -119,17 +120,6 @@ final class SettingsPage
             'json_config' => home_url('/lti/configure-json'),
             'xml_config' => home_url('/lti/configure-xml'),
             'dynamic_registration' => home_url('/lti/register'),
-        ];
-    }
-
-    private function getPlatformEndpoints(): array
-    {
-        return [
-            'issuer' => home_url('/'),
-            'auth_endpoint' => home_url('/lti/platform/auth'),
-            'jwks_url' => home_url('/lti/jwks'),
-            'ags_endpoint' => home_url('/lti/platform/grades'),
-            'deep_link_return' => home_url('/lti/platform/deep-link-return'),
         ];
     }
 

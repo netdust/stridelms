@@ -4,7 +4,7 @@
 
 namespace StellarWP\Learndash\Composer\Autoload;
 
-class ComposerStaticInit8806a881ce524374447c293b4815a224
+class ComposerStaticInit0740f0501434b720141a4fbb68907303
 {
     public static $files = array (
         'cc55976d4533c9f1adaa0d60d19574f3' => __DIR__ . '/..' . '/rmccue/requests/library/Deprecated.php',
@@ -830,9 +830,9 @@ class ComposerStaticInit8806a881ce524374447c293b4815a224
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->prefixLengthsPsr4 = ComposerStaticInit8806a881ce524374447c293b4815a224::$prefixLengthsPsr4;
-            $loader->prefixDirsPsr4 = ComposerStaticInit8806a881ce524374447c293b4815a224::$prefixDirsPsr4;
-            $loader->classMap = ComposerStaticInit8806a881ce524374447c293b4815a224::$classMap;
+            $loader->prefixLengthsPsr4 = ComposerStaticInit0740f0501434b720141a4fbb68907303::$prefixLengthsPsr4;
+            $loader->prefixDirsPsr4 = ComposerStaticInit0740f0501434b720141a4fbb68907303::$prefixDirsPsr4;
+            $loader->classMap = ComposerStaticInit0740f0501434b720141a4fbb68907303::$classMap;
 
         }, null, ClassLoader::class);
     }

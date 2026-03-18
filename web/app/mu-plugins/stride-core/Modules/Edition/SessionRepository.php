@@ -40,15 +40,16 @@ final class SessionRepository extends AbstractRepository
 
         // Sort by date ASC, then start_time ASC
         // Note: orderBy() doesn't work for meta fields, so we sort in PHP
+        // Meta keys use _ntdst_ prefix from Data Manager
         usort($sessions, function ($a, $b) {
-            $dateA = $a['meta']['date'] ?? '';
-            $dateB = $b['meta']['date'] ?? '';
+            $dateA = $a['meta']['_ntdst_date'] ?? '';
+            $dateB = $b['meta']['_ntdst_date'] ?? '';
             $dateCmp = strcmp($dateA, $dateB);
             if ($dateCmp !== 0) {
                 return $dateCmp;
             }
-            $timeA = $a['meta']['start_time'] ?? '';
-            $timeB = $b['meta']['start_time'] ?? '';
+            $timeA = $a['meta']['_ntdst_start_time'] ?? '';
+            $timeB = $b['meta']['_ntdst_start_time'] ?? '';
             return strcmp($timeA, $timeB);
         });
 
@@ -69,15 +70,16 @@ final class SessionRepository extends AbstractRepository
             ->get();
 
         // Sort by date ASC, then start_time ASC
+        // Meta keys use _ntdst_ prefix from Data Manager
         usort($sessions, function ($a, $b) {
-            $dateA = $a['meta']['date'] ?? '';
-            $dateB = $b['meta']['date'] ?? '';
+            $dateA = $a['meta']['_ntdst_date'] ?? '';
+            $dateB = $b['meta']['_ntdst_date'] ?? '';
             $dateCmp = strcmp($dateA, $dateB);
             if ($dateCmp !== 0) {
                 return $dateCmp;
             }
-            $timeA = $a['meta']['start_time'] ?? '';
-            $timeB = $b['meta']['start_time'] ?? '';
+            $timeA = $a['meta']['_ntdst_start_time'] ?? '';
+            $timeB = $b['meta']['_ntdst_start_time'] ?? '';
             return strcmp($timeA, $timeB);
         });
 
@@ -150,12 +152,16 @@ final class SessionRepository extends AbstractRepository
             return $validation;
         }
 
-        // Set title from date + time
-        $title = $data['date'];
-        if (!empty($data['start_time'])) {
-            $title .= ' ' . $data['start_time'];
+        // Use explicit title if provided, otherwise auto-generate from date + time
+        if (!empty($data['title']) && empty($data['post_title'])) {
+            $data['post_title'] = $data['title'];
+        } elseif (empty($data['post_title'])) {
+            $title = $data['date'];
+            if (!empty($data['start_time'])) {
+                $title .= ' ' . $data['start_time'];
+            }
+            $data['post_title'] = $title;
         }
-        $data['post_title'] = $title;
 
         return parent::create($data);
     }
@@ -181,11 +187,13 @@ final class SessionRepository extends AbstractRepository
             return $validation;
         }
 
-        // Update title from date + time
-        if (isset($data['date']) || isset($data['start_time'])) {
-            $date = $data['date'] ?? $this->getField($id, 'date', '');
-            $startTime = $data['start_time'] ?? $this->getField($id, 'start_time', '');
-            $data['post_title'] = $date . ($startTime ? ' ' . $startTime : '');
+        // Auto-generate title from date + time only if not set by caller
+        if (!isset($data['post_title'])) {
+            if (isset($data['date']) || isset($data['start_time'])) {
+                $date = $data['date'] ?? $this->getField($id, 'date', '');
+                $startTime = $data['start_time'] ?? $this->getField($id, 'start_time', '');
+                $data['post_title'] = $date . ($startTime ? ' ' . $startTime : '');
+            }
         }
 
         return parent::update($id, $data);

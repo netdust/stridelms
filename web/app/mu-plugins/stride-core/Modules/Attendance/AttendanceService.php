@@ -37,7 +37,8 @@ final class AttendanceService extends AbstractService
 
     protected function init(): void
     {
-        // Future: hooks for attendance events
+        // Register repository as shared singleton
+        ntdst_set(AttendanceRepository::class, fn() => $this->repository);
     }
 
     // === Mark Attendance ===

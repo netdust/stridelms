@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace NetdustLTI\Tests\Unit;
 
 use NetdustLTI\Platform\JWTBuilder;
-use NetdustLTI\Repositories\ToolRepository;
+use NetdustLTI\Platform\ToolRepository;
 use PHPUnit\Framework\TestCase;
 
 class JWTBuilderTest extends TestCase

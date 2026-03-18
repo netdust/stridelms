@@ -25,6 +25,36 @@ if (!$hero || empty($hero['type']) || empty($hero['data'])) {
 
 $type = $hero['type'];
 $data = $hero['data'];
+
+// Hero badge config per type
+$badge_config = match ($type) {
+    'upcoming_session' => [
+        'icon' => 'calendar',
+        'bg'   => 'bg-info/10',
+        'text' => 'text-info',
+    ],
+    'action_required' => [
+        'icon' => 'alert-circle',
+        'bg'   => 'bg-warning/10',
+        'text' => 'text-warning',
+    ],
+    'continue_course' => [
+        'icon' => 'trending-up',
+        'bg'   => 'bg-primary/10',
+        'text' => 'text-primary',
+    ],
+    'active_enrollment' => [
+        'icon' => 'book-open',
+        'bg'   => 'bg-primary/10',
+        'text' => 'text-primary',
+    ],
+    'certificate_ready' => [
+        'icon' => 'award',
+        'bg'   => 'bg-success/10',
+        'text' => 'text-success',
+    ],
+    default => ['icon' => 'info', 'bg' => 'bg-primary/10', 'text' => 'text-primary'],
+};
 ?>
 
 <?php if ($type === 'upcoming_session') : ?>
@@ -33,8 +63,8 @@ $data = $hero['data'];
     $label   = $isToday ? __('Vandaag', 'stridence') : __('Binnenkort', 'stridence');
     ?>
     <div class="dash-card-hero">
-        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-info/10 text-info mb-3">
-            <?php echo stridence_icon('calendar', 'w-3.5 h-3.5 mr-1'); ?>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold <?php echo esc_attr($badge_config['bg'] . ' ' . $badge_config['text']); ?> mb-3">
+            <?php echo stridence_icon($badge_config['icon'], 'w-3.5 h-3.5'); ?>
             <?php echo esc_html($label); ?>
         </span>
         <h3 class="font-heading text-lg font-bold text-text mb-2">
@@ -67,8 +97,8 @@ $data = $hero['data'];
 
 <?php elseif ($type === 'action_required') : ?>
     <div class="dash-card-hero">
-        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-warning/10 text-warning mb-3">
-            <?php echo stridence_icon('alert-circle', 'w-3.5 h-3.5 mr-1'); ?>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold <?php echo esc_attr($badge_config['bg'] . ' ' . $badge_config['text']); ?> mb-3">
+            <?php echo stridence_icon($badge_config['icon'], 'w-3.5 h-3.5'); ?>
             <?php esc_html_e('Actie vereist', 'stridence'); ?>
         </span>
         <h3 class="font-heading text-lg font-bold text-text mb-1">
@@ -89,8 +119,8 @@ $data = $hero['data'];
     <div class="dash-card-hero">
         <div class="flex items-start justify-between gap-4">
             <div class="flex-1 min-w-0">
-                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary mb-3">
-                    <?php echo stridence_icon('trending-up', 'w-3.5 h-3.5 mr-1'); ?>
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold <?php echo esc_attr($badge_config['bg'] . ' ' . $badge_config['text']); ?> mb-3">
+                    <?php echo stridence_icon($badge_config['icon'], 'w-3.5 h-3.5'); ?>
                     <?php esc_html_e('Ga verder', 'stridence'); ?>
                 </span>
                 <h3 class="font-heading text-lg font-bold text-text mb-1">
@@ -114,7 +144,7 @@ $data = $hero['data'];
             </div>
             <?php if ($progress > 0) : ?>
                 <?php
-                get_template_part('templates/dashboard/partials/progress-ring', null, [
+                stridence_template_part('templates/dashboard/partials/progress-ring', null, [
                     'progress' => $progress,
                     'size'     => 64,
                 ]);
@@ -125,8 +155,8 @@ $data = $hero['data'];
 
 <?php elseif ($type === 'active_enrollment') : ?>
     <div class="dash-card-hero">
-        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary mb-3">
-            <?php echo stridence_icon('book-open', 'w-3.5 h-3.5 mr-1'); ?>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold <?php echo esc_attr($badge_config['bg'] . ' ' . $badge_config['text']); ?> mb-3">
+            <?php echo stridence_icon($badge_config['icon'], 'w-3.5 h-3.5'); ?>
             <?php esc_html_e('Actieve opleiding', 'stridence'); ?>
         </span>
         <h3 class="font-heading text-lg font-bold text-text mb-2">
@@ -142,8 +172,8 @@ $data = $hero['data'];
 
 <?php elseif ($type === 'certificate_ready') : ?>
     <div class="dash-card-hero">
-        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-success/10 text-success mb-3">
-            <?php echo stridence_icon('award', 'w-3.5 h-3.5 mr-1'); ?>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold <?php echo esc_attr($badge_config['bg'] . ' ' . $badge_config['text']); ?> mb-3">
+            <?php echo stridence_icon($badge_config['icon'], 'w-3.5 h-3.5'); ?>
             <?php esc_html_e('Gefeliciteerd!', 'stridence'); ?>
         </span>
         <h3 class="font-heading text-lg font-bold text-text mb-2">

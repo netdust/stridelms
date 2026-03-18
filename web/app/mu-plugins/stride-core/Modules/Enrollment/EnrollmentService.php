@@ -221,6 +221,7 @@ final class EnrollmentService extends AbstractService
             'enrolled_by' => $options['enrolled_by'] ?? null,
             'voucher_code' => $options['voucher_code'] ?? null,
             'notes' => $options['notes'] ?? null,
+            'enrollment_data' => $options['enrollment_data'] ?? null,
         ];
 
         // Propagate company_id from user meta if not explicitly provided
@@ -519,7 +520,7 @@ final class EnrollmentService extends AbstractService
      *   address?: string,
      *   postal_code?: string,
      *   city?: string,
-     *   gln_peppol?: string,
+     *   gln_number?: string,
      *   invoice_email?: string,
      *   po_number?: string,
      *   voucher_code?: string,
@@ -580,12 +581,38 @@ final class EnrollmentService extends AbstractService
         // Store billing data for quote handler to use
         $this->storePendingBilling($data, $enrolledBy ?: $participantId);
 
-        // Perform enrollment
-        $registrationId = $this->enroll($participantId, $editionId, [
+        // Build enrollment options
+        $enrollOptions = [
             'enrollment_path' => $enrollmentPath,
             'enrolled_by' => $enrolledBy,
             'voucher_code' => $data['voucher_code'] ?? null,
-        ]);
+        ];
+
+        // Split extra_fields: known user meta fields get saved to user profile,
+        // remaining course-specific fields go to enrollment_data
+        if (!empty($data['extra_fields'])) {
+            $userMetaKeys = array_keys($this->getUserMetaMapping());
+            $profileFields = [];
+            $courseFields = [];
+
+            foreach ($data['extra_fields'] as $key => $value) {
+                if (in_array($key, $userMetaKeys, true)) {
+                    $profileFields[$key] = $value;
+                } else {
+                    $courseFields[$key] = $value;
+                }
+            }
+
+            if (!empty($profileFields)) {
+                $this->updateUserProfile($participantId, $profileFields);
+            }
+            if (!empty($courseFields)) {
+                $enrollOptions['enrollment_data'] = $courseFields;
+            }
+        }
+
+        // Perform enrollment
+        $registrationId = $this->enroll($participantId, $editionId, $enrollOptions);
 
         if (is_wp_error($registrationId)) {
             return $registrationId;
@@ -654,18 +681,30 @@ final class EnrollmentService extends AbstractService
     /**
      * Update user profile with enrollment form data.
      */
-    private function updateUserProfile(int $userId, array $data): void
+    /**
+     * Map of form field names to user meta keys.
+     *
+     * @return array<string, string> inputKey => metaKey
+     */
+    private function getUserMetaMapping(): array
     {
-        $metaFields = [
+        return [
             'phone' => 'phone',
-            'company' => 'company',
-            'vat_number' => 'vat_number',
-            'address' => 'billing_address',
-            'postal_code' => 'billing_postal_code',
+            'organisation' => 'organisation',
+            'department' => 'department',
+            'vat_number' => 'billing_vat',
+            'address' => 'billing_address_1',
+            'postal_code' => 'billing_postcode',
             'city' => 'billing_city',
-            'gln_peppol' => 'gln_number',
             'invoice_email' => 'invoice_email',
+            'gln_number' => 'gln_number',
+            'company' => 'billing_company',
         ];
+    }
+
+    public function updateUserProfile(int $userId, array $data): void
+    {
+        $metaFields = $this->getUserMetaMapping();
 
         foreach ($metaFields as $inputKey => $metaKey) {
             if (!empty($data[$inputKey])) {
@@ -696,7 +735,7 @@ final class EnrollmentService extends AbstractService
             'postal_code' => $data['postal_code'] ?? '',
             'city' => $data['city'] ?? '',
             'vat_number' => $data['vat_number'] ?? '',
-            'gln_number' => $data['gln_peppol'] ?? '',
+            'gln_number' => $data['gln_number'] ?? '',
             'po_number' => $data['po_number'] ?? '',
             'voucher_code' => $data['voucher_code'] ?? '',
         ];

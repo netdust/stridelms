@@ -5,13 +5,37 @@
  *
  * Sets up the testing environment with WordPress function stubs
  * and loads the autoloader.
+ *
+ * For Integration tests (with real WordPress), use --testsuite Integration
+ * which detects and loads WordPress instead of stubs.
  */
 
+// Composer autoloader first
+require_once dirname(__DIR__) . '/vendor/autoload.php';
+
+// Detect if we're running integration tests (via PHPUnit testsuite or environment)
+$isIntegration = false;
+foreach ($_SERVER['argv'] ?? [] as $arg) {
+    if (str_contains($arg, 'Integration') || str_contains($arg, 'integration')) {
+        $isIntegration = true;
+        break;
+    }
+}
+
+// Also check environment variable (can be set explicitly)
+if (getenv('STRIDE_INTEGRATION_TESTS') === '1') {
+    $isIntegration = true;
+}
+
+// Integration tests: Load real WordPress
+if ($isIntegration) {
+    require_once __DIR__ . '/Integration/bootstrap.php';
+    return; // Integration bootstrap handles everything
+}
+
+// Unit tests: Load stubs and mocks
 // Enable bypass-finals to allow mocking final classes
 DG\BypassFinals::enable();
-
-// Composer autoloader
-require_once dirname(__DIR__) . '/vendor/autoload.php';
 
 // Brain\Monkey setup for WordPress function mocking
 use Brain\Monkey;

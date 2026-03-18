@@ -314,25 +314,10 @@ class Utilities {
 						$user_courses_ids = [];
 						if ( ! empty( $user_courses_reports['results'] ) ) {
 							foreach ( $user_courses_reports['results'] as $result ) {
-								if ( in_array( 'COMPLETED', $progress_status, true ) ) {
-									if ( ! empty( $result->activity_completed ) ) {
-										$user_courses_ids[] = absint( $result->post_id );
-									}
-								}
-								if ( in_array( 'IN_PROGRESS', $progress_status, true ) ) {
-									if ( ( ! empty( $result->activity_started ) ) && ( empty( $result->activity_completed ) ) ) {
-										$user_courses_ids[] = absint( $result->post_id );
-									}
-								}
-
-								if ( in_array( 'NOT_STARTED', $progress_status, true ) ) {
-									if ( empty( $result->activity_started ) ) {
-										$user_courses_ids[] = absint( $result->post_id );
-									}
-								}
+								$user_courses_ids[] = absint( $result->post_id );
 							}
 
-							$post_ids = $user_courses_ids;
+							$post_ids = array_unique( $user_courses_ids );
 						} else {
 							// It means course with such progress status doesn't exist,
 							// we return empty array

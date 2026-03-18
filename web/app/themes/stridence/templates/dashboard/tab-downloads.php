@@ -147,23 +147,23 @@ $all_quotes = array_merge($quoteData['active'], $quoteData['cancelled']);
             <?php esc_html_e('Certificaten', 'stridence'); ?>
         </h3>
         <?php if (!empty($certificates)) : ?>
-            <div class="bg-surface-card rounded-lg border border-border/60 divide-y divide-border/60">
+            <div class="bg-surface-card rounded-xl border border-border shadow-sm">
                 <?php foreach ($certificates as $cert) : ?>
-                    <div class="list-item-static">
+                    <div class="flex items-center gap-4 px-4 py-3.5 border-b border-border/60 last:border-b-0 transition-colors">
                         <?php echo stridence_icon('award', 'w-5 h-5 text-accent shrink-0'); ?>
                         <div class="flex-1 min-w-0">
-                            <p class="text-sm font-medium text-text truncate">
+                            <span class="text-sm font-medium text-text truncate block">
                                 <?php echo esc_html($cert['course_title']); ?>
-                            </p>
+                            </span>
                             <?php if ($cert['completed_at']) : ?>
-                                <p class="text-xs text-text-muted">
+                                <span class="text-xs text-text-muted block">
                                     <?php
                                     printf(
                                         esc_html__('Behaald op %s', 'stridence'),
                                         esc_html(stride_format_date($cert['completed_at']))
                                     );
                                     ?>
-                                </p>
+                                </span>
                             <?php endif; ?>
                         </div>
                         <a href="<?php echo esc_url($cert['certificate_url']); ?>"
@@ -177,7 +177,7 @@ $all_quotes = array_merge($quoteData['active'], $quoteData['cancelled']);
                 <?php endforeach; ?>
             </div>
         <?php else : ?>
-            <div class="text-sm text-text-muted px-4 py-6 text-center bg-surface-card rounded-lg border border-border/60">
+            <div class="text-sm text-text-muted px-4 py-6 text-center bg-surface-card rounded-xl border border-border">
                 <?php esc_html_e('Nog geen certificaten beschikbaar', 'stridence'); ?>
             </div>
         <?php endif; ?>
@@ -189,23 +189,23 @@ $all_quotes = array_merge($quoteData['active'], $quoteData['cancelled']);
             <?php esc_html_e('Offertes', 'stridence'); ?>
         </h3>
         <?php if (!empty($all_quotes)) : ?>
-            <div class="bg-surface-card rounded-lg border border-border/60 divide-y divide-border/60">
+            <div class="bg-surface-card rounded-xl border border-border shadow-sm">
                 <?php foreach ($all_quotes as $quote) : ?>
-                    <div class="list-item-static">
+                    <div class="flex items-center gap-4 px-4 py-3.5 border-b border-border/60 last:border-b-0 transition-colors">
                         <?php echo stridence_icon('file-text', 'w-5 h-5 text-text-muted shrink-0'); ?>
                         <div class="flex-1 min-w-0">
-                            <p class="text-sm font-medium text-text truncate">
+                            <span class="text-sm font-medium text-text truncate block">
                                 <?php
                                 printf(
                                     esc_html__('Offerte #%s', 'stridence'),
                                     esc_html($quote['quote_number'])
                                 );
                                 ?>
-                            </p>
+                            </span>
                             <?php if ($quote['created_at']) : ?>
-                                <p class="text-xs text-text-muted">
+                                <span class="text-xs text-text-muted block">
                                     <?php echo esc_html(stride_format_date($quote['created_at'])); ?>
-                                </p>
+                                </span>
                             <?php endif; ?>
                         </div>
                         <a href="<?php echo esc_url(add_query_arg([
@@ -223,7 +223,7 @@ $all_quotes = array_merge($quoteData['active'], $quoteData['cancelled']);
                 <?php endforeach; ?>
             </div>
         <?php else : ?>
-            <div class="text-sm text-text-muted px-4 py-6 text-center bg-surface-card rounded-lg border border-border/60">
+            <div class="text-sm text-text-muted px-4 py-6 text-center bg-surface-card rounded-xl border border-border">
                 <?php esc_html_e('Nog geen offertes beschikbaar', 'stridence'); ?>
             </div>
         <?php endif; ?>
@@ -234,7 +234,7 @@ $all_quotes = array_merge($quoteData['active'], $quoteData['cancelled']);
         <h3 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
             <?php esc_html_e('Facturen', 'stridence'); ?>
         </h3>
-        <div class="text-sm text-text-muted px-4 py-6 text-center bg-surface-card rounded-lg border border-border/60">
+        <div class="text-sm text-text-muted px-4 py-6 text-center bg-surface-card rounded-xl border border-border">
             <?php esc_html_e('Nog geen facturen beschikbaar', 'stridence'); ?>
         </div>
     </div>

@@ -64,7 +64,7 @@ if ( ( class_exists( 'LearnDash_Gutenberg_Block' ) ) && ( ! class_exists( 'Learn
 		 *
 		 * @return string
 		 */
-		public function render_block( $block_attributes = array(), $block_content = '', WP_Block $block = null ) {
+		public function render_block( $block_attributes = array(), $block_content = '', ?WP_Block $block = null ) {
 			$course_post            = null;
 			$registration_variation = learndash_registration_variation();
 			$variation_classic      = \LearnDash_Theme_Register_LD30::$variation_classic;

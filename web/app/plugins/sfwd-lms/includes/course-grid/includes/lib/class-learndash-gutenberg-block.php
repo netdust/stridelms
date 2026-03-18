@@ -142,13 +142,13 @@ class LearnDash_Gutenberg_Block {
 	 *
 	 * @since 4.21.4
 	 *
-	 * @param array    $block_attributes The block attributes.
-	 * @param string   $block_content    The block content.
-	 * @param WP_Block $block            The block object.
+	 * @param array         $block_attributes The block attributes.
+	 * @param string        $block_content    The block content.
+	 * @param WP_Block|null $block            The block object.
 	 *
 	 * @return void The output is echoed.
 	 */
-	public function render_block( $block_attributes = array(), $block_content = '', WP_Block $block = null ) {
+	public function render_block( $block_attributes = array(), $block_content = '', ?WP_Block $block = null ) {
 	}
 
 	/**

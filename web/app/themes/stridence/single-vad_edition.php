@@ -25,7 +25,7 @@ $sessionService = ntdst_get(SessionService::class);
 // Get edition data via service
 $edition = $editionService->getEdition($edition_id);
 if (is_wp_error($edition)) {
-    get_template_part('partials/empty-state', null, [
+    stridence_template_part('partials/empty-state', null, [
         'icon'    => 'alert-circle',
         'title'   => __('Editie niet gevonden', 'stridence'),
         'message' => __('Deze editie bestaat niet of is verwijderd.', 'stridence'),
@@ -124,7 +124,7 @@ get_header();
     <div class="bg-surface-alt border-b border-border">
         <div class="container py-8 lg:py-12">
             <?php
-            get_template_part('partials/breadcrumb', null, [
+            stridence_template_part('partials/breadcrumb', null, [
                 'items' => $breadcrumbs,
             ]);
             ?>
@@ -142,7 +142,7 @@ get_header();
                     <?php echo $course ? esc_html(get_the_title($course)) : the_title(); ?>
                 </h1>
                 <?php
-                get_template_part('partials/badge-status', null, [
+                stridence_template_part('partials/badge-status', null, [
                     'status' => $status->value,
                     'spots'  => $spots,
                 ]);
@@ -176,7 +176,7 @@ get_header();
 
     <!-- Sticky Tab Bar -->
     <?php
-    get_template_part('templates/edition/tabs', null, [
+    stridence_template_part('templates/edition/tabs', null, [
         'has_sessions' => $has_sessions,
     ]);
     ?>
@@ -215,7 +215,7 @@ get_header();
                                 $notChosen = $hasSelections && !$isSelected && !empty($session['slot']);
                             ?>
                                 <?php
-                                get_template_part('partials/session-row', null, [
+                                stridence_template_part('partials/session-row', null, [
                                     'session'    => (object) $session,
                                     'attendance' => null,
                                     'selected'   => $isSelected,
@@ -245,7 +245,7 @@ get_header();
                                 $notChosen = $hasSelections && !$isSelected && !empty($session['slot']);
                             ?>
                                 <?php
-                                get_template_part('partials/session-row', null, [
+                                stridence_template_part('partials/session-row', null, [
                                     'session'    => (object) $session,
                                     'attendance' => null,
                                     'selected'   => $isSelected,

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Stride\Contracts;
 
-use Stride\Domain\EditionStatus;
+use Stride\Domain\OfferingStatus;
 
 /**
  * Query interface for editions - used by other modules.
@@ -31,7 +31,7 @@ interface EditionQueryInterface
     /**
      * Get edition status.
      */
-    public function getStatus(int $editionId): EditionStatus;
+    public function getStatus(int $editionId): OfferingStatus;
 
     /**
      * Get linked LearnDash course ID.
@@ -42,4 +42,9 @@ interface EditionQueryInterface
      * Check if edition exists and is valid.
      */
     public function exists(int $editionId): bool;
+
+    /**
+     * Check if edition requires admin approval for enrollment.
+     */
+    public function requiresApproval(int $editionId): bool;
 }

@@ -1,0 +1,45 @@
+/* Netdust Mail — Plugin-specific admin styles */
+/* Most styling comes from ntdst-admin-toolkit */
+
+.ndmail-smartcode-palette {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.ndmail-smartcode-pill {
+    cursor: pointer;
+    background: #f0f0f1;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-family: monospace;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+}
+
+.ndmail-smartcode-pill:hover {
+    background: #dcdcde;
+    border-color: #c3c4c7;
+}
+
+/* TinyMCE editor in modal */
+.ntdst-modal .wp-editor-wrap {
+    margin-top: 4px;
+}
+
+.ntdst-modal .wp-editor-container {
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.ntdst-modal .mce-toolbar-grp {
+    border-bottom: 1px solid #e2e4e7;
+}
+
+.ntdst-modal .wp-switch-editor {
+    height: auto;
+    padding: 5px 10px;
+}

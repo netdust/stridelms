@@ -56,7 +56,8 @@ final class QuoteUpdateHandler
             return $validation;
         }
 
-        $billing = $this->sanitizeBilling($params['billing'] ?? []);
+        // Accept billing as nested object OR flat fields (inlineEditSection sends flat)
+        $billing = $this->sanitizeBilling($params['billing'] ?? $params);
         if (!empty($billing)) {
             $quoteRepo = ntdst_get(QuoteRepository::class);
             $quoteRepo->updateMeta($quoteId, ['billing' => $billing]);
@@ -70,7 +71,7 @@ final class QuoteUpdateHandler
         return [
             'success' => true,
             'message' => __('Offerte bijgewerkt.', 'stride'),
-            'redirect_url' => home_url('/mijn-account/mijn-offertes/'),
+            'redirect_url' => home_url('/mijn-account/?tab=offertes'),
         ];
     }
 
@@ -172,7 +173,7 @@ final class QuoteUpdateHandler
         return [
             'success' => true,
             'message' => __('Inschrijving geannuleerd.', 'stride'),
-            'redirect_url' => home_url('/mijn-account/mijn-offertes/'),
+            'redirect_url' => home_url('/mijn-account/?tab=offertes'),
         ];
     }
 
@@ -231,7 +232,7 @@ final class QuoteUpdateHandler
             return [];
         }
 
-        $allowed = ['organisation', 'email', 'address', 'postal_code', 'city', 'vat_number', 'gln_number'];
+        $allowed = ['company', 'email', 'address', 'postal_code', 'city', 'vat_number', 'gln_number'];
         $sanitized = [];
 
         foreach ($allowed as $field) {

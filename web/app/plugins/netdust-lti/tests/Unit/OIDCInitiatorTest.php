@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace NetdustLTI\Tests\Unit;
 
 use NetdustLTI\Platform\OIDCInitiator;
-use NetdustLTI\Repositories\ToolRepository;
+use NetdustLTI\Platform\ToolRepository;
 use PHPUnit\Framework\TestCase;
 
 class OIDCInitiatorTest extends TestCase

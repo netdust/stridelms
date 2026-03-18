@@ -56,11 +56,12 @@ if (is_array($trajectory)) {
 
 // Map trajectory status to badge status
 $badge_status_map = [
-    'open'      => 'open',
-    'ongoing'   => 'pending',
-    'completed' => 'completed',
-    'draft'     => 'pending',
-    'closed'    => 'cancelled',
+    'open'         => 'open',
+    'announcement' => 'announcement',
+    'ongoing'      => 'pending',
+    'completed'    => 'completed',
+    'draft'        => 'pending',
+    'closed'       => 'cancelled',
 ];
 $badge_status = $badge_status_map[$status] ?? 'open';
 
@@ -72,7 +73,7 @@ $badge_status = $badge_status_map[$status] ?? 'open';
                 <?php echo esc_html($title); ?>
             </a>
         </h3>
-        <?php get_template_part('partials/badge-status', null, ['status' => $badge_status]); ?>
+        <?php stridence_template_part('partials/badge-status', null, ['status' => $badge_status]); ?>
     </div>
 
     <p class="text-sm text-text-muted line-clamp-2 mb-4 flex-1">

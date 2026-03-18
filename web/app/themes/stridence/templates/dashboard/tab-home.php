@@ -164,12 +164,12 @@ foreach ($enrollments as $enrollment) {
             </section>
         <?php endif; ?>
 
-        <!-- Mijn opleidingen -->
+        <!-- Opleidingen -->
         <?php if (!empty($enrollments)) : ?>
             <section>
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="text-base font-semibold text-text">
-                        <?php esc_html_e('Mijn opleidingen', 'stridence'); ?>
+                        <?php esc_html_e('Opleidingen', 'stridence'); ?>
                     </h3>
                     <a href="<?php echo esc_url(add_query_arg('tab', 'inschrijvingen', $permalink)); ?>"
                        class="text-sm text-primary hover:underline">
@@ -288,21 +288,21 @@ foreach ($enrollments as $enrollment) {
                                 </div>
 
                                 <!-- Progress bar -->
-                                <?php get_template_part('templates/dashboard/partials/progress-bar', null, [
+                                <?php stridence_template_part('templates/dashboard/partials/progress-bar', null, [
                                     'percentage' => $progress,
                                 ]); ?>
                             </div>
 
                             <!-- Sessions (collapsible, editions only) -->
                             <?php if (!$isOnline && !empty($futureSessions)) : ?>
-                                <?php get_template_part('templates/dashboard/partials/session-list-inline', null, [
+                                <?php stridence_template_part('templates/dashboard/partials/session-list-inline', null, [
                                     'sessions' => $futureSessions,
                                     'limit' => 5,
                                 ]); ?>
                             <?php endif; ?>
 
                             <!-- Footer -->
-                            <?php get_template_part('templates/dashboard/partials/enrollment-footer', null, [
+                            <?php stridence_template_part('templates/dashboard/partials/enrollment-footer', null, [
                                 'cta'        => $cta,
                                 'detail_url' => $detailUrl,
                                 'edition_id' => !$isOnline ? (int) ($enrollment['edition_id'] ?? 0) : 0,
@@ -378,6 +378,6 @@ foreach ($enrollments as $enrollment) {
 
     <!-- Enrollment Side Panel -->
     <?php if (!empty($enrollments)) : ?>
-        <?php get_template_part('templates/dashboard/partials/panel-enrollment'); ?>
+        <?php stridence_template_part('templates/dashboard/partials/panel-enrollment'); ?>
     <?php endif; ?>
 </div>

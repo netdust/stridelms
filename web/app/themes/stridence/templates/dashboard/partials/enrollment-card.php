@@ -2,12 +2,12 @@
 /**
  * Enrollment Card Partial
  *
- * Compact card for the home screen overview grid.
+ * Visual card with course thumbnail for the home screen.
  * Supports both edition (classroom) and online enrollment types.
  *
  * @param array $args {
- *     @type array $enrollment Enrollment data from UserDashboardService::getHomeData()
- *                             with 'type' field: 'edition' or 'online'
+ *     @type array $enrollment  Enrollment data from UserDashboardService::getHomeData()
+ *     @type bool  $panel_enabled Whether clicking opens the side panel
  * }
  * @package stridence
  */
@@ -21,12 +21,12 @@ if (empty($enrollment)) {
     return;
 }
 
-// When embedded in dashboardHome, cards open the side panel instead of linking
 $panelEnabled = !empty($args['panel_enabled']);
 
 $type     = $enrollment['type'] ?? 'edition';
 $title    = $enrollment['course_title'] ?? '';
-$progress = (int) ($enrollment['progress']['attended'] ?? $enrollment['progress'] ?? 0);
+$courseId = (int) ($enrollment['course_id'] ?? 0);
+$progress = 0;
 
 // Edition-specific fields
 $startDate = $enrollment['start_date'] ?? '';
@@ -35,101 +35,102 @@ $editionId = $enrollment['edition_id'] ?? 0;
 
 // Online-specific fields
 $courseUrl        = $enrollment['course_url'] ?? '';
-$formatLabel      = $enrollment['format_label'] ?? __('Online', 'stridence');
-$totalLessons     = (int) ($enrollment['total_lessons'] ?? 0);
+$formatLabel     = $enrollment['format_label'] ?? __('Online', 'stridence');
+$totalLessons    = (int) ($enrollment['total_lessons'] ?? 0);
 $completedLessons = (int) ($enrollment['completed_lessons'] ?? 0);
 
-// Badge label
-$badgeLabel = $type === 'edition'
-    ? __('Klassikaal', 'stridence')
-    : $formatLabel;
+// Badge
+$badgeLabel = $type === 'edition' ? __('Klassikaal', 'stridence') : $formatLabel;
+$badgeClass = $type === 'edition' ? 'bg-primary/10 text-primary' : 'bg-accent/10 text-accent';
 
-$badgeClass = $type === 'edition'
-    ? 'bg-primary/10 text-primary'
-    : 'bg-accent/10 text-accent';
-
-// Determine progress percentage for the ring
-$progressPercent = 0;
+// Progress percentage
 if ($type === 'online') {
-    $progressPercent = (int) ($enrollment['progress'] ?? 0);
+    $progress = (int) ($enrollment['progress'] ?? 0);
 } elseif ($type === 'edition' && is_array($enrollment['progress'] ?? null)) {
     $required = (int) ($enrollment['progress']['required'] ?? 0);
     $attended = (int) ($enrollment['progress']['attended'] ?? 0);
-    $progressPercent = $required > 0 ? (int) round(($attended / $required) * 100) : 0;
+    $progress = $required > 0 ? (int) round(($attended / $required) * 100) : 0;
+}
+
+// Course thumbnail
+$thumbnail = '';
+if ($courseId && has_post_thumbnail($courseId)) {
+    $thumbnail = get_the_post_thumbnail_url($courseId, 'medium');
 }
 ?>
 
-<div class="dash-card-interactive relative"
+<div class="dash-card-interactive !p-0 overflow-hidden flex flex-col"
      <?php if ($panelEnabled) : ?>
          @click="openPanel(<?php echo esc_attr(wp_json_encode($enrollment)); ?>)"
          role="button"
          tabindex="0"
          @keydown.enter="openPanel(<?php echo esc_attr(wp_json_encode($enrollment)); ?>)"
      <?php endif; ?>>
-    <!-- Type badge -->
-    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium <?php echo esc_attr($badgeClass); ?> mb-2">
-        <?php echo esc_html($badgeLabel); ?>
-    </span>
 
-    <!-- Progress ring (top-right) -->
-    <?php if ($progressPercent > 0) : ?>
-        <div class="absolute top-5 right-5">
-            <?php
-            get_template_part('templates/dashboard/partials/progress-ring', null, [
-                'progress' => $progressPercent,
-                'size'     => 48,
-            ]);
-            ?>
-        </div>
-    <?php endif; ?>
-
-    <!-- Course title -->
-    <h3 class="font-semibold text-text truncate pr-16 mb-2">
-        <?php echo esc_html($title); ?>
-    </h3>
-
-    <!-- Type-specific details -->
-    <?php if ($type === 'edition') : ?>
-        <div class="flex flex-wrap gap-3 text-sm text-text-muted">
-            <?php if ($startDate) : ?>
-                <span class="flex items-center gap-1">
-                    <?php echo stridence_icon('calendar', 'w-3.5 h-3.5'); ?>
-                    <?php echo esc_html(stride_format_date($startDate)); ?>
-                </span>
-            <?php endif; ?>
-            <?php if ($venue) : ?>
-                <span class="flex items-center gap-1">
-                    <?php echo stridence_icon('map-pin', 'w-3.5 h-3.5'); ?>
-                    <?php echo esc_html($venue); ?>
-                </span>
-            <?php endif; ?>
-        </div>
-    <?php else : ?>
-        <?php if ($totalLessons > 0) : ?>
-            <p class="text-sm text-text-muted">
-                <?php echo esc_html(sprintf(
-                    __('%d van %d lessen', 'stridence'),
-                    $completedLessons,
-                    $totalLessons
-                )); ?>
-            </p>
+    <!-- Thumbnail -->
+    <div class="aspect-[16/9] relative overflow-hidden rounded-t-xl">
+        <?php if ($thumbnail) : ?>
+            <img src="<?php echo esc_url($thumbnail); ?>"
+                 alt=""
+                 class="w-full h-full object-cover"
+                 loading="lazy">
+        <?php else : ?>
+            <div class="w-full h-full flex items-center justify-center bg-gradient-to-br <?php echo $type === 'edition' ? 'from-primary/5 via-primary/10 to-primary/20' : 'from-accent/5 via-accent/10 to-accent/20'; ?>">
+                <?php echo stridence_icon($type === 'edition' ? 'users' : 'monitor', 'w-9 h-9 ' . ($type === 'edition' ? 'text-primary/20' : 'text-accent/20')); ?>
+            </div>
         <?php endif; ?>
-    <?php endif; ?>
 
-    <!-- CTA link -->
-    <div class="mt-3">
-        <?php if ($type === 'online' && $courseUrl) : ?>
-            <a href="<?php echo esc_url($courseUrl); ?>"
-               class="text-sm font-medium text-primary hover:underline">
-                <?php esc_html_e('Ga verder', 'stridence'); ?>
-                <?php echo stridence_icon('chevron-right', 'w-3.5 h-3.5 inline-block'); ?>
-            </a>
-        <?php elseif ($editionId) : ?>
-            <a href="<?php echo esc_url(get_permalink($editionId)); ?>"
-               class="text-sm font-medium text-primary hover:underline">
-                <?php esc_html_e('Bekijk', 'stridence'); ?>
-                <?php echo stridence_icon('chevron-right', 'w-3.5 h-3.5 inline-block'); ?>
-            </a>
+        <!-- Badge overlay -->
+        <span class="absolute top-2.5 left-2.5 inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold <?php echo esc_attr($badgeClass); ?> bg-surface-card/90 backdrop-blur-sm shadow-sm">
+            <?php echo esc_html($badgeLabel); ?>
+        </span>
+
+        <!-- Progress ring overlay -->
+        <?php if ($progress > 0) : ?>
+            <div class="absolute top-2.5 right-2.5 bg-surface-card/90 backdrop-blur-sm rounded-full p-0.5 shadow-sm">
+                <?php
+                stridence_template_part('templates/dashboard/partials/progress-ring', null, [
+                    'progress' => $progress,
+                    'size'     => 36,
+                ]);
+                ?>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <!-- Content -->
+    <div class="p-4 flex-1 flex flex-col">
+        <h3 class="font-semibold text-text line-clamp-2 mb-2">
+            <?php echo esc_html($title); ?>
+        </h3>
+
+        <?php if ($type === 'edition') : ?>
+            <div class="flex flex-wrap gap-x-3 gap-y-1 text-sm text-text-muted mt-auto">
+                <?php if ($startDate) : ?>
+                    <span class="flex items-center gap-1">
+                        <?php echo stridence_icon('calendar', 'w-3.5 h-3.5'); ?>
+                        <?php echo esc_html(stride_format_date($startDate)); ?>
+                    </span>
+                <?php endif; ?>
+                <?php if ($venue) : ?>
+                    <span class="flex items-center gap-1">
+                        <?php echo stridence_icon('map-pin', 'w-3.5 h-3.5'); ?>
+                        <?php echo esc_html($venue); ?>
+                    </span>
+                <?php endif; ?>
+            </div>
+        <?php else : ?>
+            <?php if ($totalLessons > 0) : ?>
+                <div class="mt-auto">
+                    <div class="flex items-center justify-between text-xs text-text-muted mb-1.5">
+                        <span><?php echo esc_html(sprintf(__('%d van %d lessen', 'stridence'), $completedLessons, $totalLessons)); ?></span>
+                        <span><?php echo esc_html($progress . '%'); ?></span>
+                    </div>
+                    <div class="w-full h-1.5 bg-surface-alt rounded-full overflow-hidden">
+                        <div class="h-full bg-primary rounded-full transition-all" style="width: <?php echo esc_attr($progress); ?>%"></div>
+                    </div>
+                </div>
+            <?php endif; ?>
         <?php endif; ?>
     </div>
 </div>

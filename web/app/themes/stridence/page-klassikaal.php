@@ -161,7 +161,7 @@ get_header();
                 <?php foreach ($all_editions as $edition) : ?>
                     <div data-themes="<?php echo esc_attr(implode(',', $edition['themes'])); ?>">
                         <?php
-                        get_template_part('partials/card-edition', null, [
+                        stridence_template_part('partials/card-edition', null, [
                             'edition' => $edition,
                         ]);
                         ?>
@@ -172,7 +172,7 @@ get_header();
             <!-- Empty state for filtered results -->
             <div x-show="filteredCount === 0" x-cloak class="text-center py-12">
                 <?php
-                get_template_part('partials/empty-state', null, [
+                stridence_template_part('partials/empty-state', null, [
                     'icon'    => 'calendar',
                     'title'   => __('Geen opleidingen gevonden', 'stridence'),
                     'message' => __('Er zijn geen klassikale opleidingen in dit thema.', 'stridence'),
@@ -207,7 +207,7 @@ get_header();
 
         <?php else : ?>
             <?php
-            get_template_part('partials/empty-state', null, [
+            stridence_template_part('partials/empty-state', null, [
                 'icon'    => 'calendar',
                 'title'   => __('Geen opleidingen gevonden', 'stridence'),
                 'message' => __('Er zijn momenteel geen klassikale opleidingen gepland.', 'stridence'),

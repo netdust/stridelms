@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace NetdustLTI\Platform;
 
-use NetdustLTI\Repositories\ToolRepository;
+use NetdustLTI\Platform\ToolRepository;
 use WP_Error;
 
 use function absint;
@@ -46,6 +46,7 @@ final class OIDCInitiator
         $toolId = absint($_POST['tool_id'] ?? $_GET['tool_id'] ?? 0);
         $resourceLinkId = sanitize_text_field($_POST['resource_link_id'] ?? $_GET['resource_link_id'] ?? '');
         $targetLinkUri = esc_url_raw($_POST['target_link_uri'] ?? $_GET['target_link_uri'] ?? '');
+        $messageType = sanitize_text_field($_POST['message_type'] ?? $_GET['message_type'] ?? 'LtiResourceLinkRequest');
 
         if (!$toolId) {
             wp_die('Missing tool_id parameter', 'LTI Platform Error', ['response' => 400]);
@@ -73,6 +74,7 @@ final class OIDCInitiator
         $_SESSION['lti_platform_tool_id'] = $toolId;
         $_SESSION['lti_platform_resource_link_id'] = $resourceLinkId;
         $_SESSION['lti_platform_target_link_uri'] = $targetLinkUri;
+        $_SESSION['lti_platform_message_type'] = $messageType;
 
         // Build OIDC login request parameters
         // Note: state is included so the tool can echo it back for CSRF validation

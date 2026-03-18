@@ -17,7 +17,7 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
-use Stride\Modules\Course\EnrollmentFieldGroupService;
+use Stride\Modules\Enrollment\EnrollmentFieldGroups;
 use Stride\Modules\Edition\EditionService;
 
 $registration = $args['registration'] ?? null;
@@ -28,7 +28,7 @@ if (!$registration || !$post) {
 }
 
 // Get field groups for this post
-$fieldsService = ntdst_get(EnrollmentFieldGroupService::class);
+$fieldsService = ntdst_get(EnrollmentFieldGroups::class);
 
 if ($post->post_type === 'vad_edition') {
     $editionService = ntdst_get(EditionService::class);
@@ -64,7 +64,7 @@ if (empty($fieldGroups)) {
 
             <?php foreach ($group['fields'] ?? [] as $field): ?>
                 <?php
-                get_template_part('templates/forms/fields/dynamic-field', null, [
+                stridence_template_part('templates/forms/fields/dynamic-field', null, [
                     'field'  => $field,
                     'prefix' => 'questionnaire',
                     'value'  => '',

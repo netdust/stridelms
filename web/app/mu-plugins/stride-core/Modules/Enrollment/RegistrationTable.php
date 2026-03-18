@@ -125,5 +125,11 @@ final class RegistrationTable
         if (!$hasCompletionTasks) {
             $wpdb->query("ALTER TABLE {$table} ADD COLUMN completion_tasks JSON NULL AFTER notes");
         }
+
+        // Add enrollment_data JSON column (stores extra fields from field groups)
+        $hasEnrollmentData = $wpdb->get_var("SHOW COLUMNS FROM {$table} LIKE 'enrollment_data'");
+        if (!$hasEnrollmentData) {
+            $wpdb->query("ALTER TABLE {$table} ADD COLUMN enrollment_data JSON NULL AFTER completion_tasks");
+        }
     }
 }

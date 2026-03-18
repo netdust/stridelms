@@ -147,7 +147,7 @@ foreach ($enrollments as $enrollment) {
         </h3>
 
         <?php if (!empty($active)) : ?>
-            <div class="bg-surface-card rounded-lg border border-border/60 divide-y divide-border/60">
+            <div class="bg-surface-card rounded-xl border border-border shadow-sm">
                 <?php foreach ($active as $traj) :
                     $progressPct = $traj['total_required'] > 0
                         ? (int) round(($traj['completed_count'] / $traj['total_required']) * 100)
@@ -160,9 +160,9 @@ foreach ($enrollments as $enrollment) {
                         : get_permalink($traj['trajectory_id']);
                 ?>
                     <a href="<?php echo esc_url($dashboard_url); ?>"
-                       class="list-item">
+                       class="flex items-center gap-4 px-4 py-3.5 border-b border-border/60 last:border-b-0 cursor-pointer hover:bg-surface-alt transition-colors">
                         <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 mb-0.5">
+                            <div class="flex items-center gap-2">
                                 <span class="font-medium text-text text-sm truncate">
                                     <?php echo esc_html($traj['trajectory']['title']); ?>
                                 </span>
@@ -193,8 +193,8 @@ foreach ($enrollments as $enrollment) {
                             </div>
                             <!-- Progress bar -->
                             <div class="flex items-center gap-2 mt-1.5">
-                                <div class="flex-1 h-1.5 rounded-full bg-border overflow-hidden max-w-[120px]">
-                                    <div class="h-full bg-accent rounded-full transition-all" style="width: <?php echo esc_attr((string) $progressPct); ?>%"></div>
+                                <div class="flex-1 h-1 rounded-full bg-surface-alt overflow-hidden max-w-[120px]">
+                                    <div class="h-full bg-primary rounded-full transition-all" style="width: <?php echo esc_attr((string) $progressPct); ?>%"></div>
                                 </div>
                                 <span class="text-xs text-text-muted"><?php echo esc_html(sprintf('%d%%', $progressPct)); ?></span>
                             </div>
@@ -207,7 +207,7 @@ foreach ($enrollments as $enrollment) {
             </div>
         <?php else : ?>
             <?php
-            get_template_part('partials/empty-state', null, [
+            stridence_template_part('partials/empty-state', null, [
                 'icon'    => 'layers',
                 'title'   => __('Geen actieve trajecten', 'stridence'),
                 'message' => __('Je bent nog niet ingeschreven voor een leertraject. Ontdek onze trajecten en start je leerpad.', 'stridence'),
@@ -240,9 +240,9 @@ foreach ($enrollments as $enrollment) {
             </button>
 
             <div x-show="open" x-collapse>
-                <div class="bg-surface-card rounded-lg border border-border/60 divide-y divide-border/60">
+                <div class="bg-surface-card rounded-xl border border-border shadow-sm">
                     <?php foreach ($completed as $traj) : ?>
-                        <div class="list-item-static">
+                        <div class="flex items-center gap-4 px-4 py-3.5 border-b border-border/60 last:border-b-0 transition-colors">
                             <span class="shrink-0 w-8 h-8 rounded-full bg-success/10 flex items-center justify-center">
                                 <?php echo stridence_icon('award', 'w-4 h-4 text-success'); ?>
                             </span>

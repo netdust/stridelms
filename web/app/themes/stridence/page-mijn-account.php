@@ -47,7 +47,7 @@ $greeting = match (true) {
 // Build sidebar navigation
 $primary_nav = [
     'home'            => ['label' => __('Home', 'stridence'), 'icon' => 'home', 'visible' => true],
-    'inschrijvingen'  => ['label' => __('Mijn opleidingen', 'stridence'), 'icon' => 'book-open', 'visible' => !empty($nav_items['opleidingen'])],
+    'inschrijvingen'  => ['label' => __('Opleidingen', 'stridence'), 'icon' => 'book-open', 'visible' => !empty($nav_items['opleidingen'])],
     'trajecten'       => ['label' => __('Trajecten', 'stridence'), 'icon' => 'layers', 'visible' => !empty($nav_items['trajecten'])],
     'offertes'        => ['label' => __('Offertes', 'stridence'), 'icon' => 'file-text', 'visible' => !empty($nav_items['offertes'])],
 ];
@@ -64,12 +64,12 @@ $unread_count = $notificationService->getUnreadCount($user->ID);
 
 $page_titles = [
     'home'           => $greeting . ', ' . $firstName,
-    'inschrijvingen' => __('Mijn opleidingen', 'stridence'),
+    'inschrijvingen' => '',
     'trajecten'      => __('Trajecten', 'stridence'),
     'offertes'       => __('Offertes', 'stridence'),
     'certificaten'   => __('Certificaten', 'stridence'),
     'profiel'        => __('Profiel', 'stridence'),
-    'meldingen'      => __('Meldingen', 'stridence'),
+    'meldingen'      => '',
     'downloads'      => __('Downloads', 'stridence'),
 ];
 
@@ -77,55 +77,60 @@ get_header();
 ?>
 
 <div class="min-h-screen bg-surface">
-    <!-- Sidebar (desktop only) -->
-    <div class="hidden lg:block">
-        <?php get_template_part('templates/dashboard/nav-sidebar', null, [
-            'current_tab'   => $current_tab,
-            'primary_nav'   => $primary_nav,
-            'utility_nav'   => $utility_nav,
-            'user'          => $user,
-            'unread_count'  => $unread_count,
-        ]); ?>
-    </div>
+    <div class="max-w-container mx-auto px-4 md:px-6 lg:px-8">
+        <div class="lg:flex lg:gap-8 py-6 lg:py-8">
 
-    <!-- Main Content Area -->
-    <main class="lg:ml-sidebar min-h-screen">
-        <!-- Top Bar -->
-        <div class="sticky top-0 z-30 bg-surface/80 backdrop-blur-sm border-b border-border/60">
-            <div class="max-w-content mx-auto px-4 md:px-6 lg:px-8 h-14 flex items-center justify-between">
-                <h1 class="text-lg font-semibold text-text tracking-tight">
-                    <?php echo esc_html($page_titles[$current_tab] ?? 'Dashboard'); ?>
-                </h1>
+            <!-- Sidebar (desktop only) -->
+            <div class="hidden lg:block">
+                <?php stridence_template_part('templates/dashboard/nav-sidebar', null, [
+                    'current_tab'   => $current_tab,
+                    'primary_nav'   => $primary_nav,
+                    'utility_nav'   => $utility_nav,
+                    'user'          => $user,
+                    'unread_count'  => $unread_count,
+                ]); ?>
             </div>
-        </div>
 
-        <!-- Page Content -->
-        <div class="max-w-content mx-auto px-4 md:px-6 lg:px-8 py-6 lg:py-8">
-            <?php
-            if ($current_tab === 'home') {
-                get_template_part('templates/dashboard/tab-home', null, [
-                    'user'      => $user,
-                    'home_data' => $home_data,
-                ]);
-            } else {
-                get_template_part("templates/dashboard/tab-{$current_tab}", null, [
-                    'user' => $user,
-                ]);
-            }
-            ?>
+            <!-- Main Content Area -->
+            <main class="flex-1 min-w-0">
+                <!-- Page Header -->
+                <?php $pageTitle = $page_titles[$current_tab] ?? ''; ?>
+                <?php if ($pageTitle) : ?>
+                    <div class="mb-6">
+                        <h1 class="text-lg font-semibold text-text tracking-tight">
+                            <?php echo esc_html($pageTitle); ?>
+                        </h1>
+                    </div>
+                <?php endif; ?>
+
+                <!-- Page Content -->
+                <?php
+                if ($current_tab === 'home') {
+                    stridence_template_part('templates/dashboard/tab-home', null, [
+                        'user'      => $user,
+                        'home_data' => $home_data,
+                    ]);
+                } else {
+                    stridence_template_part("templates/dashboard/tab-{$current_tab}", null, [
+                        'user' => $user,
+                    ]);
+                }
+                ?>
+            </main>
+
         </div>
-    </main>
+    </div>
 
     <!-- Mobile Bottom Navigation -->
     <div class="lg:hidden">
-        <?php get_template_part('templates/dashboard/nav-mobile', null, [
+        <?php stridence_template_part('templates/dashboard/nav-mobile', null, [
             'current_tab'  => $current_tab,
             'nav_items'    => $nav_items,
             'unread_count' => $unread_count,
         ]); ?>
     </div>
 
-    <?php get_template_part('templates/dashboard/partials/toast'); ?>
+    <?php stridence_template_part('templates/dashboard/partials/toast'); ?>
 </div>
 
 <?php get_footer('dashboard'); ?>

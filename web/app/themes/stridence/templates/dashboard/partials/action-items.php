@@ -2,8 +2,8 @@
 /**
  * Dashboard action items — pending enrollment and post-course tasks.
  *
- * Uses the standard .action-item classes with amber border for consistency
- * with the dashboard home screen action list.
+ * Matches the home tab action item pattern: colored border + background
+ * with inline Tailwind utilities.
  *
  * @var array $args {
  *     @type array $items Action items from UserDashboardService::buildActionItems()
@@ -22,19 +22,42 @@ if (empty($items)) {
 ?>
 <section class="mb-6">
     <div class="space-y-2">
-        <?php foreach ($items as $item) : ?>
+        <?php foreach ($items as $item) :
+            $type = $item['type'] ?? '';
+
+            // Match home tab action styling per type
+            if ($type === 'online_lesson') {
+                $borderClass = 'border-blue-200 bg-blue-50/50 hover:border-blue-300 hover:bg-blue-50';
+                $iconColor = 'text-blue-500';
+                $chevronColor = 'text-blue-400';
+                $icon = 'play';
+            } elseif ($type === 'session_selection') {
+                $borderClass = 'border-violet-200 bg-violet-50/50 hover:border-violet-300 hover:bg-violet-50';
+                $iconColor = 'text-violet-500';
+                $chevronColor = 'text-violet-400';
+                $icon = 'list';
+            } else {
+                $borderClass = 'border-amber-200 bg-amber-50/50 hover:border-amber-300 hover:bg-amber-50';
+                $iconColor = 'text-amber-500';
+                $chevronColor = 'text-amber-400';
+                $icon = 'alert-circle';
+            }
+        ?>
             <a href="<?php echo esc_url($item['url']); ?>"
-               class="action-item action-border-amber">
-                <div class="flex items-center gap-3 min-w-0 flex-1">
-                    <span class="w-8 h-8 rounded-lg bg-warning/10 flex items-center justify-center shrink-0">
-                        <?php echo stridence_icon('alert-circle', 'w-4 h-4 text-warning'); ?>
-                    </span>
-                    <div class="min-w-0">
-                        <span class="font-medium text-text text-sm truncate block"><?php echo esc_html($item['course_title']); ?></span>
-                        <span class="text-xs text-text-muted"><?php echo esc_html($item['label']); ?></span>
-                    </div>
-                </div>
-                <?php echo stridence_icon('chevron-right', 'w-4 h-4 text-text-muted shrink-0'); ?>
+               class="flex items-center gap-2.5 rounded-lg border <?php echo $borderClass; ?> px-3 py-2 transition-colors">
+                <?php echo stridence_icon($icon, 'w-4 h-4 ' . $iconColor . ' shrink-0'); ?>
+                <span class="text-sm font-medium text-text truncate"><?php echo esc_html($item['course_title']); ?></span>
+                <span class="text-xs text-text-muted shrink-0 ml-auto">
+                    <?php echo esc_html($item['label']); ?>
+                    <?php
+                    $total = (int) ($item['total_tasks'] ?? 0);
+                    $done  = (int) ($item['done_tasks'] ?? 0);
+                    if ($total > 0) :
+                    ?>
+                        &middot; <?php echo esc_html($done . '/' . $total); ?>
+                    <?php endif; ?>
+                </span>
+                <?php echo stridence_icon('chevron-right', 'w-4 h-4 ' . $chevronColor . ' shrink-0'); ?>
             </a>
         <?php endforeach; ?>
     </div>

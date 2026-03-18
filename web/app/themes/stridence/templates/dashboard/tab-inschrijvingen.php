@@ -123,20 +123,20 @@ $cancelled_editions = $data['cancelled_editions'];
                                     )); ?>"></span>
                                 <?php endif; ?>
                             </div>
-                            <?php get_template_part('templates/dashboard/partials/progress-bar', null, [
+                            <?php stridence_template_part('templates/dashboard/partials/progress-bar', null, [
                                     'percentage' => $progressPct,
                                 ]); ?>
                         </div>
 
                         <!-- Sessions (collapsible) -->
                         <?php if (!empty($futureSessions)) : ?>
-                            <?php get_template_part('templates/dashboard/partials/session-list-inline', null, [
+                            <?php stridence_template_part('templates/dashboard/partials/session-list-inline', null, [
                                 'sessions' => $futureSessions,
                             ]); ?>
                         <?php endif; ?>
 
                         <!-- Footer -->
-                        <?php get_template_part('templates/dashboard/partials/enrollment-footer', null, [
+                        <?php stridence_template_part('templates/dashboard/partials/enrollment-footer', null, [
                             'cta'        => $cta,
                             'detail_url' => $detailUrl,
                             'edition_id' => (int) $reg['edition_id'],
@@ -187,12 +187,12 @@ $cancelled_editions = $data['cancelled_editions'];
                                     </div>
                                 </div>
                             </div>
-                            <?php get_template_part('templates/dashboard/partials/progress-bar', null, [
+                            <?php stridence_template_part('templates/dashboard/partials/progress-bar', null, [
                                 'percentage' => $progress,
                             ]); ?>
                         </div>
                         <!-- Footer -->
-                        <?php get_template_part('templates/dashboard/partials/enrollment-footer', null, [
+                        <?php stridence_template_part('templates/dashboard/partials/enrollment-footer', null, [
                             'cta'        => ['url' => $course['course_url'], 'label' => $ctaLabel],
                             'detail_url' => get_permalink($course['course_id']),
                             'edition_id' => 0,
@@ -206,7 +206,7 @@ $cancelled_editions = $data['cancelled_editions'];
     <!-- Empty state when no active courses at all -->
     <?php if (empty($active_editions) && empty($active_online)) : ?>
         <?php
-        get_template_part('partials/empty-state', null, [
+        stridence_template_part('partials/empty-state', null, [
             'icon'    => 'book-open',
             'title'   => __('Geen actieve opleidingen', 'stridence'),
             'message' => __('Je hebt momenteel geen actieve inschrijvingen. Bekijk ons aanbod en schrijf je in voor een opleiding.', 'stridence'),

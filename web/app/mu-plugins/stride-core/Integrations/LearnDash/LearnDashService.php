@@ -10,10 +10,8 @@ use Stride\Infrastructure\AbstractService;
 /**
  * LearnDash integration service.
  *
- * Single entry point for all LearnDash integration:
- * - Implements LMSAdapterInterface (course access, completion, certificates)
- * - Registers custom course taxonomies
- * - Owns LearnDashHelper (static presentation helper)
+ * Business operations only: grant/revoke access, completion check.
+ * For read-only presentation data, use LearnDashHelper.
  */
 final class LearnDashService extends AbstractService implements LMSAdapterInterface
 {
@@ -33,7 +31,6 @@ final class LearnDashService extends AbstractService implements LMSAdapterInterf
 
     protected function init(): void
     {
-        // Register custom course taxonomies
         add_action('init', function () {
             (new CourseTaxonomies())->register();
         }, 5);
@@ -70,55 +67,5 @@ final class LearnDashService extends AbstractService implements LMSAdapterInterf
         }
 
         return learndash_course_completed($userId, $courseId);
-    }
-
-    public function getCertificateLink(int $userId, int $courseId): ?string
-    {
-        if (!function_exists('learndash_get_course_certificate_link')) {
-            return null;
-        }
-
-        $link = learndash_get_course_certificate_link($courseId, $userId);
-
-        return $link ?: null;
-    }
-
-    public function getEnrolledCourses(int $userId): array
-    {
-        if (!function_exists('learndash_user_get_enrolled_courses')) {
-            return [];
-        }
-
-        return learndash_user_get_enrolled_courses($userId);
-    }
-
-    public function getProgress(int $userId, int $courseId): int
-    {
-        if (!function_exists('learndash_course_progress')) {
-            return 0;
-        }
-
-        $progress = learndash_course_progress([
-            'user_id'   => $userId,
-            'course_id' => $courseId,
-            'array'     => true,
-        ]);
-
-        return (int) ($progress['percentage'] ?? 0);
-    }
-
-    public function getCompletionDate(int $userId, int $courseId): ?int
-    {
-        if (!$this->isComplete($userId, $courseId)) {
-            return null;
-        }
-
-        if (!function_exists('learndash_user_get_course_completed_date')) {
-            return null;
-        }
-
-        $timestamp = learndash_user_get_course_completed_date($userId, $courseId);
-
-        return $timestamp ? (int) $timestamp : null;
     }
 }

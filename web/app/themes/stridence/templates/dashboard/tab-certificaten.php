@@ -151,14 +151,10 @@ usort($certificates, fn($a, $b) => strcmp($b['completed_at'], $a['completed_at']
 
 <div class="space-y-8">
     <section>
-        <h3 class="dash-subheading mb-3">
-            <?php esc_html_e('Mijn certificaten', 'stridence'); ?>
-        </h3>
-
         <?php if (!empty($certificates)) : ?>
             <div class="grid gap-4 sm:grid-cols-2">
                 <?php foreach ($certificates as $cert) : ?>
-                    <div class="bg-surface-card rounded-lg border border-border/60 overflow-hidden">
+                    <div class="bg-surface-card rounded-xl border border-border shadow-sm overflow-hidden">
                         <!-- Certificate Header -->
                         <div class="p-4 bg-gradient-to-r from-primary/8 to-primary/3">
                             <div class="flex items-center gap-3">
@@ -169,9 +165,9 @@ usort($certificates, fn($a, $b) => strcmp($b['completed_at'], $a['completed_at']
                                     <h4 class="font-medium text-text text-sm truncate">
                                         <?php echo esc_html($cert['course_title']); ?>
                                     </h4>
-                                    <p class="text-xs text-text-muted truncate">
+                                    <span class="text-xs text-text-muted truncate block">
                                         <?php echo esc_html($cert['edition_title']); ?>
-                                    </p>
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -213,7 +209,7 @@ usort($certificates, fn($a, $b) => strcmp($b['completed_at'], $a['completed_at']
             </div>
         <?php else : ?>
             <?php
-            get_template_part('partials/empty-state', null, [
+            stridence_template_part('partials/empty-state', null, [
                 'icon'    => 'award',
                 'title'   => __('Nog geen certificaten', 'stridence'),
                 'message' => __('Je hebt nog geen certificaten behaald. Rond een opleiding succesvol af om je eerste certificaat te verdienen.', 'stridence'),
@@ -226,18 +222,18 @@ usort($certificates, fn($a, $b) => strcmp($b['completed_at'], $a['completed_at']
 
     <!-- Certificate Info -->
     <?php if (!empty($certificates)) : ?>
-        <section class="bg-surface-card rounded-lg border border-border/60 p-4">
+        <section class="bg-surface-card rounded-xl border border-border shadow-sm p-4">
             <div class="flex items-start gap-3">
                 <div class="shrink-0 mt-0.5">
                     <?php echo stridence_icon('info', 'w-5 h-5 text-primary'); ?>
                 </div>
                 <div class="text-sm text-text-muted space-y-1">
-                    <p class="font-medium text-text">
+                    <span class="font-medium text-text block">
                         <?php esc_html_e('Over je certificaten', 'stridence'); ?>
-                    </p>
-                    <p>
+                    </span>
+                    <span class="block">
                         <?php esc_html_e('Certificaten worden automatisch gegenereerd zodra je een opleiding hebt afgerond. Je kunt ze hier downloaden en gebruiken als bewijs van je behaalde competenties.', 'stridence'); ?>
-                    </p>
+                    </span>
                 </div>
             </div>
         </section>

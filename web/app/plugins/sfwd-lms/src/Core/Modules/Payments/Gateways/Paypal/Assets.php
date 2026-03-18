@@ -112,6 +112,10 @@ class Assets {
 	 * @return void
 	 */
 	public function register_frontend_assets(): void {
+		if ( ! $this->is_enabled() ) {
+			return;
+		}
+
 		$payment_token = App::get( Payment_Token::class );
 
 		if (
@@ -210,6 +214,10 @@ class Assets {
 	 * @return void
 	 */
 	public function register_profile_assets(): void {
+		if ( ! $this->is_enabled() ) {
+			return;
+		}
+
 		$payment_token = App::get( Payment_Token::class );
 
 		if (
@@ -566,5 +574,18 @@ class Assets {
 			(array) Arr::get( $settings, 'payment_methods', [] ),
 			true
 		);
+	}
+
+	/**
+	 * Returns true if the PayPal Checkout gateway is enabled.
+	 *
+	 * @since 5.0.2
+	 *
+	 * @return bool
+	 */
+	private function is_enabled(): bool {
+		$settings = Payment_Gateway::get_settings();
+
+		return 'yes' === Arr::get( $settings, 'enabled', 'no' );
 	}
 }

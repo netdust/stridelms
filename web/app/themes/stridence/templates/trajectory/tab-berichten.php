@@ -57,7 +57,7 @@ $messageTypes = [
 
     <?php if (empty($messages)) : ?>
         <?php
-        get_template_part('partials/empty-state', null, [
+        stridence_template_part('partials/empty-state', null, [
             'icon' => 'bell',
             'title' => __('Geen berichten', 'stridence'),
             'message' => __('Er zijn nog geen berichten geplaatst voor dit traject.', 'stridence'),

@@ -36,9 +36,9 @@ enum QuoteStatus: string
     public function label(): string
     {
         return match ($this) {
-            self::Draft => 'Concept',
+            self::Draft => 'In behandeling',
             self::Sent => 'Verzonden',
-            self::Exported => 'Geëxporteerd',
+            self::Exported => 'Verwerkt',
             self::Cancelled => 'Geannuleerd',
         };
     }

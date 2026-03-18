@@ -360,7 +360,7 @@ final class QuoteAdminController
     private function processBillingData(array $input): array
     {
         $billing = [];
-        $fields = ['organisation', 'email', 'address', 'postal_code', 'city', 'vat_number', 'gln_number'];
+        $fields = ['company', 'email', 'address', 'postal_code', 'city', 'vat_number', 'gln_number'];
 
         foreach ($fields as $field) {
             if (isset($input[$field])) {
@@ -575,10 +575,11 @@ final class QuoteAdminController
         wp_send_json_success([
             'email' => $user->user_email,
             'organisation' => get_user_meta($userId, 'organisation', true) ?: '',
-            'address' => get_user_meta($userId, 'billing_address', true) ?: '',
-            'postal_code' => get_user_meta($userId, 'billing_postal_code', true) ?: '',
+            'company' => get_user_meta($userId, 'billing_company', true) ?: '',
+            'address' => get_user_meta($userId, 'billing_address_1', true) ?: '',
+            'postal_code' => get_user_meta($userId, 'billing_postcode', true) ?: '',
             'city' => get_user_meta($userId, 'billing_city', true) ?: '',
-            'vat_number' => get_user_meta($userId, 'vat_number', true) ?: '',
+            'vat_number' => get_user_meta($userId, 'billing_vat', true) ?: '',
             'gln_number' => get_user_meta($userId, 'gln_number', true) ?: '',
         ]);
     }

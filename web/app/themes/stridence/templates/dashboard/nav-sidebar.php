@@ -36,7 +36,7 @@ $initials = strtoupper(
 <aside class="sidebar" aria-label="<?php esc_attr_e('Dashboard navigatie', 'stridence'); ?>">
 
     <!-- Primary Navigation -->
-    <nav class="pt-4 px-3 space-y-0.5">
+    <nav class="space-y-0.5">
         <?php foreach ($primary_nav as $slug => $item) :
             if (empty($item['visible'])) continue;
 
@@ -57,7 +57,7 @@ $initials = strtoupper(
     <div class="sidebar-divider"></div>
 
     <!-- Utility Navigation -->
-    <nav class="px-3 space-y-0.5">
+    <nav class="space-y-0.5">
         <?php foreach ($utility_nav as $slug => $item) :
             if (empty($item['visible'])) continue;
 
@@ -81,17 +81,7 @@ $initials = strtoupper(
     <div class="flex-1"></div>
 
     <!-- User Footer -->
-    <div class="sidebar-divider"></div>
-
-    <div class="px-3 pb-4 space-y-1">
-        <!-- User avatar + name -->
-        <div class="sidebar-user">
-            <span class="w-8 h-8 rounded-full bg-primary-subtle text-primary text-xs font-semibold flex items-center justify-center shrink-0">
-                <?php echo esc_html($initials); ?>
-            </span>
-            <span class="text-sm font-medium text-text truncate"><?php echo esc_html($user->display_name); ?></span>
-        </div>
-
+    <div class="border-t border-border pt-3 mt-3 space-y-1">
         <!-- Profiel link -->
         <?php
             $profiel_active = ($current_tab === 'profiel');

@@ -59,7 +59,7 @@ foreach ($notifications as $n) {
                 </h3>
                 <div class="space-y-1">
                     <?php foreach ($groups['today'] as $notification) : ?>
-                        <?php get_template_part('templates/dashboard/partials/notification-item', null, [
+                        <?php stridence_template_part('templates/dashboard/partials/notification-item', null, [
                             'notification' => $notification,
                         ]); ?>
                     <?php endforeach; ?>
@@ -75,7 +75,7 @@ foreach ($notifications as $n) {
                 </h3>
                 <div class="space-y-1">
                     <?php foreach ($groups['earlier'] as $notification) : ?>
-                        <?php get_template_part('templates/dashboard/partials/notification-item', null, [
+                        <?php stridence_template_part('templates/dashboard/partials/notification-item', null, [
                             'notification' => $notification,
                         ]); ?>
                     <?php endforeach; ?>
@@ -86,7 +86,7 @@ foreach ($notifications as $n) {
     <?php else : ?>
 
         <?php
-        get_template_part('partials/empty-state', null, [
+        stridence_template_part('partials/empty-state', null, [
             'icon'    => 'bell',
             'title'   => __('Geen meldingen', 'stridence'),
             'message' => __('Je hebt momenteel geen meldingen. Zodra er iets is dat je aandacht nodig heeft, verschijnt het hier.', 'stridence'),

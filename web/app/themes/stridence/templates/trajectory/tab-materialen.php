@@ -32,7 +32,7 @@ $materials = $dashboardService->getMaterials($trajectory->ID, $user->ID);
 
     <?php if (empty($materials)) : ?>
         <?php
-        get_template_part('partials/empty-state', null, [
+        stridence_template_part('partials/empty-state', null, [
             'icon' => 'file-text',
             'title' => __('Geen materialen', 'stridence'),
             'message' => __('Er zijn nog geen materialen beschikbaar voor dit traject.', 'stridence'),

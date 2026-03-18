@@ -128,6 +128,7 @@ Alpine.data('trajectoryDetailTabs', createDetailTabs(['overzicht', 'cursussen', 
 Alpine.data('dashboardHome', () => ({
   panelOpen: false,
   activeEnrollment: null,
+  icalLoading: false,
 
   init() {
     this.$watch('panelOpen', (open) => {
@@ -146,6 +147,25 @@ Alpine.data('dashboardHome', () => ({
     setTimeout(() => {
       if (!this.panelOpen) this.activeEnrollment = null;
     }, 300);
+  },
+
+  async downloadIcal(editionId = null) {
+    this.icalLoading = true;
+    try {
+      const params = {};
+      if (editionId) params.edition_id = editionId;
+      const blob = await ntdstAPI.download('stride_download_ical', params);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'stride-agenda.ics';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('iCal download failed:', e);
+    } finally {
+      this.icalLoading = false;
+    }
   },
 }));
 
@@ -540,7 +560,66 @@ window.ntdstAPI = {
     return result.data;
   },
 
+  /**
+   * Download a file via NTDST API action.
+   * Same nonce management as call(), but returns a Blob instead of JSON.
+   *
+   * @param {string} action - Action name (e.g., 'stride_download_ical')
+   * @param {object} params - Action parameters
+   * @returns {Promise<Blob>} File blob
+   * @throws {Error} If download fails
+   */
+  async download(action, params = {}) {
+    let nonce = this._nonceCache[action];
+    if (!nonce) {
+      const nonceResponse = await fetch('/wp-json/ntdst/v1/get_nonce', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-WP-Nonce': window.strideConfig?.restNonce || '',
+        },
+        body: JSON.stringify({ action }),
+      });
+      const nonceResult = await nonceResponse.json();
+      if (!nonceResult.success) {
+        throw new Error(nonceResult.data?.message || 'Kon geen beveiligingstoken ophalen');
+      }
+      nonce = nonceResult.data.nonce;
+      this._nonceCache[action] = nonce;
+    }
+
+    const response = await fetch('/wp-json/ntdst/v1/action', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-WP-Nonce': window.strideConfig?.restNonce || '',
+      },
+      body: JSON.stringify({ action, nonce, ...params }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Download mislukt');
+    }
+
+    return response.blob();
+  },
+
 };
+
+// ══════════════════════════════════════
+// BFCACHE RELOAD
+// ══════════════════════════════════════
+
+// Brave (and some other browsers) serve pages from the back-forward cache
+// without making a new HTTP request, causing stale auth/enrollment state.
+// When that happens, force a reload to get fresh server-rendered content.
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) {
+    window.location.reload();
+  }
+});
 
 // ══════════════════════════════════════
 // INITIALIZE ALPINE

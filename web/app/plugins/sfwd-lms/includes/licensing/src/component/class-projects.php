@@ -52,6 +52,19 @@ class Projects extends Base {
 				$plugin_data = [];
 			}
 
+			// Skip third-party plugins that share a folder name with an official LearnDash add-on.
+			if (
+				'learndash-hub' !== $slug
+				&& (
+					! isset( $plugin_data['AuthorName'] )
+					|| 'LearnDash' !== $plugin_data['AuthorName']
+				)
+			) {
+				unset( $api_data[ $slug ] );
+
+				continue;
+			}
+
 			if ( empty( $plugin_data['Version'] ) ) {
 				$plugin_data['Version'] = '';
 			}
@@ -62,7 +75,39 @@ class Projects extends Base {
 			$item['folder_slug'] = $plugin_slug;
 		}
 
-		return $api_data;
+		/**
+		 * Filters the installed LearnDash add-on projects.
+		 *
+		 * Allows modification of the list of installed projects displayed
+		 * on the LearnDash Add-ons page.
+		 *
+		 * @since 5.0.2
+		 *
+		 * @param array<string, array{
+		 *     slug: string,
+		 *     name: string,
+		 *     latest_version: string,
+		 *     tags: string,
+		 *     product_type: string,
+		 *     has_update: bool,
+		 *     is_active: bool,
+		 *     version: string,
+		 *     folder_slug: string,
+		 * }> $api_data The installed projects data keyed by plugin slug.
+		 *
+		 * @return array<string, array{
+		 *     slug: string,
+		 *     name: string,
+		 *     latest_version: string,
+		 *     tags: string,
+		 *     product_type: string,
+		 *     has_update: bool,
+		 *     is_active: bool,
+		 *     version: string,
+		 *     folder_slug: string,
+		 * }> The installed projects data keyed by plugin slug.
+		 */
+		return apply_filters( 'learndash_hub_installed_projects', $api_data );
 	}
 
 	/**

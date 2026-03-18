@@ -267,7 +267,7 @@ add_action('init', function (): void {
         }
 
         get_header();
-        get_template_part('templates/trajectory/dashboard', null, [
+        stridence_template_part('templates/trajectory/dashboard', null, [
             'trajectory_slug' => sanitize_title($params['slug']),
             'user' => wp_get_current_user(),
         ]);
@@ -633,7 +633,7 @@ add_shortcode('stride_enrollment', function ($atts = []) {
     ];
 
     ob_start();
-    get_template_part('templates/forms/enrollment', null, [
+    stridence_template_part('templates/forms/enrollment', null, [
         'item_id' => $edition_id,
         'item_type' => 'edition',
         'item_data' => $item_data,
@@ -667,7 +667,7 @@ add_shortcode('stride_interest', function ($atts = []) {
         }
 
         ob_start();
-        get_template_part('templates/forms/enrollment', null, [
+        stridence_template_part('templates/forms/enrollment', null, [
             'item_id'         => $trajectory_id,
             'item_type'       => 'trajectory',
             'item_data'       => ['id' => $trajectory_id, 'title' => $trajectory->post_title],
@@ -699,7 +699,7 @@ add_shortcode('stride_interest', function ($atts = []) {
     }
 
     ob_start();
-    get_template_part('templates/forms/enrollment', null, [
+    stridence_template_part('templates/forms/enrollment', null, [
         'item_id'         => $course_id,
         'item_type'       => 'edition',
         'item_data'       => ['id' => $course_id, 'title' => $course->post_title],

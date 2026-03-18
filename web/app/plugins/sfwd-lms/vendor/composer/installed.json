@@ -488,17 +488,17 @@
         },
         {
             "name": "stellarwp/arrays",
-            "version": "1.3.1",
-            "version_normalized": "1.3.1.0",
+            "version": "1.3.2",
+            "version_normalized": "1.3.2.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/stellarwp/arrays.git",
-                "reference": "315a9b2018ac6f2475a346c89b1d7120ae07c218"
+                "reference": "e994abcdb5d76fb5fdea7f2e1549d0603c13f91e"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/stellarwp/arrays/zipball/315a9b2018ac6f2475a346c89b1d7120ae07c218",
-                "reference": "315a9b2018ac6f2475a346c89b1d7120ae07c218",
+                "url": "https://api.github.com/repos/stellarwp/arrays/zipball/e994abcdb5d76fb5fdea7f2e1549d0603c13f91e",
+                "reference": "e994abcdb5d76fb5fdea7f2e1549d0603c13f91e",
                 "shasum": ""
             },
             "require-dev": {
@@ -508,7 +508,7 @@
                 "symfony/string": "^5.4",
                 "szepeviktor/phpstan-wordpress": "^1.1"
             },
-            "time": "2025-02-07T18:23:13+00:00",
+            "time": "2026-02-12T19:58:13+00:00",
             "type": "library",
             "installation-source": "dist",
             "autoload": [],
@@ -528,8 +528,7 @@
             ],
             "description": "A library for array manipulation.",
             "support": {
-                "issues": "https://github.com/stellarwp/arrays/issues",
-                "source": "https://github.com/stellarwp/arrays/tree/1.3.1"
+                "source": "https://github.com/stellarwp/arrays/tree/1.3.2"
             },
             "install-path": "../stellarwp/arrays"
         },
@@ -639,17 +638,17 @@
         },
         {
             "name": "stellarwp/db",
-            "version": "1.2.0",
-            "version_normalized": "1.2.0.0",
+            "version": "1.3.0",
+            "version_normalized": "1.3.0.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/stellarwp/db.git",
-                "reference": "f92d6ae0bcd74a3f526b023bb2d6ecd13227ef96"
+                "reference": "34d6c66adf323f4839c2199d6e1119c79fc87a4f"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/stellarwp/db/zipball/f92d6ae0bcd74a3f526b023bb2d6ecd13227ef96",
-                "reference": "f92d6ae0bcd74a3f526b023bb2d6ecd13227ef96",
+                "url": "https://api.github.com/repos/stellarwp/db/zipball/34d6c66adf323f4839c2199d6e1119c79fc87a4f",
+                "reference": "34d6c66adf323f4839c2199d6e1119c79fc87a4f",
                 "shasum": ""
             },
             "require-dev": {
@@ -667,7 +666,7 @@
                 "symfony/string": "^5.4",
                 "szepeviktor/phpstan-wordpress": "^1.1"
             },
-            "time": "2025-11-10T10:55:50+00:00",
+            "time": "2026-02-25T17:01:46+00:00",
             "type": "library",
             "installation-source": "dist",
             "autoload": [],
@@ -688,7 +687,7 @@
             "description": "A WPDB wrapper and query builder library.",
             "support": {
                 "issues": "https://github.com/stellarwp/db/issues",
-                "source": "https://github.com/stellarwp/db/tree/1.2.0"
+                "source": "https://github.com/stellarwp/db/tree/1.3.0"
             },
             "install-path": "../stellarwp/db"
         },

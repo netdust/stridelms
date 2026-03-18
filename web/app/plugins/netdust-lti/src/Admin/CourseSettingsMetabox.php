@@ -3,12 +3,13 @@ declare(strict_types=1);
 
 namespace NetdustLTI\Admin;
 
+use NetdustLTI\ToolProvider\Services\CourseGradeSettingsService;
+
 final class CourseSettingsMetabox
 {
-    private const META_KEY = '_netdust_lti_grade_settings';
-
-    public function __construct()
-    {
+    public function __construct(
+        private readonly CourseGradeSettingsService $gradeSettings,
+    ) {
         add_action('add_meta_boxes', [$this, 'register']);
         add_action('save_post_sfwd-courses', [$this, 'save']);
     }
@@ -27,7 +28,7 @@ final class CourseSettingsMetabox
 
     public function render(\WP_Post $post): void
     {
-        $settings = get_post_meta($post->ID, self::META_KEY, true) ?: [];
+        $settings = $this->gradeSettings->getSettings($post->ID);
 
         wp_nonce_field('netdust_lti_course_settings', 'netdust_lti_course_nonce');
         ?>
@@ -76,6 +77,6 @@ final class CourseSettingsMetabox
             }
         }
 
-        update_post_meta($postId, self::META_KEY, $settings);
+        $this->gradeSettings->saveSettings($postId, $settings);
     }
 }

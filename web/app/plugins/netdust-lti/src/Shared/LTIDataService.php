@@ -203,7 +203,7 @@ final class LTIDataService implements NTDST_Service_Meta
             'show_in_menu' => false,
             'show_in_rest' => true,
             'rest_base' => 'lti-platforms',
-            'supports' => ['title'],
+            'supports' => ['title', 'custom-fields'],
             'meta_prefix' => 'lti_',
             'fields' => [
                 'platform_id' => [
@@ -309,7 +309,7 @@ final class LTIDataService implements NTDST_Service_Meta
             'show_in_menu' => false,
             'show_in_rest' => true,
             'rest_base' => 'lti-tools',
-            'supports' => ['title'],
+            'supports' => ['title', 'custom-fields'],
             'meta_prefix' => 'lti_',
             'fields' => [
                 'launch_url' => [
@@ -382,7 +382,7 @@ final class LTIDataService implements NTDST_Service_Meta
             'show_in_menu' => false,
             'show_in_rest' => true,
             'rest_base' => 'lti-resources',
-            'supports' => ['title'],
+            'supports' => ['title', 'custom-fields'],
             'meta_prefix' => 'lti_',
             'fields' => [
                 'tool_id' => [

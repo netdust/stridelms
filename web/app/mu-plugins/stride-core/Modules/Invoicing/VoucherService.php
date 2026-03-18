@@ -69,7 +69,7 @@ final class VoucherService
 
         $voucherId = $result->ID;
 
-        $this->dispatch('voucher/created', [
+        do_action('stride/voucher/created', [
             'voucher_id' => $voucherId,
             'code' => $code,
         ]);
@@ -230,7 +230,7 @@ final class VoucherService
 
             $wpdb->query('COMMIT');
 
-            $this->dispatch('voucher/redeemed', [
+            do_action('stride/voucher/redeemed', [
                 'voucher_id' => $voucherId,
                 'user_id' => $userId,
                 'quote_id' => $quoteId,

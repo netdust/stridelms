@@ -171,7 +171,7 @@ $is_post_course = ($active_phase === 'post_course');
                                 </p>
                                 <?php
                                 $template = $template_map[$taskType] ?? ('task-' . $taskType);
-                                get_template_part('templates/forms/completion/' . $template, null, [
+                                stridence_template_part('templates/forms/completion/' . $template, null, [
                                     'registration' => $registration,
                                     'task'         => $task,
                                     'task_type'    => $taskType,

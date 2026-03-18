@@ -102,7 +102,7 @@ final class EnrollmentFormHandler
         $firstName = sanitize_text_field($params['first_name'] ?? '');
         $lastName = sanitize_text_field($params['last_name'] ?? '');
         $phone = sanitize_text_field($params['phone'] ?? '');
-        $organisation = sanitize_text_field($params['company'] ?? '');
+        $organisation = sanitize_text_field($params['organisation'] ?? '');
         $message = sanitize_textarea_field($params['message'] ?? '');
 
         if (empty($firstName) || empty($lastName)) {
@@ -119,7 +119,7 @@ final class EnrollmentFormHandler
             update_user_meta($userId, 'phone', $phone);
         }
         if ($organisation) {
-            update_user_meta($userId, 'company', $organisation);
+            update_user_meta($userId, 'organisation', $organisation);
         }
 
         // Register interest
@@ -138,7 +138,7 @@ final class EnrollmentFormHandler
             'success' => true,
             'message' => __('Je interesse is geregistreerd. We houden je op de hoogte!', 'stride'),
             'registration_id' => $result,
-            'redirect_url' => home_url('/mijn-account/'),
+            'redirect_url' => home_url('/mijn-account/?tab=inschrijvingen'),
         ];
     }
 
@@ -180,6 +180,16 @@ final class EnrollmentFormHandler
             return $validation;
         }
 
+        // Validate required extra fields from field groups
+        $extraFieldValidation = $this->validateExtraFields(
+            $enrollmentData['extra_fields'] ?? [],
+            $editionId,
+            'vad_edition'
+        );
+        if (is_wp_error($extraFieldValidation)) {
+            return $extraFieldValidation;
+        }
+
         $enrollment = ntdst_get(EnrollmentService::class);
         $result = $enrollment->processEnrollment($enrollmentData);
         if (is_wp_error($result)) {
@@ -194,16 +204,25 @@ final class EnrollmentFormHandler
         // Determine response message based on resulting registration status
         $registrationId = $result['registration_id'] ?? null;
         $isPending = false;
+        $hasTasks = false;
         if ($registrationId) {
             $reg = $enrollment->getRegistration($registrationId);
             if (!is_wp_error($reg) && $reg->status === 'pending') {
                 $isPending = true;
+                $hasTasks = !empty($reg->completion_tasks);
             }
         }
 
-        $message = $isPending
-            ? __('Je inschrijving is ontvangen en wacht op goedkeuring.', 'stride')
-            : __('Je inschrijving is succesvol verwerkt!', 'stride');
+        if ($hasTasks) {
+            $message = __('Je inschrijving is ontvangen. Er zijn nog een aantal stappen nodig om je inschrijving te voltooien.', 'stride');
+            $redirectUrl = home_url('/vormingen/' . get_post_field('post_name', $editionId) . '/voltooien/');
+        } elseif ($isPending) {
+            $message = __('Je inschrijving is ontvangen en wacht op goedkeuring.', 'stride');
+            $redirectUrl = home_url('/mijn-account/?tab=inschrijvingen');
+        } else {
+            $message = __('Je inschrijving is succesvol verwerkt!', 'stride');
+            $redirectUrl = home_url('/mijn-account/?tab=inschrijvingen');
+        }
 
         return [
             'success' => true,
@@ -211,7 +230,7 @@ final class EnrollmentFormHandler
             'registration_id' => $registrationId,
             'quote_id' => $result['quote_id'] ?? null,
             'status' => $isPending ? 'pending' : 'confirmed',
-            'redirect_url' => home_url('/mijn-account/mijn-cursussen/'),
+            'redirect_url' => $redirectUrl,
         ];
     }
 
@@ -257,6 +276,16 @@ final class EnrollmentFormHandler
                 'error' => $validation->get_error_message(),
             ]);
             return $validation;
+        }
+
+        // Validate required extra fields from field groups
+        $extraFieldValidation = $this->validateExtraFields(
+            $billingData['extra_fields'] ?? [],
+            $trajectoryId,
+            'vad_trajectory'
+        );
+        if (is_wp_error($extraFieldValidation)) {
+            return $extraFieldValidation;
         }
 
         // Create enrollment via TrajectorySelection
@@ -313,7 +342,7 @@ final class EnrollmentFormHandler
             'enrollment_id' => $enrollmentId,
             'quote_id' => is_wp_error($quoteId) ? null : $quoteId,
             'status' => $requiresApproval ? 'pending' : 'confirmed',
-            'redirect_url' => home_url('/mijn-account/mijn-trajecten/'),
+            'redirect_url' => home_url('/mijn-account/?tab=inschrijvingen'),
         ];
     }
 
@@ -372,13 +401,13 @@ final class EnrollmentFormHandler
 
         // Format billing for quote
         $billing = [
-            'organisation' => $billingData['company'] ?? '',
+            'company' => $billingData['company'] ?? '',
             'email' => $billingData['invoice_email'] ?? $billingData['email'] ?? '',
             'address' => $billingData['address'] ?? '',
             'postal_code' => $billingData['postal_code'] ?? '',
             'city' => $billingData['city'] ?? '',
             'vat_number' => $billingData['vat_number'] ?? '',
-            'gln_number' => $billingData['gln_peppol'] ?? '',
+            'gln_number' => $billingData['gln_number'] ?? '',
         ];
 
         // Use QuoteService to create quote
@@ -528,15 +557,77 @@ final class EnrollmentFormHandler
             'last_name' => sanitize_text_field($params['last_name'] ?? ''),
             'email' => sanitize_email($params['email'] ?? ''),
             'phone' => sanitize_text_field($params['phone'] ?? ''),
-            'company' => sanitize_text_field($params['company'] ?? ''),
+            'organisation' => sanitize_text_field($params['organisation'] ?? ''),
+            'department' => sanitize_text_field($params['department'] ?? ''),
+            'message' => sanitize_textarea_field($params['message'] ?? ''),
             'vat_number' => sanitize_text_field($params['vat_number'] ?? ''),
             'address' => sanitize_text_field($params['address'] ?? ''),
             'postal_code' => sanitize_text_field($params['postal_code'] ?? ''),
             'city' => sanitize_text_field($params['city'] ?? ''),
-            'gln_peppol' => sanitize_text_field($params['gln_peppol'] ?? ''),
+            'company' => sanitize_text_field($params['company'] ?? ''),
             'invoice_email' => sanitize_email($params['invoice_email'] ?? ''),
+            'gln_number' => sanitize_text_field($params['gln_number'] ?? ''),
             'po_number' => sanitize_text_field($params['po_number'] ?? ''),
+            'extra_fields' => $this->sanitizeExtraFields($params['extra_fields'] ?? []),
         ];
+    }
+
+    /**
+     * Sanitize dynamic extra fields from field groups.
+     *
+     * @return array<string, string|bool>
+     */
+    private function sanitizeExtraFields(array|string $fields): array
+    {
+        if (is_string($fields)) {
+            if (strlen($fields) > 10000) {
+                return [];
+            }
+            $fields = json_decode($fields, true) ?: [];
+        }
+
+        $sanitized = [];
+        foreach ($fields as $key => $value) {
+            $safeKey = sanitize_key($key);
+            $sanitized[$safeKey] = is_bool($value) ? $value : sanitize_text_field((string) $value);
+        }
+
+        return $sanitized;
+    }
+
+    /**
+     * Validate required extra fields against field group definitions.
+     *
+     * @param array<string, string|bool> $extraFields Sanitized extra field values
+     * @param int $postId Edition or trajectory ID
+     * @param string $postType 'vad_edition' or 'vad_trajectory'
+     */
+    private function validateExtraFields(array $extraFields, int $postId, string $postType): true|WP_Error
+    {
+        $fieldGroups = ntdst_get(\Stride\Modules\Enrollment\EnrollmentFieldGroups::class);
+        $allFields = $fieldGroups->getEnrollmentFieldsForPost($postId, $postType);
+
+        foreach ($allFields as $field) {
+            if (empty($field['required'])) {
+                continue;
+            }
+
+            $name = $field['name'] ?? '';
+            if (empty($name)) {
+                continue;
+            }
+
+            $value = $extraFields[$name] ?? '';
+            if ($value === '' || $value === false) {
+                $label = $field['label'] ?? $name;
+                return new WP_Error(
+                    'validation_error',
+                    sprintf(__('Het veld "%s" is verplicht.', 'stride'), $label)
+                );
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -610,34 +701,13 @@ final class EnrollmentFormHandler
     /**
      * Update user billing info from enrollment form.
      *
+     * Delegates to EnrollmentService to keep meta key mappings consistent.
+     *
      * @param array<string, string> $billingData
      */
     private function updateUserBillingInfo(int $userId, array $billingData): void
     {
-        $metaFields = [
-            'phone' => 'phone',
-            'company' => 'company',
-            'vat_number' => 'vat_number',
-            'address' => 'billing_address',
-            'postal_code' => 'billing_postal_code',
-            'city' => 'billing_city',
-            'gln_peppol' => 'gln_number',
-            'invoice_email' => 'invoice_email',
-        ];
-
-        foreach ($metaFields as $inputKey => $metaKey) {
-            if (!empty($billingData[$inputKey])) {
-                update_user_meta($userId, $metaKey, $billingData[$inputKey]);
-            }
-        }
-
-        // Update core user fields if provided
-        if (!empty($billingData['first_name']) || !empty($billingData['last_name'])) {
-            wp_update_user([
-                'ID' => $userId,
-                'first_name' => $billingData['first_name'] ?? '',
-                'last_name' => $billingData['last_name'] ?? '',
-            ]);
-        }
+        $enrollment = ntdst_get(EnrollmentService::class);
+        $enrollment->updateUserProfile($userId, $billingData);
     }
 }

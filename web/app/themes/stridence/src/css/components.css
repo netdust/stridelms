@@ -255,45 +255,15 @@
      ══════════════════════════════════════ */
 
   .sidebar {
-    @apply fixed left-0 z-40
-           w-sidebar bg-surface-card
-           border-r border-border
-           flex flex-col;
-    /* Below site header (h-16 = 4rem on mobile, h-20 = 5rem on lg) */
-    top: 4rem;
-    height: calc(100vh - 4rem);
-    transition: width var(--duration-normal) var(--ease-out);
+    @apply sticky w-sidebar shrink-0
+           flex flex-col self-start;
+    top: 6rem; /* below sticky header (lg:h-20 + gap) */
+    height: calc(100vh - 7rem);
   }
 
-  @media (min-width: 1024px) {
-    .sidebar {
-      top: 5rem;
-      height: calc(100vh - 5rem);
-    }
-  }
-
-  /* Account for WP admin bar when logged in */
   .admin-bar .sidebar {
-    top: calc(4rem + 32px);
-    height: calc(100vh - 4rem - 32px);
-  }
-
-  @media (min-width: 1024px) {
-    .admin-bar .sidebar {
-      top: calc(5rem + 32px);
-      height: calc(100vh - 5rem - 32px);
-    }
-  }
-
-  @media screen and (max-width: 782px) {
-    .admin-bar .sidebar {
-      top: calc(4rem + 46px);
-      height: calc(100vh - 4rem - 46px);
-    }
-  }
-
-  .sidebar-collapsed {
-    width: var(--sidebar-collapsed);
+    top: calc(6rem + 32px);
+    height: calc(100vh - 7rem - 32px);
   }
 
   .sidebar-nav-item {
@@ -382,8 +352,11 @@
            bg-surface-card
            flex flex-col;
     box-shadow: var(--shadow-overlay);
-    border-radius: 1rem 0 0 1rem;
     transition: transform var(--duration-normal) var(--ease-out);
+  }
+
+  .admin-bar .dash-panel {
+    top: 32px;
   }
 
   @media (max-width: 639px) {
@@ -391,6 +364,9 @@
       @apply inset-x-0 top-auto bottom-0;
       max-height: 90vh;
       border-radius: 1rem 1rem 0 0;
+    }
+    .admin-bar .dash-panel {
+      top: auto;
     }
   }
 
@@ -419,22 +395,7 @@
      NOTIFICATION LIST
      ══════════════════════════════════════ */
 
-  .notification-item {
-    @apply flex gap-3 px-4 py-3 rounded-lg
-           cursor-pointer
-           hover:bg-surface-alt
-           transition-colors duration-fast;
-  }
-
-  .notification-unread {
-    @apply relative;
-  }
-
-  .notification-unread::before {
-    content: '';
-    @apply absolute left-1 top-1/2 -translate-y-1/2
-           w-2 h-2 rounded-full bg-primary;
-  }
+  /* notification-item styling is inline in the partial */
 
   /* ══════════════════════════════════════
      FLAT LIST ITEMS
@@ -452,32 +413,7 @@
     @apply list-item cursor-default hover:bg-transparent;
   }
 
-  /* ══════════════════════════════════════
-     ACTION LIST (dashboard nudges)
-     ══════════════════════════════════════ */
-
-  .action-item {
-    @apply flex items-center gap-3 px-4 py-3 rounded-xl
-           bg-surface-card border border-border/60 cursor-pointer
-           transition-colors duration-fast;
-    box-shadow: var(--shadow-xs);
-  }
-
-  .action-item:hover {
-    @apply bg-surface-alt border-border;
-  }
-
-  .action-border-blue {
-    border-left: 3px solid rgb(var(--color-info));
-  }
-
-  .action-border-amber {
-    border-left: 3px solid rgb(var(--color-warning));
-  }
-
-  .action-border-green {
-    border-left: 3px solid rgb(var(--color-success));
-  }
+  /* (action cards use standard utility classes — no custom CSS needed) */
 
   /* ══════════════════════════════════════
      PROGRESS RING (SVG-based)

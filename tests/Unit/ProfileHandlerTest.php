@@ -118,7 +118,7 @@ class ProfileHandlerTest extends TestCase
         $handler = new ProfileHandler();
         $result = $handler->handleUpdateProfile([], [
             'form_type' => 'billing',
-            'billing_company' => 'Test Company',
+            'company' => 'Test Company',
         ]);
 
         $this->assertIsArray($result);
@@ -200,32 +200,26 @@ class ProfileHandlerTest extends TestCase
         $user = $this->createUser(['ID' => 20]);
 
         $result = $this->callUpdateBilling(20, [
-            'billing_company' => 'Acme Corp',
-            'billing_vat' => 'NL123456789B01',
-            'billing_address' => 'Main Street 1',
-            'billing_postal_code' => '1234 AB',
-            'billing_city' => 'Amsterdam',
-            'billing_email' => 'billing@acme.com',
-            'billing_gln' => '1234567890123',
+            'company' => 'Acme Corp',
+            'vat_number' => 'NL123456789B01',
+            'address' => 'Main Street 1',
+            'postal_code' => '1234 AB',
+            'city' => 'Amsterdam',
+            'invoice_email' => 'billing@acme.com',
+            'gln_number' => '1234567890123',
         ]);
 
         $this->assertIsArray($result);
         $this->assertTrue($result['success']);
 
-        // Check all fields were saved
-        $this->assertUserMeta(20, 'invoice_organization_name', 'Acme Corp');
-        $this->assertUserMeta(20, 'vat_number', 'NL123456789B01');
-        $this->assertUserMeta(20, 'invoice_address', 'Main Street 1');
-        $this->assertUserMeta(20, 'invoice_postal_code', '1234 AB');
-        $this->assertUserMeta(20, 'invoice_city', 'Amsterdam');
+        // Check all fields were saved to billing meta keys
+        $this->assertUserMeta(20, 'billing_company', 'Acme Corp');
+        $this->assertUserMeta(20, 'billing_vat', 'NL123456789B01');
+        $this->assertUserMeta(20, 'billing_address_1', 'Main Street 1');
+        $this->assertUserMeta(20, 'billing_postcode', '1234 AB');
+        $this->assertUserMeta(20, 'billing_city', 'Amsterdam');
         $this->assertUserMeta(20, 'invoice_email', 'billing@acme.com');
         $this->assertUserMeta(20, 'gln_number', '1234567890123');
-
-        // Check legacy fields were also saved
-        $this->assertUserMeta(20, 'company', 'Acme Corp');
-        $this->assertUserMeta(20, 'address_line_1', 'Main Street 1');
-        $this->assertUserMeta(20, 'postal_code', '1234 AB');
-        $this->assertUserMeta(20, 'city', 'Amsterdam');
     }
 
     /**
@@ -236,15 +230,15 @@ class ProfileHandlerTest extends TestCase
         $user = $this->createUser(['ID' => 21]);
 
         $result = $this->callUpdateBilling(21, [
-            'billing_company' => '',
-            'billing_email' => '',
+            'company' => '',
+            'invoice_email' => '',
         ]);
 
         $this->assertIsArray($result);
         $this->assertTrue($result['success']);
 
         // Empty values should still be saved (clearing the field)
-        $this->assertUserMeta(21, 'invoice_organization_name', '');
+        $this->assertUserMeta(21, 'billing_company', '');
     }
 
     // =========================================================================

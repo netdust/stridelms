@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Stride\Modules\Trajectory;
 
 use Stride\Domain\TrajectoryMode;
-use Stride\Domain\TrajectoryStatus;
+use Stride\Domain\OfferingStatus;
 use Stride\Infrastructure\AbstractRepository;
 use WP_Error;
 use WP_Post;
@@ -35,7 +35,7 @@ final class TrajectoryRepository extends AbstractRepository
     public function findActive(): array
     {
         return $this->model()
-            ->whereIn('status', [TrajectoryStatus::Open->value, TrajectoryStatus::InProgress->value])
+            ->whereIn('status', [OfferingStatus::Announcement->value, OfferingStatus::Open->value, OfferingStatus::InProgress->value])
             ->orderBy('post_title', 'ASC')
             ->withMeta()
             ->get();
@@ -49,7 +49,7 @@ final class TrajectoryRepository extends AbstractRepository
     public function findOpen(): array
     {
         return $this->model()
-            ->where('status', TrajectoryStatus::Open->value)
+            ->where('status', OfferingStatus::Open->value)
             ->orderBy('post_title', 'ASC')
             ->withMeta()
             ->get();
@@ -70,7 +70,7 @@ final class TrajectoryRepository extends AbstractRepository
 
         // Validate status if provided
         if (!empty($data['status'])) {
-            $status = TrajectoryStatus::tryFrom($data['status']);
+            $status = OfferingStatus::tryFrom($data['status']);
             if ($status === null) {
                 return new WP_Error('invalid_status', 'Invalid trajectory status');
             }
@@ -101,7 +101,7 @@ final class TrajectoryRepository extends AbstractRepository
             $data['mode'] = TrajectoryMode::Cohort->value;
         }
         if (empty($data['status'])) {
-            $data['status'] = TrajectoryStatus::Draft->value;
+            $data['status'] = OfferingStatus::Draft->value;
         }
 
         return parent::create($data);
@@ -126,19 +126,24 @@ final class TrajectoryRepository extends AbstractRepository
     /**
      * Get required courses for trajectory.
      *
-     * @return array<array<string, mixed>>
+     * Returns actual WP_Post objects for each required course, with config data attached.
+     *
+     * @return array<WP_Post>
      */
     public function getRequiredCourses(int $trajectoryId): array
     {
         $courses = $this->getCourses($trajectoryId);
+        $required = array_filter($courses, fn($c) => ($c['required'] ?? false) === true);
 
-        return array_filter($courses, fn($c) => ($c['required'] ?? false) === true);
+        return $this->resolveCoursePosts($required);
     }
 
     /**
      * Get elective groups for trajectory.
      *
-     * @return array<string, array<array<string, mixed>>>
+     * Returns groups with actual WP_Post objects, with config data attached.
+     *
+     * @return array<array{name: string, required: int, courses: array<WP_Post>}>
      */
     public function getElectiveGroups(int $trajectoryId): array
     {
@@ -146,14 +151,94 @@ final class TrajectoryRepository extends AbstractRepository
         $electives = array_filter($courses, fn($c) => ($c['required'] ?? false) === false);
 
         $groups = [];
-        foreach ($electives as $course) {
-            $group = $course['group'] ?? 'Keuze';
-            if (!isset($groups[$group])) {
-                $groups[$group] = [];
+        foreach ($electives as $config) {
+            $groupName = $config['group'] ?? 'Keuze';
+            if (!isset($groups[$groupName])) {
+                $groups[$groupName] = [
+                    'name' => $groupName,
+                    'required' => (int) ($config['min_choices'] ?? 0),
+                    'courses' => [],
+                ];
             }
-            $groups[$group][] = $course;
+            $groups[$groupName]['courses'][] = $config;
         }
 
-        return $groups;
+        // Resolve course posts for each group
+        foreach ($groups as $groupName => &$group) {
+            $group['courses'] = $this->resolveCoursePosts($group['courses']);
+        }
+
+        return array_values($groups);
+    }
+
+    /**
+     * Find trajectory by slug.
+     */
+    public function findBySlug(string $slug): ?WP_Post
+    {
+        $results = $this->model()
+            ->where('post_name', $slug)
+            ->where('post_status', 'publish')
+            ->limit(1)
+            ->get();
+
+        if (empty($results)) {
+            return null;
+        }
+
+        $id = (int) ($results[0]['id'] ?? $results[0]['ID'] ?? 0);
+
+        return $id > 0 ? get_post($id) : null;
+    }
+
+    /**
+     * Get messages for trajectory.
+     *
+     * @return array<array<string, mixed>>
+     */
+    public function getMessages(int $trajectoryId): array
+    {
+        $messages = $this->getField($trajectoryId, 'trajectory_messages', []);
+
+        if (empty($messages) || !is_array($messages)) {
+            return [];
+        }
+
+        // Filter deleted and sort by date descending
+        $messages = array_filter($messages, fn($m) => empty($m['_deleted']));
+        usort($messages, fn($a, $b) => strtotime($b['date'] ?? '') - strtotime($a['date'] ?? ''));
+
+        return $messages;
+    }
+
+    /**
+     * Resolve course configurations to WP_Post objects.
+     *
+     * @param array<array<string, mixed>> $courseConfigs
+     * @return array<WP_Post>
+     */
+    private function resolveCoursePosts(array $courseConfigs): array
+    {
+        // Sort by order
+        usort($courseConfigs, fn($a, $b) => ($a['order'] ?? 99) <=> ($b['order'] ?? 99));
+
+        $posts = [];
+        foreach ($courseConfigs as $config) {
+            $courseId = (int) ($config['course_id'] ?? 0);
+            if ($courseId <= 0) {
+                continue;
+            }
+
+            $post = get_post($courseId);
+            if (!$post || $post->post_status !== 'publish') {
+                continue;
+            }
+
+            // Attach config data to post object for template use
+            $post->trajectory_config = $config;
+            $posts[] = $post;
+        }
+
+        return $posts;
     }
 }
