@@ -51,7 +51,9 @@ final class RegistrationTable
             INDEX idx_status (status),
             INDEX idx_edition_status (edition_id, status),
             INDEX idx_trajectory_status (trajectory_id, status),
-            INDEX idx_company (company_id)
+            INDEX idx_company (company_id),
+            INDEX idx_user_status (user_id, status),
+            INDEX idx_user_edition (user_id, edition_id)
         ) {$charset};";
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -130,6 +132,18 @@ final class RegistrationTable
         $hasEnrollmentData = $wpdb->get_var("SHOW COLUMNS FROM {$table} LIKE 'enrollment_data'");
         if (!$hasEnrollmentData) {
             $wpdb->query("ALTER TABLE {$table} ADD COLUMN enrollment_data JSON NULL AFTER completion_tasks");
+        }
+
+        // Add composite index (user_id, status) for findByUser queries
+        $hasUserStatusIdx = $wpdb->get_results("SHOW INDEX FROM {$table} WHERE Key_name = 'idx_user_status'");
+        if (empty($hasUserStatusIdx)) {
+            $wpdb->query("ALTER TABLE {$table} ADD INDEX idx_user_status (user_id, status)");
+        }
+
+        // Add composite index (user_id, edition_id) for findByUserAndEdition queries
+        $hasUserEditionIdx = $wpdb->get_results("SHOW INDEX FROM {$table} WHERE Key_name = 'idx_user_edition'");
+        if (empty($hasUserEditionIdx)) {
+            $wpdb->query("ALTER TABLE {$table} ADD INDEX idx_user_edition (user_id, edition_id)");
         }
     }
 }
