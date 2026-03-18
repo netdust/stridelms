@@ -148,6 +148,9 @@ final class EditionAdminController
             return;
         }
 
+        // WP Media Library (for document uploads)
+        wp_enqueue_media();
+
         // Select2 from CDN
         wp_enqueue_style(
             'select2',
@@ -468,6 +471,15 @@ final class EditionAdminController
                     }
                 }
                 $updateData['notes'] = $sanitizedNotes;
+            }
+        }
+
+        // Process documents (stored as JSON array of attachment IDs)
+        if (isset($fields['documents'])) {
+            $jsonString = wp_unslash($fields['documents']);
+            $docs = is_string($jsonString) ? json_decode($jsonString, true) : $jsonString;
+            if (is_array($docs)) {
+                $updateData['documents'] = array_values(array_map('absint', array_filter($docs)));
             }
         }
 

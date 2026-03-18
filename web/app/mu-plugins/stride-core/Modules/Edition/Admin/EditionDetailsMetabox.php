@@ -51,6 +51,9 @@ final class EditionDetailsMetabox
                     <button type="button" class="stride-tab" data-tab="prijzen">
                         <?php esc_html_e('Prijzen', 'stride'); ?>
                     </button>
+                    <button type="button" class="stride-tab" data-tab="documenten">
+                        <?php esc_html_e('Documenten', 'stride'); ?>
+                    </button>
                     <button type="button" class="stride-tab" data-tab="cursusinstellingen" style="display:none;">
                         <?php esc_html_e('Cursusinstellingen', 'stride'); ?>
                     </button>
@@ -69,6 +72,11 @@ final class EditionDetailsMetabox
                 <!-- Tab: Prijzen -->
                 <div class="stride-tab-content" data-tab="prijzen">
                     <?php $this->renderPrijzenTab($price, $priceNonMember); ?>
+                </div>
+
+                <!-- Tab: Documenten -->
+                <div class="stride-tab-content" data-tab="documenten">
+                    <?php $this->renderDocumentenTab($post->ID); ?>
                 </div>
 
                 <!-- Tab: Cursusinstellingen (online only, shown via tab system) -->
@@ -325,5 +333,45 @@ final class EditionDetailsMetabox
         }
 
         return $courses;
+    }
+
+    private function renderDocumentenTab(int $postId): void
+    {
+        $documents = $this->repository->getField($postId, 'documents', []);
+        if (is_string($documents)) {
+            $documents = json_decode($documents, true) ?: [];
+        }
+        $documents = array_filter(array_map('absint', (array) $documents));
+        ?>
+        <h4><?php esc_html_e('Cursus documenten', 'stride'); ?></h4>
+        <p class="description"><?php esc_html_e('Upload documenten die bij deze editie horen (PDF, presentaties, etc.). Deze worden beschikbaar voor deelnemers.', 'stride'); ?></p>
+
+        <div id="stride-documents-list" class="stride-documents-list" style="margin: 12px 0;">
+            <?php foreach ($documents as $attachmentId): ?>
+                <?php
+                $url = wp_get_attachment_url($attachmentId);
+                $filename = basename(get_attached_file($attachmentId) ?: '');
+                $filetype = wp_check_filetype($filename);
+                $filesize = size_format(filesize(get_attached_file($attachmentId) ?: '') ?: 0);
+                if (!$url) continue;
+                ?>
+                <div class="stride-document-item" data-id="<?php echo esc_attr($attachmentId); ?>" style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 4px; margin-bottom: 6px;">
+                    <span class="dashicons dashicons-media-document" style="color: #2271b1;"></span>
+                    <a href="<?php echo esc_url($url); ?>" target="_blank" style="flex: 1; text-decoration: none;"><?php echo esc_html($filename); ?></a>
+                    <span style="color: #888; font-size: 12px;"><?php echo esc_html(strtoupper($filetype['ext'] ?? '')); ?> &middot; <?php echo esc_html($filesize); ?></span>
+                    <button type="button" class="stride-document-remove button-link" title="<?php esc_attr_e('Verwijderen', 'stride'); ?>" style="color: #d63638; padding: 0;">
+                        <span class="dashicons dashicons-no-alt"></span>
+                    </button>
+                </div>
+            <?php endforeach; ?>
+        </div>
+
+        <button type="button" class="button" id="stride-add-documents">
+            <span class="dashicons dashicons-upload" style="vertical-align: middle; margin-right: 4px;"></span>
+            <?php esc_html_e('Documenten toevoegen', 'stride'); ?>
+        </button>
+
+        <input type="hidden" id="stride_documents_data" name="ntdst_fields[documents]" value="<?php echo esc_attr(json_encode(array_values($documents))); ?>">
+        <?php
     }
 }
