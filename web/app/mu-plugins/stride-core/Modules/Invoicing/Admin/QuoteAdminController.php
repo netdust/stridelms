@@ -43,6 +43,8 @@ final class QuoteAdminController
 
         add_action('add_meta_boxes', [$this, 'registerMetaboxes']);
         add_action('save_post_' . QuoteCPT::POST_TYPE, [$this, 'handleSave'], 10, 2);
+        add_action('admin_notices', [$this, 'showAdminNotices']);
+        add_filter('post_updated_messages', [$this, 'customizeUpdateMessages']);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
         add_action('wp_ajax_stride_get_user_data', [$this, 'ajaxGetUserData']);
 
@@ -328,6 +330,27 @@ final class QuoteAdminController
             $updateData['valid_until'] = sanitize_text_field($_POST['ntdst_fields']['valid_until']);
         }
 
+        // Handle notes update
+        if (isset($_POST['ntdst_fields']['notes'])) {
+            $notesRaw = wp_unslash($_POST['ntdst_fields']['notes']);
+            $notes = is_string($notesRaw) ? json_decode($notesRaw, true) : $notesRaw;
+            if (is_array($notes)) {
+                $sanitized = [];
+                foreach ($notes as $note) {
+                    if (!is_array($note) || !empty($note['_deleted'])) {
+                        continue;
+                    }
+                    $sanitized[] = [
+                        'content' => sanitize_textarea_field($note['content'] ?? ''),
+                        'type'    => in_array($note['type'] ?? '', ['admin', 'customer'], true) ? $note['type'] : 'admin',
+                        'author'  => sanitize_text_field($note['author'] ?? ''),
+                        'date'    => sanitize_text_field($note['date'] ?? ''),
+                    ];
+                }
+                $updateData['notes'] = $sanitized;
+            }
+        }
+
         // Update if we have data
         if (!empty($updateData)) {
             $this->repository->updateMeta($postId, $updateData);
@@ -345,16 +368,97 @@ final class QuoteAdminController
             $sendCc = sanitize_email($_POST['stride_send_cc'] ?? '');
             if ($sendTo) {
                 do_action('stride/quote/send_email', $postId, $sendTo, $sendCc);
+                $this->setAdminNotice('success', sprintf(
+                    __('Offerte verzonden naar %s.', 'stride'),
+                    $sendTo
+                ));
+                $this->suppressDefaultNotice();
             }
         }
 
         // Handle PDF regeneration
         if (!empty($_POST['stride_regenerate_pdf'])) {
             do_action('stride/quote/regenerate_pdf', $postId);
+            $pdfPath = get_post_meta($postId, 'pdf_path', true);
+            if ($pdfPath) {
+                $this->setAdminNotice('success', __('PDF is opnieuw gegenereerd.', 'stride'));
+            } else {
+                $this->setAdminNotice('error', __('PDF genereren mislukt.', 'stride'));
+            }
+            $this->suppressDefaultNotice();
         }
 
         // Handle voucher/discount actions
         $this->handleVoucherActions($postId);
+    }
+
+    /**
+     * Suppress WP's default "Post updated" notice by stripping the message query arg.
+     */
+    private function suppressDefaultNotice(): void
+    {
+        add_filter('redirect_post_location', function (string $location): string {
+            return remove_query_arg('message', $location);
+        });
+    }
+
+    /**
+     * Set an admin notice to show after redirect.
+     */
+    private function setAdminNotice(string $type, string $message): void
+    {
+        set_transient(
+            'stride_quote_notice_' . get_current_user_id(),
+            ['type' => $type, 'message' => $message],
+            30
+        );
+    }
+
+    /**
+     * Replace default "Post updated" with quote-specific messages.
+     */
+    public function customizeUpdateMessages(array $messages): array
+    {
+        $messages[QuoteCPT::POST_TYPE] = [
+            0  => '',
+            1  => __('Offerte opgeslagen.', 'stride'),
+            2  => __('Offerte opgeslagen.', 'stride'),
+            3  => __('Offerte opgeslagen.', 'stride'),
+            4  => __('Offerte opgeslagen.', 'stride'),
+            5  => __('Offerte opgeslagen.', 'stride'),
+            6  => __('Offerte opgeslagen.', 'stride'),
+            7  => __('Offerte opgeslagen.', 'stride'),
+            8  => __('Offerte opgeslagen.', 'stride'),
+            9  => __('Offerte opgeslagen.', 'stride'),
+            10 => __('Offerte opgeslagen.', 'stride'),
+        ];
+
+        return $messages;
+    }
+
+    /**
+     * Show admin notices set during save.
+     */
+    public function showAdminNotices(): void
+    {
+        $screen = get_current_screen();
+        if (!$screen || $screen->post_type !== QuoteCPT::POST_TYPE) {
+            return;
+        }
+
+        $notice = get_transient('stride_quote_notice_' . get_current_user_id());
+        if (!$notice || !is_array($notice)) {
+            return;
+        }
+
+        delete_transient('stride_quote_notice_' . get_current_user_id());
+
+        $type = $notice['type'] === 'error' ? 'error' : 'success';
+        printf(
+            '<div class="notice notice-%s is-dismissible"><p>%s</p></div>',
+            esc_attr($type),
+            esc_html($notice['message'])
+        );
     }
 
     private function processBillingData(array $input): array

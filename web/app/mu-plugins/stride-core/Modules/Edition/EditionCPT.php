@@ -157,6 +157,11 @@ final class EditionCPT
                 'label' => 'Inschrijfformulier',
                 'description' => 'Which enrollment form to show for this edition',
             ],
+            'documents' => [
+                'type' => 'json',
+                'label' => 'Documenten',
+                'description' => 'Attachment IDs of course documents (PDFs, presentations, etc.)',
+            ],
         ];
     }
 }

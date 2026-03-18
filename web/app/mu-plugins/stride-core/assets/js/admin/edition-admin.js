@@ -32,6 +32,7 @@
             this.initSlotManagement();
             this.initSessionTypeHandling();
             this.initNotesManagement();
+            this.initDocumentsManagement();
             this.initRegistrationManagement();
         },
 
@@ -803,6 +804,77 @@
             if (currentValue && $select.find('option[value="' + currentValue + '"]').length) {
                 $select.val(currentValue);
             }
+        },
+
+        // ========================================
+        // DOCUMENTS MANAGEMENT
+        // ========================================
+
+        /**
+         * Initialize document upload management
+         */
+        initDocumentsManagement: function() {
+            var self = this;
+
+            // Parse existing document IDs
+            var docsData = [];
+            var existing = $('#stride_documents_data').val();
+            if (existing) {
+                try { docsData = JSON.parse(existing); } catch(e) { docsData = []; }
+            }
+
+            // Add documents via WP media library
+            $('#stride-add-documents').on('click', function(e) {
+                e.preventDefault();
+                var frame = wp.media({
+                    title: 'Documenten selecteren',
+                    button: { text: 'Toevoegen' },
+                    multiple: true,
+                    library: { type: ['application/pdf', 'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'image'] }
+                });
+
+                frame.on('select', function() {
+                    var attachments = frame.state().get('selection').toJSON();
+                    attachments.forEach(function(att) {
+                        // Skip duplicates
+                        if (docsData.indexOf(att.id) !== -1) return;
+
+                        docsData.push(att.id);
+
+                        var ext = (att.filename || '').split('.').pop().toUpperCase();
+                        var size = att.filesizeHumanReadable || '';
+                        var html = '<div class="stride-document-item" data-id="' + att.id + '" style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 4px; margin-bottom: 6px;">' +
+                            '<span class="dashicons dashicons-media-document" style="color: #2271b1;"></span>' +
+                            '<a href="' + att.url + '" target="_blank" style="flex: 1; text-decoration: none;">' + self.escapeHtml(att.filename || att.title) + '</a>' +
+                            '<span style="color: #888; font-size: 12px;">' + ext + ' &middot; ' + size + '</span>' +
+                            '<button type="button" class="stride-document-remove button-link" title="Verwijderen" style="color: #d63638; padding: 0;">' +
+                                '<span class="dashicons dashicons-no-alt"></span>' +
+                            '</button>' +
+                        '</div>';
+                        $('#stride-documents-list').append(html);
+                    });
+                    self.updateDocumentsData(docsData);
+                });
+
+                frame.open();
+            });
+
+            // Remove document
+            $(document).on('click', '.stride-document-remove', function(e) {
+                e.preventDefault();
+                var $item = $(this).closest('.stride-document-item');
+                var id = parseInt($item.data('id'), 10);
+                docsData = docsData.filter(function(d) { return d !== id; });
+                $item.fadeOut(200, function() { $(this).remove(); });
+                self.updateDocumentsData(docsData);
+            });
+        },
+
+        /**
+         * Update hidden documents data field
+         */
+        updateDocumentsData: function(docs) {
+            $('#stride_documents_data').val(JSON.stringify(docs));
         },
 
         // ========================================

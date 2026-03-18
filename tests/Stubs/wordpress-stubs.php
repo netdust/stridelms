@@ -1190,6 +1190,19 @@ if (!function_exists('ntdst_data')) {
                         return true;
                     }
 
+                    public function updateMeta(int $postId, string $key, mixed $value): bool
+                    {
+                        global $_test_data_manager_meta;
+                        if (!isset($_test_data_manager_meta[$this->postType])) {
+                            $_test_data_manager_meta[$this->postType] = [];
+                        }
+                        if (!isset($_test_data_manager_meta[$this->postType][$postId])) {
+                            $_test_data_manager_meta[$this->postType][$postId] = [];
+                        }
+                        $_test_data_manager_meta[$this->postType][$postId][$key] = $value;
+                        return true;
+                    }
+
                     public function find(int $postId): \WP_Post|\WP_Error|null
                     {
                         global $_test_posts, $_test_data_manager_meta;
@@ -1962,5 +1975,39 @@ if (!class_exists('WP_Theme')) {
         public function get_stylesheet(): string {
             return $this->stylesheet;
         }
+    }
+}
+
+if (!function_exists('wp_upload_dir')) {
+    function wp_upload_dir(): array
+    {
+        return [
+            'basedir' => WP_CONTENT_DIR . '/uploads',
+            'baseurl' => '/wp-content/uploads',
+        ];
+    }
+}
+
+if (!function_exists('wp_mkdir_p')) {
+    function wp_mkdir_p(string $target): bool
+    {
+        if (is_dir($target)) return true;
+        return mkdir($target, 0755, true);
+    }
+}
+
+if (!function_exists('date_i18n')) {
+    function date_i18n(string $format, $timestamp = false): string
+    {
+        if ($timestamp === false) $timestamp = time();
+        return date($format, $timestamp);
+    }
+}
+
+if (!function_exists('content_url')) {
+    function content_url(string $path = ''): string
+    {
+        $url = '/wp-content';
+        return $path ? $url . '/' . ltrim($path, '/') : $url;
     }
 }

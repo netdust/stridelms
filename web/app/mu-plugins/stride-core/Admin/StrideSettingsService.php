@@ -33,6 +33,23 @@ class StrideSettingsService
         'edition' => 'vormingen',
     ];
 
+    /** Option name for company details */
+    private const OPTION_COMPANY = 'stride_company_details';
+
+    /** Default company details */
+    private const DEFAULT_COMPANY = [
+        'name' => '',
+        'address' => '',
+        'postal_code' => '',
+        'city' => '',
+        'country' => 'België',
+        'vat' => '',
+        'email' => '',
+        'phone' => '',
+        'bank_account' => '',
+        'logo' => '',
+    ];
+
     public function __construct()
     {
         $this->init();
@@ -81,6 +98,18 @@ class StrideSettingsService
         return get_option(self::OPTION_URL_SLUGS, self::DEFAULT_SLUGS);
     }
 
+    /**
+     * Get company details.
+     *
+     * @return array{name: string, address: string, postal_code: string, city: string, country: string, vat: string, email: string, phone: string, bank_account: string}
+     */
+    public static function getCompanyDetails(): array
+    {
+        $details = get_option(self::OPTION_COMPANY, self::DEFAULT_COMPANY);
+
+        return array_merge(self::DEFAULT_COMPANY, is_array($details) ? $details : []);
+    }
+
     // =========================================================================
     // ADMIN PAGE
     // =========================================================================
@@ -108,6 +137,9 @@ class StrideSettingsService
         if (!str_contains($hook, self::SETTINGS_SLUG)) {
             return;
         }
+
+        // WP Media Library (for logo upload)
+        wp_enqueue_media();
 
         // Alpine.js from CDN (deferred)
         wp_enqueue_script(
@@ -182,6 +214,7 @@ class StrideSettingsService
 
         return match ($tab) {
             'general' => $this->saveGeneralSettings($params),
+            'company' => $this->saveCompanySettings($params),
             'profile-types' => $this->saveProfileTypes($params),
             default => new WP_Error('invalid_tab', __('Onbekend tabblad.', 'stride')),
         };
@@ -209,6 +242,31 @@ class StrideSettingsService
         delete_option('rewrite_rules');
 
         return ['message' => 'Instellingen opgeslagen.'];
+    }
+
+    /**
+     * Save company details.
+     *
+     * @return array{message: string}
+     */
+    private function saveCompanySettings(array $params): array
+    {
+        $details = [
+            'name'         => sanitize_text_field($params['name'] ?? ''),
+            'address'      => sanitize_text_field($params['address'] ?? ''),
+            'postal_code'  => sanitize_text_field($params['postal_code'] ?? ''),
+            'city'         => sanitize_text_field($params['city'] ?? ''),
+            'country'      => sanitize_text_field($params['country'] ?? self::DEFAULT_COMPANY['country']),
+            'vat'          => sanitize_text_field($params['vat'] ?? ''),
+            'email'        => sanitize_email($params['email'] ?? ''),
+            'phone'        => sanitize_text_field($params['phone'] ?? ''),
+            'bank_account' => sanitize_text_field($params['bank_account'] ?? ''),
+            'logo'         => esc_url_raw($params['logo'] ?? ''),
+        ];
+
+        update_option(self::OPTION_COMPANY, $details);
+
+        return ['message' => 'Bedrijfsgegevens opgeslagen.'];
     }
 
     /**
@@ -339,6 +397,7 @@ class StrideSettingsService
                 'edition_slug' => $slugs['edition'] ?? self::DEFAULT_SLUGS['edition'],
                 'siteUrl' => home_url(),
             ],
+            'company' => self::getCompanyDetails(),
             'profileTypes' => [
                 'types' => array_values($typesWithCounts),
                 'availableIcons' => $availableIcons,
