@@ -159,13 +159,22 @@ $notifications = [
 
     <?php if (!empty($profileTypes)): ?>
     <!-- Profile Type -->
-    <section x-data="inlineEditSection({
-                 action: 'stride_update_profile',
-                 params: { form_type: 'profile_type' },
-                 fields: <?php echo esc_attr(json_encode([
-                     'profile_type' => $currentProfileType['slug'] ?? '',
-                 ])); ?>
-             })">
+    <section x-data="{
+                 ...inlineEditSection({
+                     action: 'stride_update_profile',
+                     params: { form_type: 'profile_type' },
+                     fields: <?php echo esc_attr(json_encode([
+                         'profile_type' => $currentProfileType['slug'] ?? '',
+                     ])); ?>
+                 }),
+                 profileTypes: <?php echo esc_attr(json_encode(
+                     array_combine(
+                         array_column($profileTypes, 'slug'),
+                         array_map(fn($t) => ['label' => $t['label'], 'color' => $t['color']], $profileTypes)
+                     )
+                 )); ?>,
+                 get currentType() { return this.profileTypes[this.fields.profile_type] ?? null; },
+             }">
         <div class="flex items-center justify-between mb-3">
             <h3 class="dash-subheading flex items-center gap-2">
                 <?php echo stridence_icon('users', 'w-4 h-4 text-primary'); ?>
@@ -185,13 +194,16 @@ $notifications = [
                 <div>
                     <dt class="text-xs text-text-muted mb-0.5"><?php esc_html_e('Profieltype', 'stridence'); ?></dt>
                     <dd class="text-sm font-medium text-text">
-                        <?php if ($currentProfileType): ?>
-                            <span class="inline-block w-2.5 h-2.5 rounded-full mr-1 align-middle"
-                                  style="background-color: <?php echo esc_attr($currentProfileType['color']); ?>"></span>
-                            <?php echo esc_html($currentProfileType['label']); ?>
-                        <?php else: ?>
+                        <template x-if="currentType">
+                            <span>
+                                <span class="inline-block w-2.5 h-2.5 rounded-full mr-1 align-middle"
+                                      :style="'background-color: ' + currentType.color"></span>
+                                <span x-text="currentType.label"></span>
+                            </span>
+                        </template>
+                        <template x-if="!currentType">
                             <span class="text-text-muted"><?php esc_html_e('Niet ingesteld', 'stridence'); ?></span>
-                        <?php endif; ?>
+                        </template>
                     </dd>
                 </div>
             </dl>
