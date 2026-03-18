@@ -31,6 +31,19 @@ function strideSettingsApp() {
         isNew: false,
         confirmDelete: null,
 
+        // Company details
+        company: {
+            name: '',
+            address: '',
+            postal_code: '',
+            city: '',
+            country: 'België',
+            vat: '',
+            email: '',
+            phone: '',
+            bank_account: '',
+        },
+
         /**
          * Initialize from localized data and URL hash.
          */
@@ -48,9 +61,14 @@ function strideSettingsApp() {
                 this.availableIcons = data.profileTypes.availableIcons || [];
             }
 
+            // Company tab
+            if (data.company) {
+                this.company = { ...this.company, ...data.company };
+            }
+
             // Read tab from URL hash
             const hash = window.location.hash.replace('#', '');
-            if (['general', 'profile-types'].includes(hash)) {
+            if (['general', 'company', 'profile-types'].includes(hash)) {
                 this.activeTab = hash;
             }
         },
@@ -97,6 +115,28 @@ function strideSettingsApp() {
                     edition_slug: this.general.edition_slug,
                 });
                 this.showMessage(result.message || 'Instellingen opgeslagen.');
+            } catch (err) {
+                this.showMessage(err.message || 'Opslaan mislukt.', 'error');
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        // =====================================================================
+        // Company Tab
+        // =====================================================================
+
+        /**
+         * Save company details.
+         */
+        async saveCompany() {
+            this.saving = true;
+            try {
+                const result = await this.apiCall('stride_save_settings', {
+                    tab: 'company',
+                    ...this.company,
+                });
+                this.showMessage(result.message || 'Bedrijfsgegevens opgeslagen.');
             } catch (err) {
                 this.showMessage(err.message || 'Opslaan mislukt.', 'error');
             } finally {

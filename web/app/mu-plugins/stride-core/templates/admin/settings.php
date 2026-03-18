@@ -12,6 +12,7 @@ defined('ABSPATH') || exit;
 
 $tabs = [
     'general'       => ['label' => 'Algemeen', 'icon' => 'dashicons-admin-generic'],
+    'company'       => ['label' => 'Bedrijf', 'icon' => 'dashicons-building'],
     'profile-types' => ['label' => 'Profieltypes', 'icon' => 'dashicons-groups'],
 ];
 
@@ -52,6 +53,13 @@ $templateDir = __DIR__ . '/settings';
             <div x-show="activeTab === 'general'" style="display: none;">
                 <?php if (file_exists($templateDir . '/tab-general.php')): ?>
                     <?php include $templateDir . '/tab-general.php'; ?>
+                <?php endif; ?>
+            </div>
+
+            <!-- Tab: Bedrijf -->
+            <div x-show="activeTab === 'company'" style="display: none;">
+                <?php if (file_exists($templateDir . '/tab-company.php')): ?>
+                    <?php include $templateDir . '/tab-company.php'; ?>
                 <?php endif; ?>
             </div>
 
