@@ -138,6 +138,35 @@ final class AttendanceRepository
     }
 
     /**
+     * Get attendance records for multiple users.
+     *
+     * @param array<int> $userIds
+     * @return array<object>
+     */
+    public function getByUsers(array $userIds, ?int $editionId = null): array
+    {
+        if (empty($userIds)) {
+            return [];
+        }
+
+        global $wpdb;
+
+        $placeholders = implode(',', array_fill(0, count($userIds), '%d'));
+        $params = $userIds;
+
+        $sql = "SELECT * FROM {$this->table()} WHERE user_id IN ({$placeholders})";
+
+        if ($editionId !== null) {
+            $sql .= " AND edition_id = %d";
+            $params[] = $editionId;
+        }
+
+        $sql .= " ORDER BY marked_at DESC";
+
+        return $wpdb->get_results($wpdb->prepare($sql, ...$params));
+    }
+
+    /**
      * Get all attendance records for a user.
      *
      * @return array<object>

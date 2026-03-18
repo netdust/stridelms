@@ -448,53 +448,67 @@ final class PartnerAPIController
         $companyId = $this->getCompanyId();
         $editionId = $request->get_param('edition_id');
         $userId = $request->get_param('user_id');
+        $page = max(1, absint($request->get_param('page') ?? 1));
+        $perPage = min(100, max(1, absint($request->get_param('per_page') ?? 50)));
 
-        // Get company users
+        // Get company user IDs
         $userQuery = new \WP_User_Query([
             'meta_key' => '_stride_company_id',
             'meta_value' => $companyId,
             'fields' => 'ID',
         ]);
-        $companyUserIds = $userQuery->get_results();
+        $companyUserIds = array_map('intval', $userQuery->get_results());
 
         if (empty($companyUserIds)) {
-            return new WP_REST_Response(['data' => []]);
+            return new WP_REST_Response(['data' => [], 'total' => 0, 'page' => $page, 'per_page' => $perPage]);
         }
 
-        // If user_id provided, verify it belongs to company
+        // If user_id provided, verify belongs to company
         if ($userId) {
-            if (!in_array((int) $userId, array_map('intval', $companyUserIds), true)) {
-                return new WP_Error(
-                    'rest_forbidden',
-                    __('User does not belong to your company.', 'stride'),
-                    ['status' => 403]
-                );
+            if (!in_array((int) $userId, $companyUserIds, true)) {
+                return new WP_Error('rest_forbidden', __('User does not belong to your company.', 'stride'), ['status' => 403]);
             }
             $companyUserIds = [(int) $userId];
         }
 
-        $attendance = [];
-        foreach ($companyUserIds as $uid) {
-            $records = $editionId
-                ? $this->attendanceRepository->getByUserAndEdition((int) $uid, (int) $editionId)
-                : $this->attendanceRepository->getByUser((int) $uid);
+        // Batch-fetch attendance records
+        $records = $this->attendanceRepository->getByUsers($companyUserIds, $editionId ? (int) $editionId : null);
 
-            foreach ($records as $record) {
-                $session = ntdst_data()->get('vad_session')->find($record->session_id);
-                $sessionHours = $session ? ((float) ($session->fields['duration'] ?? 0)) / 60 : 0;
-
-                $attendance[] = [
-                    'user_id' => (int) $record->user_id,
-                    'session_id' => (int) $record->session_id,
-                    'session_date' => $session ? ($session->fields['date'] ?? null) : null,
-                    'session_title' => $session ? ($session->post_title ?? null) : null,
-                    'status' => $record->status,
-                    'hours' => round($sessionHours, 2),
-                ];
+        // Batch-fetch sessions
+        $sessionIds = array_unique(array_column($records, 'session_id'));
+        $sessionsMap = [];
+        foreach ($sessionIds as $sid) {
+            $session = ntdst_data()->get('vad_session')->find((int) $sid);
+            if ($session) {
+                $sessionsMap[(int) $sid] = $session;
             }
         }
 
-        return new WP_REST_Response(['data' => $attendance]);
+        // Paginate
+        $total = count($records);
+        $offset = ($page - 1) * $perPage;
+        $pageRecords = array_slice($records, $offset, $perPage);
+
+        $attendance = array_map(function ($record) use ($sessionsMap) {
+            $session = $sessionsMap[(int) $record->session_id] ?? null;
+            $sessionHours = $session ? ((float) ($session->fields['duration'] ?? 0)) / 60 : 0;
+
+            return [
+                'user_id' => (int) $record->user_id,
+                'session_id' => (int) $record->session_id,
+                'session_date' => $session ? ($session->fields['date'] ?? null) : null,
+                'session_title' => $session ? ($session->post_title ?? null) : null,
+                'status' => $record->status,
+                'hours' => round($sessionHours, 2),
+            ];
+        }, $pageRecords);
+
+        return new WP_REST_Response([
+            'data' => $attendance,
+            'total' => $total,
+            'page' => $page,
+            'per_page' => $perPage,
+        ]);
     }
 
     /**
