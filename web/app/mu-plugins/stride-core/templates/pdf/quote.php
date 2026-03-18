@@ -315,7 +315,11 @@ $companyEmail = $company['email'] ?? '';
             <table class="header-table">
                 <tr>
                     <td class="company-logo">
-                        <h1><?php echo esc_html($companyName); ?></h1>
+                        <?php if (!empty($company['logo_path'])): ?>
+                            <img src="<?php echo esc_attr($company['logo_path']); ?>" alt="<?php echo esc_attr($companyName); ?>" style="max-height: 50px; max-width: 180px; margin-bottom: 2mm;">
+                        <?php else: ?>
+                            <h1><?php echo esc_html($companyName); ?></h1>
+                        <?php endif; ?>
                         <div class="company-details">
                             <?php if (!empty($company['address'])): ?>
                                 <?php echo esc_html($company['address']); ?><br>

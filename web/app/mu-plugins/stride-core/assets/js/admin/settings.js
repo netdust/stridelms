@@ -42,6 +42,7 @@ function strideSettingsApp() {
             email: '',
             phone: '',
             bank_account: '',
+            logo: '',
         },
 
         /**
@@ -125,6 +126,30 @@ function strideSettingsApp() {
         // =====================================================================
         // Company Tab
         // =====================================================================
+
+        /**
+         * Open WP media library to select a logo image.
+         */
+        selectLogo() {
+            const frame = wp.media({
+                title: 'Kies bedrijfslogo',
+                button: { text: 'Gebruik als logo' },
+                multiple: false,
+                library: { type: 'image' },
+            });
+            frame.on('select', () => {
+                const attachment = frame.state().get('selection').first().toJSON();
+                this.company.logo = attachment.url;
+            });
+            frame.open();
+        },
+
+        /**
+         * Remove the current logo.
+         */
+        removeLogo() {
+            this.company.logo = '';
+        },
 
         /**
          * Save company details.

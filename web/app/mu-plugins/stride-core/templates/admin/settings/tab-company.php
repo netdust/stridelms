@@ -21,6 +21,27 @@ defined('ABSPATH') || exit;
     <tbody>
         <tr>
             <th scope="row">
+                <label>Logo</label>
+            </th>
+            <td>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <template x-if="company.logo">
+                        <div>
+                            <img :src="company.logo" alt="Logo" style="max-height: 60px; max-width: 200px; border: 1px solid #ddd; border-radius: 4px; padding: 4px;">
+                        </div>
+                    </template>
+                    <button type="button" class="button" @click="selectLogo()">
+                        <span x-text="company.logo ? 'Wijzigen' : 'Logo kiezen'"></span>
+                    </button>
+                    <template x-if="company.logo">
+                        <button type="button" class="button" @click="removeLogo()" style="color: #d63638;">Verwijderen</button>
+                    </template>
+                </div>
+                <p class="description">Wordt getoond op offertes (PDF). Aanbevolen: transparante PNG, max 200px breed.</p>
+            </td>
+        </tr>
+        <tr>
+            <th scope="row">
                 <label for="stride-company-name">Bedrijfsnaam <span class="required">*</span></label>
             </th>
             <td>

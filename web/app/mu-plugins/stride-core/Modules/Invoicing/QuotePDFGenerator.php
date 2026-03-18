@@ -184,8 +184,48 @@ final class QuotePDFGenerator
                 'name'  => $user ? $user->display_name : '',
                 'email' => $user ? $user->user_email : '',
             ],
-            'company'             => StrideSettingsService::getCompanyDetails(),
+            'company'             => $this->enrichCompanyDetails(),
         ];
+    }
+
+    /**
+     * Get company details with logo resolved to absolute file path for DOMPDF.
+     */
+    private function enrichCompanyDetails(): array
+    {
+        $company = StrideSettingsService::getCompanyDetails();
+
+        // Resolve logo URL to absolute file path (DOMPDF needs file path, not URL)
+        if (!empty($company['logo'])) {
+            $logoPath = $this->urlToPath($company['logo']);
+            $company['logo_path'] = ($logoPath && file_exists($logoPath)) ? $logoPath : '';
+        } else {
+            $company['logo_path'] = '';
+        }
+
+        return $company;
+    }
+
+    /**
+     * Convert a WordPress upload URL to an absolute file path.
+     */
+    private function urlToPath(string $url): string
+    {
+        $uploadDir = wp_upload_dir();
+        $baseUrl = $uploadDir['baseurl'] ?? '';
+        $baseDir = $uploadDir['basedir'] ?? '';
+
+        if ($baseUrl && $baseDir && str_contains($url, $baseUrl)) {
+            return str_replace($baseUrl, $baseDir, $url);
+        }
+
+        // Fallback: try content URL
+        $contentUrl = content_url();
+        if (str_contains($url, $contentUrl)) {
+            return str_replace($contentUrl, WP_CONTENT_DIR, $url);
+        }
+
+        return '';
     }
 
     /**

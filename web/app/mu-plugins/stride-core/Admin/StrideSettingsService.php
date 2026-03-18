@@ -47,6 +47,7 @@ class StrideSettingsService
         'email' => '',
         'phone' => '',
         'bank_account' => '',
+        'logo' => '',
     ];
 
     public function __construct()
@@ -136,6 +137,9 @@ class StrideSettingsService
         if (!str_contains($hook, self::SETTINGS_SLUG)) {
             return;
         }
+
+        // WP Media Library (for logo upload)
+        wp_enqueue_media();
 
         // Alpine.js from CDN (deferred)
         wp_enqueue_script(
@@ -257,6 +261,7 @@ class StrideSettingsService
             'email'        => sanitize_email($params['email'] ?? ''),
             'phone'        => sanitize_text_field($params['phone'] ?? ''),
             'bank_account' => sanitize_text_field($params['bank_account'] ?? ''),
+            'logo'         => esc_url_raw($params['logo'] ?? ''),
         ];
 
         update_option(self::OPTION_COMPANY, $details);

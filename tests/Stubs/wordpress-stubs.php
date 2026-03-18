@@ -2003,3 +2003,11 @@ if (!function_exists('date_i18n')) {
         return date($format, $timestamp);
     }
 }
+
+if (!function_exists('content_url')) {
+    function content_url(string $path = ''): string
+    {
+        $url = '/wp-content';
+        return $path ? $url . '/' . ltrim($path, '/') : $url;
+    }
+}
