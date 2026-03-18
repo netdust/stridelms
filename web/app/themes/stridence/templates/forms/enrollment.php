@@ -108,6 +108,11 @@ if ($item_id) {
     }
 }
 
+// Enrich item_data with price for the confirmation step
+if (!empty($edition_data['price'])) {
+    $item_data['priceFormatted'] = $edition_data['price'];
+}
+
 // Alpine config
 $alpine_config = json_encode([
     'itemId'         => $item_id,
