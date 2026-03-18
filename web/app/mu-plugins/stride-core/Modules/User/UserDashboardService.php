@@ -229,7 +229,10 @@ final class UserDashboardService
      */
     public function getEnrollmentData(int $userId): array
     {
-        [$activeEditions, $completedEditions, $cancelledEditions] = $this->buildEditionRegistrations($userId);
+        // Fetch registrations once for the entire method
+        $allRegistrations = $this->registrationRepo->findByUser($userId);
+
+        [$activeEditions, $completedEditions, $cancelledEditions] = $this->buildEditionRegistrations($userId, $allRegistrations);
         [$activeOnline, $completedOnline] = $this->buildOnlineCourses($userId);
 
         $completedItems = array_merge($completedEditions, $completedOnline);
@@ -241,7 +244,7 @@ final class UserDashboardService
             'completed_items'    => $completedItems,
             'cancelled_editions' => $cancelledEditions,
             'upcoming_sessions'  => $this->buildUpcomingSessions($activeEditions),
-            'action_items'       => $this->buildActionItems($userId),
+            'action_items'       => $this->buildActionItems($userId, $allRegistrations),
         ];
     }
 
@@ -250,7 +253,7 @@ final class UserDashboardService
      *
      * @return array{course_title: string, label: string, url: string, type: string}[]
      */
-    private function buildActionItems(int $userId): array
+    private function buildActionItems(int $userId, array $registrations): array
     {
         $items = [];
 
@@ -328,7 +331,7 @@ final class UserDashboardService
         }
 
         // 2. Uncompleted online session lessons (blended learning)
-        $items = array_merge($items, $this->buildOnlineLessonActions($userId));
+        $items = array_merge($items, $this->buildOnlineLessonActions($userId, $registrations));
 
         return $items;
     }
@@ -342,9 +345,8 @@ final class UserDashboardService
      *
      * @return array<array{course_title: string, label: string, url: string, type: string}>
      */
-    private function buildOnlineLessonActions(int $userId): array
+    private function buildOnlineLessonActions(int $userId, array $registrations): array
     {
-        $registrations = $this->registrationRepo->findByUser($userId);
         $items = [];
 
         foreach ($registrations as $reg) {
@@ -421,11 +423,59 @@ final class UserDashboardService
      *
      * @return array{0: array, 1: array, 2: array} [active, completed, cancelled]
      */
-    private function buildEditionRegistrations(int $userId): array
+    private function buildEditionRegistrations(int $userId, array $registrations): array
     {
-        $registrations = $this->registrationRepo->findByUser($userId);
         $editionModel  = ntdst_data()->get('vad_edition');
         $active = $completed = $cancelled = [];
+
+        // Collect all edition IDs for batch fetching
+        $editionIds = array_filter(array_map(fn($r) => (int) ($r->edition_id ?? 0), $registrations));
+        if (empty($editionIds)) {
+            return [[], [], []];
+        }
+
+        // Batch-fetch edition posts
+        $editionPosts = get_posts([
+            'post_type' => 'vad_edition',
+            'post__in' => array_unique($editionIds),
+            'posts_per_page' => count($editionIds),
+            'post_status' => 'any',
+        ]);
+        $editionMap = [];
+        foreach ($editionPosts as $ep) {
+            $editionMap[$ep->ID] = $ep;
+        }
+
+        // Batch-fetch courseId meta
+        global $wpdb;
+        $idList = implode(',', array_map('intval', array_unique($editionIds)));
+        $metaRows = $wpdb->get_results(
+            "SELECT post_id, meta_value FROM {$wpdb->postmeta}
+             WHERE post_id IN ({$idList}) AND meta_key = '_ntdst_course_id'"
+        );
+        $courseIdMap = [];
+        $courseIds = [];
+        foreach ($metaRows as $mr) {
+            $courseIdMap[(int) $mr->post_id] = (int) $mr->meta_value;
+            if ((int) $mr->meta_value) {
+                $courseIds[] = (int) $mr->meta_value;
+            }
+        }
+
+        // Batch-fetch course posts
+        $courseMap = [];
+        $courseIds = array_unique(array_filter($courseIds));
+        if (!empty($courseIds)) {
+            $coursePosts = get_posts([
+                'post_type' => 'sfwd-courses',
+                'post__in' => $courseIds,
+                'posts_per_page' => count($courseIds),
+                'post_status' => 'any',
+            ]);
+            foreach ($coursePosts as $cp) {
+                $courseMap[$cp->ID] = $cp;
+            }
+        }
 
         foreach ($registrations as $reg) {
             if (empty($reg->edition_id)) {
@@ -433,14 +483,24 @@ final class UserDashboardService
             }
 
             $editionId = (int) $reg->edition_id;
-            $edition   = $this->editionService->getEdition($editionId);
+            $edition   = $editionMap[$editionId] ?? null;
 
-            if (is_wp_error($edition) || $this->editionService->isOnline($editionId)) {
+            if (!$edition) {
                 continue;
             }
 
-            $courseId = $this->editionService->getCourseId($editionId);
-            $course   = $courseId ? get_post($courseId) : null;
+            // Check if online using pre-fetched courseId
+            $courseId = $courseIdMap[$editionId] ?? 0;
+            if ($courseId) {
+                $formats = get_the_terms($courseId, 'stride_format');
+                $isOnline = $formats && !is_wp_error($formats) &&
+                    !empty(array_filter($formats, fn($f) => in_array($f->slug, ['online', 'webinar', 'e-learning'], true)));
+                if ($isOnline) {
+                    continue;
+                }
+            }
+
+            $course = $courseId ? ($courseMap[$courseId] ?? null) : null;
             $sessions = $this->sessionService->getSessionsForEdition($editionId);
             $selectedIds = array_map('intval', $reg->selections ?? []);
 
