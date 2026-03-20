@@ -1666,6 +1666,13 @@ if (!function_exists('wp_nonce_field')) {
     }
 }
 
+if (!function_exists('wp_salt')) {
+    function wp_salt(string $scheme = 'auth'): string
+    {
+        return 'test-salt-' . $scheme;
+    }
+}
+
 if (!function_exists('wp_create_nonce')) {
     function wp_create_nonce($action = -1)
     {
