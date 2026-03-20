@@ -9,7 +9,11 @@ use NtdstAssistant\Transport\JsonTransport;
 
 return [
     'services' => [
-        // Services will be added as they are implemented
+        \NtdstAssistant\ConversationStore::class,
+        \NtdstAssistant\SystemPrompt::class,
+        \NtdstAssistant\AbilityBridge::class,
+        \NtdstAssistant\ToolExecutor::class,
+        \NtdstAssistant\ChatController::class,
     ],
     'bindings' => [
         ClaudeClientInterface::class => fn() => (
