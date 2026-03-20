@@ -140,6 +140,7 @@ class ToolExecutor implements \NTDST_Service_Meta
 
         // Read conversation once — work in memory, flush on exit
         $messages = $this->store->get($adminUserId);
+        $downloads = [];
 
         for ($i = 0; $i < self::MAX_ITERATIONS; $i++) {
 
@@ -182,10 +183,16 @@ class ToolExecutor implements \NTDST_Service_Meta
                 $messages[] = ['role' => 'assistant', 'content' => $contentBlocks];
                 $this->store->replace($adminUserId, $messages);
 
-                return [
+                $response = [
                     'type' => 'response',
                     'text' => $text,
                 ];
+
+                if (!empty($downloads)) {
+                    $response['downloads'] = $downloads;
+                }
+
+                return $response;
             }
 
             // Process tool_use blocks before storing assistant message
@@ -215,10 +222,20 @@ class ToolExecutor implements \NTDST_Service_Meta
                     break;
                 }
 
+                // Check for download_url in result
+                $result = $execResult['result'];
+                if (is_array($result) && isset($result['download_url'])) {
+                    $downloads[] = [
+                        'url'       => $result['download_url'],
+                        'filename'  => $result['filename'] ?? 'export.csv',
+                        'row_count' => $result['row_count'] ?? 0,
+                    ];
+                }
+
                 $toolResults[] = [
                     'type'        => 'tool_result',
                     'tool_use_id' => $toolUse['id'],
-                    'content'     => json_encode($execResult['result']),
+                    'content'     => json_encode($result),
                 ];
             }
 
