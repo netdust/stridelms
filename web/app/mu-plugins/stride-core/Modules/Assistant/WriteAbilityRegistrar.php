@@ -10,7 +10,7 @@ use Stride\Infrastructure\AbstractService;
  * Registers Stride write abilities for the AI assistant.
  *
  * Owns:
- * - 2 write abilities: enroll-user, unenroll-user
+ * - 3 write abilities: enroll-user, unenroll-user, mark-attendance
  *
  * ReadAbilityRegistrar owns category registration and system prompt injection.
  */
@@ -65,6 +65,37 @@ final class WriteAbilityRegistrar extends AbstractService
             'meta' => [
                 'show_in_rest' => true,
                 'describe_input' => [$this, 'describeEnrollInput'],
+            ],
+        ]);
+
+        // Mark attendance
+        wp_register_ability('stride/mark-attendance', [
+            'label' => 'Aanwezigheid markeren',
+            'description' => 'Mark one or multiple users present/absent/excused for a session. Validates enrollment before marking.',
+            'category' => 'stride',
+            'input_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'session_id' => ['type' => 'integer', 'description' => 'Sessie-ID'],
+                    'user_id' => ['type' => 'integer', 'description' => 'Enkele gebruiker (optioneel als user_ids meegegeven)'],
+                    'user_ids' => [
+                        'type' => 'array',
+                        'items' => ['type' => 'integer'],
+                        'description' => 'Meerdere gebruikers (optioneel als user_id meegegeven)',
+                    ],
+                    'status' => [
+                        'type' => 'string',
+                        'enum' => ['present', 'absent', 'excused'],
+                        'description' => 'Aanwezigheidsstatus',
+                    ],
+                ],
+                'required' => ['session_id', 'status'],
+            ],
+            'permission_callback' => fn() => current_user_can('stride_manage'),
+            'execute_callback' => [$this, 'markAttendance'],
+            'meta' => [
+                'show_in_rest' => true,
+                'describe_input' => [$this, 'describeMarkAttendanceInput'],
             ],
         ]);
 
@@ -187,6 +218,103 @@ final class WriteAbilityRegistrar extends AbstractService
         ];
     }
 
+    /**
+     * Mark one or multiple users present/absent/excused for a session.
+     *
+     * Fail-early and atomic: validates all users before writing any attendance.
+     *
+     * @param array{session_id: int, status: string, user_id?: int, user_ids?: int[]} $input
+     * @return array{marked: int, session_id: int, status: string, message: string}|\WP_Error
+     */
+    public function markAttendance(array $input): array|\WP_Error
+    {
+        $sessionId = (int) ($input['session_id'] ?? 0);
+        $status    = $input['status'] ?? '';
+
+        // 1. Resolve user IDs
+        if (!empty($input['user_ids']) && is_array($input['user_ids'])) {
+            $userIds = array_map('intval', $input['user_ids']);
+        } elseif (!empty($input['user_id'])) {
+            $userIds = [(int) $input['user_id']];
+        } else {
+            return new \WP_Error('invalid_input', 'user_id of user_ids is vereist.');
+        }
+
+        if ($sessionId <= 0) {
+            return new \WP_Error('invalid_input', 'session_id is vereist.');
+        }
+
+        if (!in_array($status, ['present', 'absent', 'excused'], true)) {
+            return new \WP_Error('invalid_input', 'Ongeldige status. Gebruik present, absent of excused.');
+        }
+
+        // 2. Validate session exists
+        $sessionService = ntdst_get(\Stride\Modules\Edition\SessionService::class);
+        $session = $sessionService->getSession($sessionId);
+
+        if (!$session) {
+            return new \WP_Error('not_found', "Sessie #{$sessionId} niet gevonden.");
+        }
+
+        // 3. Resolve parent edition
+        $editionId = (int) ($session['edition_id'] ?? 0);
+
+        if ($editionId <= 0) {
+            return new \WP_Error('invalid_data', 'Sessie heeft geen gekoppelde editie.');
+        }
+
+        // 4. Validate ALL users enrolled (no partial execution)
+        $repo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+        $registrations = $repo->findByEdition($editionId, 'confirmed');
+        $enrolledUserIds = array_map(fn($r) => (int) $r->user_id, $registrations);
+
+        $notEnrolled = array_diff($userIds, $enrolledUserIds);
+        if (!empty($notEnrolled)) {
+            return new \WP_Error(
+                'not_enrolled',
+                sprintf(
+                    'Gebruiker(s) niet ingeschreven voor deze editie: %s. Geen aanwezigheid opgeslagen.',
+                    implode(', ', $notEnrolled),
+                ),
+            );
+        }
+
+        // 5. Execute based on status
+        $attendanceService = ntdst_get(\Stride\Modules\Attendance\AttendanceService::class);
+        $markedBy = get_current_user_id();
+
+        if ($status === 'present') {
+            $result = $attendanceService->markMultiplePresent($sessionId, $userIds, $markedBy);
+            if (is_wp_error($result)) {
+                return $result;
+            }
+        } else {
+            $method = $status === 'absent' ? 'markAbsent' : 'markExcused';
+            foreach ($userIds as $userId) {
+                $result = $attendanceService->$method($sessionId, $userId, $markedBy);
+                if (is_wp_error($result)) {
+                    return $result;
+                }
+            }
+        }
+
+        // 6. Return summary
+        $count = count($userIds);
+        $statusLabel = match ($status) {
+            'present' => 'aanwezig',
+            'absent'  => 'afwezig',
+            'excused' => 'verontschuldigd',
+            default   => $status,
+        };
+
+        return [
+            'marked'     => $count,
+            'session_id' => $sessionId,
+            'status'     => $status,
+            'message'    => sprintf('%d gebruiker(s) gemarkeerd als %s.', $count, $statusLabel),
+        ];
+    }
+
     // ---------------------------------------------------------------
     // Describe input callbacks (for confirmation flow)
     // ---------------------------------------------------------------
@@ -215,6 +343,44 @@ final class WriteAbilityRegistrar extends AbstractService
         $editionTitle = $this->resolveEditionTitle((int) ($input['edition_id'] ?? 0));
 
         return sprintf('%s uitschrijven uit %s (LearnDash-toegang wordt ingetrokken)', $userName, $editionTitle);
+    }
+
+    /**
+     * Human-readable summary for mark-attendance action confirmation.
+     *
+     * @param array{session_id: int, status: string, user_id?: int, user_ids?: int[]} $input
+     */
+    public function describeMarkAttendanceInput(array $input): string
+    {
+        $sessionId    = (int) ($input['session_id'] ?? 0);
+        $userIds      = $input['user_ids'] ?? [];
+        $singleUserId = (int) ($input['user_id'] ?? 0);
+        $status       = $input['status'] ?? 'present';
+
+        if (empty($userIds) && $singleUserId > 0) {
+            $userIds = [$singleUserId];
+        }
+
+        $count = count($userIds);
+        $statusLabel = match ($status) {
+            'present' => 'aanwezig',
+            'absent'  => 'afwezig',
+            'excused' => 'verontschuldigd',
+            default   => $status,
+        };
+
+        $sessions   = ntdst_get(\Stride\Modules\Edition\SessionService::class);
+        $session    = $sessions->getSession($sessionId);
+        $sessionDesc = $session
+            ? sprintf('sessie %s (%s)', $session['date'] ?? '?', $session['start_time'] ?? '?')
+            : "sessie #{$sessionId}";
+
+        if ($count === 1) {
+            $userName = $this->resolveUserName($userIds[0]);
+            return sprintf('%s %s markeren voor %s', $userName, $statusLabel, $sessionDesc);
+        }
+
+        return sprintf('%d gebruikers %s markeren voor %s', $count, $statusLabel, $sessionDesc);
     }
 
     // ---------------------------------------------------------------
