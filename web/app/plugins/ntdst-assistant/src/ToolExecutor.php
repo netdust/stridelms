@@ -280,12 +280,15 @@ class ToolExecutor implements \NTDST_Service_Meta
      */
     private function mapApiError(\RuntimeException $e): array
     {
-        $code = $e->getCode();
+        $msg = $e->getMessage();
+
+        error_log('[ntdst-assistant] Claude API error: ' . $msg);
 
         $text = match (true) {
-            $code === 401    => 'Claude API-sleutel is ongeldig.',
-            $code === 429    => 'Te veel verzoeken. Probeer het over een minuut opnieuw.',
-            default          => 'Claude reageert niet. Probeer het opnieuw.',
+            str_contains($msg, '401') => 'Claude API-sleutel is ongeldig.',
+            str_contains($msg, '429') => 'Te veel verzoeken. Probeer het over een minuut opnieuw.',
+            str_contains($msg, '400') => 'Ongeldig verzoek naar Claude: ' . $msg,
+            default                   => 'Claude reageert niet. Probeer het opnieuw. (' . $msg . ')',
         };
 
         return [
