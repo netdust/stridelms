@@ -48,7 +48,9 @@
     "wpackagist-theme/kadence": "^1.4",
     "openspout/openspout": "^4",
     "phpoffice/phpword": "^1",
-    "erusev/parsedown": "^1.7"
+    "erusev/parsedown": "^1.7",
+    "anthropic-ai/sdk": "^0.8.0",
+    "guzzlehttp/guzzle": "^7.10"
   },
   "require-dev": {
     "laravel/pint": "^1.18",
