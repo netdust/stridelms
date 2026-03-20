@@ -113,18 +113,18 @@ class ConversationStoreTest extends TestCase
 
     public function testReplaceTruncatesWhenOverMaxMessages(): void
     {
-        // Build a messages array exceeding the max (50)
+        // Build a messages array exceeding the max (30)
         $messages = [];
-        for ($i = 0; $i < 55; $i++) {
+        for ($i = 0; $i < 35; $i++) {
             $messages[] = ['role' => 'user', 'content' => "Message {$i}"];
         }
 
         $this->store->replace(1, $messages);
         $stored = $this->store->get(1);
 
-        $this->assertCount(50, $stored);
-        // Should keep the last 50 messages (5..54)
+        $this->assertCount(30, $stored);
+        // Should keep the last 30 messages (5..34)
         $this->assertSame('Message 5', $stored[0]['content']);
-        $this->assertSame('Message 54', $stored[49]['content']);
+        $this->assertSame('Message 34', $stored[29]['content']);
     }
 }

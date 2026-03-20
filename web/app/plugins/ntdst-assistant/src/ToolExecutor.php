@@ -140,6 +140,7 @@ class ToolExecutor implements \NTDST_Service_Meta
 
         // Read conversation once — work in memory, flush on exit
         $messages = $this->store->get($adminUserId);
+        $messages = $this->trimOldToolResults($messages);
         $downloads = [];
 
         for ($i = 0; $i < self::MAX_ITERATIONS; $i++) {
@@ -305,6 +306,41 @@ class ToolExecutor implements \NTDST_Service_Meta
     // ---------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------
+
+    /**
+     * Trim large tool_result content in older messages to reduce payload size.
+     *
+     * Keeps the last 4 messages intact, truncates tool_result content
+     * in older messages to prevent conversation bloat.
+     */
+    private function trimOldToolResults(array $messages): array
+    {
+        $count = count($messages);
+        $keepIntact = 4; // Keep last N messages untouched
+
+        for ($i = 0; $i < $count - $keepIntact; $i++) {
+            $msg = &$messages[$i];
+
+            if (($msg['role'] ?? '') !== 'user' || !is_array($msg['content'] ?? null)) {
+                continue;
+            }
+
+            foreach ($msg['content'] as &$block) {
+                if (($block['type'] ?? '') !== 'tool_result') {
+                    continue;
+                }
+
+                $content = $block['content'] ?? '';
+                if (is_string($content) && strlen($content) > 500) {
+                    $block['content'] = mb_substr($content, 0, 500) . '… [afgekapt]';
+                }
+            }
+            unset($block);
+        }
+        unset($msg);
+
+        return $messages;
+    }
 
     /**
      * Extract combined text from text content blocks.

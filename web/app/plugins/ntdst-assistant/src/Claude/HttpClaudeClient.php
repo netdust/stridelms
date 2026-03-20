@@ -8,7 +8,7 @@ use NtdstAssistant\Contracts\ClaudeClientInterface;
 class HttpClaudeClient implements ClaudeClientInterface
 {
     private const API_URL = 'https://api.anthropic.com/v1/messages';
-    private const TIMEOUT = 60;
+    private const TIMEOUT = 120;
 
     public function send(array $messages, array $tools, string $systemPrompt): array
     {
