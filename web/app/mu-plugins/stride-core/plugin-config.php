@@ -42,6 +42,7 @@ return [
         \Stride\Modules\Mail\StrideMailBridge::class,
         \Stride\Modules\PartnerAPI\PartnerAPIController::class,
         \Stride\Modules\User\ProfileTypeService::class,
+        \Stride\Modules\Assistant\AbilityRegistrar::class,
     ],
 
     /**
