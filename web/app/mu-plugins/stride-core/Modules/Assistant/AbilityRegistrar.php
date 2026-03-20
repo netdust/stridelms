@@ -381,6 +381,18 @@ final class AbilityRegistrar extends AbstractService
             return ['enrollments' => [], 'message' => 'Provide edition_id or user_id to filter enrollments.'];
         }
 
+        // Batch-prime user and post caches to avoid N+1
+        $userIds = array_unique(array_map(fn($r) => (int) $r->user_id, $raw));
+        $editionIds = array_unique(array_filter(array_map(fn($r) => (int) ($r->edition_id ?? 0), $raw)));
+
+        if (!empty($userIds)) {
+            // WP_User_Query with 'include' primes the user cache
+            new \WP_User_Query(['include' => $userIds, 'fields' => 'all_with_meta']);
+        }
+        if (!empty($editionIds)) {
+            _prime_post_caches($editionIds, true, true);
+        }
+
         $enrollments = [];
         foreach ($raw as $reg) {
             $user = get_userdata((int) $reg->user_id);

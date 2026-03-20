@@ -14,6 +14,8 @@ class AbilityBridge implements \NTDST_Service_Meta
         ];
     }
 
+    private ?array $cachedTools = null;
+
     public function __construct(
         private readonly ConversationStore $store,
     ) {}
@@ -43,6 +45,10 @@ class AbilityBridge implements \NTDST_Service_Meta
      */
     public function getToolDefinitions(): array
     {
+        if ($this->cachedTools !== null) {
+            return $this->cachedTools;
+        }
+
         $tools = [];
 
         foreach (wp_get_abilities() as $ability) {
@@ -64,7 +70,8 @@ class AbilityBridge implements \NTDST_Service_Meta
         }
 
         /** @var array $tools */
-        return apply_filters('ntdst_assistant/tools', $tools);
+        $this->cachedTools = apply_filters('ntdst_assistant/tools', $tools);
+        return $this->cachedTools;
     }
 
     // ---------------------------------------------------------------

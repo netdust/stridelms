@@ -6,6 +6,7 @@ namespace NtdstAssistant;
 class ConversationStore implements \NTDST_Service_Meta
 {
     private const TTL = HOUR_IN_SECONDS;
+    private const MAX_MESSAGES = 50;
     private const CONV_PREFIX = 'ntdst_assistant_conv_';
     private const PENDING_PREFIX = 'ntdst_assistant_pending_';
 
@@ -34,6 +35,11 @@ class ConversationStore implements \NTDST_Service_Meta
 
         $messages = $this->get($userId);
         $messages[] = $message;
+
+        if (count($messages) > self::MAX_MESSAGES) {
+            $messages = array_slice($messages, -self::MAX_MESSAGES);
+        }
+
         set_transient(self::CONV_PREFIX . $userId, $messages, self::TTL);
     }
 

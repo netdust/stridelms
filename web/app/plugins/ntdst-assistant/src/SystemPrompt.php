@@ -6,6 +6,7 @@ namespace NtdstAssistant;
 class SystemPrompt implements \NTDST_Service_Meta
 {
     private string $basePath;
+    private ?string $cachedPrompt = null;
 
     public static function metadata(): array
     {
@@ -23,6 +24,10 @@ class SystemPrompt implements \NTDST_Service_Meta
 
     public function build(): string
     {
+        if ($this->cachedPrompt !== null) {
+            return $this->cachedPrompt;
+        }
+
         $base = file_exists($this->basePath)
             ? file_get_contents($this->basePath)
             : '';
@@ -36,6 +41,7 @@ class SystemPrompt implements \NTDST_Service_Meta
             ),
         ];
 
-        return apply_filters('ntdst_assistant/system_prompt', $base, $context);
+        $this->cachedPrompt = apply_filters('ntdst_assistant/system_prompt', $base, $context);
+        return $this->cachedPrompt;
     }
 }

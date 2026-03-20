@@ -7,7 +7,7 @@ use NtdstAssistant\Contracts\ClaudeClientInterface;
 
 class ToolExecutor implements \NTDST_Service_Meta
 {
-    private const MAX_ITERATIONS = 10;
+    private const MAX_ITERATIONS = 5;
     private const TOTAL_TIMEOUT  = 120;
 
     public static function metadata(): array

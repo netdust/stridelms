@@ -100,10 +100,10 @@ final class ChatController implements \NTDST_Service_Meta
         try {
             $result = $this->executor->run($content, $userId);
         } catch (\Throwable $e) {
-            error_log('[ntdst-assistant] Chat error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+            error_log('[ntdst-assistant] Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
             $result = [
                 'type' => 'error',
-                'text' => 'Er ging iets mis: ' . $e->getMessage(),
+                'text' => 'Er ging iets mis. Probeer het opnieuw.',
             ];
         }
 
@@ -132,10 +132,10 @@ final class ChatController implements \NTDST_Service_Meta
         try {
             $result = $this->executor->runConfirmed($token, $userId, $toolUseId);
         } catch (\Throwable $e) {
-            error_log('[ntdst-assistant] Confirm error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+            error_log('[ntdst-assistant] Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
             $result = [
                 'type' => 'error',
-                'text' => 'Er ging iets mis bij het bevestigen: ' . $e->getMessage(),
+                'text' => 'Er ging iets mis. Probeer het opnieuw.',
             ];
         }
 
@@ -157,7 +157,7 @@ final class ChatController implements \NTDST_Service_Meta
             return;
         }
 
-        $storedToken = $pending['confirm_token'] ?? '';
+        $storedToken = $pending['token'] ?? '';
 
         if (!hash_equals($storedToken, $token)) {
             $this->transport->deliver([
