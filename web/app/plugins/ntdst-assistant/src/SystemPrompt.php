@@ -32,6 +32,9 @@ class SystemPrompt implements \NTDST_Service_Meta
             ? file_get_contents($this->basePath)
             : '';
 
+        // Inject current date so the model knows "today"
+        $base .= "\n\nVandaag is " . wp_date('l j F Y') . ' (' . wp_date('Y-m-d') . ').';
+
         $context = [
             'user_id' => get_current_user_id(),
             'locale' => get_locale(),
