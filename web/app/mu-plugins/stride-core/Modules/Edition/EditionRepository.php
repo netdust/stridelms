@@ -64,6 +64,44 @@ final class EditionRepository extends AbstractRepository
     }
 
     /**
+     * Query editions with flexible filters.
+     *
+     * @param array{
+     *     course_id?: int,
+     *     status?: string,
+     *     start_date_from?: string,
+     *     start_date_to?: string,
+     *     limit?: int,
+     * } $filters
+     * @return array<array<string, mixed>>
+     */
+    public function findByFilters(array $filters = [], int $limit = 100): array
+    {
+        $query = $this->model()
+            ->where('post_status', 'publish')
+            ->orderBy('start_date', 'ASC')
+            ->withMeta();
+
+        if (!empty($filters['course_id'])) {
+            $query->where('course_id', (int) $filters['course_id']);
+        }
+
+        if (!empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+
+        if (!empty($filters['start_date_from'])) {
+            $query->where('start_date', ['>=', $filters['start_date_from']]);
+        }
+
+        if (!empty($filters['start_date_to'])) {
+            $query->where('start_date', ['<=', $filters['start_date_to']]);
+        }
+
+        return $query->limit($limit)->get();
+    }
+
+    /**
      * Get field value from edition.
      */
     public function getField(int $editionId, string $field, mixed $default = null): mixed

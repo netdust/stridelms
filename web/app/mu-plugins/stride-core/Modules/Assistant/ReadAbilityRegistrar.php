@@ -111,7 +111,7 @@ final class ReadAbilityRegistrar extends AbstractService
         // Get editions
         wp_register_ability('stride/get-editions', [
             'label' => 'Edities oplijsten',
-            'description' => 'List editions with optional filters (course_id, status, upcoming). Returns title, dates, status, and capacity.',
+            'description' => 'List editions with optional filters (course_id, status, date range, upcoming). Returns title, dates, status, and capacity.',
             'category' => 'stride',
             'input_schema' => [
                 'type' => 'object',
@@ -123,6 +123,14 @@ final class ReadAbilityRegistrar extends AbstractService
                     'status' => [
                         'type' => 'string',
                         'description' => 'Filter by status: open, full, cancelled',
+                    ],
+                    'start_date_from' => [
+                        'type' => 'string',
+                        'description' => 'Start date range begin (YYYY-MM-DD). Example: 2026-03-01 for "from March"',
+                    ],
+                    'start_date_to' => [
+                        'type' => 'string',
+                        'description' => 'Start date range end (YYYY-MM-DD). Example: 2026-03-31 for "until end of March"',
                     ],
                     'upcoming' => [
                         'type' => 'boolean',
@@ -204,14 +212,15 @@ final class ReadAbilityRegistrar extends AbstractService
         // Export editions
         wp_register_ability('stride/export-editions', [
             'label' => 'Edities exporteren als CSV',
-            'description' => 'Export editions to a CSV file. Returns a signed download link. Optional filters: course_id, status, upcoming.',
+            'description' => 'Export editions to a CSV file. Returns a signed download link. Optional filters: course_id, status, date range.',
             'category' => 'stride',
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
                     'course_id' => ['type' => 'integer', 'description' => 'Filter op cursus-ID (optioneel)'],
                     'status' => ['type' => 'string', 'description' => 'Filter op status: open, full, cancelled (optioneel)'],
-                    'upcoming' => ['type' => 'boolean', 'description' => 'Alleen toekomstige edities (optioneel)'],
+                    'start_date_from' => ['type' => 'string', 'description' => 'Startdatum bereik begin (YYYY-MM-DD), bijv. 2026-03-01'],
+                    'start_date_to' => ['type' => 'string', 'description' => 'Startdatum bereik einde (YYYY-MM-DD), bijv. 2026-03-31'],
                 ],
             ],
             'permission_callback' => fn() => current_user_can('stride_view'),
@@ -385,13 +394,10 @@ final class ReadAbilityRegistrar extends AbstractService
         $editionRepo = ntdst_get(\Stride\Modules\Edition\EditionRepository::class);
         $perPage = min(50, max(1, (int) ($input['per_page'] ?? 20)));
 
-        $courseId = (int) ($input['course_id'] ?? 0);
-        $upcoming = (bool) ($input['upcoming'] ?? false);
+        $filters = $this->buildEditionFilters($input);
 
-        if ($courseId > 0) {
-            $raw = $editionService->getEditionsForCourse($courseId);
-        } elseif ($upcoming) {
-            $raw = $editionRepo->findUpcoming($perPage);
+        if (!empty($filters)) {
+            $raw = $editionRepo->findByFilters($filters, $perPage);
         } else {
             $raw = $editionRepo->findUpcoming($perPage);
         }
@@ -1153,6 +1159,47 @@ final class ReadAbilityRegistrar extends AbstractService
     }
 
     // ---------------------------------------------------------------
+    // Filter helpers
+    // ---------------------------------------------------------------
+
+    /**
+     * Build edition query filters from ability input.
+     *
+     * @return array<string, mixed> Filters for EditionRepository::findByFilters()
+     */
+    private function buildEditionFilters(array $input): array
+    {
+        $filters = [];
+
+        $courseId = (int) ($input['course_id'] ?? 0);
+        if ($courseId > 0) {
+            $filters['course_id'] = $courseId;
+        }
+
+        $status = $input['status'] ?? '';
+        if ($status !== '') {
+            $filters['status'] = sanitize_text_field($status);
+        }
+
+        $dateFrom = $input['start_date_from'] ?? '';
+        if ($dateFrom !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom)) {
+            $filters['start_date_from'] = $dateFrom;
+        }
+
+        $dateTo = $input['start_date_to'] ?? '';
+        if ($dateTo !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)) {
+            $filters['start_date_to'] = $dateTo;
+        }
+
+        $upcoming = (bool) ($input['upcoming'] ?? false);
+        if ($upcoming && !isset($filters['start_date_from'])) {
+            $filters['start_date_from'] = date('Y-m-d');
+        }
+
+        return $filters;
+    }
+
+    // ---------------------------------------------------------------
     // Execute callbacks — EXPORT
     // ---------------------------------------------------------------
 
@@ -1168,10 +1215,10 @@ final class ReadAbilityRegistrar extends AbstractService
         $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
         $editionRepo = ntdst_get(\Stride\Modules\Edition\EditionRepository::class);
 
-        $courseId = (int) ($input['course_id'] ?? 0);
+        $filters = $this->buildEditionFilters($input);
 
-        if ($courseId > 0) {
-            $raw = $editionService->getEditionsForCourse($courseId);
+        if (!empty($filters)) {
+            $raw = $editionRepo->findByFilters($filters, $export->getMaxRows());
         } else {
             $raw = $editionRepo->findUpcoming($export->getMaxRows());
         }
