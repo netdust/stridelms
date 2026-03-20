@@ -10,7 +10,8 @@ use Stride\Infrastructure\AbstractService;
  * Registers Stride read-only abilities for the AI assistant.
  *
  * Owns:
- * - 6 read abilities: search-users, get-edition, get-editions, get-enrollments, get-stats, get-attendance
+ * - 9 read abilities: search-users, get-edition, get-editions, get-enrollments, get-stats, get-attendance,
+ *   export-editions, export-enrollments, export-attendance
  * - Category registration (stride)
  * - System prompt injection (domain + formatting prompts)
  */
@@ -193,6 +194,71 @@ final class ReadAbilityRegistrar extends AbstractService
             ],
             'permission_callback' => fn() => current_user_can('stride_view'),
             'execute_callback' => [$this, 'getStats'],
+            'meta' => [
+                'show_in_rest' => true,
+                'annotations' => ['readonly' => true],
+                'readonly' => true,
+            ],
+        ]);
+
+        // Export editions
+        wp_register_ability('stride/export-editions', [
+            'label' => 'Edities exporteren als CSV',
+            'description' => 'Export editions to a CSV file. Returns a signed download link. Optional filters: course_id, status, upcoming.',
+            'category' => 'stride',
+            'input_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'course_id' => ['type' => 'integer', 'description' => 'Filter op cursus-ID (optioneel)'],
+                    'status' => ['type' => 'string', 'description' => 'Filter op status: open, full, cancelled (optioneel)'],
+                    'upcoming' => ['type' => 'boolean', 'description' => 'Alleen toekomstige edities (optioneel)'],
+                ],
+            ],
+            'permission_callback' => fn() => current_user_can('stride_view'),
+            'execute_callback' => [$this, 'exportEditions'],
+            'meta' => [
+                'show_in_rest' => true,
+                'annotations' => ['readonly' => true],
+                'readonly' => true,
+            ],
+        ]);
+
+        // Export enrollments
+        wp_register_ability('stride/export-enrollments', [
+            'label' => 'Inschrijvingen exporteren als CSV',
+            'description' => 'Export enrollments to a CSV file. Returns a signed download link. Filter by edition_id or user_id.',
+            'category' => 'stride',
+            'input_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'edition_id' => ['type' => 'integer', 'description' => 'Filter op editie-ID (optioneel)'],
+                    'user_id' => ['type' => 'integer', 'description' => 'Filter op gebruiker-ID (optioneel)'],
+                    'status' => ['type' => 'string', 'description' => 'Filter op status (optioneel)'],
+                ],
+            ],
+            'permission_callback' => fn() => current_user_can('stride_view'),
+            'execute_callback' => [$this, 'exportEnrollments'],
+            'meta' => [
+                'show_in_rest' => true,
+                'annotations' => ['readonly' => true],
+                'readonly' => true,
+            ],
+        ]);
+
+        // Export attendance
+        wp_register_ability('stride/export-attendance', [
+            'label' => 'Aanwezigheid exporteren als CSV',
+            'description' => 'Export attendance records to a CSV file. Returns a signed download link. Requires edition_id or session_id.',
+            'category' => 'stride',
+            'input_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'edition_id' => ['type' => 'integer', 'description' => 'Editie-ID (optioneel, maar minstens 1 filter vereist)'],
+                    'session_id' => ['type' => 'integer', 'description' => 'Sessie-ID (optioneel)'],
+                ],
+            ],
+            'permission_callback' => fn() => current_user_can('stride_view'),
+            'execute_callback' => [$this, 'exportAttendance'],
             'meta' => [
                 'show_in_rest' => true,
                 'annotations' => ['readonly' => true],
@@ -1084,6 +1150,252 @@ final class ReadAbilityRegistrar extends AbstractService
         }
 
         return $breakdown;
+    }
+
+    // ---------------------------------------------------------------
+    // Execute callbacks — EXPORT
+    // ---------------------------------------------------------------
+
+    /**
+     * Export editions to CSV.
+     *
+     * @param array{course_id?: int, status?: string, upcoming?: bool} $input
+     * @return array<string, mixed>
+     */
+    public function exportEditions(array $input): array
+    {
+        $export = ntdst_get(\NtdstAssistant\ExportService::class);
+        $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
+        $editionRepo = ntdst_get(\Stride\Modules\Edition\EditionRepository::class);
+
+        $courseId = (int) ($input['course_id'] ?? 0);
+
+        if ($courseId > 0) {
+            $raw = $editionService->getEditionsForCourse($courseId);
+        } else {
+            $raw = $editionRepo->findUpcoming($export->getMaxRows());
+        }
+
+        $editionIds = [];
+        foreach ($raw as $item) {
+            $id = (int) ($item['id'] ?? $item['ID'] ?? 0);
+            if ($id > 0) {
+                $editionIds[] = $id;
+            }
+        }
+
+        if (!empty($editionIds)) {
+            update_postmeta_cache($editionIds);
+        }
+
+        $registeredCounts = $this->batchRegisteredCounts($editionIds);
+
+        $rows = [];
+        foreach ($raw as $item) {
+            $id = (int) ($item['id'] ?? $item['ID'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+
+            $meta = $item['meta'] ?? [];
+            $courseName = '';
+            $cid = $editionService->getCourseId($id);
+            if ($cid) {
+                $course = get_post($cid);
+                $courseName = $course ? $course->post_title : '';
+            }
+
+            $rows[] = [
+                $id,
+                $item['title'] ?? $item['post_title'] ?? '',
+                $courseName,
+                $meta['start_date'] ?? $editionRepo->getField($id, 'start_date'),
+                $meta['end_date'] ?? $editionRepo->getField($id, 'end_date'),
+                $editionService->getPrice($id)->format(),
+                $editionService->getCapacity($id),
+                $registeredCounts[$id] ?? 0,
+                $editionService->getStatus($id)->value,
+            ];
+        }
+
+        $result = $export->generateCsv('edities', [
+            'ID', 'Titel', 'Cursus', 'Startdatum', 'Einddatum', 'Prijs', 'Capaciteit', 'Ingeschreven', 'Status',
+        ], $rows);
+
+        $response = [
+            'download_url' => $export->getSignedUrl($result['filename'], get_current_user_id()),
+            'filename' => $result['filename'],
+            'row_count' => $result['row_count'],
+        ];
+
+        if ($result['truncated']) {
+            $response['truncated'] = true;
+            $response['message'] = 'Export afgekapt op 5000 rijen. Gebruik filters om het resultaat te verfijnen.';
+        }
+
+        return $response;
+    }
+
+    /**
+     * Export enrollments to CSV.
+     *
+     * @param array{edition_id?: int, user_id?: int, status?: string} $input
+     * @return array<string, mixed>|\WP_Error
+     */
+    public function exportEnrollments(array $input): array|\WP_Error
+    {
+        $export = ntdst_get(\NtdstAssistant\ExportService::class);
+        $repo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+
+        $editionId = (int) ($input['edition_id'] ?? 0);
+        $userId = (int) ($input['user_id'] ?? 0);
+        $status = $input['status'] ?? null;
+
+        if ($editionId <= 0 && $userId <= 0) {
+            return new \WP_Error('missing_filter', 'Geef edition_id of user_id mee om te filteren.');
+        }
+
+        if ($editionId > 0) {
+            $raw = $repo->findByEdition($editionId, $status);
+        } else {
+            $raw = $repo->findByUser($userId, $status);
+        }
+
+        // Batch-prime user and post caches
+        $userIds = array_unique(array_map(fn($r) => (int) $r->user_id, $raw));
+        $editionIds = array_unique(array_filter(array_map(fn($r) => (int) ($r->edition_id ?? 0), $raw)));
+
+        if (!empty($userIds)) {
+            new \WP_User_Query(['include' => $userIds, 'fields' => 'all_with_meta']);
+        }
+        if (!empty($editionIds)) {
+            _prime_post_caches($editionIds, true, true);
+        }
+
+        $rows = [];
+        foreach ($raw as $reg) {
+            $user = get_userdata((int) $reg->user_id);
+            $edition = get_post((int) ($reg->edition_id ?? 0));
+
+            $rows[] = [
+                (int) $reg->id,
+                $user ? $user->display_name : '(onbekend)',
+                $user ? $user->user_email : '',
+                $edition ? $edition->post_title : '(onbekend)',
+                $reg->status,
+                $reg->registered_at ?? '',
+                $reg->enrollment_path ?? 'individual',
+            ];
+        }
+
+        $result = $export->generateCsv('inschrijvingen', [
+            'ID', 'Gebruiker', 'Email', 'Editie', 'Status', 'Inschrijfdatum', 'Pad',
+        ], $rows);
+
+        $response = [
+            'download_url' => $export->getSignedUrl($result['filename'], get_current_user_id()),
+            'filename' => $result['filename'],
+            'row_count' => $result['row_count'],
+        ];
+
+        if ($result['truncated']) {
+            $response['truncated'] = true;
+            $response['message'] = 'Export afgekapt op 5000 rijen. Gebruik filters om het resultaat te verfijnen.';
+        }
+
+        return $response;
+    }
+
+    /**
+     * Export attendance records to CSV.
+     *
+     * @param array{edition_id?: int, session_id?: int} $input
+     * @return array<string, mixed>|\WP_Error
+     */
+    public function exportAttendance(array $input): array|\WP_Error
+    {
+        $export = ntdst_get(\NtdstAssistant\ExportService::class);
+        $attendance = ntdst_get(\Stride\Modules\Attendance\AttendanceService::class);
+        $sessions = ntdst_get(\Stride\Modules\Edition\SessionService::class);
+
+        $editionId = (int) ($input['edition_id'] ?? 0);
+        $sessionId = (int) ($input['session_id'] ?? 0);
+
+        if ($editionId <= 0 && $sessionId <= 0) {
+            return new \WP_Error('missing_filter', 'Geef edition_id of session_id mee.');
+        }
+
+        $allRecords = [];
+
+        if ($sessionId > 0) {
+            $records = $attendance->getSessionAttendance($sessionId);
+            $session = $sessions->getSession($sessionId);
+            foreach ($records as $record) {
+                $record['session_date'] = $session['date'] ?? '';
+                $record['session_time'] = '';
+                if (!empty($session['start_time']) && !empty($session['end_time'])) {
+                    $record['session_time'] = $session['start_time'] . '-' . $session['end_time'];
+                }
+                $allRecords[] = $record;
+            }
+        } else {
+            $editionSessions = $sessions->getSessionsForEdition($editionId);
+            foreach ($editionSessions as $session) {
+                $sid = (int) $session['id'];
+                $records = $attendance->getSessionAttendance($sid);
+                foreach ($records as $record) {
+                    $record['session_date'] = $session['date'] ?? '';
+                    $record['session_time'] = '';
+                    if (!empty($session['start_time']) && !empty($session['end_time'])) {
+                        $record['session_time'] = $session['start_time'] . '-' . $session['end_time'];
+                    }
+                    $allRecords[] = $record;
+                }
+            }
+        }
+
+        // Batch-hydrate users
+        $userIds = array_unique(array_column($allRecords, 'user_id'));
+        $usersMap = $this->batchLoadUsers($userIds);
+
+        // Resolve marked_by display names
+        $markedByIds = array_unique(array_filter(array_column($allRecords, 'marked_by')));
+        $markedByMap = $this->batchLoadUsers(array_map('intval', $markedByIds));
+
+        $rows = [];
+        foreach ($allRecords as $record) {
+            $uid = (int) $record['user_id'];
+            $user = $usersMap[$uid] ?? null;
+            $markedById = (int) ($record['marked_by'] ?? 0);
+            $markedByUser = $markedByMap[$markedById] ?? null;
+
+            $rows[] = [
+                $user ? $user->display_name : '(onbekend)',
+                $user ? $user->user_email : '',
+                (int) ($record['session_id'] ?? 0),
+                $record['session_date'] ?? '',
+                $record['status'],
+                $markedByUser ? $markedByUser->display_name : '',
+                $record['marked_at'] ?? '',
+            ];
+        }
+
+        $result = $export->generateCsv('aanwezigheid', [
+            'Gebruiker', 'Email', 'Sessie', 'Datum', 'Status', 'Gemarkeerd door', 'Tijdstip',
+        ], $rows);
+
+        $response = [
+            'download_url' => $export->getSignedUrl($result['filename'], get_current_user_id()),
+            'filename' => $result['filename'],
+            'row_count' => $result['row_count'],
+        ];
+
+        if ($result['truncated']) {
+            $response['truncated'] = true;
+            $response['message'] = 'Export afgekapt op 5000 rijen. Gebruik filters om het resultaat te verfijnen.';
+        }
+
+        return $response;
     }
 
     // ---------------------------------------------------------------
