@@ -13,6 +13,7 @@ return [
         \NtdstAssistant\SystemPrompt::class,
         \NtdstAssistant\AbilityBridge::class,
         \NtdstAssistant\ToolExecutor::class,
+        \NtdstAssistant\ExportService::class,
         \NtdstAssistant\ChatController::class,
     ],
     'bindings' => [
