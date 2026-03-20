@@ -291,6 +291,13 @@ if (!function_exists('get_current_user_id')) {
     }
 }
 
+if (!function_exists('get_locale')) {
+    function get_locale(): string
+    {
+        return 'en_US';
+    }
+}
+
 if (!function_exists('wp_update_user')) {
     function wp_update_user(array $userdata)
     {
