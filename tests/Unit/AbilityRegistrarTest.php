@@ -268,39 +268,31 @@ class AbilityRegistrarTest extends TestCase
     }
 
     // =========================================================================
-    // Stub execute callbacks
+    // Execute callbacks (require DI — tested via integration tests)
     // =========================================================================
 
-    public function testGetEditionsReturnsStubMessage(): void
+    public function testGetEnrollmentsRequiresFilter(): void
     {
-        $result = $this->registrar->getEditions([]);
-
-        $this->assertArrayHasKey('message', $result);
-        $this->assertStringContainsString('not yet wired', $result['message']);
-    }
-
-    public function testGetEnrollmentsReturnsStubMessage(): void
-    {
+        // Without edition_id or user_id, returns guidance message
         $result = $this->registrar->getEnrollments([]);
 
+        $this->assertArrayHasKey('enrollments', $result);
+        $this->assertEmpty($result['enrollments']);
         $this->assertArrayHasKey('message', $result);
-        $this->assertStringContainsString('not yet wired', $result['message']);
     }
 
-    public function testEnrollUserReturnsStubMessage(): void
+    public function testEnrollUserValidatesInput(): void
     {
-        $result = $this->registrar->enrollUser(['user_id' => 1, 'edition_id' => 2]);
+        $result = $this->registrar->enrollUser(['user_id' => 0, 'edition_id' => 0]);
 
-        $this->assertArrayHasKey('message', $result);
-        $this->assertStringContainsString('not yet wired', $result['message']);
+        $this->assertInstanceOf(\WP_Error::class, $result);
     }
 
-    public function testUnenrollUserReturnsStubMessage(): void
+    public function testUnenrollUserValidatesInput(): void
     {
-        $result = $this->registrar->unenrollUser(['user_id' => 1, 'edition_id' => 2]);
+        $result = $this->registrar->unenrollUser(['user_id' => 0, 'edition_id' => 0]);
 
-        $this->assertArrayHasKey('message', $result);
-        $this->assertStringContainsString('not yet wired', $result['message']);
+        $this->assertInstanceOf(\WP_Error::class, $result);
     }
 
     // =========================================================================

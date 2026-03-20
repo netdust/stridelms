@@ -314,31 +314,91 @@ final class AbilityRegistrar extends AbstractService
     }
 
     /**
-     * Get editions — v1 stub.
+     * List editions with optional filters.
      *
-     * @param array<string, mixed> $input
-     * @return array{message: string}
+     * @param array{course_id?: int, status?: string, upcoming?: bool, per_page?: int} $input
+     * @return array{editions: array<array<string, mixed>>}
      */
     public function getEditions(array $input): array
     {
-        // TODO: Wire to EditionRepository::findUpcoming / findByCourse with filters
-        return [
-            'message' => 'stride/get-editions is registered but not yet wired to data. This will be implemented in a follow-up task.',
-        ];
+        $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
+        $editionRepo = ntdst_get(\Stride\Modules\Edition\EditionRepository::class);
+        $perPage = min(50, max(1, (int) ($input['per_page'] ?? 20)));
+
+        $courseId = (int) ($input['course_id'] ?? 0);
+        $upcoming = (bool) ($input['upcoming'] ?? false);
+
+        if ($courseId > 0) {
+            $raw = $editionService->getEditionsForCourse($courseId);
+        } elseif ($upcoming) {
+            $raw = $editionRepo->findUpcoming($perPage);
+        } else {
+            $raw = $editionRepo->findUpcoming($perPage);
+        }
+
+        $editions = [];
+        foreach (array_slice($raw, 0, $perPage) as $item) {
+            $id = (int) ($item['id'] ?? $item['ID'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+
+            $editions[] = [
+                'id' => $id,
+                'title' => $item['title'] ?? $item['post_title'] ?? '',
+                'status' => $editionService->getStatus($id)->value,
+                'start_date' => $editionRepo->getField($id, 'start_date'),
+                'end_date' => $editionRepo->getField($id, 'end_date'),
+                'venue' => $editionRepo->getField($id, 'venue'),
+                'capacity' => $editionService->getCapacity($id),
+                'registered' => $editionService->getRegisteredCount($id),
+                'can_enroll' => $editionService->canEnroll($id),
+            ];
+        }
+
+        return ['editions' => $editions];
     }
 
     /**
-     * Get enrollments — v1 stub.
+     * List enrollments by edition or user.
      *
-     * @param array<string, mixed> $input
-     * @return array{message: string}
+     * @param array{edition_id?: int, user_id?: int, status?: string} $input
+     * @return array{enrollments: array<array<string, mixed>>}
      */
     public function getEnrollments(array $input): array
     {
-        // TODO: Wire to RegistrationRepository::findByEdition / findByUser with filters
-        return [
-            'message' => 'stride/get-enrollments is registered but not yet wired to data. This will be implemented in a follow-up task.',
-        ];
+        $repo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+
+        $editionId = (int) ($input['edition_id'] ?? 0);
+        $userId = (int) ($input['user_id'] ?? 0);
+        $status = $input['status'] ?? null;
+
+        if ($editionId > 0) {
+            $raw = $repo->findByEdition($editionId, $status);
+        } elseif ($userId > 0) {
+            $raw = $repo->findByUser($userId, $status);
+        } else {
+            return ['enrollments' => [], 'message' => 'Provide edition_id or user_id to filter enrollments.'];
+        }
+
+        $enrollments = [];
+        foreach ($raw as $reg) {
+            $user = get_userdata((int) $reg->user_id);
+            $edition = get_post((int) ($reg->edition_id ?? 0));
+
+            $enrollments[] = [
+                'id' => (int) $reg->id,
+                'user_id' => (int) $reg->user_id,
+                'user_name' => $user ? $user->display_name : '(onbekend)',
+                'edition_id' => (int) ($reg->edition_id ?? 0),
+                'edition_title' => $edition ? $edition->post_title : '(onbekend)',
+                'status' => $reg->status,
+                'registered_at' => $reg->registered_at ?? null,
+                'enrollment_path' => $reg->enrollment_path ?? 'individual',
+            ];
+        }
+
+        return ['enrollments' => $enrollments];
     }
 
     // ---------------------------------------------------------------
@@ -346,30 +406,89 @@ final class AbilityRegistrar extends AbstractService
     // ---------------------------------------------------------------
 
     /**
-     * Enroll user — v1 stub.
+     * Enroll a user in an edition.
      *
      * @param array{user_id: int, edition_id: int} $input
-     * @return array{message: string}
+     * @return array{registration_id: int, status: string}|\WP_Error
      */
-    public function enrollUser(array $input): array
+    public function enrollUser(array $input): array|\WP_Error
     {
-        // TODO: Wire to EnrollmentService to create registration + grant LearnDash access
+        $userId = (int) ($input['user_id'] ?? 0);
+        $editionId = (int) ($input['edition_id'] ?? 0);
+
+        if ($userId <= 0 || $editionId <= 0) {
+            return new \WP_Error('invalid_input', 'user_id and edition_id are required.');
+        }
+
+        $enrollmentService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class);
+
+        $result = $enrollmentService->enroll($userId, $editionId, [
+            'enrollment_path' => 'individual',
+            'enrolled_by' => get_current_user_id(),
+            'notes' => 'Ingeschreven via Stride Assistant',
+        ]);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        $user = get_userdata($userId);
+        $edition = get_post($editionId);
+
         return [
-            'message' => 'stride/enroll-user is registered but not yet wired. This will be implemented in a follow-up task.',
+            'registration_id' => $result,
+            'status' => 'confirmed',
+            'user_name' => $user ? $user->display_name : '(onbekend)',
+            'edition_title' => $edition ? $edition->post_title : '(onbekend)',
+            'message' => sprintf(
+                '%s is ingeschreven voor %s. LearnDash-toegang is verleend.',
+                $user ? $user->display_name : "Gebruiker #{$userId}",
+                $edition ? $edition->post_title : "Editie #{$editionId}",
+            ),
         ];
     }
 
     /**
-     * Unenroll user — v1 stub.
+     * Unenroll a user from an edition.
      *
      * @param array{user_id: int, edition_id: int} $input
-     * @return array{message: string}
+     * @return array{cancelled: bool, message: string}|\WP_Error
      */
-    public function unenrollUser(array $input): array
+    public function unenrollUser(array $input): array|\WP_Error
     {
-        // TODO: Wire to EnrollmentService to cancel registration + revoke LearnDash access
+        $userId = (int) ($input['user_id'] ?? 0);
+        $editionId = (int) ($input['edition_id'] ?? 0);
+
+        if ($userId <= 0 || $editionId <= 0) {
+            return new \WP_Error('invalid_input', 'user_id and edition_id are required.');
+        }
+
+        $repo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+        $enrollmentService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class);
+
+        $registration = $repo->findByUserAndEdition($userId, $editionId);
+
+        if (!$registration) {
+            return new \WP_Error('not_found', 'Geen inschrijving gevonden voor deze gebruiker en editie.');
+        }
+
+        $result = $enrollmentService->cancel((int) $registration->id);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        $user = get_userdata($userId);
+        $edition = get_post($editionId);
+
         return [
-            'message' => 'stride/unenroll-user is registered but not yet wired. This will be implemented in a follow-up task.',
+            'cancelled' => true,
+            'registration_id' => (int) $registration->id,
+            'message' => sprintf(
+                '%s is uitgeschreven uit %s. LearnDash-toegang is ingetrokken.',
+                $user ? $user->display_name : "Gebruiker #{$userId}",
+                $edition ? $edition->post_title : "Editie #{$editionId}",
+            ),
         ];
     }
 
