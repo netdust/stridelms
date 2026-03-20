@@ -34,7 +34,8 @@ class ConversationStore implements \NTDST_Service_Meta
 
         $messages = $this->get($userId);
         $messages[] = $message;
-        set_transient(self::CONV_PREFIX . $userId, $messages, self::TTL);
+        $result = set_transient(self::CONV_PREFIX . $userId, $messages, self::TTL);
+        error_log("[ntdst-assistant] append: role={$message['role']}, total=" . count($messages) . ", set_transient=" . ($result ? 'true' : 'false'));
     }
 
     public function clear(int $userId): void
