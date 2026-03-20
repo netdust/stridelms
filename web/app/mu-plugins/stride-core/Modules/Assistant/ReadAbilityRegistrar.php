@@ -10,7 +10,7 @@ use Stride\Infrastructure\AbstractService;
  * Registers Stride read-only abilities for the AI assistant.
  *
  * Owns:
- * - 4 read abilities: search-users, get-edition, get-editions, get-enrollments
+ * - 5 read abilities: search-users, get-edition, get-editions, get-enrollments, get-stats
  * - Category registration (stride)
  * - System prompt injection (domain + formatting prompts)
  */
@@ -166,6 +166,33 @@ final class ReadAbilityRegistrar extends AbstractService
             ],
             'permission_callback' => fn() => current_user_can('stride_view'),
             'execute_callback' => [$this, 'getEnrollments'],
+            'meta' => [
+                'show_in_rest' => true,
+                'annotations' => ['readonly' => true],
+                'readonly' => true,
+            ],
+        ]);
+
+        // Get statistics
+        wp_register_ability('stride/get-stats', [
+            'label' => 'Statistieken ophalen',
+            'description' => 'Get aggregated statistics for an edition, course, or globally. Returns enrollment counts, fill rate, attendance rate, and completion rate (edition scope only).',
+            'category' => 'stride',
+            'input_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'edition_id' => [
+                        'type' => 'integer',
+                        'description' => 'Specifieke editie (optioneel)',
+                    ],
+                    'course_id' => [
+                        'type' => 'integer',
+                        'description' => 'Cursus-ID om edities te filteren (optioneel)',
+                    ],
+                ],
+            ],
+            'permission_callback' => fn() => current_user_can('stride_view'),
+            'execute_callback' => [$this, 'getStats'],
             'meta' => [
                 'show_in_rest' => true,
                 'annotations' => ['readonly' => true],
@@ -427,6 +454,279 @@ final class ReadAbilityRegistrar extends AbstractService
         }
 
         return ['enrollments' => $enrollments];
+    }
+
+    /**
+     * Get aggregated statistics for an edition, course, or globally.
+     *
+     * @param array{edition_id?: int, course_id?: int} $input
+     * @return array<string, mixed>
+     */
+    public function getStats(array $input): array
+    {
+        $editionId = (int) ($input['edition_id'] ?? 0);
+        $courseId = (int) ($input['course_id'] ?? 0);
+
+        if ($editionId > 0) {
+            return $this->getEditionStats($editionId);
+        }
+        if ($courseId > 0) {
+            return $this->getCourseStats($courseId);
+        }
+        return $this->getGlobalStats();
+    }
+
+    /**
+     * Statistics for a single edition.
+     */
+    private function getEditionStats(int $editionId): array
+    {
+        $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
+        $regRepo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+        $attendance = ntdst_get(\Stride\Modules\Attendance\AttendanceService::class);
+
+        $edition = $editionService->getEdition($editionId);
+        if (is_wp_error($edition)) {
+            return [
+                'scope' => 'edition',
+                'edition_count' => 0,
+                'total_enrolled' => 0,
+                'total_capacity' => 0,
+                'fill_rate' => null,
+                'status_breakdown' => [],
+                'average_attendance_rate' => null,
+                'completion_rate' => null,
+                'message' => 'Editie niet gevonden.',
+            ];
+        }
+
+        $capacity = $editionService->getCapacity($editionId);
+        $registrations = $regRepo->findByEdition($editionId);
+
+        // Status breakdown
+        $statusBreakdown = [];
+        foreach ($registrations as $reg) {
+            $status = $reg->status;
+            $statusBreakdown[$status] = ($statusBreakdown[$status] ?? 0) + 1;
+        }
+
+        $enrolled = $editionService->getRegisteredCount($editionId);
+        $fillRate = $capacity > 0 ? round(($enrolled / $capacity) * 100, 1) : null;
+
+        // Attendance rate — average across confirmed users
+        $confirmed = $regRepo->findByEdition($editionId, 'confirmed');
+        $attendanceRate = null;
+        if (!empty($confirmed)) {
+            $sessionCount = ntdst_get(\Stride\Modules\Edition\SessionService::class)->getSessionCount($editionId);
+            if ($sessionCount > 0) {
+                $totalRate = 0.0;
+                foreach ($confirmed as $reg) {
+                    $totalRate += $attendance->getAttendanceRate((int) $reg->user_id, $editionId);
+                }
+                $attendanceRate = round($totalRate / count($confirmed), 1);
+            }
+        }
+
+        // Completion rate — edition scope only
+        $completionRate = null;
+        $courseId = $editionService->getCourseId($editionId);
+        if ($courseId && !empty($confirmed)) {
+            $complete = 0;
+            foreach ($confirmed as $reg) {
+                if (\Stride\Integrations\LearnDash\LearnDashHelper::isComplete($courseId, (int) $reg->user_id)) {
+                    $complete++;
+                }
+            }
+            $completionRate = round(($complete / count($confirmed)) * 100, 1);
+        }
+
+        return [
+            'scope' => 'edition',
+            'edition_count' => 1,
+            'total_enrolled' => $enrolled,
+            'total_capacity' => $capacity,
+            'fill_rate' => $fillRate,
+            'status_breakdown' => $statusBreakdown,
+            'average_attendance_rate' => $attendanceRate,
+            'completion_rate' => $completionRate,
+            '_links' => [
+                'edition_edit' => admin_url("post.php?post={$editionId}&action=edit"),
+            ],
+        ];
+    }
+
+    /**
+     * Statistics aggregated across all editions of a course.
+     */
+    private function getCourseStats(int $courseId): array
+    {
+        $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
+        $editions = $editionService->getEditionsForCourse($courseId);
+
+        if (empty($editions)) {
+            return [
+                'scope' => 'course',
+                'edition_count' => 0,
+                'total_enrolled' => 0,
+                'total_capacity' => 0,
+                'fill_rate' => null,
+                'status_breakdown' => [],
+                'average_attendance_rate' => null,
+                'message' => 'Geen edities gevonden.',
+            ];
+        }
+
+        return $this->aggregateEditionStats($editions, 'course');
+    }
+
+    /**
+     * Global statistics across recent editions.
+     */
+    private function getGlobalStats(): array
+    {
+        $editionRepo = ntdst_get(\Stride\Modules\Edition\EditionRepository::class);
+        $editions = $editionRepo->findUpcoming(100);
+
+        if (empty($editions)) {
+            return [
+                'scope' => 'global',
+                'edition_count' => 0,
+                'total_enrolled' => 0,
+                'total_capacity' => 0,
+                'fill_rate' => null,
+                'status_breakdown' => [],
+                'average_attendance_rate' => null,
+                'message' => 'Geen edities gevonden.',
+            ];
+        }
+
+        return $this->aggregateEditionStats($editions, 'global');
+    }
+
+    /**
+     * Aggregate statistics across a set of editions.
+     *
+     * @param array<array<string, mixed>> $editions Raw edition rows from repository
+     * @param string $scope 'course' or 'global'
+     * @return array<string, mixed>
+     */
+    private function aggregateEditionStats(array $editions, string $scope): array
+    {
+        $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
+        $attendance = ntdst_get(\Stride\Modules\Attendance\AttendanceService::class);
+        $regRepo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+
+        $editionIds = [];
+        $totalCapacity = 0;
+        $hasCapacity = false;
+
+        foreach ($editions as $item) {
+            $id = (int) ($item['id'] ?? $item['ID'] ?? 0);
+            if ($id > 0) {
+                $editionIds[] = $id;
+                $cap = (int) ($item['meta']['capacity'] ?? $editionService->getCapacity($id));
+                $totalCapacity += $cap;
+                if ($cap > 0) {
+                    $hasCapacity = true;
+                }
+            }
+        }
+
+        if (empty($editionIds)) {
+            return [
+                'scope' => $scope,
+                'edition_count' => 0,
+                'total_enrolled' => 0,
+                'total_capacity' => 0,
+                'fill_rate' => null,
+                'status_breakdown' => [],
+                'average_attendance_rate' => null,
+                'message' => 'Geen edities gevonden.',
+            ];
+        }
+
+        // Prime post meta cache
+        update_postmeta_cache($editionIds);
+
+        // Batch registration counts
+        $registeredCounts = $this->batchRegisteredCounts($editionIds);
+        $totalEnrolled = array_sum($registeredCounts);
+
+        // Status breakdown across all editions — single batch query
+        $statusBreakdown = $this->batchStatusBreakdown($editionIds);
+
+        // Fill rate
+        $fillRate = ($hasCapacity && $totalCapacity > 0)
+            ? round(($totalEnrolled / $totalCapacity) * 100, 1)
+            : null;
+
+        // Attendance rate — average per edition, then average across editions
+        $sessionService = ntdst_get(\Stride\Modules\Edition\SessionService::class);
+        $attendanceRates = [];
+
+        foreach ($editionIds as $id) {
+            $sessionCount = $sessionService->getSessionCount($id);
+            if ($sessionCount === 0) {
+                continue;
+            }
+
+            $confirmed = $regRepo->findByEdition($id, 'confirmed');
+            if (empty($confirmed)) {
+                continue;
+            }
+
+            $editionRate = 0.0;
+            foreach ($confirmed as $reg) {
+                $editionRate += $attendance->getAttendanceRate((int) $reg->user_id, $id);
+            }
+            $attendanceRates[] = $editionRate / count($confirmed);
+        }
+
+        $averageAttendanceRate = !empty($attendanceRates)
+            ? round(array_sum($attendanceRates) / count($attendanceRates), 1)
+            : null;
+
+        return [
+            'scope' => $scope,
+            'edition_count' => count($editionIds),
+            'total_enrolled' => $totalEnrolled,
+            'total_capacity' => $totalCapacity,
+            'fill_rate' => $fillRate,
+            'status_breakdown' => $statusBreakdown,
+            'average_attendance_rate' => $averageAttendanceRate,
+        ];
+    }
+
+    /**
+     * Batch count registrations by status for multiple editions in a single query.
+     *
+     * @param array<int> $editionIds
+     * @return array<string, int> Map of status => count
+     */
+    private function batchStatusBreakdown(array $editionIds): array
+    {
+        if (empty($editionIds)) {
+            return [];
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'vad_registrations';
+        $ids = implode(',', array_map('intval', $editionIds));
+
+        $results = $wpdb->get_results(
+            "SELECT status, COUNT(*) as cnt
+             FROM {$table}
+             WHERE edition_id IN ({$ids})
+             GROUP BY status",
+            ARRAY_A
+        );
+
+        $breakdown = [];
+        foreach ($results as $row) {
+            $breakdown[$row['status']] = (int) $row['cnt'];
+        }
+
+        return $breakdown;
     }
 
     // ---------------------------------------------------------------
