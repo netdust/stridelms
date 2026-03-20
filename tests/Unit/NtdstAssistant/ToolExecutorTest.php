@@ -207,7 +207,7 @@ class ToolExecutorTest extends TestCase
     {
         $client = $this->createMock(ClaudeClientInterface::class);
         $client->method('send')
-            ->willThrowException(new \RuntimeException('Rate limited', 429));
+            ->willThrowException(new \RuntimeException('429: Rate limited'));
 
         $executor = new ToolExecutor($client, $this->bridge, $this->store, $this->prompt);
         $result = $executor->run('Hello', $this->adminUserId);

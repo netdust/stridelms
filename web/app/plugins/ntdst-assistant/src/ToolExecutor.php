@@ -234,13 +234,22 @@ class ToolExecutor implements \NTDST_Service_Meta
                 ]);
             }
 
-            // If a confirmation was triggered, return it now
+            // If a confirmation was triggered, store tool_use_id in pending and return
             if ($confirmationResult !== null) {
+                $toolUseId = $toolUseBlocks[$confirmationIndex]['id'];
+
+                // Add tool_use_id to the pending state so /confirm can use it
+                $pending = $this->store->getPending($adminUserId);
+                if ($pending) {
+                    $pending['tool_use_id'] = $toolUseId;
+                    $this->store->setPending($adminUserId, $pending);
+                }
+
                 return [
                     'type'          => 'confirmation',
                     'confirm_token' => $confirmationResult['confirm_token'],
                     'summary'       => $confirmationResult['summary'],
-                    'tool_use_id'   => $toolUseBlocks[$confirmationIndex]['id'],
+                    'tool_use_id'   => $toolUseId,
                     'text'          => $this->extractText($textBlocks),
                 ];
             }
