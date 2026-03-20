@@ -175,7 +175,12 @@ class AbilityBridge implements \NTDST_Service_Meta
 
         $result = $ability->execute($input);
 
-        do_action('ntdst_assistant/after_execute', $ability->get_name(), $input, $result);
+        $meta = [
+            'source'   => 'chat',
+            'readonly' => (bool) $ability->get_meta_item('readonly', false),
+        ];
+
+        do_action('ntdst_assistant/after_execute', $ability->get_name(), $input, $result, $meta);
 
         return [
             'status' => 'executed',
