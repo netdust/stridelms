@@ -282,9 +282,12 @@ Changes to `assets/js/assistant.js`:
 ```php
 class ExportService implements \NTDST_Service_Meta
 {
-    public function generateCsv(string $filename, array $headers, array $rows): string;
-    public function getSignedUrl(string $filepath, int $userId): string;
+    public function generateCsv(string $prefix, array $headers, array $rows): array;
+        // Returns: {filepath: string, filename: string, row_count: int, truncated: bool}
+    public function getSignedUrl(string $filename, int $userId): string;
     public function verifySignedUrl(string $file, string $token, int $expires, int $userId): bool;
+    public function resolveFilePath(string $file): string|false;
+        // basename() + realpath() validation for path traversal prevention
     public function cleanup(): void;
 }
 ```
@@ -294,7 +297,7 @@ class ExportService implements \NTDST_Service_Meta
 - `verifySignedUrl()`: validates HMAC + expiry + userId match.
 - `cleanup()`: deletes files older than 1 hour. Called by cron.
 
-**Cron:** Register `stride_cleanup_exports` event on plugin activation, hourly schedule. Deregister on deactivation.
+**Cron:** Register `ntdst_assistant_cleanup_exports` event on plugin activation, hourly schedule. Deregister on deactivation.
 
 ### 3.2 Download Endpoint
 

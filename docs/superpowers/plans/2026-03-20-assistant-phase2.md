@@ -37,7 +37,7 @@
 | `stride-core/plugin-config.php:45` | Replace AbilityRegistrar with Read/Write |
 | `src/ToolExecutor.php:135-188` | Add `$downloads` accumulator in loop |
 | `src/ChatController.php` | Add `/clear` + `/download` endpoints, `created_at` |
-| `src/Transport/JsonTransport.php:11-27` | Pass through `downloads` array |
+| `src/Transport/JsonTransport.php` | No changes needed — `wp_send_json()` passes `downloads` through |
 | `plugin-config.php` | Register ExportService |
 | `ntdst-assistant.php` | Cron registration on activation |
 | `assets/css/assistant.css` | Full visual overhaul |
@@ -52,7 +52,8 @@
 
 **Files:**
 - Create: `web/app/mu-plugins/stride-core/Modules/Assistant/ReadAbilityRegistrar.php`
-- Modify: `web/app/mu-plugins/stride-core/plugin-config.php:45`
+
+**Note:** Do NOT update `plugin-config.php` yet — that happens in Task 2 after both registrars exist, so every commit leaves the site bootable.
 
 - [ ] **Step 1: Create ReadAbilityRegistrar with existing 4 read abilities**
 
@@ -99,18 +100,7 @@ final class ReadAbilityRegistrar extends AbstractService
 }
 ```
 
-- [ ] **Step 2: Update stride-core plugin-config.php**
-
-Replace line 45:
-```php
-// Old:
-\Stride\Modules\Assistant\AbilityRegistrar::class,
-// New:
-\Stride\Modules\Assistant\ReadAbilityRegistrar::class,
-\Stride\Modules\Assistant\WriteAbilityRegistrar::class,
-```
-
-- [ ] **Step 3: Verify read abilities load**
+- [ ] **Step 2: Verify class loads**
 
 ```bash
 ddev exec wp eval "echo class_exists('\Stride\Modules\Assistant\ReadAbilityRegistrar') ? 'OK' : 'FAIL';"
@@ -118,10 +108,10 @@ ddev exec wp eval "echo class_exists('\Stride\Modules\Assistant\ReadAbilityRegis
 
 Expected: `OK`
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-git add web/app/mu-plugins/stride-core/Modules/Assistant/ReadAbilityRegistrar.php web/app/mu-plugins/stride-core/plugin-config.php
+git add web/app/mu-plugins/stride-core/Modules/Assistant/ReadAbilityRegistrar.php
 git commit -m "refactor(assistant): extract ReadAbilityRegistrar from AbilityRegistrar"
 ```
 
@@ -129,6 +119,9 @@ git commit -m "refactor(assistant): extract ReadAbilityRegistrar from AbilityReg
 
 **Files:**
 - Create: `web/app/mu-plugins/stride-core/Modules/Assistant/WriteAbilityRegistrar.php`
+- Modify: `web/app/mu-plugins/stride-core/plugin-config.php:45`
+- Delete: `web/app/mu-plugins/stride-core/Modules/Assistant/AbilityRegistrar.php`
+- Delete: `tests/Unit/AbilityRegistrarTest.php`
 
 - [ ] **Step 1: Create WriteAbilityRegistrar with existing 2 write abilities**
 
@@ -137,6 +130,7 @@ Move from `AbilityRegistrar`:
 - `enrollUser()`, `unenrollUser()` callbacks
 - `describeEnrollInput()`, `describeUnenrollInput()` callbacks
 - `resolveUserName()`, `resolveEditionTitle()` helpers
+- Uses `ntdst_get()` inline for DI (thin-handler pattern, same as existing code)
 
 ```php
 <?php
@@ -171,13 +165,25 @@ final class WriteAbilityRegistrar extends AbstractService
 }
 ```
 
-- [ ] **Step 2: Delete the old AbilityRegistrar.php**
+- [ ] **Step 2: Update stride-core plugin-config.php**
+
+Replace line 45:
+```php
+// Old:
+\Stride\Modules\Assistant\AbilityRegistrar::class,
+// New:
+\Stride\Modules\Assistant\ReadAbilityRegistrar::class,
+\Stride\Modules\Assistant\WriteAbilityRegistrar::class,
+```
+
+- [ ] **Step 3: Delete old AbilityRegistrar and its test**
 
 ```bash
 rm web/app/mu-plugins/stride-core/Modules/Assistant/AbilityRegistrar.php
+rm tests/Unit/AbilityRegistrarTest.php
 ```
 
-- [ ] **Step 3: Verify both registrars load and old one is gone**
+- [ ] **Step 4: Verify both registrars load and old one is gone**
 
 ```bash
 ddev exec wp eval "
@@ -191,11 +197,11 @@ echo class_exists('\Stride\Modules\Assistant\AbilityRegistrar') ? 'OLD STILL EXI
 
 Expected: `Read OK | Write OK | Old gone OK`
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add -A web/app/mu-plugins/stride-core/Modules/Assistant/
-git commit -m "refactor(assistant): extract WriteAbilityRegistrar, delete old AbilityRegistrar"
+git add -A web/app/mu-plugins/stride-core/Modules/Assistant/ web/app/mu-plugins/stride-core/plugin-config.php tests/Unit/AbilityRegistrarTest.php
+git commit -m "refactor(assistant): extract WriteAbilityRegistrar, delete old AbilityRegistrar + test"
 ```
 
 ### Task 3: Add `_links` to existing read abilities
@@ -611,8 +617,13 @@ Changes to existing methods:
 - `send()`: add `created_at: new Date().toISOString()` to user message. Reset textarea height after send.
 - `handleResponse(data)`: add `created_at: data.created_at` to all message types. Add `downloads: data.downloads || []` to assistant messages. Handle expired confirmation: if error received after confirm, find last confirmation message and set `msg.expired = true`.
 - `confirm()`: on error, mark last confirmation message as expired.
-- `init()`: start `timestampInterval = setInterval(() => this.$forceUpdate?.(), 30000)` for timestamp refresh.
+- `copyMessage(msg)`: wrap `navigator.clipboard.writeText()` in try/catch. On catch, log to console silently.
+- `init()`: start `timestampInterval = setInterval(() => this.$forceUpdate?.(), 30000)`. Check `navigator.clipboard` availability, set `canCopy: !!navigator.clipboard` property.
 - `destroy()`: clear interval.
+
+Template bindings to add:
+- Textarea: `@keydown.escape="$event.target.blur()"` for Escape key
+- Copy button: only shown when `canCopy` is true (hidden on non-HTTPS dev environments)
 
 - [ ] **Step 2: Commit**
 
@@ -682,12 +693,14 @@ register_rest_route(self::NAMESPACE, '/clear', [
 
 - [ ] **Step 2: Implement `handleClear()` method**
 
+Use `$this->transport->deliver()` for consistency with other handlers:
+
 ```php
 public function handleClear(WP_REST_Request $request): void
 {
     $userId = get_current_user_id();
     $this->store->clear($userId);
-    wp_send_json(['cleared' => true]);
+    $this->transport->deliver(['type' => 'cleared', 'cleared' => true]);
 }
 ```
 
@@ -1161,6 +1174,7 @@ Expected: No errors. Fix all issues before proceeding.
 **Test files to create/update:**
 - `tests/Unit/NtdstAssistant/ExportServiceTest.php` — CSV generation, signed URLs, path traversal prevention, cleanup
 - `tests/Unit/NtdstAssistant/ToolExecutorTest.php` — Update existing: add test for download accumulation
+- `tests/Unit/NtdstAssistant/ChatControllerTest.php` — handleClear, handleDownload (valid/expired/path-traversal/404)
 - `tests/Unit/ReadAbilityRegistrarTest.php` — get-stats, get-attendance, export callbacks
 - `tests/Unit/WriteAbilityRegistrarTest.php` — mark-attendance validation, bulk logic
 
