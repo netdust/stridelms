@@ -397,31 +397,34 @@ class ToolExecutorTest extends TestCase
         $executor = new ToolExecutor($client, $this->bridge, $this->store, $this->prompt);
         $result = $executor->run('Do both things', $this->adminUserId);
 
-        // Write ability should trigger confirmation, second tool should be unprocessed
+        // Write ability should trigger confirmation
         $this->assertSame('confirmation', $result['type']);
 
-        // Verify that tool_result messages were stored for BOTH tool_use blocks
+        // The write tool_use should NOT have a tool_result stored yet
+        // (it gets added by runConfirmed to avoid duplicates).
+        // The assistant message should be filtered to exclude the write tool_use.
         $messages = $this->store->get($this->adminUserId);
-        $toolResultMessages = array_filter($messages, fn($m) => $m['role'] === 'user');
 
-        // Find the tool_result entries in the last user message
-        $lastUserMsg = null;
-        foreach (array_reverse($messages) as $msg) {
-            if ($msg['role'] === 'user' && is_array($msg['content'] ?? null)) {
-                $lastUserMsg = $msg;
-                break;
+        // Find assistant messages with tool_use content
+        $assistantToolUseIds = [];
+        foreach ($messages as $msg) {
+            if ($msg['role'] === 'assistant' && is_array($msg['content'] ?? null)) {
+                foreach ($msg['content'] as $block) {
+                    if (($block['type'] ?? '') === 'tool_use') {
+                        $assistantToolUseIds[] = $block['id'];
+                    }
+                }
             }
         }
 
-        $this->assertNotNull($lastUserMsg, 'Should have a user message with tool_result content blocks');
+        // The write tool_use should NOT be in stored assistant messages
+        $this->assertNotContains('toolu_write', $assistantToolUseIds);
+        // The read-after tool should also NOT be stored (it was never processed)
+        $this->assertNotContains('toolu_read_after', $assistantToolUseIds);
 
-        $toolResultIds = array_map(
-            fn($block) => $block['tool_use_id'],
-            array_filter($lastUserMsg['content'], fn($b) => $b['type'] === 'tool_result')
-        );
-
-        $this->assertContains('toolu_write', $toolResultIds);
-        $this->assertContains('toolu_read_after', $toolResultIds);
+        // The pending state should contain the tool_use_id
+        $pending = $this->store->getPending($this->adminUserId);
+        $this->assertSame('toolu_write', $pending['tool_use_id']);
     }
 
     // ---------------------------------------------------------------

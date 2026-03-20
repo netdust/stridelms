@@ -56,6 +56,9 @@ class ToolExecutor implements \NTDST_Service_Meta
      */
     public function runConfirmed(string $token, int $adminUserId, string $toolUseId): array
     {
+        // Get pending state (contains assistant_content with the write tool_use)
+        $pending = $this->store->getPending($adminUserId);
+
         $execResult = $this->bridge->executeConfirmed($adminUserId, $token);
 
         if ($execResult instanceof \WP_Error) {
@@ -65,14 +68,31 @@ class ToolExecutor implements \NTDST_Service_Meta
             ];
         }
 
-        // Append tool_result for the confirmed action
+        // Reconstruct: add the assistant message with ONLY the write tool_use block
+        // (read tool_uses were already stored in the filtered message during run())
+        $writeToolUse = null;
+        foreach (($pending['assistant_content'] ?? []) as $block) {
+            if (($block['type'] ?? '') === 'tool_use' && ($block['id'] ?? '') === $toolUseId) {
+                $writeToolUse = $block;
+                break;
+            }
+        }
+
+        if ($writeToolUse) {
+            $this->store->append($adminUserId, [
+                'role'    => 'assistant',
+                'content' => [$writeToolUse],
+            ]);
+        }
+
+        // Append the real tool_result
         $this->store->append($adminUserId, [
             'role'    => 'user',
             'content' => [
                 [
                     'type'        => 'tool_result',
                     'tool_use_id' => $toolUseId,
-                    'content'     => json_encode($execResult['result']),
+                    'content'     => json_encode($execResult['result'] ?? $execResult),
                 ],
             ],
         ]);
@@ -164,13 +184,7 @@ class ToolExecutor implements \NTDST_Service_Meta
                 ];
             }
 
-            // Has tool_use blocks: store full assistant content
-            $this->store->append($adminUserId, [
-                'role'    => 'assistant',
-                'content' => $contentBlocks,
-            ]);
-
-            // Process tool_use blocks
+            // Process tool_use blocks before storing assistant message
             $toolResults        = [];
             $confirmationResult = null;
             $confirmationIndex  = null;
@@ -182,7 +196,6 @@ class ToolExecutor implements \NTDST_Service_Meta
                 $execResult = $this->bridge->execute($wpName, $input);
 
                 if ($execResult instanceof \WP_Error) {
-                    // Permission denied or unknown ability
                     $toolResults[] = [
                         'type'        => 'tool_result',
                         'tool_use_id' => $toolUse['id'],
@@ -193,32 +206,11 @@ class ToolExecutor implements \NTDST_Service_Meta
                 }
 
                 if ($execResult['status'] === 'pending_confirmation') {
-                    // Write ability: stop processing, return confirmation
                     $confirmationResult = $execResult;
                     $confirmationIndex  = $idx;
-
-                    // Add awaiting result for this tool
-                    $toolResults[] = [
-                        'type'        => 'tool_result',
-                        'tool_use_id' => $toolUse['id'],
-                        'content'     => json_encode(['status' => 'awaiting_confirmation']),
-                        'is_error'    => false,
-                    ];
-
-                    // Add error results for all remaining unprocessed tool_use blocks
-                    for ($j = $idx + 1; $j < count($toolUseBlocks); $j++) {
-                        $toolResults[] = [
-                            'type'        => 'tool_result',
-                            'tool_use_id' => $toolUseBlocks[$j]['id'],
-                            'content'     => json_encode(['error' => 'Action paused pending confirmation']),
-                            'is_error'    => true,
-                        ];
-                    }
-
                     break;
                 }
 
-                // Readonly ability: executed successfully
                 $toolResults[] = [
                     'type'        => 'tool_result',
                     'tool_use_id' => $toolUse['id'],
@@ -226,22 +218,44 @@ class ToolExecutor implements \NTDST_Service_Meta
                 ];
             }
 
-            // Store tool results
-            if (!empty($toolResults)) {
-                $this->store->append($adminUserId, [
-                    'role'    => 'user',
-                    'content' => $toolResults,
-                ]);
-            }
-
-            // If a confirmation was triggered, store tool_use_id in pending and return
+            // If confirmation triggered: only store the content blocks that have results
+            // Strip the write tool_use and anything after it from the assistant message
             if ($confirmationResult !== null) {
+                $writeToolId = $toolUseBlocks[$confirmationIndex]['id'];
+
+                // Filter assistant content: keep text blocks + only tool_use blocks that have results
+                $processedToolIds = array_column($toolResults, 'tool_use_id');
+                $filteredContent = array_filter($contentBlocks, function ($block) use ($processedToolIds, $writeToolId) {
+                    if (($block['type'] ?? '') !== 'tool_use') {
+                        return true; // keep text blocks
+                    }
+                    return in_array($block['id'] ?? '', $processedToolIds, true);
+                });
+
+                // Store filtered assistant message (only contains resolved tool_uses)
+                if (!empty($filteredContent)) {
+                    $this->store->append($adminUserId, [
+                        'role'    => 'assistant',
+                        'content' => array_values($filteredContent),
+                    ]);
+                }
+
+                // Store results for resolved read tools only
+                if (!empty($toolResults)) {
+                    $this->store->append($adminUserId, [
+                        'role'    => 'user',
+                        'content' => $toolResults,
+                    ]);
+                }
+
                 $toolUseId = $toolUseBlocks[$confirmationIndex]['id'];
 
-                // Add tool_use_id to the pending state so /confirm can use it
+                // Store tool_use_id + the original assistant content in pending
+                // so runConfirmed() can reconstruct the full message
                 $pending = $this->store->getPending($adminUserId);
                 if ($pending) {
                     $pending['tool_use_id'] = $toolUseId;
+                    $pending['assistant_content'] = $contentBlocks;
                     $this->store->setPending($adminUserId, $pending);
                 }
 
