@@ -97,7 +97,15 @@ final class ChatController implements \NTDST_Service_Meta
         $userId = get_current_user_id();
         $content = $request->get_param('content');
 
-        $result = $this->executor->run($content, $userId);
+        try {
+            $result = $this->executor->run($content, $userId);
+        } catch (\Throwable $e) {
+            error_log('[ntdst-assistant] Chat error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+            $result = [
+                'type' => 'error',
+                'text' => 'Er ging iets mis: ' . $e->getMessage(),
+            ];
+        }
 
         $this->transport->deliver($result);
     }
@@ -114,14 +122,22 @@ final class ChatController implements \NTDST_Service_Meta
         if ($pending === null) {
             $this->transport->deliver([
                 'type' => 'error',
-                'text' => 'Geen actie in afwachting van bevestiging.',
+                'text' => 'Geen actie in afwachting van bevestiging. De sessie is mogelijk verlopen.',
             ]);
             return;
         }
 
         $toolUseId = $pending['tool_use_id'] ?? '';
 
-        $result = $this->executor->runConfirmed($token, $userId, $toolUseId);
+        try {
+            $result = $this->executor->runConfirmed($token, $userId, $toolUseId);
+        } catch (\Throwable $e) {
+            error_log('[ntdst-assistant] Confirm error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+            $result = [
+                'type' => 'error',
+                'text' => 'Er ging iets mis bij het bevestigen: ' . $e->getMessage(),
+            ];
+        }
 
         $this->transport->deliver($result);
     }
