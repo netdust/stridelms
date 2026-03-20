@@ -9,6 +9,7 @@ use NtdstAssistant\Transport\JsonTransport;
 
 return [
     'services' => [
+        \NtdstAssistant\AssistantService::class,
         \NtdstAssistant\ConversationStore::class,
         \NtdstAssistant\SystemPrompt::class,
         \NtdstAssistant\AbilityBridge::class,
