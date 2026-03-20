@@ -7,6 +7,7 @@ web/app/plugins/*
 !web/app/plugins/netdust-mail/
 !web/app/plugins/ntdst-auth/
 !web/app/plugins/ntdst-audit/
+!web/app/plugins/ntdst-assistant/
 web/app/mu-plugins/*
 !web/app/mu-plugins/ntdst-core/
 !web/app/mu-plugins/ntdst-coreloader.php
