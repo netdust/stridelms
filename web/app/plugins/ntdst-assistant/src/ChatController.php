@@ -75,6 +75,12 @@ final class ChatController implements \NTDST_Service_Meta
     public function checkPermission(): bool
     {
         $capability = get_option('ntdst_assistant_capability', 'edit_others_posts');
+
+        $allowed = ['manage_options', 'edit_others_posts', 'stride_manage', 'stride_view'];
+        if (!in_array($capability, $allowed, true)) {
+            $capability = 'edit_others_posts';
+        }
+
         return current_user_can($capability);
     }
 
@@ -95,6 +101,21 @@ final class ChatController implements \NTDST_Service_Meta
         }
 
         $userId = get_current_user_id();
+
+        // Rate limiting: 30 requests per minute per user
+        $rateLimitKey = 'ntdst_assistant_rate_' . $userId;
+        $requestCount = (int) get_transient($rateLimitKey);
+
+        if ($requestCount >= 30) {
+            $this->transport->deliver([
+                'type' => 'error',
+                'text' => 'Te veel verzoeken. Wacht even en probeer het opnieuw.',
+            ]);
+            return;
+        }
+
+        set_transient($rateLimitKey, $requestCount + 1, MINUTE_IN_SECONDS);
+
         $content = $request->get_param('content');
 
         try {

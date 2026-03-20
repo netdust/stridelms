@@ -36,6 +36,11 @@ class AssistantService implements \NTDST_Service_Meta
     {
         $capability = get_option('ntdst_assistant_capability', 'edit_others_posts');
 
+        $allowed = ['manage_options', 'edit_others_posts', 'stride_manage', 'stride_view'];
+        if (!in_array($capability, $allowed, true)) {
+            $capability = 'edit_others_posts';
+        }
+
         add_submenu_page(
             'stride-dashboard',
             'Stride Assistant',
@@ -73,7 +78,7 @@ class AssistantService implements \NTDST_Service_Meta
 
         wp_enqueue_script(
             'alpinejs',
-            'https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js',
+            $pluginUrl . 'assets/js/alpine.min.js',
             ['ntdst-assistant'],
             '3.14.9',
             true,
@@ -102,7 +107,7 @@ class AssistantService implements \NTDST_Service_Meta
 
         echo '<div class="notice notice-warning"><p>';
         echo '<strong>NTDST Assistant:</strong> API-sleutel niet geconfigureerd. ';
-        echo 'Stel in via: <code>wp option update ntdst_assistant_api_key "sk-ant-..."</code>';
+        echo 'Stel in via <code>.env</code>: <code>NTDST_ASSISTANT_API_KEY=sk-ant-...</code>';
         echo '</p></div>';
     }
 

@@ -135,6 +135,12 @@ class AbilityBridge implements \NTDST_Service_Meta
             return new \WP_Error('invalid_token', 'Confirmation token is invalid.');
         }
 
+        // Token expires after 5 minutes
+        if ((time() - ($pending['time'] ?? 0)) > 300) {
+            $this->store->clearPending($userId);
+            return new \WP_Error('expired', 'Bevestigingstoken is verlopen. Probeer opnieuw.');
+        }
+
         // Re-check permissions before executing
         $ability = wp_get_ability($pending['ability']);
         if ($ability === null) {
