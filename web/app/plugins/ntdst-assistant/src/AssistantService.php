@@ -62,20 +62,21 @@ class AssistantService implements \NTDST_Service_Meta
             filemtime($pluginPath . '/assets/css/assistant.css'),
         );
 
-        wp_enqueue_script(
-            'alpinejs',
-            'https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js',
-            [],
-            '3.14.9',
-            ['strategy' => 'defer'],
-        );
-
+        // assistant.js must load BEFORE Alpine so alpine:init fires after registration
         wp_enqueue_script(
             'ntdst-assistant',
             $pluginUrl . 'assets/js/assistant.js',
-            ['alpinejs'],
+            [],
             filemtime($pluginPath . '/assets/js/assistant.js'),
-            ['strategy' => 'defer'],
+            true,
+        );
+
+        wp_enqueue_script(
+            'alpinejs',
+            'https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js',
+            ['ntdst-assistant'],
+            '3.14.9',
+            true,
         );
 
         wp_localize_script('ntdst-assistant', 'ntdstAssistantConfig', [
