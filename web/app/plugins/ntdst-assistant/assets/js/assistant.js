@@ -86,7 +86,7 @@ document.addEventListener('alpine:init', () => {
                 this.messages.push({
                     id: this.nextId(),
                     type: 'error',
-                    message: data.message,
+                    message: data.message || data.content || data.text || 'Onbekende fout.',
                 });
             }
         },
@@ -102,7 +102,13 @@ document.addEventListener('alpine:init', () => {
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+                // Try to parse error body for a message
+                let errorMsg = `HTTP ${response.status}`;
+                try {
+                    const errorData = await response.json();
+                    errorMsg = errorData.message || errorData.data?.message || errorMsg;
+                } catch (e) { /* ignore parse errors */ }
+                throw new Error(errorMsg);
             }
 
             return response.json();
