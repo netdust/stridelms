@@ -2011,3 +2011,135 @@ if (!function_exists('content_url')) {
         return $path ? $url . '/' . ltrim($path, '/') : $url;
     }
 }
+
+// --- Abilities API Stubs (WP 6.9) ---
+
+if (!class_exists('WP_Ability')) {
+    class WP_Ability {
+        private string $name;
+        private array $args;
+
+        public function __construct(string $name, array $args) {
+            $this->name = $name;
+            $this->args = $args;
+        }
+
+        public function get_name(): string { return $this->name; }
+        public function get_label(): string { return $this->args['label'] ?? ''; }
+        public function get_description(): string { return $this->args['description'] ?? ''; }
+        public function get_category(): string { return $this->args['category'] ?? ''; }
+        public function get_input_schema(): array { return $this->args['input_schema'] ?? []; }
+        public function get_output_schema(): array { return $this->args['output_schema'] ?? []; }
+        public function get_meta(): array { return $this->args['meta'] ?? []; }
+
+        public function get_meta_item(string $key, $default = null): mixed {
+            return $this->args['meta'][$key] ?? $default;
+        }
+
+        public function check_permissions($input = null): bool|\WP_Error {
+            if (isset($this->args['permission_callback'])) {
+                return call_user_func($this->args['permission_callback'], $input);
+            }
+            return true;
+        }
+
+        public function execute($input = null): mixed {
+            if (isset($this->args['execute_callback'])) {
+                do_action('wp_before_execute_ability', $this->name, $input);
+                $result = call_user_func($this->args['execute_callback'], $input);
+                do_action('wp_after_execute_ability', $this->name, $input, $result);
+                return $result;
+            }
+            return new \WP_Error('no_callback', 'No execute callback.');
+        }
+    }
+}
+
+if (!class_exists('WP_Ability_Category')) {
+    class WP_Ability_Category {
+        private string $slug;
+        private array $args;
+
+        public function __construct(string $slug, array $args) {
+            $this->slug = $slug;
+            $this->args = $args;
+        }
+
+        public function get_slug(): string { return $this->slug; }
+        public function get_label(): string { return $this->args['label'] ?? ''; }
+    }
+}
+
+// Global registries for Abilities API stubs
+global $_test_abilities, $_test_ability_categories;
+$_test_abilities = $_test_abilities ?? [];
+$_test_ability_categories = $_test_ability_categories ?? [];
+
+if (!function_exists('wp_register_ability_category')) {
+    function wp_register_ability_category(string $slug, array $args): ?WP_Ability_Category {
+        global $_test_ability_categories;
+        $cat = new WP_Ability_Category($slug, $args);
+        $_test_ability_categories[$slug] = $cat;
+        return $cat;
+    }
+}
+
+if (!function_exists('wp_has_ability_category')) {
+    function wp_has_ability_category(string $slug): bool {
+        global $_test_ability_categories;
+        return isset($_test_ability_categories[$slug]);
+    }
+}
+
+if (!function_exists('wp_get_ability_category')) {
+    function wp_get_ability_category(string $slug): ?WP_Ability_Category {
+        global $_test_ability_categories;
+        return $_test_ability_categories[$slug] ?? null;
+    }
+}
+
+if (!function_exists('wp_get_ability_categories')) {
+    function wp_get_ability_categories(): array {
+        global $_test_ability_categories;
+        return $_test_ability_categories;
+    }
+}
+
+if (!function_exists('wp_register_ability')) {
+    function wp_register_ability(string $name, array $args): ?WP_Ability {
+        global $_test_abilities;
+        $ability = new WP_Ability($name, $args);
+        $_test_abilities[$name] = $ability;
+        return $ability;
+    }
+}
+
+if (!function_exists('wp_unregister_ability')) {
+    function wp_unregister_ability(string $name): ?WP_Ability {
+        global $_test_abilities;
+        $ability = $_test_abilities[$name] ?? null;
+        unset($_test_abilities[$name]);
+        return $ability;
+    }
+}
+
+if (!function_exists('wp_has_ability')) {
+    function wp_has_ability(string $name): bool {
+        global $_test_abilities;
+        return isset($_test_abilities[$name]);
+    }
+}
+
+if (!function_exists('wp_get_ability')) {
+    function wp_get_ability(string $name): ?WP_Ability {
+        global $_test_abilities;
+        return $_test_abilities[$name] ?? null;
+    }
+}
+
+if (!function_exists('wp_get_abilities')) {
+    function wp_get_abilities(): array {
+        global $_test_abilities;
+        return $_test_abilities;
+    }
+}
