@@ -26,7 +26,9 @@ class ConversationStore implements \NTDST_Service_Meta
 
     public function append(int $userId, array $message): void
     {
-        if (($message['role'] ?? '') === 'user') {
+        // Only clear pending on genuine user text messages (string content),
+        // not on tool_result messages (array content with role=user).
+        if (($message['role'] ?? '') === 'user' && is_string($message['content'] ?? null)) {
             $this->clearPending($userId);
         }
 
