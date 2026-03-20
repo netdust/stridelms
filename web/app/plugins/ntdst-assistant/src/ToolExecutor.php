@@ -139,7 +139,6 @@ class ToolExecutor implements \NTDST_Service_Meta
         $startTime   = time();
 
         for ($i = 0; $i < self::MAX_ITERATIONS; $i++) {
-            error_log("[ntdst-assistant] Loop iteration {$i}, messages: " . count($this->store->get($adminUserId)));
 
             // Timeout guard
             if ((time() - $startTime) >= self::TOTAL_TIMEOUT) {
@@ -163,8 +162,6 @@ class ToolExecutor implements \NTDST_Service_Meta
             $textBlocks    = [];
             $toolUseBlocks = [];
 
-            $blockTypes = array_map(fn($b) => ($b['type'] ?? '?') . ':' . ($b['name'] ?? ''), $contentBlocks);
-            error_log("[ntdst-assistant] Claude response blocks: " . implode(', ', $blockTypes));
 
             foreach ($contentBlocks as $block) {
                 if (($block['type'] ?? '') === 'text') {
