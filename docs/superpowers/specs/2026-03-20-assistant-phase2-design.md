@@ -35,6 +35,8 @@ The current `AbilityRegistrar.php` (648 lines) exceeds the 150-line NTDST servic
 
 Both implement `NTDST_Service_Meta`, register on `wp_abilities_api_init` (priority 90). The category registration (`stride`) moves to `ReadAbilityRegistrar` (loads first).
 
+`ReadAbilityRegistrar` also owns the `ntdst_assistant/system_prompt` filter for domain prompt injection (covers both read and write ability context). `WriteAbilityRegistrar` does not register this filter.
+
 ### 1.2 `stride/get-stats` (read)
 
 Returns aggregated statistics for an edition, course, or globally.
@@ -74,8 +76,10 @@ Returns aggregated statistics for an edition, course, or globally.
 
 **Logic:**
 - **Edition scope:** count confirmed/pending/cancelled registrations, compute fill rate from capacity, compute attendance rate across all sessions, compute completion rate from LearnDash.
-- **Course scope:** aggregate across all editions for that course.
-- **Global scope:** aggregate across all editions. Limit to recent 100 editions for performance.
+- **Course scope:** aggregate across all editions for that course. `completion_rate` **omitted** (N×M LearnDash queries). `average_attendance_rate` computed.
+- **Global scope:** aggregate across all editions. Limit to recent 100 editions for performance. `completion_rate` **omitted** (too expensive at scale).
+
+**Zero results:** If no editions found for the given scope, return zeros for all numeric fields with `"message": "Geen edities gevonden."`.
 
 ### 1.3 `stride/get-attendance` (read)
 
@@ -94,6 +98,14 @@ Returns attendance records for a session, user-in-edition, or full edition matri
 ```
 
 At least one of `session_id`, `edition_id`, or `user_id` required (validated in callback).
+
+**Query scopes:**
+- `session_id` only → all attendees for that session
+- `edition_id` only → full attendance matrix for all sessions in edition (capped at 500 records)
+- `user_id` + `edition_id` → user's attendance across all sessions in that edition
+- `user_id` only → all attendance for that user across all editions (capped at 200 records)
+
+When a cap is hit, include `"truncated": true` and `"message": "Resultaat afgekapt op {N} rijen."` in the response.
 
 **Output:**
 ```json
@@ -173,7 +185,9 @@ One of `user_id` or `user_ids` required (validated in callback). If both provide
 **Logic:**
 - Resolve user IDs (single → array of one).
 - Validate session exists via `SessionService::getSession()`.
-- Validate all user IDs are enrolled in the edition via `RegistrationRepository::findByEdition()`.
+- **Resolve parent edition:** get session's `edition_id` from session data (`$session['edition_id']`).
+- **Validate enrollment:** check all user IDs are enrolled in that edition via `RegistrationRepository::findByEdition($editionId)`. Cross-reference the returned user IDs.
+- **Fail-early on bulk:** if any user ID is not enrolled, abort the entire operation and return `WP_Error` listing which user IDs are invalid. No partial execution.
 - Call `AttendanceService::markPresent/markAbsent/markExcused` per status.
 - For bulk present: use `markMultiplePresent()`.
 
@@ -226,12 +240,13 @@ Changes to `assets/css/assistant.css`:
 
 Changes to `assets/js/assistant.js`:
 
-- **Copy button:** appears on hover over assistant messages. Copies raw markdown (the `content` field, not `html`). Small tooltip "Gekopieerd!" on success.
-- **Clear conversation:** button in chat header. Calls `POST /ntdst-assistant/v1/clear`. Resets `messages` array. Confirm with `window.confirm("Gesprek wissen?")`.
+- **Copy button:** appears on hover over assistant messages only (not confirmation cards, not errors). Copies raw markdown (the `content` field, not `html`). Small tooltip "Gekopieerd!" on success. Fallback: wrap in try/catch; hide copy button if `navigator.clipboard` is unavailable (non-HTTPS dev).
+- **Clear conversation:** button in chat header. **Disabled while `loading === true`** (prevents race with in-flight request). Calls `POST /ntdst-assistant/v1/clear`. On success: resets `this.messages = []` **and** `this.pending = null`. Confirm with `window.confirm("Gesprek wissen?")` — cancel aborts silently.
 - **Auto-resize textarea:** grows with content up to 4 lines (~96px), then scrolls. Resets to 1 line after send.
-- **Empty state:** centered message when `messages.length === 0`: "Hoe kan ik helpen? Vraag me om gebruikers, edities, inschrijvingen of aanwezigheid op te zoeken."
+- **Empty state:** centered message when `messages.length === 0` and `loading === false`: "Hoe kan ik helpen? Vraag me om gebruikers, edities, inschrijvingen of aanwezigheid op te zoeken."
 - **Keyboard:** `Escape` blurs textarea.
-- **Timestamps:** each message object gets `created_at` from server. Rendered as relative time ("2 min geleden", "1 uur geleden"). Updated every 30 seconds via `setInterval`.
+- **Timestamps:** server responses include `created_at` (ISO 8601). User messages get `created_at: new Date().toISOString()` at push time in `send()`. Rendered as relative time ("2 min geleden", "1 uur geleden") below each message group. Updated every 30 seconds via `setInterval`.
+- **Expired confirmation cards:** after a failed `/confirm` response (expired token or error), the confirmation message in `this.messages` is marked with `expired: true`. Template renders the card with greyed-out buttons and "Verlopen" label. `this.pending` is already cleared.
 
 ### 2.3 New REST Endpoint
 
@@ -274,8 +289,8 @@ class ExportService implements \NTDST_Service_Meta
 }
 ```
 
-- `generateCsv()`: writes CSV to exports dir, returns absolute filepath. Uses `fputcsv()` with UTF-8 BOM for Excel compatibility.
-- `getSignedUrl()`: HMAC-SHA256 over `filename + userId + expires`, 1-hour expiry. Returns full REST URL.
+- `generateCsv()`: writes CSV to exports dir, returns absolute filepath. Uses `fputcsv()` with UTF-8 BOM for Excel compatibility. **Filename includes random suffix:** `edities_2026-03-20_{uniqid()}.csv` to prevent collisions between concurrent exports.
+- `getSignedUrl()`: HMAC-SHA256 over `filename + userId + expires` using `wp_salt('auth')` as key, 1-hour expiry. Returns full REST URL.
 - `verifySignedUrl()`: validates HMAC + expiry + userId match.
 - `cleanup()`: deletes files older than 1 hour. Called by cron.
 
@@ -285,16 +300,19 @@ class ExportService implements \NTDST_Service_Meta
 
 `GET /ntdst-assistant/v1/download`
 
+**Permission callback:** `current_user_can($capability)` — same capability as the chat endpoint. Defense-in-depth: signed URL alone is not sufficient; an active login session is required.
+
 **Query params:** `file`, `token`, `expires`
 
 **Flow:**
-1. Validate `expires` > current time.
-2. Verify HMAC via `ExportService::verifySignedUrl()`.
-3. Verify current user matches token's user.
-4. Stream file with headers: `Content-Type: text/csv`, `Content-Disposition: attachment; filename="..."`.
-5. Delete file after streaming (one-time download).
+1. **Path traversal prevention:** apply `basename()` to the `file` parameter. Construct path as `$exports_dir . '/' . basename($file)`. Verify with `realpath()` that the resolved path is strictly within the exports directory.
+2. Validate `expires` > current time.
+3. Verify HMAC via `ExportService::verifySignedUrl()`.
+4. Verify `get_current_user_id()` matches the user ID encoded in the token.
+5. Stream file with headers: `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="..."`.
+6. Delete file after streaming (one-time download).
 
-**Errors:** expired → 403, invalid token → 403, file missing → 404.
+**Errors:** not logged in → 401, expired → 403, invalid token → 403, path traversal → 403, file missing → 404.
 
 ### 3.3 Export Abilities (3 new reads)
 
@@ -345,13 +363,22 @@ Added to `ReadAbilityRegistrar`:
 }
 ```
 
-At least one of `edition_id` or `session_id` required.
+At least one of `edition_id` or `session_id` required (validated in callback).
 
 **CSV columns:** Gebruiker, Email, Sessie, Datum, Status, Gemarkeerd door, Tijdstip
 
-### 3.4 Download Card UI
+### 3.4 Export Row Limits
 
-The `ToolExecutor` detects when an ability result contains a `download_url` key. It adds a `downloads` array to the response alongside `content`/`html`:
+All export abilities are capped at **5,000 rows** to prevent PHP timeout on large datasets. When the cap is hit:
+- The CSV includes all 5,000 rows (no truncation marker in the file itself).
+- The response includes `"truncated": true` and `"message": "Export afgekapt op 5000 rijen. Gebruik filters om het resultaat te verfijnen."`.
+- Claude communicates the truncation to the admin.
+
+### 3.5 Download Card UI
+
+**ToolExecutor download aggregation:** During the tool loop, ToolExecutor maintains a `$downloads = []` accumulator. After each successful tool execution, it checks if `$execResult['result']` contains a `download_url` key. If so, it appends `{url, filename, row_count}` to `$downloads`. When the loop finishes and returns the final text response, the accumulated `$downloads` array is merged into the return value. If multiple export abilities are called in one turn, all download cards appear in a single message.
+
+The `ToolExecutor` adds a `downloads` array to the response alongside `content`/`html`:
 
 ```json
 {
@@ -378,9 +405,11 @@ The Alpine component renders download cards after the message text:
 └─────────────────────────────────┘
 ```
 
-Card styling: subtle border, file icon, filename, row count, download button. Button triggers `window.open(url)`.
+Card styling: subtle border, file icon, filename, row count, download button. The "Downloaden" button's `@click` handler directly calls `window.open(card.url)` — no async wrapper (avoids popup blocker).
 
-### 3.5 System Prompt Update
+Export abilities are always `readonly: true` and never trigger the confirmation flow. Download cards only render when `type === 'response'` and `downloads` array is present.
+
+### 3.6 System Prompt Update
 
 Add to domain prompt: "When the admin asks to export data, use the appropriate export ability (export-editions, export-enrollments, export-attendance). Present the download link and mention the number of rows exported."
 
@@ -426,17 +455,21 @@ Add to domain prompt: "When the admin asks to export data, use the appropriate e
 
 ## Security Considerations
 
-- Export files protected by `.htaccess` + signed URLs + user ID verification.
+- Export files protected by `.htaccess` deny-all + signed URLs + active login session + user ID verification.
+- **Path traversal prevention:** `basename()` + `realpath()` validation on download `file` parameter.
+- **Filename uniqueness:** `uniqid()` suffix prevents collision between concurrent exports.
+- **HMAC key:** `wp_salt('auth')` for both confirmation tokens and export URLs.
 - Download tokens expire after 1 hour, files cleaned by cron.
-- `mark-attendance` validates users are enrolled before marking.
+- `mark-attendance` validates users are enrolled before marking; bulk operations are atomic (all-or-nothing).
 - All new abilities respect existing capability checks (`stride_view` for reads, `stride_manage` for writes).
 - CSV files use `fputcsv()` — no injection risk from user data.
-- `/clear` endpoint requires same capability as `/chat`.
+- `/clear` and `/download` endpoints require same capability as `/chat`.
 
 ## Performance Considerations
 
-- `get-stats` global scope limited to 100 most recent editions.
-- `get-attendance` edition scope limited to 500 records.
+- `get-stats` global scope limited to 100 most recent editions. `completion_rate` only computed for edition scope (avoids N×M LearnDash queries).
+- `get-attendance` edition scope limited to 500 records; user-only scope limited to 200 records.
+- Export abilities capped at 5,000 rows to prevent PHP timeout.
 - Export abilities use streaming `fputcsv()` — constant memory regardless of row count.
 - Download endpoint streams file (no full read into memory).
 - Existing batch query patterns (cache priming, batch counts) used in new abilities.
