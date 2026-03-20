@@ -43,6 +43,20 @@ class ConversationStore implements \NTDST_Service_Meta
         set_transient(self::CONV_PREFIX . $userId, $messages, self::TTL);
     }
 
+    /**
+     * Replace the entire conversation with the given messages array.
+     *
+     * Used by ToolExecutor to flush the in-memory conversation back to storage
+     * in a single write instead of per-iteration appends.
+     */
+    public function replace(int $userId, array $messages): void
+    {
+        if (count($messages) > self::MAX_MESSAGES) {
+            $messages = array_slice($messages, -self::MAX_MESSAGES);
+        }
+        set_transient(self::CONV_PREFIX . $userId, $messages, self::TTL);
+    }
+
     public function clear(int $userId): void
     {
         delete_transient(self::CONV_PREFIX . $userId);

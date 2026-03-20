@@ -116,6 +116,17 @@ final class ChatController implements \NTDST_Service_Meta
 
         set_transient($rateLimitKey, $requestCount + 1, MINUTE_IN_SECONDS);
 
+        // Concurrency guard: prevent overlapping requests from the same user
+        $lockKey = 'ntdst_assistant_lock_' . $userId;
+        if (get_transient($lockKey)) {
+            $this->transport->deliver([
+                'type' => 'error',
+                'text' => 'Er loopt al een verzoek. Wacht tot het vorige verzoek is afgerond.',
+            ]);
+            return;
+        }
+        set_transient($lockKey, true, 180);
+
         $content = $request->get_param('content');
 
         try {
@@ -126,6 +137,8 @@ final class ChatController implements \NTDST_Service_Meta
                 'type' => 'error',
                 'text' => 'Er ging iets mis. Probeer het opnieuw.',
             ];
+        } finally {
+            delete_transient($lockKey);
         }
 
         $this->transport->deliver($result);
@@ -148,6 +161,16 @@ final class ChatController implements \NTDST_Service_Meta
             return;
         }
 
+        $lockKey = 'ntdst_assistant_lock_' . $userId;
+        if (get_transient($lockKey)) {
+            $this->transport->deliver([
+                'type' => 'error',
+                'text' => 'Er loopt al een verzoek. Wacht tot het vorige verzoek is afgerond.',
+            ]);
+            return;
+        }
+        set_transient($lockKey, true, 180);
+
         $toolUseId = $pending['tool_use_id'] ?? '';
 
         try {
@@ -158,6 +181,8 @@ final class ChatController implements \NTDST_Service_Meta
                 'type' => 'error',
                 'text' => 'Er ging iets mis. Probeer het opnieuw.',
             ];
+        } finally {
+            delete_transient($lockKey);
         }
 
         $this->transport->deliver($result);

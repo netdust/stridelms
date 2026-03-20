@@ -336,27 +336,91 @@ final class AbilityRegistrar extends AbstractService
             $raw = $editionRepo->findUpcoming($perPage);
         }
 
+        $items = array_slice($raw, 0, $perPage);
+
+        // Collect all edition IDs for batch operations
+        $editionIds = [];
+        foreach ($items as $item) {
+            $id = (int) ($item['id'] ?? $item['ID'] ?? 0);
+            if ($id > 0) {
+                $editionIds[] = $id;
+            }
+        }
+
+        if (empty($editionIds)) {
+            return ['editions' => []];
+        }
+
+        // Prime post meta cache in a single query (for getStatus/getCapacity calls)
+        update_postmeta_cache($editionIds);
+
+        // Batch registration counts in a single grouped query
+        $registeredCounts = $this->batchRegisteredCounts($editionIds);
+
         $editions = [];
-        foreach (array_slice($raw, 0, $perPage) as $item) {
+        foreach ($items as $item) {
             $id = (int) ($item['id'] ?? $item['ID'] ?? 0);
             if ($id <= 0) {
                 continue;
             }
 
+            // Use meta from the query result when available (findUpcoming uses withMeta)
+            $meta = $item['meta'] ?? [];
+            $startDate = $meta['start_date'] ?? $editionRepo->getField($id, 'start_date');
+            $endDate = $meta['end_date'] ?? $editionRepo->getField($id, 'end_date');
+            $venue = $meta['venue'] ?? $editionRepo->getField($id, 'venue');
+
+            $capacity = (int) ($meta['capacity'] ?? $editionService->getCapacity($id));
+            $registered = $registeredCounts[$id] ?? 0;
+            $status = $editionService->getStatus($id);
+
             $editions[] = [
                 'id' => $id,
                 'title' => $item['title'] ?? $item['post_title'] ?? '',
-                'status' => $editionService->getStatus($id)->value,
-                'start_date' => $editionRepo->getField($id, 'start_date'),
-                'end_date' => $editionRepo->getField($id, 'end_date'),
-                'venue' => $editionRepo->getField($id, 'venue'),
-                'capacity' => $editionService->getCapacity($id),
-                'registered' => $editionService->getRegisteredCount($id),
-                'can_enroll' => $editionService->canEnroll($id),
+                'status' => $status->value,
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'venue' => $venue,
+                'capacity' => $capacity,
+                'registered' => $registered,
+                'can_enroll' => $status->allowsEnrollment() && ($capacity === 0 || $registered < $capacity),
             ];
         }
 
         return ['editions' => $editions];
+    }
+
+    /**
+     * Batch count registrations for multiple editions in a single query.
+     *
+     * @param array<int> $editionIds
+     * @return array<int, int> Map of edition_id => count
+     */
+    private function batchRegisteredCounts(array $editionIds): array
+    {
+        if (empty($editionIds)) {
+            return [];
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'vad_registrations';
+        $ids = implode(',', array_map('intval', $editionIds));
+
+        $results = $wpdb->get_results(
+            "SELECT edition_id, COUNT(*) as cnt
+             FROM {$table}
+             WHERE edition_id IN ({$ids})
+             AND status IN ('confirmed', 'completed', 'pending')
+             GROUP BY edition_id",
+            ARRAY_A
+        );
+
+        $counts = [];
+        foreach ($results as $row) {
+            $counts[(int) $row['edition_id']] = (int) $row['cnt'];
+        }
+
+        return $counts;
     }
 
     /**

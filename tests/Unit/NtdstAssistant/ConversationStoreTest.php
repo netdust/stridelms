@@ -91,4 +91,40 @@ class ConversationStoreTest extends TestCase
 
         $this->assertNull($this->store->getPending(1));
     }
+
+    public function testReplaceOverwritesEntireConversation(): void
+    {
+        $this->store->append(1, ['role' => 'user', 'content' => 'Old message']);
+        $this->store->append(1, ['role' => 'assistant', 'content' => 'Old reply']);
+
+        $newMessages = [
+            ['role' => 'user', 'content' => 'New message'],
+            ['role' => 'assistant', 'content' => 'New reply'],
+            ['role' => 'user', 'content' => 'Follow-up'],
+        ];
+
+        $this->store->replace(1, $newMessages);
+        $messages = $this->store->get(1);
+
+        $this->assertCount(3, $messages);
+        $this->assertSame('New message', $messages[0]['content']);
+        $this->assertSame('Follow-up', $messages[2]['content']);
+    }
+
+    public function testReplaceTruncatesWhenOverMaxMessages(): void
+    {
+        // Build a messages array exceeding the max (50)
+        $messages = [];
+        for ($i = 0; $i < 55; $i++) {
+            $messages[] = ['role' => 'user', 'content' => "Message {$i}"];
+        }
+
+        $this->store->replace(1, $messages);
+        $stored = $this->store->get(1);
+
+        $this->assertCount(50, $stored);
+        // Should keep the last 50 messages (5..54)
+        $this->assertSame('Message 5', $stored[0]['content']);
+        $this->assertSame('Message 54', $stored[49]['content']);
+    }
 }

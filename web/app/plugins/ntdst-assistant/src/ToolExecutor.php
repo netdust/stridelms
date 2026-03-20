@@ -134,14 +134,18 @@ class ToolExecutor implements \NTDST_Service_Meta
 
     private function loop(int $adminUserId): array
     {
-        $tools       = $this->bridge->getToolDefinitions();
+        $tools        = $this->bridge->getToolDefinitions();
         $systemPrompt = $this->prompt->build();
-        $startTime   = time();
+        $startTime    = time();
+
+        // Read conversation once — work in memory, flush on exit
+        $messages = $this->store->get($adminUserId);
 
         for ($i = 0; $i < self::MAX_ITERATIONS; $i++) {
 
             // Timeout guard
             if ((time() - $startTime) >= self::TOTAL_TIMEOUT) {
+                $this->store->replace($adminUserId, $messages);
                 return [
                     'type' => 'error',
                     'text' => 'De assistent heeft te lang geduurd. Probeer het opnieuw.',
@@ -150,18 +154,18 @@ class ToolExecutor implements \NTDST_Service_Meta
 
             try {
                 $response = $this->client->send(
-                    $this->store->get($adminUserId),
+                    $messages,
                     $tools,
                     $systemPrompt,
                 );
             } catch (\RuntimeException $e) {
+                $this->store->replace($adminUserId, $messages);
                 return $this->mapApiError($e);
             }
 
             $contentBlocks = $response['content'] ?? [];
             $textBlocks    = [];
             $toolUseBlocks = [];
-
 
             foreach ($contentBlocks as $block) {
                 if (($block['type'] ?? '') === 'text') {
@@ -175,10 +179,8 @@ class ToolExecutor implements \NTDST_Service_Meta
             if (empty($toolUseBlocks)) {
                 $text = $this->extractText($textBlocks);
 
-                $this->store->append($adminUserId, [
-                    'role'    => 'assistant',
-                    'content' => $contentBlocks,
-                ]);
+                $messages[] = ['role' => 'assistant', 'content' => $contentBlocks];
+                $this->store->replace($adminUserId, $messages);
 
                 return [
                     'type' => 'response',
@@ -234,21 +236,18 @@ class ToolExecutor implements \NTDST_Service_Meta
                     return in_array($block['id'] ?? '', $processedToolIds, true);
                 });
 
-                // Store filtered assistant message (only contains resolved tool_uses)
+                // Append filtered assistant message (only contains resolved tool_uses)
                 if (!empty($filteredContent)) {
-                    $this->store->append($adminUserId, [
-                        'role'    => 'assistant',
-                        'content' => array_values($filteredContent),
-                    ]);
+                    $messages[] = ['role' => 'assistant', 'content' => array_values($filteredContent)];
                 }
 
-                // Store results for resolved read tools only
+                // Append results for resolved read tools only
                 if (!empty($toolResults)) {
-                    $this->store->append($adminUserId, [
-                        'role'    => 'user',
-                        'content' => $toolResults,
-                    ]);
+                    $messages[] = ['role' => 'user', 'content' => $toolResults];
                 }
+
+                // Flush to store
+                $this->store->replace($adminUserId, $messages);
 
                 $toolUseId = $toolUseBlocks[$confirmationIndex]['id'];
 
@@ -270,21 +269,16 @@ class ToolExecutor implements \NTDST_Service_Meta
                 ];
             }
 
-            // No confirmation: store full assistant message + all tool results, then loop
-            $this->store->append($adminUserId, [
-                'role'    => 'assistant',
-                'content' => $contentBlocks,
-            ]);
+            // No confirmation: append full assistant message + all tool results, continue loop
+            $messages[] = ['role' => 'assistant', 'content' => $contentBlocks];
 
             if (!empty($toolResults)) {
-                $this->store->append($adminUserId, [
-                    'role'    => 'user',
-                    'content' => $toolResults,
-                ]);
+                $messages[] = ['role' => 'user', 'content' => $toolResults];
             }
         }
 
-        // Max iterations reached
+        // Max iterations reached — flush and return error
+        $this->store->replace($adminUserId, $messages);
         return [
             'type' => 'error',
             'text' => 'De assistent heeft het maximaal aantal iteraties bereikt. Probeer een eenvoudigere vraag.',
