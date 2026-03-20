@@ -10,7 +10,7 @@ use Stride\Infrastructure\AbstractService;
  * Registers Stride read-only abilities for the AI assistant.
  *
  * Owns:
- * - 5 read abilities: search-users, get-edition, get-editions, get-enrollments, get-stats
+ * - 6 read abilities: search-users, get-edition, get-editions, get-enrollments, get-stats, get-attendance
  * - Category registration (stride)
  * - System prompt injection (domain + formatting prompts)
  */
@@ -193,6 +193,28 @@ final class ReadAbilityRegistrar extends AbstractService
             ],
             'permission_callback' => fn() => current_user_can('stride_view'),
             'execute_callback' => [$this, 'getStats'],
+            'meta' => [
+                'show_in_rest' => true,
+                'annotations' => ['readonly' => true],
+                'readonly' => true,
+            ],
+        ]);
+
+        // Get attendance
+        wp_register_ability('stride/get-attendance', [
+            'label' => 'Aanwezigheid ophalen',
+            'description' => 'Get attendance records for a session, user-in-edition, edition matrix, or all attendance for a user. Returns records with status, summary, and attendance rate.',
+            'category' => 'stride',
+            'input_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'session_id' => ['type' => 'integer', 'description' => 'Sessie-ID (optioneel)'],
+                    'edition_id' => ['type' => 'integer', 'description' => 'Editie-ID (optioneel)'],
+                    'user_id' => ['type' => 'integer', 'description' => 'Gebruiker-ID (optioneel)'],
+                ],
+            ],
+            'permission_callback' => fn() => current_user_can('stride_view'),
+            'execute_callback' => [$this, 'getAttendance'],
             'meta' => [
                 'show_in_rest' => true,
                 'annotations' => ['readonly' => true],
@@ -474,6 +496,341 @@ final class ReadAbilityRegistrar extends AbstractService
             return $this->getCourseStats($courseId);
         }
         return $this->getGlobalStats();
+    }
+
+    /**
+     * Get attendance records for a session, user-in-edition, edition matrix, or all attendance for a user.
+     *
+     * @param array{session_id?: int, edition_id?: int, user_id?: int} $input
+     * @return array<string, mixed>|\WP_Error
+     */
+    public function getAttendance(array $input): array|\WP_Error
+    {
+        $sessionId = (int) ($input['session_id'] ?? 0);
+        $editionId = (int) ($input['edition_id'] ?? 0);
+        $userId = (int) ($input['user_id'] ?? 0);
+
+        if ($sessionId <= 0 && $editionId <= 0 && $userId <= 0) {
+            return new \WP_Error('missing_filter', 'Geef session_id, edition_id, of user_id mee.');
+        }
+
+        $attendance = ntdst_get(\Stride\Modules\Attendance\AttendanceService::class);
+        $sessions = ntdst_get(\Stride\Modules\Edition\SessionService::class);
+
+        if ($sessionId > 0) {
+            return $this->getSessionAttendance($attendance, $sessions, $sessionId);
+        }
+        if ($userId > 0 && $editionId > 0) {
+            return $this->getUserEditionAttendance($attendance, $sessions, $userId, $editionId);
+        }
+        if ($editionId > 0) {
+            return $this->getEditionAttendanceMatrix($attendance, $sessions, $editionId);
+        }
+
+        return $this->getUserAttendanceAll($attendance, $sessions, $userId);
+    }
+
+    /**
+     * Attendance records for a single session.
+     */
+    private function getSessionAttendance(
+        \Stride\Modules\Attendance\AttendanceService $attendance,
+        \Stride\Modules\Edition\SessionService $sessions,
+        int $sessionId,
+    ): array {
+        $records = $attendance->getSessionAttendance($sessionId);
+        $session = $sessions->getSession($sessionId);
+
+        // Batch-hydrate users
+        $userIds = array_unique(array_column($records, 'user_id'));
+        $usersMap = $this->batchLoadUsers($userIds);
+
+        $sessionDate = $session['date'] ?? '';
+        $sessionTime = '';
+        if (!empty($session['start_time']) && !empty($session['end_time'])) {
+            $sessionTime = $session['start_time'] . '-' . $session['end_time'];
+        }
+
+        $formatted = [];
+        $summary = ['present' => 0, 'absent' => 0, 'excused' => 0, 'total' => 0];
+
+        foreach ($records as $record) {
+            $uid = (int) $record['user_id'];
+            $user = $usersMap[$uid] ?? null;
+            $status = $record['status'];
+
+            $formatted[] = [
+                'user_id' => $uid,
+                'user_name' => $user ? $user->display_name : '(onbekend)',
+                'user_email' => $user ? $user->user_email : '',
+                'session_id' => $sessionId,
+                'session_date' => $sessionDate,
+                'session_time' => $sessionTime,
+                'status' => $status,
+                'marked_by' => $record['marked_by'],
+                'marked_at' => $record['marked_at'],
+                '_links' => ['user_edit' => admin_url("user-edit.php?user_id={$uid}")],
+            ];
+
+            $summary['total']++;
+            if (isset($summary[$status])) {
+                $summary[$status]++;
+            }
+        }
+
+        $attendanceRate = $summary['total'] > 0
+            ? round(($summary['present'] + $summary['excused']) / $summary['total'] * 100, 1)
+            : 0.0;
+
+        return [
+            'records' => $formatted,
+            'summary' => $summary,
+            'attendance_rate' => $attendanceRate,
+        ];
+    }
+
+    /**
+     * Attendance records for a single user in a single edition.
+     */
+    private function getUserEditionAttendance(
+        \Stride\Modules\Attendance\AttendanceService $attendance,
+        \Stride\Modules\Edition\SessionService $sessions,
+        int $userId,
+        int $editionId,
+    ): array {
+        $records = $attendance->getUserEditionAttendance($userId, $editionId);
+        $user = get_userdata($userId);
+
+        $formatted = [];
+        $summary = ['present' => 0, 'absent' => 0, 'excused' => 0, 'total' => 0];
+
+        foreach ($records as $record) {
+            $session = $sessions->getSession((int) $record['session_id']);
+            $sessionDate = $session['date'] ?? '';
+            $sessionTime = '';
+            if (!empty($session['start_time']) && !empty($session['end_time'])) {
+                $sessionTime = $session['start_time'] . '-' . $session['end_time'];
+            }
+
+            $status = $record['status'];
+
+            $formatted[] = [
+                'user_id' => $userId,
+                'user_name' => $user ? $user->display_name : '(onbekend)',
+                'user_email' => $user ? $user->user_email : '',
+                'session_id' => (int) $record['session_id'],
+                'session_date' => $sessionDate,
+                'session_time' => $sessionTime,
+                'status' => $status,
+                'marked_by' => $record['marked_by'],
+                'marked_at' => $record['marked_at'],
+                '_links' => ['user_edit' => admin_url("user-edit.php?user_id={$userId}")],
+            ];
+
+            $summary['total']++;
+            if (isset($summary[$status])) {
+                $summary[$status]++;
+            }
+        }
+
+        $attendanceRate = $summary['total'] > 0
+            ? round(($summary['present'] + $summary['excused']) / $summary['total'] * 100, 1)
+            : 0.0;
+
+        return [
+            'records' => $formatted,
+            'summary' => $summary,
+            'attendance_rate' => $attendanceRate,
+        ];
+    }
+
+    /**
+     * Attendance matrix for an entire edition (all sessions, all users). Capped at 500 records.
+     */
+    private function getEditionAttendanceMatrix(
+        \Stride\Modules\Attendance\AttendanceService $attendance,
+        \Stride\Modules\Edition\SessionService $sessions,
+        int $editionId,
+    ): array {
+        $editionSessions = $sessions->getSessionsForEdition($editionId);
+
+        $allRecords = [];
+        $truncated = false;
+
+        foreach ($editionSessions as $session) {
+            $sid = (int) $session['id'];
+            $sessionRecords = $attendance->getSessionAttendance($sid);
+
+            foreach ($sessionRecords as $record) {
+                $record['session_id'] = $sid;
+                $record['session_date'] = $session['date'] ?? '';
+                $record['session_time'] = '';
+                if (!empty($session['start_time']) && !empty($session['end_time'])) {
+                    $record['session_time'] = $session['start_time'] . '-' . $session['end_time'];
+                }
+                $allRecords[] = $record;
+
+                if (count($allRecords) >= 500) {
+                    $truncated = true;
+                    break 2;
+                }
+            }
+        }
+
+        // Batch-hydrate users
+        $userIds = array_unique(array_column($allRecords, 'user_id'));
+        $usersMap = $this->batchLoadUsers($userIds);
+
+        $formatted = [];
+        $summary = ['present' => 0, 'absent' => 0, 'excused' => 0, 'total' => 0];
+
+        foreach ($allRecords as $record) {
+            $uid = (int) $record['user_id'];
+            $user = $usersMap[$uid] ?? null;
+            $status = $record['status'];
+
+            $formatted[] = [
+                'user_id' => $uid,
+                'user_name' => $user ? $user->display_name : '(onbekend)',
+                'user_email' => $user ? $user->user_email : '',
+                'session_id' => (int) $record['session_id'],
+                'session_date' => $record['session_date'],
+                'session_time' => $record['session_time'],
+                'status' => $status,
+                'marked_by' => $record['marked_by'],
+                'marked_at' => $record['marked_at'],
+                '_links' => ['user_edit' => admin_url("user-edit.php?user_id={$uid}")],
+            ];
+
+            $summary['total']++;
+            if (isset($summary[$status])) {
+                $summary[$status]++;
+            }
+        }
+
+        $attendanceRate = $summary['total'] > 0
+            ? round(($summary['present'] + $summary['excused']) / $summary['total'] * 100, 1)
+            : 0.0;
+
+        $result = [
+            'records' => $formatted,
+            'summary' => $summary,
+            'attendance_rate' => $attendanceRate,
+        ];
+
+        if ($truncated) {
+            $result['truncated'] = true;
+            $result['message'] = 'Resultaat afgekapt op 500 rijen.';
+        }
+
+        return $result;
+    }
+
+    /**
+     * All attendance for a user across all enrollments. Capped at 200 records.
+     */
+    private function getUserAttendanceAll(
+        \Stride\Modules\Attendance\AttendanceService $attendance,
+        \Stride\Modules\Edition\SessionService $sessions,
+        int $userId,
+    ): array {
+        $regRepo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+        $registrations = $regRepo->findByUser($userId);
+        $user = get_userdata($userId);
+
+        $allRecords = [];
+        $truncated = false;
+
+        foreach ($registrations as $reg) {
+            $editionId = (int) ($reg->edition_id ?? 0);
+            if ($editionId <= 0) {
+                continue;
+            }
+
+            $records = $attendance->getUserEditionAttendance($userId, $editionId);
+
+            foreach ($records as $record) {
+                $session = $sessions->getSession((int) $record['session_id']);
+                $record['session_date'] = $session['date'] ?? '';
+                $record['session_time'] = '';
+                if (!empty($session['start_time']) && !empty($session['end_time'])) {
+                    $record['session_time'] = $session['start_time'] . '-' . $session['end_time'];
+                }
+                $allRecords[] = $record;
+
+                if (count($allRecords) >= 200) {
+                    $truncated = true;
+                    break 2;
+                }
+            }
+        }
+
+        $formatted = [];
+        $summary = ['present' => 0, 'absent' => 0, 'excused' => 0, 'total' => 0];
+
+        foreach ($allRecords as $record) {
+            $status = $record['status'];
+
+            $formatted[] = [
+                'user_id' => $userId,
+                'user_name' => $user ? $user->display_name : '(onbekend)',
+                'user_email' => $user ? $user->user_email : '',
+                'session_id' => (int) $record['session_id'],
+                'session_date' => $record['session_date'],
+                'session_time' => $record['session_time'],
+                'status' => $status,
+                'marked_by' => $record['marked_by'],
+                'marked_at' => $record['marked_at'],
+                '_links' => ['user_edit' => admin_url("user-edit.php?user_id={$userId}")],
+            ];
+
+            $summary['total']++;
+            if (isset($summary[$status])) {
+                $summary[$status]++;
+            }
+        }
+
+        $attendanceRate = $summary['total'] > 0
+            ? round(($summary['present'] + $summary['excused']) / $summary['total'] * 100, 1)
+            : 0.0;
+
+        $result = [
+            'records' => $formatted,
+            'summary' => $summary,
+            'attendance_rate' => $attendanceRate,
+        ];
+
+        if ($truncated) {
+            $result['truncated'] = true;
+            $result['message'] = 'Resultaat afgekapt op 200 rijen.';
+        }
+
+        return $result;
+    }
+
+    /**
+     * Batch-load WP users by ID into an associative map.
+     *
+     * @param array<int> $userIds
+     * @return array<int, \WP_User> Map of user_id => WP_User
+     */
+    private function batchLoadUsers(array $userIds): array
+    {
+        if (empty($userIds)) {
+            return [];
+        }
+
+        $query = new \WP_User_Query([
+            'include' => $userIds,
+            'fields' => 'all',
+        ]);
+
+        $map = [];
+        foreach ($query->get_results() as $user) {
+            $map[(int) $user->ID] = $user;
+        }
+
+        return $map;
     }
 
     /**
