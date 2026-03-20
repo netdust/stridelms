@@ -70,6 +70,23 @@ final class ChatController implements \NTDST_Service_Meta
                 ],
             ],
         ]);
+
+        register_rest_route(self::NAMESPACE, '/clear', [
+            'methods'             => 'POST',
+            'callback'            => [$this, 'handleClear'],
+            'permission_callback' => [$this, 'checkPermission'],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/download', [
+            'methods'             => 'GET',
+            'callback'            => [$this, 'handleDownload'],
+            'permission_callback' => [$this, 'checkPermission'],
+            'args'                => [
+                'file'    => ['required' => true, 'sanitize_callback' => 'sanitize_file_name'],
+                'token'   => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
+                'expires' => ['required' => true, 'sanitize_callback' => 'absint'],
+            ],
+        ]);
     }
 
     public function checkPermission(): bool
@@ -141,6 +158,7 @@ final class ChatController implements \NTDST_Service_Meta
             delete_transient($lockKey);
         }
 
+        $result['created_at'] = gmdate('c');
         $this->transport->deliver($result);
     }
 
@@ -185,6 +203,7 @@ final class ChatController implements \NTDST_Service_Meta
             delete_transient($lockKey);
         }
 
+        $result['created_at'] = gmdate('c');
         $this->transport->deliver($result);
     }
 
@@ -219,6 +238,46 @@ final class ChatController implements \NTDST_Service_Meta
 
         $result = $this->executor->runCancelled($toolUseId, $userId);
 
+        $result['created_at'] = gmdate('c');
         $this->transport->deliver($result);
+    }
+
+    public function handleClear(WP_REST_Request $request): void
+    {
+        $userId = get_current_user_id();
+        $this->store->clear($userId);
+        $this->transport->deliver(['type' => 'cleared', 'cleared' => true]);
+    }
+
+    public function handleDownload(WP_REST_Request $request): void
+    {
+        $file    = $request->get_param('file');
+        $token   = $request->get_param('token');
+        $expires = (int) $request->get_param('expires');
+        $userId  = get_current_user_id();
+
+        $export = ntdst_get(ExportService::class);
+
+        if (!$export->verifySignedUrl($file, $token, $expires, $userId)) {
+            wp_send_json_error(['message' => 'Download link is ongeldig of verlopen.'], 403);
+            return;
+        }
+
+        $filepath = $export->resolveFilePath($file);
+        if ($filepath === false || !file_exists($filepath)) {
+            wp_send_json_error(['message' => 'Bestand niet gevonden.'], 404);
+            return;
+        }
+
+        $filename = basename($filepath);
+
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Length: ' . filesize($filepath));
+        header('Cache-Control: no-cache, no-store, must-revalidate');
+
+        readfile($filepath);
+        unlink($filepath);
+        exit;
     }
 }
