@@ -6,9 +6,6 @@
         "php": ">=8.1",
         "erusev/parsedown": "^1.7"
     },
-    "require-dev": {
-        "anthropic-ai/client-php": "^1.0"
-    },
     "autoload": {
         "psr-4": {
             "NtdstAssistant\\": "src/"
