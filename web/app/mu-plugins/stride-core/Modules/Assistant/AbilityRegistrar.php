@@ -42,7 +42,8 @@ final class AbilityRegistrar extends AbstractService
     public function registerCategories(): void
     {
         wp_register_ability_category('stride', [
-            'label' => 'Stride LMS',
+            'label'       => 'Stride LMS',
+            'description' => 'Abilities for managing Stride LMS editions, enrollments, and users.',
         ]);
     }
 
