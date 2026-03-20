@@ -208,6 +208,9 @@ final class ReadAbilityRegistrar extends AbstractService
                 'id' => (int) $user->ID,
                 'display_name' => $user->display_name,
                 'email' => $user->user_email,
+                '_links' => [
+                    'user_edit' => admin_url("user-edit.php?user_id={$user->ID}"),
+                ],
             ];
         }
 
@@ -249,6 +252,9 @@ final class ReadAbilityRegistrar extends AbstractService
             'start_date' => $repository->getField($editionId, 'start_date'),
             'end_date' => $repository->getField($editionId, 'end_date'),
             'venue' => $repository->getField($editionId, 'venue'),
+            '_links' => [
+                'edition_edit' => admin_url("post.php?post={$edition->ID}&action=edit"),
+            ],
         ];
     }
 
@@ -323,6 +329,9 @@ final class ReadAbilityRegistrar extends AbstractService
                 'capacity' => $capacity,
                 'registered' => $registered,
                 'can_enroll' => $status->allowsEnrollment() && ($capacity === 0 || $registered < $capacity),
+                '_links' => [
+                    'edition_edit' => admin_url("post.php?post={$id}&action=edit"),
+                ],
             ];
         }
 
@@ -410,6 +419,10 @@ final class ReadAbilityRegistrar extends AbstractService
                 'status' => $reg->status,
                 'registered_at' => $reg->registered_at ?? null,
                 'enrollment_path' => $reg->enrollment_path ?? 'individual',
+                '_links' => [
+                    'user_edit' => admin_url("user-edit.php?user_id={$reg->user_id}"),
+                    'edition_edit' => admin_url("post.php?post=" . ($reg->edition_id ?? 0) . "&action=edit"),
+                ],
             ];
         }
 
