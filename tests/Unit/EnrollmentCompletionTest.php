@@ -10,11 +10,13 @@ use Stride\Tests\TestCase;
 class EnrollmentCompletionTest extends TestCase
 {
     private EnrollmentCompletion $service;
+    private \Stride\Modules\Enrollment\RegistrationRepository $mockRepo;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new EnrollmentCompletion();
+        $this->mockRepo = $this->createMock(\Stride\Modules\Enrollment\RegistrationRepository::class);
+        $this->service = new EnrollmentCompletion($this->mockRepo);
     }
 
     /** @test */
@@ -415,24 +417,7 @@ class EnrollmentCompletionTest extends TestCase
     /** @test */
     public function testCompleteTaskAcceptsPostCourseTypes(): void
     {
-        // Register a mock RegistrationRepository in the container
-        $mockRepo = new class {
-            public ?object $foundRegistration = null;
-            public array $updatedTasks = [];
-
-            public function find(int $id): ?object
-            {
-                return $this->foundRegistration;
-            }
-
-            public function updateCompletionTasks(int $id, array $tasks): bool
-            {
-                $this->updatedTasks = $tasks;
-                return true;
-            }
-        };
-
-        $mockRepo->foundRegistration = (object) [
+        $registration = (object) [
             'id' => 1,
             'edition_id' => 100,
             'completion_tasks' => [
@@ -440,11 +425,22 @@ class EnrollmentCompletionTest extends TestCase
             ],
         ];
 
-        $this->registerService(\Stride\Modules\Enrollment\RegistrationRepository::class, $mockRepo);
+        $mockRepo = $this->createMock(\Stride\Modules\Enrollment\RegistrationRepository::class);
+        $mockRepo->method('find')->willReturn($registration);
 
-        $result = $this->service->completeTask(1, 'post_evaluation');
+        $updatedTasks = [];
+        $mockRepo->method('updateCompletionTasks')->willReturnCallback(
+            function (int $id, array $tasks) use (&$updatedTasks) {
+                $updatedTasks = $tasks;
+                return true;
+            }
+        );
+
+        $service = new EnrollmentCompletion($mockRepo);
+
+        $result = $service->completeTask(1, 'post_evaluation');
 
         $this->assertTrue($result);
-        $this->assertEquals('completed', $mockRepo->updatedTasks['post_evaluation']['status']);
+        $this->assertEquals('completed', $updatedTasks['post_evaluation']['status']);
     }
 }

@@ -14,7 +14,8 @@ class QuotePDFGeneratorTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->generator = new QuotePDFGenerator();
+        $mockQuoteService = $this->createMock(\Stride\Modules\Invoicing\QuoteService::class);
+        $this->generator = new QuotePDFGenerator($mockQuoteService);
     }
 
     /** @test */

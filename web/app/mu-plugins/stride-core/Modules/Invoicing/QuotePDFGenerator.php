@@ -21,8 +21,9 @@ final class QuotePDFGenerator
 {
     private const UPLOAD_DIR = 'stride-quotes';
 
-    public function __construct()
-    {
+    public function __construct(
+        private readonly QuoteService $quoteService,
+    ) {
         $this->registerHooks();
     }
 
@@ -78,7 +79,7 @@ final class QuotePDFGenerator
      */
     public function generate(int $quoteId): string|WP_Error
     {
-        $quoteService = ntdst_get(QuoteService::class);
+        $quoteService = $this->quoteService;
         if (!$quoteService) {
             return new WP_Error('service_unavailable', 'QuoteService not available');
         }

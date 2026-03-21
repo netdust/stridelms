@@ -44,7 +44,8 @@ class EditionService extends AbstractService implements EditionQueryInterface
         SessionCPT::register();
 
         // Register sub-components as singletons
-        $sessionService = new SessionService(ntdst_get(SessionRepository::class));
+        $sessionRepo = ntdst_get(SessionRepository::class);
+        $sessionService = new SessionService($sessionRepo);
         ntdst_set(SessionService::class, fn() => $sessionService);
 
         $completion = new EditionCompletion($this, $sessionService);
@@ -58,7 +59,7 @@ class EditionService extends AbstractService implements EditionQueryInterface
             $this,
             $this->repository,
             $sessionService,
-            ntdst_get(SessionRepository::class),
+            $sessionRepo,
             ntdst_get(\Stride\Modules\Attendance\AttendanceRepository::class),
         );
 

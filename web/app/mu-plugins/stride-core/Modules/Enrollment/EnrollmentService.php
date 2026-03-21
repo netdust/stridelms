@@ -45,12 +45,13 @@ final class EnrollmentService extends AbstractService
     {
         // Register enrollment/completion URL routes
         add_action('init', function () {
-            (new EnrollmentRouter())->register();
+            $completion = ntdst_get(EnrollmentCompletion::class);
+            (new EnrollmentRouter($this, $this->registrations, $completion))->register();
         }, 20);
 
         // Register plain classes as singletons (no service lifecycle)
         ntdst_set(EnrollmentFieldGroups::class, fn() => new EnrollmentFieldGroups());
-        ntdst_set(EnrollmentCompletion::class, fn() => new EnrollmentCompletion());
+        ntdst_set(EnrollmentCompletion::class, fn() => new EnrollmentCompletion($this->registrations));
 
         // Register completion task handler (AJAX + auto-confirm hook)
         new \Stride\Handlers\CompletionTaskHandler();

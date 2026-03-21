@@ -20,6 +20,12 @@ use Stride\Modules\Trajectory\TrajectoryService;
  */
 final class EnrollmentRouter
 {
+    public function __construct(
+        private readonly EnrollmentService $enrollmentService,
+        private readonly RegistrationRepository $registrations,
+        private readonly EnrollmentCompletion $completion,
+    ) {}
+
     /**
      * Register all enrollment/completion routes via ntdst_router().
      */
@@ -95,7 +101,7 @@ final class EnrollmentRouter
         }
 
         // Check if user is already enrolled
-        $enrollmentService = ntdst_get(EnrollmentService::class);
+        $enrollmentService = $this->enrollmentService;
         if ($enrollmentService->hasActiveRegistration(get_current_user_id(), editionId: $edition->ID)) {
             ntdst_response()
                 ->with('item', $edition)
@@ -156,7 +162,7 @@ final class EnrollmentRouter
         }
 
         $userId = get_current_user_id();
-        $repo = ntdst_get(RegistrationRepository::class);
+        $repo = $this->registrations;
 
         if ($postType === 'vad_edition') {
             $registration = $repo->findByUserAndEdition($userId, $post->ID);
@@ -204,7 +210,7 @@ final class EnrollmentRouter
             }
         }
 
-        $completionService = ntdst_get(EnrollmentCompletion::class);
+        $completionService = $this->completion;
         $taskSummary = $completionService->getTaskSummary((int) $registration->id);
 
         ntdst_response()
@@ -226,7 +232,7 @@ final class EnrollmentRouter
         }
 
         $userId = get_current_user_id();
-        $enrollmentService = ntdst_get(EnrollmentService::class);
+        $enrollmentService = $this->enrollmentService;
 
         // Interest mode: register interest, not full enrollment
         $options = $mode === 'interest' ? ['status_override' => 'interest'] : [];

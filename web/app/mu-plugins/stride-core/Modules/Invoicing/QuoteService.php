@@ -17,6 +17,8 @@ use WP_Post;
  */
 final class QuoteService extends AbstractService
 {
+    private VoucherService $voucherService;
+
     public function __construct(
         private readonly QuoteRepository $repository,
         private readonly EditionQueryInterface $editions,
@@ -44,23 +46,24 @@ final class QuoteService extends AbstractService
         VoucherCPT::register();
 
         // Register sub-components as singletons
-        $voucherService = new VoucherService(ntdst_get(VoucherRepository::class));
-        ntdst_set(VoucherService::class, fn() => $voucherService);
+        $voucherRepo = ntdst_get(VoucherRepository::class);
+        $this->voucherService = new VoucherService($voucherRepo);
+        ntdst_set(VoucherService::class, fn() => $this->voucherService);
 
         // Admin UI (registers own hooks in constructor)
         new Admin\QuoteAdminController(
             $this,
             $this->repository,
-            $voucherService,
+            $this->voucherService,
             ntdst_get(\Stride\Modules\Edition\EditionRepository::class),
         );
         new Admin\VoucherAdminController(
-            $voucherService,
-            ntdst_get(VoucherRepository::class),
+            $this->voucherService,
+            $voucherRepo,
         );
 
         // PDF generator (registers own hooks)
-        new QuotePDFGenerator();
+        new QuotePDFGenerator($this);
 
         // Cancel quote when registration is cancelled
         add_action('stride/registration/cancelled', [$this, 'onRegistrationCancelled']);
@@ -529,7 +532,7 @@ final class QuoteService extends AbstractService
         }
 
         // Validate and get voucher through VoucherService
-        $voucherService = ntdst_get(VoucherService::class);
+        $voucherService = $this->voucherService;
         $editionId = (int) ($meta['edition_id'] ?? 0);
         $voucher = $voucherService->validateVoucher($voucherCode, $editionId);
 

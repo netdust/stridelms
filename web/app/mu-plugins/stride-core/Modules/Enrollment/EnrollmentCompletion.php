@@ -17,6 +17,10 @@ use WP_Error;
  */
 final class EnrollmentCompletion
 {
+    public function __construct(
+        private readonly RegistrationRepository $registrations,
+    ) {}
+
     private const TASK_TYPES = [
         'session_selection', 'questionnaire', 'documents', 'approval',
         'post_evaluation', 'post_documents', 'post_approval',
@@ -210,7 +214,7 @@ final class EnrollmentCompletion
             return;
         }
 
-        $repo = ntdst_get(RegistrationRepository::class);
+        $repo = $this->registrations;
         $repo->updateCompletionTasks($registrationId, $tasks);
     }
 
@@ -273,7 +277,7 @@ final class EnrollmentCompletion
             return;
         }
 
-        $repo = ntdst_get(RegistrationRepository::class);
+        $repo = $this->registrations;
         $registration = $repo->find($registrationId);
 
         if (!$registration) {
@@ -339,7 +343,7 @@ final class EnrollmentCompletion
             return new WP_Error('invalid_task', 'Unknown task type: ' . $taskType);
         }
 
-        $repo = ntdst_get(RegistrationRepository::class);
+        $repo = $this->registrations;
         $registration = $repo->find($registrationId);
 
         if (!$registration) {
@@ -439,7 +443,7 @@ final class EnrollmentCompletion
      */
     public function getTaskSummary(int $registrationId): array
     {
-        $repo = ntdst_get(RegistrationRepository::class);
+        $repo = $this->registrations;
         $registration = $repo->find($registrationId);
 
         if (!$registration) {
