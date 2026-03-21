@@ -62,6 +62,7 @@ class ExportService
             'file' => $filename,
             'token' => $token,
             'expires' => $expires,
+            'uid' => $userId,
         ]);
     }
 

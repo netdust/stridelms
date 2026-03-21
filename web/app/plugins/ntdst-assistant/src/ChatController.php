@@ -80,24 +80,14 @@ final class ChatController implements \NTDST_Service_Meta
         register_rest_route(self::NAMESPACE, '/download', [
             'methods'             => 'GET',
             'callback'            => [$this, 'handleDownload'],
-            'permission_callback' => [$this, 'checkDownloadPermission'],
+            'permission_callback' => '__return_true', // Auth via HMAC-signed URL (user-bound, time-limited)
             'args'                => [
                 'file'    => ['required' => true, 'sanitize_callback' => 'sanitize_file_name'],
                 'token'   => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
                 'expires' => ['required' => true, 'sanitize_callback' => 'absint'],
+                'uid'     => ['required' => true, 'sanitize_callback' => 'absint'],
             ],
         ]);
-    }
-
-    /**
-     * Permission check for download endpoint.
-     *
-     * Downloads open in a new tab (no X-WP-Nonce header), so we rely on
-     * cookie auth (is_user_logged_in) + the HMAC-signed URL for security.
-     */
-    public function checkDownloadPermission(): bool
-    {
-        return is_user_logged_in();
     }
 
     public function checkPermission(): bool
@@ -265,7 +255,7 @@ final class ChatController implements \NTDST_Service_Meta
         $file    = $request->get_param('file');
         $token   = $request->get_param('token');
         $expires = (int) $request->get_param('expires');
-        $userId  = get_current_user_id();
+        $userId  = (int) $request->get_param('uid');
 
         $export = ntdst_get(ExportService::class);
 
