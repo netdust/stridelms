@@ -133,6 +133,10 @@ final class EnrollmentQuoteHandler
         );
 
         if (!is_wp_error($quoteId)) {
+            // Link quote back to registration
+            $registrationRepo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+            $registrationRepo->update($registrationId, ['quote_id' => $quoteId]);
+
             // Clear billing transient only after successful quote creation
             $this->clearPendingBilling($quoteUserId, $editionId);
 
@@ -193,13 +197,9 @@ final class EnrollmentQuoteHandler
      */
     private function getEditionPrice(int $editionId, int $userId): Money
     {
-        // Check if user is member (simplified - check user meta)
-        $isMember = (bool) get_user_meta($userId, 'is_member', true);
-
-        // Use EditionService for proper meta access with prefix handling
         $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
 
-        return $editionService->getPrice($editionId, $isMember);
+        return $editionService->getPrice($editionId, $userId);
     }
 
     /**
