@@ -16,7 +16,7 @@ use WP_Error;
  *
  * Implements EditionQueryInterface for cross-module queries.
  */
-final class EditionService extends AbstractService implements EditionQueryInterface
+class EditionService extends AbstractService implements EditionQueryInterface
 {
     public function __construct(
         private readonly EditionRepository $repository,
@@ -202,14 +202,34 @@ final class EditionService extends AbstractService implements EditionQueryInterf
     }
 
     /**
-     * Get price for edition.
+     * Check if a user is a member.
+     *
+     * Uses `is_vad_member` user meta as default.
+     * Override via `stride/membership/is_member` filter.
      */
-    public function getPrice(int $editionId, bool $isMember = true): Money
+    public function isMember(int $userId): bool
     {
+        $isMember = (bool) get_user_meta($userId, 'is_vad_member', true);
+
+        return (bool) apply_filters('stride/membership/is_member', $isMember, $userId);
+    }
+
+    /**
+     * Get price for edition.
+     *
+     * When $userId is provided, checks membership for member pricing.
+     * When null (anonymous/display), returns non-member price.
+     *
+     * Override via `stride/membership/price` filter.
+     */
+    public function getPrice(int $editionId, ?int $userId = null): Money
+    {
+        $isMember = $userId !== null ? $this->isMember($userId) : false;
         $field = $isMember ? 'price' : 'price_non_member';
         $amount = (float) $this->repository->getField($editionId, $field, 0);
+        $price = Money::eur($amount);
 
-        return Money::eur($amount);
+        return apply_filters('stride/membership/price', $price, $editionId, $userId, $isMember);
     }
 
     /**
