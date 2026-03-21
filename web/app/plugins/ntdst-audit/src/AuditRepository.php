@@ -28,8 +28,8 @@ class AuditRepository
             }
         }
 
-        // Sanitize action - allow dots for namespacing (e.g., 'registration.created')
-        $action = preg_replace('/[^a-z0-9._-]/', '', strtolower($data['action']));
+        // Sanitize action - allow dots and slashes for namespacing (e.g., 'assistant.stride/get-editions')
+        $action = preg_replace('/[^a-z0-9.\/_-]/', '', strtolower($data['action']));
 
         $insert = [
             'entity_type' => sanitize_key($data['entity_type']),
