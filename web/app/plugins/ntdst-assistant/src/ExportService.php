@@ -3,20 +3,11 @@ declare(strict_types=1);
 
 namespace NtdstAssistant;
 
-class ExportService implements \NTDST_Service_Meta
+class ExportService
 {
     private const EXPORT_DIR = 'stride-exports';
     private const URL_EXPIRY = 3600; // 1 hour
     private const MAX_ROWS = 5000;
-
-    public static function metadata(): array
-    {
-        return [
-            'name' => 'Export Service',
-            'description' => 'CSV generation with signed download URLs',
-            'priority' => 15,
-        ];
-    }
 
     public function getMaxRows(): int
     {

@@ -5,19 +5,10 @@ namespace NtdstAssistant;
 
 use NtdstAssistant\Contracts\ClaudeClientInterface;
 
-class ToolExecutor implements \NTDST_Service_Meta
+class ToolExecutor
 {
     private const MAX_ITERATIONS = 5;
     private const TOTAL_TIMEOUT  = 120;
-
-    public static function metadata(): array
-    {
-        return [
-            'name'        => 'Assistant Tool Executor',
-            'description' => 'Orchestrates the Claude conversation loop with tool execution and confirmation flow',
-            'priority'    => 20,
-        ];
-    }
 
     public function __construct(
         private readonly ClaudeClientInterface $client,

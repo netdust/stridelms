@@ -427,20 +427,4 @@ class ToolExecutorTest extends TestCase
         $this->assertSame('toolu_write', $pending['tool_use_id']);
     }
 
-    // ---------------------------------------------------------------
-    // 10. Metadata interface
-    // ---------------------------------------------------------------
-
-    public function testImplementsServiceMetaInterface(): void
-    {
-        $client = $this->createMock(ClaudeClientInterface::class);
-        $executor = new ToolExecutor($client, $this->bridge, $this->store, $this->prompt);
-
-        $this->assertInstanceOf(\NTDST_Service_Meta::class, $executor);
-
-        $meta = ToolExecutor::metadata();
-        $this->assertArrayHasKey('name', $meta);
-        $this->assertArrayHasKey('description', $meta);
-        $this->assertArrayHasKey('priority', $meta);
-    }
 }

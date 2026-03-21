@@ -3,19 +3,10 @@ declare(strict_types=1);
 
 namespace NtdstAssistant;
 
-class SystemPrompt implements \NTDST_Service_Meta
+class SystemPrompt
 {
     private string $basePath;
     private ?string $cachedPrompt = null;
-
-    public static function metadata(): array
-    {
-        return [
-            'name' => 'Assistant System Prompt',
-            'description' => 'Builds system prompt with base rules and filtered domain context',
-            'priority' => 15,
-        ];
-    }
 
     public function __construct()
     {

@@ -3,21 +3,12 @@ declare(strict_types=1);
 
 namespace NtdstAssistant;
 
-class ConversationStore implements \NTDST_Service_Meta
+class ConversationStore
 {
     private const TTL = HOUR_IN_SECONDS;
     private const MAX_MESSAGES = 30;
     private const CONV_PREFIX = 'ntdst_assistant_conv_';
     private const PENDING_PREFIX = 'ntdst_assistant_pending_';
-
-    public static function metadata(): array
-    {
-        return [
-            'name' => 'Assistant Conversation Store',
-            'description' => 'Server-side message log per admin user',
-            'priority' => 15,
-        ];
-    }
 
     public function get(int $userId): array
     {

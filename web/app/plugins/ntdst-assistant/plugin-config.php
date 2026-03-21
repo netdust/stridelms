@@ -7,13 +7,12 @@ use NtdstAssistant\Claude\HttpClaudeClient;
 use NtdstAssistant\Transport\JsonTransport;
 
 return [
+    // Only classes that hook into WordPress at boot time.
+    // Other classes (ToolExecutor, AbilityBridge, SystemPrompt,
+    // ConversationStore, ExportService) are resolved lazily
+    // via autowiring when injected as constructor dependencies.
     'services' => [
         \NtdstAssistant\AssistantService::class,
-        \NtdstAssistant\ConversationStore::class,
-        \NtdstAssistant\SystemPrompt::class,
-        \NtdstAssistant\AbilityBridge::class,
-        \NtdstAssistant\ToolExecutor::class,
-        \NtdstAssistant\ExportService::class,
         \NtdstAssistant\ChatController::class,
     ],
     'bindings' => [

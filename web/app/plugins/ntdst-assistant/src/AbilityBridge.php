@@ -3,17 +3,8 @@ declare(strict_types=1);
 
 namespace NtdstAssistant;
 
-class AbilityBridge implements \NTDST_Service_Meta
+class AbilityBridge
 {
-    public static function metadata(): array
-    {
-        return [
-            'name'        => 'Assistant Ability Bridge',
-            'description' => 'Translates WP Abilities API to Claude tool format with confirmation flow',
-            'priority'    => 15,
-        ];
-    }
-
     private ?array $cachedTools = null;
 
     public function __construct(
