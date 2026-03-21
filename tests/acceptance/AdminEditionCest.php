@@ -218,7 +218,144 @@ class AdminEditionCest
     }
 
     // =========================================================================
-    // CASCADE DELETE
+    // SESSIONS
     // =========================================================================
 
+    /**
+     * SCENARIO: Sessions metabox shows existing sessions
+     *   GIVEN: I am editing an edition with sessions
+     *   WHEN: The page loads
+     *   THEN: I see session rows with date, time, and type
+     *
+     * @group admin
+     * @group editions
+     * @group sessions
+     */
+    public function sessionsMetaboxShowsData(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify sessions metabox shows existing session data');
+
+        // Edition 7929 has 2 seeded sessions
+        $I->amOnPage('/wp/wp-admin/post.php?post=7929&action=edit');
+        $I->see('Sessies');
+        $I->waitForElement('.session-row', 5);
+
+        $sessionCount = $I->executeJS(
+            'return document.querySelectorAll(".session-row").length'
+        );
+        \PHPUnit\Framework\Assert::assertGreaterThanOrEqual(
+            2,
+            (int) $sessionCount,
+            'Edition 7929 should have at least 2 sessions'
+        );
+    }
+
+    /**
+     * SCENARIO: Add a session via the admin UI
+     *   GIVEN: I am editing an existing edition
+     *   WHEN: I click "Sessie toevoegen", then click "Opslaan"
+     *   THEN: The session count increases
+     *
+     * @group admin
+     * @group editions
+     * @group sessions
+     */
+    public function canAddSession(AcceptanceTester $I): void
+    {
+        $I->wantTo('add a session to an edition via the admin UI');
+
+        // Use edition 7929 which has the sessions metabox and existing sessions
+        $I->amOnPage('/wp/wp-admin/post.php?post=7929&action=edit');
+        $I->dontSee('Fatal error');
+
+        $sessionsBefore = $I->executeJS(
+            'return document.querySelectorAll(".session-row").length'
+        );
+
+        // Click "Sessie toevoegen" and save with defaults
+        $I->click('Sessie toevoegen');
+        $I->wait(1);
+
+        // Click the session form's Opslaan button (inside the add row)
+        $I->executeJS(
+            'document.querySelector(".stride-session-add-row button.button-primary, ' .
+            'tr.session-add-row button.button-primary, ' .
+            'button.stride-save-session")?.click() || ' .
+            '(() => { const btns = document.querySelectorAll("button"); ' .
+            'for (const b of btns) { if (b.textContent.trim() === "Opslaan") { b.click(); break; } } })()'
+        );
+        $I->wait(2);
+
+        $sessionsAfter = $I->executeJS(
+            'return document.querySelectorAll(".session-row").length'
+        );
+
+        \PHPUnit\Framework\Assert::assertGreaterThan(
+            (int) $sessionsBefore,
+            (int) $sessionsAfter,
+            'Session count should increase after adding'
+        );
+    }
+
+    // =========================================================================
+    // NOTES
+    // =========================================================================
+
+    /**
+     * SCENARIO: Notes metabox renders with input form
+     *   GIVEN: I am editing an edition
+     *   WHEN: The page loads
+     *   THEN: I see the Notities heading, text area, and add button
+     *
+     * @group admin
+     * @group editions
+     * @group notes
+     */
+    public function notesMetaboxRendersCorrectly(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify the notes metabox renders with input form');
+
+        $I->amOnPage('/wp/wp-admin/post.php?post=7929&action=edit');
+        $I->see('Notities');
+        $I->see('Notitie toevoegen');
+
+        // Hidden field exists in DOM (not visible to seeElement)
+        $hasField = $I->executeJS('return !!document.getElementById("stride_notes_data")');
+        \PHPUnit\Framework\Assert::assertTrue((bool) $hasField, 'Notes hidden field should exist');
+    }
+
+    /**
+     * SCENARIO: Add a note via the admin UI
+     *   GIVEN: I am editing an edition
+     *   WHEN: I type a note and click "Notitie toevoegen"
+     *   THEN: The note appears in the timeline and in the hidden field
+     *
+     * @group admin
+     * @group editions
+     * @group notes
+     */
+    public function canAddNote(AcceptanceTester $I): void
+    {
+        $I->wantTo('add a note to an edition via the admin UI');
+
+        $I->amOnPage('/wp/wp-admin/post.php?post=7929&action=edit');
+        $I->see('Notities');
+
+        $I->fillField('textarea[placeholder*="notitie"]', 'Acceptance test note');
+        $I->click('Notitie toevoegen');
+        $I->wait(1);
+
+        // Note should appear in the timeline
+        $I->see('Acceptance test note');
+
+        // Hidden field should contain the note data
+        $notesJson = $I->executeJS(
+            'return document.getElementById("stride_notes_data")?.value || "[]"'
+        );
+        $notes = json_decode($notesJson, true);
+        \PHPUnit\Framework\Assert::assertNotEmpty($notes, 'Notes data should not be empty');
+
+        $lastNote = end($notes);
+        \PHPUnit\Framework\Assert::assertSame('Acceptance test note', $lastNote['content']);
+    }
 }
