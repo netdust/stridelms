@@ -91,7 +91,13 @@ class AbilityBridge
             return new \WP_Error('forbidden', "Permission denied for '{$wpName}'.");
         }
 
+        // Check both top-level readonly and annotations.readonly
+        // (WP core abilities only set annotations.readonly, Stride sets both)
         $readonly = (bool) $ability->get_meta_item('readonly', false);
+        if (!$readonly) {
+            $annotations = $ability->get_meta_item('annotations', []);
+            $readonly = (bool) ($annotations['readonly'] ?? false);
+        }
 
         if ($readonly) {
             return $this->doExecute($ability, $input);
@@ -166,9 +172,15 @@ class AbilityBridge
 
         $result = $ability->execute($input);
 
+        $isReadonly = (bool) $ability->get_meta_item('readonly', false);
+        if (!$isReadonly) {
+            $annotations = $ability->get_meta_item('annotations', []);
+            $isReadonly = (bool) ($annotations['readonly'] ?? false);
+        }
+
         $meta = [
             'source'   => 'chat',
-            'readonly' => (bool) $ability->get_meta_item('readonly', false),
+            'readonly' => $isReadonly,
         ];
 
         do_action('ntdst_assistant/after_execute', $ability->get_name(), $input, $result, $meta);
