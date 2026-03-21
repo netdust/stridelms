@@ -58,7 +58,7 @@ if ($item_type === 'edition' && $item_id) {
     if (!is_wp_error($edition)) {
         $editionModel = ntdst_data()->get('vad_edition');
         $course_id    = $editionService->getCourseId($item_id);
-        $price        = $editionService->getPrice($item_id);
+        $price        = $editionService->getPrice($item_id, $current_user->ID);
 
         $edition_data = [
             'title'      => $course_id ? get_the_title($course_id) : get_the_title($item_id),
@@ -108,7 +108,16 @@ if ($item_id) {
     }
 }
 
-// Enrich item_data with price for the confirmation step
+// Enrich item_data with edition details for the confirmation step
+if (!empty($edition_data['title'])) {
+    $item_data['title'] = $edition_data['title'];
+}
+if (!empty($edition_data['start_date'])) {
+    $item_data['date'] = stride_format_date($edition_data['start_date']);
+}
+if (!empty($edition_data['venue'])) {
+    $item_data['venue'] = $edition_data['venue'];
+}
 if (!empty($edition_data['price'])) {
     $item_data['priceFormatted'] = $edition_data['price'];
 }
