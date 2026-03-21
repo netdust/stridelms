@@ -64,6 +64,10 @@ final class EditionService extends AbstractService implements EditionQueryInterf
         // Register hooks for capacity updates
         add_action('stride/registration/created', [$this, 'onRegistrationCreated']);
         add_action('stride/registration/cancelled', [$this, 'onRegistrationCancelled']);
+
+        // Cascade delete: clean up sessions and registrations when an edition is deleted
+        add_action('before_delete_post', [$this, 'onEditionDeleted']);
+        add_action('wp_trash_post', [$this, 'onEditionTrashed']);
     }
 
     // === EditionQueryInterface Implementation ===
@@ -261,5 +265,53 @@ final class EditionService extends AbstractService implements EditionQueryInterf
                 $this->repository->updateStatus($editionId, OfferingStatus::Open);
             }
         }
+    }
+
+    /**
+     * Cascade delete: remove sessions and registrations when edition is permanently deleted.
+     */
+    public function onEditionDeleted(int $postId): void
+    {
+        if (get_post_type($postId) !== EditionCPT::POST_TYPE) {
+            return;
+        }
+
+        $this->deleteChildSessions($postId);
+        $this->deleteEditionRegistrations($postId);
+    }
+
+    /**
+     * Cascade trash: also trash child sessions when edition is trashed.
+     */
+    public function onEditionTrashed(int $postId): void
+    {
+        if (get_post_type($postId) !== EditionCPT::POST_TYPE) {
+            return;
+        }
+
+        $this->deleteChildSessions($postId);
+        $this->deleteEditionRegistrations($postId);
+    }
+
+    private function deleteChildSessions(int $editionId): void
+    {
+        $sessions = get_posts([
+            'post_type' => SessionCPT::POST_TYPE,
+            'post_parent' => $editionId,
+            'post_status' => 'any',
+            'posts_per_page' => -1,
+            'fields' => 'ids',
+        ]);
+
+        foreach ($sessions as $sessionId) {
+            wp_delete_post($sessionId, true);
+        }
+    }
+
+    private function deleteEditionRegistrations(int $editionId): void
+    {
+        global $wpdb;
+        $table = $wpdb->prefix . 'vad_registrations';
+        $wpdb->delete($table, ['edition_id' => $editionId], ['%d']);
     }
 }
