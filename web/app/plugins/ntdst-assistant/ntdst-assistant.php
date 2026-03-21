@@ -52,14 +52,15 @@ add_action('ntdst/features_ready', function () use ($ntdstAssistantConfig): void
 });
 
 // Cron: cleanup expired export files
-register_activation_hook(__FILE__, function (): void {
+register_deactivation_hook(__FILE__, function (): void {
+    wp_clear_scheduled_hook('ntdst_assistant_cleanup_exports');
+});
+
+// Schedule on init if not already scheduled (survives code deploys without re-activation)
+add_action('init', function (): void {
     if (!wp_next_scheduled('ntdst_assistant_cleanup_exports')) {
         wp_schedule_event(time(), 'hourly', 'ntdst_assistant_cleanup_exports');
     }
-});
-
-register_deactivation_hook(__FILE__, function (): void {
-    wp_clear_scheduled_hook('ntdst_assistant_cleanup_exports');
 });
 
 add_action('ntdst_assistant_cleanup_exports', function (): void {
