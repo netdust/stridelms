@@ -27,9 +27,17 @@ final class AuditService implements \NTDST_Service_Meta
 
     private function init(): void
     {
-        // Ensure table exists
-        if (!AuditTable::exists()) {
-            AuditTable::create();
+        // Create table on first use (checked via option to avoid SHOW TABLES on every request)
+        if (!get_option('ntdst_audit_table_created')) {
+            if (!AuditTable::exists()) {
+                AuditTable::create();
+            }
+            update_option('ntdst_audit_table_created', true, true);
+        }
+
+        // Clear orphaned cron from old hook name (one-time cleanup)
+        if (wp_next_scheduled('stride_audit_cleanup')) {
+            wp_clear_scheduled_hook('stride_audit_cleanup');
         }
 
         // Retention cleanup cron
