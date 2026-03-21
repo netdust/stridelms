@@ -650,16 +650,15 @@ final class EditionAdminController
                 $this->attendanceRepository->delete((int) $existing->id);
             }
         } else {
-            // Record attendance using repository
+            // Record attendance via service (fires events for audit + auto-complete)
+            $attendanceService = ntdst_get(\Stride\Modules\Attendance\AttendanceService::class);
             $status = AttendanceStatus::tryFrom($statusValue);
             if ($status) {
-                $this->attendanceRepository->record(
-                    $sessionId,
-                    $userId,
-                    $status,
-                    $editionId,
-                    get_current_user_id()
-                );
+                match ($status) {
+                    AttendanceStatus::Present => $attendanceService->markPresent($sessionId, $userId),
+                    AttendanceStatus::Absent => $attendanceService->markAbsent($sessionId, $userId),
+                    AttendanceStatus::Excused => $attendanceService->markExcused($sessionId, $userId),
+                };
             }
         }
 
@@ -690,16 +689,10 @@ final class EditionAdminController
         // Get all registrations for this edition
         $registrations = $this->getEditionRegistrations($editionId);
 
-        // Mark all as present using repository
-        $currentUserId = get_current_user_id();
+        // Mark all as present via service (fires events for audit + auto-complete)
+        $attendanceService = ntdst_get(\Stride\Modules\Attendance\AttendanceService::class);
         foreach ($registrations as $registration) {
-            $this->attendanceRepository->record(
-                $sessionId,
-                (int) $registration['user_id'],
-                AttendanceStatus::Present,
-                $editionId,
-                $currentUserId
-            );
+            $attendanceService->markPresent($sessionId, (int) $registration['user_id']);
         }
 
         $totals = $this->getAttendanceTotals($sessionId);

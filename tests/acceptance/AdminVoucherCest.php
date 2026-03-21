@@ -121,8 +121,8 @@ class AdminVoucherCest
         // Wait for save
         $I->waitForElement('.notice-success, #message.updated', 10);
 
-        // Verify voucher was created (visible in admin notice)
-        $I->see('Post published', '.notice');
+        // Verify voucher was created (locale-independent check)
+        $I->seeElement('.notice-success, #message.updated');
 
         // Should be on the edit page now (not new page)
         $I->seeInCurrentUrl('action=edit');

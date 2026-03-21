@@ -89,7 +89,7 @@ function enrollmentForm(config) {
         },
 
         form: {
-            enrollment_type: (mode === 'interest' || isShortForm) ? 'self' : '',
+            enrollment_type: (mode === 'interest' || isShortForm) ? 'self' : 'werknemer',
             first_name: config.prefill.first_name || '',
             last_name: config.prefill.last_name || '',
             email: config.userEmail || '',

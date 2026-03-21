@@ -1196,9 +1196,13 @@ final class AdminAPIController
             return new WP_Error('invalid_status', 'Invalid attendance status', ['status' => 400]);
         }
 
-        // Record attendance
-        $currentUserId = get_current_user_id();
-        $result = $this->attendance->record($sessionId, $userId, $status, null, $currentUserId);
+        // Record attendance via service (fires events for audit + auto-complete)
+        $attendanceService = ntdst_get(\Stride\Modules\Attendance\AttendanceService::class);
+        $result = match ($status) {
+            AttendanceStatus::Present => $attendanceService->markPresent($sessionId, $userId),
+            AttendanceStatus::Absent => $attendanceService->markAbsent($sessionId, $userId),
+            AttendanceStatus::Excused => $attendanceService->markExcused($sessionId, $userId),
+        };
 
         if (is_wp_error($result)) {
             return $result;

@@ -182,8 +182,12 @@ final class CompletionTaskHandler
             return new WP_Error('upload_failed', $message);
         }
 
+        $taskType = in_array($params['task_type'] ?? '', ['documents', 'post_documents'], true)
+            ? $params['task_type']
+            : 'documents';
+
         $completion = ntdst_get(EnrollmentCompletion::class);
-        $result = $completion->completeTask($registrationId, 'documents', ['files' => $attachmentIds]);
+        $result = $completion->completeTask($registrationId, $taskType, ['files' => $attachmentIds]);
 
         if (is_wp_error($result)) {
             return $result;

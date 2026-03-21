@@ -16,22 +16,28 @@ use WP_Error;
  * and triggers LearnDash course completion when requirements are met.
  *
  * Plain class — owned by EditionService, not a standalone service.
+ * Same-module dependencies (EditionService, SessionService) are constructor-injected.
+ * Cross-module dependencies (Attendance, Enrollment, LMS) are resolved lazily via ntdst_get().
  */
 final class EditionCompletion
 {
+    public function __construct(
+        private readonly EditionService $editionService,
+        private readonly SessionService $sessionService,
+    ) {}
+
     /**
      * Check if user has completed an edition.
      */
     public function isComplete(int $editionId, int $userId): bool
     {
-        $editionService = ntdst_get(EditionService::class);
-        if (!$editionService->exists($editionId)) {
+        if (!$this->editionService->exists($editionId)) {
             return false;
         }
 
         $mode = $this->getCompletionMode($editionId);
         $threshold = $this->getCompletionThreshold($editionId);
-        $totalSessions = ntdst_get(SessionService::class)->getSessionCount($editionId);
+        $totalSessions = $this->sessionService->getSessionCount($editionId);
         $attended = ntdst_get(AttendanceService::class)->countAttended($userId, $editionId);
 
         return match ($mode) {
@@ -48,7 +54,7 @@ final class EditionCompletion
      */
     public function getProgress(int $editionId, int $userId): array
     {
-        $totalSessions = ntdst_get(SessionService::class)->getSessionCount($editionId);
+        $totalSessions = $this->sessionService->getSessionCount($editionId);
         $attended = ntdst_get(AttendanceService::class)->countAttended($userId, $editionId);
         $mode = $this->getCompletionMode($editionId);
         $threshold = $this->getCompletionThreshold($editionId);
@@ -112,12 +118,11 @@ final class EditionCompletion
             return new WP_Error('not_complete', 'User has not met completion requirements');
         }
 
-        $editionService = ntdst_get(EditionService::class);
-        if (!$editionService->exists($editionId)) {
+        if (!$this->editionService->exists($editionId)) {
             return new WP_Error('invalid_edition', 'Edition not found');
         }
 
-        $courseId = $editionService->getCourseId($editionId);
+        $courseId = $this->editionService->getCourseId($editionId);
         if (!$courseId) {
             return new WP_Error('no_course', 'Edition has no linked course');
         }
@@ -166,8 +171,7 @@ final class EditionCompletion
      */
     public function processCompletionFinal(int $editionId, int $userId): true|WP_Error
     {
-        $editionService = ntdst_get(EditionService::class);
-        $courseId = $editionService->getCourseId($editionId);
+        $courseId = $this->editionService->getCourseId($editionId);
         if (!$courseId) {
             return new WP_Error('no_course', 'Edition has no linked course');
         }
@@ -202,6 +206,37 @@ final class EditionCompletion
 
         if ($editionId && $userId && $this->isComplete($editionId, $userId)) {
             $this->processCompletion($editionId, $userId);
+        }
+    }
+
+    /**
+     * Handle LearnDash native course completion — sync back to Stride registration.
+     *
+     * @param array{user: \WP_User, course: \WP_Post, progress: array} $data
+     */
+    public function onLearnDashCourseCompleted(array $data): void
+    {
+        $userId = $data['user']->ID ?? 0;
+        $courseId = $data['course']->ID ?? 0;
+
+        if (!$userId || !$courseId) {
+            return;
+        }
+
+        // Find editions linked to this course
+        $editions = $this->editionService->getEditionsForCourse($courseId);
+
+        if (empty($editions)) {
+            return;
+        }
+
+        $repo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+
+        foreach ($editions as $edition) {
+            $reg = $repo->findByUserAndEdition($userId, $edition->ID);
+            if ($reg && $reg->status === 'confirmed') {
+                $repo->updateStatus((int) $reg->id, \Stride\Domain\RegistrationStatus::Completed);
+            }
         }
     }
 

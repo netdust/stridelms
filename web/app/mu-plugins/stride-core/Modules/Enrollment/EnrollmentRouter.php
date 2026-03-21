@@ -94,6 +94,17 @@ final class EnrollmentRouter
             exit;
         }
 
+        // Check if user is already enrolled
+        $enrollmentService = ntdst_get(EnrollmentService::class);
+        if ($enrollmentService->hasActiveRegistration(get_current_user_id(), editionId: $edition->ID)) {
+            ntdst_response()
+                ->with('item', $edition)
+                ->with('type', 'edition')
+                ->with('already_enrolled', true)
+                ->render('enrollment/form');
+            return;
+        }
+
         $editionService = ntdst_get(EditionService::class);
         $status = $editionService->getStatus($edition->ID);
         $mode = $this->computeEnrollmentMode(

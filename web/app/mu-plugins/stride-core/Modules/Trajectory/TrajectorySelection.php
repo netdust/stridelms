@@ -26,7 +26,7 @@ final class TrajectorySelection
     /**
      * Enroll user in trajectory.
      */
-    public function enroll(int $userId, int $trajectoryId): int|WP_Error
+    public function enroll(int $userId, int $trajectoryId, array $options = []): int|WP_Error
     {
         // Check trajectory allows enrollment
         if (!$this->trajectories->isEnrollmentOpen($trajectoryId)) {
@@ -39,11 +39,17 @@ final class TrajectorySelection
         }
 
         // Create trajectory enrollment (edition_id = null)
-        $registrationId = $this->registrations->create([
+        $data = [
             'user_id' => $userId,
             'trajectory_id' => $trajectoryId,
             'enrollment_path' => RegistrationRepository::PATH_TRAJECTORY,
-        ]);
+        ];
+
+        if (!empty($options['company_id'])) {
+            $data['company_id'] = (int) $options['company_id'];
+        }
+
+        $registrationId = $this->registrations->create($data);
 
         if (is_wp_error($registrationId)) {
             return $registrationId;

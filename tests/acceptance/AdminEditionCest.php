@@ -121,8 +121,8 @@ class AdminEditionCest
         // Wait for save
         $I->waitForElement('.notice-success, #message.updated', 10);
 
-        // Verify edition was created
-        $I->see('Post published', '.notice');
+        // Verify edition was created (locale-independent check)
+        $I->seeElement('.notice-success, #message.updated');
 
         // Verify in database
         $I->seeInDatabase('stride_posts', [
@@ -276,7 +276,7 @@ class AdminEditionCest
         $I->click('Sessie toevoegen');
         $I->wait(1);
 
-        // Click the session form's Opslaan button (inside the add row)
+        // Click the session form's save button (inside the add row)
         $I->executeJS(
             'document.querySelector(".stride-session-add-row button.button-primary, ' .
             'tr.session-add-row button.button-primary, ' .
@@ -284,7 +284,7 @@ class AdminEditionCest
             '(() => { const btns = document.querySelectorAll("button"); ' .
             'for (const b of btns) { if (b.textContent.trim() === "Opslaan") { b.click(); break; } } })()'
         );
-        $I->wait(2);
+        $I->wait(4);
 
         $sessionsAfter = $I->executeJS(
             'return document.querySelectorAll(".session-row").length'

@@ -354,8 +354,8 @@ $companyEmail = $company['email'] ?? '';
                     <td class="address-cell">
                         <div class="address-label"><?php esc_html_e('Factuuradres', 'stride'); ?></div>
                         <div class="address-content">
-                            <?php if (!empty($billing['organisation'])): ?>
-                                <strong><?php echo esc_html($billing['organisation']); ?></strong>
+                            <?php if (!empty($billing['company'])): ?>
+                                <strong><?php echo esc_html($billing['company']); ?></strong><br>
                             <?php endif; ?>
                             <?php if (!empty($user['name'])): ?>
                                 <?php echo esc_html($user['name']); ?><br>

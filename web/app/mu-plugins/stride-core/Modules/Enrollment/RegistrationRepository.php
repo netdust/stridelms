@@ -17,6 +17,7 @@ final class RegistrationRepository
     public const PATH_INDIVIDUAL = 'individual';
     public const PATH_COLLEAGUE = 'colleague';
     public const PATH_TRAJECTORY = 'trajectory';
+    public const PATH_PARTNER = 'partner';
 
     /** @var array<string, array<object>> Per-request cache for findByUser results */
     private array $findByUserCache = [];
@@ -62,8 +63,8 @@ final class RegistrationRepository
         if ($existing) {
             $existingStatus = RegistrationStatus::tryFrom($existing->status);
 
-            // If cancelled (or withdrawn — DB enum value not in PHP enum), reactivate
-            if ($existingStatus === RegistrationStatus::Cancelled || $existing->status === 'withdrawn') {
+            // If cancelled or withdrawn, reactivate
+            if ($existingStatus === RegistrationStatus::Cancelled || $existingStatus === RegistrationStatus::Withdrawn) {
                 $reactivate = [
                     'status' => $data['status'] ?? RegistrationStatus::Confirmed->value,
                     'registered_at' => current_time('mysql'),
@@ -83,14 +84,6 @@ final class RegistrationRepository
                 }
 
                 $this->clearCache();
-
-                do_action('stride/registration/created', [
-                    'registration_id' => (int) $existing->id,
-                    'user_id' => (int) $data['user_id'],
-                    'edition_id' => $editionId,
-                    'trajectory_id' => $trajectoryId,
-                    'enrollment_path' => $data['enrollment_path'] ?? self::PATH_INDIVIDUAL,
-                ]);
 
                 return (int) $existing->id;
             }
@@ -125,14 +118,6 @@ final class RegistrationRepository
         $this->clearCache();
 
         $registrationId = (int) $wpdb->insert_id;
-
-        do_action('stride/registration/created', [
-            'registration_id' => $registrationId,
-            'user_id' => $insert['user_id'],
-            'edition_id' => $insert['edition_id'],
-            'trajectory_id' => $insert['trajectory_id'],
-            'enrollment_path' => $insert['enrollment_path'],
-        ]);
 
         return $registrationId;
     }
@@ -574,6 +559,8 @@ final class RegistrationRepository
             ['%s'],
             ['%d']
         );
+
+        $this->clearCache();
 
         return $result !== false;
     }

@@ -47,9 +47,10 @@ class EditionService extends AbstractService implements EditionQueryInterface
         $sessionService = new SessionService(ntdst_get(SessionRepository::class));
         ntdst_set(SessionService::class, fn() => $sessionService);
 
-        $completion = new EditionCompletion();
+        $completion = new EditionCompletion($this, $sessionService);
         ntdst_set(EditionCompletion::class, fn() => $completion);
         add_action('stride/attendance/marked', [$completion, 'onAttendanceMarked']);
+        add_action('learndash_course_completed', [$completion, 'onLearnDashCourseCompleted']);
 
         // Admin UI + settings (registers own hooks in constructor)
         new \Stride\Admin\StrideSettingsService();
@@ -323,7 +324,10 @@ class EditionService extends AbstractService implements EditionQueryInterface
             'fields' => 'ids',
         ]);
 
+        // Clean up attendance records before deleting sessions
+        $attendanceRepo = ntdst_get(\Stride\Modules\Attendance\AttendanceRepository::class);
         foreach ($sessions as $sessionId) {
+            $attendanceRepo->deleteBySession($sessionId);
             wp_delete_post($sessionId, true);
         }
     }

@@ -117,7 +117,7 @@ final class EnrollmentCompletion
             $model = ntdst_data()->get('vad_edition');
             $isOpen = (bool) $model->getMeta($editionId, 'selection_open');
             $deadline = $model->getMeta($editionId, 'selection_deadline');
-            $pastDeadline = $deadline && strtotime($deadline) < current_time('timestamp');
+            $pastDeadline = $deadline && strtotime($deadline) < time();
 
             if (!$isOpen) {
                 $selectionReason = __('Sessiekeuze is nog niet geopend.', 'stride');
@@ -134,7 +134,7 @@ final class EnrollmentCompletion
             // Session selection: allow re-editing even when completed
             if ($status === 'completed' && $type === 'session_selection' && $selectionOpen) {
                 $startDate = $editionId ? ntdst_data()->get('vad_edition')->getMeta($editionId, 'start_date') : null;
-                $courseStarted = $startDate && strtotime($startDate) < current_time('timestamp');
+                $courseStarted = $startDate && strtotime($startDate) < time();
 
                 if (!$courseStarted) {
                     $availability[$type] = ['state' => 'available', 'reason' => __('Je kunt je keuze nog wijzigen.', 'stride')];
@@ -441,6 +441,10 @@ final class EnrollmentCompletion
     {
         $repo = ntdst_get(RegistrationRepository::class);
         $registration = $repo->find($registrationId);
+
+        if (!$registration) {
+            return ['tasks' => [], 'total' => 0, 'completed' => 0, 'percentage' => 0];
+        }
 
         $tasks = $registration->completion_tasks ?? [];
         $editionId = (int) ($registration->edition_id ?? 0);

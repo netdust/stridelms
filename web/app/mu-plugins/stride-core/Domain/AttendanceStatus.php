@@ -30,6 +30,15 @@ enum AttendanceStatus: string
     }
 
     /**
+     * Get SQL-safe quoted string of all statuses that count as attended.
+     */
+    public static function attendedValues(): string
+    {
+        $values = array_filter(self::cases(), fn(self $s) => $s->countsAsAttended());
+        return implode(',', array_map(fn(self $s) => "'" . $s->value . "'", $values));
+    }
+
+    /**
      * Get human-readable label (Dutch).
      */
     public function label(): string

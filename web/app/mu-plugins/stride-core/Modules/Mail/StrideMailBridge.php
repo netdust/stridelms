@@ -54,11 +54,27 @@ final class StrideMailBridge extends AbstractService
         // Conditional dispatch for task-specific emails
         add_action('stride/enrollment/task_completed', [$this, 'onTaskCompleted']);
 
+        // Admin notification for new enrollments (explicit recipient)
+        add_action('stride/registration/created', [$this, 'onRegistrationCreatedAdminNotify']);
+
         // Quote send email (triggered from admin)
         add_action('stride/quote/send_email', [$this, 'onQuoteSendEmail'], 10, 3);
 
         // Seed templates on admin init (once)
         add_action('admin_init', [$this, 'maybeSeedTemplates']);
+    }
+
+    /**
+     * Send admin notification for new enrollments with explicit admin recipient.
+     */
+    public function onRegistrationCreatedAdminNotify(array $data): void
+    {
+        $adminEmail = self::getAdminEmail();
+        if (!$adminEmail) {
+            return;
+        }
+
+        ndmail_send('stride-enrollment-created-admin', $data, ['to' => $adminEmail]);
     }
 
     /**
@@ -463,7 +479,6 @@ final class StrideMailBridge extends AbstractService
             'stride-enrollment-created-admin' => [
                 'title' => 'Nieuwe inschrijving (admin)',
                 'subject' => 'Nieuwe inschrijving: {{user.display_name}} voor {{edition.title}}',
-                'trigger' => 'stride/registration/created',
                 'category' => 'notification',
                 'body' => '<p>Er is een nieuwe inschrijving ontvangen.</p>'
                     . '<p><strong>Deelnemer:</strong> {{user.display_name}} ({{user.email}})<br>'

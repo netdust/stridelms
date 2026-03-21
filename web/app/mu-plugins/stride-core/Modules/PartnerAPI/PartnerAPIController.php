@@ -180,8 +180,8 @@ final class PartnerAPIController
             'status' => $request->get_param('status'),
             'edition_id' => $request->get_param('edition_id'),
             'user_id' => $request->get_param('user_id'),
-            'page' => $request->get_param('page') ?? 1,
-            'per_page' => $request->get_param('per_page') ?? 20,
+            'page' => max(1, absint($request->get_param('page') ?? 1)),
+            'per_page' => min(100, max(1, absint($request->get_param('per_page') ?? 20))),
         ];
 
         // If user_id provided, verify it belongs to partner's company
@@ -259,8 +259,12 @@ final class PartnerAPIController
             }
         }
 
-        // Map results using pre-fetched data
-        $data = array_map(function ($row) use ($users, $editions, $editionCourseMap, $courses) {
+        // Map results, skip orphaned registrations (deleted users)
+        $data = array_filter(array_map(function ($row) use ($users, $editions, $editionCourseMap, $courses) {
+            if (!isset($users[(int) $row->user_id])) {
+                return null;
+            }
+
             $editionId = $row->edition_id ? (int) $row->edition_id : 0;
             $courseId = $editionCourseMap[$editionId] ?? 0;
 
@@ -276,10 +280,10 @@ final class PartnerAPIController
                 'registered_at' => $row->registered_at ? gmdate('c', strtotime($row->registered_at)) : null,
                 'completed_at' => $row->completed_at ? gmdate('c', strtotime($row->completed_at)) : null,
             ];
-        }, $rows);
+        }, $rows));
 
         return new WP_REST_Response([
-            'data' => $data,
+            'data' => array_values($data),
             'total' => $result['total'],
             'page' => $filters['page'],
             'per_page' => $filters['per_page'],
@@ -491,7 +495,18 @@ final class PartnerAPIController
 
         $attendance = array_map(function ($record) use ($sessionsMap) {
             $session = $sessionsMap[(int) $record->session_id] ?? null;
-            $sessionHours = $session ? ((float) ($session->fields['duration'] ?? 0)) / 60 : 0;
+            $sessionHours = 0;
+            if ($session) {
+                $startTime = $session->fields['start_time'] ?? '';
+                $endTime = $session->fields['end_time'] ?? '';
+                if ($startTime && $endTime) {
+                    $start = strtotime($startTime);
+                    $end = strtotime($endTime);
+                    if ($start && $end && $end > $start) {
+                        $sessionHours = ($end - $start) / 3600;
+                    }
+                }
+            }
 
             return [
                 'user_id' => (int) $record->user_id,
@@ -580,12 +595,14 @@ final class PartnerAPIController
             $enrollmentService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class);
             $result = $enrollmentService->enroll($user->ID, $editionId, [
                 'company_id' => $companyId,
-                'enrollment_path' => 'individual',
+                'enrollment_path' => \Stride\Modules\Enrollment\RegistrationRepository::PATH_PARTNER,
                 'notes' => sprintf('Enrolled via Partner API by user #%d', get_current_user_id()),
             ]);
         } elseif ($trajectoryId) {
             $selectionService = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::class);
-            $result = $selectionService->enroll($user->ID, $trajectoryId);
+            $result = $selectionService->enroll($user->ID, $trajectoryId, [
+                'company_id' => $companyId,
+            ]);
         } else {
             return new WP_Error('invalid_input', __('Either edition_id or trajectory_id is required.', 'stride'), ['status' => 400]);
         }
@@ -609,13 +626,17 @@ final class PartnerAPIController
             'company_id' => $companyId,
         ]);
 
+        // Fetch actual registration to return real status
+        $repo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+        $registration = $repo?->find($result);
+
         return new WP_REST_Response([
             'id' => $result,
             'user_id' => $user->ID,
             'edition_id' => $editionId ?: null,
             'trajectory_id' => $trajectoryId ?: null,
-            'status' => 'confirmed',
-            'registered_at' => gmdate('c'),
+            'status' => $registration?->status ?? 'confirmed',
+            'registered_at' => $registration?->registered_at ? gmdate('c', strtotime($registration->registered_at)) : gmdate('c'),
         ], 201);
     }
 }

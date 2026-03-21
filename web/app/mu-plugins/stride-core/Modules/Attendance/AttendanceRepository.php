@@ -195,8 +195,10 @@ final class AttendanceRepository
     {
         global $wpdb;
 
+        $statuses = AttendanceStatus::attendedValues();
+
         return (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$this->table()} WHERE user_id = %d AND edition_id = %d AND status = 'present'",
+            "SELECT COUNT(*) FROM {$this->table()} WHERE user_id = %d AND edition_id = %d AND status IN ($statuses)",
             $userId,
             $editionId
         ));
@@ -248,8 +250,10 @@ final class AttendanceRepository
     {
         global $wpdb;
 
+        $statuses = AttendanceStatus::attendedValues();
+
         $results = $wpdb->get_col($wpdb->prepare(
-            "SELECT user_id FROM {$this->table()} WHERE session_id = %d AND status = 'present'",
+            "SELECT user_id FROM {$this->table()} WHERE session_id = %d AND status IN ($statuses)",
             $sessionId
         ));
 

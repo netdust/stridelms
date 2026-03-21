@@ -21,6 +21,19 @@ $item_type = $type ?? 'edition';
 $enrollment_mode = $enrollment_mode ?? 'enrollment';
 $enrollment_open = $enrollment_open ?? false;
 
+// Already enrolled: show message instead of form
+if (!empty($already_enrolled)) {
+    stridence_template_part('partials/empty-state', null, [
+        'icon'    => 'check-circle',
+        'title'   => __('Je bent al ingeschreven', 'stridence'),
+        'message' => __('Je hebt al een actieve inschrijving voor dit aanbod.', 'stridence'),
+        'action'  => __('Naar mijn opleidingen', 'stridence'),
+        'url'     => home_url('/dashboard/opleidingen/'),
+    ]);
+    get_footer();
+    return;
+}
+
 // Closed mode: show message instead of form
 if ($enrollment_mode === 'closed' || !$enrollment_open) {
     stridence_template_part('partials/empty-state', null, [

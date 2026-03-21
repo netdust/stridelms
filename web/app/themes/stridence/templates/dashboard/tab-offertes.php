@@ -167,13 +167,22 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                                         </div>
 
                                         <!-- Line Items -->
-                                        <?php if (!empty($quote['items'])) : ?>
+                                        <?php
+                                        $quoteItems = $quote['items'] ?? [];
+                                        if (is_string($quoteItems)) {
+                                            $quoteItems = maybe_unserialize($quoteItems);
+                                        }
+                                        if (!is_array($quoteItems)) {
+                                            $quoteItems = [];
+                                        }
+                                        ?>
+                                        <?php if (!empty($quoteItems)) : ?>
                                             <div class="space-y-3">
                                                 <h4 class="dash-subheading">
                                                     <?php esc_html_e('Regelitems', 'stridence'); ?>
                                                 </h4>
                                                 <div class="bg-surface-card rounded-xl border border-border shadow-sm divide-y divide-border">
-                                                    <?php foreach ($quote['items'] as $item) : ?>
+                                                    <?php foreach ($quoteItems as $item) : ?>
                                                         <div class="px-4 py-3 flex items-center justify-between gap-4">
                                                             <div class="flex-1 min-w-0">
                                                                 <span class="font-medium text-sm truncate block">

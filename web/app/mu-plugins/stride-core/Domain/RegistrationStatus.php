@@ -15,6 +15,7 @@ enum RegistrationStatus: string
     case Waitlist = 'waitlist';
     case Interest = 'interest';
     case Pending = 'pending';
+    case Withdrawn = 'withdrawn';
 
     /**
      * Check if registration counts toward capacity.
@@ -55,6 +56,7 @@ enum RegistrationStatus: string
             self::Waitlist => 'Wachtlijst',
             self::Interest => 'Interesse',
             self::Pending => 'In afwachting',
+            self::Withdrawn => 'Uitgetrokken',
         };
     }
 }

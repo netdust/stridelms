@@ -56,31 +56,7 @@ final class AttendanceService extends AbstractService
      */
     public function markPresent(int $sessionId, int $userId, ?int $markedBy = null): int|WP_Error
     {
-        $session = $this->sessionService->getSession($sessionId);
-
-        if (!$session) {
-            return new WP_Error('invalid_session', 'Session not found');
-        }
-
-        $result = $this->repository->record(
-            $sessionId,
-            $userId,
-            AttendanceStatus::Present,
-            $session['edition_id'],
-            $markedBy ?? get_current_user_id()
-        );
-
-        if (!is_wp_error($result)) {
-            do_action('stride/attendance/marked', [
-                'attendance_id' => $result,
-                'session_id' => $sessionId,
-                'user_id' => $userId,
-                'status' => AttendanceStatus::Present->value,
-                'edition_id' => $session['edition_id'],
-            ]);
-        }
-
-        return $result;
+        return $this->mark($sessionId, $userId, AttendanceStatus::Present, $markedBy);
     }
 
     /**
@@ -88,31 +64,7 @@ final class AttendanceService extends AbstractService
      */
     public function markAbsent(int $sessionId, int $userId, ?int $markedBy = null): int|WP_Error
     {
-        $session = $this->sessionService->getSession($sessionId);
-
-        if (!$session) {
-            return new WP_Error('invalid_session', 'Session not found');
-        }
-
-        $result = $this->repository->record(
-            $sessionId,
-            $userId,
-            AttendanceStatus::Absent,
-            $session['edition_id'],
-            $markedBy ?? get_current_user_id()
-        );
-
-        if (!is_wp_error($result)) {
-            do_action('stride/attendance/marked', [
-                'attendance_id' => $result,
-                'session_id' => $sessionId,
-                'user_id' => $userId,
-                'status' => AttendanceStatus::Absent->value,
-                'edition_id' => $session['edition_id'],
-            ]);
-        }
-
-        return $result;
+        return $this->mark($sessionId, $userId, AttendanceStatus::Absent, $markedBy);
     }
 
     /**
@@ -120,18 +72,28 @@ final class AttendanceService extends AbstractService
      */
     public function markExcused(int $sessionId, int $userId, ?int $markedBy = null): int|WP_Error
     {
+        return $this->mark($sessionId, $userId, AttendanceStatus::Excused, $markedBy);
+    }
+
+    /**
+     * Internal: record attendance and dispatch event.
+     */
+    private function mark(int $sessionId, int $userId, AttendanceStatus $status, ?int $markedBy = null): int|WP_Error
+    {
         $session = $this->sessionService->getSession($sessionId);
 
         if (!$session) {
             return new WP_Error('invalid_session', 'Session not found');
         }
 
+        $actor = $markedBy ?? get_current_user_id();
+
         $result = $this->repository->record(
             $sessionId,
             $userId,
-            AttendanceStatus::Excused,
+            $status,
             $session['edition_id'],
-            $markedBy ?? get_current_user_id()
+            $actor
         );
 
         if (!is_wp_error($result)) {
@@ -139,8 +101,9 @@ final class AttendanceService extends AbstractService
                 'attendance_id' => $result,
                 'session_id' => $sessionId,
                 'user_id' => $userId,
-                'status' => AttendanceStatus::Excused->value,
+                'status' => $status->value,
                 'edition_id' => $session['edition_id'],
+                'marked_by' => $actor,
             ]);
         }
 
