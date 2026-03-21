@@ -222,6 +222,9 @@ final class AuthService implements \NTDST_Service_Meta
             return new \WP_Error('rate_limited', __('Too many login attempts. Please try again later.', 'ntdst-auth'));
         }
 
+        // Increment rate limit counter for every attempt (success or failure)
+        $this->tokens->incrementRateLimit('login_ip_' . $this->getClientIp());
+
         $email = sanitize_email($email);
         $user = get_user_by('email', $email);
         $genericError = new \WP_Error('invalid_credentials', __('Invalid email or password.', 'ntdst-auth'));

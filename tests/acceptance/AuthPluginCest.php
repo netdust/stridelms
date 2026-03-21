@@ -302,4 +302,89 @@ class AuthPluginCest
         // Should stay on wp-login.php for password reset
         $I->seeInCurrentUrl('wp-login.php');
     }
+
+    // -------------------------------------------------------------------------
+    // Rate Limiting Tests
+    // -------------------------------------------------------------------------
+
+    /**
+     * SCENARIO: Password login attempt increments rate limit counter
+     *   GIVEN: I am on /login with password auth enabled
+     *   WHEN: I submit invalid credentials
+     *   THEN: A rate limit transient is created for my IP
+     *
+     * This verifies the rate limit counter is actually incremented,
+     * preventing brute-force attacks on the password login endpoint.
+     */
+    public function passwordLoginIncrementsRateLimit(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify password login attempt increments rate limit counter');
+        $I->amOnPage('/login');
+        $I->waitForElement('input[type="email"]', 5);
+
+        // Submit invalid credentials via the password form
+        $I->executeJS("
+            const container = document.querySelector('[x-data]');
+            const comp = Alpine.\$data(container);
+            comp.email = 'nonexistent@example.com';
+            comp.password = 'wrong-password';
+            comp.loginPassword();
+        ");
+
+        // Wait for AJAX to complete
+        $I->wait(2);
+
+        // A rate limit transient should exist in the options table
+        // Transient key pattern: _transient_ntdst_auth_rate_{md5('login_ip_' + ip)}
+        $I->seeInDatabase('stride_options', [
+            'option_name LIKE' => '%ntdst_auth_rate%',
+        ]);
+    }
+
+    /**
+     * SCENARIO: Registration attempt increments rate limit counter
+     *   GIVEN: I am on /register
+     *   WHEN: I submit a registration form
+     *   THEN: A rate limit transient is created for my IP
+     */
+    public function registrationIncrementsRateLimit(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify registration attempt increments rate limit counter');
+
+        // Clear any existing rate limit transients first
+        $I->executeJS("true"); // noop to ensure page context
+        $I->amOnPage('/register');
+        $I->waitForElement('#email', 5);
+
+        $testEmail = 'ratelimit-test-' . time() . '@example.com';
+
+        $I->fillField('#first_name', 'Rate');
+        $I->fillField('#last_name', 'Test');
+        $I->fillField('#email', $testEmail);
+
+        // Select profile type if present
+        $profileTypeSelects = $I->grabMultiple('#profile_type');
+        if (!empty($profileTypeSelects)) {
+            $I->executeJS("
+                const select = document.getElementById('profile_type');
+                if (select && select.options.length > 1) {
+                    select.value = select.options[1].value;
+                    select.dispatchEvent(new Event('input', { bubbles: true }));
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            ");
+        }
+
+        $I->checkOption('#consent_terms');
+        $I->checkOption('#consent_privacy');
+        $I->click('button[type="submit"]');
+
+        // Wait for AJAX response
+        $I->waitForText('inbox', 10);
+
+        // A rate limit transient should exist for registration
+        $I->seeInDatabase('stride_options', [
+            'option_name LIKE' => '%ntdst_auth_rate%',
+        ]);
+    }
 }

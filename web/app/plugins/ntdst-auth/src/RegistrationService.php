@@ -55,6 +55,9 @@ final class RegistrationService implements \NTDST_Service_Meta
             return new \WP_Error('rate_limited', __('Too many registration attempts. Please try again later.', 'ntdst-auth'));
         }
 
+        // Increment rate limit counter for every attempt
+        $this->tokens->incrementRateLimit('register_ip_' . $this->getClientIp());
+
         $email = sanitize_email($data['email'] ?? '');
         if (!is_email($email)) {
             return new \WP_Error('invalid_email', __('Please enter a valid email address.', 'ntdst-auth'));

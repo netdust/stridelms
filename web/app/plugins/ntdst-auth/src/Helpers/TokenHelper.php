@@ -159,7 +159,7 @@ final class TokenHelper
         return (int) $data >= $limit;
     }
 
-    private function incrementRateLimit(string $key): void
+    public function incrementRateLimit(string $key): void
     {
         $transientKey = self::TRANSIENT_PREFIX_RATE . md5($key);
         $window = (int) ($this->config['rate_limit_window'] ?? 15);
