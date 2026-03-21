@@ -456,8 +456,7 @@ final class EnrollmentFormHandler
             return new WP_Error('invalid_item', __('Item niet gevonden.', 'stride'));
         }
 
-        $subtotal = Money::cents((int) round($price * 100));
-        $discount = $vouchers->calculateDiscount($validation, $subtotal);
+        $discount = $vouchers->calculateDiscount($validation, $price);
 
         ntdst_log('enrollment')->info('Voucher validated', [
             'item_type' => $itemType,
@@ -477,17 +476,19 @@ final class EnrollmentFormHandler
     /**
      * Get price for an item (edition or trajectory).
      */
-    private function getItemPrice(string $itemType, int $itemId): ?float
+    private function getItemPrice(string $itemType, int $itemId): ?Money
     {
         if ($itemType === 'trajectory') {
             $trajectoryService = ntdst_get(TrajectoryService::class);
             $trajectory = $trajectoryService->getTrajectory($itemId);
-            return $trajectory ? (float) $trajectory['price'] : null;
+            return $trajectory ? Money::eur((float) $trajectory['price']) : null;
         }
 
-        // Default: edition
+        // Default: edition — pass current user for member pricing
         $editions = ntdst_get(EditionService::class);
-        return $editions->getPrice($itemId);
+        $userId = get_current_user_id() ?: null;
+
+        return $editions->getPrice($itemId, $userId);
     }
 
     /**
