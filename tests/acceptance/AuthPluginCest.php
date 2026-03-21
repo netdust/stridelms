@@ -138,6 +138,10 @@ class AuthPluginCest
     public function registrationShowsSuccessMessage(AcceptanceTester $I): void
     {
         $I->wantTo('verify registration shows success message');
+
+        // Clear rate limits to avoid being blocked by previous test runs
+        $I->dontHaveInDatabase('stride_options', ['option_name LIKE' => '%ntdst_auth_rate%']);
+
         $I->amOnPage('/register');
 
         // Wait for Alpine.js to initialize
@@ -351,8 +355,9 @@ class AuthPluginCest
     {
         $I->wantTo('verify registration attempt increments rate limit counter');
 
-        // Clear any existing rate limit transients first
-        $I->executeJS("true"); // noop to ensure page context
+        // Clear any existing rate limit transients so this test isn't blocked
+        $I->dontHaveInDatabase('stride_options', ['option_name LIKE' => '%ntdst_auth_rate%']);
+
         $I->amOnPage('/register');
         $I->waitForElement('#email', 5);
 
