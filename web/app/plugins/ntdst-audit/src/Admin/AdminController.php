@@ -59,15 +59,17 @@ final class AdminController implements \NTDST_Service_Meta
 
         ntdst_enqueue_admin_toolkit();
 
-        wp_enqueue_style('flatpickr', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css', [], '4.6.13');
-        wp_enqueue_script('flatpickr', 'https://cdn.jsdelivr.net/npm/flatpickr', [], '4.6.13', true);
-        wp_enqueue_script('flatpickr-nl', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/nl.js', ['flatpickr'], '4.6.13', true);
+        $pluginUrl = plugin_dir_url(dirname(__DIR__));
+
+        wp_enqueue_style('flatpickr', $pluginUrl . 'assets/css/flatpickr.min.css', [], '4.6.13');
+        wp_enqueue_script('flatpickr', $pluginUrl . 'assets/js/flatpickr.min.js', [], '4.6.13', true);
+        wp_enqueue_script('flatpickr-nl', $pluginUrl . 'assets/js/flatpickr-nl.js', ['flatpickr'], '4.6.13', true);
 
         wp_enqueue_script(
             'alpinejs',
-            'https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js',
+            $pluginUrl . 'assets/js/alpine.min.js',
             ['flatpickr'],
-            '3.14.0',
+            '3.14.9',
             ['strategy' => 'defer']
         );
 
