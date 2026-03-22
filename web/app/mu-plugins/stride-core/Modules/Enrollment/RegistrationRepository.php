@@ -44,8 +44,9 @@ final class RegistrationRepository
             return new WP_Error('missing_field', 'Required: edition_id or trajectory_id');
         }
 
-        if (empty($data['user_id'])) {
-            return new WP_Error('missing_field', 'Required: user_id');
+        $status = $data['status'] ?? 'confirmed';
+        if (empty($data['user_id']) && $status !== RegistrationStatus::Interest->value) {
+            return new WP_Error('missing_field', 'Required: user_id (except for interest registrations)');
         }
 
         // Check for duplicate
@@ -179,6 +180,29 @@ final class RegistrationRepository
         }
 
         return $row;
+    }
+
+    /**
+     * Find an interest registration by email and edition.
+     *
+     * Searches enrollment_data JSON for interest.email match.
+     */
+    public function findByEmailAndEdition(string $email, int $editionId): ?object
+    {
+        global $wpdb;
+
+        $table = $this->table();
+
+        return $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$table}
+             WHERE edition_id = %d
+             AND status = %s
+             AND JSON_UNQUOTE(JSON_EXTRACT(enrollment_data, '$.interest.email')) = %s
+             LIMIT 1",
+            $editionId,
+            RegistrationStatus::Interest->value,
+            $email
+        ));
     }
 
     /**

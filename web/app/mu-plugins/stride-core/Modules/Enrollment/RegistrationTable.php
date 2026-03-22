@@ -145,5 +145,30 @@ final class RegistrationTable
         if (empty($hasUserEditionIdx)) {
             $wpdb->query("ALTER TABLE {$table} ADD INDEX idx_user_edition (user_id, edition_id)");
         }
+
+        // Make user_id nullable for anonymous interest registrations
+        $wpdb->query("ALTER TABLE {$table} MODIFY COLUMN user_id BIGINT UNSIGNED NULL");
+
+        // Migrate existing flat enrollment_data to stage-keyed format
+        $rows = $wpdb->get_results(
+            "SELECT id, enrollment_data FROM {$table} WHERE enrollment_data IS NOT NULL AND enrollment_data != '' AND enrollment_data != 'null'"
+        );
+        foreach ($rows as $row) {
+            $decoded = json_decode($row->enrollment_data, true);
+            if (!is_array($decoded) || empty($decoded)) {
+                continue;
+            }
+            // Skip if already stage-keyed (first key is a known stage)
+            $firstKey = array_key_first($decoded);
+            if (in_array($firstKey, ['interest', 'enrollment_personal', 'enrollment_billing', 'intake', 'evaluation'], true)) {
+                continue;
+            }
+            // Wrap as enrollment_personal
+            $wpdb->update(
+                $table,
+                ['enrollment_data' => wp_json_encode(['enrollment_personal' => $decoded])],
+                ['id' => (int) $row->id]
+            );
+        }
     }
 }
