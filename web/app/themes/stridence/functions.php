@@ -641,6 +641,9 @@ add_shortcode('stride_enrollment', function ($atts = []) {
     return ob_get_clean();
 });
 
+require_once __DIR__ . '/services/frontend/shortcodes/InterestShortcodes.php';
+require_once __DIR__ . '/services/frontend/shortcodes/IntakeShortcodes.php';
+require_once __DIR__ . '/services/frontend/shortcodes/EvaluationShortcodes.php';
 (new \stridence\services\frontend\shortcodes\InterestShortcodes())->register();
 (new \stridence\services\frontend\shortcodes\IntakeShortcodes())->register();
 (new \stridence\services\frontend\shortcodes\EvaluationShortcodes())->register();
