@@ -10,7 +10,7 @@
  */
 
 use Stride\Modules\Edition\EditionService;
-use Stride\Modules\Enrollment\EnrollmentFieldGroups;
+use Stride\Modules\Questionnaire\QuestionnaireRepository;
 
 if (!is_user_logged_in()) {
     wp_redirect(wp_login_url(get_permalink()));
@@ -98,11 +98,11 @@ $billing_groups   = [];
 
 if ($item_id) {
     try {
-        $post_type       = $item_type === 'trajectory' ? 'vad_trajectory' : 'vad_edition';
-        $fieldsService   = ntdst_get(EnrollmentFieldGroups::class);
-        $field_groups    = $fieldsService->getFieldGroupsForPost($item_id, $post_type);
-        $personal_groups = array_values(array_filter($field_groups, fn($g) => ($g['step'] ?? 'personal') === 'personal'));
-        $billing_groups  = array_values(array_filter($field_groups, fn($g) => ($g['step'] ?? 'personal') === 'billing'));
+        $post_type         = $item_type === 'trajectory' ? 'vad_trajectory' : 'vad_edition';
+        $questionnaireRepo = ntdst_get(QuestionnaireRepository::class);
+        $personal_groups   = $questionnaireRepo->getGroupsForStage($item_id, 'enrollment_personal', $post_type);
+        $billing_groups    = $questionnaireRepo->getGroupsForStage($item_id, 'enrollment_billing', $post_type);
+        $field_groups      = array_merge($personal_groups, $billing_groups);
     } catch (\Exception $e) {
         // Service not available
     }
