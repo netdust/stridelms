@@ -11,6 +11,8 @@ use Stride\Modules\Enrollment\EnrollmentService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Invoicing\QuoteService;
 use Stride\Modules\Invoicing\VoucherService;
+use Stride\Modules\Questionnaire\QuestionnaireRepository;
+use Stride\Modules\Questionnaire\QuestionnaireValidator;
 use Stride\Modules\Trajectory\TrajectorySelection;
 use Stride\Modules\Trajectory\TrajectoryService;
 use WP_Error;
@@ -32,7 +34,6 @@ final class EnrollmentFormHandler
     {
         // Register API action handlers
         add_filter('ntdst/api_data/stride_submit_enrollment', [$this, 'handleSubmitEnrollment'], 10, 2);
-        add_filter('ntdst/api_data/stride_register_interest', [$this, 'handleRegisterInterest'], 10, 2);
         add_filter('ntdst/api_data/stride_validate_voucher', [$this, 'handleValidateVoucher'], 10, 2);
         add_filter('ntdst/api_data/stride_save_session_selection', [$this, 'handleSaveSessionSelection'], 10, 2);
     }
@@ -64,68 +65,6 @@ final class EnrollmentFormHandler
             'trajectory' => $this->processTrajectoryEnrollment($params, $userId),
             default => $this->processEditionEnrollment($params, $userId),
         };
-    }
-
-    /**
-     * Handle interest registration.
-     *
-     * @param mixed $data Existing data (unused)
-     * @param array<string, mixed> $params Request parameters
-     * @return array<string, mixed>|WP_Error
-     */
-    public function handleRegisterInterest(mixed $data, array $params): array|WP_Error
-    {
-        $userId = get_current_user_id();
-        if (!$userId) {
-            return new WP_Error('not_logged_in', __('Je moet ingelogd zijn om je interesse te melden.', 'stride'));
-        }
-
-        $itemType = sanitize_text_field($params['item_type'] ?? 'edition');
-        $editionId = absint($params['edition_id'] ?? 0);
-        $trajectoryId = absint($params['trajectory_id'] ?? 0);
-
-        // Update user profile with provided info
-        $firstName = sanitize_text_field($params['first_name'] ?? '');
-        $lastName = sanitize_text_field($params['last_name'] ?? '');
-        $phone = sanitize_text_field($params['phone'] ?? '');
-        $organisation = sanitize_text_field($params['organisation'] ?? '');
-        $message = sanitize_textarea_field($params['message'] ?? '');
-
-        if (empty($firstName) || empty($lastName)) {
-            return new WP_Error('validation_error', __('Voornaam en achternaam zijn vereist.', 'stride'));
-        }
-
-        // Update user meta
-        wp_update_user([
-            'ID' => $userId,
-            'first_name' => $firstName,
-            'last_name' => $lastName,
-        ]);
-        if ($phone) {
-            update_user_meta($userId, 'phone', $phone);
-        }
-        if ($organisation) {
-            update_user_meta($userId, 'organisation', $organisation);
-        }
-
-        // Register interest
-        $enrollment = ntdst_get(EnrollmentService::class);
-        $result = $enrollment->registerInterest($userId, [
-            'edition_id' => $editionId ?: null,
-            'trajectory_id' => $trajectoryId ?: null,
-            'notes' => $message,
-        ]);
-
-        if (is_wp_error($result)) {
-            return $result;
-        }
-
-        return [
-            'success' => true,
-            'message' => __('Je interesse is geregistreerd. We houden je op de hoogte!', 'stride'),
-            'registration_id' => $result,
-            'redirect_url' => home_url('/mijn-account/?tab=inschrijvingen'),
-        ];
     }
 
     /**
@@ -166,15 +105,36 @@ final class EnrollmentFormHandler
             return $validation;
         }
 
-        // Validate required extra fields from field groups
-        $extraFieldValidation = $this->validateExtraFields(
+        // Split extra fields into stage-keyed structure and validate each stage
+        $stageData = $this->splitExtraFieldsByStage(
             $enrollmentData['extra_fields'] ?? [],
             $editionId,
             'vad_edition'
         );
-        if (is_wp_error($extraFieldValidation)) {
-            return $extraFieldValidation;
+
+        $validator = ntdst_get(QuestionnaireValidator::class);
+
+        $personalResult = $validator->validate(
+            $stageData['enrollment_personal'] ?? [],
+            $editionId,
+            'enrollment_personal'
+        );
+        if (is_wp_error($personalResult)) {
+            return $personalResult;
         }
+
+        $billingResult = $validator->validate(
+            $stageData['enrollment_billing'] ?? [],
+            $editionId,
+            'enrollment_billing'
+        );
+        if (is_wp_error($billingResult)) {
+            return $billingResult;
+        }
+
+        // Replace flat extra_fields with stage-keyed enrollment_data
+        unset($enrollmentData['extra_fields']);
+        $enrollmentData['enrollment_data'] = $stageData;
 
         $enrollment = ntdst_get(EnrollmentService::class);
         $result = $enrollment->processEnrollment($enrollmentData);
@@ -264,15 +224,38 @@ final class EnrollmentFormHandler
             return $validation;
         }
 
-        // Validate required extra fields from field groups
-        $extraFieldValidation = $this->validateExtraFields(
+        // Split extra fields into stage-keyed structure and validate each stage
+        $stageData = $this->splitExtraFieldsByStage(
             $billingData['extra_fields'] ?? [],
             $trajectoryId,
             'vad_trajectory'
         );
-        if (is_wp_error($extraFieldValidation)) {
-            return $extraFieldValidation;
+
+        $validator = ntdst_get(QuestionnaireValidator::class);
+
+        $personalResult = $validator->validate(
+            $stageData['enrollment_personal'] ?? [],
+            $trajectoryId,
+            'enrollment_personal',
+            'vad_trajectory'
+        );
+        if (is_wp_error($personalResult)) {
+            return $personalResult;
         }
+
+        $billingResult = $validator->validate(
+            $stageData['enrollment_billing'] ?? [],
+            $trajectoryId,
+            'enrollment_billing',
+            'vad_trajectory'
+        );
+        if (is_wp_error($billingResult)) {
+            return $billingResult;
+        }
+
+        // Replace flat extra_fields with stage-keyed enrollment_data
+        unset($billingData['extra_fields']);
+        $billingData['enrollment_data'] = $stageData;
 
         // Create enrollment via TrajectorySelection
         $selectionService = ntdst_get(TrajectorySelection::class);
@@ -597,38 +580,39 @@ final class EnrollmentFormHandler
     }
 
     /**
-     * Validate required extra fields against field group definitions.
+     * Split flat extra fields into stage-keyed structure.
+     *
+     * Fields belonging to 'enrollment_billing' are placed under that key;
+     * everything else defaults to 'enrollment_personal'.
      *
      * @param array<string, string|bool> $extraFields Sanitized extra field values
-     * @param int $postId Edition or trajectory ID
-     * @param string $postType 'vad_edition' or 'vad_trajectory'
+     * @param int    $postId   Edition or trajectory post ID
+     * @param string $postType Post type — 'vad_edition' or 'vad_trajectory'
+     * @return array{enrollment_personal: array<string, mixed>, enrollment_billing: array<string, mixed>}
      */
-    private function validateExtraFields(array $extraFields, int $postId, string $postType): true|WP_Error
+    private function splitExtraFieldsByStage(array $extraFields, int $postId, string $postType): array
     {
-        $fieldGroups = ntdst_get(\Stride\Modules\Enrollment\EnrollmentFieldGroups::class);
-        $allFields = $fieldGroups->getEnrollmentFieldsForPost($postId, $postType);
+        $questionnaireRepo = ntdst_get(QuestionnaireRepository::class);
 
-        foreach ($allFields as $field) {
-            if (empty($field['required'])) {
-                continue;
-            }
+        $billingFieldNames = array_column(
+            $questionnaireRepo->getFlatFieldsForStage($postId, 'enrollment_billing', $postType),
+            'name'
+        );
 
-            $name = $field['name'] ?? '';
-            if (empty($name)) {
-                continue;
-            }
+        $stageData = [
+            'enrollment_personal' => [],
+            'enrollment_billing'  => [],
+        ];
 
-            $value = $extraFields[$name] ?? '';
-            if ($value === '' || $value === false) {
-                $label = $field['label'] ?? $name;
-                return new WP_Error(
-                    'validation_error',
-                    sprintf(__('Het veld "%s" is verplicht.', 'stride'), $label)
-                );
+        foreach ($extraFields as $key => $value) {
+            if (in_array($key, $billingFieldNames, true)) {
+                $stageData['enrollment_billing'][$key] = $value;
+            } else {
+                $stageData['enrollment_personal'][$key] = $value;
             }
         }
 
-        return true;
+        return $stageData;
     }
 
     /**
