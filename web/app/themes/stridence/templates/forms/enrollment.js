@@ -85,7 +85,7 @@ function enrollmentForm(config) {
         },
 
         get submitAction() {
-            return this.mode === 'interest' ? 'stride_register_interest' : 'stride_submit_enrollment';
+            return this.mode === 'interest' ? 'stride_submit_interest' : 'stride_submit_enrollment';
         },
 
         form: {

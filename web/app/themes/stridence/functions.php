@@ -641,72 +641,7 @@ add_shortcode('stride_enrollment', function ($atts = []) {
     return ob_get_clean();
 });
 
-/**
- * Interest form shortcode
- *
- * Uses the unified enrollment form in interest mode.
- *
- * Usage: [stride_interest]
- * URL parameters: ?cursus=<course_id> or ?traject=<trajectory_id>
- */
-add_shortcode('stride_interest', function ($atts = []) {
-    $course_id = isset($_GET['cursus']) ? absint($_GET['cursus']) : 0;
-    $trajectory_id = isset($_GET['traject']) ? absint($_GET['traject']) : 0;
-
-    // Handle trajectory interest
-    if ($trajectory_id) {
-        $trajectory = get_post($trajectory_id);
-        if (!$trajectory || $trajectory->post_type !== 'vad_trajectory') {
-            return stridence_render_error_state(
-                'alert-circle',
-                __('Traject niet gevonden', 'stridence'),
-                __('Dit traject bestaat niet of is verwijderd.', 'stridence'),
-                __('Naar trajecten', 'stridence'),
-                get_post_type_archive_link('vad_trajectory')
-            );
-        }
-
-        ob_start();
-        stridence_template_part('templates/forms/enrollment', null, [
-            'item_id'         => $trajectory_id,
-            'item_type'       => 'trajectory',
-            'item_data'       => ['id' => $trajectory_id, 'title' => $trajectory->post_title],
-            'enrollment_mode' => 'interest',
-        ]);
-        return ob_get_clean();
-    }
-
-    // Handle course interest
-    if (!$course_id) {
-        return stridence_render_error_state(
-            'alert-circle',
-            __('Geen cursus geselecteerd', 'stridence'),
-            __('Selecteer eerst een cursus of traject.', 'stridence'),
-            __('Naar cursussen', 'stridence'),
-            get_post_type_archive_link('sfwd-courses')
-        );
-    }
-
-    $course = get_post($course_id);
-    if (!$course || $course->post_type !== 'sfwd-courses') {
-        return stridence_render_error_state(
-            'alert-circle',
-            __('Cursus niet gevonden', 'stridence'),
-            __('Deze cursus bestaat niet of is verwijderd.', 'stridence'),
-            __('Naar cursussen', 'stridence'),
-            get_post_type_archive_link('sfwd-courses')
-        );
-    }
-
-    ob_start();
-    stridence_template_part('templates/forms/enrollment', null, [
-        'item_id'         => $course_id,
-        'item_type'       => 'edition',
-        'item_data'       => ['id' => $course_id, 'title' => $course->post_title],
-        'enrollment_mode' => 'interest',
-    ]);
-    return ob_get_clean();
-});
+(new \stridence\services\frontend\shortcodes\InterestShortcodes())->register();
 
 /**
  * Render error state card

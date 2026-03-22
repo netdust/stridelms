@@ -30,6 +30,8 @@ final class QuestionnaireService extends AbstractService
 
     protected function init(): void
     {
+        new QuestionnaireHandler();
+
         if (is_admin()) {
             new QuestionnaireSettingsPage();
         }
