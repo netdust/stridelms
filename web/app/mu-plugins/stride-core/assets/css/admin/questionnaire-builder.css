@@ -1,0 +1,397 @@
+/* Questionnaire Builder — Admin Page */
+
+/* =========================================================
+   Page wrapper
+   ========================================================= */
+
+.stride-questionnaire-wrap .description {
+    margin-bottom: 16px;
+}
+
+.stride-add-group-wrap {
+    margin: 16px 0;
+}
+
+/* =========================================================
+   Group block
+   ========================================================= */
+
+.stride-group-block {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    margin-bottom: 16px;
+}
+
+.stride-group-block.is-collapsed .stride-group-body {
+    display: none;
+}
+
+.stride-group-block.ui-sortable-placeholder {
+    border: 2px dashed #c3c4c7;
+    background: #f6f7f7;
+    visibility: visible !important;
+    height: 60px;
+}
+
+/* =========================================================
+   Group header
+   ========================================================= */
+
+.stride-group-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: #f6f7f7;
+    border-bottom: 1px solid #c3c4c7;
+    border-radius: 4px 4px 0 0;
+}
+
+.stride-group-header .stride-drag-handle {
+    cursor: move;
+    color: #999;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.stride-group-label-preview {
+    flex: 1;
+    font-weight: 600;
+    font-size: 14px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.stride-stage-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.stride-assignment-count {
+    font-size: 12px;
+    color: #666;
+    flex-shrink: 0;
+}
+
+.stride-group-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    color: #50575e;
+    padding: 4px;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.stride-group-toggle:hover {
+    color: #1d2327;
+}
+
+.stride-remove-group {
+    background: none;
+    border: none;
+    color: #a00;
+    cursor: pointer;
+    font-size: 22px;
+    flex-shrink: 0;
+    padding: 0 4px;
+    line-height: 1;
+}
+
+.stride-remove-group:hover {
+    color: #dc3232;
+}
+
+/* =========================================================
+   Group body
+   ========================================================= */
+
+.stride-group-body {
+    padding: 12px;
+}
+
+.stride-group-config {
+    margin-bottom: 16px;
+}
+
+/* Label / stage config rows */
+.stride-group-label-row,
+.stride-stage-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.stride-group-label-row label,
+.stride-stage-row label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+}
+
+.stride-group-label-row label span,
+.stride-stage-row label span {
+    font-weight: 500;
+    min-width: 90px;
+    flex-shrink: 0;
+    color: #50575e;
+}
+
+/* =========================================================
+   Assignments
+   ========================================================= */
+
+.stride-assignments-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.stride-assignments-label {
+    font-weight: 500;
+    font-size: 13px;
+    padding-top: 6px;
+    flex-shrink: 0;
+    min-width: 110px;
+    color: #50575e;
+}
+
+.stride-assignments-select {
+    flex: 1;
+    min-width: 300px;
+}
+
+/* Select2 tweaks — blue selection chips */
+.stride-group-body .select2-container {
+    flex: 1;
+    min-width: 300px;
+}
+
+.stride-group-body .select2-container--default .select2-selection--multiple {
+    border-color: #8c8f94;
+    min-height: 34px;
+}
+
+.stride-group-body .select2-container--default .select2-selection--multiple .select2-selection__choice {
+    background-color: #2271b1;
+    border-color: #2271b1;
+    color: #fff;
+    font-size: 12px;
+}
+
+.stride-group-body .select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.stride-group-body .select2-container--default .select2-selection--multiple .select2-selection__choice__remove:hover {
+    color: #fff;
+}
+
+/* =========================================================
+   Field cards container
+   ========================================================= */
+
+.stride-field-cards {
+    margin-top: 8px;
+}
+
+/* =========================================================
+   Field card
+   ========================================================= */
+
+.stride-field-card {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 3px;
+    margin-bottom: 8px;
+}
+
+.stride-field-card.is-collapsed .stride-field-card-body {
+    display: none;
+}
+
+.stride-field-card.ui-sortable-placeholder {
+    visibility: visible !important;
+    background: #f0f6fc;
+    border-style: dashed;
+}
+
+/* =========================================================
+   Field card header
+   ========================================================= */
+
+.stride-field-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.stride-field-card-header:hover {
+    background: #f9f9f9;
+}
+
+.stride-field-card-header .stride-drag-handle {
+    cursor: move;
+    color: #999;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.stride-field-label-preview {
+    flex: 1;
+    font-size: 13px;
+    color: #1d2327;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.stride-remove-field {
+    background: none;
+    border: none;
+    color: #a00;
+    cursor: pointer;
+    font-size: 16px;
+    flex-shrink: 0;
+    padding: 0 2px;
+    line-height: 1;
+}
+
+.stride-remove-field:hover {
+    color: #dc3232;
+}
+
+/* =========================================================
+   Type pill
+   ========================================================= */
+
+.stride-type-pill {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
+}
+
+/* =========================================================
+   Field card body
+   ========================================================= */
+
+.stride-field-card-body {
+    padding: 10px 10px 10px 32px;
+    border-top: 1px solid #eee;
+}
+
+.stride-field-config-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.stride-field-config-row label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+}
+
+.stride-field-config-row label span {
+    font-size: 12px;
+    font-weight: 500;
+    color: #50575e;
+    min-width: 80px;
+    flex-shrink: 0;
+}
+
+.stride-field-config-row input[type="text"],
+.stride-field-config-row input[type="number"],
+.stride-field-config-row textarea,
+.stride-field-config-row select {
+    flex: 1;
+}
+
+.stride-field-config-row input[type="checkbox"] {
+    width: auto;
+    flex: none;
+}
+
+/* Inline label for checkbox row */
+.stride-inline-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #1d2327;
+}
+
+.stride-inline-label span {
+    min-width: auto !important;
+}
+
+/* Scale row: two label+input pairs side by side */
+.stride-config-scale {
+    flex-wrap: wrap;
+}
+
+.stride-config-scale label {
+    flex: 0 0 auto;
+}
+
+/* =========================================================
+   Type picker
+   ========================================================= */
+
+.stride-type-picker {
+    display: none;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 0;
+    margin-bottom: 8px;
+}
+
+.stride-type-picker.is-visible {
+    display: flex;
+}
+
+.stride-type-pick-btn {
+    padding: 6px 12px;
+    border: 2px solid #dcdcde;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: border-color 0.15s, background-color 0.15s;
+    line-height: 1.4;
+}
+
+.stride-type-pick-btn:hover {
+    background: #f6f7f7;
+    /* border-color overridden by inline style from PHP per-type color */
+}
+
+/* =========================================================
+   Add field button area
+   ========================================================= */
+
+.stride-add-field-wrap {
+    margin: 8px 0 0 32px;
+}
