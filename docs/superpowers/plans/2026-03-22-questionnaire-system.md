@@ -4,7 +4,7 @@
 
 **Goal:** Replace the enrollment-only field group system with a unified questionnaire module that serves interest, enrollment, intake, and evaluation stages.
 
-**Architecture:** New `Modules/Questionnaire/` module with Repository, Validator, Renderer, Service, and Admin page. Shortcodes in `functions.php` updated to use the new module. Enrollment templates updated to use stage-keyed field groups.
+**Architecture:** New `Modules/Questionnaire/` module with Repository, Validator, Renderer, Handler, Service, and Admin page. Dedicated shortcode classes replace inline closures. Enrollment templates updated to use stage-keyed field groups.
 
 **Tech Stack:** PHP 8.3, WordPress, NTDST DI container, jQuery + jQuery UI Sortable (admin), Alpine.js + Tailwind (frontend)
 
@@ -22,6 +22,7 @@
 | `web/app/mu-plugins/stride-core/Modules/Questionnaire/QuestionnaireValidator.php` | Validate submitted answers against field definitions |
 | `web/app/mu-plugins/stride-core/Modules/Questionnaire/QuestionnaireRenderer.php` | Render field groups to HTML using template partials |
 | `web/app/mu-plugins/stride-core/Modules/Questionnaire/QuestionnaireService.php` | Service (hooks: admin_menu, admin_init, enqueue_scripts) |
+| `web/app/mu-plugins/stride-core/Modules/Questionnaire/QuestionnaireHandler.php` | API action handlers (interest, intake, evaluation submissions) |
 | `web/app/mu-plugins/stride-core/Modules/Questionnaire/Admin/QuestionnaireSettingsPage.php` | Card-based admin builder page |
 | `web/app/mu-plugins/stride-core/assets/js/admin/questionnaire-builder.js` | jQuery admin UI: card repeater, sortable, Select2 |
 | `web/app/mu-plugins/stride-core/assets/css/admin/questionnaire-builder.css` | Admin card-based builder styles |
@@ -34,8 +35,12 @@
 | `web/app/themes/stridence/templates/forms/fields/field-scale.php` | Numbered pill row (1-5 / 1-10) |
 | `web/app/themes/stridence/templates/forms/fields/field-description.php` | Static text paragraph |
 | `web/app/themes/stridence/templates/forms/interest.php` | Interest form template (anonymous) |
-| `web/app/themes/stridence/templates/forms/intake.php` | Intake form template |
-| `web/app/themes/stridence/templates/forms/evaluation.php` | Evaluation form template |
+| `web/app/themes/stridence/templates/forms/stage-form.php` | Shared stage form template (intake/evaluation) |
+| `web/app/themes/stridence/templates/forms/intake.php` | Intake form wrapper |
+| `web/app/themes/stridence/templates/forms/evaluation.php` | Evaluation form wrapper |
+| `web/app/themes/stridence/services/frontend/shortcodes/InterestShortcodes.php` | `[stride_interest]` shortcode class |
+| `web/app/themes/stridence/services/frontend/shortcodes/IntakeShortcodes.php` | `[stride_intake]` shortcode class |
+| `web/app/themes/stridence/services/frontend/shortcodes/EvaluationShortcodes.php` | `[stride_evaluation]` shortcode class |
 
 ### New Files (Tests)
 
@@ -56,7 +61,8 @@
 | `web/app/mu-plugins/stride-core/Handlers/EnrollmentFormHandler.php` | Use `QuestionnaireValidator`, remove `stride_register_interest`, store stage-keyed data |
 | `web/app/themes/stridence/templates/forms/enrollment.php` | Replace `EnrollmentFieldGroups` with `QuestionnaireRepository`, stage-keyed filtering |
 | `web/app/themes/stridence/templates/forms/fields/dynamic-field.php` | Add radio, scale, description type cases |
-| `web/app/themes/stridence/functions.php` | Update shortcodes: `stride_enrollment`, `stride_interest`, add `stride_intake`, `stride_evaluation` |
+| `web/app/themes/stridence/functions.php` | Remove inline `stride_interest` shortcode closure (moved to class) |
+| `web/app/themes/stridence/templates/forms/enrollment.js` | Update `stride_register_interest` action name to `stride_submit_interest` |
 
 ### Deleted Files
 
@@ -833,39 +839,7 @@ git commit -m "feat(questionnaire): add QuestionnaireService, register in config
 
 ---
 
-### Task 8: Delete Old Field Group System
-
-**Files:**
-- Delete: `web/app/mu-plugins/stride-core/Modules/Enrollment/EnrollmentFieldGroups.php`
-- Delete: `web/app/mu-plugins/stride-core/Admin/FieldGroupSettingsPage.php`
-- Delete: `web/app/mu-plugins/stride-core/assets/js/admin/field-groups.js`
-- Delete: `web/app/mu-plugins/stride-core/assets/css/admin/field-groups.css`
-- Modify: `web/app/mu-plugins/stride-core/Modules/Enrollment/EnrollmentService.php` — remove `EnrollmentFieldGroups` and `FieldGroupSettingsPage` instantiation
-
-- [ ] **Step 1: Find and remove references to `EnrollmentFieldGroups` in `EnrollmentService`**
-
-Search `EnrollmentService.php` for `EnrollmentFieldGroups` and `FieldGroupSettingsPage` references. Remove the instantiation (likely in `init()` method). The enrollment form handler references will be updated in Phase 3.
-
-- [ ] **Step 2: Delete the four old files**
-
-```bash
-rm web/app/mu-plugins/stride-core/Modules/Enrollment/EnrollmentFieldGroups.php
-rm web/app/mu-plugins/stride-core/Admin/FieldGroupSettingsPage.php
-rm web/app/mu-plugins/stride-core/assets/js/admin/field-groups.js
-rm web/app/mu-plugins/stride-core/assets/css/admin/field-groups.css
-```
-
-- [ ] **Step 3: Run unit tests to check for breakage**
-
-Run: `ddev exec vendor/bin/phpunit --testsuite Unit`
-Expected: PASS (or identify any tests that reference deleted classes and update them)
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add -A
-git commit -m "refactor(questionnaire): delete old EnrollmentFieldGroups and FieldGroupSettingsPage"
-```
+### Task 8: (MOVED — see Task 13b after handler updates)
 
 ---
 
@@ -1331,140 +1305,300 @@ function strideInterestForm(config) {
 </script>
 ```
 
-- [ ] **Step 2: Update `stride_interest` shortcode in `functions.php`**
+- [ ] **Step 2: Create `InterestShortcodes` class**
 
-Replace the existing `stride_interest` shortcode (lines 652-709) to use the new interest template. The key change: it now takes an `edition_id` parameter (from URL `?editie=<id>`) and renders the interest template. No login required.
+Create `web/app/themes/stridence/services/frontend/shortcodes/InterestShortcodes.php`:
 
 ```php
-add_shortcode('stride_interest', function ($atts = []) {
-    $edition_id = isset($_GET['editie']) ? absint($_GET['editie']) : 0;
+<?php
+declare(strict_types=1);
 
-    if (!$edition_id) {
-        return stridence_render_error_state(
-            'alert-circle',
-            __('Geen editie geselecteerd', 'stridence'),
-            __('Selecteer eerst een editie via de cursuspagina.', 'stridence'),
-            __('Naar cursussen', 'stridence'),
-            get_post_type_archive_link('sfwd-courses')
-        );
+namespace stridence\services\frontend\shortcodes;
+
+/**
+ * Interest form shortcode.
+ *
+ * Renders anonymous interest form for editions without sessions.
+ */
+final class InterestShortcodes
+{
+    use ShortcodeBase;
+
+    public function register(): void
+    {
+        add_shortcode('stride_interest', [$this, 'renderInterest']);
     }
 
-    $edition = get_post($edition_id);
-    if (!$edition || $edition->post_type !== 'vad_edition') {
-        return stridence_render_error_state(
-            'alert-circle',
-            __('Editie niet gevonden', 'stridence'),
-            __('Deze editie bestaat niet of is verwijderd.', 'stridence'),
-            __('Naar cursussen', 'stridence'),
-            get_post_type_archive_link('sfwd-courses')
-        );
-    }
+    public function renderInterest(array $atts = []): string
+    {
+        $edition_id = isset($_GET['editie']) ? absint($_GET['editie']) : 0;
 
-    ob_start();
-    stridence_template_part('templates/forms/interest', null, [
-        'edition_id' => $edition_id,
-    ]);
-    return ob_get_clean();
-});
+        if (!$edition_id) {
+            return stridence_render_error_state(
+                'alert-circle',
+                __('Geen editie geselecteerd', 'stridence'),
+                __('Selecteer eerst een editie via de cursuspagina.', 'stridence'),
+                __('Naar cursussen', 'stridence'),
+                get_post_type_archive_link('sfwd-courses')
+            );
+        }
+
+        $edition = get_post($edition_id);
+        if (!$edition || $edition->post_type !== 'vad_edition') {
+            return stridence_render_error_state(
+                'alert-circle',
+                __('Editie niet gevonden', 'stridence'),
+                __('Deze editie bestaat niet of is verwijderd.', 'stridence'),
+                __('Naar cursussen', 'stridence'),
+                get_post_type_archive_link('sfwd-courses')
+            );
+        }
+
+        ob_start();
+        stridence_template_part('templates/forms/interest', null, [
+            'edition_id' => $edition_id,
+        ]);
+        return ob_get_clean() ?: '';
+    }
+}
 ```
 
-- [ ] **Step 3: Add `stride_submit_interest` API action**
+- [ ] **Step 3: Remove old inline `stride_interest` shortcode from `functions.php`**
+
+Delete the `add_shortcode('stride_interest', ...)` closure (lines 644-709 in functions.php).
+
+- [ ] **Step 4: Create QuestionnaireHandler**
+
+Create `web/app/mu-plugins/stride-core/Modules/Questionnaire/QuestionnaireHandler.php`:
+
+```php
+<?php
+declare(strict_types=1);
+
+namespace Stride\Modules\Questionnaire;
+
+use Stride\Domain\RegistrationStatus;
+use Stride\Modules\Enrollment\RegistrationRepository;
+use WP_Error;
+
+/**
+ * API action handlers for questionnaire submissions.
+ *
+ * Thin handler — validates input, delegates to repository.
+ */
+final class QuestionnaireHandler
+{
+    public function __construct()
+    {
+        $this->init();
+    }
+
+    private function init(): void
+    {
+        add_filter('ntdst/api_data/stride_submit_interest', [$this, 'handleSubmitInterest'], 10, 2);
+        add_filter('ntdst/api_data/stride_submit_intake', [$this, 'handleSubmitStage'], 10, 2);
+        add_filter('ntdst/api_data/stride_submit_evaluation', [$this, 'handleSubmitStage'], 10, 2);
+
+        // Interest is public (anonymous)
+        add_filter('ntdst/api/public_actions', function (array $actions): array {
+            $actions[] = 'stride_submit_interest';
+            return $actions;
+        });
+    }
+
+    public function handleSubmitInterest(mixed $data, array $params): array|WP_Error
+    {
+        $editionId = absint($params['edition_id'] ?? 0);
+        $name = sanitize_text_field($params['name'] ?? '');
+        $email = sanitize_email($params['email'] ?? '');
+
+        if (!$editionId || empty($name) || empty($email)) {
+            return new WP_Error('validation_error', __('Naam, e-mailadres en editie zijn vereist.', 'stride'));
+        }
+
+        // Validate extra fields
+        $extraFields = $this->sanitizeExtraFields($params['extra_fields'] ?? []);
+        $validator = ntdst_get(QuestionnaireValidator::class);
+        $validationResult = $validator->validate($extraFields, $editionId, 'interest');
+        if (is_wp_error($validationResult)) {
+            return $validationResult;
+        }
+
+        // Check for existing interest (upsert)
+        $registrations = ntdst_get(RegistrationRepository::class);
+        $existing = $registrations->findByEmailAndEdition($email, $editionId);
+
+        $stageData = array_merge(['name' => $name, 'email' => $email], $extraFields);
+
+        if ($existing) {
+            // Merge with existing data, update interest key
+            $existingData = json_decode($existing->enrollment_data ?? '{}', true) ?: [];
+            $existingData['interest'] = $stageData;
+            $registrations->update((int) $existing->id, [
+                'enrollment_data' => wp_json_encode($existingData),
+            ]);
+        } else {
+            // Create new interest registration
+            $registrationId = $registrations->create([
+                'user_id' => null,
+                'edition_id' => $editionId,
+                'status' => RegistrationStatus::Interest->value,
+                'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
+                'enrollment_data' => ['interest' => $stageData],
+            ]);
+
+            if (is_wp_error($registrationId)) {
+                return $registrationId;
+            }
+        }
+
+        // Notify admin
+        $edition = get_post($editionId);
+        $subject = sprintf(__('Nieuwe interesse: %s', 'stride'), $edition ? $edition->post_title : "Editie #{$editionId}");
+        $message = sprintf(
+            __("Naam: %s\nE-mail: %s\nEditie: %s", 'stride'),
+            $name, $email, $edition ? $edition->post_title : "#{$editionId}"
+        );
+        wp_mail(get_option('admin_email'), $subject, $message);
+
+        return [
+            'success' => true,
+            'message' => __('Je interesse is geregistreerd. We houden je op de hoogte!', 'stride'),
+        ];
+    }
+
+    public function handleSubmitStage(mixed $data, array $params): array|WP_Error
+    {
+        $userId = get_current_user_id();
+        if (!$userId) {
+            return new WP_Error('not_logged_in', __('Je moet ingelogd zijn.', 'stride'));
+        }
+
+        $editionId = absint($params['edition_id'] ?? 0);
+        if (!$editionId) {
+            return new WP_Error('invalid_input', __('Geen editie opgegeven.', 'stride'));
+        }
+
+        // Determine stage from the current filter
+        $stage = str_contains(current_filter(), 'intake') ? 'intake' : 'evaluation';
+
+        // Find existing registration
+        $registrations = ntdst_get(RegistrationRepository::class);
+        $registration = $registrations->findByUserAndEdition($userId, $editionId);
+        if (!$registration) {
+            return new WP_Error('no_registration', __('Geen inschrijving gevonden.', 'stride'));
+        }
+
+        // Check registration status matches expected state
+        $expectedStatus = $stage === 'intake' ? RegistrationStatus::Confirmed : RegistrationStatus::Completed;
+        if ($registration->status !== $expectedStatus->value) {
+            return new WP_Error('invalid_status', __('Je inschrijving heeft niet de juiste status voor dit formulier.', 'stride'));
+        }
+
+        // Validate
+        $extraFields = $this->sanitizeExtraFields($params['extra_fields'] ?? []);
+        $validator = ntdst_get(QuestionnaireValidator::class);
+        $validationResult = $validator->validate($extraFields, $editionId, $stage);
+        if (is_wp_error($validationResult)) {
+            return $validationResult;
+        }
+
+        // Merge stage data into enrollment_data
+        $existingData = json_decode($registration->enrollment_data ?? '{}', true) ?: [];
+        $existingData[$stage] = $extraFields;
+
+        $registrations->update((int) $registration->id, [
+            'enrollment_data' => wp_json_encode($existingData),
+        ]);
+
+        return [
+            'success' => true,
+            'message' => __('Bedankt voor het invullen!', 'stride'),
+        ];
+    }
+
+    private function sanitizeExtraFields(array|string $fields): array
+    {
+        if (is_string($fields)) {
+            $fields = json_decode($fields, true) ?: [];
+        }
+        $sanitized = [];
+        foreach ($fields as $key => $value) {
+            $sanitized[sanitize_key($key)] = is_string($value) ? sanitize_text_field($value) : $value;
+        }
+        return $sanitized;
+    }
+}
+```
+
+- [ ] **Step 5: Wire QuestionnaireHandler in QuestionnaireService::init()**
 
 Add to `QuestionnaireService::init()`:
-
 ```php
-add_filter('ntdst/api_data/stride_submit_interest', [$this, 'handleSubmitInterest'], 10, 2);
-add_filter('ntdst/api/public_actions', function (array $actions): array {
-    $actions[] = 'stride_submit_interest';
-    return $actions;
-});
+new QuestionnaireHandler();
 ```
 
-Add handler method to `QuestionnaireService`:
+- [ ] **Step 6: Update `enrollment.js` — replace `stride_register_interest` with `stride_submit_interest`**
 
-```php
-public function handleSubmitInterest(mixed $data, array $params): array|WP_Error
-{
-    $editionId = absint($params['edition_id'] ?? 0);
-    $name = sanitize_text_field($params['name'] ?? '');
-    $email = sanitize_email($params['email'] ?? '');
+In `web/app/themes/stridence/templates/forms/enrollment.js`, find `stride_register_interest` and replace with `stride_submit_interest`.
 
-    if (!$editionId || empty($name) || empty($email)) {
-        return new WP_Error('validation_error', __('Naam, e-mailadres en editie zijn vereist.', 'stride'));
-    }
-
-    // Validate extra fields
-    $extraFields = $this->sanitizeExtraFields($params['extra_fields'] ?? []);
-    $validator = ntdst_get(QuestionnaireValidator::class);
-    $validationResult = $validator->validate($extraFields, $editionId, 'interest');
-    if (is_wp_error($validationResult)) {
-        return $validationResult;
-    }
-
-    // Check for existing interest (upsert)
-    $registrations = ntdst_get(RegistrationRepository::class);
-    $existing = $registrations->findByEmailAndEdition($email, $editionId);
-
-    $stageData = array_merge(['name' => $name, 'email' => $email], $extraFields);
-
-    if ($existing) {
-        // Update existing interest
-        $registrations->update((int) $existing->id, [
-            'enrollment_data' => wp_json_encode(['interest' => $stageData]),
-        ]);
-        $registrationId = (int) $existing->id;
-    } else {
-        // Create new interest registration
-        $registrationId = $registrations->create([
-            'user_id' => null,
-            'edition_id' => $editionId,
-            'status' => RegistrationStatus::Interest->value,
-            'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
-            'enrollment_data' => ['interest' => $stageData],
-        ]);
-
-        if (is_wp_error($registrationId)) {
-            return $registrationId;
-        }
-    }
-
-    // Notify admin
-    $edition = get_post($editionId);
-    $subject = sprintf(__('Nieuwe interesse: %s', 'stride'), $edition ? $edition->post_title : "Editie #{$editionId}");
-    $message = sprintf(
-        __("Naam: %s\nE-mail: %s\nEditie: %s", 'stride'),
-        $name, $email, $edition ? $edition->post_title : "#{$editionId}"
-    );
-    wp_mail(get_option('admin_email'), $subject, $message);
-
-    return [
-        'success' => true,
-        'message' => __('Je interesse is geregistreerd. We houden je op de hoogte!', 'stride'),
-    ];
-}
-
-private function sanitizeExtraFields(array|string $fields): array
-{
-    if (is_string($fields)) {
-        $fields = json_decode($fields, true) ?: [];
-    }
-    $sanitized = [];
-    foreach ($fields as $key => $value) {
-        $sanitized[sanitize_key($key)] = is_string($value) ? sanitize_text_field($value) : $value;
-    }
-    return $sanitized;
-}
-```
-
-- [ ] **Step 4: Verify interest form in browser**
+- [ ] **Step 7: Verify interest form in browser**
 
 Expected: Form loads without login, submission creates interest registration, admin receives email.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add web/app/themes/stridence/templates/forms/interest.php web/app/themes/stridence/functions.php web/app/mu-plugins/stride-core/Modules/Questionnaire/QuestionnaireService.php
-git commit -m "feat(questionnaire): add anonymous interest form with shortcode and API action"
+git add web/app/themes/stridence/services/frontend/shortcodes/InterestShortcodes.php \
+  web/app/mu-plugins/stride-core/Modules/Questionnaire/QuestionnaireHandler.php \
+  web/app/mu-plugins/stride-core/Modules/Questionnaire/QuestionnaireService.php \
+  web/app/themes/stridence/templates/forms/interest.php \
+  web/app/themes/stridence/templates/forms/enrollment.js \
+  web/app/themes/stridence/functions.php
+git commit -m "feat(questionnaire): add interest shortcode class, handler, and anonymous form"
+```
+
+---
+
+### Task 13b: Delete Old Field Group System
+
+**Files:**
+- Delete: `web/app/mu-plugins/stride-core/Modules/Enrollment/EnrollmentFieldGroups.php`
+- Delete: `web/app/mu-plugins/stride-core/Admin/FieldGroupSettingsPage.php`
+- Delete: `web/app/mu-plugins/stride-core/assets/js/admin/field-groups.js`
+- Delete: `web/app/mu-plugins/stride-core/assets/css/admin/field-groups.css`
+- Modify: `web/app/mu-plugins/stride-core/Modules/Enrollment/EnrollmentService.php` — remove `EnrollmentFieldGroups` and `FieldGroupSettingsPage` references
+
+> **Note:** This task runs AFTER handler updates (Task 12) and enrollment template update (Task 11) to avoid breaking the site between tasks.
+
+- [ ] **Step 1: Remove references to `EnrollmentFieldGroups` in `EnrollmentService`**
+
+Search `EnrollmentService.php` for `EnrollmentFieldGroups` and `FieldGroupSettingsPage` references. Remove instantiation and imports.
+
+- [ ] **Step 2: Delete the four old files and the old option**
+
+```bash
+rm web/app/mu-plugins/stride-core/Modules/Enrollment/EnrollmentFieldGroups.php
+rm web/app/mu-plugins/stride-core/Admin/FieldGroupSettingsPage.php
+rm web/app/mu-plugins/stride-core/assets/js/admin/field-groups.js
+rm web/app/mu-plugins/stride-core/assets/css/admin/field-groups.css
+```
+
+Also add to `RegistrationTable::migrate()`:
+```php
+delete_option('stride_enrollment_field_groups');
+```
+
+- [ ] **Step 3: Run unit tests to check for breakage**
+
+Run: `ddev exec vendor/bin/phpunit --testsuite Unit`
+Expected: PASS (update any tests that reference deleted classes)
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add -A
+git commit -m "refactor(questionnaire): delete old EnrollmentFieldGroups and FieldGroupSettingsPage"
 ```
 
 ---
@@ -1472,10 +1606,11 @@ git commit -m "feat(questionnaire): add anonymous interest form with shortcode a
 ### Task 14: Intake + Evaluation Shortcodes
 
 **Files:**
+- Create: `web/app/themes/stridence/templates/forms/stage-form.php`
 - Create: `web/app/themes/stridence/templates/forms/intake.php`
 - Create: `web/app/themes/stridence/templates/forms/evaluation.php`
-- Modify: `web/app/themes/stridence/functions.php` — add `stride_intake` and `stride_evaluation` shortcodes
-- Modify: `web/app/mu-plugins/stride-core/Modules/Questionnaire/QuestionnaireService.php` — add intake/evaluation API handlers
+- Create: `web/app/themes/stridence/services/frontend/shortcodes/IntakeShortcodes.php`
+- Create: `web/app/themes/stridence/services/frontend/shortcodes/EvaluationShortcodes.php`
 
 - [ ] **Step 1: Create shared stage form template**
 
@@ -1508,6 +1643,14 @@ $registrations = ntdst_get(RegistrationRepository::class);
 $registration = $registrations->findByUserAndEdition($userId, $edition_id);
 
 if (!$registration) return;
+
+// Check registration status matches expected state
+$expectedStatus = match ($stage) {
+    'intake' => 'confirmed',
+    'evaluation' => 'completed',
+    default => null,
+};
+if ($expectedStatus && $registration->status !== $expectedStatus) return;
 
 // Check if already completed
 $enrollmentData = json_decode($registration->enrollment_data ?? '{}', true) ?: [];
@@ -1622,83 +1765,67 @@ stridence_template_part('templates/forms/stage-form', null, [
 ]);
 ```
 
-- [ ] **Step 3: Add shortcodes in `functions.php`**
+- [ ] **Step 3: Create `IntakeShortcodes` class**
+
+Create `web/app/themes/stridence/services/frontend/shortcodes/IntakeShortcodes.php`:
 
 ```php
-add_shortcode('stride_intake', function ($atts = []) {
-    if (!is_user_logged_in()) return '';
-    $edition_id = isset($_GET['editie']) ? absint($_GET['editie']) : 0;
-    if (!$edition_id) return '';
+<?php
+declare(strict_types=1);
 
-    ob_start();
-    stridence_template_part('templates/forms/intake', null, ['edition_id' => $edition_id]);
-    return ob_get_clean();
-});
+namespace stridence\services\frontend\shortcodes;
 
-add_shortcode('stride_evaluation', function ($atts = []) {
-    if (!is_user_logged_in()) return '';
-    $edition_id = isset($_GET['editie']) ? absint($_GET['editie']) : 0;
-    if (!$edition_id) return '';
-
-    ob_start();
-    stridence_template_part('templates/forms/evaluation', null, ['edition_id' => $edition_id]);
-    return ob_get_clean();
-});
-```
-
-- [ ] **Step 4: Add API handlers in QuestionnaireService**
-
-Register in `init()`:
-```php
-add_filter('ntdst/api_data/stride_submit_intake', [$this, 'handleSubmitStage'], 10, 2);
-add_filter('ntdst/api_data/stride_submit_evaluation', [$this, 'handleSubmitStage'], 10, 2);
-```
-
-Handler (shared for intake/evaluation):
-```php
-public function handleSubmitStage(mixed $data, array $params): array|WP_Error
+final class IntakeShortcodes
 {
-    $userId = get_current_user_id();
-    if (!$userId) {
-        return new WP_Error('not_logged_in', __('Je moet ingelogd zijn.', 'stride'));
+    use ShortcodeBase;
+
+    public function register(): void
+    {
+        add_shortcode('stride_intake', [$this, 'renderIntake']);
     }
 
-    $editionId = absint($params['edition_id'] ?? 0);
-    if (!$editionId) {
-        return new WP_Error('invalid_input', __('Geen editie opgegeven.', 'stride'));
+    public function renderIntake(array $atts = []): string
+    {
+        if (!is_user_logged_in()) return '';
+        $edition_id = isset($_GET['editie']) ? absint($_GET['editie']) : 0;
+        if (!$edition_id) return '';
+
+        return $this->renderTemplate('forms/intake.php', ['edition_id' => $edition_id]);
     }
-
-    // Determine stage from the current filter
-    $stage = str_contains(current_filter(), 'intake') ? 'intake' : 'evaluation';
-
-    // Find existing registration
-    $registrations = ntdst_get(RegistrationRepository::class);
-    $registration = $registrations->findByUserAndEdition($userId, $editionId);
-    if (!$registration) {
-        return new WP_Error('no_registration', __('Geen inschrijving gevonden.', 'stride'));
-    }
-
-    // Validate
-    $extraFields = $this->sanitizeExtraFields($params['extra_fields'] ?? []);
-    $validator = ntdst_get(QuestionnaireValidator::class);
-    $validationResult = $validator->validate($extraFields, $editionId, $stage);
-    if (is_wp_error($validationResult)) {
-        return $validationResult;
-    }
-
-    // Merge stage data into enrollment_data
-    $existingData = json_decode($registration->enrollment_data ?? '{}', true) ?: [];
-    $existingData[$stage] = $extraFields;
-
-    $registrations->update((int) $registration->id, [
-        'enrollment_data' => wp_json_encode($existingData),
-    ]);
-
-    return [
-        'success' => true,
-        'message' => __('Bedankt voor het invullen!', 'stride'),
-    ];
 }
+```
+
+- [ ] **Step 4: Create `EvaluationShortcodes` class**
+
+Create `web/app/themes/stridence/services/frontend/shortcodes/EvaluationShortcodes.php`:
+
+```php
+<?php
+declare(strict_types=1);
+
+namespace stridence\services\frontend\shortcodes;
+
+final class EvaluationShortcodes
+{
+    use ShortcodeBase;
+
+    public function register(): void
+    {
+        add_shortcode('stride_evaluation', [$this, 'renderEvaluation']);
+    }
+
+    public function renderEvaluation(array $atts = []): string
+    {
+        if (!is_user_logged_in()) return '';
+        $edition_id = isset($_GET['editie']) ? absint($_GET['editie']) : 0;
+        if (!$edition_id) return '';
+
+        return $this->renderTemplate('forms/evaluation.php', ['edition_id' => $edition_id]);
+    }
+}
+```
+
+Note: API handlers for intake/evaluation are already registered in `QuestionnaireHandler` (created in Task 13, Step 4).
 ```
 
 - [ ] **Step 5: Commit**
@@ -1756,6 +1883,47 @@ git commit -m "feat(enrollment): upgrade interest registration on enrollment"
 
 ---
 
+### Task 16: Acceptance Tests
+
+**Files:**
+- Create: `tests/acceptance/QuestionnaireCest.php`
+
+- [ ] **Step 1: Write acceptance tests**
+
+Create `tests/acceptance/QuestionnaireCest.php` covering these scenarios:
+
+```
+ADMIN FLOW:
+  - Admin can create a field group with stage and fields
+  - Admin can add all 7 field types
+
+INTEREST FLOW:
+  - Anonymous user submits interest form → registration with status "interest"
+  - Duplicate interest (same email) updates existing
+
+ENROLLMENT FLOW:
+  - Enrollment with custom fields saves stage-keyed enrollment_data
+  - Interest registration upgraded on enrollment (matched by email)
+
+EVALUATION FLOW:
+  - Evaluation form shows for completed registration
+  - Already-submitted evaluation shows confirmation instead of form
+```
+
+- [ ] **Step 2: Run acceptance tests**
+
+Run: `ddev exec vendor/bin/codecept run acceptance QuestionnaireCest --steps`
+Expected: ALL pass
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add tests/acceptance/QuestionnaireCest.php
+git commit -m "test(questionnaire): add acceptance tests for all stages"
+```
+
+---
+
 ## Verification Stages (MANDATORY)
 
 > Run AFTER all implementation tasks. NOT done until all stages pass.
@@ -1769,6 +1937,7 @@ ddev exec vendor/bin/phpcs --standard=PSR12 \
   web/app/mu-plugins/stride-core/Modules/Questionnaire/QuestionnaireValidator.php \
   web/app/mu-plugins/stride-core/Modules/Questionnaire/QuestionnaireRenderer.php \
   web/app/mu-plugins/stride-core/Modules/Questionnaire/QuestionnaireService.php \
+  web/app/mu-plugins/stride-core/Modules/Questionnaire/QuestionnaireHandler.php \
   web/app/mu-plugins/stride-core/Modules/Questionnaire/Admin/QuestionnaireSettingsPage.php
 ```
 
