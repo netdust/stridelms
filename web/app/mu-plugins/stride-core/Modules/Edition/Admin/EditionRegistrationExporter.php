@@ -17,7 +17,6 @@ use Stride\Modules\Attendance\AttendanceRepository;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionService;
-use Stride\Modules\Enrollment\EnrollmentFieldGroups;
 
 /**
  * Comprehensive XLSX export for edition registrations.
@@ -141,9 +140,9 @@ final class EditionRegistrationExporter
             }
         }
 
-        // Collect enrollment_data field definitions for this edition
-        $fieldGroups = ntdst_get(EnrollmentFieldGroups::class);
-        $extraFields = $fieldGroups->getEnrollmentFieldsForPost($editionId, 'vad_edition');
+        // Note: Extra fields from the old enrollment field group system are no longer supported.
+        // Use the Questionnaire module for additional fields instead.
+        $extraFields = [];
 
         // Parse enrollment_data JSON for each registration
         foreach ($registrations as &$r) {

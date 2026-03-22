@@ -170,5 +170,8 @@ final class RegistrationTable
                 ['id' => (int) $row->id]
             );
         }
+
+        // Clean up old field groups option (no longer used — replaced by Questionnaire module)
+        delete_option('stride_enrollment_field_groups');
     }
 }

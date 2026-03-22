@@ -50,14 +50,10 @@ final class EnrollmentService extends AbstractService
         }, 20);
 
         // Register plain classes as singletons (no service lifecycle)
-        ntdst_set(EnrollmentFieldGroups::class, fn() => new EnrollmentFieldGroups());
         ntdst_set(EnrollmentCompletion::class, fn() => new EnrollmentCompletion($this->registrations));
 
         // Register completion task handler (AJAX + auto-confirm hook)
         new \Stride\Handlers\CompletionTaskHandler();
-
-        // Admin: field group settings page
-        new \Stride\Admin\FieldGroupSettingsPage();
 
         // Auto-enroll users when they access an open course lesson
         add_action('learndash-lesson-before', [$this, 'maybeEnrollOnLessonAccess'], 10, 3);

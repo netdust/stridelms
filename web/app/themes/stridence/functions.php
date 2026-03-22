@@ -642,6 +642,8 @@ add_shortcode('stride_enrollment', function ($atts = []) {
 });
 
 (new \stridence\services\frontend\shortcodes\InterestShortcodes())->register();
+(new \stridence\services\frontend\shortcodes\IntakeShortcodes())->register();
+(new \stridence\services\frontend\shortcodes\EvaluationShortcodes())->register();
 
 /**
  * Render error state card

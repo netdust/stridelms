@@ -244,28 +244,6 @@ final class EditionActionsMetabox
                 </select>
             </div>
 
-            <!-- Active field groups (read-only) -->
-            <?php
-            $fieldGroupsService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentFieldGroups::class);
-            $activeGroups = $fieldGroupsService->getFieldGroupsForPost($post->ID, 'vad_edition');
-            if (!empty($activeGroups)) : ?>
-                <div style="margin-top: 8px;">
-                    <span style="font-size: 11px; color: #646970;"><?php esc_html_e('Actieve veldgroepen:', 'stride'); ?></span>
-                    <ul style="margin: 4px 0 0; padding: 0; list-style: none;">
-                        <?php foreach ($activeGroups as $group) : ?>
-                            <li style="font-size: 11px; padding: 2px 0; color: #50575e;">
-                                <span class="dashicons dashicons-yes-alt" style="font-size: 14px; width: 14px; height: 14px; color: #2271b1; vertical-align: text-bottom;"></span>
-                                <?php echo esc_html($group['label']); ?>
-                                <span style="color: #a0a0a0;">(<?php echo esc_html($group['step'] === 'billing' ? 'facturatie' : 'persoonlijk'); ?>)</span>
-                            </li>
-                        <?php endforeach; ?>
-                    </ul>
-                    <a href="<?php echo esc_url(admin_url('admin.php?page=stride-field-groups')); ?>" style="font-size: 11px;">
-                        <?php esc_html_e('Veldgroepen beheren', 'stride'); ?> &rarr;
-                    </a>
-                </div>
-            <?php endif; ?>
-
             <!-- Post-course requirements -->
             <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #e0e0e0;">
                 <h4><?php esc_html_e('Na afloop', 'stride'); ?></h4>

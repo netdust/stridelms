@@ -45,6 +45,9 @@ final class AuditBridge extends AbstractService
 
         // LearnDash completion events
         add_action('learndash_course_completed', [$this, 'onCourseCompleted'], 10, 1);
+
+        // Assistant ability executions
+        add_action('ntdst_assistant/after_execute', [$this, 'onAssistantExecute'], 10, 4);
     }
 
     private function audit(): AuditService
@@ -116,6 +119,22 @@ final class AuditBridge extends AbstractService
             [
                 'session_id' => $data['session_id'] ?? null,
                 'edition_id' => $data['edition_id'] ?? null,
+            ]
+        );
+    }
+
+    public function onAssistantExecute(string $ability, array $input, mixed $result, array $meta): void
+    {
+        $this->audit()->record(
+            'assistant',
+            get_current_user_id() ?: 0,
+            "assistant.{$ability}",
+            get_current_user_id() ?: null,
+            [
+                'source'   => $meta['source'] ?? 'chat',
+                'input'    => $input,
+                'readonly' => $meta['readonly'] ?? false,
+                'success'  => !is_wp_error($result),
             ]
         );
     }
