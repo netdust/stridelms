@@ -206,6 +206,36 @@ final class RegistrationRepository
     }
 
     /**
+     * Upgrade an interest registration to a full enrollment.
+     *
+     * Sets user_id, status, enrollment_path, enrollment_data, and registered_at.
+     *
+     * @param array<string, mixed> $enrollmentData Merged enrollment_data to store
+     */
+    public function upgradeFromInterest(int $registrationId, int $userId, string $status, string $enrollmentPath, array $enrollmentData): bool
+    {
+        global $wpdb;
+
+        $result = $wpdb->update(
+            $this->table(),
+            [
+                'user_id'         => $userId,
+                'status'          => $status,
+                'enrollment_path' => $enrollmentPath,
+                'enrollment_data' => wp_json_encode($enrollmentData),
+                'registered_at'   => current_time('mysql'),
+            ],
+            ['id' => $registrationId]
+        );
+
+        if ($result !== false) {
+            $this->clearCache();
+        }
+
+        return $result !== false;
+    }
+
+    /**
      * Check if user is registered for edition.
      */
     public function existsForEdition(int $userId, int $editionId): bool

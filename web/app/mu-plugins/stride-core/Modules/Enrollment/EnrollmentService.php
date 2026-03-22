@@ -200,16 +200,6 @@ final class EnrollmentService extends AbstractService
                 return new WP_Error('edition_full', 'This edition is full');
             }
 
-            // Check not already registered (within transaction)
-            if ($this->hasActiveRegistration($userId, editionId: $editionId)) {
-                $wpdb->query('ROLLBACK');
-                ntdst_log('enrollment')->warning('Enrollment rejected: already registered', [
-                    'user_id' => $userId,
-                    'edition_id' => $editionId,
-                ]);
-                return new WP_Error('already_enrolled', 'User is already enrolled in this edition');
-            }
-
             // Determine initial status based on completion requirements + approval setting
             $completionService = ntdst_get(EnrollmentCompletion::class);
             $hasCompletionRequirements = $completionService->hasRequirements($editionId, 'vad_edition');
@@ -218,37 +208,80 @@ final class EnrollmentService extends AbstractService
                 ? RegistrationStatus::Pending
                 : RegistrationStatus::Confirmed;
 
-            // Build registration data
-            $registrationData = [
-                'user_id' => $userId,
-                'edition_id' => $editionId,
-                'status' => $initialStatus->value,
-                'enrollment_path' => $options['enrollment_path'] ?? RegistrationRepository::PATH_INDIVIDUAL,
-                'enrolled_by' => $options['enrolled_by'] ?? null,
-                'voucher_code' => $options['voucher_code'] ?? null,
-                'notes' => $options['notes'] ?? null,
-                'enrollment_data' => $options['enrollment_data'] ?? null,
-            ];
+            // Check for existing interest registration to upgrade (before duplicate check)
+            $upgradedRegistrationId = null;
+            $user = get_userdata($userId);
+            $userEmail = $user ? $user->user_email : '';
+            if ($userEmail) {
+                $existingInterest = $this->registrations->findByEmailAndEdition($userEmail, $editionId);
+                if ($existingInterest && $existingInterest->status === RegistrationStatus::Interest->value) {
+                    // Upgrade: set user_id, merge enrollment data
+                    $existingData = is_array($existingInterest->enrollment_data)
+                        ? $existingInterest->enrollment_data
+                        : (json_decode($existingInterest->enrollment_data ?? '{}', true) ?: []);
+                    $newData = is_array($options['enrollment_data'] ?? null)
+                        ? $options['enrollment_data']
+                        : [];
+                    $mergedData = array_merge($existingData, $newData);
 
-            // Propagate company_id from user meta if not explicitly provided
-            if (!isset($options['company_id'])) {
-                $companyId = (int) get_user_meta($userId, '_stride_company_id', true);
-                if ($companyId) {
-                    $registrationData['company_id'] = $companyId;
+                    $this->registrations->upgradeFromInterest(
+                        (int) $existingInterest->id,
+                        $userId,
+                        $initialStatus->value,
+                        $options['enrollment_path'] ?? RegistrationRepository::PATH_INDIVIDUAL,
+                        $mergedData
+                    );
+
+                    $upgradedRegistrationId = (int) $existingInterest->id;
                 }
-            } elseif ($options['company_id']) {
-                $registrationData['company_id'] = $options['company_id'];
             }
 
-            // Create registration
-            $registrationId = $this->registrations->create($registrationData);
+            if ($upgradedRegistrationId !== null) {
+                $registrationId = $upgradedRegistrationId;
+                $wpdb->query('COMMIT');
+            } else {
+                // Check not already registered (within transaction)
+                if ($this->hasActiveRegistration($userId, editionId: $editionId)) {
+                    $wpdb->query('ROLLBACK');
+                    ntdst_log('enrollment')->warning('Enrollment rejected: already registered', [
+                        'user_id' => $userId,
+                        'edition_id' => $editionId,
+                    ]);
+                    return new WP_Error('already_enrolled', 'User is already enrolled in this edition');
+                }
 
-            if (is_wp_error($registrationId)) {
-                $wpdb->query('ROLLBACK');
-                return $registrationId;
+                // Build registration data
+                $registrationData = [
+                    'user_id' => $userId,
+                    'edition_id' => $editionId,
+                    'status' => $initialStatus->value,
+                    'enrollment_path' => $options['enrollment_path'] ?? RegistrationRepository::PATH_INDIVIDUAL,
+                    'enrolled_by' => $options['enrolled_by'] ?? null,
+                    'voucher_code' => $options['voucher_code'] ?? null,
+                    'notes' => $options['notes'] ?? null,
+                    'enrollment_data' => $options['enrollment_data'] ?? null,
+                ];
+
+                // Propagate company_id from user meta if not explicitly provided
+                if (!isset($options['company_id'])) {
+                    $companyId = (int) get_user_meta($userId, '_stride_company_id', true);
+                    if ($companyId) {
+                        $registrationData['company_id'] = $companyId;
+                    }
+                } elseif ($options['company_id']) {
+                    $registrationData['company_id'] = $options['company_id'];
+                }
+
+                // Create registration
+                $registrationId = $this->registrations->create($registrationData);
+
+                if (is_wp_error($registrationId)) {
+                    $wpdb->query('ROLLBACK');
+                    return $registrationId;
+                }
+
+                $wpdb->query('COMMIT');
             }
-
-            $wpdb->query('COMMIT');
         } catch (\Throwable $e) {
             $wpdb->query('ROLLBACK');
             throw $e;
