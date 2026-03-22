@@ -773,6 +773,21 @@ if (!function_exists('register_post_type')) {
     }
 }
 
+if (!function_exists('get_post_type')) {
+    function get_post_type($post = null)
+    {
+        global $_test_posts;
+        if (is_numeric($post)) {
+            $p = $_test_posts[(int) $post] ?? null;
+            return $p->post_type ?? false;
+        }
+        if (is_object($post) && isset($post->post_type)) {
+            return $post->post_type;
+        }
+        return false;
+    }
+}
+
 if (!function_exists('register_post_meta')) {
     function register_post_meta(string $post_type, string $meta_key, array $args = []): bool
     {
