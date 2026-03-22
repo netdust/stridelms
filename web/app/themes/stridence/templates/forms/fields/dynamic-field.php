@@ -34,6 +34,12 @@ if ($type === 'select' && !empty($options)) {
 
 $inputId = 'extra_field_' . esc_attr($name);
 $modelBinding = "form.extra_fields['{$name}']";
+
+// Delegate to specialized templates for new types
+if (in_array($type, ['radio', 'scale', 'description'], true)) {
+    stridence_template_part('templates/forms/fields/field-' . $type, null, ['field' => $field]);
+    return;
+}
 ?>
 
 <div class="stride-dynamic-field">
