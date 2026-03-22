@@ -1,7 +1,7 @@
 # Questionnaire System — Design Spec
 
 **Date:** 2026-03-22
-**Status:** Draft
+**Status:** Reviewed
 **Replaces:** EnrollmentFieldGroups + FieldGroupSettingsPage
 
 ---
@@ -22,7 +22,7 @@ A stage is a moment in the registration lifecycle where questions can be shown.
 
 | Stage | When shown | Auth required | Creates/updates registration |
 |-------|-----------|---------------|------------------------------|
-| `interest` | Edition exists but has no sessions | No | Creates with status `interested` |
+| `interest` | Edition exists but has no sessions | No | Creates with status `interest` |
 | `enrollment_personal` | Enrollment form, personal step | Yes | Creates with status `confirmed` |
 | `enrollment_billing` | Enrollment form, billing step | Yes | Same registration |
 | `intake` | Dashboard, before training starts | Yes | Updates existing registration |
@@ -107,6 +107,8 @@ Modules/Questionnaire/
 - `getGroupsForStage(int $editionId, string $stage): array`
 - `getFlatFieldsForStage(int $editionId, string $stage): array`
 
+Supports both edition and trajectory assignments. Wildcards: `_all_editions`, `_all_trajectories`.
+
 **QuestionnaireRenderer** (plain class, DI)
 - `renderFieldGroups(array $groups, string $modelPrefix = 'form.extra_fields'): string`
 - Uses template partials, returns HTML string
@@ -114,7 +116,7 @@ Modules/Questionnaire/
 
 **QuestionnaireValidator** (plain class, DI)
 - `validate(array $submittedData, int $editionId, string $stage): true|WP_Error`
-- Checks required fields, type constraints
+- Checks required fields, type constraints (scale must be integer within [min, max])
 
 ### What Gets Deleted
 
@@ -122,12 +124,15 @@ Modules/Questionnaire/
 - `Admin/FieldGroupSettingsPage.php` — replaced by `QuestionnaireSettingsPage`
 - `assets/js/admin/field-groups.js` — rewritten for card-based UI
 - `assets/css/admin/field-groups.css` — rewritten for card-based UI
+- `wp_options` key `stride_enrollment_field_groups` — deleted, replaced by `stride_questionnaire_field_groups`
+- Existing field group data is not migrated — clean replace, admin recreates groups in new system
 
 ### What Gets Updated
 
 - `EnrollmentService` — uses `QuestionnaireRepository` instead of `EnrollmentFieldGroups`
-- `EnrollmentFormHandler` — uses `QuestionnaireValidator` instead of inline validation
+- `EnrollmentFormHandler` — uses `QuestionnaireValidator` instead of inline validation; removes old `stride_register_interest` action (replaced by `stride_submit_interest`)
 - `plugin-config.php` — register `QuestionnaireService`, remove old field group references
+- `RegistrationRepository` — add `findByEmailAndEdition(string $email, int $editionId): ?object` for interest-to-enrollment upgrade; allow null `user_id` when status is `interest`
 - Enrollment templates — update import path for field groups
 
 ---
@@ -274,8 +279,8 @@ Renders:
 
 On submit:
 1. Validate name + email + required interest fields
-2. Create registration: `user_id = null`, `status = interested`
-3. Store answers in `enrollment_data.interest` + name/email
+2. Check for existing `interest` registration with same email + edition (via `findByEmailAndEdition`). If found, update it (upsert). If not, create new.
+3. Registration: `user_id = null`, `status = interest`, answers in `enrollment_data.interest` including name/email
 4. Send `wp_mail` to admin
 5. Show confirmation message
 
@@ -346,13 +351,34 @@ All handlers follow the same pattern:
 
 ## Interest → Enrollment Upgrade Path
 
-1. Anonymous user submits interest → registration created with `status = interested`, `user_id = null`, email stored in `enrollment_data.interest.email`
+1. Anonymous user submits interest → registration created with `status = interest`, `user_id = null`, email stored in `enrollment_data.interest.email`
 2. Admin adds sessions to edition → edition is now planned
 3. Admin notifies interested users (manual action, sends email with enrollment link)
 4. User creates account, visits enrollment page
-5. Enrollment handler checks for existing `interested` registration matching email + edition
+5. Enrollment handler checks for existing `interest` registration matching email + edition (via `findByEmailAndEdition`)
 6. If found: upgrades registration (sets `user_id`, changes status to `confirmed`, merges enrollment answers)
 7. If not found: creates new registration as normal
+
+---
+
+## Intake / Evaluation Visibility
+
+The dashboard determines which forms to show based on registration state:
+
+| Stage | Visible when |
+|-------|-------------|
+| `intake` | Registration exists with status `confirmed`, edition has `intake` field groups, `enrollment_data.intake` does not exist yet |
+| `evaluation` | Registration status is `completed`, edition has `evaluation` field groups, `enrollment_data.evaluation` does not exist yet |
+
+Once a stage's answers exist in `enrollment_data`, the form is replaced with a "completed" indicator. No re-submission.
+
+---
+
+## Existing Data Migration
+
+Existing registrations have flat `enrollment_data` (e.g. `{"big_nummer": "123456"}`). A one-time migration in `RegistrationTable::migrate()` wraps existing flat data as `{"enrollment_personal": {...}}`. This runs automatically on next page load via the migrate method.
+
+Old `wp_options` key `stride_enrollment_field_groups` is deleted. Admin recreates field groups in the new system.
 
 ---
 
@@ -366,7 +392,8 @@ The table already has:
 **Migration needed:**
 - Make `user_id` nullable: `ALTER TABLE ... MODIFY COLUMN user_id BIGINT UNSIGNED NULL`
 - Update `RegistrationTable::migrate()` with this change
-- Update `RegistrationRepository::create()` to allow null `user_id` when status is `interested`
+- Update `RegistrationRepository::create()` to allow null `user_id` when status is `interest`
+- Migrate existing flat `enrollment_data` to stage-keyed format (wrap as `{"enrollment_personal": {...}}`)
 
 ---
 
