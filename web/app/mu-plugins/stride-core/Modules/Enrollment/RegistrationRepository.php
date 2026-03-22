@@ -54,11 +54,13 @@ final class RegistrationRepository
         $trajectoryId = isset($data['trajectory_id']) ? absint($data['trajectory_id']) : null;
 
         // Check for existing registration (unique constraint on user+edition)
+        // Skip duplicate check for anonymous interest registrations (no user_id)
         $existing = null;
-        if ($editionId) {
-            $existing = $this->findByUserAndEdition((int) $data['user_id'], $editionId);
-        } elseif ($trajectoryId) {
-            $existing = $this->findByUserAndTrajectory((int) $data['user_id'], $trajectoryId);
+        $userId = isset($data['user_id']) ? (int) $data['user_id'] : 0;
+        if ($userId && $editionId) {
+            $existing = $this->findByUserAndEdition($userId, $editionId);
+        } elseif ($userId && $trajectoryId) {
+            $existing = $this->findByUserAndTrajectory($userId, $trajectoryId);
         }
 
         if ($existing) {
@@ -97,7 +99,7 @@ final class RegistrationRepository
         }
 
         $insert = [
-            'user_id' => absint($data['user_id']),
+            'user_id' => isset($data['user_id']) ? absint($data['user_id']) : null,
             'edition_id' => $editionId,
             'trajectory_id' => $trajectoryId,
             'company_id' => isset($data['company_id']) ? absint($data['company_id']) : null,
