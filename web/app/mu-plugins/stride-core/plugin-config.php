@@ -34,6 +34,7 @@ return [
         \Stride\Admin\AdminDashboardService::class,
         \Stride\Modules\Edition\EditionService::class,
         \Stride\Modules\Enrollment\EnrollmentService::class,
+        \Stride\Modules\Questionnaire\QuestionnaireService::class,
         \Stride\Modules\Trajectory\TrajectoryService::class,
         \Stride\Modules\Attendance\AttendanceService::class,
         \Stride\Modules\Invoicing\QuoteService::class,
