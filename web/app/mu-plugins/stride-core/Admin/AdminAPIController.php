@@ -339,6 +339,13 @@ final class AdminAPIController
             'callback' => [$this, 'markNotificationsRead'],
             'permission_callback' => [$this, 'canViewAdmin'],
         ]);
+
+        // Export registrations as CSV
+        register_rest_route(self::NAMESPACE, '/admin/export/registrations', [
+            'methods' => 'GET',
+            'callback' => [$this, 'exportRegistrations'],
+            'permission_callback' => [$this, 'canManageAdmin'],
+        ]);
     }
 
     /**
@@ -2638,5 +2645,84 @@ final class AdminAPIController
         update_user_meta($userId, 'stride_last_read_notification_id', $latestId);
 
         return new WP_REST_Response(['success' => true, 'unread_count' => 0]);
+    }
+
+    /**
+     * Export confirmed registrations for upcoming editions as a UTF-8 CSV file.
+     *
+     * Outputs directly to php://output and exits — no WP_REST_Response return.
+     */
+    public function exportRegistrations(WP_REST_Request $request): void
+    {
+        global $wpdb;
+        $table = RegistrationTable::getTableName();
+
+        if (!RegistrationTable::exists()) {
+            wp_die('Registration table not found.');
+        }
+
+        // Get confirmed registrations for upcoming editions
+        $today = current_time('Y-m-d');
+        $registrations = $wpdb->get_results($wpdb->prepare(
+            "SELECT r.*, p.post_title as edition_title,
+                    pm_date.meta_value as edition_date
+             FROM {$table} r
+             LEFT JOIN {$wpdb->posts} p ON r.edition_id = p.ID
+             LEFT JOIN {$wpdb->postmeta} pm_date ON r.edition_id = pm_date.post_id AND pm_date.meta_key = 'start_date'
+             WHERE r.status = 'confirmed'
+             AND (pm_date.meta_value >= %s OR pm_date.meta_value IS NULL)
+             ORDER BY pm_date.meta_value ASC, r.created_at ASC",
+            $today
+        ));
+
+        // Set download headers
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="inschrijvingen-' . date('Y-m-d') . '.csv"');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        $output = fopen('php://output', 'w');
+        // BOM for Excel UTF-8 compatibility
+        fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+        // Header row (semicolons for Dutch Excel)
+        fputcsv($output, ['Naam', 'E-mail', 'Organisatie', 'Editie', 'Datum', 'Status', 'Offerte #'], ';');
+
+        foreach ($registrations as $reg) {
+            $user = get_userdata((int) ($reg->user_id ?? 0));
+            $name = $user ? $user->display_name : 'Onbekend';
+            $email = $user ? $user->user_email : '';
+            $org = $user ? (get_user_meta($user->ID, 'organisation', true) ?: '') : '';
+
+            // Find linked quote number
+            $quoteNumber = '';
+            if (!empty($reg->id)) {
+                $quotePost = $wpdb->get_var($wpdb->prepare(
+                    "SELECT p.ID FROM {$wpdb->posts} p
+                     INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+                     WHERE p.post_type = %s AND p.post_status = 'publish'
+                     AND pm.meta_key = 'registration_id' AND pm.meta_value = %s
+                     LIMIT 1",
+                    QuoteCPT::POST_TYPE,
+                    $reg->id
+                ));
+                if ($quotePost) {
+                    $quoteNumber = get_post_meta((int) $quotePost, 'quote_number', true) ?: 'Q-' . $quotePost;
+                }
+            }
+
+            fputcsv($output, [
+                $name,
+                $email,
+                $org,
+                $reg->edition_title ?? '',
+                $reg->edition_date ?? '',
+                $reg->status ?? '',
+                $quoteNumber,
+            ], ';');
+        }
+
+        fclose($output);
+        exit;
     }
 }
