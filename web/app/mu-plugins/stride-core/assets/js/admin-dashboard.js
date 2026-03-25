@@ -193,10 +193,16 @@ document.addEventListener('alpine:init', () => {
                 if (stats.status === 'fulfilled') this.stats = stats.value;
                 if (queue.status === 'fulfilled') this.actionQueue = queue.value;
                 if (sessions.status === 'fulfilled') {
+                    const statusLabels = { open: 'Open', full: 'Vol', cancelled: 'Geannuleerd', completed: 'Afgelopen', closed: 'Gesloten' };
                     this.upcomingSessions = (sessions.value.items || []).map(s => ({
                         ...s,
-                        isToday: s.date === new Date().toISOString().split('T')[0],
-                        isPast: new Date(s.date) < new Date(new Date().setHours(0, 0, 0, 0)),
+                        edition_id: s.id,
+                        edition_title: s.title,
+                        time: [s.startTime, s.endTime].filter(Boolean).join('–') || '—',
+                        registered: s.registeredCount ?? 0,
+                        status_label: statusLabels[s.status] || s.status || '—',
+                        isToday: s.isToday || s.date === new Date().toISOString().split('T')[0],
+                        isPast: s.isPast || new Date(s.date) < new Date(new Date().setHours(0, 0, 0, 0)),
                     }));
                 }
                 if (activity.status === 'fulfilled') this.activityFeed = activity.value;
@@ -262,13 +268,20 @@ document.addEventListener('alpine:init', () => {
             });
             try {
                 const data = await this.api(`/admin/editions?${params}`);
+                const statusLabels = { open: 'Open', full: 'Vol', cancelled: 'Geannuleerd', completed: 'Afgelopen', closed: 'Gesloten', announcement: 'Aankondiging' };
                 this.editions = (data.items || []).map(s => ({
                     ...s,
-                    isToday: s.date === new Date().toISOString().split('T')[0],
-                    isPast: new Date(s.date) < new Date(new Date().setHours(0, 0, 0, 0)),
+                    edition_id: s.id,
+                    edition_title: s.title,
+                    session_title: s.sessionTitle || s.session_title || '',
+                    time: [s.startTime, s.endTime].filter(Boolean).join('–') || '—',
+                    registered: s.registeredCount ?? s.registered ?? 0,
+                    status_label: statusLabels[s.status] || s.status || '—',
+                    isToday: s.isToday || s.date === new Date().toISOString().split('T')[0],
+                    isPast: s.isPast || new Date(s.date) < new Date(new Date().setHours(0, 0, 0, 0)),
                 }));
                 this.editionSessions = this.editions;
-                this.editionPagination = { page: data.page || 1, totalPages: data.total_pages || 1, total: data.total || 0 };
+                this.editionPagination = { page: data.page || 1, totalPages: data.total_pages || data.totalPages || 1, total: data.total || 0 };
             } catch (e) {
                 this.showToast('Edities laden mislukt', 'error');
             }
@@ -367,8 +380,15 @@ document.addEventListener('alpine:init', () => {
             });
             try {
                 const data = await this.api(`/admin/quotes?${params}`);
-                this.quotes = data.items || [];
-                this.quotePagination = { page: data.page || 1, totalPages: data.total_pages || 1, total: data.total || 0 };
+                const quoteStatusLabels = { draft: 'Concept', sent: 'Verzonden', exported: 'Geëxporteerd', cancelled: 'Geannuleerd' };
+                this.quotes = (data.items || []).map(q => ({
+                    ...q,
+                    client_name: q.user?.name || q.client_name || '—',
+                    client_email: q.user?.email || q.client_email || '—',
+                    edition_title: q.edition?.title || q.edition_title || '—',
+                    status_label: q.statusLabel || quoteStatusLabels[q.status] || q.status || '—',
+                }));
+                this.quotePagination = { page: data.page || 1, totalPages: data.total_pages || data.totalPages || 1, total: data.total || 0 };
             } catch (e) { this.showToast('Offertes laden mislukt', 'error'); }
             this.loading = false;
         },
@@ -427,8 +447,14 @@ document.addEventListener('alpine:init', () => {
             });
             try {
                 const data = await this.api(`/admin/trajectories?${params}`);
-                this.trajectories = data.items || [];
-                this.trajectoryPagination = { page: data.page || 1, totalPages: data.total_pages || 1, total: data.total || 0 };
+                this.trajectories = (data.items || []).map(t => ({
+                    ...t,
+                    course_count: t.courseCount ?? t.course_count ?? 0,
+                    registered: t.enrolledCount ?? t.registered ?? 0,
+                    status_label: t.statusLabel ?? t.status_label ?? t.status ?? '—',
+                    deadline: t.enrollmentDeadline ?? t.deadline ?? null,
+                }));
+                this.trajectoryPagination = { page: data.page || 1, totalPages: data.total_pages || data.totalPages || 1, total: data.total || 0 };
             } catch (e) { this.showToast('Trajecten laden mislukt', 'error'); }
             this.loading = false;
         },
