@@ -193,6 +193,7 @@ class AdminDashboardService extends AbstractService
                 'id' => $user->ID,
                 'name' => $user->display_name,
                 'email' => $user->user_email,
+                'firstName' => $user->first_name ?: $user->display_name,
             ],
             'canManage' => current_user_can('stride_manage'),
         ]);

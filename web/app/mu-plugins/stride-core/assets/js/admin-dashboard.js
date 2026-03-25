@@ -1,450 +1,540 @@
 document.addEventListener('alpine:init', () => {
     Alpine.data('strideApp', () => ({
-        // State
-        user: StrideConfig.user,
-        canManage: StrideConfig.canManage,
+        // ── Routing ──────────────────────────────────────────────
         view: 'dashboard',
-        loading: true,
+        loading: false,
 
-        // Stats
-        stats: {
-            upcomingEditions: 0,
-            totalRegistrations: 0,
-            pendingQuotes: 0,
-            todaySessions: 0
-        },
+        // ── Config ───────────────────────────────────────────────
+        config: window.StrideConfig || {},
 
-        // Editions state
+        // ── Dashboard home ───────────────────────────────────────
+        stats: { upcomingEditions: 0, totalRegistrations: 0, pendingQuotes: 0, todaySessions: 0, actionsNeeded: 0 },
+        actionQueue: [],
+        upcomingSessions: [],
+        activityFeed: [],
+        healthChecks: { registration: 'green', mail: 'green' },
+
+        // ── Editions ─────────────────────────────────────────────
         editions: [],
-        editionsLoading: false,
-        editionFilters: { search: '', status: '', dateFrom: '', dateTo: '', courseTag: 0 },
-        editionView: 'agenda', // 'agenda' (default) or 'list'
-        editionPage: 1,
-        editionPages: 1,
-        selectedEdition: null,
+        editionFilters: { search: '', status: '', date_from: '', date_to: '', course_tag: 0 },
+        editionPagination: { page: 1, totalPages: 1, total: 0 },
         courseTags: [],
-        dateRangePicker: null,
+        selectedEdition: null,
         editionTab: 'students',
-        registrations: [],
-        registrationsLoading: false,
+        editionRegistrations: [],
+        editionSessions: [],
+        slideoverOpen: false,
 
-        // Quotes state
+        // ── Quotes ───────────────────────────────────────────────
         quotes: [],
-        quotesLoading: false,
-        quoteFilters: { search: '', status: '', editionId: '' },
-        quotePage: 1,
-        quotePages: 1,
+        quoteFilters: { search: '', status: '', edition_id: 0 },
+        quotePagination: { page: 1, totalPages: 1, total: 0 },
         quoteEditions: [],
         selectedQuote: null,
         quoteTab: 'details',
+        quickSendTarget: null,
 
-        // Trajectories state
+        // ── Trajectories ─────────────────────────────────────────
         trajectories: [],
-        trajectoriesLoading: false,
         trajectoryFilters: { search: '', status: '' },
-        trajectoryPage: 1,
-        trajectoryPages: 1,
+        trajectoryPagination: { page: 1, totalPages: 1, total: 0 },
         selectedTrajectory: null,
         trajectoryTab: 'details',
 
-        // Pending approvals
-        pendingApprovals: [],
+        // ── Users ────────────────────────────────────────────────
+        userSearchQuery: '',
+        userSearchResults: [],
+        dashboardUserResults: [],
+        selectedUser: null,
 
-        // Initialize
+        // ── Notifications ────────────────────────────────────────
+        notifications: [],
+        unreadCount: 0,
+        showNotifications: false,
+
+        // ── UI ───────────────────────────────────────────────────
+        toast: null,
+
+        // ==============================================================
+        //  COMPUTED GETTERS
+        //  Template references these derived arrays from selectedEdition
+        //  and selectedTrajectory / selectedUser detail data.
+        // ==============================================================
+
+        /** Sessions list for the attendance grid inside edition slide-over */
+        get editionSessionList() {
+            return this.selectedEdition?.sessions || this.editionSessions || [];
+        },
+
+        /** quoteEditions exposed as "editionOptions" for the quote filter dropdown */
+        get editionOptions() {
+            return this.quoteEditions;
+        },
+
+        /** Courses inside the selected trajectory */
+        get trajectoryCourses() {
+            return this.selectedTrajectory?.courses || [];
+        },
+
+        /** Registrations inside the selected trajectory */
+        get trajectoryRegistrations() {
+            return this.selectedTrajectory?.registrations || [];
+        },
+
+        /** Registrations for the selected user */
+        get userRegistrations() {
+            return this.selectedUser?.registrations || [];
+        },
+
+        /** Quotes for the selected user */
+        get userQuotes() {
+            return this.selectedUser?.quotes || [];
+        },
+
+        /** Audit log for the selected user */
+        get userAuditLog() {
+            return this.selectedUser?.audit_log || [];
+        },
+
+        /** Attendance summary for the selected user */
+        get userAttendanceSummary() {
+            return this.selectedUser?.attendance_summary || [];
+        },
+
+        // ==============================================================
+        //  CORE METHODS
+        // ==============================================================
+
         init() {
             this.parseHash();
             window.addEventListener('hashchange', () => this.parseHash());
-            this.loadStats();
-
-            // Watch view changes to load data
+            this.loadDashboard();
             this.$watch('view', (newView) => {
                 this.loadViewData(newView);
-                // Update hash to match view
-                if (window.location.hash !== '#/' + newView) {
-                    history.replaceState(null, '', '#/' + newView);
-                }
+                history.replaceState(null, '', newView === 'dashboard' ? '#/' : '#/' + newView);
             });
         },
 
         parseHash() {
             const hash = window.location.hash.replace('#/', '') || 'dashboard';
-            this.view = hash;
-            this.loadViewData(hash);
+            const validViews = ['dashboard', 'edities', 'offertes', 'trajecten', 'gebruikers'];
+            this.view = validViews.includes(hash) ? hash : 'dashboard';
+            this.loadViewData(this.view);
         },
+
+        switchView(view) {
+            this.view = view;
+        },
+
+        async api(endpoint, options = {}) {
+            const url = `${this.config.apiUrl}${endpoint}`;
+            const response = await fetch(url, {
+                ...options,
+                headers: {
+                    'X-WP-Nonce': this.config.nonce,
+                    'Content-Type': 'application/json',
+                    ...(options.headers || {}),
+                },
+            });
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(error.message || 'API error');
+            }
+            return response.json();
+        },
+
+        showToast(message, type = 'info') {
+            this.toast = { message, type };
+            setTimeout(() => { this.toast = null; }, 4000);
+        },
+
+        openSlideOver() { this.slideoverOpen = true; },
+        closeSlideOver() {
+            this.slideoverOpen = false;
+            this.selectedEdition = null;
+            this.selectedQuote = null;
+            this.selectedTrajectory = null;
+        },
+
+        // ==============================================================
+        //  VIEW DATA LOADING
+        // ==============================================================
 
         loadViewData(view) {
-            // Load data when switching views
-            if (view === 'editions') {
-                if (this.editions.length === 0) {
-                    this.loadEditions();
-                }
-                if (this.courseTags.length === 0) {
-                    this.loadCourseTags();
-                }
-                // Initialize date picker after DOM update
+            if (view === 'edities') {
+                if (this.editions.length === 0) this.loadEditions();
+                if (this.courseTags.length === 0) this.loadCourseTags();
                 this.$nextTick(() => this.initDateRangePicker());
-            } else if (view === 'quotes') {
-                if (this.quotes.length === 0) {
-                    this.loadQuotes();
-                }
-                if (this.quoteEditions.length === 0) {
-                    this.loadQuoteEditions();
-                }
-            } else if (view === 'trajectories' && this.trajectories.length === 0) {
-                this.loadTrajectories();
+            } else if (view === 'offertes') {
+                if (this.quotes.length === 0) this.loadQuotes();
+                if (this.quoteEditions.length === 0) this.loadQuoteEditions();
+            } else if (view === 'trajecten') {
+                if (this.trajectories.length === 0) this.loadTrajectories();
+            } else if (view === 'dashboard') {
+                this.loadDashboard();
             }
         },
 
-        async loadStats() {
+        // ==============================================================
+        //  DASHBOARD METHODS
+        // ==============================================================
+
+        async loadDashboard() {
             this.loading = true;
             try {
-                const response = await fetch(`${StrideConfig.apiUrl}/admin/stats`, {
-                    headers: {
-                        'X-WP-Nonce': StrideConfig.nonce
-                    }
-                });
-                if (response.ok) {
-                    this.stats = await response.json();
-                }
-            } catch (e) {
-                console.error('Failed to load stats:', e);
-            }
-            this.loading = false;
-            // Also load pending approvals on dashboard
-            this.loadPendingApprovals();
-        },
-
-        async loadPendingApprovals() {
-            try {
-                const response = await fetch(`${StrideConfig.apiUrl}/admin/pending-approvals`, {
-                    headers: { 'X-WP-Nonce': StrideConfig.nonce }
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    this.pendingApprovals = (data.items || []).map(item => ({
-                        ...item,
-                        approving: false,
+                const [stats, queue, sessions, activity, health, notifs] = await Promise.allSettled([
+                    this.api('/admin/stats'),
+                    this.api('/admin/action-queue'),
+                    this.api('/admin/editions?view=agenda&per_page=10'),
+                    this.api('/admin/activity?limit=10'),
+                    this.api('/admin/health-checks'),
+                    this.api('/admin/notifications'),
+                ]);
+                if (stats.status === 'fulfilled') this.stats = stats.value;
+                if (queue.status === 'fulfilled') this.actionQueue = queue.value;
+                if (sessions.status === 'fulfilled') {
+                    this.upcomingSessions = (sessions.value.items || []).map(s => ({
+                        ...s,
+                        isToday: s.date === new Date().toISOString().split('T')[0],
+                        isPast: new Date(s.date) < new Date(new Date().setHours(0, 0, 0, 0)),
                     }));
                 }
+                if (activity.status === 'fulfilled') this.activityFeed = activity.value;
+                if (health.status === 'fulfilled') this.healthChecks = health.value;
+                if (notifs.status === 'fulfilled') {
+                    this.notifications = notifs.value.notifications || [];
+                    this.unreadCount = notifs.value.unread_count || 0;
+                }
             } catch (e) {
-                console.error('Failed to load pending approvals:', e);
+                console.error('Dashboard load error:', e);
             }
+            this.loading = false;
         },
 
-        async approveRegistration(registrationId) {
-            const approval = this.pendingApprovals.find(a => a.id === registrationId);
-            if (!approval) return;
-
-            // Use different endpoint for post-course vs enrollment approval
-            const endpoint = approval.type === 'post_approval'
-                ? '/admin/approve-post-course'
-                : '/admin/approve-registration';
-
-            approval.approving = true;
+        async dismissAction(rule, subjectId) {
             try {
-                const response = await fetch(`${StrideConfig.apiUrl}${endpoint}`, {
+                await this.api('/admin/action-queue/dismiss', {
                     method: 'POST',
-                    headers: {
-                        'X-WP-Nonce': StrideConfig.nonce,
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ registration_id: registrationId }),
+                    body: JSON.stringify({ rule, subject_id: subjectId || 0 }),
                 });
-                if (response.ok) {
-                    this.pendingApprovals = this.pendingApprovals.filter(a => a.id !== registrationId);
-                } else {
-                    const err = await response.json();
-                    alert(err.message || 'Goedkeuring mislukt.');
-                    approval.approving = false;
-                }
+                this.actionQueue = this.actionQueue.filter(i =>
+                    !(i.rule === rule && (i.subject_id || 0) === (subjectId || 0))
+                );
+                this.stats.actionsNeeded = Math.max(0, (this.stats.actionsNeeded || 0) - 1);
             } catch (e) {
-                console.error('Approve failed:', e);
-                alert('Verbindingsfout. Probeer opnieuw.');
-                approval.approving = false;
+                this.showToast('Actie negeren mislukt', 'error');
             }
         },
 
-        async loadEditions() {
-            this.editionsLoading = true;
+        async dashboardUserSearch(query) {
+            if (query.length < 2) { this.dashboardUserResults = []; return; }
             try {
-                const params = new URLSearchParams({
-                    page: this.editionPage,
-                    per_page: 20,
-                    view: this.editionView
-                });
-                if (this.editionFilters.search) {
-                    params.append('search', this.editionFilters.search);
-                }
-                if (this.editionFilters.status) {
-                    params.append('status', this.editionFilters.status);
-                }
-                if (this.editionFilters.dateFrom) {
-                    params.append('date_from', this.editionFilters.dateFrom);
-                }
-                if (this.editionFilters.dateTo) {
-                    params.append('date_to', this.editionFilters.dateTo);
-                }
-                if (this.editionFilters.courseTag) {
-                    params.append('course_tag', this.editionFilters.courseTag);
-                }
+                this.dashboardUserResults = await this.api(`/admin/users/search?q=${encodeURIComponent(query)}`);
+            } catch (e) { this.dashboardUserResults = []; }
+        },
 
-                const response = await fetch(`${StrideConfig.apiUrl}/admin/editions?${params}`, {
-                    headers: {
-                        'X-WP-Nonce': StrideConfig.nonce
-                    }
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    this.editions = data.items || [];
-                    this.editionPages = data.totalPages || 1;
-                }
+        navigateToUser(userId) {
+            this.dashboardUserResults = [];
+            this.view = 'gebruikers';
+            this.$nextTick(() => this.selectUser(userId));
+        },
+
+        exportRegistrations() {
+            window.location.href = this.config.apiUrl + '/admin/export/registrations?_wpnonce=' + this.config.nonce;
+        },
+
+        // ==============================================================
+        //  EDITIONS METHODS
+        // ==============================================================
+
+        async loadEditions(page) {
+            if (page != null) this.editionPagination.page = page;
+            this.loading = true;
+            const params = new URLSearchParams({
+                page: this.editionPagination.page,
+                per_page: 20,
+                view: 'agenda',
+                search: this.editionFilters.search,
+                status: this.editionFilters.status,
+                date_from: this.editionFilters.date_from,
+                date_to: this.editionFilters.date_to,
+                course_tag: this.editionFilters.course_tag,
+            });
+            try {
+                const data = await this.api(`/admin/editions?${params}`);
+                this.editions = (data.items || []).map(s => ({
+                    ...s,
+                    isToday: s.date === new Date().toISOString().split('T')[0],
+                    isPast: new Date(s.date) < new Date(new Date().setHours(0, 0, 0, 0)),
+                }));
+                this.editionSessions = this.editions;
+                this.editionPagination = { page: data.page || 1, totalPages: data.total_pages || 1, total: data.total || 0 };
             } catch (e) {
-                console.error('Failed to load editions:', e);
+                this.showToast('Edities laden mislukt', 'error');
             }
-            this.editionsLoading = false;
+            this.loading = false;
         },
 
         async loadCourseTags() {
-            try {
-                const response = await fetch(`${StrideConfig.apiUrl}/admin/course-tags`, {
-                    headers: {
-                        'X-WP-Nonce': StrideConfig.nonce
-                    }
-                });
-                if (response.ok) {
-                    this.courseTags = await response.json();
-                }
-            } catch (e) {
-                console.error('Failed to load course tags:', e);
-            }
+            try { this.courseTags = await this.api('/admin/course-tags'); } catch (e) {}
         },
 
         initDateRangePicker() {
-            if (this.dateRangePicker) return;
-            const el = this.$refs.dateRange;
-            if (!el || typeof flatpickr === 'undefined') return;
-
-            this.dateRangePicker = flatpickr(el, {
+            const el = this.$refs?.dateRange;
+            if (!el || el._flatpickr) return;
+            if (typeof flatpickr === 'undefined') return;
+            flatpickr(el, {
                 mode: 'range',
                 dateFormat: 'Y-m-d',
-                locale: typeof flatpickr.l10ns.nl !== 'undefined' ? 'nl' : 'default',
-                allowInput: true,
-                onChange: (selectedDates) => {
-                    if (selectedDates.length === 2) {
-                        this.editionFilters.dateFrom = selectedDates[0].toISOString().split('T')[0];
-                        this.editionFilters.dateTo = selectedDates[1].toISOString().split('T')[0];
-                        this.loadEditions();
-                    } else if (selectedDates.length === 0) {
-                        this.editionFilters.dateFrom = '';
-                        this.editionFilters.dateTo = '';
+                locale: typeof flatpickr.l10ns?.nl !== 'undefined' ? 'nl' : 'default',
+                onChange: (dates) => {
+                    if (dates.length === 2) {
+                        this.editionFilters.date_from = dates[0].toISOString().split('T')[0];
+                        this.editionFilters.date_to = dates[1].toISOString().split('T')[0];
                         this.loadEditions();
                     }
-                }
+                },
             });
+        },
+
+        resetEditionFilters() {
+            this.editionFilters = { search: '', status: '', date_from: '', date_to: '', course_tag: 0 };
+            const el = this.$refs?.dateRange;
+            if (el?._flatpickr) el._flatpickr.clear();
+            this.loadEditions(1);
         },
 
         async openEdition(id) {
             try {
-                const response = await fetch(`${StrideConfig.apiUrl}/admin/editions/${id}`, {
-                    headers: {
-                        'X-WP-Nonce': StrideConfig.nonce
-                    }
-                });
-                if (response.ok) {
-                    this.selectedEdition = await response.json();
-                    this.editionTab = 'students';
-                    this.loadRegistrations(id);
+                const [edition, regs] = await Promise.all([
+                    this.api(`/admin/editions/${id}`),
+                    this.api(`/admin/editions/${id}/registrations`),
+                ]);
+                this.selectedEdition = edition;
+                this.editionRegistrations = (regs.registrations || regs.items || []).map(reg => ({
+                    ...reg,
+                    user_id: reg.user_id || reg.user?.id,
+                    name: reg.name || reg.user?.name,
+                    email: reg.email || reg.user?.email,
+                }));
+                if (regs.sessions) {
+                    this.selectedEdition.sessions = regs.sessions;
                 }
+                this.editionTab = 'students';
+                this.openSlideOver();
             } catch (e) {
-                console.error('Failed to load edition:', e);
+                this.showToast('Editie laden mislukt', 'error');
             }
-        },
-
-        async loadRegistrations(editionId) {
-            this.registrationsLoading = true;
-            this.registrations = [];
-            try {
-                const response = await fetch(`${StrideConfig.apiUrl}/admin/editions/${editionId}/registrations`, {
-                    headers: {
-                        'X-WP-Nonce': StrideConfig.nonce
-                    }
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    // Update sessions on the selected edition
-                    if (this.selectedEdition && data.sessions) {
-                        this.selectedEdition.sessions = data.sessions;
-                    }
-                    // Flatten user data for template compatibility
-                    this.registrations = (data.items || []).map(reg => ({
-                        ...reg,
-                        userId: reg.user?.id,
-                        name: reg.user?.name,
-                        email: reg.user?.email,
-                    }));
-                }
-            } catch (e) {
-                console.error('Failed to load registrations:', e);
-            }
-            this.registrationsLoading = false;
         },
 
         async toggleAttendance(sessionId, userId, currentStatus) {
-            // Cycle: null -> present -> absent -> excused -> null
-            const statusCycle = [null, 'present', 'absent', 'excused'];
-            const currentIndex = statusCycle.indexOf(currentStatus);
-            const nextStatus = statusCycle[(currentIndex + 1) % statusCycle.length];
-
+            const cycle = { undefined: 'present', null: 'present', '': 'present', none: 'present', present: 'absent', absent: 'excused', excused: '' };
+            const newStatus = cycle[currentStatus] ?? 'present';
+            // Optimistic update
+            const reg = this.editionRegistrations.find(r => r.user_id === userId);
+            if (reg) {
+                if (!reg.attendance) reg.attendance = {};
+                reg.attendance[sessionId] = newStatus || undefined;
+            }
             try {
-                const response = await fetch(`${StrideConfig.apiUrl}/admin/attendance`, {
+                await this.api('/admin/attendance', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-WP-Nonce': StrideConfig.nonce
-                    },
-                    body: JSON.stringify({
-                        session_id: sessionId,
-                        user_id: userId,
-                        status: nextStatus
-                    })
+                    body: JSON.stringify({ session_id: sessionId, user_id: userId, status: newStatus }),
                 });
-
-                if (response.ok) {
-                    // Update local state
-                    const reg = this.registrations.find(r => r.userId === userId);
-                    if (reg) {
-                        if (!reg.attendance) {
-                            reg.attendance = {};
-                        }
-                        if (nextStatus) {
-                            reg.attendance[sessionId] = nextStatus;
-                        } else {
-                            delete reg.attendance[sessionId];
-                        }
-                    }
-                }
             } catch (e) {
-                console.error('Failed to update attendance:', e);
+                // Revert on failure
+                if (reg) reg.attendance[sessionId] = currentStatus;
+                this.showToast('Aanwezigheid opslaan mislukt', 'error');
             }
         },
 
-        formatDate(dateStr) {
-            if (!dateStr) return '';
-            const date = new Date(dateStr);
-            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+        attendanceLabel(status) {
+            return { present: '\u2713', absent: '\u2717', excused: '!', '': '\u00b7', undefined: '\u00b7', null: '\u00b7' }[status] ?? '\u00b7';
         },
 
-        formatShortDate(dateStr) {
-            if (!dateStr) return '';
-            const date = new Date(dateStr);
-            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            return `${date.getDate()} ${months[date.getMonth()]}`;
-        },
+        // ==============================================================
+        //  QUOTES METHODS
+        // ==============================================================
 
-        formatDateFull(dateStr) {
-            if (!dateStr) return '';
-            const date = new Date(dateStr);
-            const days = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
-            const months = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
-            return `${days[date.getDay()]} ${date.getDate()} ${months[date.getMonth()]}`;
-        },
-
-        async loadQuotes() {
-            this.quotesLoading = true;
+        async loadQuotes(page) {
+            if (page != null) this.quotePagination.page = page;
+            this.loading = true;
+            const params = new URLSearchParams({
+                page: this.quotePagination.page, per_page: 20,
+                search: this.quoteFilters.search,
+                status: this.quoteFilters.status,
+                edition_id: this.quoteFilters.edition_id,
+            });
             try {
-                const params = new URLSearchParams({
-                    page: this.quotePage,
-                });
-                if (this.quoteFilters.search) {
-                    params.append('search', this.quoteFilters.search);
-                }
-                if (this.quoteFilters.status) {
-                    params.append('status', this.quoteFilters.status);
-                }
-                if (this.quoteFilters.editionId) {
-                    params.append('edition_id', this.quoteFilters.editionId);
-                }
-                const response = await fetch(`${StrideConfig.apiUrl}/admin/quotes?${params}`, {
-                    headers: { 'X-WP-Nonce': StrideConfig.nonce }
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    this.quotes = data.items;
-                    this.quotePages = data.totalPages;
-                }
-            } catch (e) {
-                console.error('Failed to load quotes:', e);
-            }
-            this.quotesLoading = false;
+                const data = await this.api(`/admin/quotes?${params}`);
+                this.quotes = data.items || [];
+                this.quotePagination = { page: data.page || 1, totalPages: data.total_pages || 1, total: data.total || 0 };
+            } catch (e) { this.showToast('Offertes laden mislukt', 'error'); }
+            this.loading = false;
         },
 
         async loadQuoteEditions() {
             try {
-                // Load all published editions for the dropdown
-                const response = await fetch(`${StrideConfig.apiUrl}/admin/editions?per_page=100&view=list`, {
-                    headers: { 'X-WP-Nonce': StrideConfig.nonce }
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    this.quoteEditions = data.items || [];
-                }
-            } catch (e) {
-                console.error('Failed to load editions for quote filter:', e);
-            }
+                const data = await this.api('/admin/editions?per_page=100&view=list');
+                this.quoteEditions = data.items || [];
+            } catch (e) {}
         },
 
-        openQuote(quote) {
-            this.selectedQuote = quote;
+        openQuote(quoteOrId) {
+            // Template calls openQuote(quote.id) from table row click
+            if (typeof quoteOrId === 'object') {
+                this.selectedQuote = quoteOrId;
+            } else {
+                this.selectedQuote = this.quotes.find(q => q.id === quoteOrId) || null;
+            }
             this.quoteTab = 'details';
+            if (this.selectedQuote) this.openSlideOver();
         },
 
-        async loadTrajectories() {
-            this.trajectoriesLoading = true;
+        showQuickSend(quote) {
+            this.quickSendTarget = quote;
+        },
+
+        async confirmQuickSend() {
+            if (!this.quickSendTarget) return;
+            const quoteId = this.quickSendTarget.id;
             try {
-                const params = new URLSearchParams({
-                    page: this.trajectoryPage,
-                    search: this.trajectoryFilters.search,
-                    status: this.trajectoryFilters.status
-                });
-                const response = await fetch(`${StrideConfig.apiUrl}/admin/trajectories?${params}`, {
-                    headers: { 'X-WP-Nonce': StrideConfig.nonce }
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    this.trajectories = data.items;
-                    this.trajectoryPages = data.totalPages;
+                await this.api(`/admin/quotes/${quoteId}/send`, { method: 'POST' });
+                this.showToast('Offerte verzonden', 'success');
+                this.quickSendTarget = null;
+                this.loadQuotes(this.quotePagination.page);
+            } catch (e) {
+                this.showToast('Offerte verzenden mislukt \u2014 probeer opnieuw', 'error');
+            }
+        },
+
+        resetQuoteFilters() {
+            this.quoteFilters = { search: '', status: '', edition_id: 0 };
+            this.loadQuotes(1);
+        },
+
+        // ==============================================================
+        //  TRAJECTORY METHODS
+        // ==============================================================
+
+        async loadTrajectories(page) {
+            if (page != null) this.trajectoryPagination.page = page;
+            this.loading = true;
+            const params = new URLSearchParams({
+                page: this.trajectoryPagination.page, per_page: 20,
+                search: this.trajectoryFilters.search,
+                status: this.trajectoryFilters.status,
+            });
+            try {
+                const data = await this.api(`/admin/trajectories?${params}`);
+                this.trajectories = data.items || [];
+                this.trajectoryPagination = { page: data.page || 1, totalPages: data.total_pages || 1, total: data.total || 0 };
+            } catch (e) { this.showToast('Trajecten laden mislukt', 'error'); }
+            this.loading = false;
+        },
+
+        async openTrajectory(id) {
+            try {
+                const data = await this.api(`/admin/trajectories/${id}`);
+                this.selectedTrajectory = data;
+                this.trajectoryTab = 'details';
+                this.openSlideOver();
+            } catch (e) { this.showToast('Traject laden mislukt', 'error'); }
+        },
+
+        resetTrajectoryFilters() {
+            this.trajectoryFilters = { search: '', status: '' };
+            this.loadTrajectories(1);
+        },
+
+        // ==============================================================
+        //  USER METHODS
+        // ==============================================================
+
+        async searchUsers(query) {
+            this.userSearchQuery = query;
+            if (query.length < 2) { this.userSearchResults = []; return; }
+            try {
+                this.userSearchResults = await this.api(`/admin/users/search?q=${encodeURIComponent(query)}`);
+            } catch (e) { this.userSearchResults = []; }
+        },
+
+        async selectUser(userOrId) {
+            // Can be called with a user object (from search results) or a numeric id
+            const userId = typeof userOrId === 'object' ? userOrId.id : userOrId;
+            try {
+                this.selectedUser = await this.api(`/admin/users/${userId}/detail`);
+            } catch (e) {
+                this.showToast('Gebruiker laden mislukt', 'error');
+            }
+        },
+
+        clearUserSearch() {
+            this.userSearchQuery = '';
+            this.userSearchResults = [];
+            this.selectedUser = null;
+        },
+
+        async impersonateUser(userId) {
+            if (!this.config.canManage) return;
+            try {
+                const result = await this.api(`/admin/users/${userId}/impersonate`, { method: 'POST' });
+                if (result.redirect) {
+                    window.location.href = result.redirect;
                 }
             } catch (e) {
-                console.error('Failed to load trajectories:', e);
+                this.showToast(e.message || 'Impersonatie mislukt', 'error');
             }
-            this.trajectoriesLoading = false;
         },
 
-        openTrajectory(trajectory) {
-            this.selectedTrajectory = trajectory;
-            this.trajectoryTab = 'details';
+        // ==============================================================
+        //  NOTIFICATION METHODS
+        // ==============================================================
+
+        toggleNotifications() {
+            this.showNotifications = !this.showNotifications;
         },
 
-        formatRelativeTime(dateStr) {
-            if (!dateStr) return '';
-            const date = new Date(dateStr);
-            const now = new Date();
-            const diffMs = now - date;
-            const diffMins = Math.floor(diffMs / 60000);
-            const diffHours = Math.floor(diffMs / 3600000);
-            const diffDays = Math.floor(diffMs / 86400000);
-
-            if (diffMins < 1) return 'Zojuist';
-            if (diffMins < 60) return `${diffMins} min geleden`;
-            if (diffHours < 24) return `${diffHours} uur geleden`;
-            if (diffDays === 1) return 'Gisteren';
-            if (diffDays < 7) return `${diffDays} dagen geleden`;
-            return this.formatDate(dateStr);
+        async markAllRead() {
+            try {
+                await this.api('/admin/notifications/read', { method: 'POST' });
+                this.unreadCount = 0;
+                this.notifications = this.notifications.map(n => ({ ...n, read: true }));
+                this.showNotifications = false;
+            } catch (e) { this.showToast('Markeren mislukt', 'error'); }
         },
 
-        formatCurrency(amount) {
-            return new Intl.NumberFormat('nl-BE', { style: 'currency', currency: 'EUR' }).format(amount || 0);
-        }
+        // ==============================================================
+        //  FORMATTING METHODS
+        // ==============================================================
+
+        formatDate(dateStr) {
+            if (!dateStr) return '\u2014';
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+        },
+
+        formatShortDate(dateStr) {
+            if (!dateStr) return '\u2014';
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' });
+        },
+
+        formatCurrency(cents) {
+            if (cents == null) return '\u2014';
+            return new Intl.NumberFormat('nl-BE', { style: 'currency', currency: 'EUR' }).format(cents / 100);
+        },
+
+        formatRelativeTime(timestamp) {
+            if (!timestamp) return '';
+            const now = Math.floor(Date.now() / 1000);
+            const ts = typeof timestamp === 'number' ? timestamp : Math.floor(new Date(timestamp).getTime() / 1000);
+            const diff = now - ts;
+            if (diff < 60) return 'zojuist';
+            if (diff < 3600) return Math.floor(diff / 60) + ' min geleden';
+            if (diff < 86400) return Math.floor(diff / 3600) + ' uur geleden';
+            if (diff < 604800) return Math.floor(diff / 86400) + ' dag(en) geleden';
+            return new Date(ts * 1000).toLocaleDateString('nl-BE');
+        },
     }));
 });
