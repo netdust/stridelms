@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stride\Admin;
 
+use NTDST\Audit\AuditTable;
 use Stride\Domain\AttendanceStatus;
 use Stride\Domain\QuoteStatus;
 use Stride\Infrastructure\BatchQueryHelper;
@@ -243,6 +244,41 @@ final class AdminAPIController
                 ],
             ],
         ]);
+
+        // Action queue
+        register_rest_route(self::NAMESPACE, '/admin/action-queue', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getActionQueue'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+        ]);
+
+        // Dismiss action queue item
+        register_rest_route(self::NAMESPACE, '/admin/action-queue/dismiss', [
+            'methods' => 'POST',
+            'callback' => [$this, 'dismissActionItem'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+            'args' => [
+                'rule' => ['type' => 'string', 'required' => true],
+                'subject_id' => ['type' => 'integer', 'default' => 0],
+            ],
+        ]);
+
+        // Health checks
+        register_rest_route(self::NAMESPACE, '/admin/health-checks', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getHealthChecks'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+        ]);
+
+        // Activity feed
+        register_rest_route(self::NAMESPACE, '/admin/activity', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getActivityFeed'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+            'args' => [
+                'limit' => ['type' => 'integer', 'default' => 10, 'maximum' => 50],
+            ],
+        ]);
     }
 
     /**
@@ -306,6 +342,14 @@ final class AdminAPIController
             QuoteCPT::POST_TYPE,
             QuoteStatus::Draft->value
         ));
+
+        // Pending registrations (for actionCount)
+        $pendingRegistrations = 0;
+        if ($registrationTableExists) {
+            $pendingRegistrations = (int) $wpdb->get_var(
+                "SELECT COUNT(*) FROM {$registrationTable} WHERE status = 'pending'"
+            );
+        }
 
         // Sessions today count
         $todaySessions = (int) $wpdb->get_var($wpdb->prepare(
@@ -556,6 +600,7 @@ final class AdminAPIController
             'pendingQuotes' => $pendingQuotes,
             'todaySessions' => $todaySessions,
             'openTrajectories' => $openTrajectories,
+            'actionCount' => $pendingRegistrations + $pendingQuotes,
             // Dashboard detail data
             'todaySessionDetails' => $todaySessionDetails,
             'upcomingEditionDetails' => $upcomingEditionDetails,
@@ -1789,6 +1834,306 @@ final class AdminAPIController
             'registration_id' => $registrationId,
         ]);
     }
+
+    // =========================================================================
+    // ACTION QUEUE, HEALTH CHECKS, ACTIVITY FEED
+    // =========================================================================
+
+    /**
+     * GET /admin/action-queue
+     *
+     * Evaluate notification rules against live data, cached for 5 minutes.
+     */
+    public function getActionQueue(WP_REST_Request $request): WP_REST_Response
+    {
+        global $wpdb;
+
+        $rules = StrideSettingsService::getNotificationRules();
+
+        // Check transient cache
+        $cached = get_transient('stride_action_queue');
+        if ($cached !== false) {
+            $items = $cached;
+        } else {
+            $today = current_time('Y-m-d');
+            $registrationTable = RegistrationTable::getTableName();
+            $registrationTableExists = RegistrationTable::exists();
+
+            $data = [];
+
+            // Editions with capacity (for capacity_threshold rule)
+            if (!empty($rules['capacity_threshold']['enabled'])) {
+                $editions = $wpdb->get_results($wpdb->prepare(
+                    "SELECT p.ID as id, p.post_title as title,
+                            pm_cap.meta_value as capacity,
+                            COALESCE(rc.cnt, 0) as registered
+                     FROM {$wpdb->posts} p
+                     INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = 'start_date'
+                     LEFT JOIN {$wpdb->postmeta} pm_cap ON p.ID = pm_cap.post_id AND pm_cap.meta_key = 'capacity'
+                     LEFT JOIN (
+                         SELECT edition_id, COUNT(*) as cnt FROM {$registrationTable}
+                         WHERE status = 'confirmed' GROUP BY edition_id
+                     ) rc ON rc.edition_id = p.ID
+                     WHERE p.post_type = %s AND p.post_status = 'publish'
+                     AND pm_date.meta_value >= %s
+                     AND pm_cap.meta_value > 0",
+                    EditionCPT::POST_TYPE,
+                    $today
+                ), ARRAY_A);
+                $data['editions'] = $editions ?: [];
+            }
+
+            // Pending approvals
+            if (!empty($rules['pending_approval']['enabled']) && $registrationTableExists) {
+                $pending = $wpdb->get_results(
+                    "SELECT id FROM {$registrationTable} WHERE status = 'pending'",
+                    ARRAY_A
+                );
+                $data['pending_approvals'] = $pending ?: [];
+            }
+
+            // Stale quotes
+            if (!empty($rules['stale_quote']['enabled'])) {
+                $staleDays = (int) ($rules['stale_quote']['value'] ?? 7);
+                $cutoff = wp_date('Y-m-d H:i:s', strtotime("-{$staleDays} days"));
+                $staleQuotes = $wpdb->get_results($wpdb->prepare(
+                    "SELECT p.ID as id, pm_num.meta_value as number
+                     FROM {$wpdb->posts} p
+                     INNER JOIN {$wpdb->postmeta} pm_st ON p.ID = pm_st.post_id AND pm_st.meta_key = 'status'
+                     LEFT JOIN {$wpdb->postmeta} pm_num ON p.ID = pm_num.post_id AND pm_num.meta_key = 'quote_number'
+                     WHERE p.post_type = %s AND p.post_status = 'publish'
+                     AND pm_st.meta_value = %s
+                     AND p.post_date < %s",
+                    QuoteCPT::POST_TYPE,
+                    QuoteStatus::Draft->value,
+                    $cutoff
+                ), ARRAY_A);
+                $data['stale_quotes'] = $staleQuotes ?: [];
+            }
+
+            // Sessions approaching
+            if (!empty($rules['session_approaching']['enabled'])) {
+                $approachDays = (int) ($rules['session_approaching']['value'] ?? 1);
+                $approachDate = wp_date('Y-m-d', strtotime("+{$approachDays} days"));
+                $approachingSessions = $wpdb->get_results($wpdb->prepare(
+                    "SELECT s.ID as id, s.post_title,
+                            pm_date.meta_value as date,
+                            pm_eid.meta_value as edition_id,
+                            e.post_title as edition_title
+                     FROM {$wpdb->posts} s
+                     INNER JOIN {$wpdb->postmeta} pm_date ON s.ID = pm_date.post_id AND pm_date.meta_key = 'date'
+                     LEFT JOIN {$wpdb->postmeta} pm_eid ON s.ID = pm_eid.post_id AND pm_eid.meta_key = 'edition_id'
+                     LEFT JOIN {$wpdb->posts} e ON e.ID = pm_eid.meta_value
+                     WHERE s.post_type = %s AND s.post_status = 'publish'
+                     AND pm_date.meta_value >= %s AND pm_date.meta_value <= %s",
+                    SessionCPT::POST_TYPE,
+                    $today,
+                    $approachDate
+                ), ARRAY_A);
+                $data['approaching_sessions'] = $approachingSessions ?: [];
+            }
+
+            // Editions starting soon
+            if (!empty($rules['edition_starting']['enabled'])) {
+                $startDays = (int) ($rules['edition_starting']['value'] ?? 3);
+                $startDate = wp_date('Y-m-d', strtotime("+{$startDays} days"));
+                $startingSoon = $wpdb->get_results($wpdb->prepare(
+                    "SELECT p.ID as id, p.post_title as title,
+                            pm_date.meta_value as start_date
+                     FROM {$wpdb->posts} p
+                     INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = 'start_date'
+                     WHERE p.post_type = %s AND p.post_status = 'publish'
+                     AND pm_date.meta_value >= %s AND pm_date.meta_value <= %s",
+                    EditionCPT::POST_TYPE,
+                    $today,
+                    $startDate
+                ), ARRAY_A);
+                $data['starting_soon'] = $startingSoon ?: [];
+            }
+
+            // Incomplete tasks (editions where last session passed, registrations with incomplete tasks)
+            if (!empty($rules['incomplete_tasks']['enabled']) && $registrationTableExists) {
+                $taskDays = (int) ($rules['incomplete_tasks']['value'] ?? 7);
+                $taskCutoff = wp_date('Y-m-d', strtotime("-{$taskDays} days"));
+                $incompleteTasks = $wpdb->get_results($wpdb->prepare(
+                    "SELECT r.id
+                     FROM {$registrationTable} r
+                     WHERE r.status = 'confirmed'
+                     AND r.tasks IS NOT NULL
+                     AND r.tasks LIKE %s
+                     AND r.registered_at < %s",
+                    '%"completed":false%',
+                    $taskCutoff
+                ), ARRAY_A);
+                $data['incomplete_tasks'] = $incompleteTasks ?: [];
+            }
+
+            $service = new ActionQueueService();
+            $items = $service->evaluate($rules, $data);
+
+            set_transient('stride_action_queue', $items, 5 * MINUTE_IN_SECONDS);
+        }
+
+        // Filter out dismissed items
+        $userId = get_current_user_id();
+        $dismissed = get_user_meta($userId, 'stride_dismissed_actions', true);
+        $dismissed = is_array($dismissed) ? $dismissed : [];
+
+        // Prune dismissals older than 30 days
+        $thirtyDaysAgo = strtotime('-30 days');
+        $dismissed = array_filter($dismissed, static function (array $entry) use ($thirtyDaysAgo): bool {
+            return strtotime($entry['date'] ?? '1970-01-01') > $thirtyDaysAgo;
+        });
+        update_user_meta($userId, 'stride_dismissed_actions', $dismissed);
+
+        // Build a lookup set for fast filtering
+        $dismissedKeys = [];
+        foreach ($dismissed as $entry) {
+            $dismissedKeys[$entry['rule'] . ':' . ($entry['subject_id'] ?? 0)] = true;
+        }
+
+        $filtered = array_values(array_filter($items, static function (array $item) use ($dismissedKeys): bool {
+            $key = $item['rule'] . ':' . ($item['subject_id'] ?? 0);
+            return !isset($dismissedKeys[$key]);
+        }));
+
+        return new WP_REST_Response($filtered);
+    }
+
+    /**
+     * POST /admin/action-queue/dismiss
+     *
+     * Dismiss an action queue item for the current user.
+     */
+    public function dismissActionItem(WP_REST_Request $request): WP_REST_Response
+    {
+        $rule = sanitize_text_field($request->get_param('rule'));
+        $subjectId = (int) $request->get_param('subject_id');
+        $userId = get_current_user_id();
+
+        $dismissed = get_user_meta($userId, 'stride_dismissed_actions', true);
+        $dismissed = is_array($dismissed) ? $dismissed : [];
+
+        $dismissed[] = [
+            'rule' => $rule,
+            'subject_id' => $subjectId,
+            'date' => current_time('Y-m-d'),
+        ];
+
+        update_user_meta($userId, 'stride_dismissed_actions', $dismissed);
+
+        return new WP_REST_Response(['dismissed' => true]);
+    }
+
+    /**
+     * GET /admin/health-checks
+     *
+     * System health indicators for the dashboard.
+     */
+    public function getHealthChecks(WP_REST_Request $request): WP_REST_Response
+    {
+        global $wpdb;
+
+        $registrationTable = RegistrationTable::getTableName();
+        $registrationTableExists = RegistrationTable::exists();
+        $today = current_time('Y-m-d');
+
+        // Last registration timestamp
+        $lastRegistration = 0;
+        if ($registrationTableExists) {
+            $lastRegDate = $wpdb->get_var(
+                "SELECT MAX(registered_at) FROM {$registrationTable}"
+            );
+            if ($lastRegDate) {
+                $lastRegistration = (int) strtotime($lastRegDate);
+            }
+        }
+
+        // Last mail send timestamp — check audit log for quote.sent action
+        $lastMailSend = 0;
+        if (AuditTable::exists()) {
+            $auditTable = AuditTable::getTableName();
+            $lastMailDate = $wpdb->get_var($wpdb->prepare(
+                "SELECT MAX(created_at) FROM {$auditTable} WHERE action = %s",
+                'quote.sent'
+            ));
+            if ($lastMailDate) {
+                $lastMailSend = (int) strtotime($lastMailDate);
+            }
+        }
+
+        // Any open editions with future start date?
+        $hasOpenEditions = (bool) $wpdb->get_var($wpdb->prepare(
+            "SELECT 1 FROM {$wpdb->posts} p
+             INNER JOIN {$wpdb->postmeta} pm_status ON p.ID = pm_status.post_id AND pm_status.meta_key = 'status'
+             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = 'start_date'
+             WHERE p.post_type = %s AND p.post_status = 'publish'
+             AND pm_status.meta_value = 'open'
+             AND pm_date.meta_value >= %s
+             LIMIT 1",
+            EditionCPT::POST_TYPE,
+            $today
+        ));
+
+        $service = new HealthCheckService();
+        $checks = $service->evaluate($lastRegistration, $lastMailSend, $hasOpenEditions);
+
+        return new WP_REST_Response($checks);
+    }
+
+    /**
+     * GET /admin/activity
+     *
+     * Recent activity feed from audit log.
+     */
+    public function getActivityFeed(WP_REST_Request $request): WP_REST_Response
+    {
+        global $wpdb;
+
+        $limit = min((int) $request->get_param('limit'), 50);
+        if ($limit <= 0) {
+            $limit = 10;
+        }
+
+        if (!AuditTable::exists()) {
+            return new WP_REST_Response([]);
+        }
+
+        $auditTable = AuditTable::getTableName();
+        $entries = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$auditTable} ORDER BY created_at DESC LIMIT %d",
+            $limit
+        ));
+
+        if (empty($entries)) {
+            return new WP_REST_Response([]);
+        }
+
+        // Collect actor IDs for batch user fetch
+        $actorIds = [];
+        foreach ($entries as $entry) {
+            if (!empty($entry->actor_id)) {
+                $actorIds[] = (int) $entry->actor_id;
+            }
+        }
+
+        $usersMap = !empty($actorIds) ? BatchQueryHelper::batchGetUsers($actorIds) : [];
+
+        $feed = [];
+        foreach ($entries as $entry) {
+            $actorId = (int) ($entry->actor_id ?? 0);
+            $user = $usersMap[$actorId] ?? null;
+            $actorName = $user ? $user->display_name : __('Systeem', 'stride');
+
+            $feed[] = AdminActivityMapper::fromAuditEntry($entry, $actorName);
+        }
+
+        return new WP_REST_Response($feed);
+    }
+
+    // =========================================================================
+    // HELPERS
+    // =========================================================================
 
     /**
      * Build a pending approval item for the REST response.

@@ -57,6 +57,33 @@ class AdminDashboardService extends AbstractService
         // Admin guide page (registers own menu hook)
         new AdminGuidePage();
 
+        // Impersonation admin bar hook
+        $impersonation = new ImpersonationHandler();
+        if ($impersonation->isActive()) {
+            add_filter('show_admin_bar', '__return_true', 999);
+            add_action('admin_bar_menu', function (\WP_Admin_Bar $bar) use ($impersonation) {
+                $token = $impersonation->getTokenFromCookie();
+                $adminId = $impersonation->getOriginalAdmin($token);
+                if ($adminId > 0) {
+                    $adminUser = get_userdata($adminId);
+                    $bar->add_node([
+                        'id' => 'stride-end-impersonation',
+                        'title' => sprintf('← Terug naar %s', $adminUser ? $adminUser->display_name : 'admin'),
+                        'href' => rest_url('stride/v1/admin/impersonate/end') . '?token=' . urlencode($token) . '&_wpnonce=' . wp_create_nonce('wp_rest'),
+                        'meta' => ['class' => 'stride-impersonation-notice'],
+                    ]);
+                }
+            }, 999);
+        }
+
+        // Cache invalidation for action queue transient
+        $invalidateQueue = fn() => delete_transient('stride_action_queue');
+        add_action('stride/registration/created', $invalidateQueue);
+        add_action('stride/registration/confirmed', $invalidateQueue);
+        add_action('stride/registration/cancelled', $invalidateQueue);
+        add_action('stride/attendance/marked', $invalidateQueue);
+        add_action('save_post_vad_quote', $invalidateQueue);
+
         add_action('admin_menu', [$this, 'registerAdminPage']);
         add_action('admin_menu', [$this, 'reorderSubmenus'], 999);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);

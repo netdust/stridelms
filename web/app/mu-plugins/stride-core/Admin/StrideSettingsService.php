@@ -33,6 +33,9 @@ class StrideSettingsService
         'edition' => 'vormingen',
     ];
 
+    /** Option name for notification rules */
+    private const OPTION_NOTIFICATIONS = 'stride_notification_rules';
+
     /** Option name for company details */
     private const OPTION_COMPANY = 'stride_company_details';
 
@@ -108,6 +111,18 @@ class StrideSettingsService
         $details = get_option(self::OPTION_COMPANY, self::DEFAULT_COMPANY);
 
         return array_merge(self::DEFAULT_COMPANY, is_array($details) ? $details : []);
+    }
+
+    /**
+     * Get notification rules merged with defaults.
+     *
+     * @return array<string, array{enabled: bool, value?: int}>
+     */
+    public static function getNotificationRules(): array
+    {
+        $saved = get_option(self::OPTION_NOTIFICATIONS, []);
+
+        return array_merge(ActionQueueService::DEFAULTS, is_array($saved) ? $saved : []);
     }
 
     // =========================================================================
