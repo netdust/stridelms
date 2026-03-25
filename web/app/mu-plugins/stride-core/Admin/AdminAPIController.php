@@ -17,6 +17,7 @@ use Stride\Modules\Edition\SessionRepository;
 use Stride\Modules\Enrollment\RegistrationTable;
 use Stride\Modules\Invoicing\QuoteCPT;
 use Stride\Modules\Trajectory\TrajectoryCPT;
+use Stride\Modules\User\ProfileTypeService;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -277,6 +278,27 @@ final class AdminAPIController
             'permission_callback' => [$this, 'canViewAdmin'],
             'args' => [
                 'limit' => ['type' => 'integer', 'default' => 10, 'maximum' => 50],
+            ],
+        ]);
+
+        // User search
+        register_rest_route(self::NAMESPACE, '/admin/users/search', [
+            'methods' => 'GET',
+            'callback' => [$this, 'searchUsers'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+            'args' => [
+                'q' => ['type' => 'string', 'required' => true, 'minLength' => 2],
+            ],
+        ]);
+
+        // User detail
+        register_rest_route(self::NAMESPACE, '/admin/users/(?P<id>\d+)/detail', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getUserDetail'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+            'args' => [
+                'id' => ['type' => 'integer', 'required' => true],
+                'reg_page' => ['type' => 'integer', 'default' => 1],
             ],
         ]);
     }
@@ -2132,8 +2154,261 @@ final class AdminAPIController
     }
 
     // =========================================================================
+    // USER SEARCH + DETAIL
+    // =========================================================================
+
+    /**
+     * GET /admin/users/search
+     *
+     * Search users by name, email, or login. Returns max 10 results.
+     */
+    public function searchUsers(WP_REST_Request $request): WP_REST_Response
+    {
+        $query = sanitize_text_field($request->get_param('q'));
+
+        $userQuery = new \WP_User_Query([
+            'search' => "*{$query}*",
+            'search_columns' => ['user_login', 'user_email', 'display_name'],
+            'number' => 10,
+            'orderby' => 'display_name',
+            'fields' => ['ID', 'display_name', 'user_email'],
+        ]);
+
+        $users = array_map(function ($user) {
+            $userId = (int) $user->ID;
+            return [
+                'id' => $userId,
+                'name' => $user->display_name,
+                'email' => $user->user_email,
+                'organisation' => get_user_meta($userId, 'organisation', true) ?: '',
+                'registration_count' => $this->countUserRegistrations($userId),
+            ];
+        }, $userQuery->get_results());
+
+        return new WP_REST_Response($users);
+    }
+
+    /**
+     * GET /admin/users/{id}/detail
+     *
+     * Comprehensive user profile: personal info, registrations, quotes,
+     * attendance summary, and audit trail.
+     */
+    public function getUserDetail(WP_REST_Request $request): WP_REST_Response
+    {
+        global $wpdb;
+
+        $userId = (int) $request->get_param('id');
+        $regPage = max(1, (int) $request->get_param('reg_page'));
+        $regPerPage = 20;
+
+        // --- User data ---
+        $userData = get_userdata($userId);
+        if (!$userData) {
+            return new WP_REST_Response(['error' => 'User not found'], 404);
+        }
+
+        // Profile type
+        $profileType = null;
+        $profileService = ntdst_get(ProfileTypeService::class);
+        if ($profileService) {
+            $type = $profileService->getUserType($userId);
+            if ($type) {
+                $profileType = [
+                    'name' => $type['label'] ?? $type['slug'],
+                    'color' => $type['color'] ?? '',
+                ];
+            }
+        }
+
+        $user = [
+            'id' => $userId,
+            'display_name' => $userData->display_name,
+            'email' => $userData->user_email,
+            'phone' => get_user_meta($userId, 'phone', true) ?: '',
+            'organisation' => get_user_meta($userId, 'organisation', true) ?: '',
+            'department' => get_user_meta($userId, 'department', true) ?: '',
+            'profile_type' => $profileType,
+        ];
+
+        // --- Registrations (paginated, with edition title) ---
+        $registrations = [];
+        $registrationsTotal = 0;
+        $registrationTable = RegistrationTable::getTableName();
+
+        if (RegistrationTable::exists()) {
+            $registrationsTotal = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$registrationTable} WHERE user_id = %d",
+                $userId
+            ));
+
+            $regOffset = ($regPage - 1) * $regPerPage;
+            $regRows = $wpdb->get_results($wpdb->prepare(
+                "SELECT r.id, r.edition_id, r.status, r.enrollment_path, r.registered_at,
+                        r.completed_at, r.cancelled_at, p.post_title AS edition_title
+                 FROM {$registrationTable} r
+                 LEFT JOIN {$wpdb->posts} p ON r.edition_id = p.ID
+                 WHERE r.user_id = %d
+                 ORDER BY r.registered_at DESC
+                 LIMIT %d OFFSET %d",
+                $userId,
+                $regPerPage,
+                $regOffset
+            ));
+
+            foreach ($regRows as $row) {
+                $registrations[] = [
+                    'id' => (int) $row->id,
+                    'edition_id' => (int) $row->edition_id,
+                    'edition_title' => $row->edition_title ?: __('Onbekend', 'stride'),
+                    'status' => $row->status,
+                    'enrollment_path' => $row->enrollment_path,
+                    'registered_at' => $row->registered_at,
+                    'completed_at' => $row->completed_at,
+                    'cancelled_at' => $row->cancelled_at,
+                ];
+            }
+        }
+
+        // --- Quotes (linked to user by billing email or user meta) ---
+        $quotes = [];
+        $quoteQuery = new \WP_Query([
+            'post_type' => QuoteCPT::POST_TYPE,
+            'post_status' => 'publish',
+            'posts_per_page' => 20,
+            'meta_query' => [
+                'relation' => 'OR',
+                [
+                    'key' => 'billing_email',
+                    'value' => $userData->user_email,
+                ],
+                [
+                    'key' => 'user_id',
+                    'value' => $userId,
+                    'type' => 'NUMERIC',
+                ],
+            ],
+            'orderby' => 'date',
+            'order' => 'DESC',
+        ]);
+
+        foreach ($quoteQuery->posts as $quotePost) {
+            $quotes[] = [
+                'id' => $quotePost->ID,
+                'title' => $quotePost->post_title,
+                'status' => get_post_meta($quotePost->ID, 'status', true) ?: '',
+                'total' => (int) get_post_meta($quotePost->ID, 'total', true),
+                'created_at' => $quotePost->post_date,
+            ];
+        }
+
+        // --- Attendance summary (grouped by edition) ---
+        $attendance = [];
+        if (AttendanceTable::exists()) {
+            $attendanceTable = AttendanceTable::getTableName();
+            $attRows = $wpdb->get_results($wpdb->prepare(
+                "SELECT a.edition_id, a.status, COUNT(*) as cnt,
+                        p.post_title AS edition_title
+                 FROM {$attendanceTable} a
+                 LEFT JOIN {$wpdb->posts} p ON a.edition_id = p.ID
+                 WHERE a.user_id = %d
+                 GROUP BY a.edition_id, a.status
+                 ORDER BY a.edition_id DESC",
+                $userId
+            ));
+
+            // Group by edition
+            $grouped = [];
+            foreach ($attRows as $row) {
+                $editionId = (int) $row->edition_id;
+                if (!isset($grouped[$editionId])) {
+                    $grouped[$editionId] = [
+                        'edition_id' => $editionId,
+                        'edition_title' => $row->edition_title ?: __('Onbekend', 'stride'),
+                        'present' => 0,
+                        'absent' => 0,
+                        'excused' => 0,
+                    ];
+                }
+                $status = $row->status;
+                if (isset($grouped[$editionId][$status])) {
+                    $grouped[$editionId][$status] = (int) $row->cnt;
+                }
+            }
+            $attendance = array_values($grouped);
+        }
+
+        // --- Audit trail (last 50 entries where user is actor or subject) ---
+        $auditTrail = [];
+        $auditTrailTotal = 0;
+
+        if (AuditTable::exists()) {
+            $auditTable = AuditTable::getTableName();
+
+            $auditTrailTotal = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$auditTable}
+                 WHERE actor_id = %d OR (entity_type = 'user' AND entity_id = %d)",
+                $userId,
+                $userId
+            ));
+
+            $auditEntries = $wpdb->get_results($wpdb->prepare(
+                "SELECT * FROM {$auditTable}
+                 WHERE actor_id = %d OR (entity_type = 'user' AND entity_id = %d)
+                 ORDER BY created_at DESC
+                 LIMIT 50",
+                $userId,
+                $userId
+            ));
+
+            // Collect actor IDs for batch user fetch
+            $actorIds = [];
+            foreach ($auditEntries as $entry) {
+                if (!empty($entry->actor_id)) {
+                    $actorIds[] = (int) $entry->actor_id;
+                }
+            }
+            $usersMap = !empty($actorIds) ? BatchQueryHelper::batchGetUsers($actorIds) : [];
+
+            foreach ($auditEntries as $entry) {
+                $actorId = (int) ($entry->actor_id ?? 0);
+                $actorUser = $usersMap[$actorId] ?? null;
+                $actorName = $actorUser ? $actorUser->display_name : __('Systeem', 'stride');
+
+                $auditTrail[] = AdminActivityMapper::fromAuditEntry($entry, $actorName);
+            }
+        }
+
+        return new WP_REST_Response([
+            'user' => $user,
+            'registrations' => $registrations,
+            'registrations_total' => $registrationsTotal,
+            'quotes' => $quotes,
+            'attendance' => $attendance,
+            'audit_trail' => $auditTrail,
+            'audit_trail_total' => $auditTrailTotal,
+        ]);
+    }
+
+    // =========================================================================
     // HELPERS
     // =========================================================================
+
+    /**
+     * Count registrations for a given user.
+     */
+    private function countUserRegistrations(int $userId): int
+    {
+        global $wpdb;
+        $table = RegistrationTable::getTableName();
+        if (!RegistrationTable::exists()) {
+            return 0;
+        }
+        return (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table} WHERE user_id = %d",
+            $userId
+        ));
+    }
 
     /**
      * Build a pending approval item for the REST response.
