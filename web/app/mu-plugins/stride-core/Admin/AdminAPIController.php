@@ -301,6 +301,44 @@ final class AdminAPIController
                 'reg_page' => ['type' => 'integer', 'default' => 1],
             ],
         ]);
+
+        // Impersonate user
+        register_rest_route(self::NAMESPACE, '/admin/users/(?P<id>\d+)/impersonate', [
+            'methods' => 'POST',
+            'callback' => [$this, 'impersonateUser'],
+            'permission_callback' => [$this, 'canManageAdmin'],
+            'args' => [
+                'id' => ['type' => 'integer', 'required' => true],
+            ],
+        ]);
+
+        // End impersonation — permission validated internally via cookie+transient
+        register_rest_route(self::NAMESPACE, '/admin/impersonate/end', [
+            'methods' => ['GET', 'POST'],
+            'callback' => [$this, 'endImpersonation'],
+            'permission_callback' => function () {
+                $handler = new ImpersonationHandler();
+                if (!$handler->isActive()) {
+                    return false;
+                }
+                $token = $handler->getTokenFromCookie();
+                return $handler->getOriginalAdmin($token) > 0;
+            },
+        ]);
+
+        // Notifications
+        register_rest_route(self::NAMESPACE, '/admin/notifications', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getNotifications'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+        ]);
+
+        // Mark notifications read
+        register_rest_route(self::NAMESPACE, '/admin/notifications/read', [
+            'methods' => 'POST',
+            'callback' => [$this, 'markNotificationsRead'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+        ]);
     }
 
     /**
@@ -2431,5 +2469,174 @@ final class AdminAPIController
             'registered_at' => $row->registered_at,
             'tasks' => $tasks,
         ];
+    }
+
+    /* ---------------------------------------------------------------
+     *  Impersonation
+     * ------------------------------------------------------------- */
+
+    /**
+     * Start impersonating a user. Switches the current session to the target user
+     * and stores a token so the admin can return.
+     */
+    public function impersonateUser(WP_REST_Request $request): WP_REST_Response|WP_Error
+    {
+        $targetId = (int) $request->get_param('id');
+        $targetUser = get_userdata($targetId);
+
+        if (!$targetUser) {
+            return new WP_Error('not_found', __('Gebruiker niet gevonden.', 'stride'), ['status' => 404]);
+        }
+
+        $handler = new ImpersonationHandler();
+        $validation = $handler->validateTarget(
+            targetUserId: $targetId,
+            targetIsAdmin: user_can($targetId, 'manage_options'),
+            callerHasManageOptions: current_user_can('manage_options'),
+        );
+
+        if (is_wp_error($validation)) {
+            return $validation;
+        }
+
+        $adminId = get_current_user_id();
+        $token = $handler->generateToken();
+        $handler->storeSession($token, $adminId);
+
+        // Audit trail
+        global $wpdb;
+        $auditTable = $wpdb->prefix . 'ntdst_audit_log';
+        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $auditTable))) {
+            $wpdb->insert($auditTable, [
+                'action'     => 'impersonation.started',
+                'actor_id'   => $adminId,
+                'subject_id' => $targetId,
+                'context'    => wp_json_encode([
+                    'target_name'  => $targetUser->display_name,
+                    'target_email' => $targetUser->user_email,
+                ]),
+                'created_at' => current_time('mysql', true),
+            ]);
+        }
+
+        // Switch session to target user
+        wp_clear_auth_cookie();
+        wp_set_auth_cookie($targetId, false);
+
+        // Set impersonation cookie
+        setcookie(ImpersonationHandler::COOKIE_NAME, $token, [
+            'expires'  => time() + ImpersonationHandler::TTL,
+            'path'     => COOKIEPATH,
+            'domain'   => COOKIE_DOMAIN,
+            'secure'   => is_ssl(),
+            'httponly'  => true,
+            'samesite' => 'Strict',
+        ]);
+
+        return new WP_REST_Response([
+            'success'  => true,
+            'redirect' => home_url('/'),
+        ]);
+    }
+
+    /**
+     * End impersonation and switch back to the original admin.
+     * Redirects to the admin dashboard users tab.
+     */
+    public function endImpersonation(WP_REST_Request $request): void
+    {
+        $handler = new ImpersonationHandler();
+        $token = $handler->getTokenFromCookie();
+        $adminId = $handler->getOriginalAdmin($token);
+
+        if ($adminId <= 0) {
+            wp_safe_redirect(admin_url());
+            exit;
+        }
+
+        // Clean up session
+        $handler->endSession($token);
+
+        // Clear impersonation cookie
+        setcookie(ImpersonationHandler::COOKIE_NAME, '', [
+            'expires' => time() - 3600,
+            'path'    => COOKIEPATH,
+            'domain'  => COOKIE_DOMAIN,
+        ]);
+
+        // Switch back to admin
+        wp_clear_auth_cookie();
+        wp_set_auth_cookie($adminId, false);
+
+        // Redirect to dashboard users tab
+        wp_safe_redirect(admin_url('admin.php?page=stride-dashboard#/gebruikers'));
+        exit;
+    }
+
+    /* ---------------------------------------------------------------
+     *  Notifications
+     * ------------------------------------------------------------- */
+
+    /**
+     * Get recent notifications from the audit log.
+     * Tracks read/unread state per admin user.
+     */
+    public function getNotifications(WP_REST_Request $request): WP_REST_Response
+    {
+        $userId = get_current_user_id();
+        $lastReadId = (int) get_user_meta($userId, 'stride_last_read_notification_id', true);
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'ntdst_audit_log';
+
+        // Only notification-worthy events
+        $actions = [
+            'registration.created',
+            'registration.cancelled',
+            'quote.created',
+            'completion.course_completed',
+        ];
+        $placeholders = implode(',', array_fill(0, count($actions), '%s'));
+
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $entries = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$table} WHERE action IN ({$placeholders}) ORDER BY created_at DESC LIMIT 10",
+            ...$actions,
+        ));
+
+        $notifications = array_map(function ($entry) use ($lastReadId) {
+            $actorName = '';
+            if (!empty($entry->actor_id)) {
+                $user = get_userdata((int) $entry->actor_id);
+                $actorName = $user ? $user->display_name : 'Onbekend';
+            }
+            $mapped = AdminActivityMapper::fromAuditEntry($entry, $actorName);
+            $mapped['read'] = $mapped['id'] <= $lastReadId;
+
+            return $mapped;
+        }, $entries ?: []);
+
+        $unread = count(array_filter($notifications, fn($n) => !$n['read']));
+
+        return new WP_REST_Response([
+            'notifications' => $notifications,
+            'unread_count'  => $unread,
+        ]);
+    }
+
+    /**
+     * Mark all notifications as read by storing the latest audit log ID.
+     */
+    public function markNotificationsRead(WP_REST_Request $request): WP_REST_Response
+    {
+        $userId = get_current_user_id();
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'ntdst_audit_log';
+        $latestId = (int) $wpdb->get_var("SELECT MAX(id) FROM {$table}");
+
+        update_user_meta($userId, 'stride_last_read_notification_id', $latestId);
+
+        return new WP_REST_Response(['success' => true, 'unread_count' => 0]);
     }
 }
