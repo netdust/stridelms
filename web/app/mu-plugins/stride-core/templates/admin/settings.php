@@ -14,6 +14,7 @@ $tabs = [
     'general'       => ['label' => 'Algemeen', 'icon' => 'dashicons-admin-generic'],
     'company'       => ['label' => 'Bedrijf', 'icon' => 'dashicons-building'],
     'profile-types' => ['label' => 'Profieltypes', 'icon' => 'dashicons-groups'],
+    'notifications' => ['label' => 'Meldingen', 'icon' => 'dashicons-bell'],
 ];
 
 $templateDir = __DIR__ . '/settings';
@@ -67,6 +68,13 @@ $templateDir = __DIR__ . '/settings';
             <div x-show="activeTab === 'profile-types'" style="display: none;">
                 <?php if (file_exists($templateDir . '/tab-profile-types.php')): ?>
                     <?php include $templateDir . '/tab-profile-types.php'; ?>
+                <?php endif; ?>
+            </div>
+
+            <!-- Tab: Meldingen -->
+            <div x-show="activeTab === 'notifications'" style="display: none;">
+                <?php if (file_exists($templateDir . '/tab-notifications.php')): ?>
+                    <?php include $templateDir . '/tab-notifications.php'; ?>
                 <?php endif; ?>
             </div>
 

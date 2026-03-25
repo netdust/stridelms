@@ -31,6 +31,16 @@ function strideSettingsApp() {
         isNew: false,
         confirmDelete: null,
 
+        // Notification rules
+        notifications: {
+            capacity_threshold:  { enabled: true, value: 80 },
+            session_approaching: { enabled: true, value: 1 },
+            stale_quote:         { enabled: true, value: 7 },
+            pending_approval:    { enabled: true },
+            edition_starting:    { enabled: true, value: 3 },
+            incomplete_tasks:    { enabled: true, value: 7 },
+        },
+
         // Company details
         company: {
             name: '',
@@ -62,6 +72,11 @@ function strideSettingsApp() {
                 this.availableIcons = data.profileTypes.availableIcons || [];
             }
 
+            // Notifications tab
+            if (data.notifications) {
+                this.notifications = { ...this.notifications, ...data.notifications };
+            }
+
             // Company tab
             if (data.company) {
                 this.company = { ...this.company, ...data.company };
@@ -69,7 +84,7 @@ function strideSettingsApp() {
 
             // Read tab from URL hash
             const hash = window.location.hash.replace('#', '');
-            if (['general', 'company', 'profile-types'].includes(hash)) {
+            if (['general', 'company', 'profile-types', 'notifications'].includes(hash)) {
                 this.activeTab = hash;
             }
         },
@@ -166,6 +181,49 @@ function strideSettingsApp() {
                 this.showMessage(err.message || 'Opslaan mislukt.', 'error');
             } finally {
                 this.saving = false;
+            }
+        },
+
+        // =====================================================================
+        // Notifications Tab
+        // =====================================================================
+
+        /**
+         * Save notification settings.
+         * Called from tab-notifications.php via saveTab('notifications').
+         */
+        async saveNotifications() {
+            this.saving = true;
+            try {
+                const params = { tab: 'notifications' };
+
+                // Flatten notification rules into key_enabled / key_value params
+                for (const [key, rule] of Object.entries(this.notifications)) {
+                    params[key + '_enabled'] = rule.enabled ? '1' : '0';
+                    if (rule.value !== undefined) {
+                        params[key + '_value'] = String(rule.value);
+                    }
+                }
+
+                const result = await this.apiCall('stride_save_settings', params);
+                this.showMessage(result.message || 'Meldingsinstellingen opgeslagen.');
+            } catch (err) {
+                this.showMessage(err.message || 'Opslaan mislukt.', 'error');
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        /**
+         * Generic tab save dispatcher.
+         * Used by tabs that call saveTab('tabName') from their template.
+         */
+        saveTab(tab) {
+            switch (tab) {
+                case 'general':       return this.saveGeneral();
+                case 'company':       return this.saveCompany();
+                case 'profile-types': return this.saveProfileTypes();
+                case 'notifications': return this.saveNotifications();
             }
         },
 

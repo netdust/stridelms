@@ -231,6 +231,7 @@ class StrideSettingsService
             'general' => $this->saveGeneralSettings($params),
             'company' => $this->saveCompanySettings($params),
             'profile-types' => $this->saveProfileTypes($params),
+            'notifications' => $this->saveNotificationSettings($params),
             default => new WP_Error('invalid_tab', __('Onbekend tabblad.', 'stride')),
         };
     }
@@ -370,6 +371,31 @@ class StrideSettingsService
         return $sanitized;
     }
 
+    /**
+     * Save notification rule settings.
+     *
+     * @return array{message: string}
+     */
+    private function saveNotificationSettings(array $params): array
+    {
+        $ruleKeys = ['capacity_threshold', 'session_approaching', 'stale_quote', 'pending_approval', 'edition_starting', 'incomplete_tasks'];
+        $rules = [];
+
+        foreach ($ruleKeys as $key) {
+            $rules[$key] = [
+                'enabled' => filter_var($params[$key . '_enabled'] ?? true, FILTER_VALIDATE_BOOLEAN),
+            ];
+            if ($key !== 'pending_approval') {
+                $value = absint($params[$key . '_value'] ?? 0);
+                $rules[$key]['value'] = max(1, min(365, $value ?: ActionQueueService::DEFAULTS[$key]['value']));
+            }
+        }
+
+        update_option(self::OPTION_NOTIFICATIONS, $rules);
+
+        return ['message' => 'Meldingsinstellingen opgeslagen.'];
+    }
+
     // =========================================================================
     // LOCALIZED DATA
     // =========================================================================
@@ -417,6 +443,7 @@ class StrideSettingsService
                 'types' => array_values($typesWithCounts),
                 'availableIcons' => $availableIcons,
             ],
+            'notifications' => self::getNotificationRules(),
         ];
     }
 }
