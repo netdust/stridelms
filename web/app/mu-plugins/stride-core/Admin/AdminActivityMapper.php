@@ -12,6 +12,32 @@ namespace Stride\Admin;
  */
 final class AdminActivityMapper
 {
+    /** Actions that should be shown in the admin activity feed. */
+    private const KNOWN_ACTIONS = [
+        'registration.created',
+        'registration.cancelled',
+        'attendance.marked_present',
+        'attendance.marked_absent',
+        'attendance.marked_excused',
+        'completion.course_completed',
+        'completion.certificate_issued',
+        'quote.created',
+        'quote.sent',
+        'impersonation.started',
+        'user.created',
+        'user.updated',
+        'edition.created',
+        'edition.updated',
+    ];
+
+    /**
+     * Check if an audit entry should appear in the activity feed.
+     */
+    public static function isKnownAction(object $entry): bool
+    {
+        return in_array($entry->action ?? '', self::KNOWN_ACTIONS, true);
+    }
+
     /**
      * Convert an audit log entry to an admin-friendly activity array.
      *

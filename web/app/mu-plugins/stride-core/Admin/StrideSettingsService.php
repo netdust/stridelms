@@ -382,12 +382,21 @@ class StrideSettingsService
         $rules = [];
 
         foreach ($ruleKeys as $key) {
+            // Check if the enabled param was explicitly provided
+            $enabledKey = $key . '_enabled';
+            $enabled = array_key_exists($enabledKey, $params)
+                ? filter_var($params[$enabledKey], FILTER_VALIDATE_BOOLEAN)
+                : (ActionQueueService::DEFAULTS[$key]['enabled'] ?? true);
+
             $rules[$key] = [
-                'enabled' => filter_var($params[$key . '_enabled'] ?? true, FILTER_VALIDATE_BOOLEAN),
+                'enabled' => $enabled,
             ];
             if ($key !== 'pending_approval') {
-                $value = absint($params[$key . '_value'] ?? 0);
-                $rules[$key]['value'] = max(1, min(365, $value ?: ActionQueueService::DEFAULTS[$key]['value']));
+                $valueKey = $key . '_value';
+                $rawValue = array_key_exists($valueKey, $params) ? absint($params[$valueKey]) : 0;
+                $rules[$key]['value'] = $rawValue > 0
+                    ? max(1, min(365, $rawValue))
+                    : (ActionQueueService::DEFAULTS[$key]['value'] ?? 7);
             }
         }
 

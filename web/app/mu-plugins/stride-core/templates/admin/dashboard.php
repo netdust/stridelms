@@ -200,7 +200,7 @@ defined('ABSPATH') || exit;
                             <template x-if="activityFeed.length === 0 && !loading">
                                 <div class="sd-empty"><span class="sd-empty__text">Nog geen activiteit.</span></div>
                             </template>
-                            <a href="#" class="sd-card__link" x-show="activityFeed.length > 0" @click.prevent="">Meer bekijken →</a>
+                            <!-- Activity feed shows last 10 items; no dedicated view yet -->
                         </div>
                     </div>
 
@@ -399,7 +399,8 @@ defined('ABSPATH') || exit;
                             </dl>
                             <a :href="'<?php echo esc_url($admin_url); ?>post.php?post=' + selectedEdition?.id + '&action=edit'"
                                class="sd-btn sd-btn--ghost"
-                               target="_blank">Bewerk in WP →</a>
+                               target="_blank"
+                               x-show="selectedEdition?.id">Bewerk in WP →</a>
                         </div>
 
                     </div><!-- /.sd-slideout__body -->
@@ -468,7 +469,7 @@ defined('ABSPATH') || exit;
                                     <button class="sd-btn sd-btn--text"
                                             @click="quickSendTarget = quote"
                                             title="Verzenden"
-                                            x-show="quote.status === 'concept'">✉</button>
+                                            x-show="quote.status === 'draft'">✉</button>
                                 </td>
                             </tr>
                         </template>
@@ -519,12 +520,17 @@ defined('ABSPATH') || exit;
                                 <dd x-text="selectedQuote?.edition_title || '—'"></dd>
                                 <dt>Datum</dt>
                                 <dd x-text="formatDate(selectedQuote?.date)"></dd>
+                                <dt>Subtotaal</dt>
+                                <dd x-text="formatCurrency(selectedQuote?.subtotal)"></dd>
+                                <dt>BTW</dt>
+                                <dd x-text="formatCurrency(selectedQuote?.tax)"></dd>
                                 <dt>Totaal</dt>
                                 <dd x-text="formatCurrency(selectedQuote?.total)"></dd>
                             </dl>
                             <a :href="'<?php echo esc_url($admin_url); ?>post.php?post=' + selectedQuote?.id + '&action=edit'"
                                class="sd-btn sd-btn--ghost"
-                               target="_blank">Bewerk in WP →</a>
+                               target="_blank"
+                               x-show="selectedQuote?.id">Bewerk in WP →</a>
                         </div>
 
                         <!-- Items tab -->
@@ -663,7 +669,8 @@ defined('ABSPATH') || exit;
                             </dl>
                             <a :href="'<?php echo esc_url($admin_url); ?>post.php?post=' + selectedTrajectory?.id + '&action=edit'"
                                class="sd-btn sd-btn--ghost"
-                               target="_blank">Bewerk in WP →</a>
+                               target="_blank"
+                               x-show="selectedTrajectory?.id">Bewerk in WP →</a>
                         </div>
 
                         <!-- Courses tab -->
@@ -747,7 +754,7 @@ defined('ABSPATH') || exit;
                                     <div x-text="selectedUser?.organisation || ''" x-show="selectedUser?.organisation"></div>
                                 </div>
                                 <div class="sd-user-header__actions">
-                                    <button class="sd-btn sd-btn--ghost" @click="impersonateUser(selectedUser?.id)" x-show="config.canManage">Inloggen als</button>
+                                    <button class="sd-btn sd-btn--ghost" @click="impersonateUser(selectedUser?.id)" x-show="config.canManage">Bekijk als gebruiker</button>
                                     <a :href="'<?php echo esc_url($admin_url); ?>user-edit.php?user_id=' + selectedUser?.id"
                                        class="sd-btn sd-btn--ghost"
                                        target="_blank">Bewerk in WP →</a>

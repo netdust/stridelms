@@ -160,16 +160,17 @@ document.addEventListener('alpine:init', () => {
         //  VIEW DATA LOADING
         // ==============================================================
 
+        _loadingViews: {},
         loadViewData(view) {
             if (view === 'edities') {
-                if (this.editions.length === 0) this.loadEditions();
+                if (this.editions.length === 0 && !this._loadingViews.edities) this.loadEditions();
                 if (this.courseTags.length === 0) this.loadCourseTags();
                 this.$nextTick(() => this.initDateRangePicker());
             } else if (view === 'offertes') {
-                if (this.quotes.length === 0) this.loadQuotes();
+                if (this.quotes.length === 0 && !this._loadingViews.offertes) this.loadQuotes();
                 if (this.quoteEditions.length === 0) this.loadQuoteEditions();
             } else if (view === 'trajecten') {
-                if (this.trajectories.length === 0) this.loadTrajectories();
+                if (this.trajectories.length === 0 && !this._loadingViews.trajecten) this.loadTrajectories();
             } else if (view === 'dashboard') {
                 this.loadDashboard();
             }
@@ -259,6 +260,7 @@ document.addEventListener('alpine:init', () => {
 
         async loadEditions(page) {
             if (page != null) this.editionPagination.page = page;
+            this._loadingViews.edities = true;
             this.loading = true;
             const params = new URLSearchParams({
                 page: this.editionPagination.page,
@@ -381,6 +383,7 @@ document.addEventListener('alpine:init', () => {
 
         async loadQuotes(page) {
             if (page != null) this.quotePagination.page = page;
+            this._loadingViews.offertes = true;
             this.loading = true;
             const params = new URLSearchParams({
                 page: this.quotePagination.page, per_page: 20,
@@ -460,6 +463,7 @@ document.addEventListener('alpine:init', () => {
 
         async loadTrajectories(page) {
             if (page != null) this.trajectoryPagination.page = page;
+            this._loadingViews.trajecten = true;
             this.loading = true;
             const params = new URLSearchParams({
                 page: this.trajectoryPagination.page, per_page: 20,

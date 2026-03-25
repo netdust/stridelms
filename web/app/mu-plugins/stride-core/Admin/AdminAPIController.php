@@ -2254,6 +2254,11 @@ final class AdminAPIController
 
         $feed = [];
         foreach ($entries as $entry) {
+            // Skip raw/system events that don't have a user-friendly label
+            if (!AdminActivityMapper::isKnownAction($entry)) {
+                continue;
+            }
+
             $actorId = (int) ($entry->actor_id ?? 0);
             $user = $usersMap[$actorId] ?? null;
             $actorName = $user ? $user->display_name : __('Systeem', 'stride');
