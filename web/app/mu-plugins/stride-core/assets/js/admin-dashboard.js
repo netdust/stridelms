@@ -613,9 +613,9 @@ document.addEventListener('alpine:init', () => {
             return d.toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' });
         },
 
-        formatCurrency(cents) {
-            if (cents == null) return '\u2014';
-            return new Intl.NumberFormat('nl-BE', { style: 'currency', currency: 'EUR' }).format(cents / 100);
+        formatCurrency(value) {
+            if (value == null) return '\u2014';
+            return new Intl.NumberFormat('nl-BE', { style: 'currency', currency: 'EUR' }).format(value);
         },
 
         formatRelativeTime(timestamp) {
