@@ -246,9 +246,11 @@ defined('ABSPATH') || exit;
                 <select class="sd-select" x-model="editionFilters.status" @change="loadEditions()">
                     <option value="">Alle statussen</option>
                     <option value="open">Open</option>
-                    <option value="gesloten">Gesloten</option>
-                    <option value="vol">Vol</option>
-                    <option value="concept">Concept</option>
+                    <option value="full">Vol</option>
+                    <option value="cancelled">Geannuleerd</option>
+                    <option value="completed">Afgelopen</option>
+                    <option value="closed">Gesloten</option>
+                    <option value="announcement">Aankondiging</option>
                 </select>
                 <input type="text"
                        class="sd-input"
@@ -420,9 +422,10 @@ defined('ABSPATH') || exit;
                        @input.debounce.300ms="loadQuotes()">
                 <select class="sd-select" x-model="quoteFilters.status" @change="loadQuotes()">
                     <option value="">Alle statussen</option>
-                    <option value="concept">Concept</option>
-                    <option value="verzonden">Verzonden</option>
-                    <option value="geexporteerd">Geëxporteerd</option>
+                    <option value="draft">Concept</option>
+                    <option value="sent">Verzonden</option>
+                    <option value="exported">Geëxporteerd</option>
+                    <option value="cancelled">Geannuleerd</option>
                 </select>
                 <select class="sd-select" x-model="quoteFilters.edition_id" @change="loadQuotes()">
                     <option value="">Alle edities</option>
@@ -569,9 +572,10 @@ defined('ABSPATH') || exit;
                 <select class="sd-select" x-model="trajectoryFilters.status" @change="loadTrajectories()">
                     <option value="">Alle statussen</option>
                     <option value="open">Open</option>
-                    <option value="gesloten">Gesloten</option>
-                    <option value="vol">Vol</option>
-                    <option value="concept">Concept</option>
+                    <option value="closed">Gesloten</option>
+                    <option value="full">Volzet</option>
+                    <option value="draft">Concept</option>
+                    <option value="archived">Gearchiveerd</option>
                 </select>
                 <button class="sd-btn sd-btn--ghost" @click="resetTrajectoryFilters()">Reset</button>
             </div>
