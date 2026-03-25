@@ -150,7 +150,7 @@ defined('ABSPATH') || exit;
                                 </tr>
                             </thead>
                             <tbody>
-                                <template x-for="session in upcomingSessions" :key="session.id">
+                                <template x-for="session in upcomingSessions" :key="session.sessionId || session.id">
                                     <tr :class="{'sd-table__row--today': session.isToday, 'sd-table__row--past': session.isPast}">
                                         <td><a :href="'<?php echo esc_url($admin_url); ?>post.php?post=' + session.edition_id + '&action=edit'" x-text="session.edition_title"></a></td>
                                         <td x-text="formatDate(session.date)"></td>
@@ -279,7 +279,7 @@ defined('ABSPATH') || exit;
                         </tr>
                     </thead>
                     <tbody>
-                        <template x-for="session in editionSessions" :key="session.id">
+                        <template x-for="session in editionSessions" :key="session.sessionId || session.id">
                             <tr :class="{'sd-table__row--today': session.isToday, 'sd-table__row--past': session.isPast}"
                                 @click="openEdition(session.edition_id)">
                                 <td x-text="session.edition_title"></td>
