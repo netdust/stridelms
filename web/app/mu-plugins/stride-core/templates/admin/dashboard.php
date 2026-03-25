@@ -190,7 +190,7 @@ defined('ABSPATH') || exit;
                         <div class="sd-card__body">
                             <template x-for="entry in activityFeed" :key="entry.id">
                                 <div class="sd-activity-item">
-                                    <div class="sd-avatar sd-avatar--sm" x-text="(entry.user || '?')[0].toUpperCase()"></div>
+                                    <div class="sd-avatar sd-avatar--sm" x-text="(entry.actor_name || '?')[0].toUpperCase()"></div>
                                     <div class="sd-activity-item__content">
                                         <span class="sd-activity-item__text" x-text="entry.text"></span>
                                         <span class="sd-activity-item__time" x-text="formatRelativeTime(entry.timestamp)"></span>
@@ -595,7 +595,7 @@ defined('ABSPATH') || exit;
                         <template x-for="traj in trajectories" :key="traj.id">
                             <tr @click="openTrajectory(traj.id)">
                                 <td x-text="traj.title"></td>
-                                <td x-text="traj.mode || '—'"></td>
+                                <td x-text="traj.modeLabel || traj.mode || '—'"></td>
                                 <td x-text="traj.course_count"></td>
                                 <td x-text="traj.registered"></td>
                                 <td x-text="formatCurrency(traj.price)"></td>
@@ -649,7 +649,7 @@ defined('ABSPATH') || exit;
                                 <dt>Status</dt>
                                 <dd><span class="sd-badge" :class="'sd-badge--' + selectedTrajectory?.status" x-text="selectedTrajectory?.status_label"></span></dd>
                                 <dt>Modus</dt>
-                                <dd x-text="selectedTrajectory?.mode || '—'"></dd>
+                                <dd x-text="selectedTrajectory?.modeLabel || selectedTrajectory?.mode || '—'"></dd>
                                 <dt>Prijs</dt>
                                 <dd x-text="formatCurrency(selectedTrajectory?.price)"></dd>
                                 <dt>Deadline</dt>

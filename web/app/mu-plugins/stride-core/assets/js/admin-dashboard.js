@@ -8,7 +8,7 @@ document.addEventListener('alpine:init', () => {
         config: window.StrideConfig || {},
 
         // ── Dashboard home ───────────────────────────────────────
-        stats: { upcomingEditions: 0, totalRegistrations: 0, pendingQuotes: 0, todaySessions: 0, actionsNeeded: 0 },
+        stats: { upcomingEditions: 0, totalRegistrations: 0, pendingQuotes: 0, todaySessions: 0, actionsNeeded: 0, actionCount: 0 },
         actionQueue: [],
         upcomingSessions: [],
         activityFeed: [],
@@ -93,7 +93,7 @@ document.addEventListener('alpine:init', () => {
 
         /** Audit log for the selected user */
         get userAuditLog() {
-            return this.selectedUser?.audit_log || [];
+            return this.selectedUser?.audit_trail || [];
         },
 
         /** Attendance summary for the selected user */
@@ -190,7 +190,11 @@ document.addEventListener('alpine:init', () => {
                     this.api('/admin/health-checks'),
                     this.api('/admin/notifications'),
                 ]);
-                if (stats.status === 'fulfilled') this.stats = stats.value;
+                if (stats.status === 'fulfilled') {
+                    const s = stats.value;
+                    s.actionsNeeded = s.actionCount ?? s.actionsNeeded ?? 0;
+                    this.stats = s;
+                }
                 if (queue.status === 'fulfilled') this.actionQueue = queue.value;
                 if (sessions.status === 'fulfilled') {
                     const statusLabels = { open: 'Open', full: 'Vol', cancelled: 'Geannuleerd', completed: 'Afgelopen', closed: 'Gesloten' };
@@ -324,11 +328,17 @@ document.addEventListener('alpine:init', () => {
                     this.api(`/admin/editions/${id}/registrations`),
                 ]);
                 this.selectedEdition = edition;
+                const regStatusLabels = {
+                    confirmed: 'Bevestigd', completed: 'Afgerond', cancelled: 'Geannuleerd',
+                    pending: 'In afwachting', interest: 'Interesse', waitlist: 'Wachtlijst',
+                    withdrawn: 'Teruggetrokken',
+                };
                 this.editionRegistrations = (regs.registrations || regs.items || []).map(reg => ({
                     ...reg,
                     user_id: reg.user_id || reg.user?.id,
                     name: reg.name || reg.user?.name,
                     email: reg.email || reg.user?.email,
+                    status_label: reg.status_label || regStatusLabels[reg.status] || reg.status || '—',
                 }));
                 if (regs.sessions) {
                     this.selectedEdition.sessions = regs.sessions;
@@ -402,11 +412,22 @@ document.addEventListener('alpine:init', () => {
 
         openQuote(quoteOrId) {
             // Template calls openQuote(quote.id) from table row click
+            let quote;
             if (typeof quoteOrId === 'object') {
-                this.selectedQuote = quoteOrId;
+                quote = quoteOrId;
             } else {
-                this.selectedQuote = this.quotes.find(q => q.id === quoteOrId) || null;
+                quote = this.quotes.find(q => q.id === quoteOrId) || null;
             }
+            if (quote) {
+                // Map lineItems to items with correct field names for template
+                quote.items = (quote.lineItems || quote.items || []).map(item => ({
+                    ...item,
+                    description: item.title || item.description || '',
+                    price: item.unit_price ?? item.price ?? 0,
+                    total: item.line_total ?? item.total ?? ((item.unit_price ?? item.price ?? 0) * (item.quantity || 1)),
+                }));
+            }
+            this.selectedQuote = quote;
             this.quoteTab = 'details';
             if (this.selectedQuote) this.openSlideOver();
         },
@@ -489,7 +510,53 @@ document.addEventListener('alpine:init', () => {
             // Can be called with a user object (from search results) or a numeric id
             const userId = typeof userOrId === 'object' ? userOrId.id : userOrId;
             try {
-                this.selectedUser = await this.api(`/admin/users/${userId}/detail`);
+                const data = await this.api(`/admin/users/${userId}/detail`);
+
+                // Status label maps
+                const regStatusLabels = {
+                    confirmed: 'Bevestigd', completed: 'Afgerond', cancelled: 'Geannuleerd',
+                    pending: 'In afwachting', interest: 'Interesse', waitlist: 'Wachtlijst',
+                    withdrawn: 'Teruggetrokken',
+                };
+                const quoteStatusLabels = { draft: 'Concept', sent: 'Verzonden', exported: 'Geëxporteerd', cancelled: 'Geannuleerd' };
+
+                // Map registrations: add date and status_label
+                const registrations = (data.registrations || []).map(reg => ({
+                    ...reg,
+                    date: reg.registered_at || reg.date || null,
+                    status_label: regStatusLabels[reg.status] || reg.status || '—',
+                }));
+
+                // Map quotes: add number, edition_title, status_label
+                const quotes = (data.quotes || []).map(q => ({
+                    ...q,
+                    number: q.number || q.quote_number || q.title || '—',
+                    edition_title: q.edition_title || '—',
+                    status_label: quoteStatusLabels[q.status] || q.status || '—',
+                }));
+
+                // Map attendance for userAttendanceSummary
+                const attendance_summary = (data.attendance || []).map(att => ({
+                    ...att,
+                    attended: att.present || 0,
+                    total: (att.present || 0) + (att.absent || 0) + (att.excused || 0),
+                    hours: ((att.present || 0) * 4), // estimate
+                }));
+
+                // Flatten: merge user fields to top level for template access
+                this.selectedUser = {
+                    ...data,
+                    id: data.user?.id,
+                    name: data.user?.display_name || data.user?.name || '',
+                    email: data.user?.email || '',
+                    phone: data.user?.phone || '',
+                    organisation: data.user?.organisation || '',
+                    department: data.user?.department || '',
+                    profile_type: data.user?.profile_type || null,
+                    registrations,
+                    quotes,
+                    attendance_summary,
+                };
             } catch (e) {
                 this.showToast('Gebruiker laden mislukt', 'error');
             }

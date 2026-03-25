@@ -2338,11 +2338,21 @@ final class AdminAPIController
         ]);
 
         foreach ($quoteQuery->posts as $quotePost) {
+            $quoteId = $quotePost->ID;
+            $quoteEditionId = (int) get_post_meta($quoteId, 'edition_id', true);
+            $quoteEdition = $quoteEditionId ? get_post($quoteEditionId) : null;
+            $quoteStatus = get_post_meta($quoteId, 'status', true) ?: '';
+            $statusEnum = QuoteStatus::tryFrom($quoteStatus);
+
             $quotes[] = [
-                'id' => $quotePost->ID,
+                'id' => $quoteId,
                 'title' => $quotePost->post_title,
-                'status' => get_post_meta($quotePost->ID, 'status', true) ?: '',
-                'total' => (int) get_post_meta($quotePost->ID, 'total', true),
+                'number' => get_post_meta($quoteId, 'quote_number', true) ?: '',
+                'edition_id' => $quoteEditionId,
+                'edition_title' => $quoteEdition ? $quoteEdition->post_title : '',
+                'status' => $quoteStatus,
+                'status_label' => $statusEnum?->label() ?? $quoteStatus,
+                'total' => (float) get_post_meta($quoteId, 'total', true),
                 'created_at' => $quotePost->post_date,
             ];
         }
