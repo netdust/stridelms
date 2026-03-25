@@ -386,7 +386,7 @@ final class AdminAPIController
              INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = %s
              WHERE p.post_type = %s AND p.post_status = 'publish'
              AND pm.meta_value >= %s",
-            'start_date',
+            '_ntdst_start_date',
             EditionCPT::POST_TYPE,
             $today
         ));
@@ -424,7 +424,7 @@ final class AdminAPIController
              INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = %s
              WHERE p.post_type = %s AND p.post_status = 'publish'
              AND pm.meta_value = %s",
-            'date',
+            '_ntdst_date',
             SessionCPT::POST_TYPE,
             $today
         ));
@@ -435,7 +435,7 @@ final class AdminAPIController
              INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = %s
              WHERE p.post_type = %s AND p.post_status = 'publish'
              AND pm.meta_value = %s",
-            'status',
+            '_ntdst_status',
             TrajectoryCPT::POST_TYPE,
             'open'
         ));
@@ -447,10 +447,10 @@ final class AdminAPIController
             "SELECT p.ID, p.post_title, pm_time.meta_value as start_time, pm_end.meta_value as end_time,
                     pm_edition.meta_value as edition_id
              FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = 'date'
-             LEFT JOIN {$wpdb->postmeta} pm_time ON p.ID = pm_time.post_id AND pm_time.meta_key = 'start_time'
-             LEFT JOIN {$wpdb->postmeta} pm_end ON p.ID = pm_end.post_id AND pm_end.meta_key = 'end_time'
-             LEFT JOIN {$wpdb->postmeta} pm_edition ON p.ID = pm_edition.post_id AND pm_edition.meta_key = 'edition_id'
+             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_date'
+             LEFT JOIN {$wpdb->postmeta} pm_time ON p.ID = pm_time.post_id AND pm_time.meta_key = '_ntdst_start_time'
+             LEFT JOIN {$wpdb->postmeta} pm_end ON p.ID = pm_end.post_id AND pm_end.meta_key = '_ntdst_end_time'
+             LEFT JOIN {$wpdb->postmeta} pm_edition ON p.ID = pm_edition.post_id AND pm_edition.meta_key = '_ntdst_edition_id'
              WHERE p.post_type = %s AND p.post_status = 'publish'
              AND pm_date.meta_value = %s
              ORDER BY pm_time.meta_value ASC",
@@ -497,9 +497,9 @@ final class AdminAPIController
             "SELECT p.ID, p.post_title, pm_date.meta_value as start_date,
                     pm_capacity.meta_value as capacity, pm_status.meta_value as status
              FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = 'start_date'
-             LEFT JOIN {$wpdb->postmeta} pm_capacity ON p.ID = pm_capacity.post_id AND pm_capacity.meta_key = 'capacity'
-             LEFT JOIN {$wpdb->postmeta} pm_status ON p.ID = pm_status.post_id AND pm_status.meta_key = 'status'
+             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_start_date'
+             LEFT JOIN {$wpdb->postmeta} pm_capacity ON p.ID = pm_capacity.post_id AND pm_capacity.meta_key = '_ntdst_capacity'
+             LEFT JOIN {$wpdb->postmeta} pm_status ON p.ID = pm_status.post_id AND pm_status.meta_key = '_ntdst_status'
              WHERE p.post_type = %s AND p.post_status = 'publish'
              AND pm_date.meta_value >= %s
              ORDER BY pm_date.meta_value ASC
@@ -606,8 +606,8 @@ final class AdminAPIController
             "SELECT p.ID, p.post_title, pm_date.meta_value as start_date,
                     pm_capacity.meta_value as capacity
              FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = 'start_date'
-             LEFT JOIN {$wpdb->postmeta} pm_capacity ON p.ID = pm_capacity.post_id AND pm_capacity.meta_key = 'capacity'
+             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_start_date'
+             LEFT JOIN {$wpdb->postmeta} pm_capacity ON p.ID = pm_capacity.post_id AND pm_capacity.meta_key = '_ntdst_capacity'
              WHERE p.post_type = %s AND p.post_status = 'publish'
              AND pm_date.meta_value >= %s AND pm_date.meta_value <= %s
              ORDER BY pm_date.meta_value ASC",
@@ -724,7 +724,7 @@ final class AdminAPIController
         }
 
         if (!empty($status)) {
-            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = 'status' AND pm_status.meta_value = %s)";
+            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = '_ntdst_status' AND pm_status.meta_value = %s)";
             $params[] = $status;
         }
 
@@ -741,7 +741,7 @@ final class AdminAPIController
         // Course tag filter (via linked course)
         $tagJoin = '';
         if ($courseTag > 0) {
-            $tagJoin = "INNER JOIN {$wpdb->postmeta} pm_course ON p.ID = pm_course.post_id AND pm_course.meta_key = 'course_id'
+            $tagJoin = "INNER JOIN {$wpdb->postmeta} pm_course ON p.ID = pm_course.post_id AND pm_course.meta_key = '_ntdst_course_id'
                         INNER JOIN {$wpdb->term_relationships} tr ON pm_course.meta_value = tr.object_id
                         INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id AND tt.taxonomy = 'ld_course_tag'";
             $where[] = "tt.term_id = %d";
@@ -754,7 +754,7 @@ final class AdminAPIController
         $countParams = $params;
         $total = (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(DISTINCT p.ID) FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = 'start_date'
+             INNER JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
              {$tagJoin}
              WHERE {$whereClause}",
             ...$countParams
@@ -767,7 +767,7 @@ final class AdminAPIController
         $editions = $wpdb->get_results($wpdb->prepare(
             "SELECT DISTINCT p.ID, p.post_title, pm_start.meta_value as start_date
              FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = 'start_date'
+             INNER JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
              {$tagJoin}
              WHERE {$whereClause}
              ORDER BY pm_start.meta_value ASC
@@ -783,7 +783,7 @@ final class AdminAPIController
 
         // Batch fetch meta for all editions
         $editionMeta = BatchQueryHelper::batchGetPostMeta($editionIds, [
-            'start_date', 'end_date', 'venue', 'capacity', 'status', 'course_id',
+            '_ntdst_start_date', '_ntdst_end_date', '_ntdst_venue', '_ntdst_capacity', '_ntdst_status', '_ntdst_course_id',
         ]);
 
         // Batch fetch registration counts
@@ -792,7 +792,7 @@ final class AdminAPIController
             : [];
 
         // Batch fetch course data
-        $courseIds = array_filter(array_map(fn($id) => (int) ($editionMeta[$id]['course_id'] ?? 0), $editionIds));
+        $courseIds = array_filter(array_map(fn($id) => (int) ($editionMeta[$id]['_ntdst_course_id'] ?? 0), $editionIds));
         $courses = BatchQueryHelper::batchGetPosts($courseIds, 'sfwd-courses');
         $courseTags = BatchQueryHelper::batchGetCourseTags($courseIds);
 
@@ -801,12 +801,12 @@ final class AdminAPIController
             $meta = $editionMeta[$editionId] ?? [];
 
             // Get meta values from batch
-            $startDate = $meta['start_date'] ?? '';
-            $endDate = $meta['end_date'] ?? '';
-            $venue = $meta['venue'] ?? '';
-            $capacity = (int) ($meta['capacity'] ?? 0);
-            $editionStatus = $meta['status'] ?? '';
-            $courseId = (int) ($meta['course_id'] ?? 0);
+            $startDate = $meta['_ntdst_start_date'] ?? '';
+            $endDate = $meta['_ntdst_end_date'] ?? '';
+            $venue = $meta['_ntdst_venue'] ?? '';
+            $capacity = (int) ($meta['_ntdst_capacity'] ?? 0);
+            $editionStatus = $meta['_ntdst_status'] ?? '';
+            $courseId = (int) ($meta['_ntdst_course_id'] ?? 0);
 
             // Get course data from batch
             $courseTitle = '';
@@ -895,7 +895,7 @@ final class AdminAPIController
 
         // Filter by edition status
         if (!empty($status)) {
-            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = e.ID AND pm_status.meta_key = 'status' AND pm_status.meta_value = %s)";
+            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = e.ID AND pm_status.meta_key = '_ntdst_status' AND pm_status.meta_value = %s)";
             $params[] = $status;
         }
 
@@ -912,7 +912,7 @@ final class AdminAPIController
         // Course tag filter
         $tagJoin = '';
         if ($courseTag > 0) {
-            $tagJoin = "INNER JOIN {$wpdb->postmeta} pm_course ON e.ID = pm_course.post_id AND pm_course.meta_key = 'course_id'
+            $tagJoin = "INNER JOIN {$wpdb->postmeta} pm_course ON e.ID = pm_course.post_id AND pm_course.meta_key = '_ntdst_course_id'
                         INNER JOIN {$wpdb->term_relationships} tr ON pm_course.meta_value = tr.object_id
                         INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id AND tt.taxonomy = 'ld_course_tag'";
             $where[] = "tt.term_id = %d";
@@ -926,9 +926,9 @@ final class AdminAPIController
         $total = (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(DISTINCT s.ID)
              FROM {$wpdb->posts} s
-             INNER JOIN {$wpdb->postmeta} pm_edition ON s.ID = pm_edition.post_id AND pm_edition.meta_key = 'edition_id'
+             INNER JOIN {$wpdb->postmeta} pm_edition ON s.ID = pm_edition.post_id AND pm_edition.meta_key = '_ntdst_edition_id'
              INNER JOIN {$wpdb->posts} e ON pm_edition.meta_value = e.ID
-             INNER JOIN {$wpdb->postmeta} pm_date ON s.ID = pm_date.post_id AND pm_date.meta_key = 'date'
+             INNER JOIN {$wpdb->postmeta} pm_date ON s.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_date'
              {$tagJoin}
              WHERE {$whereClause}",
             ...$countParams
@@ -943,9 +943,9 @@ final class AdminAPIController
                     e.ID as edition_id, e.post_title as edition_title,
                     pm_date.meta_value as session_date
              FROM {$wpdb->posts} s
-             INNER JOIN {$wpdb->postmeta} pm_edition ON s.ID = pm_edition.post_id AND pm_edition.meta_key = 'edition_id'
+             INNER JOIN {$wpdb->postmeta} pm_edition ON s.ID = pm_edition.post_id AND pm_edition.meta_key = '_ntdst_edition_id'
              INNER JOIN {$wpdb->posts} e ON pm_edition.meta_value = e.ID
-             INNER JOIN {$wpdb->postmeta} pm_date ON s.ID = pm_date.post_id AND pm_date.meta_key = 'date'
+             INNER JOIN {$wpdb->postmeta} pm_date ON s.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_date'
              {$tagJoin}
              WHERE {$whereClause}
              ORDER BY pm_date.meta_value ASC, pm_edition.meta_value ASC
@@ -962,12 +962,12 @@ final class AdminAPIController
 
         // Batch fetch session meta
         $sessionMeta = BatchQueryHelper::batchGetPostMeta($sessionIds, [
-            'start_time', 'end_time', 'location',
+            '_ntdst_start_time', '_ntdst_end_time', '_ntdst_location',
         ]);
 
         // Batch fetch edition meta
         $editionMeta = BatchQueryHelper::batchGetPostMeta($editionIds, [
-            'venue', 'capacity', 'status', 'course_id',
+            '_ntdst_venue', '_ntdst_capacity', '_ntdst_status', '_ntdst_course_id',
         ]);
 
         // Batch fetch registration counts
@@ -976,7 +976,7 @@ final class AdminAPIController
             : [];
 
         // Batch fetch course data
-        $courseIds = array_filter(array_map(fn($id) => (int) ($editionMeta[$id]['course_id'] ?? 0), $editionIds));
+        $courseIds = array_filter(array_map(fn($id) => (int) ($editionMeta[$id]['_ntdst_course_id'] ?? 0), $editionIds));
         $courses = BatchQueryHelper::batchGetPosts($courseIds, 'sfwd-courses');
 
         foreach ($sessions as $session) {
@@ -986,16 +986,16 @@ final class AdminAPIController
 
             // Get session meta from batch
             $sMeta = $sessionMeta[$sessionId] ?? [];
-            $startTime = $sMeta['start_time'] ?? '';
-            $endTime = $sMeta['end_time'] ?? '';
-            $location = $sMeta['location'] ?? '';
+            $startTime = $sMeta['_ntdst_start_time'] ?? '';
+            $endTime = $sMeta['_ntdst_end_time'] ?? '';
+            $location = $sMeta['_ntdst_location'] ?? '';
 
             // Get edition meta from batch
             $eMeta = $editionMeta[$editionId] ?? [];
-            $venue = $eMeta['venue'] ?? '';
-            $capacity = (int) ($eMeta['capacity'] ?? 0);
-            $editionStatus = $eMeta['status'] ?? '';
-            $courseId = (int) ($eMeta['course_id'] ?? 0);
+            $venue = $eMeta['_ntdst_venue'] ?? '';
+            $capacity = (int) ($eMeta['_ntdst_capacity'] ?? 0);
+            $editionStatus = $eMeta['_ntdst_status'] ?? '';
+            $courseId = (int) ($eMeta['_ntdst_course_id'] ?? 0);
 
             // Get course title from batch
             $courseTitle = '';
@@ -1184,7 +1184,7 @@ final class AdminAPIController
         // Get sessions for this edition
         $sessions = $wpdb->get_results($wpdb->prepare(
             "SELECT p.ID FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = 'edition_id'
+             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_ntdst_edition_id'
              WHERE p.post_type = %s AND p.post_status = 'publish' AND pm.meta_value = %d
              ORDER BY p.ID ASC",
             SessionCPT::POST_TYPE,
@@ -1194,15 +1194,15 @@ final class AdminAPIController
         $sessionIds = array_map(fn($s) => (int) $s->ID, $sessions);
 
         // Batch fetch session meta
-        $sessionMeta = BatchQueryHelper::batchGetPostMeta($sessionIds, ['date', 'start_time']);
+        $sessionMeta = BatchQueryHelper::batchGetPostMeta($sessionIds, ['_ntdst_date', '_ntdst_start_time']);
 
         $sessionItems = [];
         foreach ($sessionIds as $sessionId) {
             $meta = $sessionMeta[$sessionId] ?? [];
             $sessionItems[] = [
                 'id' => $sessionId,
-                'date' => $meta['date'] ?: null,
-                'startTime' => $meta['start_time'] ?: null,
+                'date' => $meta['_ntdst_date'] ?: null,
+                'startTime' => $meta['_ntdst_start_time'] ?: null,
             ];
         }
 
@@ -1356,7 +1356,7 @@ final class AdminAPIController
                 SELECT 1 FROM {$wpdb->postmeta} pm_user
                 INNER JOIN {$wpdb->users} u ON u.ID = pm_user.meta_value
                 WHERE pm_user.post_id = p.ID
-                AND pm_user.meta_key = '_quote_user_id'
+                AND pm_user.meta_key = 'user_id'
                 AND (u.display_name LIKE %s OR u.user_email LIKE %s)
             )";
             $params[] = $searchPattern;
@@ -1365,13 +1365,13 @@ final class AdminAPIController
 
         // Filter by status
         if (!empty($status)) {
-            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = '_quote_status' AND pm_status.meta_value = %s)";
+            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = 'status' AND pm_status.meta_value = %s)";
             $params[] = $status;
         }
 
         // Filter by edition (item_id when item_type is edition)
         if ($editionId > 0) {
-            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_edition WHERE pm_edition.post_id = p.ID AND pm_edition.meta_key = '_quote_item_id' AND pm_edition.meta_value = %d)";
+            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_edition WHERE pm_edition.post_id = p.ID AND pm_edition.meta_key = 'edition_id' AND pm_edition.meta_value = %d)";
             $params[] = $editionId;
         }
 
@@ -1400,17 +1400,17 @@ final class AdminAPIController
 
         // Batch fetch all quote meta
         $quoteMeta = BatchQueryHelper::batchGetPostMeta($quoteIds, [
-            '_quote_number', '_quote_status', '_quote_total', '_quote_subtotal',
-            '_quote_tax', '_quote_user_id', '_quote_item_id', '_quote_sent_at',
-            '_quote_valid_until', '_quote_items', '_quote_billing',
+            'quote_number', 'status', 'total', 'subtotal',
+            'tax', 'user_id', 'edition_id', 'sent_at',
+            'valid_until', 'items', 'billing',
         ]);
 
         // Collect unique user IDs and edition IDs for batch fetch
         $userIds = [];
         $editionIds = [];
         foreach ($quoteIds as $quoteId) {
-            $userId = (int) ($quoteMeta[$quoteId]['_quote_user_id'] ?? 0);
-            $editionId = (int) ($quoteMeta[$quoteId]['_quote_item_id'] ?? 0);
+            $userId = (int) ($quoteMeta[$quoteId]['user_id'] ?? 0);
+            $editionId = (int) ($quoteMeta[$quoteId]['edition_id'] ?? 0);
             if ($userId > 0) {
                 $userIds[] = $userId;
             }
@@ -1429,17 +1429,17 @@ final class AdminAPIController
             $quoteId = (int) $quote->ID;
             $meta = $quoteMeta[$quoteId] ?? [];
 
-            $quoteNumber = $meta['_quote_number'] ?? '';
-            $quoteStatus = $meta['_quote_status'] ?? 'draft';
-            $quoteTotal = (float) ($meta['_quote_total'] ?? 0);
-            $quoteSubtotal = (float) ($meta['_quote_subtotal'] ?? 0);
-            $quoteTax = (float) ($meta['_quote_tax'] ?? 0);
-            $userId = (int) ($meta['_quote_user_id'] ?? 0);
-            $editionId = (int) ($meta['_quote_item_id'] ?? 0);
-            $sentAt = $meta['_quote_sent_at'] ?? '';
-            $validUntil = $meta['_quote_valid_until'] ?? '';
-            $quoteItems = $meta['_quote_items'] ?? [];
-            $billing = $meta['_quote_billing'] ?? [];
+            $quoteNumber = $meta['quote_number'] ?? '';
+            $quoteStatus = $meta['status'] ?? 'draft';
+            $quoteTotal = (float) ($meta['total'] ?? 0);
+            $quoteSubtotal = (float) ($meta['subtotal'] ?? 0);
+            $quoteTax = (float) ($meta['tax'] ?? 0);
+            $userId = (int) ($meta['user_id'] ?? 0);
+            $editionId = (int) ($meta['edition_id'] ?? 0);
+            $sentAt = $meta['sent_at'] ?? '';
+            $validUntil = $meta['valid_until'] ?? '';
+            $quoteItems = $meta['items'] ?? [];
+            $billing = $meta['billing'] ?? [];
 
             // Get user info from batch
             $userName = '';
@@ -1523,7 +1523,7 @@ final class AdminAPIController
         }
 
         if (!empty($status)) {
-            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = 'status' AND pm_status.meta_value = %s)";
+            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = '_ntdst_status' AND pm_status.meta_value = %s)";
             $params[] = $status;
         }
 
@@ -1563,8 +1563,8 @@ final class AdminAPIController
 
         // Batch fetch trajectory meta
         $trajectoryMeta = BatchQueryHelper::batchGetPostMeta($trajectoryIds, [
-            'status', 'mode', 'capacity', 'enrollment_deadline', 'choice_deadline',
-            'courses', 'price', 'price_non_member', 'choice_available_date',
+            '_ntdst_status', '_ntdst_mode', '_ntdst_capacity', '_ntdst_enrollment_deadline', '_ntdst_choice_deadline',
+            '_ntdst_courses', '_ntdst_price', '_ntdst_price_non_member', '_ntdst_choice_available_date',
         ]);
 
         // Check if enrollment table exists (once)
@@ -1581,7 +1581,7 @@ final class AdminAPIController
             $meta = $trajectoryMeta[$trajectoryId] ?? [];
 
             // Parse courses to collect edition IDs
-            $courses = $meta['courses'] ?? null;
+            $courses = $meta['_ntdst_courses'] ?? null;
             $courseList = [];
             if (is_array($courses)) {
                 $courseList = $courses;
@@ -1654,17 +1654,17 @@ final class AdminAPIController
             $meta = $trajectoryMeta[$trajectoryId] ?? [];
 
             // Get meta values from batch
-            $trajectoryStatus = $meta['status'] ?? '';
-            $mode = $meta['mode'] ?? '';
-            $capacity = (int) ($meta['capacity'] ?? 0);
-            $enrollmentDeadline = $meta['enrollment_deadline'] ?? '';
-            $choiceDeadline = $meta['choice_deadline'] ?? '';
-            $price = (int) ($meta['price'] ?? 0);
-            $priceNonMember = (float) ($meta['price_non_member'] ?? 0);
-            $choiceAvailableDate = $meta['choice_available_date'] ?? '';
+            $trajectoryStatus = $meta['_ntdst_status'] ?? '';
+            $mode = $meta['_ntdst_mode'] ?? '';
+            $capacity = (int) ($meta['_ntdst_capacity'] ?? 0);
+            $enrollmentDeadline = $meta['_ntdst_enrollment_deadline'] ?? '';
+            $choiceDeadline = $meta['_ntdst_choice_deadline'] ?? '';
+            $price = (int) ($meta['_ntdst_price'] ?? 0);
+            $priceNonMember = (float) ($meta['_ntdst_price_non_member'] ?? 0);
+            $choiceAvailableDate = $meta['_ntdst_choice_available_date'] ?? '';
 
             // Parse courses
-            $courses = $meta['courses'] ?? null;
+            $courses = $meta['_ntdst_courses'] ?? null;
             $courseList = [];
             if (is_array($courses)) {
                 $courseList = $courses;
@@ -1935,8 +1935,8 @@ final class AdminAPIController
                             pm_cap.meta_value as capacity,
                             COALESCE(rc.cnt, 0) as registered
                      FROM {$wpdb->posts} p
-                     INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = 'start_date'
-                     LEFT JOIN {$wpdb->postmeta} pm_cap ON p.ID = pm_cap.post_id AND pm_cap.meta_key = 'capacity'
+                     INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_start_date'
+                     LEFT JOIN {$wpdb->postmeta} pm_cap ON p.ID = pm_cap.post_id AND pm_cap.meta_key = '_ntdst_capacity'
                      LEFT JOIN (
                          SELECT edition_id, COUNT(*) as cnt FROM {$registrationTable}
                          WHERE status = 'confirmed' GROUP BY edition_id
@@ -1988,8 +1988,8 @@ final class AdminAPIController
                             pm_eid.meta_value as edition_id,
                             e.post_title as edition_title
                      FROM {$wpdb->posts} s
-                     INNER JOIN {$wpdb->postmeta} pm_date ON s.ID = pm_date.post_id AND pm_date.meta_key = 'date'
-                     LEFT JOIN {$wpdb->postmeta} pm_eid ON s.ID = pm_eid.post_id AND pm_eid.meta_key = 'edition_id'
+                     INNER JOIN {$wpdb->postmeta} pm_date ON s.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_date'
+                     LEFT JOIN {$wpdb->postmeta} pm_eid ON s.ID = pm_eid.post_id AND pm_eid.meta_key = '_ntdst_edition_id'
                      LEFT JOIN {$wpdb->posts} e ON e.ID = pm_eid.meta_value
                      WHERE s.post_type = %s AND s.post_status = 'publish'
                      AND pm_date.meta_value >= %s AND pm_date.meta_value <= %s",
@@ -2008,7 +2008,7 @@ final class AdminAPIController
                     "SELECT p.ID as id, p.post_title as title,
                             pm_date.meta_value as start_date
                      FROM {$wpdb->posts} p
-                     INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = 'start_date'
+                     INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_start_date'
                      WHERE p.post_type = %s AND p.post_status = 'publish'
                      AND pm_date.meta_value >= %s AND pm_date.meta_value <= %s",
                     EditionCPT::POST_TYPE,
@@ -2132,8 +2132,8 @@ final class AdminAPIController
         // Any open editions with future start date?
         $hasOpenEditions = (bool) $wpdb->get_var($wpdb->prepare(
             "SELECT 1 FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm_status ON p.ID = pm_status.post_id AND pm_status.meta_key = 'status'
-             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = 'start_date'
+             INNER JOIN {$wpdb->postmeta} pm_status ON p.ID = pm_status.post_id AND pm_status.meta_key = '_ntdst_status'
+             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_start_date'
              WHERE p.post_type = %s AND p.post_status = 'publish'
              AND pm_status.meta_value = 'open'
              AND pm_date.meta_value >= %s
@@ -2668,7 +2668,7 @@ final class AdminAPIController
                     pm_date.meta_value as edition_date
              FROM {$table} r
              LEFT JOIN {$wpdb->posts} p ON r.edition_id = p.ID
-             LEFT JOIN {$wpdb->postmeta} pm_date ON r.edition_id = pm_date.post_id AND pm_date.meta_key = 'start_date'
+             LEFT JOIN {$wpdb->postmeta} pm_date ON r.edition_id = pm_date.post_id AND pm_date.meta_key = '_ntdst_start_date'
              WHERE r.status = 'confirmed'
              AND (pm_date.meta_value >= %s OR pm_date.meta_value IS NULL)
              ORDER BY pm_date.meta_value ASC, r.created_at ASC",
