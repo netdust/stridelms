@@ -213,6 +213,19 @@ final class AdminAPIController
             ],
         ]);
 
+        // Trajectory detail
+        register_rest_route(self::NAMESPACE, '/admin/trajectories/(?P<id>\d+)', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getTrajectory'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+            'args' => [
+                'id' => [
+                    'type' => 'integer',
+                    'required' => true,
+                ],
+            ],
+        ]);
+
         // Pending approvals
         register_rest_route(self::NAMESPACE, '/admin/pending-approvals', [
             'methods' => 'GET',
@@ -1764,6 +1777,59 @@ final class AdminAPIController
             'perPage' => $perPage,
             'totalPages' => (int) ceil($total / $perPage),
         ]);
+    }
+
+    /**
+     * GET /admin/trajectories/{id}
+     *
+     * Single trajectory detail. Reuses the same logic as the list endpoint
+     * but returns a single item by fetching the list for that ID.
+     */
+    public function getTrajectory(WP_REST_Request $request): WP_REST_Response|WP_Error
+    {
+        global $wpdb;
+
+        $trajectoryId = (int) $request->get_param('id');
+
+        $post = get_post($trajectoryId);
+        if (!$post || $post->post_type !== TrajectoryCPT::POST_TYPE) {
+            return new WP_Error('not_found', 'Trajectory not found', ['status' => 404]);
+        }
+
+        // Reuse the list endpoint with a filter that returns just this one
+        $listRequest = new WP_REST_Request('GET', '/stride/v1/admin/trajectories');
+        $listRequest->set_param('page', 1);
+        $listRequest->set_param('per_page', 100);
+        $listRequest->set_param('search', '');
+        $listRequest->set_param('status', '');
+
+        $listResponse = $this->getTrajectories($listRequest);
+        $items = $listResponse->get_data()['items'] ?? [];
+
+        foreach ($items as $item) {
+            if ($item['id'] === $trajectoryId) {
+                // Remap enrolledUsers to registrations for slide-over template
+                $regStatusLabels = [
+                    'active' => 'Actief', 'completed' => 'Afgerond',
+                    'cancelled' => 'Geannuleerd', 'pending' => 'In afwachting',
+                ];
+                $registrations = array_map(function (array $u) use ($regStatusLabels) {
+                    return [
+                        'id' => $u['id'],
+                        'name' => $u['name'],
+                        'email' => $u['email'],
+                        'status' => $u['status'],
+                        'status_label' => $regStatusLabels[$u['status']] ?? ucfirst($u['status'] ?? ''),
+                    ];
+                }, $item['enrolledUsers'] ?? []);
+
+                return new WP_REST_Response(array_merge($item, [
+                    'registrations' => $registrations,
+                ]));
+            }
+        }
+
+        return new WP_Error('not_found', 'Trajectory not found', ['status' => 404]);
     }
 
     /**
