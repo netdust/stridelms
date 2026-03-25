@@ -790,26 +790,34 @@ body.stride-dashboard .wrap {
 /* --------------------------------------------------------------------------
    14. SLIDEOUT PANEL
    -------------------------------------------------------------------------- */
-.sd-slideout__overlay {
+.sd-slideout {
     position: fixed;
     inset: 0;
-    background: rgba(30, 27, 58, 0.3);
     z-index: 100000;
     display: flex;
     justify-content: flex-end;
 }
 
-.sd-slideout {
+.sd-slideout__overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(30, 27, 58, 0.3);
+}
+
+.sd-slideout__panel {
+    position: relative;
+    z-index: 1;
     width: 600px;
-    max-width: 100%;
-    background: var(--sd-surface);
+    max-width: 90vw;
     height: 100%;
+    background: var(--sd-surface);
     display: flex;
     flex-direction: column;
     box-shadow: var(--sd-shadow-lg);
+    overflow-y: auto;
 }
 
-.sd-slideout--wide {
+.sd-slideout--wide .sd-slideout__panel {
     width: 700px;
 }
 
@@ -2066,8 +2074,9 @@ body.stride-dashboard .wrap {
         min-width: 100%;
     }
 
-    .sd-slideout {
+    .sd-slideout__panel {
         width: 100%;
+        max-width: 100%;
     }
 
     .sd-filters {
