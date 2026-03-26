@@ -374,6 +374,14 @@
     @apply bg-surface-alt/50;
   }
 
+  /* ══════════════════════════════════════
+     FOCUS MODE — Editorial No-Line Rule
+     ══════════════════════════════════════ */
+
+  .ld-focus .ld-focus-header {
+    border-bottom: none;
+  }
+
 }
 
 /* ══════════════════════════════════════
