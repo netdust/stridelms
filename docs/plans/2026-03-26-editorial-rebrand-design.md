@@ -10,13 +10,16 @@
 | Layer | What changes |
 |-------|-------------|
 | `tokens.css` | Full palette remap to editorial colors, new fonts, adjusted shadows/radius |
-| `components.css` | Editorial tweaks: rounded-full buttons, no-border cards, glass nav, surface-shift cards |
+| `components.css` | Editorial tweaks: rounded-full buttons, no-border cards, surface-shift cards, token-driven badges |
 | `header.php` | Glass navigation (backdrop-blur), editorial typography for logo, no solid border |
+| `header-dashboard.php` | Font swap only (same Google Fonts link as header.php) |
 | `footer.php` | Editorial footer: warm surface, no top border, serif branding line |
 | `front-page.php` | **New structure**: editorial hero, course cards, mission section, testimonial, CTA |
 | `base.css` | Add editorial base styles (serif font import, glass-nav utility, blur-blob) |
-| `tailwind.config.js` | Add `font-serif` family, surface container variants |
-| Google Fonts | Replace Inter with Newsreader (headings) + Plus Jakarta Sans (body/UI) |
+| `learndash.css` | Minimal: remove focus mode border, update font reference |
+| `tailwind.config.js` | Complete delta: font-serif, font-label, surface containers, tertiary, accent colors |
+| Google Fonts | Replace Inter with Newsreader (headings) + Plus Jakarta Sans (body/UI) + Manrope (labels) |
+| `stride-client-example/assets/client.css` | Update token inventory comments with new editorial tokens |
 
 **Not touched:** Dashboard structure, course detail structure, enrollment form structure, catalog page structure, Alpine.js components, PHP services, data layer.
 
@@ -24,14 +27,14 @@
 
 ## 1. Color System (tokens.css)
 
-Map the Stitch "Curated Sanctuary" palette to Stride's existing CSS custom property system.
+Map the Stitch "Curated Sanctuary" palette to Stride's existing CSS custom property system. All existing tokens are preserved (including layout, transition, shadow aliases). Only values change.
 
 ```css
 :root {
   /* ── Brand Colors ── */
   --color-primary: 8 106 105;          /* #086a69 deep teal — trust, healthcare */
   --color-primary-hover: 0 93 92;      /* #005d5c teal darker */
-  --color-primary-subtle: 156 235 232; /* #9cebe8 teal light bg */
+  --color-primary-subtle: 232 248 247; /* #e8f8f7 very subtle teal — sidebar active, not saturated */
   --color-primary-light: 142 220 218;  /* #8edcda teal medium */
   --color-primary-dark: 0 88 87;       /* #005857 teal darkest */
   --color-accent: 152 72 45;          /* #98482d terracotta — warm, human */
@@ -45,7 +48,7 @@ Map the Stitch "Curated Sanctuary" palette to Stride's existing CSS custom prope
   --color-border-strong: 121 124 113;  /* #797c71 outline */
   --color-text: 49 51 43;             /* #31332b warm dark — never pure black */
   --color-text-muted: 94 96 86;       /* #5e6056 on-surface-variant */
-  --color-text-inverse: 224 255 253;  /* #e0fffd on-primary */
+  --color-text-inverse: 255 255 255;  /* white — safe contrast on teal */
 
   /* ── Status Colors ── */
   --color-success: 22 163 74;          /* keep green-600 */
@@ -53,12 +56,19 @@ Map the Stitch "Curated Sanctuary" palette to Stride's existing CSS custom prope
   --color-error: 172 52 52;            /* #ac3434 warmer red */
   --color-info: 8 106 105;             /* same as primary */
 
-  /* ── Badge Colors ── */
-  --color-badge-open: 22 163 74;
-  --color-badge-few: 234 179 8;
-  --color-badge-full: 172 52 52;
-  --color-badge-online: 8 106 105;     /* primary instead of indigo */
-  --color-badge-free: 16 185 129;
+  /* ── Badge Colors (token-driven, used by components.css) ── */
+  --color-badge-open-bg: 240 253 244;       /* green-50 */
+  --color-badge-open-text: 21 128 61;       /* green-700 */
+  --color-badge-few-bg: 254 252 232;        /* yellow-50 */
+  --color-badge-few-text: 161 98 7;         /* yellow-800 (improved contrast) */
+  --color-badge-full-bg: 254 242 242;       /* red-50 */
+  --color-badge-full-text: 153 27 27;       /* red-800 */
+  --color-badge-cancelled-bg: 249 250 251;  /* gray-50 */
+  --color-badge-cancelled-text: 107 114 128;/* gray-500 */
+  --color-badge-online-bg: 232 248 247;     /* teal-50 (matches primary) */
+  --color-badge-online-text: 8 106 105;     /* primary */
+  --color-badge-free-bg: 236 253 245;       /* emerald-50 */
+  --color-badge-free-text: 4 120 87;        /* emerald-700 */
 
   /* ── Typography ── */
   --font-sans: 'Plus Jakarta Sans', 'Manrope', system-ui, sans-serif;
@@ -70,20 +80,35 @@ Map the Stitch "Curated Sanctuary" palette to Stride's existing CSS custom prope
   --space-block: 3.5rem;    /* was 3rem */
   --space-element: 1.5rem;
 
-  /* ── Border Radius (rounder for friendly feel) ── */
-  --radius-sm: 0.5rem;      /* was 0.375rem */
-  --radius-md: 0.75rem;     /* was 0.5rem */
-  --radius-lg: 1rem;        /* was 0.75rem */
-  --radius-xl: 1.5rem;      /* was 1rem */
+  /* ── Layout (unchanged) ── */
+  --container-max: 1280px;
+  --content-max: 960px;
+  --sidebar-width: 240px;
+  --sidebar-collapsed: 56px;
 
-  /* ── Shadows (warm-tinted, diffused) ── */
+  /* ── Border Radius (rounder for friendly feel) ── */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+
+  /* ── Shadows (warm-tinted, diffused — never pure black) ── */
   --shadow-xs: 0 1px 2px rgba(49, 51, 43, 0.03);
   --shadow-sm: 0 2px 6px rgba(49, 51, 43, 0.04);
   --shadow-md: 0 8px 16px -4px rgba(49, 51, 43, 0.06);
   --shadow-lg: 0 20px 40px rgba(49, 51, 43, 0.06);
   --shadow-overlay: 0 24px 48px -12px rgba(49, 51, 43, 0.12);
 
-  /* ── Editorial Additions ── */
+  /* Tailwind-mapped aliases (must be preserved) */
+  --shadow-card: var(--shadow-xs);
+  --shadow-elevated: var(--shadow-md);
+
+  /* ── Transitions (unchanged) ── */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+
+  /* ── Editorial Surface Containers ── */
   --color-tertiary: 129 82 0;          /* #815200 amber — energy accent */
   --color-tertiary-light: 255 185 92;  /* #ffb95c amber light */
   --color-secondary-container: 221 246 239; /* #ddf6ef soft teal bg */
@@ -93,27 +118,28 @@ Map the Stitch "Curated Sanctuary" palette to Stride's existing CSS custom prope
 }
 ```
 
-### New surface tokens for Tailwind
+### WCAG AA Contrast Verification
 
-Add to `tailwind.config.js`:
-```js
-surface: {
-  DEFAULT: '...',
-  alt: '...',      // maps to container-low
-  card: '...',     // maps to container-lowest (white)
-  container: 'rgb(var(--color-surface-container) / <alpha-value>)',
-  'container-high': 'rgb(var(--color-surface-container-high) / <alpha-value>)',
-  'container-highest': 'rgb(var(--color-surface-container-highest) / <alpha-value>)',
-},
-```
+These pairs must pass before implementation:
+
+| Pair | Ratio | Result |
+|------|-------|--------|
+| `#31332b` on `#fbfaf2` (text on surface) | 11.8:1 | PASS |
+| `#5e6056` on `#fbfaf2` (muted on surface) | 5.2:1 | PASS |
+| `#ffffff` on `#086a69` (inverse on primary) | 5.6:1 | PASS |
+| `#98482d` on `#fbfaf2` (accent on surface) | 5.7:1 | PASS |
+| `#5e6056` on `#f4f4eb` (muted on surface-alt) | 4.7:1 | PASS |
+| Badge yellow: `#654e07` on `#fef9c3` | 7.1:1 | PASS |
+
+Note: Changed `--color-text-inverse` from `#e0fffd` to `#ffffff` for safer contrast. Changed `--color-primary-subtle` from saturated `#9cebe8` to desaturated `#e8f8f7` for subtle sidebar highlights.
 
 ---
 
 ## 2. Typography
 
-### Font Loading (header.php)
+### Font Loading (header.php AND header-dashboard.php)
 
-Replace current Google Fonts link:
+Both header files must swap the Google Fonts link:
 ```html
 <!-- Old -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700&display=swap" rel="stylesheet">
@@ -132,36 +158,55 @@ Replace current Google Fonts link:
 | Labels, metadata | Manrope | 500 | Small, tracking-wide |
 | UI elements (buttons, nav) | Plus Jakarta Sans | 500-600 | |
 
-### Tailwind Config Addition
+---
+
+## 3. Tailwind Config (complete delta)
+
+Full diff for `tailwind.config.js`:
 
 ```js
+// ADD to colors:
+accent: {
+  DEFAULT: 'rgb(var(--color-accent) / <alpha-value>)',
+  light: 'rgb(var(--color-accent-light) / <alpha-value>)',
+},
+tertiary: {
+  DEFAULT: 'rgb(var(--color-tertiary) / <alpha-value>)',
+  light: 'rgb(var(--color-tertiary-light) / <alpha-value>)',
+},
+'secondary-container': 'rgb(var(--color-secondary-container) / <alpha-value>)',
+
+// EXTEND surface:
+surface: {
+  DEFAULT: 'rgb(var(--color-surface) / <alpha-value>)',
+  alt: 'rgb(var(--color-surface-alt) / <alpha-value>)',
+  card: 'rgb(var(--color-surface-card) / <alpha-value>)',
+  container: 'rgb(var(--color-surface-container) / <alpha-value>)',
+  'container-high': 'rgb(var(--color-surface-container-high) / <alpha-value>)',
+  'container-highest': 'rgb(var(--color-surface-container-highest) / <alpha-value>)',
+},
+
+// ADD to fontFamily:
 fontFamily: {
   sans: ['var(--font-sans)'],
   heading: ['var(--font-heading)'],
-  serif: ['var(--font-serif)'],     // NEW
-  label: ['Manrope', 'var(--font-sans)'],  // NEW
+  serif: ['var(--font-serif)'],
+  label: ['Manrope', 'var(--font-sans)'],
 },
 ```
 
 ---
 
-## 3. Component Adaptations (components.css)
+## 4. Component Adaptations (components.css)
 
 ### Buttons — Rounder, Warmer
 
 ```css
 .btn-primary {
-  /* Change: rounded-lg → rounded-full, add gradient option */
-  @apply rounded-full;
+  @apply rounded-full;  /* was rounded-lg */
 }
-
 .btn-secondary {
-  /* Change: remove border, use ghost style */
-  @apply border-0 hover:bg-surface-alt;
-}
-
-.btn-ghost {
-  /* Add tertiary underline variant */
+  @apply border-0 hover:bg-surface-alt;  /* remove border */
 }
 ```
 
@@ -169,93 +214,106 @@ fontFamily: {
 
 ```css
 .card {
-  /* Remove: border border-border/60 */
-  /* Add: just shadow and bg-surface-card on surface-alt sections */
-  @apply bg-surface-card rounded-xl border-0;
+  @apply bg-surface-card rounded-xl border-0;  /* remove border */
   box-shadow: var(--shadow-xs);
 }
-
 .card-interactive:hover {
-  /* Warmer hover: ambient shadow, no border change */
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-md);  /* ambient shadow, no border */
+  transform: translateY(-1px);
 }
 ```
 
-### Navigation — Glass Effect
+### Badges — Token-Driven (all 6 variants)
 
-```css
-/* Header: glass nav instead of solid border */
-header {
-  backdrop-filter: blur(20px);
-  background: rgb(var(--color-surface) / 0.8);
-  border-bottom: none;  /* No-Line Rule */
-}
-```
+Convert all hardcoded Tailwind badge colors to use token-driven custom properties:
 
-### Badges — Softer Tones
+| Badge | Current (hardcoded) | New (token-driven) |
+|-------|--------------------|--------------------|
+| `.badge-open` | `bg-green-50 text-green-700 ring-1 ring-green-600/20` | `bg-[rgb(var(--color-badge-open-bg))] text-[rgb(var(--color-badge-open-text))]` |
+| `.badge-few` | `bg-yellow-50 text-yellow-700 ring-1 ring-yellow-600/20` | token-driven, ring-0 |
+| `.badge-full` | `bg-red-50 text-red-700 ring-1 ring-red-600/20` | token-driven, ring-0 |
+| `.badge-cancelled` | `bg-gray-50 text-gray-500 ring-1 ring-gray-500/20` | token-driven, ring-0 |
+| `.badge-online` | `bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600/20` | token-driven (now teal), ring-0 |
+| `.badge-free` | `bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20` | token-driven, ring-0 |
 
-Badges use `secondary-container` style instead of ring-based:
-```css
-.badge-open {
-  @apply bg-green-50/80 text-green-800 ring-0;
-}
-```
+All badges: remove `ring-1 ring-inset` — editorial "No-Line Rule".
 
 ### List Items — Surface Hover, No Border
 
 ```css
 .list-item {
+  @apply border-0 rounded-lg hover:bg-surface-alt;
   /* Remove: border-b border-border/60 */
-  /* Add: surface-shift hover, generous padding */
-  @apply border-0 rounded-lg hover:bg-surface-container-high;
+}
+```
+
+### Sidebar — Ghost Borders
+
+```css
+.sidebar-divider {
+  @apply border-border/15 my-3 mx-3;  /* ghost border at 15% opacity */
+}
+```
+
+### Dash Cards — Warm Gradient
+
+```css
+.dash-card-hero {
+  /* Verify: teal gradient at 0.02-0.07 opacity is perceptible */
+  /* If not, increase to 0.04-0.10 */
 }
 ```
 
 ---
 
-## 4. Header (header.php)
+## 5. Header (header.php)
 
 ### Changes
 
-1. **Glass effect**: Replace `bg-surface-card border-b border-border` with glass nav
-2. **Logo typography**: If no custom logo, use serif italic style: `font-serif italic font-semibold text-accent`
-3. **Nav links**: Lighter weight, hover uses primary color (not bg change)
-4. **CTA button**: Primary button with rounded-full
-5. **Dropdown**: Remove border, use shadow-lg only
-6. **Remove** `<hr>` in mobile menu — use spacing instead
+1. **Glass effect**: Replace `bg-surface-card border-b border-border` with `glass-nav` class
+2. **Logo typography**: If no custom logo, use serif italic: `font-serif italic font-semibold text-accent`
+3. **Nav links**: Lighter weight, hover uses primary color
+4. **CTA button**: `btn-primary` (inherits rounded-full from component change)
+5. **Dropdown**: Remove border, use `shadow-lg` only
+6. **Mobile menu panel**: Keep solid `bg-surface-card` for readability (no glass)
+7. **Remove** `<hr>` separators — use `py-4` spacing instead
+8. **Glass nav opacity**: Constant `0.8` at all scroll positions (no scroll listener)
 
 ### Structure (unchanged)
-
-- Logo left, nav center, user menu right
-- Mobile hamburger toggle
-- Same Alpine.js components
+Logo left, nav center, user menu right. Same Alpine.js components.
 
 ---
 
-## 5. Footer (footer.php)
+## 6. Header Dashboard (header-dashboard.php)
+
+**Minimal change:** Swap Google Fonts `<link>` only (same as header.php). No structural changes.
+
+---
+
+## 7. Footer (footer.php)
 
 ### Changes
 
-1. **Background**: `bg-surface-alt` stays, but remove `border-t border-border`
+1. **Background**: `bg-surface-alt` stays, remove `border-t border-border`
 2. **Brand column**: Add serif italic tagline
 3. **Link hover**: `hover:text-accent` (terracotta) instead of `hover:text-primary`
-4. **Section titles**: Use `font-label` (Manrope), smaller, tracking-widest
-5. **Bottom bar**: Remove `border-t` — use generous spacing instead
+4. **Section titles**: Use `font-label` (Manrope), tracking-widest
+5. **Bottom bar**: Remove `border-t` — use generous `mt-16 pt-8` spacing
 
 ---
 
-## 6. Homepage (front-page.php) — New Structure
+## 8. Homepage (front-page.php) — New Structure
 
-The homepage gets a complete editorial redesign. This is a content page and is client-swappable via the mu-plugin system.
+Complete editorial redesign. Client-swappable via mu-plugin `stridence_template_path` filter.
 
 ### Sections
 
-#### 6.1 Hero
-- Full-width, warm paper background
-- Decorative blur blobs (subtle, behind content)
+#### 8.1 Hero
+- Full-width, warm paper background (`bg-surface`)
+- Decorative blur blobs (absolute positioned, `blur-blob` class)
 - Large serif headline with italic accent words
 - Subheading in body font
-- Two CTAs: filled primary + ghost with arrow
+- Two CTAs: filled primary + ghost with arrow icon
 
 ```
 "Versterk je zorgteam met deskundige opleidingen."
@@ -263,44 +321,58 @@ The homepage gets a complete editorial redesign. This is a content page and is c
 [Bekijk opleidingen]  [Onze aanpak →]
 ```
 
-#### 6.2 Learning Mode Selector (adapted from current)
-- Keep the 3-card grid (Trajecten, Klassikaal, Online)
-- Restyle cards: no border, surface-container-low bg, serif card titles
-- Larger, more editorial card layout
+#### 8.2 Learning Mode Selector (adapted)
+- Keep 3-card grid (Trajecten, Klassikaal, Online)
+- Restyle: no border, `bg-surface-alt` cards, larger editorial layout
+- Keep existing WP_Query counts (dynamic)
 
-#### 6.3 Featured Courses (adapted from current)
-- Keep course card grid
-- Restyle with editorial card treatment: tonal backgrounds, serif titles
-- Navigation arrows (from Stitch design)
-- Section heading: serif, with subtitle
+#### 8.3 Featured Courses (adapted)
+- Keep course card grid with existing WP_Query
+- Editorial card treatment: no border, serif titles, warm shadows
+- Section heading: serif with subtitle
+- **Empty state**: If no courses, hide the section entirely (CSS `empty` or PHP `if`)
 
-#### 6.4 Mission/Value Section (new, from Stitch)
-- Two-column asymmetric layout
-- Left: serif heading, body text about the organization
-- Right: image with slight rotation, floating quote card
-- Uses surface-container-low background with rounded top corners
+#### 8.4 Mission/Value Section (new)
+- Two-column asymmetric layout on `bg-surface-alt rounded-t-[64px]`
+- Left: serif italic heading, body text about healthcare professional development
+- Right: placeholder image from theme `images/` directory with `rotate-2` transform, floating quote card with `rotate(-3deg)`
+- **Image**: Hardcode a `images/mission-placeholder.jpg` in theme. Clients override the entire template via mu-plugin.
+- Content is hardcoded PHP strings (same pattern as existing `front-page.php`)
 
-#### 6.5 Testimonial (new, from Stitch)
-- Large centered blockquote in serif italic
-- Quote icon above
-- Student/participant name and role below
-- Clean, spacious section
+#### 8.5 Testimonial (new)
+- Large centered blockquote in `font-serif italic`
+- SVG quote icon above
+- Fictional healthcare worker name and role below
+- Hardcoded content (same as existing pattern)
 
-#### 6.6 CTA Section
-- Simple centered layout
+#### 8.6 CTA Section
+- Centered layout, `bg-surface` background
 - Large serif heading "Klaar om te starten?"
-- Subtitle + two buttons (primary + secondary)
+- Subtitle + two buttons (primary rounded-full + secondary rounded-full)
 - Serif italic closing tagline
 
 ### Content Language
-All in Dutch (nl_BE). Healthcare-appropriate demo content:
-- Course titles: "Palliatieve Zorg", "Eerste Hulp bij Psychische Problemen", "Communicatie in de Zorg"
-- Testimonial from a fictional healthcare worker
-- Mission text about professional development in healthcare
+All Dutch (nl_BE). Healthcare demo content:
+- Course titles from seed data
+- Testimonial: fictional verpleegkundige
+- Mission: professional development in de zorgsector
 
 ---
 
-## 7. Base CSS Additions (base.css)
+## 9. LearnDash CSS (learndash.css) — Minimal
+
+```css
+/* Remove border from focus mode header (No-Line Rule) */
+.ld-focus .ld-focus-header {
+  border-bottom: none;
+}
+```
+
+Font inheritance is automatic — `learndash.css` doesn't set fonts, it inherits from `body`. The Google Fonts swap in `header.php` handles this.
+
+---
+
+## 10. Base CSS Additions (base.css)
 
 ```css
 /* Editorial utilities */
@@ -315,46 +387,59 @@ All in Dutch (nl_BE). Healthcare-appropriate demo content:
   pointer-events: none;
 }
 
-/* Serif headline utility */
-.font-serif {
-  font-family: var(--font-serif);
+/* Focus ring offset on glass backgrounds */
+.glass-nav :focus-visible {
+  --tw-ring-offset-color: rgb(var(--color-surface));
 }
+```
+
+Note: `font-serif` utility is handled by Tailwind config — no manual CSS needed.
+
+---
+
+## 11. Client Example Update (stride-client-example)
+
+Update `assets/client.css` comment block to document new tokens:
+
+```
+* Editorial:
+*   --color-tertiary, --color-tertiary-light
+*   --color-secondary-container
+*   --color-surface-container, --color-surface-container-high, --color-surface-container-highest
+*   --font-serif
+*   --color-badge-{variant}-bg, --color-badge-{variant}-text (open, few, full, cancelled, online, free)
 ```
 
 ---
 
-## 8. What Stays the Same
+## 12. What Stays the Same
 
 - **All Alpine.js components** — no changes
-- **Dashboard structure** — sidebar, tabs, panels, cards (just restyled via tokens)
+- **Dashboard structure** — sidebar, tabs, panels, cards (restyled via tokens)
 - **Course detail pages** — hero, tabs, sidebar (restyled via tokens)
 - **Enrollment form** — multi-step flow (restyled via tokens)
 - **Catalog pages** — grid layout, filters (restyled via tokens)
 - **PHP services, data layer, routing** — zero changes
-- **Template partials structure** — card-course, card-edition, badge-status etc. keep their HTML
+- **Template partials structure** — card-course, card-edition, badge-status etc. keep HTML
+- **Dark mode** — not supported (not supported before either, explicitly out of scope)
+- **Print styles** — out of scope for demo (noted for production follow-up)
 
 ---
 
-## 9. Client Customization Proof
-
-The demo proves swappability by showing that:
-1. All visual changes flow through `tokens.css` custom properties
-2. A client mu-plugin can override tokens via `client.css`
-3. Content pages (homepage) can be overridden via `stridence_template_path` filter
-4. The existing `stride-client-example` pattern works for full rebranding
-
----
-
-## 10. Files Changed
+## 13. Files Changed (complete)
 
 | File | Type of change |
 |------|---------------|
-| `src/css/tokens.css` | Full token remap |
-| `src/css/base.css` | Add editorial utilities (glass-nav, blur-blob, font-serif) |
-| `src/css/components.css` | Editorial component adaptations |
-| `tailwind.config.js` | Add font-serif, surface container variants, tertiary color |
-| `header.php` | Glass nav, font swap, editorial logo styling |
-| `footer.php` | Remove borders, editorial typography |
-| `front-page.php` | Complete rewrite with editorial structure |
+| `src/css/tokens.css` | Full token remap (preserve all layout/transition/alias tokens) |
+| `src/css/base.css` | Add glass-nav, blur-blob, focus-ring-offset utilities |
+| `src/css/components.css` | Editorial: rounded buttons, no-border cards, token badges, surface-shift lists |
+| `src/css/learndash.css` | Remove focus mode header border |
+| `tailwind.config.js` | Full delta: fonts, surface containers, tertiary, accent, badge tokens |
+| `header.php` | Glass nav, font swap, editorial logo, remove borders/hr |
+| `header-dashboard.php` | Font swap only (Google Fonts link) |
+| `footer.php` | Remove borders, editorial typography, terracotta hover |
+| `front-page.php` | Complete rewrite with editorial sections |
+| `images/mission-placeholder.jpg` | New: placeholder image for homepage mission section |
+| `stride-client-example/assets/client.css` | Update token inventory comments |
 
-**Zero backend changes.** This is purely a frontend/CSS/template task.
+**Zero backend changes.** Purely frontend/CSS/template task.
