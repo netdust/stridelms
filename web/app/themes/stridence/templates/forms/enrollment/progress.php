@@ -9,8 +9,8 @@
     <ol class="flex items-center justify-center gap-2 text-sm">
         <template x-for="(label, index) in stepLabels" :key="index">
             <li class="flex items-center">
-                <span :class="progressIndex > index ? 'bg-primary text-white' :
-                              progressIndex === index ? 'bg-primary text-white' :
+                <span :class="progressIndex > index ? 'bg-primary text-text-inverse' :
+                              progressIndex === index ? 'bg-primary text-text-inverse' :
                               'bg-surface-alt text-text-muted'"
                       class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium"
                       x-text="index + 1"></span>

@@ -643,9 +643,10 @@ final class QuestionnaireSettingsPage
 
         $editionOpts = [];
         foreach ($editions as $edition) {
-            $courseId    = (int) get_post_meta($edition->ID, '_ntdst_course_id', true);
+            $editionModel = ntdst_data()->get('vad_edition');
+            $courseId    = (int) ($editionModel->getMeta($edition->ID, 'course_id') ?: 0);
             $courseTitle = $courseId ? get_the_title($courseId) : $edition->post_title;
-            $startDate   = get_post_meta($edition->ID, '_ntdst_start_date', true);
+            $startDate   = $editionModel->getMeta($edition->ID, 'start_date') ?: '';
             $dateSuffix  = $startDate ? date_i18n('M Y', strtotime($startDate)) : '';
 
             $label = $courseTitle;

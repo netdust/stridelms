@@ -20,6 +20,9 @@ document.addEventListener('alpine:init', () => {
         editingPlatformId: null,
         platformForm: {
             title: '',
+            mode: '1.3',
+            consumer_key: '',
+            consumer_secret: '',
             platform_id: '',
             client_id: '',
             deployment_id: '',
@@ -65,13 +68,13 @@ document.addEventListener('alpine:init', () => {
         setTab(t) {
             this.tab = t;
             window.location.hash = t;
-            this.loadTabData(t);
+            // loadTabData is triggered by hashchange → parseHash
         },
 
         loadTabData(t) {
             switch (t) {
                 case 'platforms':
-                    if (this.platforms.length === 0) this.loadPlatforms();
+                    this.loadPlatforms();
                     break;
                 case 'logs':
                     if (this.logs.length === 0) this.loadLogs();
@@ -118,6 +121,28 @@ document.addEventListener('alpine:init', () => {
             });
         },
 
+        // ── Legacy Mode Helpers ─────────────────────────────
+        generateRandomString(length) {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let result = '';
+            const values = crypto.getRandomValues(new Uint8Array(length));
+            for (let i = 0; i < length; i++) result += chars[values[i] % chars.length];
+            return result;
+        },
+
+        handleModeChange() {
+            if (this.platformForm.mode === 'legacy' && !this.platformForm.consumer_key) {
+                this.platformForm.consumer_key = 'NDLTI-' + this.generateRandomString(12);
+                this.platformForm.consumer_secret = this.generateRandomString(32);
+            }
+        },
+
+        regenerateSecret() {
+            if (confirm('Regenerate secret? The old secret will stop working immediately.')) {
+                this.platformForm.consumer_secret = this.generateRandomString(32);
+            }
+        },
+
         // ── Platforms CRUD ────────────────────────────────
         async loadPlatforms() {
             this.platformsLoading = true;
@@ -136,6 +161,9 @@ document.addEventListener('alpine:init', () => {
             this.editingPlatformId = null;
             this.platformForm = {
                 title: '',
+                mode: '1.3',
+                consumer_key: '',
+                consumer_secret: '',
                 platform_id: '',
                 client_id: '',
                 deployment_id: '',
@@ -155,6 +183,9 @@ document.addEventListener('alpine:init', () => {
             this.editingPlatformId = platform.id;
             this.platformForm = {
                 title: platform.title.rendered,
+                mode: platform.meta.lti_mode || '1.3',
+                consumer_key: platform.meta.lti_consumer_key || '',
+                consumer_secret: platform.meta.lti_consumer_secret || '',
                 platform_id: platform.meta.lti_platform_id || '',
                 client_id: platform.meta.lti_client_id || '',
                 deployment_id: platform.meta.lti_deployment_id || '',
@@ -176,6 +207,9 @@ document.addEventListener('alpine:init', () => {
                 title: this.platformForm.title,
                 status: 'publish',
                 meta: {
+                    lti_mode: this.platformForm.mode,
+                    lti_consumer_key: this.platformForm.consumer_key,
+                    lti_consumer_secret: this.platformForm.consumer_secret,
                     lti_platform_id: this.platformForm.platform_id,
                     lti_client_id: this.platformForm.client_id,
                     lti_deployment_id: this.platformForm.deployment_id,

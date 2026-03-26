@@ -10,20 +10,91 @@
 defined( 'ABSPATH' ) || exit;
 
 if ( ! class_exists( 'LearnDash_ProPanel_Widget' ) ) {
+	/**
+	 * Base class for ProPanel dashboard widgets.
+	 *
+	 * @since 4.17.0
+	 */
 	class LearnDash_ProPanel_Widget {
 		/**
-		 * @var LearnDash_ProPanel_Overview The reference to *Singleton* instance of this class
+		 * Singleton instance reference.
+		 *
+		 * @since 4.17.0
+		 *
+		 * @var static|null
 		 */
 		private static $instance;
 
-		protected $post_data           = array();
+		/**
+		 * Posted filter data.
+		 *
+		 * @since 4.17.0
+		 *
+		 * @var array<string, mixed>
+		 */
+		protected $post_data = array();
+
+		/**
+		 * Activity query arguments from filters.
+		 *
+		 * @since 4.17.0
+		 *
+		 * @var array<string, mixed>
+		 */
 		protected $activity_query_args = array();
 
+		/**
+		 * Registered filter widgets.
+		 *
+		 * @since 4.17.0
+		 *
+		 * @var array<string, mixed>
+		 */
 		protected $registered_filters = array();
+
+		/**
+		 * Filter key identifier.
+		 *
+		 * @since 4.17.0
+		 *
+		 * @var string
+		 */
 		protected $filter_key;
+
+		/**
+		 * Search placeholder for filter UI.
+		 *
+		 * @since 4.17.0
+		 *
+		 * @var string
+		 */
 		protected $filter_search_placeholder;
+
+		/**
+		 * Filter table column headers.
+		 *
+		 * @since 4.17.0
+		 *
+		 * @var array<int|string, string>
+		 */
 		protected $filter_headers = array();
+
+		/**
+		 * Path to filter table template.
+		 *
+		 * @since 4.17.0
+		 *
+		 * @var string
+		 */
 		protected $filter_template_table;
+
+		/**
+		 * Path to filter row template.
+		 *
+		 * @since 4.17.0
+		 *
+		 * @var string
+		 */
 		protected $filter_template_row;
 
 		/**
@@ -58,7 +129,11 @@ if ( ! class_exists( 'LearnDash_ProPanel_Widget' ) ) {
 		}
 
 		/**
-		 * LearnDash_ProPanel_Overview constructor.
+		 * Registers WordPress hooks for this widget.
+		 *
+		 * @since 4.17.0
+		 *
+		 * @return void
 		 */
 		public function __construct() {
 			add_action( 'wp_dashboard_setup', array( $this, 'register_widget' ) );
@@ -69,13 +144,17 @@ if ( ! class_exists( 'LearnDash_ProPanel_Widget' ) ) {
 		}
 
 		/**
+		 * Enqueues ProPanel scripts and styles where applicable.
 		 *
+		 * @since 4.17.0
+		 *
+		 * @return void
 		 */
-		function scripts() {
+		public function scripts() {
 			if ( is_admin() ) {
 				$screen = get_current_screen();
 
-				if ( in_array( $screen->id, array( 'dashboard', 'dashboard_page_propanel-reporting' ) ) ) {
+				if ( in_array( $screen->id, array( 'dashboard', 'dashboard_page_propanel-reporting' ), true ) ) {
 					$menu_user_cap = '';
 
 					if ( learndash_is_admin_user() ) {
@@ -104,6 +183,7 @@ if ( ! class_exists( 'LearnDash_ProPanel_Widget' ) ) {
 								/**
 								 * Filter CSV Export File Name
 								 */
+								// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Legacy ProPanel filter.
 								'filename'         => apply_filters( 'ld_propanel_export_filename', 'learndash-report-' . current_time( 'Y-m-d' ) ) . '.csv',
 								'ajax_email_error' => esc_html__( 'ProPanel Email: AJAX submission could not complete, please try again.', 'learndash' ),
 							)
@@ -120,17 +200,26 @@ if ( ! class_exists( 'LearnDash_ProPanel_Widget' ) ) {
 		}
 
 		/**
-		 * Register Widget
+		 * Registers the dashboard widget when the user may access ProPanel.
+		 *
+		 * @since 4.17.0
+		 *
+		 * @return void
 		 */
-		function register_widget() {
-			// Only show the ProPanel widgets for admin and group leaders
-			if ( ( learndash_is_group_leader_user() ) || ( learndash_is_admin_user() ) || ( current_user_can( 'propanel_widgets' ) ) ) {
+		public function register_widget() {
+			// Only show the ProPanel widgets for admin and group leaders, or users with ProPanel access.
+			if (
+				learndash_is_group_leader_user()
+				|| learndash_is_admin_user()
+				|| current_user_can( 'propanel_widgets' )
+			) {
 				$is_dashboard = true;
 			} else {
 				$is_dashboard = false;
 			}
 
 			/** This filter is documented in includes/class-ld-propanel.php */
+			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Legacy ProPanel filter.
 			$is_dashboard = apply_filters( 'ld_propanel_dashboard_show_widgets', $is_dashboard );
 			if ( true === $is_dashboard ) {
 				wp_add_dashboard_widget( 'learndash-propanel-' . $this->name, $this->label, array( $this, 'initial_template' ) );
@@ -138,21 +227,39 @@ if ( ! class_exists( 'LearnDash_ProPanel_Widget' ) ) {
 		}
 
 		/**
-		 * Initial Template
+		 * Outputs the widget container markup (override in subclasses).
+		 *
+		 * @since 4.17.0
+		 *
+		 * @return void
 		 */
-		function initial_template() {}
+		public function initial_template() {}
 
 		/**
-		 * Load Template(s)
+		 * AJAX handler: renders a ProPanel fragment by template name.
+		 *
+		 * @since 4.17.0
+		 *
+		 * @return void
 		 */
-		function load_template() {
+		public function load_template() {
 			check_ajax_referer( 'ld-propanel', 'nonce' );
 
-			if ( isset( $_GET['template'] ) && ! empty( $_GET['template'] ) ) {
-				$output = apply_filters( 'learndash_propanel_template_ajax', '', $_GET['template'] );
-				wp_send_json_success( array( 'output' => $output ) );
+			if (
+				learndash_is_admin_user()
+				|| learndash_is_group_leader_user()
+				|| current_user_can( 'propanel_widgets' )
+			) {
+				$template = isset( $_GET['template'] ) ? sanitize_text_field( wp_unslash( $_GET['template'] ) ) : '';
+				if ( '' !== $template ) {
+					$output = apply_filters( 'learndash_propanel_template_ajax', '', $template );
+					wp_send_json_success( array( 'output' => $output ) );
+				} else {
+					die();
+				}
+			} else {
+				wp_send_json_error( array( 'message' => __( 'Insufficient permissions.', 'learndash' ) ), 403 );
 			}
-			die();
 		}
 
 		/**

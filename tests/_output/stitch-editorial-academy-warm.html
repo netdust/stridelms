@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>The Editorial Academy | A Curated Sanctuary for Knowledge</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&amp;family=Plus+Jakarta+Sans:wght@200..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-tint": "#9e412a",
+              "surface-container-highest": "#e4e3d7",
+              "tertiary-fixed": "#ffddb7",
+              "primary-fixed-dim": "#ffb4a2",
+              "surface-container-low": "#f5f4e8",
+              "on-primary-fixed": "#3c0700",
+              "on-primary-fixed-variant": "#7f2b15",
+              "inverse-primary": "#ffb4a2",
+              "surface-container-high": "#e9e9dd",
+              "surface": "#fbfaee",
+              "secondary-fixed": "#baebf3",
+              "surface-container-lowest": "#ffffff",
+              "secondary-container": "#baebf3",
+              "error-container": "#ffdad6",
+              "error": "#ba1a1a",
+              "on-tertiary-container": "#fffbff",
+              "on-secondary-container": "#3c6b73",
+              "tertiary-container": "#a36800",
+              "on-primary": "#ffffff",
+              "on-error-container": "#93000a",
+              "surface-dim": "#dbdbcf",
+              "on-background": "#1b1c15",
+              "outline-variant": "#dcc0ba",
+              "primary-container": "#bb573d",
+              "on-surface": "#1b1c15",
+              "secondary-fixed-dim": "#9fcfd7",
+              "on-secondary-fixed": "#001f24",
+              "background": "#fbfaee",
+              "secondary": "#36656d",
+              "on-error": "#ffffff",
+              "surface-variant": "#e4e3d7",
+              "primary-fixed": "#ffdad2",
+              "on-tertiary-fixed": "#2a1700",
+              "surface-container": "#efeee3",
+              "inverse-surface": "#303129",
+              "on-tertiary-fixed-variant": "#653e00",
+              "on-secondary": "#ffffff",
+              "on-secondary-fixed-variant": "#1b4d54",
+              "on-surface-variant": "#56423d",
+              "inverse-on-surface": "#f2f1e5",
+              "on-primary-container": "#fffbff",
+              "outline": "#89726c",
+              "tertiary-fixed-dim": "#ffb95c",
+              "primary": "#9b3f28",
+              "surface-bright": "#fbfaee",
+              "tertiary": "#815200",
+              "on-tertiary": "#ffffff"
+            },
+            fontFamily: {
+              "headline": ["Newsreader"],
+              "body": ["Plus Jakarta Sans"],
+              "label": ["Plus Jakarta Sans"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #fbfaee; color: #1b1c15; }
+        .font-serif { font-family: 'Newsreader', serif; }
+        .blur-blob { filter: blur(80px); opacity: 0.15; }
+        .glass-nav { backdrop-filter: blur(20px); background: rgba(251, 250, 238, 0.8); }
+    </style>
+</head>
+<body class="bg-surface text-on-surface selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 glass-nav transition-all duration-300">
+<div class="flex justify-between items-center w-full px-12 py-8 max-w-screen-2xl mx-auto">
+<div class="text-2xl font-serif italic font-semibold text-[#C35D43] dark:text-[#d17a63]">The Editorial Academy</div>
+<div class="hidden md:flex items-center space-gap-12 gap-10">
+<a class="text-stone-700 font-medium hover:text-[#C35D43] transition-colors duration-300" href="#">Courses</a>
+<a class="text-stone-700 font-medium hover:text-[#C35D43] transition-colors duration-300" href="#">Mission</a>
+<a class="text-stone-700 font-medium hover:text-[#C35D43] transition-colors duration-300" href="#">About Us</a>
+</div>
+<button class="bg-primary text-on-primary px-8 py-3 rounded-full font-medium active:scale-95 opacity-90 transition-all">
+                Start Learning
+            </button>
+</div>
+</nav>
+<main class="relative overflow-hidden">
+<!-- Decorative Blobs -->
+<div class="absolute -top-24 -left-24 w-96 h-96 bg-tertiary-fixed-dim rounded-full blur-blob"></div>
+<div class="absolute top-1/2 -right-48 w-[500px] h-[500px] bg-secondary-fixed-dim rounded-full blur-blob"></div>
+<!-- Hero Section -->
+<section class="relative pt-64 pb-32 px-8 max-w-screen-xl mx-auto">
+<div class="grid grid-cols-1 md:grid-cols-12 gap-12 items-center">
+<div class="md:col-span-8">
+<span class="inline-block text-primary font-medium tracking-widest uppercase text-sm mb-6 font-body">Knowledge as a Sanctuary</span>
+<h1 class="text-7xl md:text-8xl font-serif font-light leading-tight mb-8">
+                        Empowering your voice through <span class="italic text-primary">curated knowledge.</span>
+</h1>
+<p class="text-xl md:text-2xl text-on-surface-variant leading-relaxed max-w-2xl font-body mb-12">
+                        We believe that education should be as deliberate as the crafts it teaches. Enter a space designed for depth, focus, and human connection.
+                    </p>
+<div class="flex flex-wrap gap-6">
+<button class="bg-primary text-on-primary px-10 py-5 rounded-lg text-lg font-medium hover:opacity-90 transition-all">Explore Curated Courses</button>
+<button class="text-on-surface flex items-center gap-3 font-medium group">
+                            Our Philosophy 
+                            <span class="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Course Grid Section -->
+<section class="py-32 px-8 max-w-screen-2xl mx-auto">
+<div class="flex justify-between items-end mb-20 px-4">
+<div>
+<h2 class="text-5xl font-serif mb-4">Master Your Skills</h2>
+<p class="text-on-surface-variant text-lg max-w-md">Our curriculum is curated by industry elders and visionary creators.</p>
+</div>
+<div class="hidden md:flex gap-4">
+<button class="p-4 rounded-full bg-surface-container-high hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined">west</span>
+</button>
+<button class="p-4 rounded-full bg-primary text-on-primary hover:opacity-90 transition-colors">
+<span class="material-symbols-outlined">east</span>
+</button>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+<!-- Course Card 1: Solid Color / Typographic Emphasis -->
+<div class="bg-primary-container p-10 rounded-lg min-h-[450px] flex flex-col justify-between group cursor-pointer border-none">
+<div class="flex justify-between items-start">
+<span class="px-4 py-1 rounded-full bg-surface/20 text-on-primary text-sm font-medium">8 Modules</span>
+<span class="material-symbols-outlined text-on-primary opacity-50">auto_stories</span>
+</div>
+<div>
+<h3 class="text-4xl font-serif text-on-primary leading-tight mb-6">The Art of Narrative Architecture in Modern Non-Fiction</h3>
+<p class="text-on-primary/80 mb-8 line-clamp-3">Explore how structure influences empathy and engagement in long-form storytelling.</p>
+<div class="flex items-center gap-4 text-on-primary font-medium">
+                            Explore Syllabus 
+                            <span class="material-symbols-outlined group-hover:translate-x-2 transition-all">arrow_forward</span>
+</div>
+</div>
+</div>
+<!-- Course Card 2: Tonal Layering -->
+<div class="bg-surface-container-low p-10 rounded-lg min-h-[450px] flex flex-col justify-between group cursor-pointer">
+<div class="flex justify-between items-start">
+<span class="px-4 py-1 rounded-full bg-secondary-container text-on-secondary-container text-sm font-medium">12 Weeks</span>
+<span class="material-symbols-outlined text-secondary opacity-50">edit_note</span>
+</div>
+<div>
+<h3 class="text-4xl font-serif text-on-surface leading-tight mb-6">Editorial Ethics: The Responsibility of the Modern Gatekeeper</h3>
+<p class="text-on-surface-variant mb-8 line-clamp-3">Navigating the complex landscape of information integrity in a digital-first world.</p>
+<div class="flex items-center gap-4 text-primary font-medium">
+                            Enroll Now 
+                            <span class="material-symbols-outlined group-hover:translate-x-2 transition-all">arrow_forward</span>
+</div>
+</div>
+</div>
+<!-- Course Card 3: Tertiary Emphasis / Very Long Title -->
+<div class="bg-tertiary-container p-10 rounded-lg min-h-[450px] flex flex-col justify-between group cursor-pointer">
+<div class="flex justify-between items-start">
+<span class="px-4 py-1 rounded-full bg-tertiary-fixed text-on-tertiary-fixed text-sm font-medium">Masterclass</span>
+<span class="material-symbols-outlined text-on-tertiary-container opacity-50">palette</span>
+</div>
+<div>
+<h3 class="text-4xl font-serif text-on-tertiary-container leading-tight mb-6">Visual Literacy: Interpreting the Unspoken Language of Global Editorial Photography and Documentary Film</h3>
+<p class="text-on-tertiary-container/80 mb-8 line-clamp-2">A deep dive into visual semiotics and the power of the frame.</p>
+<div class="flex items-center gap-4 text-on-tertiary-container font-medium">
+                            Join Cohort 
+                            <span class="material-symbols-outlined group-hover:translate-x-2 transition-all">arrow_forward</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Our Mission Section (Enhanced Asymmetric Layout) -->
+<section class="py-48 bg-surface-container-low rounded-t-[64px] relative overflow-hidden">
+<div class="absolute -bottom-24 left-1/2 -translate-x-1/2 w-3/4 h-3/4 bg-primary-fixed-dim/20 rounded-full blur-blob"></div>
+<div class="max-w-screen-xl mx-auto px-8 relative z-10">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-24 items-center">
+<div>
+<div class="w-20 h-1 bg-primary mb-10"></div>
+<h2 class="text-6xl font-serif italic mb-10 leading-tight">Democratizing knowledge for the next generation of changemakers.</h2>
+<div class="space-y-8 text-xl text-on-surface-variant leading-relaxed">
+<p>The Editorial Academy was founded on a simple premise: that high-level intellectual growth shouldn't be confined to ivory towers. We bring the rigor of classical academia to the agility of the modern learner.</p>
+<p>Our platform is a non-profit sanctuary, ensuring that talented voices from all backgrounds have access to the tools, mentorship, and prestige required to shape our collective future.</p>
+</div>
+</div>
+<div class="relative">
+<div class="aspect-[4/5] bg-surface-container-highest rounded-lg overflow-hidden transform rotate-2">
+<img alt="Academy Mission" class="w-full h-full object-cover grayscale mix-blend-multiply opacity-80" data-alt="a bright and airy library workshop with high ceilings, large arched windows, and diverse students engaged in collaborative discussion around a large oak table" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBvn88VWHaM1PwHnedW1hfGMN3kIENkDVuGq_GQVbpWt5I7YaXuSb1iGu6zshxy5mYKKMnUZQlVgBnBmj8MPPUzqSONG0397v9Gg-z-3w93t112p2NfjL7J3tBvJL7teDYmPekNlo3Muf0nb_abIRFBGqn1VCPcUst9-1hf7LThlfNos8bfY1HbGXfIhIp7tHrP33xzFYyp_Lh4z6OpYsarti-ThlkM-XF9iO7cgpk74hHYi2-tGED8TcqcFS3U19Oh9b-opXPCu20"/>
+</div>
+<div class="absolute -bottom-10 -left-10 bg-surface-container-lowest p-8 rounded-lg shadow-sm max-w-xs transform -rotate-3">
+<p class="font-serif italic text-2xl text-primary">"Education is the most powerful tool which you can use to change the world."</p>
+<p class="mt-4 text-sm font-bold uppercase tracking-widest text-on-surface-variant">— Nelson Mandela</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Impact/Testimonial Section -->
+<section class="py-48 px-8 text-center max-w-screen-xl mx-auto">
+<span class="material-symbols-outlined text-6xl text-primary-fixed-dim mb-12" style="font-variation-settings: 'FILL' 1;">format_quote</span>
+<blockquote class="text-4xl md:text-5xl font-serif font-light leading-snug mb-16 max-w-4xl mx-auto">
+                "Finding The Editorial Academy felt like stumbling into a quiet garden in the middle of a loud city. Here, I didn't just learn skills; I found the <span class="italic text-secondary">clarity of purpose</span> to tell the stories that actually matter."
+            </blockquote>
+<div class="flex flex-col items-center">
+<div class="w-16 h-16 rounded-full bg-surface-container-highest mb-4 overflow-hidden">
+<img alt="Student Profile" class="w-full h-full object-cover" data-alt="portrait of a thoughtful man with a creative look, wearing glasses and a simple linen shirt, neutral background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDdDCRoIdw0j72eqr9FSeNHwFbIbfzozf4KrfrOrQydNNdy4yJUyTTrjAvFufyJDNI798U7WZJ2In16Xv03pAANP8OVp7hovuFHXYGesrYKfn7s9GTHHOmqXp_KP9-zoUvNQiIRakM00WRbXz5gzJGJB3eYoo00LHJeelRjQvAoi5sHF3HfxVr3sN7ST1taVkdNI97UnUb1dMjyQbZcVEdHUL15xuPqf6po1-zBXix2g7GKb4qK9CYHqYzqqxYylcaN51sfsXbVQ74"/>
+</div>
+<p class="font-bold text-lg">Julian Vance</p>
+<p class="text-on-surface-variant">Documentary Filmmaker &amp; 2023 Fellow</p>
+</div>
+</section>
+<!-- CTA Section -->
+<section class="py-48 px-8 bg-surface">
+<div class="max-w-4xl mx-auto text-center">
+<h2 class="text-7xl font-serif mb-10">Ready to Join?</h2>
+<p class="text-xl text-on-surface-variant mb-12 max-w-2xl mx-auto leading-relaxed">
+                    Applications for our Winter 2024 cohort are now open. Spaces are limited to maintain our commitment to intimate, mentored learning.
+                </p>
+<div class="flex flex-col sm:flex-row justify-center gap-6">
+<button class="bg-primary text-on-primary px-12 py-6 rounded-full text-xl font-medium shadow-lg hover:-translate-y-1 transition-all">Apply for a Scholarship</button>
+<button class="bg-surface-container-highest text-on-surface px-12 py-6 rounded-full text-xl font-medium hover:bg-surface-container-high transition-all">Browse Open Courses</button>
+</div>
+<p class="mt-12 text-on-surface-variant/60 italic font-serif text-lg">A sanctuary for the curious mind.</p>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-[#f5f4e8] dark:bg-stone-900 rounded-t-[32px]">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-16 px-16 py-24 w-full max-w-screen-2xl mx-auto">
+<div>
+<div class="text-xl font-serif text-[#1b1c15] dark:text-stone-100 mb-8">The Editorial Academy</div>
+<p class="font-serif Newsreader italic text-xl text-stone-600 dark:text-stone-400 mb-8 leading-relaxed">
+                    Crafting knowledge with the precision of a master artisan and the heart of a visionary teacher.
+                </p>
+<div class="flex gap-6">
+<span class="material-symbols-outlined text-stone-400 hover:text-primary cursor-pointer transition-colors">public</span>
+<span class="material-symbols-outlined text-stone-400 hover:text-primary cursor-pointer transition-colors">mail</span>
+<span class="material-symbols-outlined text-stone-400 hover:text-primary cursor-pointer transition-colors">share</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-8">
+<div>
+<h4 class="font-bold mb-6 uppercase tracking-widest text-xs text-on-surface-variant/50">Navigation</h4>
+<ul class="space-y-4">
+<li><a class="text-stone-600 hover:text-[#C35D43] hover:translate-x-1 transition-all inline-block" href="#">Courses</a></li>
+<li><a class="text-stone-600 hover:text-[#C35D43] hover:translate-x-1 transition-all inline-block" href="#">Mission</a></li>
+<li><a class="text-stone-600 hover:text-[#C35D43] hover:translate-x-1 transition-all inline-block" href="#">About Us</a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-bold mb-6 uppercase tracking-widest text-xs text-on-surface-variant/50">Legal</h4>
+<ul class="space-y-4">
+<li><a class="text-stone-600 hover:text-[#C35D43] hover:translate-x-1 transition-all inline-block" href="#">Privacy Policy</a></li>
+<li><a class="text-stone-600 hover:text-[#C35D43] hover:translate-x-1 transition-all inline-block" href="#">Terms of Service</a></li>
+<li><a class="text-stone-600 hover:text-[#C35D43] hover:translate-x-1 transition-all inline-block" href="#">Contact</a></li>
+</ul>
+</div>
+</div>
+<div class="flex flex-col justify-between">
+<div>
+<h4 class="font-bold mb-6 uppercase tracking-widest text-xs text-on-surface-variant/50">Our Home</h4>
+<p class="text-stone-600 leading-relaxed">
+                        The Atelier of Ideas<br/>
+                        12 Sanctuary Row, Creative District<br/>
+                        Edinburgh, EH1 2TH
+                    </p>
+</div>
+<p class="text-sm text-stone-500 mt-12">
+                    © 2024 The Editorial Academy. Crafted for human knowledge.
+                </p>
+</div>
+</div>
+</footer>
+</body></html>

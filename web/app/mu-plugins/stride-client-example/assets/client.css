@@ -25,7 +25,7 @@
  *   --color-success, --color-warning, --color-error, --color-info
  *
  * Typography:
- *   --font-sans, --font-heading
+ *   --font-sans, --font-heading, --font-label
  *
  * Layout:
  *   --container-max, --content-max, --sidebar-width
@@ -38,7 +38,7 @@
  *   --color-tertiary, --color-tertiary-light
  *   --color-secondary-container
  *   --color-surface-container, --color-surface-container-high, --color-surface-container-highest
- *   --font-serif
+ *   --font-serif, --font-label
  *
  * Badges (per-variant bg/text):
  *   --color-badge-open-bg, --color-badge-open-text

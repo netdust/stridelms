@@ -1,7 +1,20 @@
+= [5.0.4] 2026-03-25 =
+
+* Fix - Added delay between scheduled payment actions to prevent overwhelming the payment gateway when many subscriptions are due at once (e.g. on first run after upgrade).
+* Tweak - Added filters: `learndash_payment_subscription_delay_between_actions`.
+
+= [5.0.3.1] 2026-03-19 =
+
+* Security - Tightened security around SQL queries.
+
 = [5.0.3] 2026-03-11 =
 
 * Fix - Resolved an issue where the `[ld_course_resume]` shortcode/block could redirect users to the wrong course step.
 * Tweak - Updated functions: `learndash_user_progress_get_first_incomplete_step`.
+
+= [5.0.2.1] 2026-03-09 =
+
+* Security - Tightened security around PDF generation.
 
 = [5.0.2] 2026-02-25 =
 

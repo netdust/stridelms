@@ -4,7 +4,7 @@
     'name' => 'learndash/core',
     'pretty_version' => 'dev-main',
     'version' => 'dev-main',
-    'reference' => '96a55fb44184d753ca50104125c65963ec870819',
+    'reference' => '5a2ff940ff7a575d9cb46ee7baf59e1360f37b00',
     'type' => 'wordpress-plugin',
     'install_path' => __DIR__ . '/../',
     'aliases' => 

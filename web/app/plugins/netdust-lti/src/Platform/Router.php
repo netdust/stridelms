@@ -155,6 +155,18 @@ final class Router implements NTDST_Service_Meta
             return;
         }
 
+        // Allow LTI endpoints to be loaded in platform iframes
+        // CSP frame-ancestors overrides X-Frame-Options in modern browsers
+        header_remove('X-Frame-Options');
+        header('Content-Security-Policy: frame-ancestors *');
+
+        // Strip WordPress magic quotes from superglobals.
+        // WordPress's wp_magic_quotes() adds backslashes to $_POST/$_GET/$_REQUEST,
+        // which corrupts LTI parameters (e.g., JSON values, JWTs).
+        $_POST = wp_unslash($_POST);
+        $_GET = wp_unslash($_GET);
+        $_REQUEST = wp_unslash($_REQUEST);
+
         // Configure session for cross-site requests
         $this->configureSession();
 

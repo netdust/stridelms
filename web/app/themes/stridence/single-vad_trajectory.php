@@ -79,7 +79,7 @@ get_header();
 
             <!-- Format badge -->
             <div class="flex items-center gap-2 mb-4">
-                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-accent text-white">
+                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-accent text-text-inverse">
                     <?php echo stridence_icon('layers', 'w-3 h-3'); ?>
                     <?php esc_html_e('Leertraject', 'stridence'); ?>
                 </span>

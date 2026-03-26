@@ -10,7 +10,10 @@
 
 defined( 'ABSPATH' ) || exit;
 
-if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Status' ) ) && ( class_exists( 'LearnDash_ProPanel_Filtering' ) ) ) {
+if (
+	! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Status' )
+	&& class_exists( 'LearnDash_ProPanel_Filtering' )
+) {
 	class LearnDash_ProPanel_Reporting_Filter_Status extends LearnDash_ProPanel_Filtering {
 		public function __construct() {
 			$this->filter_key = 'courseStatus';
@@ -18,7 +21,10 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Status' ) ) && ( cla
 		}
 
 		public function filter_post_args( $post_args_filters = array() ) {
-			if ( ( isset( $_GET['filters'][ $this->filter_key ] ) ) && ( ! empty( $_GET['filters'][ $this->filter_key ] ) ) ) {
+			if (
+				isset( $_GET['filters'][ $this->filter_key ] )
+				&& ! empty( $_GET['filters'][ $this->filter_key ] )
+			) {
 				if ( is_string( $_GET['filters'][ $this->filter_key ] ) ) {
 					$post_args_filters[ $this->filter_key ][] = esc_attr( $_GET['filters'][ $this->filter_key ] );
 				} elseif ( is_array( $_GET['filters'][ $this->filter_key ] ) ) {
@@ -45,7 +51,14 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Status' ) ) && ( cla
 			esc_html_x( 'All Statuses', 'Course status - All Statuses', 'learndash' ) . '"></select>';
 		}
 
-		function filter_search() {
+		/**
+		 * Status search.
+		 *
+		 * @since 4.17.0
+		 *
+		 * @return array<string, mixed>
+		 */
+		public function filter_search() {
 			$statuses = array(
 				array(
 					'id'   => 'not-started',

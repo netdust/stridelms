@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace NetdustLTI\Tests\Unit;
 
-use NetdustLTI\Platform\PlatformRouter;
+use NetdustLTI\Platform\Router as PlatformRouter;
 use PHPUnit\Framework\TestCase;
 
 class PlatformRouterTest extends TestCase

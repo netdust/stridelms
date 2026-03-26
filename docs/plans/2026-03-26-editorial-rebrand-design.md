@@ -255,12 +255,16 @@ All badges: remove `ring-1 ring-inset` — editorial "No-Line Rule".
 }
 ```
 
-### Dash Cards — Warm Gradient
+### Dash Cards — No Side Borders
 
 ```css
 .dash-card-hero {
-  /* Verify: teal gradient at 0.02-0.07 opacity is perceptible */
-  /* If not, increase to 0.04-0.10 */
+  /* REMOVE: border-left: 3px solid — never use one-sided borders on rounded cards */
+  /* REPLACE with: gradient background only, no border at all */
+  border: none;
+  border-left: none;
+  background: linear-gradient(135deg, rgb(var(--color-primary) / 0.04), rgb(var(--color-primary) / 0.10));
+  /* Increase gradient opacity range to 0.04-0.10 for visibility with teal */
 }
 ```
 

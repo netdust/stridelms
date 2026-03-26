@@ -19,10 +19,24 @@ function learndash_propanel_editor_scripts() {
 		return;
 	}
 
+	if (
+		! learndash_is_admin_user()
+		&& ! learndash_is_group_leader_user()
+		&& ! current_user_can( 'propanel_widgets' )
+	) {
+		return;
+	}
+
 	// Make paths variables so we don't write em twice ;).
-	$learndash_block_path         = '../assets/js/index.js';
-	$learndash_editor_style_path  = '../assets/js/index.css';
-	$learndash_block_dependencies = include dirname( __DIR__ ) . '/assets/js/index.asset.php';
+	$learndash_block_path        = '../assets/js/index.js';
+	$learndash_editor_style_path = '../assets/js/index.css';
+	$asset_path                  = dirname( __DIR__ ) . '/assets/js/index.asset.php';
+	$learndash_block_dependencies = file_exists( $asset_path )
+		? include $asset_path
+		: array(
+			'dependencies' => array(),
+			'version'      => LD_PP_VERSION,
+		);
 
 	wp_enqueue_style( 'ld-propanel-style', LD_PP_PLUGIN_URL . 'dist/css/ld-propanel.css', null, LD_PP_VERSION );
 

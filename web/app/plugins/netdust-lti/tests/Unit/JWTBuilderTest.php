@@ -219,48 +219,50 @@ class JWTBuilderTest extends TestCase
         $this->assertNotContains('http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor', $roles);
     }
 
-    public function test_handle_auth_callback_fails_with_invalid_state(): void
+    public function test_handle_auth_callback_fails_with_missing_nonce(): void
     {
-        global $_GET, $_SESSION;
-        $_GET = ['state' => 'invalid-state'];
-        $_SESSION = ['lti_platform_state' => 'valid-state'];
+        global $_GET, $_POST, $_SESSION;
+        $_GET = [];
+        $_POST = ['redirect_uri' => 'https://tool.example.com/launch'];
+        $_SESSION = [];
 
         $builder = new JWTBuilder(
             $this->createMock(ToolRepository::class)
         );
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Invalid state parameter');
+        $this->expectExceptionMessage('Missing required parameters');
 
         $builder->handleAuthCallback();
     }
 
-    public function test_handle_auth_callback_fails_with_missing_state(): void
+    public function test_handle_auth_callback_fails_with_missing_redirect_uri(): void
     {
-        global $_GET, $_SESSION;
+        global $_GET, $_POST, $_SESSION;
         $_GET = [];
-        $_SESSION = ['lti_platform_state' => 'valid-state'];
+        $_POST = ['nonce' => 'test-nonce'];
+        $_SESSION = [];
 
         $builder = new JWTBuilder(
             $this->createMock(ToolRepository::class)
         );
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Invalid state parameter');
+        $this->expectExceptionMessage('Missing required parameters');
 
         $builder->handleAuthCallback();
     }
 
     public function test_handle_auth_callback_fails_for_missing_tool(): void
     {
-        global $_GET, $_SESSION;
-        $state = 'valid-state-12345';
-        $_GET = ['state' => $state];
+        global $_GET, $_POST, $_SESSION;
+        $_GET = [];
+        $_POST = [
+            'nonce' => 'test-nonce',
+            'redirect_uri' => 'https://tool.example.com/launch',
+            'lti_message_hint' => json_encode(['tool_id' => 999, 'resource_link_id' => 'resource-123']),
+        ];
         $_SESSION = [
-            'lti_platform_state' => $state,
-            'lti_platform_nonce' => 'test-nonce',
-            'lti_platform_tool_id' => 999,
-            'lti_platform_resource_link_id' => 'resource-123',
             'lti_platform_target_link_uri' => 'https://tool.example.com/launch',
         ];
 

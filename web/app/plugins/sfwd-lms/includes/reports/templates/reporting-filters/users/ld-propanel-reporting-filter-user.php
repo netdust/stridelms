@@ -10,7 +10,10 @@
 
 defined( 'ABSPATH' ) || exit;
 
-if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Users' ) ) && ( class_exists( 'LearnDash_ProPanel_Filtering' ) ) ) {
+if (
+	! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Users' )
+	&& class_exists( 'LearnDash_ProPanel_Filtering' )
+) {
 	class LearnDash_ProPanel_Reporting_Filter_Users extends LearnDash_ProPanel_Filtering {
 		public function __construct() {
 			$this->filter_key                = 'users';
@@ -31,7 +34,10 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Users' ) ) && ( clas
 		}
 
 		public function filter_post_args( $post_args = array(), $_get = array() ) {
-			if ( ( isset( $_get['filters'][ $this->filter_key ] ) ) && ( ! empty( $_get['filters'][ $this->filter_key ] ) ) ) {
+			if (
+				isset( $_get['filters'][ $this->filter_key ] )
+				&& ! empty( $_get['filters'][ $this->filter_key ] )
+			) {
 				if ( is_string( $_get['filters'][ $this->filter_key ] ) ) {
 					$post_args['filters'][ $this->filter_key ] = explode( ',', $_get['filters'][ $this->filter_key ] );
 				} else {
@@ -46,11 +52,23 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Users' ) ) && ( clas
 			} else {
 				$post_args['filters'][ $this->filter_key ] = array( get_current_user_id() );
 
-				if ( ( isset( $post_args['template'] ) ) && ( ( $post_args['template'] == 'course-reporting' ) || ( $post_args['template'] == 'group-reporting' ) ) ) {
+				if (
+					isset( $post_args['template'] )
+					&& (
+						$post_args['template'] == 'course-reporting'
+						|| $post_args['template'] == 'group-reporting'
+					)
+				) {
 					$post_args['template'] = 'user-reporting';
 				}
 
-				if ( ( isset( $post_args['filters']['type'] ) ) && ( ( $post_args['filters']['type'] == 'course' ) || ( $post_args['filters']['type'] == 'group' ) ) ) {
+				if (
+					isset( $post_args['filters']['type'] )
+					&& (
+						$post_args['filters']['type'] == 'course'
+						|| $post_args['filters']['type'] == 'group'
+					)
+				) {
 					$post_args['filters']['type'] = 'user';
 				}
 			}
@@ -60,11 +78,20 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Users' ) ) && ( clas
 
 		public function filter_activity_args( $activity_args = array(), $post_data = array(), $_get = array() ) {
 			if ( ! empty( $activity_args ) ) {
-				if ( ( isset( $post_data['filters'][ $this->filter_key ] ) ) && ( ! empty( $post_data['filters'][ $this->filter_key ] ) ) ) {
+				if (
+					isset( $post_data['filters'][ $this->filter_key ] )
+					&& ! empty( $post_data['filters'][ $this->filter_key ] )
+				) {
 					$activity_args['user_ids'] = $post_data['filters'][ $this->filter_key ];
-				} elseif ( ( ! isset( $activity_args['user_ids'] ) ) || ( empty( $activity_args['user_ids'] ) ) ) {
+				} elseif (
+					! isset( $activity_args['user_ids'] )
+					|| empty( $activity_args['user_ids'] )
+				) {
 					if ( learndash_is_admin_user( get_current_user_id() ) ) {
-						if ( ( ! isset( $activity_args['user_ids'] ) ) || ( empty( $activity_args['user_ids'] ) ) ) {
+						if (
+							! isset( $activity_args['user_ids'] )
+							|| empty( $activity_args['user_ids'] )
+						) {
 							// $exclude_admin_users = ld_propanel_exclude_admin_users();
 
 							if ( ! empty( $activity_args['post_ids'] ) ) {
@@ -89,7 +116,10 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Users' ) ) && ( clas
 								}
 
 								if ( ! $course_has_open ) {
-									if ( ( ! ld_propanel_exclude_admin_users() ) && ( ld_propanel_auto_enroll_admin_users() ) ) {
+									if (
+										! ld_propanel_exclude_admin_users()
+										&& ld_propanel_auto_enroll_admin_users()
+									) {
 										$admin_user_ids = ld_propanel_get_admin_user_ids();
 										if ( ! empty( $admin_user_ids ) ) {
 											$course_user_ids = array_merge( $course_user_ids, $admin_user_ids );
@@ -157,13 +187,13 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Users' ) ) && ( clas
 			if ( learndash_is_admin_user( get_current_user_id() ) ) {
 			} elseif ( learndash_is_group_leader_user( get_current_user_id() ) ) {
 			} else {
-				return;
+				return '';
 			}
 
 			return '<select class="filter-users select2" data-ajax--cache="true" data-allow-clear="true" data-placeholder="' . esc_html__( 'All Users', 'learndash' ) . '"><option value="">' . esc_html__( 'Select User', 'learndash' ) . '</option></select>';
 		}
 
-		function filter_search() {
+		public function filter_search() {
 			$response = array(
 				'total' => 0,
 				'items' => array(),
@@ -179,16 +209,23 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Users' ) ) && ( clas
 					'paged'   => intval( $_GET['page'] ),
 				);
 
-				if ( ( isset( $_GET['search'] ) ) && ( ! empty( $_GET['search'] ) ) ) {
+				if (
+					isset( $_GET['search'] )
+					&& ! empty( $_GET['search'] )
+				) {
 					$user_query_args['search']         = sprintf( '*%s*', $_GET['search'] );
 					$user_query_args['search_columns'] = array( 'display_name' );
 				}
 
+				$post_filters       = ( isset( $this->post_data['filters'] ) && is_array( $this->post_data['filters'] ) ) ? $this->post_data['filters'] : array();
+				$filter_groups_uid  = ( isset( $post_filters['groups'] ) && is_array( $post_filters['groups'] ) ) ? array_map( 'intval', $post_filters['groups'] ) : array();
+				$filter_courses_uid = ( isset( $post_filters['courses'] ) && is_array( $post_filters['courses'] ) ) ? array_map( 'intval', $post_filters['courses'] ) : array();
+
 				if ( learndash_is_admin_user( get_current_user_id() ) ) {
 					// Here we check the group selector first. If the group is selected then we don't need to check the course selector
-					if ( ( isset( $this->post_data['filters']['groups'] ) ) && ( ! empty( $this->post_data['filters']['groups'] ) ) ) {
+					if ( ! empty( $filter_groups_uid ) ) {
 						$groups_user_ids = array();
-						foreach ( $this->post_data['filters']['groups'] as $group_id ) {
+						foreach ( $filter_groups_uid as $group_id ) {
 							$user_ids = learndash_get_groups_user_ids( $group_id );
 							if ( ! empty( $user_ids ) ) {
 								$groups_user_ids = array_merge( $groups_user_ids, $user_ids );
@@ -199,9 +236,9 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Users' ) ) && ( clas
 						if ( ! empty( $groups_user_ids ) ) {
 							$user_query_args['include'] = $groups_user_ids;
 						}
-					} elseif ( ( isset( $this->post_data['filters']['courses'] ) ) && ( ! empty( $this->post_data['filters']['courses'] ) ) ) {
+					} elseif ( ! empty( $filter_courses_uid ) ) {
 						$courses_user_ids = array();
-						foreach ( $this->post_data['filters']['courses'] as $course_id ) {
+						foreach ( $filter_courses_uid as $course_id ) {
 							$course_user_query = learndash_get_users_for_course( $course_id, array(), ld_propanel_exclude_admin_users() );
 							if ( $course_user_query instanceof WP_User_Query ) {
 								$user_ids = $course_user_query->get_results();
@@ -210,7 +247,10 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Users' ) ) && ( clas
 								}
 							}
 						}
-						if ( ( ! ld_propanel_exclude_admin_users() ) && ( ld_propanel_auto_enroll_admin_users() ) ) {
+						if (
+							! ld_propanel_exclude_admin_users()
+							&& ld_propanel_auto_enroll_admin_users()
+						) {
 							$admin_user_ids = ld_propanel_get_admin_user_ids();
 							if ( ! empty( $admin_user_ids ) ) {
 								$course_user_ids = array_merge( $course_user_ids, $admin_user_ids );
@@ -223,9 +263,9 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Users' ) ) && ( clas
 					}
 				} elseif ( learndash_is_group_leader_user( get_current_user_id() ) ) {
 					// Here we check the group selector first. If the group is selected then we don't need to check the course selector
-					if ( ( isset( $this->post_data['filters']['groups'] ) ) && ( ! empty( $this->post_data['filters']['groups'] ) ) ) {
+					if ( ! empty( $filter_groups_uid ) ) {
 						$groups_user_ids = array();
-						foreach ( $this->post_data['filters']['groups'] as $group_id ) {
+						foreach ( $filter_groups_uid as $group_id ) {
 							$user_ids = learndash_get_groups_user_ids( $group_id );
 							if ( ! empty( $user_ids ) ) {
 								$groups_user_ids = array_merge( $groups_user_ids, $user_ids );
@@ -236,14 +276,14 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Users' ) ) && ( clas
 						} else {
 							$user_query_args = array();
 						}
-					} elseif ( ( isset( $this->post_data['filters']['courses'] ) ) && ( ! empty( $this->post_data['filters']['courses'] ) ) ) {
+					} elseif ( ! empty( $filter_courses_uid ) ) {
 						$admin_group_ids = learndash_get_administrators_group_ids( get_current_user_id() );
 						if ( ! empty( $admin_group_ids ) ) {
 							$group_ids = array();
 							foreach ( $admin_group_ids as $group_id ) {
 								$group_course_ids = learndash_group_enrolled_courses( $group_id );
 								if ( ! empty( $group_course_ids ) ) {
-									$course_ids_intersect = array_intersect( $this->post_data['filters']['courses'], $group_course_ids );
+									$course_ids_intersect = array_intersect( $filter_courses_uid, $group_course_ids );
 									if ( ! empty( $course_ids_intersect ) ) {
 										$group_ids[] = $group_id;
 									}
@@ -399,7 +439,10 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Users' ) ) && ( clas
 			 * Search args column indexes are different on full vs widget
 			 */
 
-			if ( ( isset( $this->activity_query_args['s'] ) ) && ( ! empty( $this->activity_query_args['s'] ) ) ) {
+			if (
+				isset( $this->activity_query_args['s'] )
+				&& ! empty( $this->activity_query_args['s'] )
+			) {
 				$this->activity_query_args['s_context'] = 'post_title';
 			}
 
@@ -416,8 +459,14 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Users' ) ) && ( clas
 				// error_log('users: activity_query_args<pre>'. print_r($this->activity_query_args, true) .'</pre>');
 				$activities = learndash_reports_get_activity( $this->activity_query_args );
 				// error_log('users: activities<pre>'. print_r($activities, true) .'</pre>');
-				if ( ( isset( $activities['results'] ) ) && ( ! empty( $activities['results'] ) ) ) {
-					if ( ( isset( $activities['pager'] ) ) && ( ! empty( $activities['pager'] ) ) ) {
+				if (
+					isset( $activities['results'] )
+					&& ! empty( $activities['results'] )
+				) {
+					if (
+						isset( $activities['pager'] )
+						&& ! empty( $activities['pager'] )
+					) {
 						$response['total_rows'] = $activities['pager']['total_items'];
 
 						$activities['pager']['current_page'] = $this->activity_query_args['paged'];
@@ -439,7 +488,10 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Users' ) ) && ( clas
 					}
 
 					// Just in case the pager returns empties
-					if ( ( empty( $response['total_rows'] ) ) && ( count( $response['rows'] ) ) ) {
+					if (
+						empty( $response['total_rows'] )
+						&& count( $response['rows'] )
+					) {
 						$response['total_rows'] = count( $response['rows'] );
 					}
 				}

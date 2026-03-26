@@ -127,6 +127,14 @@ final class StrideMailBridge extends AbstractService
         $codes['registration'] = [
             'label' => __('Inschrijving', 'stride'),
             'codes' => [
+                'name' => [
+                    'label' => __('Naam', 'stride'),
+                    'callback' => fn($ctx) => $ctx['name'] ?? null,
+                ],
+                'email' => [
+                    'label' => __('E-mail', 'stride'),
+                    'callback' => fn($ctx) => $ctx['email'] ?? null,
+                ],
                 'status' => [
                     'label' => __('Status', 'stride'),
                     'callback' => function ($ctx) {
@@ -405,12 +413,13 @@ final class StrideMailBridge extends AbstractService
      */
     public function maybeSeedTemplates(): void
     {
-        if (get_option('stride_mail_templates_seeded')) {
+        $currentVersion = '2';
+        if (get_option('stride_mail_templates_seeded') === $currentVersion) {
             return;
         }
 
         $this->seedTemplates();
-        update_option('stride_mail_templates_seeded', '1');
+        update_option('stride_mail_templates_seeded', $currentVersion);
     }
 
     /**
@@ -567,6 +576,16 @@ final class StrideMailBridge extends AbstractService
                     . '<p><strong>Offerte:</strong> {{quote.number}}<br>'
                     . '<strong>Deelnemer:</strong> {{user.display_name}}</p>'
                     . '<p>Controleer de offerte en pas deze handmatig aan indien nodig.</p>',
+            ],
+            'stride-interest-registered-admin' => [
+                'title' => 'Nieuwe interesse (admin)',
+                'subject' => 'Nieuwe interesse: {{edition.title}}',
+                'trigger' => '',
+                'category' => 'notification',
+                'body' => '<p>Er is een nieuwe interesse geregistreerd.</p>'
+                    . '<p><strong>Naam:</strong> {{registration.name}}<br>'
+                    . '<strong>E-mail:</strong> {{registration.email}}<br>'
+                    . '<strong>Editie:</strong> {{edition.title}}</p>',
             ],
             'stride-trajectory-enrolled' => [
                 'title' => 'Traject inschrijving',

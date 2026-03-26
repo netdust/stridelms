@@ -53,7 +53,7 @@ export default {
         sans: ['var(--font-sans)'],
         heading: ['var(--font-heading)'],
         serif: ['var(--font-serif)'],
-        label: ['Manrope', 'var(--font-sans)'],
+        label: ['var(--font-label)'],
       },
 
       maxWidth: {

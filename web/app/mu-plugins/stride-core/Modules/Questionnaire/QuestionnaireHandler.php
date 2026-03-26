@@ -78,14 +78,17 @@ final class QuestionnaireHandler
             }
         }
 
-        // Notify admin
-        $edition = get_post($editionId);
-        $subject = sprintf(__('Nieuwe interesse: %s', 'stride'), $edition ? $edition->post_title : "Editie #{$editionId}");
-        $message = sprintf(
-            __("Naam: %s\nE-mail: %s\nEditie: %s", 'stride'),
-            $name, $email, $edition ? $edition->post_title : "#{$editionId}"
-        );
-        wp_mail(get_option('admin_email'), $subject, $message);
+        // Notify admin via netdust-mail
+        if (function_exists('ndmail_send')) {
+            $edition = get_post($editionId);
+            $adminEmail = \Stride\Modules\Mail\StrideMailBridge::getAdminEmail();
+            ndmail_send('stride-interest-registered-admin', [
+                'name'         => $name,
+                'email'        => $email,
+                'edition_id'   => $editionId,
+                'edition_title' => $edition ? $edition->post_title : "Editie #{$editionId}",
+            ], ['to' => $adminEmail]);
+        }
 
         return [
             'success' => true,

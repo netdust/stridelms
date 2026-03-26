@@ -2,14 +2,14 @@
 # This file is distributed under the same license as the LearnDash LMS plugin.
 msgid ""
 msgstr ""
-"Project-Id-Version: LearnDash LMS 5.0.3\n"
+"Project-Id-Version: LearnDash LMS 5.0.4\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/learndash-core\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-03-09T15:28:44+00:00\n"
+"POT-Creation-Date: 2026-03-24T13:26:46+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: learndash\n"
@@ -590,7 +590,7 @@ msgid "Sending..."
 msgstr ""
 
 #: includes/admin/class-learndash-admin-groups-users-list.php:339
-#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:17
+#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:32
 #: includes/licensing/assets/scripts/settings.js:2408
 #: includes/licensing/frontend/src/Settings/Permissions.jsx:154
 msgid "Search Users"
@@ -2503,7 +2503,7 @@ msgstr ""
 #: includes/class-ldlms-post-types.php:161
 #: includes/deprecated/5.0.0/functions.php:2032
 #: includes/ld-groups.php:2176
-#: includes/reports/templates/reporting-filters/status/ld-propanel-reporting-filter-status.php:56
+#: includes/reports/templates/reporting-filters/status/ld-propanel-reporting-filter-status.php:69
 #: includes/settings/shortcodes-sections/ld_course_list.php:136
 #: includes/settings/shortcodes-sections/ld_group_list.php:135
 #: includes/shortcodes/ld_course_inprogress.php:72
@@ -4126,7 +4126,7 @@ msgstr ""
 
 #: includes/admin/classes-posts-listings/class-learndash-admin-courses-listing.php:50
 #: includes/admin/classes-posts-listings/class-learndash-admin-groups-listing.php:47
-#: includes/reports/templates/reporting-filters/users/ld-propanel-reporting-filter-user.php:163
+#: includes/reports/templates/reporting-filters/users/ld-propanel-reporting-filter-user.php:193
 msgid "All Users"
 msgstr ""
 
@@ -4786,7 +4786,7 @@ msgstr ""
 
 #: includes/admin/classes-posts-listings/class-learndash-admin-transactions-listing.php:1034
 #: includes/ld-misc-functions.php:1180
-#: includes/reports/includes/class-ld-propanel-activity.php:716
+#: includes/reports/includes/class-ld-propanel-activity.php:835
 #: themes/ld30/templates/shortcodes/profile/quiz-row.php:80
 #: themes/legacy/templates/learndash_lesson_assignment_uploads_list.php:72
 msgid "View"
@@ -6665,7 +6665,7 @@ msgstr ""
 #: includes/reports/templates/ld-propanel-activity-rows.php:534
 #: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course-row.php:85
 #: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group-row.php:104
-#: includes/reports/templates/reporting-filters/status/ld-propanel-reporting-filter-status.php:52
+#: includes/reports/templates/reporting-filters/status/ld-propanel-reporting-filter-status.php:65
 #: includes/reports/templates/reporting-filters/users/ld-propanel-reporting-filter-user-row.php:61
 #: includes/settings/shortcodes-sections/ld_course_list.php:135
 #: includes/settings/shortcodes-sections/ld_group_list.php:134
@@ -6694,7 +6694,7 @@ msgstr ""
 #: includes/deprecated/5.0.0/functions.php:1885
 #: includes/deprecated/5.0.0/functions.php:2042
 #: includes/ld-groups.php:2170
-#: includes/reports/templates/reporting-filters/status/ld-propanel-reporting-filter-status.php:60
+#: includes/reports/templates/reporting-filters/status/ld-propanel-reporting-filter-status.php:73
 #: includes/settings/shortcodes-sections/ld_course_list.php:137
 #: includes/settings/shortcodes-sections/ld_group_list.php:136
 #: includes/shortcodes/ld_course_complete.php:73
@@ -10111,7 +10111,7 @@ msgid "Take This Course"
 msgstr ""
 
 #: includes/deprecated/4.17.0/functions.php:105
-#: includes/reports/includes/gutenberg/lib/enqueue-scripts.php:85
+#: includes/reports/includes/gutenberg/lib/enqueue-scripts.php:99
 msgid "LearnDash LMS Reporting Blocks"
 msgstr ""
 
@@ -11354,15 +11354,15 @@ msgstr ""
 msgid "UR = unregistered user, R = registered user"
 msgstr ""
 
-#. translators: User ID.
+#. Translators: User ID column label.
 #: includes/lib/wp-pro-quiz/lib/view/WpProQuiz_View_AdminToplist.php:86
 #: includes/lib/wp-pro-quiz/lib/view/WpProQuiz_View_Statistics.php:256
 #: includes/lib/wp-pro-quiz/lib/view/WpProQuiz_View_StatisticsAjax.php:929
 #: includes/lib/wp-pro-quiz/lib/view/WpProQuiz_View_StatisticsNew.php:137
-#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:281
-#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:288
-#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:294
-#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:287
+#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:418
+#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:425
+#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:431
+#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:453
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-quiz-admin-data-handling-settings.php:938
 #: includes/settings/settings-sections/class-ld-settings-section-general-rest-api.php:283
 #: includes/settings/settings-sections/class-ld-settings-section-general-rest-api.php:535
@@ -11459,7 +11459,7 @@ msgstr ""
 
 #. translators: placeholder: Quiz.
 #: includes/lib/wp-pro-quiz/lib/view/WpProQuiz_View_FrontQuiz.php:995
-#: includes/reports/includes/class-ld-propanel-activity.php:714
+#: includes/reports/includes/class-ld-propanel-activity.php:833
 #, php-format
 msgctxt "placeholder: Quiz"
 msgid "View %s Statistics"
@@ -12883,10 +12883,10 @@ msgid "TextArea"
 msgstr ""
 
 #: includes/lib/wp-pro-quiz/lib/view/WpProQuiz_View_QuizEdit.php:1494
-#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:280
-#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:286
-#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:274
-#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:281
+#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:417
+#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:423
+#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:440
+#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:447
 #: includes/settings/settings-fields/class-ld-settings-fields-quiz-custom-fields.php:101
 msgid "Checkbox"
 msgstr ""
@@ -14169,44 +14169,48 @@ msgstr ""
 msgid "LearnDash Activity"
 msgstr ""
 
-#: includes/reports/includes/class-ld-propanel-activity.php:243
+#: includes/reports/includes/class-ld-propanel-activity.php:270
 msgid "course_total_time_on"
 msgstr ""
 
-#: includes/reports/includes/class-ld-propanel-activity.php:251
+#: includes/reports/includes/class-ld-propanel-activity.php:278
 msgid "course_last_step_id"
 msgstr ""
 
-#: includes/reports/includes/class-ld-propanel-activity.php:259
+#: includes/reports/includes/class-ld-propanel-activity.php:286
 msgid "course_last_step_type"
 msgstr ""
 
-#: includes/reports/includes/class-ld-propanel-activity.php:267
+#: includes/reports/includes/class-ld-propanel-activity.php:294
 msgid "course_last_step_title"
 msgstr ""
 
-#: includes/reports/includes/class-ld-propanel-activity.php:275
+#: includes/reports/includes/class-ld-propanel-activity.php:302
 msgid "last_login_date"
 msgstr ""
 
-#: includes/reports/includes/class-ld-propanel-base-widget.php:108
+#: includes/reports/includes/class-ld-propanel-base-widget.php:188
 msgid "ProPanel Email: AJAX submission could not complete, please try again."
 msgstr ""
 
-#: includes/reports/includes/class-ld-propanel-filtering.php:33
+#: includes/reports/includes/class-ld-propanel-base-widget.php:261
+msgid "Insufficient permissions."
+msgstr ""
+
+#: includes/reports/includes/class-ld-propanel-filtering.php:36
 #: includes/reports/includes/class-ld-propanel-shortcodes.php:60
 msgid "LearnDash Report Filters"
 msgstr ""
 
 #. translators: placeholder: email count.
-#: includes/reports/includes/class-ld-propanel-filtering.php:297
+#: includes/reports/includes/class-ld-propanel-filtering.php:369
 #, php-format
 msgctxt "placeholder: email count"
 msgid "Email sent to %d destinations"
 msgstr ""
 
 #. translators: placeholder: error messages
-#: includes/reports/includes/class-ld-propanel-filtering.php:312
+#: includes/reports/includes/class-ld-propanel-filtering.php:384
 #, php-format
 msgctxt "placeholder: error messages"
 msgid ""
@@ -14214,8 +14218,8 @@ msgid ""
 "Error: %s"
 msgstr ""
 
-#: includes/reports/includes/class-ld-propanel-filtering.php:324
-#: includes/reports/includes/class-ld-propanel-reporting.php:308
+#: includes/reports/includes/class-ld-propanel-filtering.php:396
+#: includes/reports/includes/class-ld-propanel-reporting.php:332
 msgid "We do not have any email addresses to send your message to."
 msgstr ""
 
@@ -14282,14 +14286,14 @@ msgid "LearnDash Reporting"
 msgstr ""
 
 #. translators: placeholder: count users.
-#: includes/reports/includes/class-ld-propanel-reporting.php:281
+#: includes/reports/includes/class-ld-propanel-reporting.php:305
 #, php-format
 msgctxt "placeholder: count users."
 msgid "Email sent to %d destinations"
 msgstr ""
 
 #. translators: placeholder: error message
-#: includes/reports/includes/class-ld-propanel-reporting.php:296
+#: includes/reports/includes/class-ld-propanel-reporting.php:320
 #, php-format
 msgctxt "placeholder: error message"
 msgid ""
@@ -14428,7 +14432,7 @@ msgstr ""
 #. translators: Course status - All Statuses.
 #. translators: Course status - All Statuses
 #: includes/reports/includes/class-ld-tinymce-courseinfo.php:103
-#: includes/reports/templates/reporting-filters/status/ld-propanel-reporting-filter-status.php:45
+#: includes/reports/templates/reporting-filters/status/ld-propanel-reporting-filter-status.php:51
 msgctxt "Course status - All Statuses"
 msgid "All Statuses"
 msgstr ""
@@ -14710,22 +14714,22 @@ msgctxt "Number of completed course steps"
 msgid "%1$d of %2$d steps completed"
 msgstr ""
 
-#. translators: All Courses
-#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:114
-#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:118
+#. Translators: placeholder is the courses label.
+#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:198
+#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:202
 #, php-format
 msgctxt "All Courses"
 msgid "All %s"
 msgstr ""
 
-#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:282
-#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:289
-#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:295
+#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:419
+#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:426
+#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:432
 #: includes/settings/settings-sections/class-ld-settings-section-import-export.php:197
 msgid "Progress"
 msgstr ""
 
-#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:287
+#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:424
 #: includes/rest-api/v1/class-ld-rest-users-groups-controller.php:70
 #: includes/rest-api/v2/class-ld-rest-quiz-form-entries-controller.php:333
 #: includes/rest-api/v2/class-ld-rest-users-course-progress-controller.php:97
@@ -14782,7 +14786,7 @@ msgstr ""
 msgid "User ID"
 msgstr ""
 
-#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:290
+#: includes/reports/templates/reporting-filters/courses/ld-propanel-reporting-filter-course.php:427
 msgid "Completed On"
 msgstr ""
 
@@ -14801,42 +14805,43 @@ msgctxt "placeholder: User Email"
 msgid "Compose a new mail to %s"
 msgstr ""
 
-#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:17
+#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:32
 msgid "Search Groups"
 msgstr ""
 
-#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:116
+#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:215
 msgid "All Groups"
 msgstr ""
 
+#. Translators: Course Progress column label.
 #. translators: Course Progress.
-#. translators: Course Progress
-#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:277
-#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:289
-#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:297
-#: includes/reports/templates/reporting-filters/users/ld-propanel-reporting-filter-user.php:350
-#: includes/reports/templates/reporting-filters/users/ld-propanel-reporting-filter-user.php:358
-#: includes/reports/templates/reporting-filters/users/ld-propanel-reporting-filter-user.php:366
+#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:443
+#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:455
+#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:463
+#: includes/reports/templates/reporting-filters/users/ld-propanel-reporting-filter-user.php:390
+#: includes/reports/templates/reporting-filters/users/ld-propanel-reporting-filter-user.php:398
+#: includes/reports/templates/reporting-filters/users/ld-propanel-reporting-filter-user.php:406
 msgctxt "Course Progress"
 msgid "Progress"
 msgstr ""
 
+#. Translators: Course ID column label.
 #. translators: Course ID.
-#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:283
-#: includes/reports/templates/reporting-filters/users/ld-propanel-reporting-filter-user.php:355
+#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:449
+#: includes/reports/templates/reporting-filters/users/ld-propanel-reporting-filter-user.php:395
 #, php-format
 msgctxt "Course ID"
 msgid "%s ID"
 msgstr ""
 
-#. translators: User ID.
-#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:286
+#. Translators: User ID column label.
+#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:452
 msgctxt "User ID"
 msgid "U-ID"
 msgstr ""
 
-#. translators: Course Progress
-#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:291
+#. Translators: Course completion date column label.
+#: includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php:457
 msgctxt "Course completion data"
 msgid "Completed On"
 msgstr ""
@@ -14849,18 +14854,18 @@ msgid "%s ID:"
 msgstr ""
 
 #. translators: Search Courses
-#: includes/reports/templates/reporting-filters/users/ld-propanel-reporting-filter-user.php:19
+#: includes/reports/templates/reporting-filters/users/ld-propanel-reporting-filter-user.php:22
 #, php-format
 msgctxt "Search Courses"
 msgid "Search %s"
 msgstr ""
 
-#: includes/reports/templates/reporting-filters/users/ld-propanel-reporting-filter-user.php:163
+#: includes/reports/templates/reporting-filters/users/ld-propanel-reporting-filter-user.php:193
 msgid "Select User"
 msgstr ""
 
 #. translators: Course completion date
-#: includes/reports/templates/reporting-filters/users/ld-propanel-reporting-filter-user.php:360
+#: includes/reports/templates/reporting-filters/users/ld-propanel-reporting-filter-user.php:400
 msgctxt "Course completion date"
 msgid "Completed On"
 msgstr ""

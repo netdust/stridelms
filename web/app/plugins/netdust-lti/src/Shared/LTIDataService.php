@@ -33,6 +33,7 @@ final class LTIDataService implements NTDST_Service_Meta
     {
         add_action('init', [$this, 'registerModels'], 5);
         add_action('rest_api_init', [$this, 'registerRestMeta']);
+        add_action('rest_api_init', [$this, 'restrictRestAccess']);
         add_filter('post_row_actions', [$this, 'addResourceRowActions'], 10, 2);
         add_filter('manage_lti_resource_posts_columns', [$this, 'addResourceColumns']);
         add_action('manage_lti_resource_posts_custom_column', [$this, 'renderResourceColumn'], 10, 2);
@@ -102,6 +103,32 @@ final class LTIDataService implements NTDST_Service_Meta
         return $actions;
     }
 
+    /**
+     * Restrict REST API read access for LTI CPTs to admins only.
+     *
+     * These contain integration credentials (client IDs, RSA keys, endpoints)
+     * that should not be publicly readable.
+     */
+    public function restrictRestAccess(): void
+    {
+        add_filter('rest_pre_dispatch', function ($result, $server, $request) {
+            $route = $request->get_route();
+            $protected = ['/wp/v2/lti-platforms', '/wp/v2/lti-tools', '/wp/v2/lti-resources'];
+
+            foreach ($protected as $prefix) {
+                if (str_starts_with($route, $prefix) && !current_user_can('manage_options')) {
+                    return new \WP_Error(
+                        'rest_forbidden',
+                        __('You do not have permission to access LTI configuration.', 'netdust-lti'),
+                        ['status' => 401]
+                    );
+                }
+            }
+
+            return $result;
+        }, 10, 3);
+    }
+
     public function registerModels(): void
     {
         $this->registerPlatformModel();
@@ -132,6 +159,9 @@ final class LTIDataService implements NTDST_Service_Meta
             'lti_contexts',
             'lti_role_instructor',
             'lti_role_learner',
+            'lti_consumer_key',
+            'lti_consumer_secret',
+            'lti_mode',
         ];
 
         foreach ($platformStringKeys as $key) {
@@ -255,6 +285,20 @@ final class LTIDataService implements NTDST_Service_Meta
                     'label' => 'Enabled',
                     'default' => true,
                     'description' => 'Enable or disable this platform',
+                ],
+                'consumer_key' => [
+                    'type' => 'text',
+                    'label' => 'Consumer Key',
+                ],
+                'consumer_secret' => [
+                    'type' => 'text',
+                    'label' => 'Consumer Secret',
+                ],
+                'mode' => [
+                    'type' => 'select',
+                    'label' => 'LTI Mode',
+                    'options' => ['1.3' => 'LTI 1.3', 'legacy' => 'Legacy (1.1/1.2)'],
+                    'default' => '1.3',
                 ],
                 'contexts' => [
                     'type' => 'textarea',

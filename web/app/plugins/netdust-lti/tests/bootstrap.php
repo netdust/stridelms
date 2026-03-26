@@ -314,6 +314,14 @@ if (!isset($wpdb) || !is_object($wpdb)) {
     };
 }
 
+// wp_unslash stub
+if (!function_exists('wp_unslash')) {
+    function wp_unslash($value)
+    {
+        return is_string($value) ? stripslashes($value) : $value;
+    }
+}
+
 // Plugin autoloader
 spl_autoload_register(function (string $class): void {
     $prefix = 'NetdustLTI\\';

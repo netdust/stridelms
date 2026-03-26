@@ -71,6 +71,32 @@ final class PlatformRepository
     }
 
     /**
+     * Find a platform by OAuth consumer key (LTI 1.1/1.2)
+     *
+     * @param string $consumerKey The OAuth consumer key
+     * @return WP_Post|null Platform post or null if not found
+     */
+    public function findByConsumerKey(string $consumerKey): ?WP_Post
+    {
+        $model = ntdst_data()->get(self::POST_TYPE);
+        $posts = $model->where('consumer_key', $consumerKey)
+                       ->withMeta()
+                       ->limit(1)
+                       ->get();
+
+        if (empty($posts)) {
+            return null;
+        }
+
+        $postId = $posts[0]['ID'] ?? $posts[0]['id'] ?? 0;
+        if (!$postId) {
+            return null;
+        }
+
+        return $model->find((int) $postId);
+    }
+
+    /**
      * Get all platforms
      *
      * @return array Array of platform data arrays
@@ -118,6 +144,9 @@ final class PlatformRepository
             'rsa_key' => $data['rsa_key'] ?? '',
             'kid' => $data['kid'] ?? '',
             'enabled' => $data['enabled'] ?? true,
+            'consumer_key' => $data['consumer_key'] ?? '',
+            'consumer_secret' => $data['consumer_secret'] ?? '',
+            'mode' => $data['mode'] ?? '1.3',
         ];
 
         $result = $model->create($postData);
@@ -155,6 +184,9 @@ final class PlatformRepository
             'rsa_key',
             'kid',
             'enabled',
+            'consumer_key',
+            'consumer_secret',
+            'mode',
         ];
 
         foreach ($metaFields as $field) {

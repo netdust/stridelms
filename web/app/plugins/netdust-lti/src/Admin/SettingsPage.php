@@ -133,4 +133,16 @@ final class SettingsPage
             'hasKeys' => $hasPrivateKey && $hasPublicKey,
         ];
     }
+
+    /**
+     * Get legacy (LTI 1.1/1.2) configuration for a platform.
+     */
+    public function getLegacyConfig(int $platformId): array
+    {
+        return [
+            'launch_url'      => home_url('/lti/launch'),
+            'consumer_key'    => get_post_meta($platformId, 'lti_consumer_key', true) ?: '',
+            'consumer_secret' => get_post_meta($platformId, 'lti_consumer_secret', true) ?: '',
+        ];
+    }
 }

@@ -71,14 +71,14 @@ if (is_user_logged_in() && $edition_id) {
     if ($is_enrolled && $course_id) {
         $progress = \Stride\Integrations\LearnDash\LearnDashHelper::getProgress((int) $course_id);
         if ($progress >= 100) {
-            $enrolled_badge = ['class' => 'bg-green-600 text-white', 'label' => __('Afgerond', 'stridence'), 'icon' => 'check'];
+            $enrolled_badge = ['class' => 'bg-green-600 text-text-inverse', 'label' => __('Afgerond', 'stridence'), 'icon' => 'check'];
         } elseif ($progress > 0) {
-            $enrolled_badge = ['class' => 'bg-accent text-white', 'label' => sprintf(__('%d%% voltooid', 'stridence'), $progress), 'icon' => 'clock'];
+            $enrolled_badge = ['class' => 'bg-accent text-text-inverse', 'label' => sprintf(__('%d%% voltooid', 'stridence'), $progress), 'icon' => 'clock'];
         } else {
-            $enrolled_badge = ['class' => 'bg-primary text-white', 'label' => __('Ingeschreven', 'stridence'), 'icon' => 'check'];
+            $enrolled_badge = ['class' => 'bg-primary text-text-inverse', 'label' => __('Ingeschreven', 'stridence'), 'icon' => 'check'];
         }
     } elseif ($is_enrolled) {
-        $enrolled_badge = ['class' => 'bg-primary text-white', 'label' => __('Ingeschreven', 'stridence'), 'icon' => 'check'];
+        $enrolled_badge = ['class' => 'bg-primary text-text-inverse', 'label' => __('Ingeschreven', 'stridence'), 'icon' => 'check'];
     }
 }
 

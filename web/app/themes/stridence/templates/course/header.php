@@ -27,12 +27,12 @@ $is_online   = $args['is_online'] ?? false;
         <!-- Format badge -->
         <div class="flex items-center gap-2 mb-4">
             <?php if ($is_online) : ?>
-                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-accent text-white">
+                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-accent text-text-inverse">
                     <?php echo stridence_icon('wifi', 'w-3 h-3'); ?>
                     <?php esc_html_e('Online cursus', 'stridence'); ?>
                 </span>
             <?php else : ?>
-                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-primary text-white">
+                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-primary text-text-inverse">
                     <?php echo stridence_icon('map-pin', 'w-3 h-3'); ?>
                     <?php esc_html_e('Klassikaal', 'stridence'); ?>
                 </span>

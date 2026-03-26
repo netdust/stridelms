@@ -127,7 +127,8 @@
                         <thead>
                             <tr>
                                 <th>Name</th>
-                                <th>Platform ID</th>
+                                <th>Mode</th>
+                                <th>Platform ID / Key</th>
                                 <th>Client ID</th>
                                 <th>Status</th>
                                 <th></th>
@@ -137,7 +138,15 @@
                             <template x-for="platform in platforms" :key="platform.id">
                                 <tr>
                                     <td x-text="platform.title.rendered" style="font-weight:500;"></td>
-                                    <td><code x-text="platform.meta.lti_platform_id || '-'" style="font-size:12px;"></code></td>
+                                    <td>
+                                        <span class="ntdst-badge"
+                                              :class="(platform.meta.lti_mode || '1.3') === 'legacy' ? 'ntdst-badge-warning' : 'ntdst-badge-info'"
+                                              x-text="(platform.meta.lti_mode || '1.3') === 'legacy' ? '1.1/1.2' : '1.3'"></span>
+                                    </td>
+                                    <td>
+                                        <code style="font-size:12px;"
+                                              x-text="(platform.meta.lti_mode || '1.3') === 'legacy' ? (platform.meta.lti_consumer_key || '-') : (platform.meta.lti_platform_id || '-')"></code>
+                                    </td>
                                     <td><code x-text="platform.meta.lti_client_id || '-'" style="font-size:12px;"></code></td>
                                     <td>
                                         <span class="ntdst-badge"
@@ -170,46 +179,85 @@
                             <input x-model="platformForm.title" class="ntdst-form-input" placeholder="e.g. Canvas LMS">
                         </div>
 
-                        <h4 class="ntdst-field-group-title">Credentials</h4>
                         <div class="ntdst-form-group">
-                            <label class="ntdst-form-label">Platform ID (Issuer)</label>
-                            <input x-model="platformForm.platform_id" class="ntdst-form-input" placeholder="https://canvas.instructure.com">
-                            <p class="ntdst-form-help">The platform issuer URL</p>
-                        </div>
-                        <div class="ntdst-form-group">
-                            <label class="ntdst-form-label">Client ID</label>
-                            <input x-model="platformForm.client_id" class="ntdst-form-input">
-                        </div>
-                        <div class="ntdst-form-group">
-                            <label class="ntdst-form-label">Deployment ID</label>
-                            <input x-model="platformForm.deployment_id" class="ntdst-form-input">
-                            <p class="ntdst-form-help">Optional deployment ID for multi-tenancy</p>
+                            <label class="ntdst-form-label">LTI Mode</label>
+                            <select x-model="platformForm.mode" @change="handleModeChange()" class="ntdst-form-input">
+                                <option value="1.3">LTI 1.3 (OIDC + JWT)</option>
+                                <option value="legacy">Legacy (1.1/1.2 — OAuth)</option>
+                            </select>
                         </div>
 
-                        <h4 class="ntdst-field-group-title">Endpoints</h4>
-                        <div class="ntdst-form-group">
-                            <label class="ntdst-form-label">Auth Endpoint</label>
-                            <input x-model="platformForm.auth_endpoint" class="ntdst-form-input" placeholder="https://...">
-                        </div>
-                        <div class="ntdst-form-group">
-                            <label class="ntdst-form-label">Token Endpoint</label>
-                            <input x-model="platformForm.token_endpoint" class="ntdst-form-input" placeholder="https://...">
-                        </div>
-                        <div class="ntdst-form-group">
-                            <label class="ntdst-form-label">JWKS Endpoint</label>
-                            <input x-model="platformForm.jwks_endpoint" class="ntdst-form-input" placeholder="https://...">
-                        </div>
+                        <!-- Legacy 1.1/1.2 Fields -->
+                        <template x-if="platformForm.mode === 'legacy'">
+                            <div>
+                                <h4 class="ntdst-field-group-title">Consumer Credentials</h4>
+                                <div class="ntdst-form-group">
+                                    <label class="ntdst-form-label">Consumer Key</label>
+                                    <div style="display:flex;gap:8px;align-items:center;">
+                                        <input type="text" x-model="platformForm.consumer_key" class="ntdst-form-input" readonly style="font-family:monospace;flex:1;">
+                                        <button type="button" class="ntdst-btn ntdst-btn-ghost ntdst-btn-sm" @click="copyToClipboard(platformForm.consumer_key, 'consumer-key')"
+                                                x-text="copied === 'consumer-key' ? 'Copied!' : 'Copy'"></button>
+                                    </div>
+                                    <p class="ntdst-form-help">Auto-generated key to identify this tool provider</p>
+                                </div>
+                                <div class="ntdst-form-group">
+                                    <label class="ntdst-form-label">Consumer Secret</label>
+                                    <div style="display:flex;gap:8px;align-items:center;">
+                                        <input type="text" x-model="platformForm.consumer_secret" class="ntdst-form-input" readonly style="font-family:monospace;flex:1;">
+                                        <button type="button" class="ntdst-btn ntdst-btn-ghost ntdst-btn-sm" @click="copyToClipboard(platformForm.consumer_secret, 'consumer-secret')"
+                                                x-text="copied === 'consumer-secret' ? 'Copied!' : 'Copy'"></button>
+                                        <button type="button" class="ntdst-btn ntdst-btn-ghost ntdst-btn-sm" @click="regenerateSecret()" style="color:#d63638;">Regenerate</button>
+                                    </div>
+                                    <p class="ntdst-form-help">Shared secret for OAuth signature verification</p>
+                                </div>
+                            </div>
+                        </template>
 
-                        <h4 class="ntdst-field-group-title">Keys</h4>
-                        <div class="ntdst-form-group">
-                            <label class="ntdst-form-label">RSA Public Key (PEM)</label>
-                            <textarea x-model="platformForm.rsa_key" class="ntdst-form-textarea" rows="5" placeholder="-----BEGIN PUBLIC KEY-----"></textarea>
-                            <p class="ntdst-form-help">Optional. The platform's public key in PEM format. Not needed if JWKS endpoint is set.</p>
-                        </div>
-                        <div class="ntdst-form-group">
-                            <label class="ntdst-form-label">Key ID (kid)</label>
-                            <input x-model="platformForm.kid" class="ntdst-form-input" placeholder="Optional key ID">
-                        </div>
+                        <!-- LTI 1.3 Fields -->
+                        <template x-if="platformForm.mode !== 'legacy'">
+                            <div>
+                                <h4 class="ntdst-field-group-title">Credentials</h4>
+                                <div class="ntdst-form-group">
+                                    <label class="ntdst-form-label">Platform ID (Issuer)</label>
+                                    <input x-model="platformForm.platform_id" class="ntdst-form-input" placeholder="https://canvas.instructure.com">
+                                    <p class="ntdst-form-help">The platform issuer URL</p>
+                                </div>
+                                <div class="ntdst-form-group">
+                                    <label class="ntdst-form-label">Client ID</label>
+                                    <input x-model="platformForm.client_id" class="ntdst-form-input">
+                                </div>
+                                <div class="ntdst-form-group">
+                                    <label class="ntdst-form-label">Deployment ID</label>
+                                    <input x-model="platformForm.deployment_id" class="ntdst-form-input">
+                                    <p class="ntdst-form-help">Optional deployment ID for multi-tenancy</p>
+                                </div>
+
+                                <h4 class="ntdst-field-group-title">Endpoints</h4>
+                                <div class="ntdst-form-group">
+                                    <label class="ntdst-form-label">Auth Endpoint</label>
+                                    <input x-model="platformForm.auth_endpoint" class="ntdst-form-input" placeholder="https://...">
+                                </div>
+                                <div class="ntdst-form-group">
+                                    <label class="ntdst-form-label">Token Endpoint</label>
+                                    <input x-model="platformForm.token_endpoint" class="ntdst-form-input" placeholder="https://...">
+                                </div>
+                                <div class="ntdst-form-group">
+                                    <label class="ntdst-form-label">JWKS Endpoint</label>
+                                    <input x-model="platformForm.jwks_endpoint" class="ntdst-form-input" placeholder="https://...">
+                                </div>
+
+                                <h4 class="ntdst-field-group-title">Keys</h4>
+                                <div class="ntdst-form-group">
+                                    <label class="ntdst-form-label">RSA Public Key (PEM)</label>
+                                    <textarea x-model="platformForm.rsa_key" class="ntdst-form-textarea" rows="5" placeholder="-----BEGIN PUBLIC KEY-----"></textarea>
+                                    <p class="ntdst-form-help">Optional. The platform's public key in PEM format. Not needed if JWKS endpoint is set.</p>
+                                </div>
+                                <div class="ntdst-form-group">
+                                    <label class="ntdst-form-label">Key ID (kid)</label>
+                                    <input x-model="platformForm.kid" class="ntdst-form-input" placeholder="Optional key ID">
+                                </div>
+                            </div>
+                        </template>
 
                         <h4 class="ntdst-field-group-title">Settings</h4>
                         <div class="ntdst-form-group" style="display:flex;align-items:center;gap:12px;">

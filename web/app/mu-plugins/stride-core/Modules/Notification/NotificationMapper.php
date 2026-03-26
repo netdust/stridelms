@@ -134,7 +134,7 @@ final class NotificationMapper
             return '(onbekend)';
         }
 
-        $date = get_post_meta($sessionId, '_ntdst_date', true);
+        $date = ntdst_data()->get('vad_session')->getMeta($sessionId, 'date');
 
         return $date ? stride_format_date($date) : '(onbekend)';
     }

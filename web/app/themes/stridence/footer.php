@@ -87,7 +87,7 @@ defined('ABSPATH') || exit;
          x-transition:leave-start="opacity-100 translate-y-0"
          x-transition:leave-end="opacity-0 translate-y-2"
          :class="type === 'error' ? 'bg-error' : 'bg-primary-dark'"
-         class="text-white text-sm px-5 py-3 rounded-lg shadow-overlay pointer-events-auto max-w-sm text-center"
+         class="text-text-inverse text-sm px-5 py-3 rounded-lg shadow-overlay pointer-events-auto max-w-sm text-center"
          x-text="message"
          role="alert">
     </div>

@@ -379,7 +379,7 @@ final class QuoteAdminController
         // Handle PDF regeneration
         if (!empty($_POST['stride_regenerate_pdf'])) {
             do_action('stride/quote/regenerate_pdf', $postId);
-            $pdfPath = get_post_meta($postId, 'pdf_path', true);
+            $pdfPath = ntdst_data()->get('vad_quote')->getMeta($postId, 'pdf_path');
             if ($pdfPath) {
                 $this->setAdminNotice('success', __('PDF is opnieuw gegenereerd.', 'stride'));
             } else {

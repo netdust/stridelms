@@ -23,7 +23,7 @@ $modelBinding = "form.extra_fields['{$name}']";
         <?php for ($i = $min; $i <= $max; $i++) : ?>
             <button type="button"
                     @click="<?= esc_attr($modelBinding) ?> = <?= $i ?>"
-                    :class="<?= esc_attr($modelBinding) ?> === <?= $i ?> ? 'bg-primary text-white border-primary' : 'bg-white text-text border-border hover:border-primary'"
+                    :class="<?= esc_attr($modelBinding) ?> === <?= $i ?> ? 'bg-primary text-text-inverse border-primary' : 'bg-white text-text border-border hover:border-primary'"
                     class="w-10 h-10 rounded-lg border-2 font-semibold text-sm transition-colors flex items-center justify-center">
                 <?= $i ?>
             </button>

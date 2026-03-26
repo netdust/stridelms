@@ -376,7 +376,7 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                                                                     $dispatch('toast', { message: 'Inschrijving geannuleerd', type: 'success' });
                                                                     setTimeout(() => location.reload(), 1000);
                                                                 })"
-                                                                class="btn-sm bg-error text-white hover:bg-error/90">
+                                                                class="btn-sm bg-error text-text-inverse hover:bg-error/90">
                                                             <?php esc_html_e('Ja, annuleren', 'stridence'); ?>
                                                         </button>
                                                     </div>

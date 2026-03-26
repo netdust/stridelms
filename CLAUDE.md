@@ -11,9 +11,7 @@
 - CRM/Forms: FluentCRM, FluentForms, Fluent SMTP
 - Frontend: Tailwind CSS + Alpine.js + Vite (Stridence theme)
 
-**Project Plan:** See `docs/V4-PROJECT-PLAN master.md` for the full feature inventory and 9-phase implementation plan.
-
-**Current Phase:** Phase 3 - Invoicing/Vouchers
+Operational config (hosting, deploy, SSH): `site.yml`. Memory: `memory/`. Tasks: `tasks/`.
 
 ---
 
@@ -31,7 +29,10 @@ Stride follows WordPress mu-plugin architecture with clear separation:
 | `mu-plugins/stride-core/Modules/` | `Stride\Modules\{Module}\` | Domain modules (Edition, Enrollment, etc.) |
 | `mu-plugins/stride-core/Handlers/` | `Stride\Handlers\` | AJAX handlers |
 | `mu-plugins/stride-core/Admin/` | `Stride\Admin\` | Admin dashboard services |
-| `mu-plugins/stride-core/Integrations/` | `Stride\Integrations\` | Third-party adapters (LearnDash, FluentCRM) |
+| `mu-plugins/stride-core/Integrations/` | `Stride\Integrations\` | Third-party adapters (LearnDash) |
+| `mu-plugins/stride-core/Contracts/` | `Stride\Contracts\` | Interfaces (LMSAdapterInterface, etc.) |
+| `mu-plugins/stride-core/Domain/` | `Stride\Domain\` | Value objects (Money, EditionStatus, RegistrationStatus, etc.) |
+| `mu-plugins/stride-core/Infrastructure/` | `Stride\Infrastructure\` | Abstract base classes (AbstractRepository, AbstractService, BatchQueryHelper) |
 | `themes/stridence/services/frontend/` | `stridence\services\frontend` | Theme presentation services |
 
 ---
@@ -121,6 +122,13 @@ When you solve a non-trivial problem (not a typo, not a missing import), add an 
 | `memory/gotchas.md` | Non-obvious behavior, traps, things that waste time |
 | `memory/patterns.md` | Confirmed conventions verified across multiple interactions |
 
+## Memory
+
+Memory and tasks are managed automatically by global hooks.
+- `memory/STATE.md` — current project state, open work, decisions, risks
+- `memory/lessons.md` — accumulated learnings specific to this project
+- `tasks/todo.md` — open tasks carried forward between sessions
+
 Entry format for problems:
 ```
 ### [Short title]
@@ -177,11 +185,13 @@ Specialized agents for complex tasks. Launch via the Agent tool.
 
 ```
 stride/
+├── site.yml                          # Operational config (hosting, deploy, DDEV, SSH)
 ├── docs/
 │   ├── V4-PROJECT-PLAN master.md    # Feature inventory & 9-phase implementation
 │   ├── ARCHITECTURE-V4-PROPOSAL.md  # Architecture decisions & design
-│   └── ARCHITECTURE-V3-ANALYSIS.md  # V3 analysis for reference
-├── plans/                            # Implementation plans
+│   ├── ARCHITECTURE-V3-ANALYSIS.md  # V3 analysis for reference
+│   └── plans/                       # Dated design docs & implementation plans
+├── plans/                            # Phase implementation plans (phase-1.5 through phase-5)
 ├── scripts/
 │   ├── seed.php                     # Development data seeder
 │   └── unseed.php                   # Seed data cleanup
@@ -192,44 +202,50 @@ stride/
 │   │   │   ├── ntdst-core/             # DI, Bootstrap, Router, Theme
 │   │   │   ├── stride-coreloader.php   # Stride business logic loader
 │   │   │   └── stride-core/            # Stride business logic
-│   │   │       ├── Modules/            # Domain modules (new pattern)
+│   │   │       ├── Modules/            # Domain modules
 │   │   │       │   ├── Edition/        # EditionService, EditionRepository, EditionCPT
 │   │   │       │   ├── Enrollment/     # EnrollmentService, RegistrationRepository
 │   │   │       │   ├── Invoicing/      # QuoteService, VoucherService
 │   │   │       │   ├── Trajectory/     # TrajectoryService, TrajectoryDashboardService
 │   │   │       │   ├── Attendance/     # AttendanceService, AttendanceRepository
-│   │   │       │   ├── Completion/     # CompletionService
-│   │   │       │   ├── Course/         # CourseTaxonomyService
+│   │   │       │   ├── Questionnaire/  # QuestionnaireService
+│   │   │       │   ├── Notification/   # NotificationService
+│   │   │       │   ├── User/           # ProfileTypeService
+│   │   │       │   ├── Mail/           # StrideMailBridge
 │   │   │       │   ├── Audit/          # AuditBridge
+│   │   │       │   ├── Assistant/      # ReadAbilityRegistrar, WriteAbilityRegistrar
 │   │   │       │   └── PartnerAPI/     # REST API for partner organizations
+│   │   │       ├── Admin/              # AdminDashboardService
 │   │   │       ├── Handlers/           # AJAX handlers (ProfileHandler, ICalHandler, etc.)
+│   │   │       ├── Integrations/       # LearnDashService, LearnDashHelper
+│   │   │       ├── Contracts/          # Interfaces (LMSAdapterInterface, etc.)
+│   │   │       ├── Domain/             # Value objects (Money, EditionStatus, etc.)
+│   │   │       ├── Infrastructure/     # AbstractRepository, AbstractService, BatchQueryHelper
 │   │   │       ├── assets/
-│   │   │       │   ├── css/            # Admin CSS (admin-dashboard.css)
-│   │   │       │   └── js/             # Admin JS (admin-dashboard.js)
+│   │   │       │   ├── css/            # Admin CSS + per-module CSS
+│   │   │       │   └── js/             # Admin JS + per-module JS
 │   │   │       ├── templates/
-│   │   │       │   └── admin/          # Admin templates (dashboard.php)
-│   │   │       ├── sync/               # UserDataSync
-│   │   │       ├── adapters/           # LearnDashAdapter, FluentCRMAdapter
-│   │   │       ├── contracts/          # Interfaces
-│   │   │       ├── admin/              # AdminMenuService
-│   │   │       ├── smartcode/          # SmartCodeService
+│   │   │       │   ├── admin/          # Admin templates (dashboard, settings, handleiding)
+│   │   │       │   └── pdf/            # PDF templates (quote.php)
 │   │   │       ├── FieldRegistry.php   # Field name constants
 │   │   │       └── plugin-config.php   # Service registration
 │   │   ├── plugins/                     # Composer-managed plugins
 │   │   └── themes/
-│   │       └── stride/
-│   │           ├── functions.php        # Bootstrap lifecycle
+│   │       └── stridence/
+│   │           ├── functions.php        # Bootstrap lifecycle + inline shortcodes
 │   │           ├── theme-config.php     # Frontend services config
 │   │           ├── services/
-│   │           │   └── frontend/        # DashboardService, DashboardShortcodes
-│   │           │       └── shortcodes/  # Focused shortcode classes + ShortcodeBase trait
-│   │           └── templates/           # View templates
-│   │               ├── dashboard/
-│   │               ├── course/
-│   │               ├── invoice/
-│   │               ├── admin/
-│   │               ├── emails/
-│   │               └── pdf/
+│   │           │   └── frontend/
+│   │           │       └── shortcodes/  # InterestShortcodes, IntakeShortcodes, EvaluationShortcodes
+│   │           ├── helpers/             # icons.php, formatting.php, templates.php
+│   │           ├── templates/           # View templates
+│   │           │   ├── dashboard/
+│   │           │   ├── course/
+│   │           │   ├── enrollment/
+│   │           │   ├── invoice/
+│   │           │   ├── emails/
+│   │           │   └── pdf/
+│   │           └── src/css/             # Tailwind source + tokens.css
 │   └── wp/                              # WordPress core (Bedrock)
 ├── config/                              # Bedrock config
 ├── vendor/                              # Composer dependencies
@@ -245,26 +261,26 @@ stride/
 
 ```php
 return [
+    'bindings' => [
+        LMSAdapterInterface::class => LearnDashService::class,
+        EditionQueryInterface::class => EditionService::class,
+    ],
     'services' => [
-        // Edition module
+        \Stride\Integrations\LearnDash\LearnDashService::class,
+        \Stride\Admin\AdminDashboardService::class,
         \Stride\Modules\Edition\EditionService::class,
-        \Stride\Modules\Edition\SessionService::class,
-        \Stride\Modules\Edition\Admin\EditionAdminController::class,
-
-        // Enrollment module
         \Stride\Modules\Enrollment\EnrollmentService::class,
-        \Stride\Modules\Enrollment\EnrollmentRouterService::class,
-
-        // Invoicing module
-        \Stride\Modules\Invoicing\QuoteService::class,
-        \Stride\Modules\Invoicing\VoucherService::class,
-
-        // Trajectory module
+        \Stride\Modules\Questionnaire\QuestionnaireService::class,
         \Stride\Modules\Trajectory\TrajectoryService::class,
-        \Stride\Modules\Trajectory\TrajectoryDashboardService::class,
-
-        // Partner API
+        \Stride\Modules\Attendance\AttendanceService::class,
+        \Stride\Modules\Invoicing\QuoteService::class,
+        \Stride\Modules\Notification\NotificationService::class,
+        \Stride\Modules\Audit\AuditBridge::class,
+        \Stride\Modules\Mail\StrideMailBridge::class,
         \Stride\Modules\PartnerAPI\PartnerAPIController::class,
+        \Stride\Modules\User\ProfileTypeService::class,
+        \Stride\Modules\Assistant\ReadAbilityRegistrar::class,
+        \Stride\Modules\Assistant\WriteAbilityRegistrar::class,
     ],
 ];
 ```
@@ -361,49 +377,16 @@ final class ProfileHandler
 }
 ```
 
-### Shortcode Classes Pattern
+### Shortcode Organization
 
-Shortcodes in `themes/stride/services/frontend/shortcodes/` use focused classes with a shared trait:
+Most shortcodes are registered inline in `themes/stridence/functions.php` (e.g., `stride_enrollment`).
+Newer shortcodes use focused classes in `themes/stridence/services/frontend/shortcodes/`:
 
-```php
-<?php
-namespace stride\services\frontend\shortcodes;
-
-use stride\services\frontend\DashboardService;
-
-final class CourseShortcodes
-{
-    use ShortcodeBase;  // Shared helpers: renderTemplate, requireLogin, resolveService
-
-    private ?DashboardService $dashboardService;
-
-    public function __construct(?DashboardService $dashboardService = null)
-    {
-        $this->dashboardService = $dashboardService ?? $this->resolveService(DashboardService::class);
-    }
-
-    public function register(): void
-    {
-        add_shortcode('stride_course_catalog', [$this, 'renderCourseCatalog']);
-        add_shortcode('stride_course_sidebar', [$this, 'renderCourseSidebar']);
-    }
-
-    public function renderCourseCatalog(array $atts = []): string
-    {
-        // Use $this->renderTemplate() from trait
-        return $this->renderTemplate('course/catalog.php', ['courses' => $data]);
-    }
-}
-```
-
-**Shortcode class organization:**
 | Class | Shortcodes |
 |-------|------------|
-| `UserDashboardShortcodes` | `stride_dashboard`, `stride_my_courses`, `stride_my_profile`, `stride_my_calendar` |
-| `CourseShortcodes` | `stride_course_catalog`, `stride_course_sidebar` |
-| `TrajectoryShortcodes` | `stride_my_trajectories`, `stride_trajectory`, `stride_trajectory_catalog` |
-| `QuoteShortcodes` | `stride_my_quotes`, `stride_quote_update` |
-| `EnrollmentShortcodes` | `stride_enrollment`, `stride_edition`, `stride_session_selection` |
+| `InterestShortcodes` | `stride_interest` |
+| `IntakeShortcodes` | `stride_intake` |
+| `EvaluationShortcodes` | `stride_evaluation` |
 
 ### External Assets Pattern (Admin)
 
@@ -412,12 +395,30 @@ Admin CSS/JS/HTML extracted to external files in `stride-core/`:
 ```
 stride-core/
 ├── Admin/
-│   └── AdminDashboardService.php   # Slim orchestrator (~240 lines)
+│   └── AdminDashboardService.php   # Slim orchestrator
 ├── assets/
-│   ├── css/admin-dashboard.css     # Extracted CSS
-│   └── js/admin-dashboard.js       # Extracted JS (Alpine.js)
+│   ├── css/
+│   │   ├── admin-dashboard.css     # Dashboard CSS
+│   │   └── admin/                  # Per-module CSS
+│   │       ├── edition-admin.css
+│   │       ├── questionnaire-builder.css
+│   │       ├── quote-admin.css
+│   │       ├── settings.css
+│   │       └── trajectory-admin.css
+│   └── js/
+│       ├── admin-dashboard.js      # Dashboard JS (Alpine.js)
+│       └── admin/                  # Per-module JS
+│           ├── edition-admin.js
+│           ├── questionnaire-builder.js
+│           ├── quote-admin.js
+│           ├── settings.js
+│           └── trajectory-admin.js
 └── templates/
-    └── admin/dashboard.php         # Extracted HTML template
+    ├── admin/                      # Admin templates
+    │   ├── dashboard.php
+    │   ├── handleiding.php
+    │   └── settings.php + settings/*.php
+    └── pdf/quote.php               # PDF templates
 ```
 
 Load external assets using `dirname(__DIR__)` for path calculation:
@@ -576,7 +577,7 @@ Test credentials after seeding:
 
 ### Verify Plugin Load
 ```bash
-ddev exec wp eval "echo class_exists('\ntdst\Stride\core\EditionService') ? 'OK' : 'FAIL';"
+ddev exec wp eval "echo class_exists('\Stride\Modules\Edition\EditionService') ? 'OK' : 'FAIL';"
 ```
 
 ### Running Tests
@@ -708,10 +709,13 @@ stridence_icon($name, $class)  // Inline SVG icon
 
 ## Related Documentation
 
+- **Operational Config (DevOps):** `site.yml` — hosting, SSH, deploy commands, DDEV config. Read this for any deployment or infrastructure questions.
 - **V4 Project Plan (Master):** `docs/V4-PROJECT-PLAN master.md`
 - **V4 Architecture:** `docs/ARCHITECTURE-V4-PROPOSAL.md`
 - **Stridence Theme Spec:** `docs/plans/stride-theme-spec.md`
 - **V3 Analysis:** `docs/ARCHITECTURE-V3-ANALYSIS.md`
+- **Phase Plans:** `plans/` — phase-1.5 through phase-5 implementation plans
+- **Design Docs:** `docs/plans/` — dated design and implementation documents
 - **Plugin Extraction Plan:** `plans/plugin-extraction.md`
 - **Seed Scripts:** `scripts/seed.php`, `scripts/unseed.php`
 - **V3 Codebase (reference):** `/home/ntdst/Sites/vad-vormingen/`

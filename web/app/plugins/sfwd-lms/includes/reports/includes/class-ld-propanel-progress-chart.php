@@ -193,6 +193,13 @@ if ( ! class_exists( 'LearnDash_ProPanel_Progress_Chart' ) ) {
 		public function get_progress_course_data_for_chart() {
 			check_ajax_referer( 'ld-propanel', 'nonce' );
 
+			if (
+				! learndash_is_admin_user()
+				&& ! learndash_is_group_leader_user()
+				&& ! current_user_can( 'propanel_widgets' ) ) {
+				wp_send_json_error( array( 'message' => 'Insufficient permissions.' ), 403 );
+			}
+
 			$post_data = ld_propanel_load_post_data();
 
 			$activity_query_args = array(

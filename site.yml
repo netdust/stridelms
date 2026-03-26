@@ -1,0 +1,37 @@
+# site.yml — operational config for this project
+# Read by netdust-wp-manager scripts and Claude when managing this site.
+
+site:
+  name: stridelms
+  domain: app.stridelms.be
+  risk: low                  # high | medium | low
+  description: "LMS platform — 4000+ users"
+
+structure:
+  type: bedrock            # bedrock | custom-app | custom-app-public | custom-site
+  webroot: web                # relative path to webroot
+  wpcli_path: web/wp          # --path= value for WP-CLI (or "auto" if wp-cli.yml handles it)
+
+hosting:
+  provider: ploi           # combell | ploi
+  ssh_staging: ploi-staging
+  ssh_production:
+  remote_path_staging: /home/ploi/app.stridelms.be/web
+  remote_path_production:
+
+deploy:
+  method: makefile            # makefile | git-push
+  staging_command: make deploy-staging
+  production_command: make deploy-production
+  staging_branch: staging     # only for git-push method
+  production_branch: main     # only for git-push method
+
+local:
+  ddev_project: stride
+  start: ddev start
+  url: https://stride.ddev.site
+
+notes:
+  - "Redis cache exclusions must be verified before any wp cache flush"
+  - "Never push directly to main without staging validation"
+  - "LMS data (LearnDash, Tin Canny) excluded from object cache"

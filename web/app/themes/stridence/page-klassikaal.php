@@ -191,7 +191,7 @@ get_header();
 
                     <template x-for="p in totalPages" :key="p">
                         <button @click="page = p"
-                            :class="p === page ? 'bg-primary text-white' : 'hover:bg-surface-alt'"
+                            :class="p === page ? 'bg-primary text-text-inverse' : 'hover:bg-surface-alt'"
                             class="inline-flex items-center justify-center min-w-[40px] h-10 px-3 rounded-lg text-sm font-medium transition-colors"
                             x-text="p">
                         </button>

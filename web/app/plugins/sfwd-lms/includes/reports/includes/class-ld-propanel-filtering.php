@@ -9,7 +9,10 @@
 
 defined( 'ABSPATH' ) || exit;
 
-if ( ( ! class_exists( 'LearnDash_ProPanel_Filtering' ) ) && ( class_exists( 'LearnDash_ProPanel_Widget' ) ) ) {
+if (
+	! class_exists( 'LearnDash_ProPanel_Filtering' )
+	&& class_exists( 'LearnDash_ProPanel_Widget' )
+) {
 	class LearnDash_ProPanel_Filtering extends LearnDash_ProPanel_Widget {
 		/**
 		 * @var string
@@ -70,11 +73,46 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Filtering' ) ) && ( class_exists( 'Le
 			return $this->registered_filters;
 		}
 
+		/**
+		 * Filter widget display markup (overridden by reporting filter subclasses).
+		 *
+		 * @since 5.0.3.1
+		 *
+		 * @return string
+		 */
+		public function filter_display() {
+			return '';
+		}
+
+		/**
+		 * AJAX search handler (overridden by reporting filter subclasses).
+		 *
+		 * @since 5.0.3.1
+		 *
+		 * @return array<string, mixed>
+		 */
+		public function filter_search() {
+			return array();
+		}
+
 		function show_filters() {
 			if ( ! empty( $this->registered_filters ) ) {
 				foreach ( $this->registered_filters as $filter_key => $filter_set ) {
+					if (
+						! is_array( $filter_set )
+						|| ! isset( $filter_set['instance'] )
+						|| ! $filter_set['instance'] instanceof LearnDash_ProPanel_Filtering
+					) {
+						continue;
+					}
+					$filter_widget = $filter_set['instance'];
 					?>
-					<div class="select2-selection filter-selection filter-section-<?php echo $filter_key; ?>" data-filter-key="<?php echo $filter_key; ?>"><?php echo $filter_set['instance']->filter_display(); ?></div>
+					<div class="select2-selection filter-selection filter-section-<?php echo esc_attr( (string) $filter_key ); ?>" data-filter-key="<?php echo esc_attr( (string) $filter_key ); ?>">
+						<?php
+						// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Intentional HTML from filter widget.
+						echo $filter_widget->filter_display();
+						?>
+					</div>
 					<?php
 				}
 			}
@@ -98,6 +136,15 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Filtering' ) ) && ( class_exists( 'Le
 
 
 		function filters_search() {
+			check_ajax_referer( 'ld-propanel', 'nonce' );
+
+			if (
+				! learndash_is_admin_user()
+				&& ! learndash_is_group_leader_user()
+				&& ! current_user_can( 'propanel_widgets' ) ) {
+				wp_send_json_error( array( 'message' => 'Insufficient permissions.' ), 403 );
+			}
+
 			$filter_results = array();
 
 			$this->post_data           = ld_propanel_load_post_data();
@@ -107,9 +154,17 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Filtering' ) ) && ( class_exists( 'Le
 			if ( isset( $_GET['filter_key'] ) ) {
 				$filter_key = esc_attr( $_GET['filter_key'] );
 				if ( array_key_exists( $filter_key, $this->registered_filters ) ) {
-					$this->registered_filters[ $filter_key ]['instance']->post_data           = $this->post_data;
-					$this->registered_filters[ $filter_key ]['instance']->activity_query_args = $this->activity_query_args;
-					$filter_results = $this->registered_filters[ $filter_key ]['instance']->filter_search();
+					$filter_entry = $this->registered_filters[ $filter_key ];
+					if (
+						is_array( $filter_entry )
+						&& isset( $filter_entry['instance'] )
+						&& $filter_entry['instance'] instanceof LearnDash_ProPanel_Filtering
+					) {
+						$filter_widget                      = $filter_entry['instance'];
+						$filter_widget->post_data           = $this->post_data;
+						$filter_widget->activity_query_args = $this->activity_query_args;
+						$filter_results                     = $filter_widget->filter_search();
+					}
 				}
 			}
 
@@ -173,7 +228,7 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Filtering' ) ) && ( class_exists( 'Le
 		*/
 
 		/**
-		 * @param array   $user_ids
+		 * @param array $user_ids
 		 * @param $subject
 		 * @param $message
 		 *
@@ -204,7 +259,10 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Filtering' ) ) && ( class_exists( 'Le
 
 						$mail_ret = false;
 
-						$email_sql_str   = 'SELECT user_email from ' . $wpdb->users . ' WHERE ID IN (' . implode( ',', $user_ids_part ) . ')';
+						$email_sql_str   = $wpdb->prepare(
+							'SELECT user_email FROM ' . $wpdb->users . ' WHERE ID IN (' . implode( ', ', array_fill( 0, count( $user_ids_part ), '%d' ) ) . ')',
+							...array_values( $user_ids_part )
+						);
 						$email_addresses = $wpdb->get_col( $email_sql_str );
 
 						if ( $email_addresses ) {
@@ -250,6 +308,13 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Filtering' ) ) && ( class_exists( 'Le
 		function ajax_email_users() {
 			check_ajax_referer( 'ld-propanel', 'nonce' );
 
+			if (
+				! learndash_is_admin_user()
+				&& ! learndash_is_group_leader_user()
+				&& ! current_user_can( 'propanel_widgets' ) ) {
+				wp_send_json_error( array( 'message' => 'Insufficient permissions.' ), 403 );
+			}
+
 			$user_ids       = isset( $_POST['user_ids'] ) ? $_POST['user_ids'] : null;
 			$filter         = isset( $_POST['filter'] ) ? $_POST['filter'] : null;
 			$subject        = isset( $_POST['subject'] ) ? sanitize_text_field( stripslashes( $_POST['subject'] ) ) : '';
@@ -277,7 +342,10 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Filtering' ) ) && ( class_exists( 'Le
 
 				while ( true ) {
 					$activities = learndash_reports_get_activity( $this->activity_query_args );
-					if ( ( isset( $activities['results'] ) ) && ( ! empty( $activities['results'] ) ) ) {
+					if (
+						isset( $activities['results'] )
+						&& ! empty( $activities['results'] )
+					) {
 						$user_ids                            = array_merge( $user_ids, wp_list_pluck( $activities['results'], 'user_id' ) );
 						$this->activity_query_args['paged'] += 1;
 					} else {
@@ -286,7 +354,11 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Filtering' ) ) && ( class_exists( 'Le
 				}
 			}
 
-			if ( ( ! empty( $user_ids ) ) && ( ! empty( $subject ) ) && ( ! empty( $message ) ) ) {
+			if (
+				! empty( $user_ids )
+				&& ! empty( $subject )
+				&& ! empty( $message )
+			) {
 				$user_ids = array_unique( $user_ids );
 				$result   = $this->email_users( $user_ids, $subject, $message, $filter );
 				if ( $result ) {

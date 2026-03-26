@@ -62,6 +62,9 @@ final class WPDataConnector extends DataConnector
                     }
                 }
             }
+        } elseif (!empty($platform->getKey())) {
+            // LTI 1.1/1.2: lookup by OAuth consumer key
+            $post = $this->platformRepo->findByConsumerKey($platform->getKey());
         }
 
         if (!$post) {
@@ -71,6 +74,8 @@ final class WPDataConnector extends DataConnector
         // Map WP_Post fields to Platform object
         $platform->setRecordId($post->ID);
         $platform->name = $post->post_title;
+        $platform->setKey($post->fields['consumer_key'] ?? '');
+        $platform->secret = $post->fields['consumer_secret'] ?? '';
         $platform->platformId = $post->fields['platform_id'] ?? '';
         $platform->clientId = $post->fields['client_id'] ?? '';
         $platform->deploymentId = $post->fields['deployment_id'] ?? '';
@@ -83,6 +88,14 @@ final class WPDataConnector extends DataConnector
         $platform->enabled = (bool) ($post->fields['enabled'] ?? true);
         $platform->created = strtotime($post->post_date_gmt);
         $platform->updated = strtotime($post->post_modified_gmt);
+
+        // Role settings
+        if (!empty($post->fields['role_instructor'])) {
+            $platform->setSetting('custom_role_instructor', $post->fields['role_instructor']);
+        }
+        if (!empty($post->fields['role_learner'])) {
+            $platform->setSetting('custom_role_learner', $post->fields['role_learner']);
+        }
 
         // Fix platform settings after loading
         $this->fixPlatformSettings($platform, false);
@@ -113,6 +126,13 @@ final class WPDataConnector extends DataConnector
             'kid' => $platform->kid,
             'enabled' => $platform->enabled,
         ];
+
+        if (!empty($platform->getKey())) {
+            $data['consumer_key'] = $platform->getKey();
+        }
+        if (!empty($platform->secret)) {
+            $data['consumer_secret'] = $platform->secret;
+        }
 
         if ($platform->getRecordId()) {
             $result = $this->platformRepo->update($platform->getRecordId(), $data);

@@ -50,17 +50,17 @@ if ($userId && LearnDashHelper::isActive() && LearnDashHelper::isEnrolled($cours
 
     if ($progress >= 100) {
         $badge_status = 'completed';
-        $badge_class = 'bg-green-600 text-white';
+        $badge_class = 'bg-green-600 text-text-inverse';
         $badge_label = __('Afgerond', 'stridence');
         $badge_icon = 'check';
     } elseif ($progress > 0) {
         $badge_status = 'in_progress';
-        $badge_class = 'bg-accent text-white';
+        $badge_class = 'bg-accent text-text-inverse';
         $badge_label = sprintf(__('%d%% voltooid', 'stridence'), $progress);
         $badge_icon = 'clock';
     } else {
         $badge_status = 'enrolled';
-        $badge_class = 'bg-primary text-white';
+        $badge_class = 'bg-primary text-text-inverse';
         $badge_label = __('Ingeschreven', 'stridence');
         $badge_icon = 'check';
     }
