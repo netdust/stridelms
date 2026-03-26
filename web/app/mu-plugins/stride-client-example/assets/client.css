@@ -34,6 +34,20 @@
  * Borders:
  *   --radius-sm, --radius-md, --radius-lg, --radius-xl
  *
+ * Editorial:
+ *   --color-tertiary, --color-tertiary-light
+ *   --color-secondary-container
+ *   --color-surface-container, --color-surface-container-high, --color-surface-container-highest
+ *   --font-serif
+ *
+ * Badges (per-variant bg/text):
+ *   --color-badge-open-bg, --color-badge-open-text
+ *   --color-badge-few-bg, --color-badge-few-text
+ *   --color-badge-full-bg, --color-badge-full-text
+ *   --color-badge-cancelled-bg, --color-badge-cancelled-text
+ *   --color-badge-online-bg, --color-badge-online-text
+ *   --color-badge-free-bg, --color-badge-free-text
+ *
  * Shadows:
  *   --shadow-card, --shadow-elevated, --shadow-overlay
  */
