@@ -14,7 +14,7 @@ defined('ABSPATH') || exit;
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..800;1,6..72,300..800&family=Plus+Jakarta+Sans:wght@300..800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
     <?php wp_head(); ?>
 </head>
 <body <?php body_class('bg-surface text-text'); ?>>
@@ -28,7 +28,7 @@ defined('ABSPATH') || exit;
     </a>
 
     <!-- Header -->
-    <header class="sticky top-0 z-40 bg-surface-card border-b border-border" x-data="mobileMenu()">
+    <header class="sticky top-0 z-40 glass-nav" x-data="mobileMenu()">
         <div class="container">
             <div class="flex items-center justify-between h-16 lg:h-20">
 
@@ -37,7 +37,7 @@ defined('ABSPATH') || exit;
                     <?php if (has_custom_logo()) : ?>
                         <?php the_custom_logo(); ?>
                     <?php else : ?>
-                        <span class="text-xl font-heading font-bold text-primary">
+                        <span class="text-xl font-serif italic font-semibold text-accent">
                             <?php bloginfo('name'); ?>
                         </span>
                     <?php endif; ?>
@@ -88,7 +88,7 @@ defined('ABSPATH') || exit;
                                  x-transition:leave-start="opacity-100 translate-y-0"
                                  x-transition:leave-end="opacity-0 translate-y-1"
                                  @click.outside="close()"
-                                 class="absolute right-0 mt-2 w-48 bg-surface-card rounded-lg shadow-overlay border border-border py-1 z-50">
+                                 class="absolute right-0 mt-2 w-48 bg-surface-card rounded-xl shadow-overlay py-1 z-50">
                                 <a href="<?php echo esc_url(home_url('/mijn-account/')); ?>" class="block px-4 py-2 text-sm hover:bg-surface-alt">
                                     <?php esc_html_e('Mijn account', 'stridence'); ?>
                                 </a>
@@ -149,7 +149,7 @@ defined('ABSPATH') || exit;
                     ]);
                     ?>
                 </nav>
-                <hr class="my-4 border-border">
+                <div class="py-3"></div>
                 <?php if (is_user_logged_in()) : ?>
                     <div class="space-y-1">
                         <a href="<?php echo esc_url(home_url('/mijn-account/')); ?>" class="block nav-link">
