@@ -7,73 +7,89 @@
 
 :root {
   /* ── Brand Colors ── */
-  --color-primary: 79 70 229;        /* #4F46E5 indigo-600 */
-  --color-primary-hover: 67 56 202;  /* #4338CA indigo-700 */
-  --color-primary-subtle: 238 242 255; /* #EEF2FF indigo-50 */
-  --color-primary-light: 99 102 241; /* #6366F1 indigo-500 */
-  --color-primary-dark: 55 48 163;   /* #3730A3 indigo-800 */
-  --color-accent: 13 148 136;        /* #0D9488 teal-600 */
-  --color-accent-light: 20 184 166;  /* #14B8A6 teal-500 */
+  --color-primary: 8 106 105;          /* #086a69 deep teal */
+  --color-primary-hover: 0 93 92;      /* #005d5c */
+  --color-primary-subtle: 232 248 247; /* #e8f8f7 very subtle teal */
+  --color-primary-light: 142 220 218;  /* #8edcda */
+  --color-primary-dark: 0 88 87;       /* #005857 */
+  --color-accent: 152 72 45;          /* #98482d terracotta */
+  --color-accent-light: 244 145 113;  /* #f49171 */
 
-  /* ── Neutral Colors ── */
-  --color-surface: 250 248 246;      /* #FAF8F6 warm off-white */
-  --color-surface-alt: 245 242 238;  /* #F5F2EE warm elevated */
-  --color-surface-card: 255 255 255; /* #FFFFFF white */
-  --color-border: 232 228 223;       /* #E8E4DF warm border */
-  --color-border-strong: 212 207 200; /* #D4CFC8 active border */
-  --color-text: 28 25 23;            /* #1C1917 stone-900 */
-  --color-text-muted: 120 113 108;   /* #78716C stone-500 */
+  /* ── Neutral Colors (warm paper) ── */
+  --color-surface: 251 250 242;        /* #fbfaf2 */
+  --color-surface-alt: 244 244 235;    /* #f4f4eb */
+  --color-surface-card: 255 255 255;   /* #ffffff */
+  --color-border: 177 179 167;         /* #b1b3a7 ghost borders */
+  --color-border-strong: 121 124 113;  /* #797c71 */
+  --color-text: 49 51 43;             /* #31332b never pure black */
+  --color-text-muted: 94 96 86;       /* #5e6056 */
   --color-text-inverse: 255 255 255;
 
   /* ── Status Colors ── */
-  --color-success: 22 163 74;        /* #16A34A green-600 */
-  --color-warning: 217 119 6;        /* #D97706 amber-600 */
-  --color-error: 220 38 38;          /* #DC2626 red-600 */
-  --color-info: 79 70 229;           /* same as primary */
+  --color-success: 22 163 74;
+  --color-warning: 217 119 6;
+  --color-error: 172 52 52;            /* #ac3434 warmer red */
+  --color-info: 8 106 105;
 
-  /* ── Badge Colors ── */
-  --color-badge-open: 22 163 74;
-  --color-badge-few: 234 179 8;
-  --color-badge-full: 220 38 38;
-  --color-badge-online: 99 102 241;
-  --color-badge-free: 16 185 129;
+  /* ── Badge Colors (token-driven) ── */
+  --color-badge-open-bg: 240 253 244;
+  --color-badge-open-text: 21 128 61;
+  --color-badge-few-bg: 254 252 232;
+  --color-badge-few-text: 161 98 7;
+  --color-badge-full-bg: 254 242 242;
+  --color-badge-full-text: 153 27 27;
+  --color-badge-cancelled-bg: 249 250 251;
+  --color-badge-cancelled-text: 107 114 128;
+  --color-badge-online-bg: 232 248 247;
+  --color-badge-online-text: 8 106 105;
+  --color-badge-free-bg: 236 253 245;
+  --color-badge-free-text: 4 120 87;
 
   /* ── Typography ── */
-  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-heading: var(--font-sans);
+  --font-sans: 'Plus Jakarta Sans', 'Manrope', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-heading: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
 
   /* ── Spacing ── */
-  --space-section: 5rem;
-  --space-block: 3rem;
+  --space-section: 6rem;
+  --space-block: 3.5rem;
   --space-element: 1.5rem;
 
-  /* ── Layout ── */
+  /* ── Layout (unchanged) ── */
   --container-max: 1280px;
   --content-max: 960px;
   --sidebar-width: 240px;
   --sidebar-collapsed: 56px;
 
   /* ── Border Radius ── */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
 
-  /* ── Shadows (unified scale) ── */
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.03);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-  --shadow-md: 0 4px 8px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-  --shadow-lg: 0 8px 24px -4px rgba(0, 0, 0, 0.08);
-  --shadow-overlay: 0 16px 40px -8px rgba(0, 0, 0, 0.14);
+  /* ── Shadows (warm-tinted) ── */
+  --shadow-xs: 0 1px 2px rgba(49, 51, 43, 0.03);
+  --shadow-sm: 0 2px 6px rgba(49, 51, 43, 0.04);
+  --shadow-md: 0 8px 16px -4px rgba(49, 51, 43, 0.06);
+  --shadow-lg: 0 20px 40px rgba(49, 51, 43, 0.06);
+  --shadow-overlay: 0 24px 48px -12px rgba(49, 51, 43, 0.12);
 
-  /* Tailwind-mapped aliases (referenced in tailwind.config.js) */
+  /* Tailwind-mapped aliases */
   --shadow-card: var(--shadow-xs);
   --shadow-elevated: var(--shadow-md);
 
-  /* ── Transitions ── */
+  /* ── Transitions (unchanged) ── */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --duration-fast: 150ms;
   --duration-normal: 250ms;
+
+  /* ── Editorial Surface Containers ── */
+  --color-tertiary: 129 82 0;
+  --color-tertiary-light: 255 185 92;
+  --color-secondary-container: 221 246 239;
+  --color-surface-container: 238 238 228;
+  --color-surface-container-high: 232 233 222;
+  --color-surface-container-highest: 226 228 215;
 }
 
 /* ── Reduced Motion ── */
