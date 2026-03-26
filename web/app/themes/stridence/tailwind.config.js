@@ -21,10 +21,18 @@ export default {
           DEFAULT: 'rgb(var(--color-accent) / <alpha-value>)',
           light: 'rgb(var(--color-accent-light) / <alpha-value>)',
         },
+        tertiary: {
+          DEFAULT: 'rgb(var(--color-tertiary) / <alpha-value>)',
+          light: 'rgb(var(--color-tertiary-light) / <alpha-value>)',
+        },
+        'secondary-container': 'rgb(var(--color-secondary-container) / <alpha-value>)',
         surface: {
           DEFAULT: 'rgb(var(--color-surface) / <alpha-value>)',
           alt: 'rgb(var(--color-surface-alt) / <alpha-value>)',
           card: 'rgb(var(--color-surface-card) / <alpha-value>)',
+          container: 'rgb(var(--color-surface-container) / <alpha-value>)',
+          'container-high': 'rgb(var(--color-surface-container-high) / <alpha-value>)',
+          'container-highest': 'rgb(var(--color-surface-container-highest) / <alpha-value>)',
         },
         border: {
           DEFAULT: 'rgb(var(--color-border) / <alpha-value>)',
@@ -44,6 +52,8 @@ export default {
       fontFamily: {
         sans: ['var(--font-sans)'],
         heading: ['var(--font-heading)'],
+        serif: ['var(--font-serif)'],
+        label: ['Manrope', 'var(--font-sans)'],
       },
 
       maxWidth: {
