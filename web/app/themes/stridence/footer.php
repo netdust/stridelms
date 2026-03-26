@@ -10,7 +10,7 @@ defined('ABSPATH') || exit;
     </main><!-- #main -->
 
     <!-- Footer (hidden on mobile for dashboard pages with bottom nav) -->
-    <footer class="bg-surface-alt border-t border-border mt-auto <?php echo is_page_template('page-mijn-account.php') ? 'hidden lg:block' : ''; ?>">
+    <footer class="bg-surface-alt mt-auto <?php echo is_page_template('page-mijn-account.php') ? 'hidden lg:block' : ''; ?>">
         <div class="container py-12 lg:py-16">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
 
@@ -19,7 +19,7 @@ defined('ABSPATH') || exit;
                     <?php if (has_custom_logo()) : ?>
                         <?php the_custom_logo(); ?>
                     <?php else : ?>
-                        <span class="text-xl font-heading font-bold text-primary">
+                        <span class="text-xl font-serif italic font-semibold text-accent">
                             <?php bloginfo('name'); ?>
                         </span>
                     <?php endif; ?>
@@ -30,42 +30,42 @@ defined('ABSPATH') || exit;
 
                 <!-- Quick Links -->
                 <div>
-                    <h4 class="font-heading font-semibold text-sm uppercase tracking-wide text-text-muted mb-4">
+                    <h4 class="font-label font-bold text-[10px] uppercase tracking-widest text-text-muted/60 mb-5">
                         <?php esc_html_e('Opleidingen', 'stridence'); ?>
                     </h4>
                     <ul class="space-y-2 text-sm">
-                        <li><a href="<?php echo esc_url(home_url('/opleidingen/')); ?>" class="text-text hover:text-primary"><?php esc_html_e('Alle opleidingen', 'stridence'); ?></a></li>
-                        <li><a href="<?php echo esc_url(home_url('/trajecten/')); ?>" class="text-text hover:text-primary"><?php esc_html_e('Trajecten', 'stridence'); ?></a></li>
-                        <li><a href="<?php echo esc_url(home_url('/agenda/')); ?>" class="text-text hover:text-primary"><?php esc_html_e('Agenda', 'stridence'); ?></a></li>
+                        <li><a href="<?php echo esc_url(home_url('/opleidingen/')); ?>" class="text-text hover:text-accent"><?php esc_html_e('Alle opleidingen', 'stridence'); ?></a></li>
+                        <li><a href="<?php echo esc_url(home_url('/trajecten/')); ?>" class="text-text hover:text-accent"><?php esc_html_e('Trajecten', 'stridence'); ?></a></li>
+                        <li><a href="<?php echo esc_url(home_url('/agenda/')); ?>" class="text-text hover:text-accent"><?php esc_html_e('Agenda', 'stridence'); ?></a></li>
                     </ul>
                 </div>
 
                 <!-- Support -->
                 <div>
-                    <h4 class="font-heading font-semibold text-sm uppercase tracking-wide text-text-muted mb-4">
+                    <h4 class="font-label font-bold text-[10px] uppercase tracking-widest text-text-muted/60 mb-5">
                         <?php esc_html_e('Ondersteuning', 'stridence'); ?>
                     </h4>
                     <ul class="space-y-2 text-sm">
-                        <li><a href="<?php echo esc_url(home_url('/contact/')); ?>" class="text-text hover:text-primary"><?php esc_html_e('Contact', 'stridence'); ?></a></li>
-                        <li><a href="<?php echo esc_url(home_url('/faq/')); ?>" class="text-text hover:text-primary"><?php esc_html_e('Veelgestelde vragen', 'stridence'); ?></a></li>
-                        <li><a href="<?php echo esc_url(home_url('/over-ons/')); ?>" class="text-text hover:text-primary"><?php esc_html_e('Over ons', 'stridence'); ?></a></li>
+                        <li><a href="<?php echo esc_url(home_url('/contact/')); ?>" class="text-text hover:text-accent"><?php esc_html_e('Contact', 'stridence'); ?></a></li>
+                        <li><a href="<?php echo esc_url(home_url('/faq/')); ?>" class="text-text hover:text-accent"><?php esc_html_e('Veelgestelde vragen', 'stridence'); ?></a></li>
+                        <li><a href="<?php echo esc_url(home_url('/over-ons/')); ?>" class="text-text hover:text-accent"><?php esc_html_e('Over ons', 'stridence'); ?></a></li>
                     </ul>
                 </div>
 
                 <!-- Legal -->
                 <div>
-                    <h4 class="font-heading font-semibold text-sm uppercase tracking-wide text-text-muted mb-4">
+                    <h4 class="font-label font-bold text-[10px] uppercase tracking-widest text-text-muted/60 mb-5">
                         <?php esc_html_e('Juridisch', 'stridence'); ?>
                     </h4>
                     <ul class="space-y-2 text-sm">
-                        <li><a href="<?php echo esc_url(home_url('/privacy/')); ?>" class="text-text hover:text-primary"><?php esc_html_e('Privacybeleid', 'stridence'); ?></a></li>
-                        <li><a href="<?php echo esc_url(home_url('/voorwaarden/')); ?>" class="text-text hover:text-primary"><?php esc_html_e('Algemene voorwaarden', 'stridence'); ?></a></li>
+                        <li><a href="<?php echo esc_url(home_url('/privacy/')); ?>" class="text-text hover:text-accent"><?php esc_html_e('Privacybeleid', 'stridence'); ?></a></li>
+                        <li><a href="<?php echo esc_url(home_url('/voorwaarden/')); ?>" class="text-text hover:text-accent"><?php esc_html_e('Algemene voorwaarden', 'stridence'); ?></a></li>
                     </ul>
                 </div>
             </div>
 
             <!-- Bottom Bar -->
-            <div class="mt-12 pt-8 border-t border-border flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="mt-16 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
                 <p class="text-sm text-text-muted">
                     &copy; <?php echo esc_html(date('Y')); ?> <?php bloginfo('name'); ?>. <?php esc_html_e('Alle rechten voorbehouden.', 'stridence'); ?>
                 </p>
