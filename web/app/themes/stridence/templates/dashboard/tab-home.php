@@ -83,9 +83,9 @@ foreach ($enrollments as $enrollment) {
                         </a>
                     <?php else : ?>
                         <a href="<?php echo esc_url($action['url']); ?>"
-                           class="flex items-center gap-2.5 rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-2 hover:border-amber-300 hover:bg-amber-50 transition-colors"
+                           class="flex items-center gap-2.5 rounded-lg border border-status-warning bg-status-warning-subtle px-3 py-2 hover:border-status-warning hover:bg-status-warning-subtle transition-colors"
                            <?php echo $xAttr; ?>>
-                            <?php echo stridence_icon('alert-circle', 'w-4 h-4 text-amber-500 shrink-0'); ?>
+                            <?php echo stridence_icon('alert-circle', 'w-4 h-4 text-status-warning shrink-0'); ?>
                             <span class="text-sm font-medium text-text truncate"><?php echo esc_html($action['course_title']); ?></span>
                             <span class="text-xs text-text-muted shrink-0 ml-auto">
                                 <?php echo esc_html($action['label']); ?>
@@ -93,7 +93,7 @@ foreach ($enrollments as $enrollment) {
                                     · <?php echo esc_html($done . '/' . $total); ?>
                                 <?php endif; ?>
                             </span>
-                            <?php echo stridence_icon('chevron-right', 'w-4 h-4 text-amber-400 shrink-0'); ?>
+                            <?php echo stridence_icon('chevron-right', 'w-4 h-4 text-status-warning shrink-0'); ?>
                         </a>
                     <?php endif; ?>
                 <?php endforeach; ?>
@@ -269,7 +269,7 @@ foreach ($enrollments as $enrollment) {
                                                 <span><?php echo esc_html($enrollment['format_label'] ?? __('Online', 'stridence')); ?></span>
                                                 <?php $daysLeft = $enrollment['days_remaining'] ?? null; ?>
                                                 <?php if ($daysLeft !== null && $daysLeft > 0 && $daysLeft <= 30) : ?>
-                                                    <span class="text-amber-600"><?php echo esc_html(sprintf(__('Nog %d dagen', 'stridence'), $daysLeft)); ?></span>
+                                                    <span class="text-status-warning"><?php echo esc_html(sprintf(__('Nog %d dagen', 'stridence'), $daysLeft)); ?></span>
                                                 <?php endif; ?>
                                             <?php endif; ?>
                                             <?php if ($progressLabel) : ?>
@@ -280,7 +280,7 @@ foreach ($enrollments as $enrollment) {
 
                                     <!-- Pending tasks indicator (top-right) -->
                                     <?php if ($pendingTasks > 0) : ?>
-                                        <span class="w-2 h-2 rounded-full bg-amber-400 shrink-0 mt-2" title="<?php echo esc_attr(sprintf(
+                                        <span class="w-2 h-2 rounded-full bg-warning shrink-0 mt-2" title="<?php echo esc_attr(sprintf(
                                             _n('%d openstaande taak', '%d openstaande taken', $pendingTasks, 'stridence'),
                                             $pendingTasks
                                         )); ?>"></span>

@@ -71,7 +71,7 @@ if (is_user_logged_in() && $edition_id) {
     if ($is_enrolled && $course_id) {
         $progress = \Stride\Integrations\LearnDash\LearnDashHelper::getProgress((int) $course_id);
         if ($progress >= 100) {
-            $enrolled_badge = ['class' => 'bg-green-600 text-text-inverse', 'label' => __('Afgerond', 'stridence'), 'icon' => 'check'];
+            $enrolled_badge = ['class' => 'bg-success text-text-inverse', 'label' => __('Afgerond', 'stridence'), 'icon' => 'check'];
         } elseif ($progress > 0) {
             $enrolled_badge = ['class' => 'bg-accent text-text-inverse', 'label' => sprintf(__('%d%% voltooid', 'stridence'), $progress), 'icon' => 'clock'];
         } else {

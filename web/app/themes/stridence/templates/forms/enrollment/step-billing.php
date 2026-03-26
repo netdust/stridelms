@@ -88,11 +88,11 @@ $billing_groups = $args['billing_groups'] ?? [];
                     <span x-show="voucherLoading" class="flex items-center gap-2">
                         <span class="spinner"></span>
                     </span>
-                    <span x-show="voucherValid" class="text-green-600">✓ Geldig</span>
+                    <span x-show="voucherValid" class="text-status-success">✓ Geldig</span>
                 </button>
             </div>
             <p x-show="voucherError" class="input-error" x-text="voucherError"></p>
-            <p x-show="voucherDiscount" class="text-sm text-green-600 mt-1" x-text="voucherDiscount"></p>
+            <p x-show="voucherDiscount" class="text-sm text-status-success mt-1" x-text="voucherDiscount"></p>
         </div>
     </div>
 

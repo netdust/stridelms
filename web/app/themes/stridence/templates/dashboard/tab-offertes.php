@@ -32,10 +32,10 @@ $cancelled  = $quoteData['cancelled'];
 function stridence_quote_status_classes(QuoteStatus $status): string
 {
     return match ($status) {
-        QuoteStatus::Draft => 'bg-amber-100 text-amber-800',
+        QuoteStatus::Draft => 'bg-status-warning-subtle text-status-warning',
         QuoteStatus::Sent => 'bg-blue-100 text-blue-800',
-        QuoteStatus::Exported => 'bg-green-100 text-green-800',
-        QuoteStatus::Cancelled => 'bg-gray-100 text-gray-500',
+        QuoteStatus::Exported => 'bg-status-success-subtle text-status-success',
+        QuoteStatus::Cancelled => 'bg-surface-container text-text-muted',
     };
 }
 ?>
@@ -146,7 +146,7 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                                                                 <span class="text-xs">(<?php echo esc_html($quote['voucher_code']); ?>)</span>
                                                             <?php endif; ?>
                                                         </dt>
-                                                        <dd class="font-medium text-green-600">-<?php echo esc_html($quote['discount']->format()); ?></dd>
+                                                        <dd class="font-medium text-status-success">-<?php echo esc_html($quote['discount']->format()); ?></dd>
                                                     </div>
                                                 <?php endif; ?>
                                                 <div class="flex justify-between">
@@ -339,7 +339,7 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                                                     </button>
                                                 </div>
                                                 <span x-show="error" class="text-sm text-error mt-2 block" x-text="error"></span>
-                                                <span x-show="applied" class="text-sm text-green-600 mt-2 block">
+                                                <span x-show="applied" class="text-sm text-status-success mt-2 block">
                                                     <?php echo stridence_icon('check-circle', 'w-4 h-4 inline mr-1'); ?>
                                                     <?php esc_html_e('Kortingscode toegepast!', 'stridence'); ?>
                                                 </span>

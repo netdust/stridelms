@@ -471,4 +471,20 @@
   .dash-subheading {
     @apply text-xs font-semibold text-text-muted uppercase tracking-wider;
   }
+
+  /* ══════════════════════════════════════
+     STATUS COLORS (semantic, token-driven)
+     ══════════════════════════════════════ */
+
+  .text-status-success { color: rgb(var(--color-success)); }
+  .bg-status-success-subtle { background: rgb(var(--color-success) / 0.08); }
+  .border-status-success { border-color: rgb(var(--color-success) / 0.2); }
+
+  .text-status-warning { color: rgb(var(--color-warning)); }
+  .bg-status-warning-subtle { background: rgb(var(--color-warning) / 0.08); }
+  .border-status-warning { border-color: rgb(var(--color-warning) / 0.2); }
+
+  .text-status-error { color: rgb(var(--color-error)); }
+  .bg-status-error-subtle { background: rgb(var(--color-error) / 0.08); }
+  .border-status-error { border-color: rgb(var(--color-error) / 0.2); }
 }

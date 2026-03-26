@@ -198,7 +198,7 @@ usort($certificates, fn($a, $b) => strcmp($b['completed_at'], $a['completed_at']
                                     <?php esc_html_e('Download certificaat', 'stridence'); ?>
                                 </a>
                             <?php else : ?>
-                                <div class="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+                                <div class="flex items-center gap-2 text-xs text-status-warning bg-status-warning-subtle rounded-lg px-3 py-2">
                                     <?php echo stridence_icon('clock', 'w-3.5 h-3.5'); ?>
                                     <span><?php esc_html_e('Certificaat wordt gegenereerd...', 'stridence'); ?></span>
                                 </div>

@@ -37,10 +37,10 @@ $read      = (bool) ($notification['read'] ?? false);
 
 // Icon and color per type
 [$icon, $iconColor, $iconBg] = match ($type) {
-    'enrollment'  => ['check-circle', 'text-green-600', 'bg-green-50'],
+    'enrollment'  => ['check-circle', 'text-status-success', 'bg-status-success-subtle'],
     'attendance'  => ['check', 'text-blue-600', 'bg-blue-50'],
-    'completion'  => ['award', 'text-green-600', 'bg-green-50'],
-    'certificate' => ['file-text', 'text-green-600', 'bg-green-50'],
+    'completion'  => ['award', 'text-status-success', 'bg-status-success-subtle'],
+    'certificate' => ['file-text', 'text-status-success', 'bg-status-success-subtle'],
     'session'     => ['info', 'text-blue-600', 'bg-blue-50'],
     default       => ['bell', 'text-primary', 'bg-primary/10'],
 };

@@ -117,11 +117,11 @@ $is_post_course = ($active_phase === 'post_course');
                         @click="open = !open"
                         <?php if ($isLocked): ?>disabled<?php endif; ?>>
                     <?php if ($isCompleted): ?>
-                        <span class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                            <?= stridence_icon('check', 'w-4 h-4 text-emerald-600') ?>
+                        <span class="w-8 h-8 rounded-full bg-status-success-subtle flex items-center justify-center shrink-0">
+                            <?= stridence_icon('check', 'w-4 h-4 text-status-success') ?>
                         </span>
                     <?php elseif ($isLocked): ?>
-                        <span class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                        <span class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center shrink-0">
                             <?= stridence_icon('info', 'w-4 h-4 text-text-muted') ?>
                         </span>
                     <?php else: ?>
@@ -139,7 +139,7 @@ $is_post_course = ($active_phase === 'post_course');
                                 <?= esc_html($reason) ?>
                             </span>
                         <?php elseif ($isAvailable && $reason): ?>
-                            <span class="text-xs text-amber-600 ml-2">
+                            <span class="text-xs text-status-warning ml-2">
                                 <?= esc_html($reason) ?>
                             </span>
                         <?php endif; ?>
@@ -158,7 +158,7 @@ $is_post_course = ($active_phase === 'post_course');
                     <div x-show="open" x-collapse class="border-t border-border">
                         <div class="p-4">
                             <?php if ($isCompleted): ?>
-                                <p class="text-sm text-emerald-600">
+                                <p class="text-sm text-status-success">
                                     <?= stridence_icon('check', 'w-4 h-4 inline-block mr-1') ?>
                                     <?= esc_html__('Voltooid', 'stridence') ?>
                                     <?php if (!empty($task['completed_at'])): ?>

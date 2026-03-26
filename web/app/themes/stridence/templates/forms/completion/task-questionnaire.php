@@ -81,6 +81,6 @@ if (empty($fieldGroups)) {
             <span x-show="!loading"><?= esc_html__('Opslaan', 'stridence') ?></span>
             <span x-show="loading"><?= esc_html__('Opslaan...', 'stridence') ?></span>
         </button>
-        <span x-show="error" class="text-sm text-red-600" x-text="error"></span>
+        <span x-show="error" class="text-sm text-status-error" x-text="error"></span>
     </div>
 </form>

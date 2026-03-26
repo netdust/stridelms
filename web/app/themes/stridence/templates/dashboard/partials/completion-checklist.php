@@ -71,7 +71,7 @@ foreach ($tasks as $task) {
             ?>
             <li class="flex items-center gap-2 text-sm">
                 <?php if ($state === 'completed'): ?>
-                    <?= stridence_icon('check', 'w-4 h-4 text-emerald-500') ?>
+                    <?= stridence_icon('check', 'w-4 h-4 text-status-success') ?>
                     <span class="text-text-muted line-through"><?= esc_html($task_labels[$type] ?? $type) ?></span>
                 <?php elseif ($state === 'locked'): ?>
                     <?= stridence_icon('info', 'w-4 h-4 text-text-muted') ?>

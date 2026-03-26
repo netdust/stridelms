@@ -37,9 +37,9 @@ if (empty($items)) {
                 $chevronColor = 'text-violet-400';
                 $icon = 'list';
             } else {
-                $borderClass = 'border-amber-200 bg-amber-50/50 hover:border-amber-300 hover:bg-amber-50';
-                $iconColor = 'text-amber-500';
-                $chevronColor = 'text-amber-400';
+                $borderClass = 'border-status-warning bg-status-warning-subtle hover:border-status-warning hover:bg-status-warning-subtle';
+                $iconColor = 'text-status-warning';
+                $chevronColor = 'text-status-warning';
                 $icon = 'alert-circle';
             }
         ?>

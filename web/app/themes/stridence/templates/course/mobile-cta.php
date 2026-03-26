@@ -45,7 +45,7 @@ $is_open     = $is_online && LearnDashHelper::getAccessMode($course_id) === Lear
                 </a>
             <?php else : ?>
                 <span class="btn btn-ghost w-full text-center flex items-center justify-center gap-2 pointer-events-none">
-                    <?php echo stridence_icon('check-circle', 'w-4 h-4 text-green-600'); ?>
+                    <?php echo stridence_icon('check-circle', 'w-4 h-4 text-status-success'); ?>
                     Afgerond
                 </span>
             <?php endif; ?>

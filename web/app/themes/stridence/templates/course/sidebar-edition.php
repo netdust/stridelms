@@ -68,7 +68,7 @@ $enrollmentService = $user_id ? ntdst_get(EnrollmentService::class) : null;
                             <?php endif; ?>
                         </div>
                         <?php if ($is_enrolled) : ?>
-                            <span class="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                            <span class="inline-flex items-center gap-1 text-xs font-medium text-status-success bg-status-success-subtle px-2 py-0.5 rounded-full">
                                 <?php echo stridence_icon('check-circle', 'w-3.5 h-3.5'); ?>
                                 Ingeschreven
                             </span>

@@ -29,25 +29,25 @@ if ($is_online && LearnDashHelper::hasPrerequisites($course_id)) :
 
     if (!empty($prerequisites) && !$all_met) :
 ?>
-<div class="mb-8 p-4 rounded-lg border border-amber-200 bg-amber-50">
+<div class="mb-8 p-4 rounded-lg border border-status-warning bg-status-warning-subtle">
     <div class="flex items-start gap-3">
-        <?php echo stridence_icon('alert-circle', 'w-5 h-5 text-amber-600 mt-0.5 shrink-0'); ?>
+        <?php echo stridence_icon('alert-circle', 'w-5 h-5 text-status-warning mt-0.5 shrink-0'); ?>
         <div>
-            <h3 class="font-semibold text-amber-800 mb-1">
+            <h3 class="font-semibold text-status-warning mb-1">
                 <?php esc_html_e('Vereiste voorkennis', 'stridence'); ?>
             </h3>
-            <p class="text-sm text-amber-700 mb-3">
+            <p class="text-sm text-status-warning mb-3">
                 <?php esc_html_e('Rond eerst de volgende cursus(sen) af om toegang te krijgen:', 'stridence'); ?>
             </p>
             <ul class="space-y-2">
                 <?php foreach ($prerequisites as $prereq) : ?>
                     <li class="flex items-center gap-2 text-sm">
                         <?php if ($prereq['completed']) : ?>
-                            <?php echo stridence_icon('check-circle', 'w-4 h-4 text-green-600'); ?>
-                            <span class="text-green-700 line-through"><?php echo esc_html($prereq['title']); ?></span>
+                            <?php echo stridence_icon('check-circle', 'w-4 h-4 text-status-success'); ?>
+                            <span class="text-status-success line-through"><?php echo esc_html($prereq['title']); ?></span>
                         <?php else : ?>
-                            <?php echo stridence_icon('circle', 'w-4 h-4 text-amber-400'); ?>
-                            <a href="<?php echo esc_url($prereq['url']); ?>" class="text-amber-800 hover:underline font-medium">
+                            <?php echo stridence_icon('circle', 'w-4 h-4 text-status-warning'); ?>
+                            <a href="<?php echo esc_url($prereq['url']); ?>" class="text-status-warning hover:underline font-medium">
                                 <?php echo esc_html($prereq['title']); ?>
                             </a>
                         <?php endif; ?>
@@ -121,7 +121,7 @@ endif;
             <?php foreach ($lessons_with_dates as $lesson) : ?>
                 <div class="flex items-center gap-3 p-3 rounded-lg <?php echo $lesson['is_available'] ? 'bg-surface' : 'bg-surface-alt'; ?>">
                     <?php if ($lesson['completed']) : ?>
-                        <?php echo stridence_icon('check-circle', 'w-5 h-5 text-green-600 shrink-0'); ?>
+                        <?php echo stridence_icon('check-circle', 'w-5 h-5 text-status-success shrink-0'); ?>
                     <?php elseif (!$lesson['is_available']) : ?>
                         <?php echo stridence_icon('clock', 'w-5 h-5 text-text-muted shrink-0'); ?>
                     <?php else : ?>
@@ -148,7 +148,7 @@ endif;
                             )); ?>
                         </span>
                     <?php elseif ($lesson['completed']) : ?>
-                        <span class="text-xs text-green-600 whitespace-nowrap">
+                        <span class="text-xs text-status-success whitespace-nowrap">
                             <?php esc_html_e('Afgerond', 'stridence'); ?>
                         </span>
                     <?php endif; ?>

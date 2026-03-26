@@ -117,7 +117,7 @@ $cancelled_editions = $data['cancelled_editions'];
                                     </div>
                                 </div>
                                 <?php if ($pendingTasks > 0) : ?>
-                                    <span class="w-2 h-2 rounded-full bg-amber-400 shrink-0 mt-2" title="<?php echo esc_attr(sprintf(
+                                    <span class="w-2 h-2 rounded-full bg-warning shrink-0 mt-2" title="<?php echo esc_attr(sprintf(
                                         _n('%d openstaande taak', '%d openstaande taken', $pendingTasks, 'stridence'),
                                         $pendingTasks
                                     )); ?>"></span>
@@ -179,7 +179,7 @@ $cancelled_editions = $data['cancelled_editions'];
                                     <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-text-muted">
                                         <span><?php echo esc_html($course['format_label']); ?></span>
                                         <?php if ($daysLeft !== null && $daysLeft > 0 && $daysLeft <= 30) : ?>
-                                            <span class="text-amber-600"><?php echo esc_html(sprintf(__('Nog %d dagen', 'stridence'), $daysLeft)); ?></span>
+                                            <span class="text-status-warning"><?php echo esc_html(sprintf(__('Nog %d dagen', 'stridence'), $daysLeft)); ?></span>
                                         <?php endif; ?>
                                         <?php if ($progressLabel) : ?>
                                             <span><?php echo esc_html($progressLabel); ?></span>

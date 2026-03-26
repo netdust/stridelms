@@ -80,7 +80,7 @@ defined('ABSPATH') || exit;
                     <span class="flex-1 truncate" x-text="file.name"></span>
                     <span class="text-xs text-text-muted" x-text="(file.size / 1024 / 1024).toFixed(1) + ' MB'"></span>
                     <button type="button" @click="removeFile(index)"
-                            class="text-red-500 hover:text-red-700 text-xs">
+                            class="text-status-error hover:text-status-error/80 text-xs">
                         &times;
                     </button>
                 </div>
@@ -90,7 +90,7 @@ defined('ABSPATH') || exit;
 
     <!-- Error message -->
     <template x-if="uploadError">
-        <div class="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" x-text="uploadError"></div>
+        <div class="mt-3 p-3 bg-status-error-subtle border border-status-error rounded-lg text-sm text-status-error" x-text="uploadError"></div>
     </template>
 
     <!-- Submit -->

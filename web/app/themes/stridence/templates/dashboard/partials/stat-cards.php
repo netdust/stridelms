@@ -19,8 +19,8 @@ if (empty($stats)) {
 
 $colorMap = [
     'primary' => ['bg' => 'bg-primary/10', 'text' => 'text-primary'],
-    'warning' => ['bg' => 'bg-amber-50', 'text' => 'text-amber-600'],
-    'success' => ['bg' => 'bg-emerald-50', 'text' => 'text-emerald-600'],
+    'warning' => ['bg' => 'bg-status-warning-subtle', 'text' => 'text-status-warning'],
+    'success' => ['bg' => 'bg-status-success-subtle', 'text' => 'text-status-success'],
 ];
 ?>
 

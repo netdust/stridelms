@@ -66,8 +66,8 @@ $row_id = 'session-' . ($session->id ?? wp_unique_id());
 $type_config = match ($type) {
     SessionType::InPerson  => ['icon' => 'map-pin',   'badge' => 'Fysiek',      'badge_class' => 'bg-blue-100 text-blue-700'],
     SessionType::Webinar   => ['icon' => 'wifi',       'badge' => 'Webinar',     'badge_class' => 'bg-purple-100 text-purple-700'],
-    SessionType::Online    => ['icon' => 'book-open',  'badge' => 'Online',      'badge_class' => 'bg-green-100 text-green-700'],
-    SessionType::Assignment => ['icon' => 'file-text', 'badge' => 'Opdracht',    'badge_class' => 'bg-amber-100 text-amber-700'],
+    SessionType::Online    => ['icon' => 'book-open',  'badge' => 'Online',      'badge_class' => 'bg-status-success-subtle text-status-success'],
+    SessionType::Assignment => ['icon' => 'file-text', 'badge' => 'Opdracht',    'badge_class' => 'bg-status-warning-subtle text-status-warning'],
 };
 
 ?>

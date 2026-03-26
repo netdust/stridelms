@@ -26,7 +26,7 @@
                     <span x-text="itemData.priceFormatted"></span>
                 </div>
                 <template x-if="voucherDiscount">
-                    <div class="flex justify-between text-sm text-green-600">
+                    <div class="flex justify-between text-sm text-status-success">
                         <span>Korting</span>
                         <span x-text="'- ' + voucherDiscount"></span>
                     </div>

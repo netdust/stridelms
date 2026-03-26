@@ -342,15 +342,15 @@
   }
 
   .learndash-wrapper .ld-alert-success {
-    @apply bg-green-50 text-green-800 border border-green-200;
+    @apply bg-status-success-subtle text-status-success border border-status-success;
   }
 
   .learndash-wrapper .ld-alert-warning {
-    @apply bg-yellow-50 text-yellow-800 border border-yellow-200;
+    @apply bg-status-warning-subtle text-status-warning border border-status-warning;
   }
 
   .learndash-wrapper .ld-alert-danger {
-    @apply bg-red-50 text-red-800 border border-red-200;
+    @apply bg-status-error-subtle text-status-error border border-status-error;
   }
 
   /* ══════════════════════════════════════

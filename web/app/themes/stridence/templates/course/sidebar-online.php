@@ -102,8 +102,8 @@ $expiration_ts = ($days_remaining !== null)
     <?php if ($is_complete) : ?>
         <!-- ── Completed ── -->
         <div class="flex items-center gap-2 mb-4">
-            <?php echo stridence_icon('check-circle', 'w-5 h-5 text-green-600'); ?>
-            <h3 class="font-heading font-semibold text-lg text-green-700">Afgerond</h3>
+            <?php echo stridence_icon('check-circle', 'w-5 h-5 text-status-success'); ?>
+            <h3 class="font-heading font-semibold text-lg text-status-success">Afgerond</h3>
         </div>
 
         <div class="space-y-4">
@@ -146,7 +146,7 @@ $expiration_ts = ($days_remaining !== null)
                     <span>Voortgang</span>
                     <span><?php echo esc_html($progress); ?>%</span>
                 </div>
-                <div class="w-full bg-gray-200 rounded-full h-2">
+                <div class="w-full bg-surface-container rounded-full h-2">
                     <div class="bg-primary rounded-full h-2 transition-all" style="width: <?php echo esc_attr($progress); ?>%"></div>
                 </div>
             </div>
@@ -211,15 +211,15 @@ $expiration_ts = ($days_remaining !== null)
 
             <ul class="text-sm text-text-muted space-y-2">
                 <li class="flex items-center gap-2">
-                    <?php echo stridence_icon('check', 'w-4 h-4 text-green-600'); ?>
+                    <?php echo stridence_icon('check', 'w-4 h-4 text-status-success'); ?>
                     <?php esc_html_e('Direct toegang', 'stridence'); ?>
                 </li>
                 <li class="flex items-center gap-2">
-                    <?php echo stridence_icon('check', 'w-4 h-4 text-green-600'); ?>
+                    <?php echo stridence_icon('check', 'w-4 h-4 text-status-success'); ?>
                     <?php esc_html_e('Leer in je eigen tempo', 'stridence'); ?>
                 </li>
                 <li class="flex items-center gap-2">
-                    <?php echo stridence_icon('check', 'w-4 h-4 text-green-600'); ?>
+                    <?php echo stridence_icon('check', 'w-4 h-4 text-status-success'); ?>
                     <?php esc_html_e('Certificaat na afronding', 'stridence'); ?>
                 </li>
             </ul>

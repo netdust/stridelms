@@ -116,7 +116,7 @@ $renderOption = function (array $session) {
                     $formatted = '-€ ' . number_format(abs($priceModifier) / 100, 2, ',', '.');
                 }
             ?>
-                <span class="text-xs font-medium <?= $priceModifier > 0 ? 'text-amber-600' : 'text-green-600' ?> ml-1">
+                <span class="text-xs font-medium <?= $priceModifier > 0 ? 'text-status-warning' : 'text-status-success' ?> ml-1">
                     (<?= esc_html($formatted) ?>)
                 </span>
             <?php endif; ?>
@@ -180,7 +180,7 @@ $renderOption = function (array $session) {
                                 <?= esc_html__('Kies 1 sessie', 'stridence') ?>
                             <?php endif; ?>
                             <?php if ($required): ?>
-                                <span class="text-amber-500">*</span>
+                                <span class="text-status-warning">*</span>
                             <?php endif; ?>
                         </span>
                     </div>

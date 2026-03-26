@@ -50,7 +50,7 @@ if ($userId && LearnDashHelper::isActive() && LearnDashHelper::isEnrolled($cours
 
     if ($progress >= 100) {
         $badge_status = 'completed';
-        $badge_class = 'bg-green-600 text-text-inverse';
+        $badge_class = 'bg-success text-text-inverse';
         $badge_label = __('Afgerond', 'stridence');
         $badge_icon = 'check';
     } elseif ($progress > 0) {
