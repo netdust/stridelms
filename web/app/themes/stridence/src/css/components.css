@@ -13,7 +13,7 @@
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2
            bg-primary text-text-inverse font-medium
-           px-5 py-2.5 rounded-lg cursor-pointer
+           px-5 py-2.5 rounded-full cursor-pointer
            hover:bg-primary-hover
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2
            disabled:opacity-50 disabled:cursor-not-allowed
@@ -23,8 +23,8 @@
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2
            bg-surface-card text-text font-medium
-           px-5 py-2.5 rounded-lg border border-border cursor-pointer
-           hover:bg-surface-alt hover:border-border
+           px-5 py-2.5 rounded-full border-0 cursor-pointer
+           hover:bg-surface-alt
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2
            disabled:opacity-50 disabled:cursor-not-allowed
            transition-colors duration-fast;
@@ -97,20 +97,18 @@
      ══════════════════════════════════════ */
 
   .card {
-    @apply bg-surface-card rounded-xl border border-border/60;
+    @apply bg-surface-card rounded-xl;
     box-shadow: var(--shadow-xs);
   }
 
   .card-interactive {
     @apply card cursor-pointer;
-    transition: border-color var(--duration-fast),
-                box-shadow var(--duration-normal) var(--ease-out),
+    transition: box-shadow var(--duration-normal) var(--ease-out),
                 transform var(--duration-normal) var(--ease-out);
   }
 
   .card-interactive:hover {
-    @apply border-border;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--shadow-md);
     transform: translateY(-1px);
   }
 
@@ -123,10 +121,9 @@
      ══════════════════════════════════════ */
 
   .dash-card {
-    @apply bg-surface-card rounded-xl border border-border/60;
+    @apply bg-surface-card rounded-xl;
     box-shadow: var(--shadow-xs);
-    transition: border-color var(--duration-fast),
-                box-shadow var(--duration-normal) var(--ease-out),
+    transition: box-shadow var(--duration-normal) var(--ease-out),
                 transform var(--duration-normal) var(--ease-out);
   }
 
@@ -135,16 +132,13 @@
   }
 
   .dash-card-interactive:hover {
-    border-color: rgb(var(--color-primary) / 0.25);
     box-shadow: var(--shadow-sm);
     transform: translateY(-1px);
   }
 
   .dash-card-hero {
     @apply bg-surface-card rounded-xl p-6 lg:p-8;
-    border: 1px solid rgb(var(--color-primary) / 0.15);
-    border-left: 3px solid rgb(var(--color-primary));
-    background: linear-gradient(135deg, rgb(var(--color-primary) / 0.02), rgb(var(--color-primary) / 0.07));
+    background: linear-gradient(135deg, rgb(var(--color-primary) / 0.04), rgb(var(--color-primary) / 0.10));
     box-shadow: var(--shadow-sm);
   }
 
@@ -157,31 +151,43 @@
   }
 
   .badge-open {
-    @apply badge bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20;
+    @apply badge;
+    background: rgb(var(--color-badge-open-bg));
+    color: rgb(var(--color-badge-open-text));
   }
 
   .badge-few {
-    @apply badge bg-yellow-50 text-yellow-700 ring-1 ring-inset ring-yellow-600/20;
+    @apply badge;
+    background: rgb(var(--color-badge-few-bg));
+    color: rgb(var(--color-badge-few-text));
   }
 
   .badge-full {
-    @apply badge bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20;
+    @apply badge;
+    background: rgb(var(--color-badge-full-bg));
+    color: rgb(var(--color-badge-full-text));
   }
 
   .badge-cancelled {
-    @apply badge bg-gray-50 text-gray-500 ring-1 ring-inset ring-gray-500/20;
+    @apply badge;
+    background: rgb(var(--color-badge-cancelled-bg));
+    color: rgb(var(--color-badge-cancelled-text));
   }
 
   .badge-online {
-    @apply badge bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20;
+    @apply badge;
+    background: rgb(var(--color-badge-online-bg));
+    color: rgb(var(--color-badge-online-text));
   }
 
   .badge-free {
-    @apply badge bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20;
+    @apply badge;
+    background: rgb(var(--color-badge-free-bg));
+    color: rgb(var(--color-badge-free-text));
   }
 
   .badge-primary {
-    @apply badge bg-primary/10 text-primary ring-1 ring-inset ring-primary/20;
+    @apply badge bg-primary/10 text-primary;
   }
 
   /* ══════════════════════════════════════
@@ -286,7 +292,8 @@
   }
 
   .sidebar-divider {
-    @apply border-t border-border my-2 mx-3;
+    @apply my-3 mx-3;
+    border-top: 1px solid rgb(var(--color-border) / 0.15);
   }
 
   .sidebar-user {
@@ -403,8 +410,7 @@
 
   .list-item {
     @apply flex items-center gap-4 px-4 py-3.5
-           border-b border-border/60 last:border-b-0
-           cursor-pointer
+           cursor-pointer rounded-lg
            hover:bg-surface-alt
            transition-colors duration-fast;
   }
