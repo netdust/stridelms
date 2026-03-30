@@ -22,6 +22,10 @@ Add 3 missing scenarios to `scripts/seed.php`:
 
 New seed courses should follow existing seed patterns: 3-5 lessons each, member/non-member pricing, reasonable capacity.
 
+**Valid `enrollment_form` values:** `'default'`, `'minimal'`, `'direct'`, or `''` (empty string = no form). Never use the literal string `'none'`.
+
+**Important:** `seed_student1` must NOT be pre-enrolled in the new scenarios — smoke tests assume unenrolled state.
+
 ## Manual Smoke Test Matrix
 
 Test each scenario as `seed_student1` (not enrolled). Document all failures in bug manifest.
@@ -30,7 +34,7 @@ Test each scenario as `seed_student1` (not enrolled). Document all failures in b
 
 | Scenario | Expected Sidebar | Expected CTA | Mobile CTA |
 |----------|-----------------|--------------|------------|
-| 1 (open, no edition) | `sidebar-online` | "Start cursus" (direct LD access) | Same |
+| 1 (open, no edition) | `sidebar-online` | Verify CTA text for first-time visitor (see known gap below) | Same |
 | 2 (closed + default form) | `sidebar-online` | "Inschrijven" → enrollment form | Same |
 | 3 (closed + minimal form) | `sidebar-online` | "Inschrijven" → enrollment form | Same |
 | 4 (closed + direct) | `sidebar-online` | "Inschrijven" → direct redirect | Same |
@@ -41,11 +45,13 @@ Verify:
 - LD payment buttons shown only when closed + no Stride form
 - Format badge shows correct label (E-learning / Webinar)
 
+**Known gap — Scenario 1 first-visit CTA:** `sidebar-online.php` shows "Direct starten" only when `$is_open && $has_access`. On first visit, `$has_access` may be false for a never-visited open course. Verify what CTA actually renders and log as bug if incorrect.
+
 ### B. Enrollment Flow
 
 | Scenario | Expected Flow |
 |----------|--------------|
-| 1 | No Stride form. LD grants access on click. No registration in `wp_vad_registrations`. |
+| 1 | No Stride form. LD grants access directly. No registration in `wp_vad_registrations`. Dashboard shows course via LD enrollment data only. |
 | 2 | Default form: 2-step (personal → confirm). No type step, no billing. |
 | 3 | Minimal form: 2-step (personal → confirm). Same as online default. |
 | 4 | Direct: immediate `enroll()` → redirect with `?enrolled=1`. No form shown. |
@@ -62,13 +68,14 @@ Verify for scenarios 2-5:
 
 | Check | Expected |
 |-------|----------|
-| Online tab | Enrolled course appears with progress bar |
+| Online section | Enrolled course appears with progress bar in "Online cursussen" section |
 | Format label | "E-learning" or "Webinar" per course format |
 | Progress | 0% immediately after enrollment |
 | Resume URL | Links to first lesson |
 | Days remaining | Shows if course has expiration |
-| Completed tab | Course moves here after all lessons done |
-| Certificate | Available in completed tab if configured |
+| Afgerond section | Completed courses appear in collapsible "Afgerond" section (not a separate tab) |
+| Certificate | Available in Afgerond section if configured |
+| Scenario 1 (open, no edition) | Course appears via LD enrollment data — no `wp_vad_registrations` row needed |
 
 ### D. Admin UI
 
@@ -87,11 +94,15 @@ Verify for scenarios 2-5:
 
 | Case | Expected |
 |------|----------|
-| Already enrolled user visits enrollment form | Redirect or "already enrolled" message |
+| Already enrolled user visits enrollment form | **Investigate:** does `enrollment.php` handle `already_enrolled` flag? May show form instead of message (likely bug) |
+| Already enrolled user visits direct enrollment URL | Redirect to course page, no duplicate registration |
 | Logged-out user visits enrollment URL | Redirect to login |
 | Online edition with capacity reached | "Volzet" state, CTA disabled |
 | Online edition with `capacity=0` (unlimited) | Always enrollable |
+| Direct enrollment on full edition (race condition) | Silent redirect to edition page — log as UX gap if no feedback shown |
 | Course format changed after edition created | Edition behavior updates (no stale cache) |
+| Direct enrollment `?enrolled=1` redirect | Verify edition page handles the query param (toast/message or silently ignored) |
+| Pending registration blocks re-enrollment | User with existing pending registration cannot re-enroll |
 
 ## Acceptance Tests
 
@@ -160,10 +171,10 @@ SCENARIO: Online enrollment appears in dashboard
   WHEN: visits dashboard
   THEN: course appears in online tab with 0% progress, format label, resume link
 
-SCENARIO: Completed online course shows certificate
+SCENARIO: Completed online course shows in Afgerond section
   GIVEN: seed_student1 completed online course (all lessons done)
   WHEN: visits dashboard
-  THEN: course in completed tab with certificate link (if configured)
+  THEN: course in Afgerond collapsible section with certificate link (if configured)
 ```
 
 ### `OnlineAdminCest`
