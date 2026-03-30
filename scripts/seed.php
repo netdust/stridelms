@@ -135,12 +135,12 @@ class StrideSeedData {
 
         // stride_theme terms
         $themes = [
-            'verslaving'    => 'Verslaving',
-            'preventie'     => 'Preventie',
-            'behandeling'   => 'Behandeling',
-            'jongeren'      => 'Jongeren',
-            'alcohol'       => 'Alcohol & Drugs',
-            'methodiek'     => 'Methodiek',
+            'beweging'       => 'Beweging',
+            'voeding'        => 'Voeding',
+            'welzijn'        => 'Welzijn',
+            'sportblessures' => 'Sportblessures',
+            'jeugdwerk'      => 'Jeugdwerk',
+            'schoolbeleid'   => 'Schoolbeleid',
         ];
 
         foreach ($themes as $slug => $name) {
@@ -233,39 +233,39 @@ class StrideSeedData {
 
             // === INDEX 0: Open online - comprehensive introduction ===
             [
-                'title' => 'E-learning: Basiskennis Verslavingszorg',
-                'description' => 'Deze uitgebreide online cursus biedt een stevige basis in de verslavingszorg. Je leert over de verschillende soorten verslavingen, de biologische en psychologische mechanismen, en de belangrijkste behandelmethoden.',
+                'title' => 'E-learning: Basiskennis Jeugdgezondheid',
+                'description' => 'Uitgebreide online cursus over de pijlers van jeugdgezondheid: beweging, voeding en mentaal welzijn. Evidence-based inzichten voor iedereen die met jongeren werkt.',
                 'type' => 'online',
                 'format' => ['online', 'e-learning'],
-                'themes' => ['verslaving', 'behandeling'],
+                'themes' => ['beweging', 'welzijn'],
                 'ld_price_type' => 'open', // free, no restrictions
                 'editions' => [],
                 'lessons' => [
-                    ['title' => 'Module 1: Wat is verslaving?', 'content' => '<h3>Definitie en Kenmerken</h3><p>In deze eerste module verkennen we wat verslaving precies inhoudt. We bekijken de DSM-5 criteria.</p>'],
-                    ['title' => 'Module 2: Het verslaafde brein', 'content' => '<h3>Neurobiologie van Verslaving</h3><p>Verslaving is een hersenziekte. Leer hoe verslavende stoffen het beloningssysteem beïnvloeden.</p>'],
-                    ['title' => 'Module 3: Soorten verslavingen', 'content' => '<h3>Middelen en Gedragsverslavingen</h3><p>Overzicht van de verschillende types verslavingen.</p>'],
-                    ['title' => 'Module 4: Behandelmethoden', 'content' => '<h3>Evidence-Based Behandelingen</h3><p>CGT, motiverende gespreksvoering, en farmacologische opties.</p>'],
+                    ['title' => 'Module 1: Wat is jeugdgezondheid?', 'content' => '<h3>Definitie en Kenmerken</h3><p>In deze eerste module verkennen we wat jeugdgezondheid precies inhoudt. We bekijken de drie pijlers: beweging, voeding en mentaal welzijn.</p>'],
+                    ['title' => 'Module 2: Bewegen en motoriek', 'content' => '<h3>Beweging bij Jongeren</h3><p>Hoe beweging bijdraagt aan fysieke en mentale ontwikkeling. Beweegnormen en motorische vaardigheden.</p>'],
+                    ['title' => 'Module 3: Voeding bij jongeren', 'content' => '<h3>Gezonde Voeding</h3><p>Overzicht van voedingsbehoeften bij jongeren en de impact op groei en prestaties.</p>'],
+                    ['title' => 'Module 4: Mentaal welzijn', 'content' => '<h3>Psychisch Welbevinden</h3><p>Stressmanagement, veerkracht en het herkennen van signalen bij jongeren.</p>'],
                     ['title' => 'Module 5: Eindtoets', 'content' => '<h3>Toets je Kennis</h3><p>25 meerkeuzevragen. Minimaal 70% om te slagen.</p>'],
                 ],
             ],
 
-            // === INDEX 1: Open online - alcohol course ===
+            // === INDEX 1: Open online - sport nutrition course ===
             [
-                'title' => 'E-learning: Alcohol en Gezondheid',
-                'description' => 'Verdiepende online module over alle aspecten van alcohol. Van de werking op het lichaam tot de sociale impact.',
+                'title' => 'E-learning: Voeding en Prestatie bij Jonge Sporters',
+                'description' => 'Verdiepende online module over sportvoeding voor jongeren. Van koolhydraatlading tot hydratatie, afgestemd op groeiende lichamen.',
                 'type' => 'online',
                 'format' => ['online', 'e-learning'],
-                'themes' => ['alcohol', 'preventie'],
+                'themes' => ['voeding', 'beweging'],
                 'ld_price_type' => 'open',
                 'ld_expire_access' => 'on',
                 'ld_expire_access_days' => 90,
                 'editions' => [],
                 'lessons' => [
-                    ['title' => 'Hoofdstuk 1: Alcohol in cijfers', 'content' => '<h3>De situatie</h3><p>België staat in de Europese top qua alcoholconsumptie.</p>'],
-                    ['title' => 'Hoofdstuk 2: Effecten op lichaam en geest', 'content' => '<h3>Hoe Alcohol Werkt</h3><p>Alcohol werkt als remmer op het centraal zenuwstelsel.</p>'],
-                    ['title' => 'Hoofdstuk 3: Herkennen van problematisch gebruik', 'content' => '<h3>Vroege Signalering</h3><p>De CAGE vragenlijst en andere screeningtools.</p>'],
-                    ['title' => 'Hoofdstuk 4: Gespreksvoering', 'content' => '<h3>Het Gesprek Aangaan</h3><p>De 5 A\'s methode voor korte interventies.</p>'],
-                    ['title' => 'Hoofdstuk 5: Behandelmogelijkheden', 'content' => '<h3>Van Vroeginterventie tot Behandeling</h3><p>Ambulant, klinisch en zelfhulpgroepen.</p>'],
+                    ['title' => 'Hoofdstuk 1: Voedingsbehoeften van jonge sporters', 'content' => '<h3>De basis</h3><p>Jongeren in de groei hebben specifieke voedingsbehoeften, zeker bij sport.</p>'],
+                    ['title' => 'Hoofdstuk 2: Macro- en micronutriënten', 'content' => '<h3>Bouwstenen</h3><p>Koolhydraten, eiwitten, vetten, vitaminen en mineralen voor prestatie.</p>'],
+                    ['title' => 'Hoofdstuk 3: Hydratatie en sportdranken', 'content' => '<h3>Vochtbalans</h3><p>Wanneer water volstaat en wanneer sportdranken nodig zijn.</p>'],
+                    ['title' => 'Hoofdstuk 4: Timing en maaltijdplanning', 'content' => '<h3>Rond de Training</h3><p>Wat eet je voor, tijdens en na het sporten?</p>'],
+                    ['title' => 'Hoofdstuk 5: Veelvoorkomende fouten', 'content' => '<h3>Valkuilen</h3><p>Supplementengebruik, crash-diëten en onvoldoende energie-inname bij jongeren.</p>'],
                 ],
             ],
 
@@ -274,13 +274,13 @@ class StrideSeedData {
             // These appear on /online/ but require going through Stride enrollment form.
             // =========================================================================
 
-            // === INDEX 2: Closed online - cannabis (with edition + form) ===
+            // === INDEX 2: Closed online - eating disorders (with edition + form) ===
             [
-                'title' => 'E-learning: Cannabis - Feiten en Fabels',
-                'description' => 'Alles wat je moet weten over cannabis: van de werkzame stoffen tot de effecten op de hersenen. Speciaal voor professionals die werken met jongeren.',
+                'title' => 'E-learning: Eetproblemen Herkennen en Bespreekbaar Maken',
+                'description' => 'Leer de vroege signalen van eetproblemen herkennen bij jongeren en hoe je het gesprek aangaat — zonder te diagnosticeren. Speciaal voor leerkrachten en CLB-medewerkers.',
                 'type' => 'online',
                 'format' => ['online', 'e-learning'],
-                'themes' => ['alcohol', 'jongeren'],
+                'themes' => ['welzijn', 'voeding'],
                 'ld_price_type' => 'closed', // requires enrollment
                 'editions' => [
                     [
@@ -293,24 +293,24 @@ class StrideSeedData {
                         'status' => 'open',
                         'enrollment_form' => 'default',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Cannabis module (90 dagen toegang)'],
+                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Eetproblemen module (90 dagen toegang)'],
                         ],
                     ],
                 ],
                 'lessons' => [
-                    ['title' => 'Les 1: Cannabis 101', 'content' => '<h3>Wat is Cannabis?</h3><p>THC vs CBD, vormen van cannabis.</p>'],
-                    ['title' => 'Les 2: Effecten en risico\'s', 'content' => '<h3>Wat Doet Cannabis?</h3><p>Gewenste en ongewenste effecten, risico\'s bij jongeren.</p>'],
-                    ['title' => 'Les 3: Cannabis en psychose', 'content' => '<h3>De Relatie</h3><p>Genetische kwetsbaarheid en andere risicofactoren.</p>'],
+                    ['title' => 'Les 1: Wat zijn eetproblemen?', 'content' => '<h3>Vormen en Signalen</h3><p>Anorexia, boulimie, eetbuistoornis en selectief eten bij jongeren.</p>'],
+                    ['title' => 'Les 2: Vroege signalen herkennen', 'content' => '<h3>Observatie en Alert Zijn</h3><p>Fysieke, emotionele en gedragsmatige signalen die wijzen op eetproblemen.</p>'],
+                    ['title' => 'Les 3: Het gesprek aangaan', 'content' => '<h3>Communicatie</h3><p>Hoe bespreek je zorgen zonder te diagnosticeren of te stigmatiseren?</p>'],
                 ],
             ],
 
-            // === INDEX 3: Closed online - gaming addiction (with edition + form) ===
+            // === INDEX 3: Closed online - screen time + movement (with edition + form) ===
             [
-                'title' => 'E-learning: Gaming en Schermverslaving',
-                'description' => 'Interactieve e-learning over gaming disorder en problematisch schermgebruik. Met casussen, video-interviews en een toolkit voor het voeren van gesprekken met jongeren over hun schermgedrag.',
+                'title' => 'E-learning: Schermtijd en Bewegingsarmoede',
+                'description' => 'Interactieve e-learning over de impact van schermgedrag op beweging en welzijn bij jongeren. Met casussen, video-interviews en een toolkit voor gesprekken.',
                 'type' => 'online',
                 'format' => ['online', 'e-learning'],
-                'themes' => ['jongeren', 'verslaving'],
+                'themes' => ['welzijn', 'beweging'],
                 'ld_price_type' => 'closed',
                 'editions' => [
                     [
@@ -328,20 +328,20 @@ class StrideSeedData {
                     ],
                 ],
                 'lessons' => [
-                    ['title' => 'Module 1: Digitale cultuur', 'content' => '<p>Hoe jongeren technologie gebruiken en waarom sommigen problematisch gedrag ontwikkelen.</p>'],
-                    ['title' => 'Module 2: Gaming disorder (DSM-5)', 'content' => '<p>Criteria, prevalentie en onderscheid met passioneel gamen.</p>'],
-                    ['title' => 'Module 3: Schermtijd en welzijn', 'content' => '<p>Het verband tussen schermgebruik, slaap, concentratie en sociale vaardigheden.</p>'],
-                    ['title' => 'Module 4: In gesprek met jongeren', 'content' => '<p>Praktische gesprekstechnieken en tools.</p>'],
+                    ['title' => 'Module 1: Schermgedrag bij jongeren', 'content' => '<p>Hoe jongeren schermen gebruiken en de impact op hun beweeggedrag.</p>'],
+                    ['title' => 'Module 2: Gevolgen van bewegingsarmoede', 'content' => '<p>Fysieke, mentale en sociale gevolgen van te weinig bewegen.</p>'],
+                    ['title' => 'Module 3: Schermtijd en welzijn', 'content' => '<p>Het verband tussen schermgebruik, slaap, concentratie en motivatie om te bewegen.</p>'],
+                    ['title' => 'Module 4: In gesprek met jongeren', 'content' => '<p>Praktische gesprekstechnieken om schermtijd en beweging bespreekbaar te maken.</p>'],
                 ],
             ],
 
-            // === INDEX 4: Closed online - medication-assisted treatment (full, to test) ===
+            // === INDEX 4: Closed online - movement policy (full, to test) ===
             [
-                'title' => 'E-learning: Medicatie bij Verslaving',
-                'description' => 'Uitgebreide online cursus over farmacologische behandeling van verslavingsstoornissen. Methadon, buprenorfine, naltrexon, acamprosaat en meer.',
+                'title' => 'E-learning: Beweegbeleid Ontwikkelen',
+                'description' => 'Uitgebreide online cursus over het opzetten van een actief beweegbeleid in scholen en jeugdwerkingen. Van visie tot concrete acties.',
                 'type' => 'online',
                 'format' => ['online', 'e-learning'],
-                'themes' => ['behandeling', 'verslaving'],
+                'themes' => ['schoolbeleid', 'beweging'],
                 'ld_price_type' => 'closed',
                 'editions' => [
                     [
@@ -355,7 +355,7 @@ class StrideSeedData {
                         'status' => 'open',
                         'enrollment_form' => 'default',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Farmacotherapie (lopende cohort)'],
+                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Beweegbeleid (lopende cohort)'],
                         ],
                     ],
                     // Second edition opening soon
@@ -369,43 +369,103 @@ class StrideSeedData {
                         'status' => 'open',
                         'enrollment_form' => 'default',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Farmacotherapie (nieuw cohort)'],
+                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Beweegbeleid (nieuw cohort)'],
                         ],
                     ],
                 ],
                 'lessons' => [
-                    ['title' => 'Module 1: Principes van farmacotherapie', 'content' => '<p>Wanneer medicatie inzetten en hoe dit past in een integrale behandeling.</p>'],
-                    ['title' => 'Module 2: Opiaat substitutie', 'content' => '<p>Methadon, buprenorfine, heroine-ondersteunde behandeling.</p>'],
-                    ['title' => 'Module 3: Anti-craving medicatie', 'content' => '<p>Naltrexon, acamprosaat, disulfiram en nieuwe middelen.</p>'],
+                    ['title' => 'Module 1: Waarom een beweegbeleid?', 'content' => '<p>Het belang van een structureel beweegbeleid voor jongeren en hoe je draagvlak creëert.</p>'],
+                    ['title' => 'Module 2: Van visie tot actieplan', 'content' => '<p>Stappen om een beweegvisie te formuleren en om te zetten in concrete acties.</p>'],
+                    ['title' => 'Module 3: Evaluatie en borging', 'content' => '<p>Hoe meet je het effect van je beweegbeleid en hoe borg je het op lange termijn?</p>'],
+                ],
+            ],
+
+            // === SHAKE-OUT: Closed online - minimal enrollment form ===
+            [
+                'title' => 'E-learning: Mindfulness voor Jongeren',
+                'description' => 'Korte online module over mindfulness-technieken voor jongeren. Ademhalingsoefeningen, body scan en korte meditaties.',
+                'type' => 'online',
+                'format' => ['online', 'e-learning'],
+                'themes' => ['welzijn'],
+                'ld_price_type' => 'closed',
+                'editions' => [
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+1 day')),
+                        'end_date' => date('Y-m-d', strtotime('+60 days')),
+                        'price' => 45.00,
+                        'price_non_member' => 55.00,
+                        'capacity' => 0, // unlimited — tests capacity=0 edge case
+                        'venue' => 'Online',
+                        'status' => 'open',
+                        'enrollment_form' => 'minimal',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Mindfulness (60 dagen toegang)'],
+                        ],
+                    ],
+                ],
+                'lessons' => [
+                    ['title' => 'Les 1: Wat is mindfulness?', 'content' => '<p>Introductie tot mindfulness en waarom het werkt voor jongeren.</p>'],
+                    ['title' => 'Les 2: Ademhalingsoefeningen', 'content' => '<p>Drie eenvoudige ademhalingstechnieken voor in de klas.</p>'],
+                    ['title' => 'Les 3: Body scan', 'content' => '<p>Geleide body scan oefening met audio-instructies.</p>'],
+                ],
+            ],
+
+            // === SHAKE-OUT: Closed online - direct enrollment (no form) ===
+            [
+                'title' => 'E-learning: Snelle Update Jeugdsport',
+                'description' => 'Korte opfrismodule over actuele richtlijnen jeugdsport. Geen formulier nodig, direct toegang na inschrijving.',
+                'type' => 'online',
+                'format' => ['online', 'e-learning'],
+                'themes' => ['beweging'],
+                'ld_price_type' => 'closed',
+                'editions' => [
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+1 day')),
+                        'end_date' => date('Y-m-d', strtotime('+30 days')),
+                        'price' => 25.00,
+                        'price_non_member' => 35.00,
+                        'capacity' => 500,
+                        'venue' => 'Online',
+                        'status' => 'open',
+                        'enrollment_form' => 'direct',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Jeugdsport update (30 dagen toegang)'],
+                        ],
+                    ],
+                ],
+                'lessons' => [
+                    ['title' => 'Update 1: Nieuwe beweegrichtlijnen 2026', 'content' => '<p>Samenvatting van de herziene beweegrichtlijnen voor jongeren.</p>'],
+                    ['title' => 'Update 2: Blessurepreventie checklist', 'content' => '<p>Praktische checklist voor blessurepreventie bij jeugdsport.</p>'],
+                    ['title' => 'Update 3: Warmteprotocol', 'content' => '<p>Richtlijnen voor sporten bij hoge temperaturen.</p>'],
                 ],
             ],
 
             // =========================================================================
-            // INDEX 5-10: IN-PERSON COURSES (various configurations)
+            // INDEX 7-12: IN-PERSON COURSES (various configurations)
             // =========================================================================
 
             // === INDEX 5: Simple single-session course (2 editions in different cities) ===
             // First edition has post-course requirements for testing completion flow
             [
-                'title' => 'Motiverende Gespreksvoering - Basistraining',
-                'description' => 'Motiverende Gespreksvoering (MGV) is een evidence-based gespreksmethodiek. In deze intensieve basistraining leer je de vier processen van MGV. Erkend voor SKJ/NVO-registratie.',
+                'title' => 'Motiverende Gespreksvoering rond Voeding bij Jongeren',
+                'description' => 'Leer hoe je jongeren op een niet-veroordelende manier motiveert om gezondere eetgewoontes te ontwikkelen. Met rollenspelen en praktijkcasussen. Erkend voor bijscholing.',
                 'type' => 'in-person',
                 'format' => ['klassikaal'],
-                'themes' => ['methodiek', 'behandeling'],
+                'themes' => ['voeding', 'welzijn'],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('-2 weeks')), // Past date: sessions already happened
                         'price' => 295.00,
                         'price_non_member' => 345.00,
                         'capacity' => 16,
-                        'venue' => 'VAD Opleidingscentrum Brussel',
-                        'speakers' => 'Dr. Marie De Vries',
+                        'venue' => 'BWEEG Opleidingscentrum Gent',
+                        'speakers' => 'Lien De Smedt, sportpedagoge',
                         'status' => 'open',
                         'enrollment_form' => 'default',
                         'post_requires_evaluation' => true,
                         'post_requires_documents' => true,
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Basistraining MGV'],
+                            ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Motiverende gespreksvoering rond voeding'],
                         ],
                     ],
                     [
@@ -413,28 +473,28 @@ class StrideSeedData {
                         'price' => 295.00,
                         'price_non_member' => 345.00,
                         'capacity' => 16,
-                        'venue' => 'VAD Locatie Antwerpen',
+                        'venue' => 'BWEEG Locatie Antwerpen',
                         'speakers' => 'Drs. Peter Willems',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Basistraining MGV'],
+                            ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Motiverende gespreksvoering rond voeding'],
                         ],
                     ],
                 ],
                 'lessons' => [
-                    ['title' => 'Theorie: De geest van MGV', 'content' => 'Achtergrond en principes van motiverende gespreksvoering.'],
-                    ['title' => 'Praktijk: ORBS-technieken', 'content' => 'Open vragen, Reflecteren, Bevestigen, Samenvatten.'],
+                    ['title' => 'Theorie: Motiverende gespreksvoering', 'content' => 'Achtergrond en principes van motiverende gespreksvoering rond voeding.'],
+                    ['title' => 'Praktijk: Rollenspelen en casussen', 'content' => 'Oefenen met gesprekstechnieken aan de hand van praktijkcasussen.'],
                 ],
             ],
 
             // === INDEX 6: Multi-day intensive (3 consecutive days, spread over weeks) ===
             // First edition has post-course requirements including approval for testing
             [
-                'title' => 'Cognitieve Gedragstherapie bij Verslaving',
-                'description' => 'Driedaagse intensieve training in CGT specifiek voor de verslavingszorg. Functionele analyses, gedachten uitdagen, terugvalpreventie. Inclusief werkboek.',
+                'title' => 'Sportblessures Voorkomen: van Warm-up tot Cool-down',
+                'description' => 'Driedaagse evidence-based opleiding over blessurepreventie bij jongeren. Functionele screening, opwarming, cooling-down en return-to-play. Inclusief werkboek.',
                 'type' => 'in-person',
                 'format' => ['klassikaal'],
-                'themes' => ['behandeling', 'methodiek'],
+                'themes' => ['sportblessures', 'beweging'],
                 'editions' => [
                     // Edition 1: 3 days spread over 3 weeks (past dates for post-course testing)
                     [
@@ -442,17 +502,17 @@ class StrideSeedData {
                         'price' => 695.00,
                         'price_non_member' => 795.00,
                         'capacity' => 12,
-                        'venue' => 'Conferentiecentrum De Factorij, Antwerpen',
-                        'speakers' => 'Prof. dr. Jan Janssen, Dr. Els Peters',
+                        'venue' => 'Sportcentrum De Blaarmeersen, Gent',
+                        'speakers' => 'Prof. dr. Jan Janssen, sportwetenschapper',
                         'status' => 'open',
                         'enrollment_form' => 'default',
                         'post_requires_evaluation' => true,
                         'post_requires_documents' => true,
                         'post_requires_approval' => true,
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Gedragsanalyse en functieanalyse'],
-                            ['date_offset' => 7, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 2: Cognitieve interventies'],
-                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 3: Terugvalpreventie en integratie'],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Functionele screening'],
+                            ['date_offset' => 7, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 2: Blessurepreventie-oefeningen'],
+                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 3: Return-to-play protocollen'],
                         ],
                     ],
                     // Edition 2: almost full
@@ -462,30 +522,30 @@ class StrideSeedData {
                         'price_non_member' => 795.00,
                         'capacity' => 12,
                         'registered' => 10,
-                        'venue' => 'VAD Opleidingscentrum Gent',
-                        'speakers' => 'Prof. dr. Jan Janssen',
+                        'venue' => 'BWEEG Opleidingscentrum Gent',
+                        'speakers' => 'Dr. Els Peters, kinesitherapeut',
                         'status' => 'few_spots',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Gedragsanalyse'],
-                            ['date_offset' => 7, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 2: Cognitieve interventies'],
-                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 3: Terugvalpreventie'],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Functionele screening'],
+                            ['date_offset' => 7, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 2: Blessurepreventie-oefeningen'],
+                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 3: Return-to-play protocollen'],
                         ],
                     ],
                 ],
                 'lessons' => [
-                    ['title' => 'CGT Dag 1: Functieanalyse', 'content' => 'Leer het gedragsmodel en het maken van een functionele analyse.'],
-                    ['title' => 'CGT Dag 2: Gedachten uitdagen', 'content' => 'Cognitieve technieken voor het werken met automatische gedachten.'],
-                    ['title' => 'CGT Dag 3: Terugvalpreventie', 'content' => 'Het opstellen en implementeren van een terugvalpreventieplan.'],
+                    ['title' => 'Dag 1: Functionele screening', 'content' => 'Leer screeningsmethoden voor het identificeren van blessurerisico bij jongeren.'],
+                    ['title' => 'Dag 2: Preventie-oefeningen', 'content' => 'Evidence-based opwarmings- en preventie-oefeningen voor verschillende sporten.'],
+                    ['title' => 'Dag 3: Return-to-play', 'content' => 'Protocollen voor veilige terugkeer naar sport na een blessure.'],
                 ],
             ],
 
             // === INDEX 7: Masterclass - sold out + future (single session, exclusive) ===
             [
-                'title' => 'Masterclass Crisisinterventie bij Verslaving',
-                'description' => 'Exclusieve masterclass voor ervaren professionals. De-escalatie, crisisassessment, veilig handelen bij intoxicatie. Maximum 8 deelnemers.',
+                'title' => 'Masterclass Mentale Veerkracht bij Jonge Sporters',
+                'description' => 'Exclusieve masterclass voor ervaren sportcoaches. Herken signalen van prestatiedruk en leer technieken om mentale weerbaarheid te versterken. Maximum 8 deelnemers.',
                 'type' => 'in-person',
                 'format' => ['klassikaal'],
-                'themes' => ['behandeling'],
+                'themes' => ['welzijn'],
                 'editions' => [
                     // Full
                     [
@@ -494,11 +554,11 @@ class StrideSeedData {
                         'price_non_member' => 525.00,
                         'capacity' => 8,
                         'registered' => 8,
-                        'venue' => 'VAD Opleidingscentrum Brussel',
-                        'speakers' => 'Dr. Paul Verhaeghe',
+                        'venue' => 'BWEEG Opleidingscentrum Gent',
+                        'speakers' => 'Dr. Paul Verhaeghe, sportpsycholoog',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Masterclass Crisisinterventie'],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Masterclass Mentale Veerkracht'],
                         ],
                     ],
                     // Future
@@ -507,35 +567,35 @@ class StrideSeedData {
                         'price' => 450.00,
                         'price_non_member' => 525.00,
                         'capacity' => 8,
-                        'venue' => 'VAD Opleidingscentrum Brussel',
-                        'speakers' => 'Dr. Paul Verhaeghe',
+                        'venue' => 'BWEEG Opleidingscentrum Gent',
+                        'speakers' => 'Dr. Paul Verhaeghe, sportpsycholoog',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Masterclass Crisisinterventie'],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Masterclass Mentale Veerkracht'],
                         ],
                     ],
                 ],
                 'lessons' => [
-                    ['title' => 'Crisisinterventie module', 'content' => 'Theorie en praktijk van crisisinterventie in de verslavingszorg.'],
+                    ['title' => 'Mentale veerkracht module', 'content' => 'Theorie en praktijk van mentale weerbaarheid bij jonge sporters.'],
                 ],
             ],
 
             // === INDEX 8: Course with SESSION SLOTS + SELECTION DEADLINE ===
             // Users must choose between parallel sessions (morning/afternoon tracks)
             [
-                'title' => 'Preventie in de Praktijk',
-                'description' => 'Complete tweedaagse cursus over preventieve interventies. Na de basistraining kies je uit verdiepingsmodules voor specifieke doelgroepen.',
+                'title' => 'Gezonde Tussendoortjes in de Jeugdwerking',
+                'description' => 'Complete tweedaagse cursus over gezonde voeding in de jeugdwerking. Na de basiscursus kies je uit verdiepingsmodules voor specifieke doelgroepen.',
                 'type' => 'in-person',
                 'format' => ['klassikaal'],
-                'themes' => ['preventie'],
+                'themes' => ['voeding', 'jeugdwerk'],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+5 weeks')),
                         'price' => 395.00,
                         'price_non_member' => 450.00,
                         'capacity' => 20,
-                        'venue' => 'VAD Opleidingscentrum Brussel',
-                        'speakers' => 'Team VAD Preventie',
+                        'venue' => 'BWEEG Opleidingscentrum Gent',
+                        'speakers' => 'Team BWEEG Voeding',
                         'status' => 'open',
                         'requires_session_selection' => true,
                         'selection_open' => true,
@@ -552,29 +612,29 @@ class StrideSeedData {
                         ]),
                         'sessions' => [
                             // Mandatory day 1
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Basisprincipes preventie', 'optional' => false],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Basisprincipes gezonde voeding', 'optional' => false],
                             // Mandatory day 2 morning
-                            ['date_offset' => 1, 'start' => '09:00', 'end' => '12:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 2: Praktijk en interventies', 'optional' => false],
+                            ['date_offset' => 1, 'start' => '09:00', 'end' => '12:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 2: Praktijk en recepten', 'optional' => false],
                             // SLOT: choose ONE of these afternoon sessions
-                            ['date_offset' => 1, 'start' => '13:00', 'end' => '16:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Verdieping A: Jongeren en social media', 'optional' => true, 'slot' => 'Verdieping (kies 1)'],
-                            ['date_offset' => 1, 'start' => '13:00', 'end' => '16:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Verdieping B: Ouderen en medicatie', 'optional' => true, 'slot' => 'Verdieping (kies 1)'],
-                            ['date_offset' => 1, 'start' => '13:00', 'end' => '16:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Verdieping C: Werkplek en alcohol', 'optional' => true, 'slot' => 'Verdieping (kies 1)'],
+                            ['date_offset' => 1, 'start' => '13:00', 'end' => '16:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Verdieping A: Sportvoeding', 'optional' => true, 'slot' => 'Verdieping (kies 1)'],
+                            ['date_offset' => 1, 'start' => '13:00', 'end' => '16:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Verdieping B: Budget-vriendelijk koken', 'optional' => true, 'slot' => 'Verdieping (kies 1)'],
+                            ['date_offset' => 1, 'start' => '13:00', 'end' => '16:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Verdieping C: Allergieen en intoleranties', 'optional' => true, 'slot' => 'Verdieping (kies 1)'],
                         ],
                     ],
                 ],
                 'lessons' => [
-                    ['title' => 'Preventie basis', 'content' => 'Basisprincipes van verslavingspreventie.'],
-                    ['title' => 'Preventie praktijk', 'content' => 'Praktische toepassing van preventieve interventies.'],
+                    ['title' => 'Gezonde voeding basis', 'content' => 'Basisprincipes van gezonde voeding in de jeugdwerking.'],
+                    ['title' => 'Gezonde voeding praktijk', 'content' => 'Praktische toepassing: recepten en tussendoortjes.'],
                 ],
             ],
 
             // === INDEX 9: Course with CANCELLED + RESCHEDULED editions ===
             [
-                'title' => 'Workshop Mindfulness in de Verslavingszorg',
-                'description' => 'Praktische workshop over mindfulness-technieken in de behandeling van verslaving. Geschikt voor alle hulpverleners, geen meditatie-ervaring vereist.',
+                'title' => 'Workshop Yoga en Mindfulness voor Jongeren',
+                'description' => 'Praktische workshop over yoga- en mindfulness-technieken voor jongeren. Geschikt voor alle begeleiders, geen ervaring vereist.',
                 'type' => 'in-person',
                 'format' => ['klassikaal'],
-                'themes' => ['behandeling', 'methodiek'],
+                'themes' => ['welzijn', 'beweging'],
                 'editions' => [
                     // Cancelled
                     [
@@ -582,11 +642,11 @@ class StrideSeedData {
                         'price' => 195.00,
                         'price_non_member' => 225.00,
                         'capacity' => 15,
-                        'venue' => 'Yogacentrum Leuven',
-                        'speakers' => 'Leen Smits, MBSR-trainer',
+                        'venue' => 'Yogacentrum Gent',
+                        'speakers' => 'Leen Smits, yogadocente',
                         'status' => 'cancelled',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '13:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Workshop Mindfulness (GEANNULEERD)'],
+                            ['date_offset' => 0, 'start' => '13:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Workshop Yoga en Mindfulness (GEANNULEERD)'],
                         ],
                     ],
                     // Rescheduled
@@ -595,42 +655,42 @@ class StrideSeedData {
                         'price' => 195.00,
                         'price_non_member' => 225.00,
                         'capacity' => 15,
-                        'venue' => 'Yogacentrum Leuven',
-                        'speakers' => 'Leen Smits, MBSR-trainer',
+                        'venue' => 'Yogacentrum Gent',
+                        'speakers' => 'Leen Smits, yogadocente',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '13:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Workshop Mindfulness (nieuwe datum)'],
+                            ['date_offset' => 0, 'start' => '13:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Workshop Yoga en Mindfulness (nieuwe datum)'],
                         ],
                     ],
                 ],
                 'lessons' => [
-                    ['title' => 'Mindfulness workshop', 'content' => 'Praktische introductie in mindfulness voor de behandelpraktijk.'],
+                    ['title' => 'Yoga en mindfulness workshop', 'content' => 'Praktische introductie in yoga en mindfulness voor jongeren.'],
                 ],
             ],
 
             // === INDEX 10: Free single-session introductory course ===
             [
-                'title' => 'Gratis Introductie: Werken bij VAD',
+                'title' => 'Gratis Introductie: Werken bij BWEEG',
                 'description' => 'Gratis kennismakingsochtend voor nieuwe medewerkers en stagiairs. Rondleiding en ontmoeting met collega\'s.',
                 'type' => 'in-person',
                 'format' => ['klassikaal'],
-                'themes' => ['verslaving'],
+                'themes' => ['beweging'],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+1 week')),
                         'price' => 0.00,
                         'price_non_member' => 0.00,
                         'capacity' => 30,
-                        'venue' => 'VAD Hoofdkantoor Brussel',
-                        'speakers' => 'Diverse VAD medewerkers',
+                        'venue' => 'BWEEG Hoofdkantoor Gent',
+                        'speakers' => 'Diverse BWEEG medewerkers',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:30', 'end' => '12:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Introductie en rondleiding VAD'],
+                            ['date_offset' => 0, 'start' => '09:30', 'end' => '12:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Introductie en rondleiding BWEEG'],
                         ],
                     ],
                 ],
                 'lessons' => [
-                    ['title' => 'Introductie VAD', 'content' => 'Kennismaking met VAD als organisatie.'],
+                    ['title' => 'Introductie BWEEG', 'content' => 'Kennismaking met BWEEG als organisatie.'],
                 ],
             ],
 
@@ -640,18 +700,18 @@ class StrideSeedData {
 
             // === INDEX 11: Questionnaire + Documents + Approval (full completion flow) ===
             [
-                'title' => 'Erkenningstraject Verslavingsdeskundige',
-                'description' => 'Erkend opleidingstraject voor verslavingsdeskundigen. Na inschrijving vul je een intake-vragenlijst in, upload je relevante diploma\'s, en wacht je op goedkeuring van het opleidingsteam.',
+                'title' => 'Erkenningstraject Jeugdsportcoach',
+                'description' => 'Erkend opleidingstraject voor jeugdsportcoaches. Na inschrijving vul je een intake-vragenlijst in, upload je relevante diploma\'s, en wacht je op goedkeuring.',
                 'type' => 'in-person',
                 'format' => ['klassikaal'],
-                'themes' => ['behandeling', 'methodiek'],
+                'themes' => ['beweging', 'sportblessures'],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+6 weeks')),
                         'price' => 895.00,
                         'price_non_member' => 995.00,
                         'capacity' => 12,
-                        'venue' => 'VAD Opleidingscentrum Brussel',
+                        'venue' => 'BWEEG Opleidingscentrum Gent',
                         'speakers' => 'Prof. dr. An Vermeersch, Dr. Koen De Smet',
                         'status' => 'open',
                         'enrollment_form' => 'default',
@@ -659,42 +719,42 @@ class StrideSeedData {
                         'requires_documents' => true,
                         'requires_approval' => true,
                         'sessions' => [
-                            ['date_offset' => 0,  'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Intake en assessment'],
-                            ['date_offset' => 7,  'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 2: Diagnostiek en classificatie'],
-                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 3: Behandelplanning'],
+                            ['date_offset' => 0,  'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Intake en motorische screening'],
+                            ['date_offset' => 7,  'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 2: Blessurepreventie en EHBO'],
+                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 3: Begeleidingsvaardigheden'],
                         ],
                     ],
                 ],
                 'lessons' => [
-                    ['title' => 'Voorbereidingsmateriaal', 'content' => 'Lees dit document voor de eerste lesdag.'],
+                    ['title' => 'Voorbereidingsmateriaal', 'content' => 'Lees dit document voor de eerste lesdag van het erkenningstraject.'],
                 ],
             ],
 
             // === INDEX 12: Documents only (upload required, no approval) ===
             [
-                'title' => 'Bijscholing Ambulante Verslavingszorg',
-                'description' => 'Verplichte bijscholing voor ambulante hulpverleners. Upload je registratiebewijs bij inschrijving zodat we je accreditatie kunnen verwerken.',
+                'title' => 'Bijscholing Bewegingsonderwijs',
+                'description' => 'Verplichte bijscholing voor leerkrachten LO. Upload je registratiebewijs bij inschrijving zodat we je accreditatie kunnen verwerken.',
                 'type' => 'in-person',
                 'format' => ['klassikaal'],
-                'themes' => ['behandeling'],
+                'themes' => ['schoolbeleid'],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+4 weeks')),
                         'price' => 175.00,
                         'price_non_member' => 225.00,
                         'capacity' => 25,
-                        'venue' => 'VAD Locatie Antwerpen',
+                        'venue' => 'BWEEG Locatie Antwerpen',
                         'speakers' => 'Drs. Sofie Claes',
                         'status' => 'open',
                         'enrollment_form' => 'default',
                         'requires_documents' => true,
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Bijscholing Ambulante Verslavingszorg'],
+                            ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Bijscholing Bewegingsonderwijs'],
                         ],
                     ],
                 ],
                 'lessons' => [
-                    ['title' => 'Bijscholing module', 'content' => 'Actuele ontwikkelingen in de ambulante verslavingszorg.'],
+                    ['title' => 'Bijscholing module', 'content' => 'Actuele ontwikkelingen in het bewegingsonderwijs.'],
                 ],
             ],
 
@@ -702,32 +762,32 @@ class StrideSeedData {
             // INDEX 13: HYBRID COURSE (in-person + online + webinar sessions)
             // =========================================================================
             [
-                'title' => 'Dual Diagnose: Verslaving en Psychiatrie',
-                'description' => 'Hybride leertraject: klassikale dag + e-learning + live webinar + praktijkdag. Combineert kennisoverdracht met diepgang.',
+                'title' => 'Beweegbeleid op School: van Visie tot Actie',
+                'description' => 'Hybride leertraject: klassikale dag + e-learning + live webinar + praktijkdag. Stappenplan om een actief beweegbeleid uit te bouwen op jouw school.',
                 'type' => 'hybrid',
                 'format' => ['klassikaal', 'hybrid'],
-                'themes' => ['behandeling', 'verslaving'],
+                'themes' => ['schoolbeleid', 'beweging'],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+4 weeks')),
                         'price' => 550.00,
                         'price_non_member' => 650.00,
                         'capacity' => 20,
-                        'venue' => 'VAD Brussel + Online',
-                        'speakers' => 'Dr. Katrien Maes, psychiater',
+                        'venue' => 'BWEEG Gent + Online',
+                        'speakers' => 'Dr. Katrien Maes, onderwijspedagoge',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'location' => 'VAD Opleidingscentrum Brussel', 'title' => 'Introductie dual diagnose'],
-                            ['date_offset' => 3, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Psychiatrische stoornissen'],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'location' => 'BWEEG Opleidingscentrum Gent', 'title' => 'Introductie beweegbeleid'],
+                            ['date_offset' => 3, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Draagvlak en stakeholders'],
                             ['date_offset' => 7, 'start' => '14:00', 'end' => '16:00', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Live Q&A: Casusbespreking'],
-                            ['date_offset' => 10, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Geïntegreerde behandeling'],
-                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'location' => 'VAD Opleidingscentrum Brussel', 'title' => 'Praktijkdag: Integratie en toepassing'],
+                            ['date_offset' => 10, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Implementatie'],
+                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'location' => 'BWEEG Opleidingscentrum Gent', 'title' => 'Praktijkdag: Evaluatie en bijsturing'],
                         ],
                     ],
                 ],
                 'lessons' => [
-                    ['title' => 'E-learning Dual Diagnose Module 1', 'content' => 'Online module over comorbiditeit.'],
-                    ['title' => 'E-learning Dual Diagnose Module 2', 'content' => 'Online module over geïntegreerde behandeling.'],
+                    ['title' => 'E-learning Beweegbeleid Module 1', 'content' => 'Online module over draagvlak en stakeholders.'],
+                    ['title' => 'E-learning Beweegbeleid Module 2', 'content' => 'Online module over implementatie en evaluatie.'],
                 ],
             ],
 
@@ -737,11 +797,11 @@ class StrideSeedData {
 
             // === INDEX 14: Webinar series (4 weekly sessions) ===
             [
-                'title' => 'Webinarreeks: Actuele Thema\'s in Verslavingszorg',
+                'title' => 'Webinarreeks: Actuele Thema\'s in Jeugdgezondheid',
                 'description' => 'Reeks van 4 interactieve webinars. Elke week een nieuw thema met een expert spreker. Inclusief opname en handouts.',
                 'type' => 'webinar',
                 'format' => ['webinar', 'online'],
-                'themes' => ['verslaving', 'behandeling'],
+                'themes' => ['welzijn', 'beweging'],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+1 week')),
@@ -751,26 +811,27 @@ class StrideSeedData {
                         'venue' => 'Online (Zoom)',
                         'speakers' => 'Diverse experts',
                         'status' => 'open',
+                        'enrollment_form' => 'default',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 1: Gaming en sociale media verslaving'],
-                            ['date_offset' => 7, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 2: Jongeren en online gokken'],
-                            ['date_offset' => 14, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 3: Medicatie-ondersteunde behandeling'],
-                            ['date_offset' => 21, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 4: Herstelondersteunende zorg'],
+                            ['date_offset' => 0, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 1: Schermtijd en bewegen'],
+                            ['date_offset' => 7, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 2: Sportvoeding voor jongeren'],
+                            ['date_offset' => 14, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 3: Blessurepreventie update'],
+                            ['date_offset' => 21, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 4: Mentale veerkracht bij jongeren'],
                         ],
                     ],
                 ],
                 'lessons' => [
-                    ['title' => 'Webinar introductie', 'content' => 'Algemene informatie over de webinarreeks.'],
+                    ['title' => 'Webinar introductie', 'content' => 'Algemene informatie over de webinarreeks jeugdgezondheid.'],
                 ],
             ],
 
             // === INDEX 15: Single free webinar ===
             [
-                'title' => 'Gratis Webinar: Lachgas - De Nieuwe Trend',
-                'description' => 'Gratis informatief webinar over lachgasgebruik onder jongeren. Risico\'s, herkenning en gesprekstechnieken.',
+                'title' => 'Gratis Webinar: Energy Drinks - De Nieuwe Trend',
+                'description' => 'Gratis informatief webinar over energy drinks bij jongeren. Risico\'s, herkenning en gesprekstechnieken.',
                 'type' => 'webinar',
                 'format' => ['webinar', 'online'],
-                'themes' => ['jongeren', 'preventie'],
+                'themes' => ['voeding', 'welzijn'],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+10 days')),
@@ -778,15 +839,15 @@ class StrideSeedData {
                         'price_non_member' => 0.00,
                         'capacity' => 200,
                         'venue' => 'Online (Teams)',
-                        'speakers' => 'Dr. Sarah Janssen, toxicoloog',
+                        'speakers' => 'Dr. Sarah Janssen, voedingsdeskundige',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '12:00', 'end' => '13:00', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Lunchwebinar: Lachgas - feiten en risico\'s'],
+                            ['date_offset' => 0, 'start' => '12:00', 'end' => '13:00', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Lunchwebinar: Energy drinks - feiten en risico\'s'],
                         ],
                     ],
                 ],
                 'lessons' => [
-                    ['title' => 'Lachgas info', 'content' => 'Informatie over lachgas en de effecten.'],
+                    ['title' => 'Energy drinks info', 'content' => 'Informatie over energy drinks en de effecten bij jongeren.'],
                 ],
             ],
 
@@ -796,11 +857,11 @@ class StrideSeedData {
 
             // === INDEX 16: Required foundation ===
             [
-                'title' => 'Verslavingskunde: Fundament',
-                'description' => 'Basiscursus voor iedereen die professioneel met verslaving werkt. Verplicht onderdeel van het traject Verslavingsspecialist.',
+                'title' => 'Jeugdgezondheid: Fundament',
+                'description' => 'Basiscursus voor iedereen die professioneel met jeugdgezondheid werkt. Verplicht onderdeel van het traject Jeugdgezondheidsspecialist.',
                 'type' => 'in-person',
                 'format' => ['klassikaal'],
-                'themes' => ['verslaving', 'behandeling'],
+                'themes' => ['beweging', 'welzijn'],
                 'trajectory_role' => 'required',
                 'editions' => [
                     [
@@ -808,8 +869,8 @@ class StrideSeedData {
                         'price' => 395.00,
                         'price_non_member' => 495.00,
                         'capacity' => 16,
-                        'venue' => 'VAD Opleidingscentrum Brussel',
-                        'speakers' => 'Team VAD Academie',
+                        'venue' => 'BWEEG Opleidingscentrum Gent',
+                        'speakers' => 'Team BWEEG Academie',
                         'status' => 'open',
                         'sessions' => [
                             ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Basiskennis'],
@@ -818,18 +879,18 @@ class StrideSeedData {
                     ],
                 ],
                 'lessons' => [
-                    ['title' => 'Fundament module 1', 'content' => 'Basiskennis verslavingskunde.'],
+                    ['title' => 'Fundament module 1', 'content' => 'Basiskennis jeugdgezondheid.'],
                     ['title' => 'Fundament module 2', 'content' => 'Introductie gespreksvoering.'],
                 ],
             ],
 
             // === INDEX 17: Required advanced ===
             [
-                'title' => 'Verslavingskunde: Assessment en Diagnostiek',
-                'description' => 'Gestructureerd intake afnemen, screeningsinstrumenten gebruiken, behandelplan opstellen. Verplicht onderdeel traject.',
+                'title' => 'Assessment en Motorische Screening',
+                'description' => 'Gestructureerd intake afnemen, motorische screeningsinstrumenten gebruiken, begeleidingsplan opstellen. Verplicht onderdeel traject.',
                 'type' => 'in-person',
                 'format' => ['klassikaal'],
-                'themes' => ['behandeling'],
+                'themes' => ['beweging', 'sportblessures'],
                 'trajectory_role' => 'required',
                 'editions' => [
                     [
@@ -837,28 +898,28 @@ class StrideSeedData {
                         'price' => 395.00,
                         'price_non_member' => 495.00,
                         'capacity' => 14,
-                        'venue' => 'VAD Opleidingscentrum Brussel',
+                        'venue' => 'BWEEG Opleidingscentrum Gent',
                         'speakers' => 'Dr. Tom Decorte',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Assessment en screeningsinstrumenten'],
-                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Behandelplanning en doelen stellen'],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Motorische screening en instrumenten'],
+                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Begeleidingsplanning en doelen stellen'],
                         ],
                     ],
                 ],
                 'lessons' => [
-                    ['title' => 'Assessment theorie', 'content' => 'Screeningsinstrumenten en intake.'],
-                    ['title' => 'Diagnostiek praktijk', 'content' => 'Behandelplanning.'],
+                    ['title' => 'Assessment theorie', 'content' => 'Motorische screeningsinstrumenten en intake.'],
+                    ['title' => 'Screening praktijk', 'content' => 'Begeleidingsplanning.'],
                 ],
             ],
 
             // === INDEX 18: Elective 1 ===
             [
-                'title' => 'Keuzecursus: Familie en Systeem',
-                'description' => 'Verdieping over het betrekken van het systeem bij de behandeling. Keuzevak voor het traject Verslavingsspecialist.',
+                'title' => 'Keuzecursus: Familie en Gezondheidscoaching',
+                'description' => 'Verdieping over het betrekken van het gezin bij gezondheidsbevordering. Keuzevak voor het traject Jeugdgezondheidsspecialist.',
                 'type' => 'in-person',
                 'format' => ['klassikaal'],
-                'themes' => ['behandeling'],
+                'themes' => ['welzijn', 'voeding'],
                 'trajectory_role' => 'elective',
                 'editions' => [
                     [
@@ -866,26 +927,26 @@ class StrideSeedData {
                         'price' => 245.00,
                         'price_non_member' => 295.00,
                         'capacity' => 16,
-                        'venue' => 'VAD Locatie Antwerpen',
-                        'speakers' => 'Drs. Lies Verhoeven, systeemtherapeut',
+                        'venue' => 'BWEEG Locatie Antwerpen',
+                        'speakers' => 'Drs. Lies Verhoeven, gezondheidscoach',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Familie en systeemwerk'],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Familie en gezondheidscoaching'],
                         ],
                     ],
                 ],
                 'lessons' => [
-                    ['title' => 'Systeemwerk module', 'content' => 'Werken met het systeem rondom de cliënt.'],
+                    ['title' => 'Gezondheidscoaching module', 'content' => 'Werken met het gezin rondom de jongere.'],
                 ],
             ],
 
             // === INDEX 19: Elective 2 ===
             [
-                'title' => 'Keuzecursus: Groepsbehandeling',
-                'description' => 'Verdieping in groepstherapie bij verslaving. Groepsdynamica, sessies structureren, omgaan met weerstand.',
+                'title' => 'Keuzecursus: Groepsdynamiek in Sportteams',
+                'description' => 'Verdieping in groepsdynamiek bij jonge sportteams. Teamcohesie, conflicthantering en motivatietechnieken.',
                 'type' => 'in-person',
                 'format' => ['klassikaal'],
-                'themes' => ['behandeling', 'methodiek'],
+                'themes' => ['beweging', 'welzijn'],
                 'trajectory_role' => 'elective',
                 'editions' => [
                     [
@@ -893,26 +954,26 @@ class StrideSeedData {
                         'price' => 245.00,
                         'price_non_member' => 295.00,
                         'capacity' => 12,
-                        'venue' => 'VAD Opleidingscentrum Gent',
+                        'venue' => 'BWEEG Opleidingscentrum Gent',
                         'speakers' => 'Dr. Kris Goethals',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Groepsbehandeling bij verslaving'],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Groepsdynamiek in sportteams'],
                         ],
                     ],
                 ],
                 'lessons' => [
-                    ['title' => 'Groepsdynamica', 'content' => 'Theorie en praktijk van groepstherapie.'],
+                    ['title' => 'Groepsdynamiek', 'content' => 'Theorie en praktijk van groepsdynamiek in sportteams.'],
                 ],
             ],
 
             // === INDEX 20: Elective 3 ===
             [
-                'title' => 'Keuzecursus: Harm Reduction',
-                'description' => 'Verdieping in harm reduction benaderingen. Spuitenruil, drugscheck, gebruikersruimtes, naloxon.',
+                'title' => 'Keuzecursus: Harm Reduction bij Eetproblemen',
+                'description' => 'Verdieping in harm reduction benaderingen bij eetproblemen. Signalering, gespreksvoering en doorverwijzing.',
                 'type' => 'in-person',
                 'format' => ['klassikaal'],
-                'themes' => ['preventie', 'verslaving'],
+                'themes' => ['voeding', 'welzijn'],
                 'trajectory_role' => 'elective',
                 'editions' => [
                     [
@@ -920,16 +981,16 @@ class StrideSeedData {
                         'price' => 195.00,
                         'price_non_member' => 245.00,
                         'capacity' => 20,
-                        'venue' => 'VAD Hoofdkantoor Brussel',
+                        'venue' => 'BWEEG Hoofdkantoor Gent',
                         'speakers' => 'Peter Vander Laenen',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Harm reduction: theorie en praktijk'],
+                            ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Harm reduction bij eetproblemen: theorie en praktijk'],
                         ],
                     ],
                 ],
                 'lessons' => [
-                    ['title' => 'Harm reduction module', 'content' => 'Principes en praktijk van schadebeperking.'],
+                    ['title' => 'Harm reduction module', 'content' => 'Principes en praktijk van schadebeperking bij eetproblemen.'],
                 ],
             ],
         ];
@@ -1229,34 +1290,36 @@ class StrideSeedData {
         $courseIds = $this->created['courses'];
 
         // Course index reference:
-        // 0: E-learning Basiskennis (online open)
-        // 1: E-learning Alcohol (online open)
-        // 2: E-learning Cannabis (online closed)
-        // 3: E-learning Gaming (online closed)
-        // 4: E-learning Medicatie (online closed)
-        // 5: MGV Basistraining (in-person)
-        // 6: CGT bij Verslaving (in-person)
-        // 7: Masterclass Crisisinterventie (in-person)
-        // 8: Preventie in de Praktijk (in-person, slots)
-        // 9: Workshop Mindfulness (in-person, cancelled/rescheduled)
-        // 10: Gratis Introductie (in-person, free)
-        // 11: Dual Diagnose (hybrid)
-        // 12: Webinarreeks (webinar)
-        // 13: Gratis Webinar Lachgas (webinar, free)
-        // 14: Fundament (trajectory required)
-        // 15: Assessment (trajectory required)
-        // 16: Familie en Systeem (trajectory elective)
-        // 17: Groepsbehandeling (trajectory elective)
-        // 18: Harm Reduction (trajectory elective)
+        // 0: E-learning Basiskennis Jeugdgezondheid (online open)
+        // 1: E-learning Voeding en Prestatie (online open)
+        // 2: E-learning Eetproblemen (online closed)
+        // 3: E-learning Schermtijd en Bewegingsarmoede (online closed)
+        // 4: E-learning Beweegbeleid (online closed)
+        // 5: MGV rond Voeding (in-person)
+        // 6: Sportblessures Voorkomen (in-person)
+        // 7: Masterclass Mentale Veerkracht (in-person)
+        // 8: Gezonde Tussendoortjes (in-person, slots)
+        // 9: Workshop Yoga en Mindfulness (in-person, cancelled/rescheduled)
+        // 10: Gratis Introductie BWEEG (in-person, free)
+        // 11: Erkenningstraject Jeugdsportcoach (in-person, completion)
+        // 12: Bijscholing Bewegingsonderwijs (in-person, documents)
+        // 13: Beweegbeleid op School (hybrid)
+        // 14: Webinarreeks Jeugdgezondheid (webinar)
+        // 15: Gratis Webinar Energy Drinks (webinar, free)
+        // 16: Jeugdgezondheid Fundament (trajectory required)
+        // 17: Assessment en Motorische Screening (trajectory required)
+        // 18: Familie en Gezondheidscoaching (trajectory elective)
+        // 19: Groepsdynamiek in Sportteams (trajectory elective)
+        // 20: Harm Reduction bij Eetproblemen (trajectory elective)
 
-        // === TRAJECTORY 1: COHORT - Verslavingsspecialist ===
+        // === TRAJECTORY 1: COHORT - Jeugdgezondheidsspecialist ===
         $cohortData = [
-            'title' => 'Traject Verslavingsspecialist',
-            'post_content' => '<p>Word een gecertificeerd verslavingsspecialist met dit intensieve cohort-traject.</p>
+            'title' => 'Traject Jeugdgezondheidsspecialist',
+            'post_content' => '<p>Word een gecertificeerd jeugdgezondheidsspecialist met dit intensieve cohort-traject.</p>
 <h3>Verplichte cursussen</h3>
-<ul><li>Verslavingskunde: Fundament (2 dagen)</li><li>Assessment en Diagnostiek (2 dagen)</li><li>Motiverende Gespreksvoering (1 dag)</li><li>CGT bij Verslaving (3 dagen)</li></ul>
+<ul><li>Jeugdgezondheid: Fundament (2 dagen)</li><li>Assessment en Motorische Screening (2 dagen)</li><li>Motiverende Gespreksvoering rond Voeding (1 dag)</li><li>Sportblessures Voorkomen (3 dagen)</li></ul>
 <h3>Keuzecursussen (kies 2 uit 3)</h3>
-<ul><li>Familie en Systeem</li><li>Groepsbehandeling</li><li>Harm Reduction</li></ul>',
+<ul><li>Familie en Gezondheidscoaching</li><li>Groepsdynamiek in Sportteams</li><li>Harm Reduction bij Eetproblemen</li></ul>',
             'mode' => TrajectoryMode::Cohort->value,
             'status' => OfferingStatus::Open->value,
             'enrollment_deadline' => date('Y-m-d', strtotime('+1 month')),
@@ -1280,15 +1343,15 @@ class StrideSeedData {
         if (!is_wp_error($cohortId)) {
             update_post_meta($cohortId, self::SEED_META_KEY, true);
             $this->created['trajectories'][] = $cohortId;
-            echo "  + Cohort trajectory: Traject Verslavingsspecialist (ID: {$cohortId})\n";
+            echo "  + Cohort trajectory: Traject Jeugdgezondheidsspecialist (ID: {$cohortId})\n";
         } else {
             echo "  ! Cohort trajectory failed: {$cohortId->get_error_message()}\n";
         }
 
-        // === TRAJECTORY 2: SELF-PACED - Preventiewerker ===
+        // === TRAJECTORY 2: SELF-PACED - Jeugdgezondheidswerker ===
         $selfPacedData = [
-            'title' => 'Traject Preventiewerker',
-            'post_content' => '<p>Flexibel traject voor preventiewerkers. Combineer online cursussen met praktijkdagen, in je eigen tempo.</p>',
+            'title' => 'Traject Jeugdgezondheidswerker',
+            'post_content' => '<p>Flexibel traject voor jeugdgezondheidswerkers. Combineer online cursussen met praktijkdagen, in je eigen tempo.</p>',
             'mode' => TrajectoryMode::SelfPaced->value,
             'status' => OfferingStatus::Open->value,
             'enrollment_deadline' => '',
@@ -1308,14 +1371,14 @@ class StrideSeedData {
         if (!is_wp_error($selfPacedId)) {
             update_post_meta($selfPacedId, self::SEED_META_KEY, true);
             $this->created['trajectories'][] = $selfPacedId;
-            echo "  + Self-paced trajectory: Traject Preventiewerker (ID: {$selfPacedId})\n";
+            echo "  + Self-paced trajectory: Traject Jeugdgezondheidswerker (ID: {$selfPacedId})\n";
         } else {
             echo "  ! Self-paced trajectory failed: {$selfPacedId->get_error_message()}\n";
         }
 
         // === TRAJECTORY 3: BLENDED - Kennismakingstraject ===
         $blendedData = [
-            'title' => 'Kennismakingstraject Verslavingszorg',
+            'title' => 'Kennismakingstraject Jeugdgezondheid',
             'post_content' => '<p>Laagdrempelig kennismakingstraject. Combinatie van gratis en betaalde onderdelen.</p>',
             'mode' => TrajectoryMode::SelfPaced->value,
             'status' => OfferingStatus::Open->value,
@@ -1351,7 +1414,7 @@ class StrideSeedData {
 
         $vouchers = [
             ['code' => 'WELKOM2026', 'discount_type' => 'percentage', 'discount_value' => 10, 'usage_limit' => 50],
-            ['code' => 'VAD-MEMBER', 'discount_type' => 'percentage', 'discount_value' => 15, 'usage_limit' => 100],
+            ['code' => 'BWEEG-MEMBER', 'discount_type' => 'percentage', 'discount_value' => 15, 'usage_limit' => 100],
             ['code' => 'GRATIS-INTRO', 'discount_type' => 'full', 'discount_value' => 0, 'usage_limit' => 5],
             ['code' => 'KORTING50', 'discount_type' => 'fixed', 'discount_value' => 5000, 'usage_limit' => 20],
             ['code' => 'SEEDVOUCHER10', 'discount_type' => 'percentage', 'discount_value' => 10, 'usage_limit' => 100],
@@ -1442,7 +1505,7 @@ class StrideSeedData {
                     }
 
                     // Initialize completion_tasks if edition has requirements
-                    $completion = new EnrollmentCompletion();
+                    $completion = ntdst_get(EnrollmentCompletion::class);
                     $tasks = $completion->buildInitialTasks($editionId, 'vad_edition');
                     if (!empty($tasks)) {
                         global $wpdb;
@@ -1483,7 +1546,7 @@ class StrideSeedData {
                 if (!is_wp_error($regId)) {
                     $this->created['registrations'][] = $regId;
 
-                    $completion = new EnrollmentCompletion();
+                    $completion = ntdst_get(EnrollmentCompletion::class);
                     $tasks = $completion->buildInitialTasks($editionId, 'vad_edition');
                     if (!empty($tasks)) {
                         global $wpdb;
@@ -1752,7 +1815,7 @@ class StrideSeedData {
 
                 // Initialize post-course tasks
                 if (function_exists('ntdst_get') && class_exists(EnrollmentCompletion::class)) {
-                    $completion = new EnrollmentCompletion();
+                    $completion = ntdst_get(EnrollmentCompletion::class);
                     $completion->initializePostCourseTasks($regId, $editionId);
 
                     $reqs = $completion->getPostCourseRequirements($editionId, 'vad_edition');
@@ -1895,14 +1958,14 @@ class StrideSeedData {
         echo "\n--- Company Details ---\n";
 
         $companyDetails = [
-            'name'         => 'VAD vzw',
-            'address'      => 'Vanderlindenstraat 15',
-            'postal_code'  => '1030',
-            'city'         => 'Brussel',
+            'name'         => 'BWEEG vzw',
+            'address'      => 'Sportstraat 42',
+            'postal_code'  => '9000',
+            'city'         => 'Gent',
             'country'      => 'België',
             'vat'          => 'BE0420.798.935',
-            'email'        => 'info@vad.be',
-            'phone'        => '+32 2 423 03 33',
+            'email'        => 'info@bweeg.be',
+            'phone'        => '+32 9 234 56 78',
             'bank_account' => 'BE68 0682 0553 5765',
         ];
 
@@ -1926,46 +1989,46 @@ class StrideSeedData {
         echo "=== Course Types ===\n";
         echo "  ONLINE (5 total):\n";
         echo "    Open (LD native enrollment):\n";
-        echo "      - E-learning: Basiskennis Verslavingszorg (free, open)\n";
-        echo "      - E-learning: Alcohol en Gezondheid (free, 90-day expiry)\n";
+        echo "      - E-learning: Basiskennis Jeugdgezondheid (free, open)\n";
+        echo "      - E-learning: Voeding en Prestatie bij Jonge Sporters (free, 90-day expiry)\n";
         echo "    Closed (Stride enrollment form + sessions):\n";
-        echo "      - E-learning: Cannabis - Feiten en Fabels (€75, form)\n";
-        echo "      - E-learning: Gaming en Schermverslaving (€65, form)\n";
-        echo "      - E-learning: Medicatie bij Verslaving (€125, full + new cohort)\n";
+        echo "      - E-learning: Eetproblemen Herkennen en Bespreekbaar Maken (€75, form)\n";
+        echo "      - E-learning: Schermtijd en Bewegingsarmoede (€65, form)\n";
+        echo "      - E-learning: Beweegbeleid Ontwikkelen (€125, full + new cohort)\n";
         echo "\n";
 
         echo "  IN-PERSON (6 total, various configs):\n";
-        echo "    - MGV Basistraining (2 editions: Brussel + Antwerpen, single day)\n";
-        echo "    - CGT bij Verslaving (2 editions, 3-day spread over weeks, 1 almost full)\n";
-        echo "    - Masterclass Crisisinterventie (1 FULL, 1 open, single session)\n";
-        echo "    - Preventie in de Praktijk (session SLOTS + selection deadline)\n";
-        echo "    - Workshop Mindfulness (1 cancelled, 1 rescheduled)\n";
-        echo "    - Gratis Introductie (free, single morning session)\n";
+        echo "    - MGV rond Voeding (2 editions: Gent + Antwerpen, single day)\n";
+        echo "    - Sportblessures Voorkomen (2 editions, 3-day spread over weeks, 1 almost full)\n";
+        echo "    - Masterclass Mentale Veerkracht (1 FULL, 1 open, single session)\n";
+        echo "    - Gezonde Tussendoortjes (session SLOTS + selection deadline)\n";
+        echo "    - Workshop Yoga en Mindfulness (1 cancelled, 1 rescheduled)\n";
+        echo "    - Gratis Introductie BWEEG (free, single morning session)\n";
         echo "\n";
 
         echo "  HYBRID (1 total):\n";
-        echo "    - Dual Diagnose (klassikaal + e-learning + webinar mixed sessions)\n";
+        echo "    - Beweegbeleid op School (klassikaal + e-learning + webinar mixed sessions)\n";
         echo "\n";
 
         echo "  WEBINAR (2 total):\n";
-        echo "    - Webinarreeks: Actuele Thema's (4 weekly sessions)\n";
-        echo "    - Gratis Webinar: Lachgas (free, single lunchtime session)\n";
+        echo "    - Webinarreeks: Actuele Thema's in Jeugdgezondheid (4 weekly sessions)\n";
+        echo "    - Gratis Webinar: Energy Drinks (free, single lunchtime session)\n";
         echo "\n";
 
         echo "  TRAJECTORY COURSES (5 total):\n";
-        echo "    Required: Fundament, Assessment en Diagnostiek\n";
-        echo "    Electives: Familie en Systeem, Groepsbehandeling, Harm Reduction\n";
+        echo "    Required: Fundament, Assessment en Motorische Screening\n";
+        echo "    Electives: Familie en Gezondheidscoaching, Groepsdynamiek in Sportteams, Harm Reduction bij Eetproblemen\n";
         echo "\n";
 
         echo "=== Trajectories ===\n";
-        echo "  1. Traject Verslavingsspecialist (cohort, 4 required + choose 2 of 3)\n";
-        echo "  2. Traject Preventiewerker (self-paced, 3 required + 2 optional)\n";
-        echo "  3. Kennismakingstraject (free entry, 2 required + 2 optional)\n";
+        echo "  1. Traject Jeugdgezondheidsspecialist (cohort, 4 required + choose 2 of 3)\n";
+        echo "  2. Traject Jeugdgezondheidswerker (self-paced, 3 required + 2 optional)\n";
+        echo "  3. Kennismakingstraject Jeugdgezondheid (free entry, 2 required + 2 optional)\n";
         echo "\n";
 
         echo "=== Post-Course Completion ===\n";
-        echo "  - MGV Basistraining (Brussel): post_evaluation + post_documents\n";
-        echo "  - CGT bij Verslaving (Antwerpen): post_evaluation + post_documents + post_approval\n";
+        echo "  - MGV rond Voeding (Gent): post_evaluation + post_documents\n";
+        echo "  - Sportblessures Voorkomen (Blaarmeersen): post_evaluation + post_documents + post_approval\n";
         echo "  - seed_student1 enrolled + attendance marked + post-course tasks initialized\n";
         echo "\n";
 
@@ -1983,7 +2046,7 @@ class StrideSeedData {
 
         echo "=== Voucher Codes ===\n";
         echo "  - WELKOM2026 (10% off)\n";
-        echo "  - VAD-MEMBER (15% off)\n";
+        echo "  - BWEEG-MEMBER (15% off)\n";
         echo "  - GRATIS-INTRO (100% off)\n";
         echo "  - KORTING50 (€50 off)\n";
         echo "  - SEEDVOUCHER10 (10% off)\n";
