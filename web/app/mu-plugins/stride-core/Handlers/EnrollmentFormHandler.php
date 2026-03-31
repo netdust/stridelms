@@ -411,7 +411,7 @@ final class EnrollmentFormHandler
 
         $code = sanitize_text_field($params['code'] ?? '');
         $itemType = sanitize_text_field($params['item_type'] ?? 'edition');
-        $itemId = absint($params['edition_id'] ?? $params['trajectory_id'] ?? 0);
+        $itemId = absint($params['item_id'] ?? $params['edition_id'] ?? $params['trajectory_id'] ?? 0);
 
         if (empty($code)) {
             return new WP_Error('invalid_input', __('Vouchercode is vereist.', 'stride'));

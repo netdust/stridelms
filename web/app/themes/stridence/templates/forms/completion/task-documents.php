@@ -16,6 +16,8 @@
 declare(strict_types=1);
 
 defined('ABSPATH') || exit;
+
+$taskType = $args['task_type'] ?? 'documents';
 ?>
 
 <div x-data="{
@@ -39,6 +41,7 @@ defined('ABSPATH') || exit;
         this.uploadError = '';
         const formData = new FormData();
         formData.append('registration_id', $data.registrationId);
+        formData.append('task_type', '<?= esc_js($taskType) ?>');
 
         this.files.forEach(file => {
             formData.append('documents[]', file);
@@ -47,7 +50,7 @@ defined('ABSPATH') || exit;
         try {
             const result = await ntdstAPI.upload('stride_upload_completion_documents', formData);
             this.files = [];
-            $data.tasks['documents'] = { status: 'completed', completed_at: new Date().toISOString() };
+            $data.tasks['<?= esc_js($taskType) ?>'] = { status: 'completed', completed_at: new Date().toISOString() };
 
             if ($data.completedCount === $data.totalCount) {
                 window.location.reload();

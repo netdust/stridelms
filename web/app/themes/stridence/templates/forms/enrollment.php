@@ -61,7 +61,7 @@ if ($item_type === 'edition' && $item_id) {
         $price        = $editionService->getPrice($item_id, $current_user->ID);
 
         $edition_data = [
-            'title'      => $course_id ? get_the_title($course_id) : get_the_title($item_id),
+            'title'      => ($course_id ? get_the_title($course_id) : '') ?: get_the_title($item_id),
             'start_date' => $editionModel->getMeta($item_id, 'start_date', ''),
             'venue'      => $editionModel->getMeta($item_id, 'venue', ''),
             'price'      => $price ? $price->format() : '',

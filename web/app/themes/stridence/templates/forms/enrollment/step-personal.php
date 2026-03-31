@@ -87,8 +87,8 @@ $form_type       = $args['form_type'] ?? 'default';
 
     <div class="mt-8 flex justify-between">
         <button type="button" @click="prevStep" class="btn-secondary"
-                x-show="mode !== 'interest'">Vorige</button>
-        <span x-show="mode === 'interest'"></span>
+                x-show="mode !== 'interest' && stepIndex > 0">Vorige</button>
+        <span x-show="mode === 'interest' || stepIndex === 0"></span>
         <button type="button" @click="nextStep" class="btn-primary">Volgende</button>
     </div>
 </div>

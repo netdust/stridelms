@@ -588,7 +588,7 @@ final class EnrollmentService extends AbstractService
         ]);
 
         // Determine participant and enrollment path
-        if ($enrollmentType === 'colleague') {
+        if (in_array($enrollmentType, ['colleague', 'collega'], true)) {
             // Check if user exists before resolving (to detect new user creation)
             $existingUser = get_user_by('email', $data['email']);
 

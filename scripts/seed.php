@@ -1629,16 +1629,38 @@ class StrideSeedData {
 
             foreach ($randomEditions as $editionId) {
                 if ($this->regRepo) {
+                    // Check if edition has enrollment requirements → status=pending
+                    $hasEnrollmentReqs = get_post_meta($editionId, '_ntdst_requires_session_selection', true)
+                        || get_post_meta($editionId, '_ntdst_requires_questionnaire', true)
+                        || get_post_meta($editionId, '_ntdst_requires_documents', true)
+                        || get_post_meta($editionId, '_ntdst_requires_approval', true);
+
                     $regId = $this->regRepo->create([
                         'user_id' => $userId,
                         'edition_id' => $editionId,
-                        'status' => RegistrationStatus::Confirmed->value,
+                        'status' => $hasEnrollmentReqs
+                            ? RegistrationStatus::Pending->value
+                            : RegistrationStatus::Confirmed->value,
                         'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
                     ]);
 
                     if (!is_wp_error($regId)) {
                         $this->created['registrations'][] = $regId;
-                        echo "  + Registration: {$user->user_login} -> edition {$editionId}\n";
+
+                        // Initialize completion tasks if edition has requirements
+                        $completion = ntdst_get(EnrollmentCompletion::class);
+                        $tasks = $completion->buildInitialTasks($editionId, 'vad_edition');
+                        if (!empty($tasks)) {
+                            global $wpdb;
+                            $wpdb->update(
+                                $wpdb->prefix . 'vad_registrations',
+                                ['completion_tasks' => wp_json_encode($tasks)],
+                                ['id' => $regId]
+                            );
+                            echo "  + Registration: {$user->user_login} -> edition {$editionId} (pending, tasks: " . implode(', ', array_keys($tasks)) . ")\n";
+                        } else {
+                            echo "  + Registration: {$user->user_login} -> edition {$editionId}\n";
+                        }
                     }
                 }
 
@@ -1745,6 +1767,60 @@ class StrideSeedData {
         }
 
         echo "  Found " . count($postCourseEditions) . " editions with post-course requirements\n";
+
+        // Ensure evaluation field groups are assigned to post-course edition courses
+        if (class_exists(\Stride\Modules\Questionnaire\QuestionnaireRepository::class)) {
+            $questionnaireRepo = ntdst_get(\Stride\Modules\Questionnaire\QuestionnaireRepository::class);
+            $groups = $questionnaireRepo->getAllGroups();
+
+            // Find or create an evaluation field group
+            $evalGroup = null;
+            foreach ($groups as &$g) {
+                if (($g['stage'] ?? '') === 'evaluation') {
+                    $evalGroup = &$g;
+                    break;
+                }
+            }
+            unset($g);
+
+            if (!$evalGroup) {
+                $groups[] = [
+                    'id' => 'qg_eval_seed',
+                    'label' => 'Evaluatie opleiding',
+                    'stage' => 'evaluation',
+                    'assignments' => [],
+                    'fields' => [
+                        ['label' => 'Beoordeling docent', 'name' => 'beoordeling_docent', 'type' => 'scale', 'required' => true, 'min' => 1, 'max' => 5],
+                        ['label' => 'Beoordeling lesmateriaal', 'name' => 'beoordeling_materiaal', 'type' => 'scale', 'required' => true, 'min' => 1, 'max' => 5],
+                        ['label' => 'Opmerkingen', 'name' => 'opmerkingen', 'type' => 'textarea', 'required' => false],
+                    ],
+                ];
+                $evalGroup = &$groups[count($groups) - 1];
+            }
+
+            // Assign to courses linked to post-course editions
+            $editionService = $this->editionService;
+            $courseIds = [];
+            foreach ($postCourseEditions as $editionId) {
+                $courseId = $editionService ? $editionService->getCourseId($editionId) : 0;
+                if ($courseId) {
+                    $courseIds[] = $courseId;
+                }
+            }
+            $courseIds = array_unique($courseIds);
+
+            // Merge into existing assignments (flat int IDs, matching admin settings format)
+            $existing = $evalGroup['assignments'] ?? [];
+            foreach ($courseIds as $cid) {
+                if (!in_array($cid, $existing, true)) {
+                    $evalGroup['assignments'][] = $cid;
+                }
+            }
+
+            $questionnaireRepo->saveGroups($groups);
+            echo "  + Evaluation field group assigned to courses: " . implode(', ', $courseIds) . "\n";
+            unset($evalGroup);
+        }
 
         global $wpdb;
         $attendanceTable = $wpdb->prefix . 'vad_attendance';
