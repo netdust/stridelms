@@ -802,6 +802,7 @@ class StrideSeedData {
                 'type' => 'webinar',
                 'format' => ['webinar', 'online'],
                 'themes' => ['welzijn', 'beweging'],
+                'ld_price_type' => 'closed',
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+1 week')),
@@ -1135,13 +1136,15 @@ class StrideSeedData {
         }
 
         // Simulate registrations if specified
+        // Uses high fake user_ids to avoid unique_user_edition constraint (no real user at these IDs)
         if (!empty($data['registered']) && $this->regRepo) {
+            global $wpdb;
             for ($i = 0; $i < $data['registered']; $i++) {
-                global $wpdb;
-                $wpdb->insert(
+                $fakeUserId = 900000 + ($editionId * 100) + $i + 1;
+                $result = $wpdb->insert(
                     $wpdb->prefix . 'vad_registrations',
                     [
-                        'user_id' => 0,
+                        'user_id' => $fakeUserId,
                         'edition_id' => $editionId,
                         'status' => 'confirmed',
                         'enrollment_path' => 'individual',
@@ -1149,6 +1152,9 @@ class StrideSeedData {
                         'registered_at' => current_time('mysql'),
                     ]
                 );
+                if ($result === false) {
+                    echo "    ! Fake registration insert failed: {$wpdb->last_error}\n";
+                }
             }
         }
 
