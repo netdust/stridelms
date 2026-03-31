@@ -28,15 +28,22 @@ if (!$registration || !$post) {
     return;
 }
 
-// Determine stage: post_evaluation → 'evaluation', questionnaire → 'questionnaire'
-$stage = ($taskType === 'post_evaluation') ? 'evaluation' : 'questionnaire';
+// Map task type to questionnaire stage:
+// - post_evaluation → 'evaluation' (post-course evaluation form)
+// - questionnaire   → 'intake' (pre-course intake questionnaire)
+$stage = ($taskType === 'post_evaluation') ? 'evaluation' : 'intake';
 
 $repo = ntdst_get(QuestionnaireRepository::class);
 
 if ($post->post_type === 'vad_edition') {
     $editionService = ntdst_get(EditionService::class);
     $courseId = $editionService->getCourseId($post->ID);
-    $fieldGroups = $courseId ? $repo->getGroupsForStage($courseId, $stage) : [];
+
+    // Check both edition and linked course for field group assignments
+    $fieldGroups = $repo->getGroupsForStage($post->ID, $stage, 'vad_edition');
+    if (empty($fieldGroups) && $courseId) {
+        $fieldGroups = $repo->getGroupsForStage($courseId, $stage);
+    }
 } else {
     $fieldGroups = $repo->getGroupsForStage($post->ID, $stage, $post->post_type);
 }

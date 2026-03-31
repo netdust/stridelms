@@ -228,11 +228,13 @@ document.addEventListener('alpine:init', () => {
                 });
 
                 if (result.completed) {
-                    const wasAlreadyDone = this.completedCount === this.totalCount;
                     this.tasks[taskType] = { status: 'completed', completed_at: new Date().toISOString() };
 
-                    if (this.completedCount === this.totalCount || wasAlreadyDone) {
+                    if (this.completedCount === this.totalCount) {
                         window.location.href = '<?= esc_url(home_url('/mijn-account/?tab=inschrijvingen')) ?>';
+                    } else {
+                        // Reload to refresh server-rendered task availability (e.g. unlock approval)
+                        window.location.reload();
                     }
                 } else {
                     this.error = result.data?.message || 'Er ging iets mis.';

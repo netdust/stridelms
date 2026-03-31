@@ -78,7 +78,7 @@ if (in_array($type, ['radio', 'scale', 'description'], true)) {
             <!-- Select field -->
             <select id="<?= esc_attr($inputId) ?>"
                     x-model="<?= esc_attr($modelBinding) ?>"
-                    class="input-text"
+                    class="input-select"
                     <?= $required ? 'required' : '' ?>>
                 <option value=""><?= esc_html__('Selecteer...', 'stride') ?></option>
                 <?php foreach ($selectOptions as $option) : ?>
