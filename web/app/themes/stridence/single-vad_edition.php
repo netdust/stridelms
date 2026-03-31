@@ -120,6 +120,15 @@ get_header();
 ?>
 
 <article <?php post_class('pb-12 lg:pb-16'); ?>>
+    <?php if (!empty($_GET['enrolled'])) : ?>
+        <div class="container mt-6">
+            <div class="flex items-center gap-3 p-4 rounded-lg bg-status-success/10 text-status-success-dark border border-status-success/20">
+                <?php echo stridence_icon('check-circle', 'w-5 h-5 shrink-0'); ?>
+                <p class="text-sm font-medium"><?php esc_html_e('Je bent succesvol ingeschreven!', 'stridence'); ?></p>
+            </div>
+        </div>
+    <?php endif; ?>
+
     <!-- Header Section -->
     <div class="bg-surface-alt border-b border-border">
         <div class="container py-8 lg:py-12">

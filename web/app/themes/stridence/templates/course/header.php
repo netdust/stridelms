@@ -26,10 +26,27 @@ $is_online   = $args['is_online'] ?? false;
 
         <!-- Format badge -->
         <div class="flex items-center gap-2 mb-4">
-            <?php if ($is_online) : ?>
+            <?php if ($is_online) :
+                // Distinguish e-learning vs webinar via stride_format taxonomy
+                $format_terms = get_the_terms($course_id, 'stride_format');
+                $format_slugs = (!empty($format_terms) && !is_wp_error($format_terms))
+                    ? wp_list_pluck($format_terms, 'slug')
+                    : [];
+
+                if (in_array('e-learning', $format_slugs, true)) {
+                    $format_label = __('E-learning', 'stridence');
+                    $format_icon = 'monitor';
+                } elseif (in_array('webinar', $format_slugs, true)) {
+                    $format_label = __('Webinar', 'stridence');
+                    $format_icon = 'video';
+                } else {
+                    $format_label = __('Online cursus', 'stridence');
+                    $format_icon = 'wifi';
+                }
+            ?>
                 <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-accent text-text-inverse">
-                    <?php echo stridence_icon('wifi', 'w-3 h-3'); ?>
-                    <?php esc_html_e('Online cursus', 'stridence'); ?>
+                    <?php echo stridence_icon($format_icon, 'w-3 h-3'); ?>
+                    <?php echo esc_html($format_label); ?>
                 </span>
             <?php else : ?>
                 <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-primary text-text-inverse">

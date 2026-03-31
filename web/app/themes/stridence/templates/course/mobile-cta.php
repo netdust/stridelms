@@ -62,8 +62,14 @@ $is_open     = $is_online && LearnDashHelper::getAccessMode($course_id) === Lear
                 <?php esc_html_e('Start cursus', 'stridence'); ?>
             </a>
 
+        <?php elseif ($is_online && $enrollment_url) : ?>
+            <!-- Online not enrolled: Stride enrollment URL -->
+            <a href="<?php echo esc_url($enrollment_url); ?>" class="btn btn-primary w-full text-center">
+                <?php esc_html_e('Inschrijven', 'stridence'); ?>
+            </a>
+
         <?php elseif ($is_online) : ?>
-            <!-- Online not enrolled: LD payment or our own CTA -->
+            <!-- Online not enrolled: LD payment or fallback CTA -->
             <?php
             $ld_mobile_buttons = function_exists('learndash_payment_buttons') ? learndash_payment_buttons($course_id) : '';
             $mobile_price_type = LearnDashHelper::getAccessMode($course_id);

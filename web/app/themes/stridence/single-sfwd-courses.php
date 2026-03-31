@@ -31,6 +31,8 @@ $editionService = ntdst_get(EditionService::class);
 $editions = $editionService->getEditionsForCourse($course_id);
 $enrollmentService = $user_id ? ntdst_get(EnrollmentService::class) : null;
 
+$edition_price = null; // Money object from first enrollable edition
+
 foreach ($editions as $edition) {
     $edition_id = (int) ($edition['id'] ?? $edition['ID'] ?? 0);
     if (!$edition_id) {
@@ -46,6 +48,11 @@ foreach ($editions as $edition) {
         if (!$is_online || $editionService->hasEnrollmentForm($edition_id)) {
             $enrollment_url = stride_enrollment_url($edition_id);
         }
+    }
+
+    // Capture edition price from first available edition
+    if ($edition_price === null) {
+        $edition_price = $editionService->getPrice($edition_id, $user_id ?: null);
     }
 }
 
@@ -96,6 +103,7 @@ get_header();
                         'course_id'      => $course_id,
                         'enrollment_url' => $enrollment_url,
                         'user_enrolled'  => $user_enrolled,
+                        'edition_price'  => $edition_price,
                     ]);
                     ?>
                 <?php else : ?>

@@ -18,10 +18,12 @@
 defined('ABSPATH') || exit;
 
 use Stride\Integrations\LearnDash\LearnDashHelper;
+use Stride\Domain\Money;
 
 $course_id       = $args['course_id'] ?? get_the_ID();
 $enrollment_url  = $args['enrollment_url'] ?? '';
 $stride_enrolled = $args['user_enrolled'] ?? false;
+$edition_price   = $args['edition_price'] ?? null; // Money object from edition
 $user_id         = get_current_user_id();
 
 // ── Enrollment state ──
@@ -33,16 +35,23 @@ $is_complete = $has_access && $progress >= 100;
 $is_open     = LearnDashHelper::getAccessMode($course_id) === LearnDashHelper::MODE_OPEN;
 
 // ── Price info (for not-enrolled state) ──
+// Prefer Stride edition price over LearnDash price (LD returns null for closed-type courses)
+$has_edition_price = $edition_price instanceof Money && !$edition_price->isZero();
+
 $price_info = function_exists('learndash_get_course_price')
     ? learndash_get_course_price($course_id)
     : [];
-$price_type   = $price_info['type'] ?? 'open';
+$price_type   = $has_edition_price ? 'paynow' : ($price_info['type'] ?? 'open');
 $course_price = $price_info['price'] ?? '';
 
 // Format price display
-$price_formatted = !empty($course_price)
-    ? '€ ' . number_format((float) $course_price, 2, ',', '.')
-    : '';
+if ($has_edition_price) {
+    $price_formatted = $edition_price->format();
+} else {
+    $price_formatted = !empty($course_price)
+        ? '€ ' . number_format((float) $course_price, 2, ',', '.')
+        : '';
+}
 
 // Subscription billing text
 $billing_text = '';
