@@ -7,9 +7,9 @@ Last refresh: 2026-05-13
 
 ---
 
-## Current Phase: Pre-launch cleanup → Phase 1 finishing work
+## Current Phase: Phase 1 finishing work (mid-flight)
 
-Development is restarting after a pause. Two parallel goals:
+Two parallel goals:
 
 1. **Production-ready Phase 1** — e-learning, blended learning, enrollment flow, enrollment tasks, completion tasks, attendance, invoicing, user dashboard.
 2. **Multi-brand demo** — 2–3 distinct brand scaffolds + swap demo for sales.
@@ -18,47 +18,66 @@ Development is restarting after a pause. Two parallel goals:
 
 ---
 
-## Biggest Open Work
+## What shipped 2026-05-13
 
-| Area | Item | Source |
-|------|------|--------|
-| Admin Dashboard | **23 bugs all OPEN** (the biggest single blocker) | `tasks/shake-out-dashboard-manifest.md` |
-| Phase 3 tail | 14-day auto-lock cron, billing edit restriction, OGM payment ref | `plans/finish-phase-3.md` |
-| Phase 4 vouchers | 5 VAD-specific rules (categories, member, prorating, social) | `plans/phase-4-voucher-completion.md` |
-| Deferred bugs (launch modules) | 11 bugs across Completion, Attendance, Theme | See LAUNCH-CHECKLIST.md §D |
-| Multi-brand demo | 2 more brand scaffolds + swap doc | See LAUNCH-CHECKLIST.md §F |
+Three commits this session:
+- `8a54c475` Sprint 1 + Track 2 — all 23 dashboard bugs resolved + neutral UX pass + user-detail rework (enrollment / attendance / invoice tables) + empty/loading/error states
+- `01b9a346` Phase 3 tail — bulk lock/unlock quotes from edition + customer-facing edit restriction
+- `7c5f04f5` Perf benchmark script — confirms `getUserDetail` at 50 enrollments is 13 queries / 5 ms (no N+1)
+
+Plus `ba09bec6` docs commit with the new `docs/LAUNCH-CHECKLIST.md` as the single source of truth.
+
+**Tests:** 674 unit + 221 integration green.
 
 ---
 
-## Shake-out Status (latest)
+## Biggest Open Work (per LAUNCH-CHECKLIST)
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Edition module | DONE | All resolved |
-| Enrollment module | DONE | v2 manifest (2026-03-31) supersedes v1; all 4 resolved |
-| Enrollment-completion | DONE | All 2 resolved (2026-03-31) |
-| Online enrollment | DONE | All 6 fixed (2026-03-31) |
-| Completion module | DONE | v2 manifest (2026-03-31) supersedes v1; all 5 resolved |
-| Invoicing module | DONE | Mixed status, mostly fixed |
-| Attendance module | DONE | 3 deferred (now P0–P1 per launch checklist) |
-| Partner API | DONE | 5 deferred (post-launch) |
-| Stridence theme | DONE | 3 deferred (now P0–P1 per launch checklist) |
-| ntdst-assistant | DONE | All 7 resolved |
-| ntdst-audit | DONE | All 4 resolved |
-| ntdst-auth | DONE | All 1 resolved |
-| netdust-mail | DONE | 1 deferred (CDN Alpine.js) |
-| ntdst-core + stride-core | DONE | Clean |
-| Edition | DONE | All 2 resolved |
-| Questionnaire | DONE | All 1 resolved |
-| LTI plugin | DONE | 5 resolved, 1 deferred — **deferred to post-launch** |
-| **Admin dashboard** | **OPEN** | **23 bugs all unfixed** |
-| Trajectory | UNTESTED | Deferred to post-launch |
+| Area | Item | Status |
+|------|------|--------|
+| §A Admin Dashboard | All 23 bugs + visual/UX repair | ✅ DONE |
+| §B Phase 3 tail | Bulk lock/unlock + edit restriction | ✅ DONE (OGM + cron dropped from v1) |
+| §C Phase 4 vouchers | 5 VAD-specific rules (categories, member, prorating, social) | OPEN |
+| §D Deferred bugs in launch modules | 11 bugs across Completion, Attendance, Theme | OPEN |
+| §F Multi-brand demo | 2 more brand scaffolds + swap doc | OPEN |
+| Pre-launch cleanup | stash LTI WIP, drop stray PNGs, gitignore tests/_output | OPEN |
 
-**Superseded manifests** (archived to `tasks/archive/`):
-- `shake-out-completion-manifest.md` → see v2
-- `shake-out-enrollment-manifest.md` → see v2
+---
 
-**Test suite:** 611 unit, 214 integration, 90 acceptance — all green at last run
+## Decisions this session
+
+- **OGM payment reference** — dropped from v1. Stride creates quotes, not invoices; OGM belongs on the Exact-generated invoice.
+- **Auto-lock cron** — dropped. Admin decides when to lock (single toggle on edition sidebar).
+- **Trajectory UI** — stays visible for v1 (user decision after Track 1 sweep).
+- **Activity feed grouping** — skipped per user. Current flat list is good enough for launch.
+- **Per-enrollment timeline view** — skipped per user.
+
+---
+
+## Shake-out Status
+
+All major modules done. Admin dashboard fully resolved (was the last blocker).
+
+**Remaining deferred bugs in launch modules (per §D):**
+- Completion (5) — LD course_completed sync, deprecated current_time, cache, Withdrawn enum, DI coupling
+- Attendance (3) — cascade delete, orphan session_registrations, semantic count
+- Theme (3) — 7 footer 404s, LD ProPanel notice, 11 shortcodes
+
+Partner API's 5 deferred bugs stay deferred (post-launch).
+
+---
+
+## Performance baseline (2026-05-13)
+
+| Endpoint | 10 regs | 50 regs |
+|---|---|---|
+| getUserDetail | 39 queries / 13 ms | 13 queries / 5 ms |
+| getStats | 17 q / 6 ms | 20 q / 6 ms |
+| getEditions (20 rows) | 12 q / 6 ms | 12 q / 6 ms |
+| getQuotes (20 rows) | 9 q / 5 ms | 9 q / 5 ms |
+| getActivityFeed (10) | 3 q / 1 ms | 3 q / 1 ms |
+
+No N+1. Comfortable for VAD's profile (4000 users, avg 2–3 enrollments). Re-run via `ddev exec bash -c "HEAVY=1 wp eval-file scripts/perf-benchmark.php"`.
 
 ---
 
@@ -70,7 +89,8 @@ Development is restarting after a pause. Two parallel goals:
 - Editorial rebrand (2026-03-26) — design-system shell via tokens + Tailwind config
 - BWEEG demo (2026-03-27) — first branded client scaffold on top of editorial rebrand
 - Online enrollment flow shake-out (2026-03-31) — 6 bugs fixed
-- Enrollment-completion task fixes (latest commit) — questionnaire stage mapping, select styling, reload on complete
+- Admin dashboard Sprint 1 + Track 2 (2026-05-13) — 23 bugs verified resolved, neutral UX, designed empty/loading/error states
+- Quote bulk lock/unlock from edition (2026-05-13) — admin-driven, customer-facing block
 
 ---
 
@@ -83,7 +103,8 @@ Inventory only — left in place per user instruction:
 - `web/app/plugins/ntdst-auth/assets/css/auth.css` — auth styling tweak
 - `web/app/themes/stridence/tailwind.config.js` — tailwind tweaks
 - Stray PNGs in repo root: `bento-section`, `debug-outlines`, `stridelms-fullpage` — design references, not source
-- 40+ untracked screenshots in `tests/_output/` — Playwright artifacts
+- 60+ untracked screenshots in `tests/_output/` — Playwright + dashboard sweep artifacts
+- Random third-party plugin modifications (sfwd-lms changes, ntdst-assistant lib/)
 
 **To clean before launch:** see LAUNCH-CHECKLIST.md "Pre-Launch Cleanup".
 
@@ -105,3 +126,6 @@ Inventory only — left in place per user instruction:
 - Trajectory module — design done, never shake-out tested
 - Partner API — 5 deferred bugs, foundational design done
 - LTI — in-progress work parked on `staging` branch
+- OGM payment reference — re-add when Stride generates invoices or when Exact integration is built
+- Enrollment timeline view — answers "what happened to this enrollment?"
+- Activity feed grouping — group by entity, filter chips

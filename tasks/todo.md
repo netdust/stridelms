@@ -4,52 +4,56 @@ Working scratchpad. Authoritative launch list lives in `docs/LAUNCH-CHECKLIST.md
 
 ---
 
-## Sprint 1 — Admin Dashboard: bugs + visual/UX repair
+## Sprint 1 — Admin Dashboard ✅ DONE (2026-05-13)
 
-Two tracks. Do **bugs first**, then **visual** — fixing bugs surfaces what's actually broken vs what's design.
+- Track 1 — all 23 bugs verified resolved (5 fixed, 18 already in code)
+- Track 2 — neutral UX pass, user-detail rework, empty/loading/error states
+- 31 previously-unstyled classes filled in
+- Commit `8a54c475`
 
-### Track 1 — Functional bugs (5 real, 2 to verify)
+## Phase 3 tail ✅ DONE (2026-05-13)
 
-**Re-sweep done 2026-05-13. 18 of 23 bugs already resolved in code. Remaining:**
+- Bulk lock/unlock from edition (single toggle button)
+- Customer-facing edit restriction when `locked=true`
+- OGM dropped from v1 (Exact's job)
+- Auto-lock cron dropped from v1 (admin-driven instead)
+- Commit `01b9a346`
 
-1. [ ] **BUG-009 (P0)** Currency: API returns cents-as-euros. Fix `AdminAPIController::quotes()` to divide subtotal/tax/total by 100 before send. Verify with seeded OFF-2026-0161 → should show €272,25 not €27.225,00.
-2. [ ] **BUG-007 (P0)** Settings persistence: save returns 200 but reload reverts. Check `StrideSettingsService.php` option saving + capability check.
-3. [ ] **BUG-021 (P1)** Activity feed text: "Pieter Janssen: auth.logout" → human Dutch via `AdminActivityMapper`. Define mappings per event type (auth.logout, user.created, quote.sent, etc).
-4. [x] ~~Hide trajectory UI for v1~~ — **decision 2026-05-13: keep visible.** Re-verify BUG-003 (trajectory detail 404) as part of standalone bugs below.
-5. [ ] **BUG-022 (P2)** Course tag dropdown empty. Confirm `ld_course_tag` taxonomy and BWEEG seed.
-6. [ ] **BUG-023 (P2)** Quote slide-over BTW breakdown. Add subtotal + BTW 21% + total rows to template.
-7. [ ] **Verify BUG-019** (dead "Alles bekijken" links) — quick browser test.
-8. [ ] **Verify BUG-020** (`post=undefined` in hidden slide-overs) — quick browser test.
-9. [ ] Update manifest with fixes + re-sweep result.
+## Performance baseline ✅ DONE (2026-05-13)
 
-### Track 2 — Visual & UX repair (after bugs)
-See `docs/LAUNCH-CHECKLIST.md` §A.2 for full scope. Headlines:
-
-9. [ ] Color system — drop purple, pick stable neutral + 1 accent + status colors (tokens.css only)
-10. [ ] Layout stability — density, spacing, hierarchy
-11. [ ] Slide-over content redesign (after BUG-002 positioning fix lands)
-12. [ ] User detail = "call center" view — enrollments + quotes/invoices + payment status + events on one screen
-13. [ ] Enrollment detail = "what happened" timeline view
-14. [ ] Activity feed redesign — group by entity, human-readable text
-15. [ ] Empty / loading / error states across dashboard
-16. [ ] (P1) density mode toggle (compact)
-
-### Acceptance for Sprint 1
-- All 23 bugs resolved or explicitly deferred with documented reason
-- Visual repair items complete or scoped down with user sign-off
-- Dashboard shake-out manifest re-run shows green
-- "Where's my invoice?" and "What happened to this enrollment?" can be answered from the dashboard in < 30 seconds
-- No regressions in existing test suite (611/214/90)
+- `scripts/perf-benchmark.php` — 13 queries / 5 ms for `getUserDetail` at 50 enrollments
+- No N+1 anywhere
+- Commit `7c5f04f5`
 
 ---
 
-## After Sprint 1
+## Next session — pick from LAUNCH-CHECKLIST in priority order
 
-In priority order (see `docs/LAUNCH-CHECKLIST.md` for full scope):
+In §C → §D → §F order, or whichever you want to tackle first:
 
-1. Phase 3 tail — OGM, auto-lock, billing edit restriction
-2. Phase 4 VAD voucher rules
-3. Deferred bugs in launch modules — Completion (5) + Attendance (3) + Theme (3)
-4. Multi-brand demo — scaffold #2 + #3 + swap doc
-5. Pre-launch cleanup — stash LTI, clean repo root, gitignore tests/_output
-6. Decide stale design drafts
+### §C — Phase 4 VAD voucher rules
+Source: `plans/phase-4-voucher-completion.md`
+- Voucher category field (5 types: member, action, speaker, day, social)
+- Edition `is_multi_year_training` flag
+- `VoucherTypeValidator` helper
+- Member voucher rules (blocked for multi-year editions)
+- Day voucher prorating (1 day = 1/N of edition price)
+- Social voucher (50% off)
+- Tests
+
+### §D — 11 deferred bugs in launch modules
+- **Completion (5)**: LD course_completed sync, deprecated current_time, cache clear on task update, Withdrawn enum, DI coupling
+- **Attendance (3)**: cascade delete, orphan session_registrations, semantic count
+- **Theme (3)**: 7 footer pages 404, LD ProPanel notice, 11 shortcodes
+
+### §F — Multi-brand demo
+- Brand scaffold #2 (corporate training or university CPD)
+- Brand scaffold #3 (wellness or public sector)
+- Swap mechanic doc
+- Side-by-side screenshots
+
+### Pre-launch cleanup
+- Stash uncommitted LTI work on `staging`
+- Drop stray PNGs (`bento-section`, `debug-outlines`, `stridelms-fullpage`)
+- Add `tests/_output/` to `.gitignore`
+- Decide stale design drafts (session-price-modifiers, stride-mail-integration, roles-capabilities)
