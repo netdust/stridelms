@@ -67,6 +67,9 @@ final class EditionAdminController
         add_action('wp_ajax_stride_reject_registration', [$this, 'ajaxRejectRegistration']);
         add_action('wp_ajax_stride_approve_post_course', [$this, 'ajaxApprovePostCourse']);
 
+        // Bulk lock/unlock quotes for this edition
+        add_action('wp_ajax_stride_bulk_lock_quotes', [$this, 'ajaxBulkLockQuotes']);
+
         // Registration export
         add_action('wp_ajax_stride_export_registrations', [$this, 'ajaxExportRegistrations']);
 
@@ -698,6 +701,41 @@ final class EditionAdminController
         $totals = $this->getAttendanceTotals($sessionId);
 
         wp_send_json_success($totals);
+    }
+
+    // === Quote bulk lock/unlock ===
+
+    /**
+     * Bulk lock or unlock all quotes linked to an edition.
+     *
+     * POST params:
+     *   edition_id  int    — the edition whose quotes to update
+     *   locked      bool   — '1' or '0'
+     *
+     * Returns a summary {total, changed, unchanged} so the UI can show
+     * "12 offertes vergrendeld" or "Alle offertes waren al ontgrendeld".
+     */
+    public function ajaxBulkLockQuotes(): void
+    {
+        if (!$this->verifyAjaxNonce()) {
+            return;
+        }
+
+        $editionId = absint($_POST['edition_id'] ?? 0);
+        if (!$editionId) {
+            wp_send_json_error(['message' => __('Ongeldige editie.', 'stride')], 400);
+        }
+
+        if (!current_user_can('edit_post', $editionId)) {
+            wp_send_json_error(['message' => __('Onvoldoende rechten.', 'stride')], 403);
+        }
+
+        $locked = filter_var($_POST['locked'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+        $quoteService = ntdst_get(\Stride\Modules\Invoicing\QuoteService::class);
+        $summary = $quoteService->bulkSetLockedByEdition($editionId, $locked);
+
+        wp_send_json_success($summary);
     }
 
     // === Registration Approval AJAX Endpoints ===

@@ -179,6 +179,11 @@ final class QuoteUpdateHandler
 
     /**
      * Validate user has access to quote and quote is editable.
+     *
+     * A quote is editable when:
+     *   - user owns it
+     *   - status is still 'draft' (not sent / exported / cancelled)
+     *   - `locked` flag is false (admin hasn't locked it via the edition bulk action)
      */
     private function validateQuoteAccess(int $quoteId, int $userId): true|WP_Error
     {
@@ -195,6 +200,13 @@ final class QuoteUpdateHandler
         $status = $quote['status'] ?? '';
         if ($status !== 'draft') {
             return new WP_Error('not_editable', __('Deze offerte kan niet meer worden bijgewerkt.', 'stride'));
+        }
+
+        if (!empty($quote['locked'])) {
+            return new WP_Error(
+                'locked',
+                __('Deze offerte is vergrendeld door de beheerder en kan niet meer worden bijgewerkt.', 'stride')
+            );
         }
 
         return true;

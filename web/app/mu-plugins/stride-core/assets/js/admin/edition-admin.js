@@ -34,6 +34,7 @@
             this.initNotesManagement();
             this.initDocumentsManagement();
             this.initRegistrationManagement();
+            this.initQuoteLockToggle();
         },
 
         // Cache for loaded lessons
@@ -1304,6 +1305,57 @@
                     dropdownParent: $select.closest('.stride-type-panel')
                 });
             }
+        },
+
+        /**
+         * Bulk lock/unlock toggle for an edition's linked quotes.
+         *
+         * Single button: when all quotes are locked it reads "Ontgrendel alle
+         * offertes" and unlocks; otherwise it reads "Vergrendel alle offertes"
+         * and locks. The status line updates after the AJAX returns.
+         */
+        initQuoteLockToggle: function() {
+            $(document).on('click', '#stride-toggle-quotes-lock', function(e) {
+                e.preventDefault();
+                var $btn = $(this);
+                if ($btn.prop('disabled')) {
+                    return;
+                }
+
+                var editionId = $btn.data('edition-id');
+                var currentlyAllLocked = String($btn.data('locked')) === '1';
+                var nextLocked = !currentlyAllLocked;
+                var total = parseInt($btn.data('total'), 10) || 0;
+
+                $btn.prop('disabled', true);
+
+                $.post(strideEditionAdmin.ajaxurl, {
+                    action: 'stride_bulk_lock_quotes',
+                    nonce: strideEditionAdmin.nonce,
+                    edition_id: editionId,
+                    locked: nextLocked ? '1' : '0'
+                }).done(function(response) {
+                    if (!response || !response.success) {
+                        var msg = (response && response.data && response.data.message)
+                            ? response.data.message
+                            : 'Bulkactie mislukt.';
+                        alert(msg);
+                        return;
+                    }
+
+                    var summary = response.data || {};
+                    var lockedCount = nextLocked ? total : 0;
+
+                    // Update status line + button label/state
+                    $('#stride-quotes-lock-status').text(lockedCount + ' van ' + total + ' vergrendeld');
+                    $btn.data('locked', nextLocked ? '1' : '0').attr('data-locked', nextLocked ? '1' : '0');
+                    $btn.text(nextLocked ? 'Ontgrendel alle offertes' : 'Vergrendel alle offertes');
+                }).fail(function() {
+                    alert('Bulkactie mislukt — controleer de verbinding.');
+                }).always(function() {
+                    $btn.prop('disabled', false);
+                });
+            });
         }
     };
 

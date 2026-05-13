@@ -76,6 +76,72 @@ final class EditionActionsMetabox
 
             <!-- Enrollment Requirements -->
             <?php $this->renderRequirementsSection($post); ?>
+
+            <!-- Quote bulk lock/unlock -->
+            <?php $this->renderQuotesLockSection($post); ?>
+        </div>
+        <?php
+    }
+
+    /**
+     * Bulk lock/unlock all quotes linked to this edition.
+     *
+     * Admin-driven, no automatic cron: clicking "Vergrendel alle offertes"
+     * loops the edition's quotes and sets locked=true. Individual quotes
+     * can still be unlocked separately afterward.
+     */
+    private function renderQuotesLockSection(WP_Post $post): void
+    {
+        if ($post->post_status === 'auto-draft') {
+            return;
+        }
+
+        $quoteRepo = ntdst_get(\Stride\Modules\Invoicing\QuoteRepository::class);
+        $quotes = $quoteRepo->findByEdition($post->ID);
+        $total = count($quotes);
+        $lockedCount = 0;
+        foreach ($quotes as $q) {
+            $quoteId = (int) ($q['id'] ?? 0);
+            if ($quoteId === 0) {
+                continue;
+            }
+            if ($quoteRepo->getField($quoteId, 'locked', false)) {
+                $lockedCount++;
+            }
+        }
+
+        if ($total === 0) {
+            return; // Nothing to lock yet
+        }
+
+        // The toggle reflects "are all quotes locked?". Any unlocked quote
+        // means the action is "Lock all"; if every quote is already locked,
+        // the action becomes "Unlock all".
+        $allLocked = $lockedCount === $total;
+        ?>
+        <div class="stride-sidebar-section">
+            <h4><?php esc_html_e('Offertes', 'stride'); ?></h4>
+            <p class="description" id="stride-quotes-lock-status" style="font-size: 11px; margin-bottom: 8px;">
+                <?php echo esc_html(sprintf(
+                    /* translators: 1: locked count, 2: total */
+                    __('%1$d van %2$d vergrendeld', 'stride'),
+                    $lockedCount,
+                    $total
+                )); ?>
+            </p>
+            <button type="button"
+                    class="button"
+                    id="stride-toggle-quotes-lock"
+                    data-edition-id="<?php echo esc_attr((string) $post->ID); ?>"
+                    data-locked="<?php echo $allLocked ? '1' : '0'; ?>"
+                    data-total="<?php echo esc_attr((string) $total); ?>">
+                <?php echo $allLocked
+                    ? esc_html__('Ontgrendel alle offertes', 'stride')
+                    : esc_html__('Vergrendel alle offertes', 'stride'); ?>
+            </button>
+            <p class="description" style="font-size: 11px; margin-top: 8px;">
+                <?php esc_html_e('Vergrendelde offertes kunnen niet meer worden bewerkt door deelnemers. Individuele offertes kunnen apart worden vrijgegeven.', 'stride'); ?>
+            </p>
         </div>
         <?php
     }

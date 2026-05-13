@@ -477,6 +477,79 @@ final class QuoteService extends AbstractService
     }
 
     /**
+     * Set a quote's `locked` flag.
+     *
+     * Used as the building block for bulk locking from the edition admin.
+     * Idempotent: silently no-ops when the requested state is already set.
+     */
+    public function setLocked(int $quoteId, bool $locked): bool
+    {
+        $current = (bool) $this->repository->getField($quoteId, 'locked', false);
+        if ($current === $locked) {
+            return true;
+        }
+
+        $result = $this->repository->updateMeta($quoteId, ['locked' => $locked]);
+
+        if ($result) {
+            $this->dispatch($locked ? 'quote/locked' : 'quote/unlocked', [
+                'quote_id' => $quoteId,
+            ]);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Bulk lock or unlock every quote linked to an edition.
+     *
+     * Returns a summary of what changed: how many quotes were inspected,
+     * how many actually flipped, and how many were already in the target
+     * state. The caller (admin AJAX handler) renders this as a status line.
+     *
+     * @return array{total:int, changed:int, unchanged:int}
+     */
+    public function bulkSetLockedByEdition(int $editionId, bool $locked): array
+    {
+        $quotes = $this->repository->findByEdition($editionId);
+
+        $changed = 0;
+        foreach ($quotes as $quote) {
+            // Repository returns meta nested under 'meta' key; setLocked() will
+            // re-read authoritatively so we don't depend on the in-memory shape.
+            $quoteId = (int) ($quote['id'] ?? 0);
+            if ($quoteId === 0) {
+                continue;
+            }
+            $current = (bool) $this->repository->getField($quoteId, 'locked', false);
+            if ($current === $locked) {
+                continue;
+            }
+            $this->setLocked($quoteId, $locked);
+            $changed++;
+        }
+
+        ntdst_log('invoicing')->info('Bulk lock applied to edition quotes', [
+            'edition_id' => $editionId,
+            'locked' => $locked,
+            'total' => count($quotes),
+            'changed' => $changed,
+        ]);
+
+        $this->dispatch('quote/bulk_locked', [
+            'edition_id' => $editionId,
+            'locked' => $locked,
+            'changed' => $changed,
+        ]);
+
+        return [
+            'total' => count($quotes),
+            'changed' => $changed,
+            'unchanged' => count($quotes) - $changed,
+        ];
+    }
+
+    /**
      * Cancel quote.
      */
     public function cancel(int $quoteId): bool|WP_Error

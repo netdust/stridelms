@@ -34,6 +34,21 @@ final class QuoteRepository extends AbstractRepository
     }
 
     /**
+     * Find all quotes linked to an edition.
+     *
+     * @return array<array<string, mixed>>
+     */
+    public function findByEdition(int $editionId): array
+    {
+        return $this->model()
+            ->where('edition_id', $editionId)
+            ->where('post_status', 'publish')
+            ->orderBy('post_date', 'DESC')
+            ->withMeta()
+            ->get();
+    }
+
+    /**
      * Find quote by registration ID.
      */
     public function findByRegistration(int $registrationId): ?array

@@ -293,4 +293,138 @@ class QuoteUpdateHandlerIntegrationTest extends IntegrationTestCase
         $this->assertIsArray($result);
         $this->assertTrue($result['success']);
     }
+
+    // =========================================================================
+    // LOCKED QUOTE — edit restriction
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function updateQuoteRejectsWhenLocked(): void
+    {
+        $editionId = $this->createTestEdition();
+        $quoteId = $this->createTestQuote(self::$testUserId, $editionId);
+        update_post_meta($quoteId, 'locked', true);
+
+        $result = $this->handler->handleUpdateQuote([], [
+            'quote_id' => $quoteId,
+            'billing' => ['company' => 'Should Not Save'],
+        ]);
+
+        $this->assertTrue(is_wp_error($result));
+        $this->assertEquals('locked', $result->get_error_code());
+    }
+
+    /**
+     * @test
+     */
+    public function applyVoucherRejectsWhenLocked(): void
+    {
+        $editionId = $this->createTestEdition();
+        $quoteId = $this->createTestQuote(self::$testUserId, $editionId);
+        update_post_meta($quoteId, 'locked', true);
+
+        $result = $this->handler->handleApplyVoucher([], [
+            'quote_id' => $quoteId,
+            'voucher_code' => 'ANYTHING',
+        ]);
+
+        $this->assertTrue(is_wp_error($result));
+        $this->assertEquals('locked', $result->get_error_code());
+    }
+
+    /**
+     * @test
+     */
+    public function unlockedQuoteCanStillBeUpdated(): void
+    {
+        // Sanity check: regression guard for the locked check above.
+        $editionId = $this->createTestEdition();
+        $quoteId = $this->createTestQuote(self::$testUserId, $editionId);
+        // explicitly unlocked
+        update_post_meta($quoteId, 'locked', false);
+
+        $result = $this->handler->handleUpdateQuote([], [
+            'quote_id' => $quoteId,
+            'billing' => ['company' => 'Updated Co'],
+        ]);
+
+        $this->assertIsArray($result);
+        $this->assertTrue($result['success']);
+    }
+
+    // =========================================================================
+    // BULK lock/unlock by edition
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function bulkSetLockedByEditionLocksAllLinkedQuotes(): void
+    {
+        $editionId = $this->createTestEdition();
+        $quote1 = $this->createTestQuote(self::$testUserId, $editionId);
+        $quote2 = $this->createTestQuote(self::$testUserId, $editionId);
+        $quote3 = $this->createTestQuote(self::$testUserId, $editionId);
+
+        $summary = $this->quoteService->bulkSetLockedByEdition($editionId, true);
+
+        $this->assertEquals(3, $summary['total']);
+        $this->assertEquals(3, $summary['changed']);
+        $this->assertEquals(0, $summary['unchanged']);
+        $this->assertTrue((bool) get_post_meta($quote1, 'locked', true));
+        $this->assertTrue((bool) get_post_meta($quote2, 'locked', true));
+        $this->assertTrue((bool) get_post_meta($quote3, 'locked', true));
+    }
+
+    /**
+     * @test
+     */
+    public function bulkSetLockedIsIdempotent(): void
+    {
+        $editionId = $this->createTestEdition();
+        $quoteId = $this->createTestQuote(self::$testUserId, $editionId);
+        update_post_meta($quoteId, 'locked', true);
+
+        $summary = $this->quoteService->bulkSetLockedByEdition($editionId, true);
+
+        $this->assertEquals(1, $summary['total']);
+        $this->assertEquals(0, $summary['changed']);
+        $this->assertEquals(1, $summary['unchanged']);
+    }
+
+    /**
+     * @test
+     */
+    public function bulkSetLockedUnlocksAllLinkedQuotes(): void
+    {
+        $editionId = $this->createTestEdition();
+        $quote1 = $this->createTestQuote(self::$testUserId, $editionId);
+        $quote2 = $this->createTestQuote(self::$testUserId, $editionId);
+        update_post_meta($quote1, 'locked', true);
+        update_post_meta($quote2, 'locked', true);
+
+        $summary = $this->quoteService->bulkSetLockedByEdition($editionId, false);
+
+        $this->assertEquals(2, $summary['changed']);
+        $this->assertFalse((bool) get_post_meta($quote1, 'locked', true));
+        $this->assertFalse((bool) get_post_meta($quote2, 'locked', true));
+    }
+
+    /**
+     * @test
+     */
+    public function bulkSetLockedDoesNotTouchOtherEditions(): void
+    {
+        $editionA = $this->createTestEdition();
+        $editionB = $this->createTestEdition();
+        $quoteA = $this->createTestQuote(self::$testUserId, $editionA);
+        $quoteB = $this->createTestQuote(self::$testUserId, $editionB);
+
+        $this->quoteService->bulkSetLockedByEdition($editionA, true);
+
+        $this->assertTrue((bool) get_post_meta($quoteA, 'locked', true));
+        $this->assertFalse((bool) get_post_meta($quoteB, 'locked', true));
+    }
 }
