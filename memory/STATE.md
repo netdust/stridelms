@@ -1,93 +1,107 @@
 # Stride — Project State
 
 Current state of the project for session continuity. Updated after meaningful work.
+**For "what's left to launch" see `docs/LAUNCH-CHECKLIST.md` (single source of truth).**
+
+Last refresh: 2026-05-13
 
 ---
 
-## Current Phase: Phase 3 — Invoicing/Vouchers (per project plan)
+## Current Phase: Pre-launch cleanup → Phase 1 finishing work
 
-### Production Priorities
+Development is restarting after a pause. Two parallel goals:
 
-**Phase 1 (must-have for launch):**
-- E-learning, blended learning, enrollment flow, enrollment tasks, completion tasks, attendance, invoicing, user dashboard
+1. **Production-ready Phase 1** — e-learning, blended learning, enrollment flow, enrollment tasks, completion tasks, attendance, invoicing, user dashboard.
+2. **Multi-brand demo** — 2–3 distinct brand scaffolds + swap demo for sales.
 
-**Deferred (when client needs them):**
-- Trajectories, Partner API, LTI integration
-
----
-
-## Shake-out Status (2026-03-21)
-
-12 components tested, 49 bugs found, 32 fixed, all tests green.
-
-| Component | Bugs | Fixed | Status |
-|-----------|------|-------|--------|
-| ntdst-assistant | 7 | 7 | DONE |
-| ntdst-audit | 4 | 4 | DONE |
-| ntdst-auth | 1 | 1 | DONE |
-| netdust-mail | 1 | 0 (deferred CDN) | DONE |
-| ntdst-core + stride-core | 0 | 0 | DONE — clean |
-| Edition module | 2 | 2 | DONE |
-| Enrollment module | 7 | 7 | DONE |
-| Invoicing module | 3 | 3 | DONE |
-| Attendance module | 6 | 3 | DONE (3 deferred) |
-| Completion module | 7 | 2 | DONE (5 deferred) |
-| Partner API | 7 | 2 | DONE (5 deferred) |
-| Stridence theme | 4 | 1 | DONE (3 deferred) |
-
-**Not yet tested:** Trajectory module, Admin dashboard
-
-**Test suite:** 611 unit, 214 integration, 90 acceptance — all green
+**Post-launch (do NOT block launch):** Trajectories, Partner API, LTI.
 
 ---
 
-## Completed Features
+## Biggest Open Work
 
-### Quote PDF Generation (DONE)
-- DOMPDF rendering, company settings with logo, email attachment
-- Admin buttons (lock/PDF view/regenerate), customer notes on PDF
-- Edition "Documenten" tab for course document uploads
-- Branch merged to staging
-
-### Client Customization System (DONE, 2026-03-18)
-- Per-client mu-plugin (not child themes)
-- `stridence_template_part()` with `stridence_template_path` filter for template overrides
-- CSS branding via custom property overrides (40+ tokens in `src/css/tokens.css`)
-- Reference scaffold: `web/app/mu-plugins/stride-client-example/`
-
-### ntdst-assistant Phase 2 (DONE, 2026-03-21)
-- 16 tasks: CSS overhaul, Alpine.js rewrite, template updates
-- /clear + /download endpoints, ExportService, cron cleanup
-- 3 export abilities, date range filters
-- 600 unit tests, 15 acceptance tests
+| Area | Item | Source |
+|------|------|--------|
+| Admin Dashboard | **23 bugs all OPEN** (the biggest single blocker) | `tasks/shake-out-dashboard-manifest.md` |
+| Phase 3 tail | 14-day auto-lock cron, billing edit restriction, OGM payment ref | `plans/finish-phase-3.md` |
+| Phase 4 vouchers | 5 VAD-specific rules (categories, member, prorating, social) | `plans/phase-4-voucher-completion.md` |
+| Deferred bugs (launch modules) | 11 bugs across Completion, Attendance, Theme | See LAUNCH-CHECKLIST.md §D |
+| Multi-brand demo | 2 more brand scaffolds + swap doc | See LAUNCH-CHECKLIST.md §F |
 
 ---
 
-## Planned / In Progress
+## Shake-out Status (latest)
 
-### Assistant Exports (planned)
-- CSV/Excel/DOCX export abilities for AI assistant
-- Abilities: `stride/export-editions`, `stride/export-enrollments`, `stride/export-attendance`
-- Needs PhpSpreadsheet for Excel, `download` response type in transport
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Edition module | DONE | All resolved |
+| Enrollment module | DONE | v2 manifest (2026-03-31) supersedes v1; all 4 resolved |
+| Enrollment-completion | DONE | All 2 resolved (2026-03-31) |
+| Online enrollment | DONE | All 6 fixed (2026-03-31) |
+| Completion module | DONE | v2 manifest (2026-03-31) supersedes v1; all 5 resolved |
+| Invoicing module | DONE | Mixed status, mostly fixed |
+| Attendance module | DONE | 3 deferred (now P0–P1 per launch checklist) |
+| Partner API | DONE | 5 deferred (post-launch) |
+| Stridence theme | DONE | 3 deferred (now P0–P1 per launch checklist) |
+| ntdst-assistant | DONE | All 7 resolved |
+| ntdst-audit | DONE | All 4 resolved |
+| ntdst-auth | DONE | All 1 resolved |
+| netdust-mail | DONE | 1 deferred (CDN Alpine.js) |
+| ntdst-core + stride-core | DONE | Clean |
+| Edition | DONE | All 2 resolved |
+| Questionnaire | DONE | All 1 resolved |
+| LTI plugin | DONE | 5 resolved, 1 deferred — **deferred to post-launch** |
+| **Admin dashboard** | **OPEN** | **23 bugs all unfixed** |
+| Trajectory | UNTESTED | Deferred to post-launch |
 
-### Assistant Evolution (vision)
-- Three execution modes: Chat (exists), CLI (to build), Hook (to build)
-- Headless ToolExecutor, WP-CLI command, source tracking, audit log table
-- Event-triggered AI: error triage, form replies, quote follow-ups, capacity alerts
-- Cron-based: weekly digest, pre-edition checklist, monthly partner report
+**Superseded manifests** (archived to `tasks/archive/`):
+- `shake-out-completion-manifest.md` → see v2
+- `shake-out-enrollment-manifest.md` → see v2
+
+**Test suite:** 611 unit, 214 integration, 90 acceptance — all green at last run
 
 ---
 
-## LTI Plugin (in progress on staging)
+## Completed Features (recap)
 
-Currently modified files on staging branch indicate active LTI work:
-- `web/app/plugins/netdust-lti/` — Platform/ToolProvider routers, admin settings, WPDataConnector, deep-link picker, SCORM proxy bridge, JWT tests
+- Quote PDF Generation — DOMPDF, company settings, logo, email attachment, edition documents
+- Client Customization System (2026-03-18) — mu-plugin pattern, template overrides, CSS tokens
+- ntdst-assistant Phase 2 (2026-03-21) — 16 tasks, CSS overhaul, Alpine rewrite, 3 export abilities
+- Editorial rebrand (2026-03-26) — design-system shell via tokens + Tailwind config
+- BWEEG demo (2026-03-27) — first branded client scaffold on top of editorial rebrand
+- Online enrollment flow shake-out (2026-03-31) — 6 bugs fixed
+- Enrollment-completion task fixes (latest commit) — questionnaire stage mapping, select styling, reload on complete
 
 ---
 
-## Deferred Bugs (from shake-out)
+## Uncommitted Work on `staging`
 
-**Attendance:** cascade delete, orphan session_registrations, semantic count inconsistency
-**Completion:** no LD course_completed sync, deprecated current_time('timestamp'), cache not cleared on task update, Withdrawn enum mismatch, DI coupling
-**Partner API:** pagination not sanitized, orphan registrations visible, no args schema, no PATH_PARTNER, hardcoded status
-**Theme:** 7 footer pages 404, LearnDash ProPanel script notice, 11 shortcodes not yet implemented
+Inventory only — left in place per user instruction:
+
+- `web/app/plugins/netdust-lti/` — LTI plugin in progress (deferred to post-launch)
+- `web/app/themes/stridence/dist/.vite/manifest.json` + main.* — built theme assets
+- `web/app/plugins/ntdst-auth/assets/css/auth.css` — auth styling tweak
+- `web/app/themes/stridence/tailwind.config.js` — tailwind tweaks
+- Stray PNGs in repo root: `bento-section`, `debug-outlines`, `stridelms-fullpage` — design references, not source
+- 40+ untracked screenshots in `tests/_output/` — Playwright artifacts
+
+**To clean before launch:** see LAUNCH-CHECKLIST.md "Pre-Launch Cleanup".
+
+---
+
+## Open Design Drafts (decide before code freeze)
+
+- `docs/plans/2026-03-16-session-price-modifiers-design.md` — per-session pricing
+- `docs/plans/2026-03-17-stride-mail-integration-design.md` — verify vs shipped netdust-mail
+- `docs/plans/2026-03-18-roles-capabilities-design.md` — verify what's already implemented
+
+---
+
+## Post-Launch Vision (not for launch)
+
+- Assistant exports — CSV/Excel/DOCX abilities (`memory/project_assistant_exports.md`)
+- Assistant evolution — headless mode, WP-CLI, event-triggered AI, audit log table (`memory/project_assistant_vision.md`)
+- Phase 8 voucher automations — annual member voucher renewal, reversal on cancellation
+- Trajectory module — design done, never shake-out tested
+- Partner API — 5 deferred bugs, foundational design done
+- LTI — in-progress work parked on `staging` branch
