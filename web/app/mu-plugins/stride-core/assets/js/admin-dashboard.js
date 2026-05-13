@@ -3,12 +3,16 @@ document.addEventListener('alpine:init', () => {
         // ── Routing ──────────────────────────────────────────────
         view: 'dashboard',
         loading: false,
+        statsLoaded: false,
+
+        // ── Error state per view (set when a fetch throws) ────────
+        errors: { dashboard: '', edities: '', offertes: '', trajecten: '', users: '' },
 
         // ── Config ───────────────────────────────────────────────
         config: window.StrideConfig || {},
 
         // ── Dashboard home ───────────────────────────────────────
-        stats: { upcomingEditions: 0, totalRegistrations: 0, pendingQuotes: 0, todaySessions: 0, actionsNeeded: 0, actionCount: 0 },
+        stats: { upcomingEditions: null, totalRegistrations: null, pendingQuotes: null, todaySessions: null, actionsNeeded: null, actionCount: null },
         actionQueue: [],
         upcomingSessions: [],
         activityFeed: [],
@@ -16,9 +20,9 @@ document.addEventListener('alpine:init', () => {
 
         // ── Editions ─────────────────────────────────────────────
         editions: [],
-        editionFilters: { search: '', status: '', date_from: '', date_to: '', course_tag: 0 },
+        editionFilters: { search: '', status: '', date_from: '', date_to: '', theme: 0, format: 0, tag: 0 },
         editionPagination: { page: 1, totalPages: 1, total: 0 },
-        courseTags: [],
+        editionTaxonomies: { theme: [], format: [], tag: [] },
         selectedEdition: null,
         editionTab: 'students',
         editionRegistrations: [],
@@ -96,9 +100,17 @@ document.addEventListener('alpine:init', () => {
             return this.selectedUser?.audit_trail || [];
         },
 
-        /** Attendance summary for the selected user */
+        /** Attendance summary for the selected user (legacy, kept for callers) */
         get userAttendanceSummary() {
             return this.selectedUser?.attendance_summary || [];
+        },
+
+        /**
+         * Registrations whose edition has sessions — used by the Aanwezigheid
+         * table so e-learning enrollments don't pollute the progress view.
+         */
+        get sessionedRegistrations() {
+            return (this.selectedUser?.registrations || []).filter(r => r.has_sessions);
         },
 
         // ==============================================================
@@ -164,7 +176,7 @@ document.addEventListener('alpine:init', () => {
         loadViewData(view) {
             if (view === 'edities') {
                 if (this.editions.length === 0 && !this._loadingViews.edities) this.loadEditions();
-                if (this.courseTags.length === 0) this.loadCourseTags();
+                if (this.editionTaxonomies.theme.length === 0) this.loadEditionTaxonomies();
                 this.$nextTick(() => this.initDateRangePicker());
             } else if (view === 'offertes') {
                 if (this.quotes.length === 0 && !this._loadingViews.offertes) this.loadQuotes();
@@ -182,6 +194,7 @@ document.addEventListener('alpine:init', () => {
 
         async loadDashboard() {
             this.loading = true;
+            this.errors.dashboard = '';
             try {
                 const [stats, queue, sessions, activity, health, notifs] = await Promise.allSettled([
                     this.api('/admin/stats'),
@@ -191,10 +204,14 @@ document.addEventListener('alpine:init', () => {
                     this.api('/admin/health-checks'),
                     this.api('/admin/notifications'),
                 ]);
+                if (stats.status === 'rejected') {
+                    this.errors.dashboard = 'Kon dashboard-data niet laden.';
+                }
                 if (stats.status === 'fulfilled') {
                     const s = stats.value;
                     s.actionsNeeded = s.actionCount ?? s.actionsNeeded ?? 0;
                     this.stats = s;
+                    this.statsLoaded = true;
                 }
                 if (queue.status === 'fulfilled') this.actionQueue = queue.value;
                 if (sessions.status === 'fulfilled') {
@@ -270,7 +287,9 @@ document.addEventListener('alpine:init', () => {
                 status: this.editionFilters.status,
                 date_from: this.editionFilters.date_from,
                 date_to: this.editionFilters.date_to,
-                course_tag: this.editionFilters.course_tag,
+                theme: this.editionFilters.theme,
+                format: this.editionFilters.format,
+                tag: this.editionFilters.tag,
             });
             try {
                 const data = await this.api(`/admin/editions?${params}`);
@@ -288,14 +307,24 @@ document.addEventListener('alpine:init', () => {
                 }));
                 this.editionSessions = this.editions;
                 this.editionPagination = { page: data.page || 1, totalPages: data.total_pages || data.totalPages || 1, total: data.total || 0 };
+                this.errors.edities = '';
             } catch (e) {
+                this.errors.edities = 'Edities laden mislukt. Controleer de verbinding en probeer opnieuw.';
                 this.showToast('Edities laden mislukt', 'error');
             }
             this.loading = false;
         },
 
-        async loadCourseTags() {
-            try { this.courseTags = await this.api('/admin/course-tags'); } catch (e) {}
+        async loadEditionTaxonomies() {
+            try {
+                const data = await this.api('/admin/course-tags');
+                // API returns { theme: [...], format: [...], tag: [...] }
+                this.editionTaxonomies = {
+                    theme: data.theme || [],
+                    format: data.format || [],
+                    tag: data.tag || [],
+                };
+            } catch (e) {}
         },
 
         initDateRangePicker() {
@@ -317,7 +346,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         resetEditionFilters() {
-            this.editionFilters = { search: '', status: '', date_from: '', date_to: '', course_tag: 0 };
+            this.editionFilters = { search: '', status: '', date_from: '', date_to: '', theme: 0, format: 0, tag: 0 };
             const el = this.$refs?.dateRange;
             if (el?._flatpickr) el._flatpickr.clear();
             this.loadEditions(1);
@@ -402,7 +431,11 @@ document.addEventListener('alpine:init', () => {
                     status_label: q.statusLabel || quoteStatusLabels[q.status] || q.status || '—',
                 }));
                 this.quotePagination = { page: data.page || 1, totalPages: data.total_pages || data.totalPages || 1, total: data.total || 0 };
-            } catch (e) { this.showToast('Offertes laden mislukt', 'error'); }
+                this.errors.offertes = '';
+            } catch (e) {
+                this.errors.offertes = 'Offertes laden mislukt. Probeer opnieuw.';
+                this.showToast('Offertes laden mislukt', 'error');
+            }
             this.loading = false;
         },
 
@@ -480,7 +513,11 @@ document.addEventListener('alpine:init', () => {
                     deadline: t.enrollmentDeadline ?? t.deadline ?? null,
                 }));
                 this.trajectoryPagination = { page: data.page || 1, totalPages: data.total_pages || data.totalPages || 1, total: data.total || 0 };
-            } catch (e) { this.showToast('Trajecten laden mislukt', 'error'); }
+                this.errors.trajecten = '';
+            } catch (e) {
+                this.errors.trajecten = 'Trajecten laden mislukt. Probeer opnieuw.';
+                this.showToast('Trajecten laden mislukt', 'error');
+            }
             this.loading = false;
         },
 
@@ -632,6 +669,55 @@ document.addEventListener('alpine:init', () => {
             if (diff < 86400) return Math.floor(diff / 3600) + ' uur geleden';
             if (diff < 604800) return Math.floor(diff / 86400) + ' dag(en) geleden';
             return new Date(ts * 1000).toLocaleDateString('nl-BE');
+        },
+
+        enrollmentPathLabel(path) {
+            return {
+                individual: 'Individueel',
+                colleague:  'Collega',
+                voucher:    'Voucher',
+            }[path] || path || '—';
+        },
+
+        // ── Attendance helpers (for Aanwezigheid table) ────────────────────
+        attendancePct(att) {
+            if (!att) return 0;
+            const total = att.total_sessions || (att.present + att.absent + att.excused);
+            return total > 0 ? Math.round((att.present / total) * 100) : 0;
+        },
+
+        attendancePresent(reg) {
+            return reg.attendance?.present ?? 0;
+        },
+
+        attendanceTotal(reg) {
+            const att = reg.attendance;
+            if (!att) return 0;
+            return att.total_sessions || (att.present + att.absent + att.excused);
+        },
+
+        attendanceBarClass(att) {
+            const pct = this.attendancePct(att);
+            if (pct >= 80) return 'sd-attendance-cell-stack__bar-fill--good';
+            if (pct >= 50) return 'sd-attendance-cell-stack__bar-fill--mid';
+            return 'sd-attendance-cell-stack__bar-fill--low';
+        },
+
+        attendancePctClass(reg) {
+            const pct = this.attendancePct(reg.attendance);
+            if (pct >= 80) return 'sd-attendance-pct--good';
+            if (pct >= 50) return 'sd-attendance-pct--mid';
+            return 'sd-attendance-pct--low';
+        },
+
+        /**
+         * Per-edition progress label for the Voortgang column.
+         * Mirrors enrollment lifecycle, not LearnDash course completion.
+         */
+        progressLabel(reg) {
+            if (reg.cancelled_at) return 'Geannuleerd';
+            if (reg.completed_at) return 'Afgerond op ' + this.formatShortDate(reg.completed_at);
+            return 'Bezig';
         },
     }));
 });

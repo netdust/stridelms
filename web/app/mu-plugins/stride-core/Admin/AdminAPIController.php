@@ -6,6 +6,7 @@ namespace Stride\Admin;
 
 use NTDST\Audit\AuditTable;
 use Stride\Domain\AttendanceStatus;
+use Stride\Domain\Money;
 use Stride\Domain\QuoteStatus;
 use Stride\Infrastructure\BatchQueryHelper;
 use Stride\Modules\Attendance\AttendanceRepository;
@@ -86,7 +87,15 @@ final class AdminAPIController
                     'type' => 'string',
                     'default' => '',
                 ],
-                'course_tag' => [
+                'theme' => [
+                    'type' => 'integer',
+                    'default' => 0,
+                ],
+                'format' => [
+                    'type' => 'integer',
+                    'default' => 0,
+                ],
+                'tag' => [
                     'type' => 'integer',
                     'default' => 0,
                 ],
@@ -710,7 +719,9 @@ final class AdminAPIController
         $status = sanitize_text_field($request->get_param('status') ?? '');
         $dateFrom = sanitize_text_field($request->get_param('date_from') ?? '');
         $dateTo = sanitize_text_field($request->get_param('date_to') ?? '');
-        $courseTag = (int) $request->get_param('course_tag');
+        $themeId = (int) $request->get_param('theme');
+        $formatId = (int) $request->get_param('format');
+        $tagId = (int) $request->get_param('tag');
         $offset = ($page - 1) * $perPage;
 
         $today = current_time('Y-m-d');
@@ -751,15 +762,12 @@ final class AdminAPIController
             $params[] = $dateTo;
         }
 
-        // Course tag filter (via linked course)
-        $tagJoin = '';
-        if ($courseTag > 0) {
-            $tagJoin = "INNER JOIN {$wpdb->postmeta} pm_course ON p.ID = pm_course.post_id AND pm_course.meta_key = '_ntdst_course_id'
-                        INNER JOIN {$wpdb->term_relationships} tr ON pm_course.meta_value = tr.object_id
-                        INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id AND tt.taxonomy = 'ld_course_tag'";
-            $where[] = "tt.term_id = %d";
-            $params[] = $courseTag;
-        }
+        // Taxonomy filters (theme/format/tag — applied to the linked course's terms)
+        $tagJoin = $this->buildCourseTaxonomyJoin(
+            ['theme' => $themeId, 'format' => $formatId, 'tag' => $tagId],
+            $where,
+            $params
+        );
 
         $whereClause = implode(' AND ', $where);
 
@@ -882,7 +890,9 @@ final class AdminAPIController
         $status = sanitize_text_field($request->get_param('status') ?? '');
         $dateFrom = sanitize_text_field($request->get_param('date_from') ?? '');
         $dateTo = sanitize_text_field($request->get_param('date_to') ?? '');
-        $courseTag = (int) $request->get_param('course_tag');
+        $themeId = (int) $request->get_param('theme');
+        $formatId = (int) $request->get_param('format');
+        $tagId = (int) $request->get_param('tag');
         $offset = ($page - 1) * $perPage;
 
         // Build query for sessions with edition info
@@ -922,15 +932,13 @@ final class AdminAPIController
             $params[] = $dateTo;
         }
 
-        // Course tag filter
-        $tagJoin = '';
-        if ($courseTag > 0) {
-            $tagJoin = "INNER JOIN {$wpdb->postmeta} pm_course ON e.ID = pm_course.post_id AND pm_course.meta_key = '_ntdst_course_id'
-                        INNER JOIN {$wpdb->term_relationships} tr ON pm_course.meta_value = tr.object_id
-                        INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id AND tt.taxonomy = 'ld_course_tag'";
-            $where[] = "tt.term_id = %d";
-            $params[] = $courseTag;
-        }
+        // Taxonomy filters (theme/format/tag — applied to the linked course's terms)
+        $tagJoin = $this->buildCourseTaxonomyJoin(
+            ['theme' => $themeId, 'format' => $formatId, 'tag' => $tagId],
+            $where,
+            $params,
+            'e.ID'
+        );
 
         $whereClause = implode(' AND ', $where);
 
@@ -1061,29 +1069,90 @@ final class AdminAPIController
     /**
      * GET /admin/course-tags
      *
-     * Get all course tags for filter dropdown.
+     * Get the three taxonomies used by the editions filter:
+     *   - theme   (stride_theme, curated content area)
+     *   - format  (stride_format, delivery format)
+     *   - tag     (ld_course_tag, free-form admin tags)
+     *
+     * Each is an array of {id, name, count}, with `hide_empty => false` so admins
+     * can browse the full vocabulary even when nothing is tagged yet.
      */
     public function getCourseTags(WP_REST_Request $request): WP_REST_Response
     {
-        $tags = get_terms([
-            'taxonomy' => 'ld_course_tag',
+        return new WP_REST_Response([
+            'theme'  => $this->fetchTaxonomyTerms('stride_theme'),
+            'format' => $this->fetchTaxonomyTerms('stride_format'),
+            'tag'    => $this->fetchTaxonomyTerms('ld_course_tag'),
+        ]);
+    }
+
+    /**
+     * Fetch terms for a taxonomy as a simple list of {id, name, count}.
+     */
+    private function fetchTaxonomyTerms(string $taxonomy): array
+    {
+        $terms = get_terms([
+            'taxonomy' => $taxonomy,
             'hide_empty' => false,
             'orderby' => 'name',
             'order' => 'ASC',
         ]);
 
-        $items = [];
-        if (!is_wp_error($tags)) {
-            foreach ($tags as $tag) {
-                $items[] = [
-                    'id' => $tag->term_id,
-                    'name' => $tag->name,
-                    'count' => $tag->count,
-                ];
-            }
+        if (is_wp_error($terms)) {
+            return [];
         }
 
-        return new WP_REST_Response($items);
+        return array_map(static fn($t) => [
+            'id' => (int) $t->term_id,
+            'name' => $t->name,
+            'count' => (int) $t->count,
+        ], $terms);
+    }
+
+    /**
+     * Build the JOIN clause filtering editions by linked-course taxonomy terms.
+     *
+     * Adds WHERE conditions + params for each non-zero term id. Returns the JOIN SQL
+     * fragment (empty string if no filters active). Mutates $where and $params in place.
+     *
+     * @param array{theme: int, format: int, tag: int} $termIds
+     * @param array<int, string>                       $where
+     * @param array<int, mixed>                        $params
+     * @param string                                   $editionIdColumn  Column for the edition post ID (e.g. 'p.ID' or 'e.ID')
+     */
+    private function buildCourseTaxonomyJoin(array $termIds, array &$where, array &$params, string $editionIdColumn = 'p.ID'): string
+    {
+        global $wpdb;
+
+        $taxonomies = [
+            'theme'  => 'stride_theme',
+            'format' => 'stride_format',
+            'tag'    => 'ld_course_tag',
+        ];
+
+        $activeFilters = array_filter($termIds, static fn($id) => $id > 0);
+        if (empty($activeFilters)) {
+            return '';
+        }
+
+        // Always join postmeta → course id once
+        $joins = ["INNER JOIN {$wpdb->postmeta} pm_course ON {$editionIdColumn} = pm_course.post_id AND pm_course.meta_key = '_ntdst_course_id'"];
+
+        // Add one term_relationships + term_taxonomy join alias per active filter,
+        // so they can be AND-combined. Taxonomy names are hardcoded (internal
+        // constants, never user input) to avoid placeholder ordering issues
+        // between JOIN and WHERE — only the integer term_id is parameterized.
+        foreach ($activeFilters as $kind => $termId) {
+            $aliasTr = "tr_{$kind}";
+            $aliasTt = "tt_{$kind}";
+            $taxonomy = esc_sql($taxonomies[$kind]);
+            $joins[] = "INNER JOIN {$wpdb->term_relationships} {$aliasTr} ON pm_course.meta_value = {$aliasTr}.object_id";
+            $joins[] = "INNER JOIN {$wpdb->term_taxonomy} {$aliasTt} ON {$aliasTr}.term_taxonomy_id = {$aliasTt}.term_taxonomy_id AND {$aliasTt}.taxonomy = '{$taxonomy}'";
+            $where[] = "{$aliasTt}.term_id = %d";
+            $params[] = (int) $termId;
+        }
+
+        return implode(' ', $joins);
     }
 
     /**
@@ -1444,9 +1513,9 @@ final class AdminAPIController
 
             $quoteNumber = $meta['quote_number'] ?? '';
             $quoteStatus = $meta['status'] ?? 'draft';
-            $quoteTotal = (float) ($meta['total'] ?? 0);
-            $quoteSubtotal = (float) ($meta['subtotal'] ?? 0);
-            $quoteTax = (float) ($meta['tax'] ?? 0);
+            $quoteTotal = Money::cents((int) ($meta['total'] ?? 0))->amount();
+            $quoteSubtotal = Money::cents((int) ($meta['subtotal'] ?? 0))->amount();
+            $quoteTax = Money::cents((int) ($meta['tax'] ?? 0))->amount();
             $userId = (int) ($meta['user_id'] ?? 0);
             $editionId = (int) ($meta['edition_id'] ?? 0);
             $sentAt = $meta['sent_at'] ?? '';
@@ -1495,7 +1564,9 @@ final class AdminAPIController
                     'id' => $editionId,
                     'title' => $editionTitle,
                 ],
-                'lineItems' => is_array($quoteItems) ? $quoteItems : (json_decode($quoteItems, true) ?: []),
+                'lineItems' => $this->lineItemsToEuros(
+                    is_array($quoteItems) ? $quoteItems : (json_decode($quoteItems, true) ?: [])
+                ),
                 'billing' => is_array($billing) ? $billing : (json_decode($billing, true) ?: []),
                 'editUrl' => admin_url("post.php?post={$quoteId}&action=edit"),
             ];
@@ -2242,15 +2313,20 @@ final class AdminAPIController
             return new WP_REST_Response([]);
         }
 
-        // Collect actor IDs for batch user fetch
-        $actorIds = [];
+        // Collect actor IDs AND target user IDs (entity_type=user) for one batch fetch
+        $userIdsToResolve = [];
         foreach ($entries as $entry) {
             if (!empty($entry->actor_id)) {
-                $actorIds[] = (int) $entry->actor_id;
+                $userIdsToResolve[] = (int) $entry->actor_id;
+            }
+            if (($entry->entity_type ?? '') === 'user' && !empty($entry->entity_id)) {
+                $userIdsToResolve[] = (int) $entry->entity_id;
             }
         }
 
-        $usersMap = !empty($actorIds) ? BatchQueryHelper::batchGetUsers($actorIds) : [];
+        $usersMap = !empty($userIdsToResolve)
+            ? BatchQueryHelper::batchGetUsers(array_unique($userIdsToResolve))
+            : [];
 
         $feed = [];
         foreach ($entries as $entry) {
@@ -2260,10 +2336,19 @@ final class AdminAPIController
             }
 
             $actorId = (int) ($entry->actor_id ?? 0);
-            $user = $usersMap[$actorId] ?? null;
-            $actorName = $user ? $user->display_name : __('Systeem', 'stride');
+            $actor = $usersMap[$actorId] ?? null;
+            $actorName = $actor ? $actor->display_name : __('Systeem', 'stride');
 
-            $feed[] = AdminActivityMapper::fromAuditEntry($entry, $actorName);
+            // Resolve target name from entity_id for user.* events
+            $targetName = '';
+            if (($entry->entity_type ?? '') === 'user' && !empty($entry->entity_id)) {
+                $targetUser = $usersMap[(int) $entry->entity_id] ?? null;
+                if ($targetUser) {
+                    $targetName = $targetUser->display_name;
+                }
+            }
+
+            $feed[] = AdminActivityMapper::fromAuditEntry($entry, $actorName, $targetName);
         }
 
         return new WP_REST_Response($feed);
@@ -2372,16 +2457,45 @@ final class AdminAPIController
                 $regOffset
             ));
 
+            // Pre-fetch attendance stats + total session counts for all loaded editions,
+            // so each row carries actionable info without N+1 queries.
+            $editionIds = array_map(static fn($r) => (int) $r->edition_id, $regRows);
+            $editionIds = array_values(array_unique(array_filter($editionIds)));
+
+            $attendanceByEdition = $this->fetchUserAttendanceByEdition($userId, $editionIds);
+            $sessionCountByEdition = $this->fetchSessionCountByEdition($editionIds);
+
             foreach ($regRows as $row) {
+                $editionId = (int) $row->edition_id;
+                $att = $attendanceByEdition[$editionId] ?? null;
+                $totalSessions = $sessionCountByEdition[$editionId] ?? 0;
+                $attendanceSummary = null;
+
+                if ($totalSessions > 0) {
+                    $present = $att['present'] ?? 0;
+                    $absent = $att['absent'] ?? 0;
+                    $excused = $att['excused'] ?? 0;
+                    $hours = $att['hours'] ?? 0;
+                    $attendanceSummary = [
+                        'present' => $present,
+                        'absent' => $absent,
+                        'excused' => $excused,
+                        'total_sessions' => $totalSessions,
+                        'hours' => $hours,
+                    ];
+                }
+
                 $registrations[] = [
                     'id' => (int) $row->id,
-                    'edition_id' => (int) $row->edition_id,
+                    'edition_id' => $editionId,
                     'edition_title' => $row->edition_title ?: __('Onbekend', 'stride'),
                     'status' => $row->status,
                     'enrollment_path' => $row->enrollment_path,
                     'registered_at' => $row->registered_at,
                     'completed_at' => $row->completed_at,
                     'cancelled_at' => $row->cancelled_at,
+                    'has_sessions' => $totalSessions > 0,
+                    'attendance' => $attendanceSummary,
                 ];
             }
         }
@@ -2423,8 +2537,11 @@ final class AdminAPIController
                 'edition_title' => $quoteEdition ? $quoteEdition->post_title : '',
                 'status' => $quoteStatus,
                 'status_label' => $statusEnum?->label() ?? $quoteStatus,
-                'total' => (float) get_post_meta($quoteId, 'total', true),
+                'total' => Money::cents((int) get_post_meta($quoteId, 'total', true))->amount(),
                 'created_at' => $quotePost->post_date,
+                'sent_at' => get_post_meta($quoteId, 'sent_at', true) ?: null,
+                'paid_at' => get_post_meta($quoteId, 'paid_at', true) ?: null,
+                'valid_until' => get_post_meta($quoteId, 'valid_until', true) ?: null,
             ];
         }
 
@@ -2461,6 +2578,19 @@ final class AdminAPIController
                     $grouped[$editionId][$status] = (int) $row->cnt;
                 }
             }
+
+            // Enrich with total session count + hours per edition
+            $summaryEditionIds = array_keys($grouped);
+            if (!empty($summaryEditionIds)) {
+                $sessionCounts = $this->fetchSessionCountByEdition($summaryEditionIds);
+                $hoursByEdition = $this->fetchUserAttendanceByEdition($userId, $summaryEditionIds);
+                foreach ($grouped as $editionId => &$row) {
+                    $row['total_sessions'] = $sessionCounts[$editionId] ?? 0;
+                    $row['hours'] = $hoursByEdition[$editionId]['hours'] ?? 0;
+                }
+                unset($row);
+            }
+
             $attendance = array_values($grouped);
         }
 
@@ -2487,21 +2617,34 @@ final class AdminAPIController
                 $userId
             ));
 
-            // Collect actor IDs for batch user fetch
-            $actorIds = [];
+            // Collect actor IDs AND target user IDs for batch fetch
+            $userIdsToResolve = [];
             foreach ($auditEntries as $entry) {
                 if (!empty($entry->actor_id)) {
-                    $actorIds[] = (int) $entry->actor_id;
+                    $userIdsToResolve[] = (int) $entry->actor_id;
+                }
+                if (($entry->entity_type ?? '') === 'user' && !empty($entry->entity_id)) {
+                    $userIdsToResolve[] = (int) $entry->entity_id;
                 }
             }
-            $usersMap = !empty($actorIds) ? BatchQueryHelper::batchGetUsers($actorIds) : [];
+            $usersMap = !empty($userIdsToResolve)
+                ? BatchQueryHelper::batchGetUsers(array_unique($userIdsToResolve))
+                : [];
 
             foreach ($auditEntries as $entry) {
                 $actorId = (int) ($entry->actor_id ?? 0);
                 $actorUser = $usersMap[$actorId] ?? null;
                 $actorName = $actorUser ? $actorUser->display_name : __('Systeem', 'stride');
 
-                $auditTrail[] = AdminActivityMapper::fromAuditEntry($entry, $actorName);
+                $targetName = '';
+                if (($entry->entity_type ?? '') === 'user' && !empty($entry->entity_id)) {
+                    $targetUser = $usersMap[(int) $entry->entity_id] ?? null;
+                    if ($targetUser) {
+                        $targetName = $targetUser->display_name;
+                    }
+                }
+
+                $auditTrail[] = AdminActivityMapper::fromAuditEntry($entry, $actorName, $targetName);
             }
         }
 
@@ -2534,6 +2677,113 @@ final class AdminAPIController
             "SELECT COUNT(*) FROM {$table} WHERE user_id = %d",
             $userId
         ));
+    }
+
+    /**
+     * Count sessions per edition for a set of edition IDs.
+     *
+     * Returns [edition_id => session_count]. Editions with no sessions are absent
+     * from the map; callers should treat missing keys as 0 (no sessions ⇒ e-learning).
+     *
+     * @param array<int> $editionIds
+     * @return array<int, int>
+     */
+    private function fetchSessionCountByEdition(array $editionIds): array
+    {
+        if (empty($editionIds)) {
+            return [];
+        }
+
+        global $wpdb;
+        $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
+        $params = array_merge([SessionCPT::POST_TYPE], $editionIds);
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT pm.meta_value AS edition_id, COUNT(*) AS cnt
+             FROM {$wpdb->posts} p
+             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_ntdst_edition_id'
+             WHERE p.post_type = %s
+               AND p.post_status = 'publish'
+               AND pm.meta_value IN ({$placeholders})
+             GROUP BY pm.meta_value",
+            ...$params
+        ));
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[(int) $row->edition_id] = (int) $row->cnt;
+        }
+        return $map;
+    }
+
+    /**
+     * Aggregate attendance for a user across a set of editions.
+     *
+     * Returns [edition_id => [present, absent, excused, hours]]. Hours assumes
+     * 4 hours per "present" session (current convention in the user-detail
+     * attendance summary). Editions with no recorded attendance are absent.
+     *
+     * @param array<int> $editionIds
+     * @return array<int, array{present:int, absent:int, excused:int, hours:int}>
+     */
+    private function fetchUserAttendanceByEdition(int $userId, array $editionIds): array
+    {
+        if (empty($editionIds) || !AttendanceTable::exists()) {
+            return [];
+        }
+
+        global $wpdb;
+        $attendanceTable = AttendanceTable::getTableName();
+        $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
+        $params = array_merge([$userId], $editionIds);
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT edition_id, status, COUNT(*) AS cnt
+             FROM {$attendanceTable}
+             WHERE user_id = %d
+               AND edition_id IN ({$placeholders})
+             GROUP BY edition_id, status",
+            ...$params
+        ));
+
+        $map = [];
+        foreach ($rows as $row) {
+            $editionId = (int) $row->edition_id;
+            if (!isset($map[$editionId])) {
+                $map[$editionId] = ['present' => 0, 'absent' => 0, 'excused' => 0, 'hours' => 0];
+            }
+            if (isset($map[$editionId][$row->status])) {
+                $map[$editionId][$row->status] = (int) $row->cnt;
+            }
+        }
+
+        // Hours = present count × 4 (matches existing convention)
+        foreach ($map as &$entry) {
+            $entry['hours'] = $entry['present'] * 4;
+        }
+        unset($entry);
+
+        return $map;
+    }
+
+    /**
+     * Convert quote line-item money fields from cents (storage) to euros (API).
+     * Storage fields: unit_price, total. Other fields pass through unchanged.
+     */
+    private function lineItemsToEuros(array $items): array
+    {
+        return array_map(static function ($item) {
+            if (!is_array($item)) {
+                return $item;
+            }
+            if (isset($item['unit_price'])) {
+                $item['unit_price'] = Money::cents((int) $item['unit_price'])->amount();
+            }
+            if (isset($item['total'])) {
+                $item['total'] = Money::cents((int) $item['total'])->amount();
+            }
+            return $item;
+        }, $items);
     }
 
     /**

@@ -110,4 +110,171 @@ class AdminActivityMapperTest extends TestCase
         $this->assertIsInt($result['id']);
         $this->assertIsInt($result['timestamp']);
     }
+
+    public function test_collapses_usermeta_events_to_single_line(): void
+    {
+        $entry = (object) [
+            'id' => 10,
+            'action' => 'usermeta.updated',
+            'actor_id' => 1,
+            'context' => json_encode([]),
+            'created_at' => '2026-03-25 10:00:00',
+        ];
+        $result = AdminActivityMapper::fromAuditEntry($entry, 'Pieter Janssen');
+        $this->assertSame('user', $result['type']);
+        $this->assertStringContainsString('Profielgegevens', $result['text']);
+        $this->assertStringContainsString('Pieter Janssen', $result['text']);
+    }
+
+    public function test_maps_user_created_with_target(): void
+    {
+        $entry = (object) [
+            'id' => 11,
+            'action' => 'user.created',
+            'actor_id' => 1,
+            'context' => json_encode(['target_name' => 'Marie Claes']),
+            'created_at' => '2026-03-25 10:00:00',
+        ];
+        $result = AdminActivityMapper::fromAuditEntry($entry, 'Admin');
+        $this->assertSame('user', $result['type']);
+        $this->assertStringContainsString('Marie Claes', $result['text']);
+        $this->assertStringContainsString('aangemaakt', $result['text']);
+        $this->assertStringContainsString('Admin', $result['text']);
+    }
+
+    public function test_maps_user_created_self_registered(): void
+    {
+        $entry = (object) [
+            'id' => 12,
+            'action' => 'user.created',
+            'actor_id' => 5,
+            'context' => json_encode([]),
+            'created_at' => '2026-03-25 10:00:00',
+        ];
+        $result = AdminActivityMapper::fromAuditEntry($entry, 'Nieuwe Gebruiker');
+        $this->assertSame('user', $result['type']);
+        $this->assertStringContainsString('Nieuwe Gebruiker', $result['text']);
+        $this->assertStringContainsString('aangemaakt', $result['text']);
+    }
+
+    public function test_maps_user_role_changed_with_from_to(): void
+    {
+        $entry = (object) [
+            'id' => 13,
+            'action' => 'user.role_changed',
+            'actor_id' => 1,
+            'context' => json_encode([
+                'target_name' => 'Marie Claes',
+                'from_role' => 'student',
+                'to_role' => 'instructor',
+            ]),
+            'created_at' => '2026-03-25 10:00:00',
+        ];
+        $result = AdminActivityMapper::fromAuditEntry($entry, 'Admin');
+        $this->assertSame('user', $result['type']);
+        $this->assertStringContainsString('Marie Claes', $result['text']);
+        $this->assertStringContainsString('student', $result['text']);
+        $this->assertStringContainsString('instructor', $result['text']);
+    }
+
+    public function test_maps_auth_login(): void
+    {
+        $entry = (object) [
+            'id' => 14,
+            'action' => 'auth.login',
+            'actor_id' => 5,
+            'context' => '{}',
+            'created_at' => '2026-03-25 10:00:00',
+        ];
+        $result = AdminActivityMapper::fromAuditEntry($entry, 'Pieter Janssen');
+        $this->assertSame('auth', $result['type']);
+        $this->assertStringContainsString('Pieter Janssen', $result['text']);
+        $this->assertStringContainsString('ingelogd', $result['text']);
+    }
+
+    public function test_maps_auth_logout(): void
+    {
+        $entry = (object) [
+            'id' => 15,
+            'action' => 'auth.logout',
+            'actor_id' => 5,
+            'context' => '{}',
+            'created_at' => '2026-03-25 10:00:00',
+        ];
+        $result = AdminActivityMapper::fromAuditEntry($entry, 'Pieter Janssen');
+        $this->assertSame('auth', $result['type']);
+        $this->assertStringContainsString('uitgelogd', $result['text']);
+    }
+
+    public function test_maps_edition_created(): void
+    {
+        $entry = (object) [
+            'id' => 16,
+            'action' => 'edition.created',
+            'actor_id' => 1,
+            'context' => json_encode(['edition_title' => 'Excel Basis']),
+            'created_at' => '2026-03-25 10:00:00',
+        ];
+        $result = AdminActivityMapper::fromAuditEntry($entry, 'Admin');
+        $this->assertSame('edition', $result['type']);
+        $this->assertStringContainsString('Excel Basis', $result['text']);
+    }
+
+    public function test_maps_impersonation_started(): void
+    {
+        $entry = (object) [
+            'id' => 17,
+            'action' => 'impersonation.started',
+            'actor_id' => 1,
+            'context' => json_encode(['target_name' => 'Pieter Janssen']),
+            'created_at' => '2026-03-25 10:00:00',
+        ];
+        $result = AdminActivityMapper::fromAuditEntry($entry, 'Admin');
+        $this->assertSame('user', $result['type']);
+        $this->assertStringContainsString('Admin', $result['text']);
+        $this->assertStringContainsString('Pieter Janssen', $result['text']);
+    }
+
+    public function test_user_event_with_unresolved_target_shows_deleted_account_text(): void
+    {
+        // Audit references a user that no longer exists: actor_id=0 → 'Systeem', no target_name in context
+        $entry = (object) [
+            'id' => 18,
+            'action' => 'user.created',
+            'actor_id' => 0,
+            'context' => '{}',
+            'created_at' => '2026-03-25 10:00:00',
+        ];
+        $result = AdminActivityMapper::fromAuditEntry($entry, 'Systeem');
+        $this->assertSame('user', $result['type']);
+        $this->assertStringContainsString('niet meer beschikbaar', $result['text']);
+    }
+
+    public function test_user_event_with_resolved_target_name(): void
+    {
+        // Controller resolved entity_id → display_name and passed it in
+        $entry = (object) [
+            'id' => 19,
+            'action' => 'user.created',
+            'actor_id' => 1,
+            'context' => '{}',
+            'created_at' => '2026-03-25 10:00:00',
+        ];
+        $result = AdminActivityMapper::fromAuditEntry($entry, 'Admin', 'Marie Claes');
+        $this->assertSame('user', $result['type']);
+        $this->assertStringContainsString('Marie Claes', $result['text']);
+        $this->assertStringContainsString('aangemaakt', $result['text']);
+    }
+
+    public function test_known_action_includes_new_events(): void
+    {
+        $newActions = ['auth.login', 'auth.logout', 'user.deleted', 'user.role_changed', 'user.profile_updated'];
+        foreach ($newActions as $action) {
+            $entry = (object) ['action' => $action];
+            $this->assertTrue(
+                AdminActivityMapper::isKnownAction($entry),
+                "isKnownAction should return true for {$action}"
+            );
+        }
+    }
 }

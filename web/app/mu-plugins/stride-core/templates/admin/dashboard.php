@@ -80,23 +80,48 @@ defined('ABSPATH') || exit;
             <div class="sd-kpi-row">
                 <div class="sd-kpi-card" @click="switchView('edities')">
                     <span class="sd-kpi-card__label">Komende edities</span>
-                    <span class="sd-kpi-card__value" x-text="stats.upcomingEditions ?? '—'"></span>
+                    <template x-if="statsLoaded">
+                        <span class="sd-kpi-card__value" x-text="stats.upcomingEditions ?? '—'"></span>
+                    </template>
+                    <template x-if="!statsLoaded">
+                        <span class="sd-skeleton sd-skeleton--kpi"></span>
+                    </template>
                 </div>
                 <div class="sd-kpi-card" @click="switchView('edities')">
                     <span class="sd-kpi-card__label">Actieve inschrijvingen</span>
-                    <span class="sd-kpi-card__value" x-text="stats.totalRegistrations ?? '—'"></span>
+                    <template x-if="statsLoaded">
+                        <span class="sd-kpi-card__value" x-text="stats.totalRegistrations ?? '—'"></span>
+                    </template>
+                    <template x-if="!statsLoaded">
+                        <span class="sd-skeleton sd-skeleton--kpi"></span>
+                    </template>
                 </div>
                 <div class="sd-kpi-card" @click="switchView('offertes')">
                     <span class="sd-kpi-card__label">Openstaande offertes</span>
-                    <span class="sd-kpi-card__value" x-text="stats.pendingQuotes ?? '—'"></span>
+                    <template x-if="statsLoaded">
+                        <span class="sd-kpi-card__value" x-text="stats.pendingQuotes ?? '—'"></span>
+                    </template>
+                    <template x-if="!statsLoaded">
+                        <span class="sd-skeleton sd-skeleton--kpi"></span>
+                    </template>
                 </div>
                 <div class="sd-kpi-card">
                     <span class="sd-kpi-card__label">Sessies vandaag</span>
-                    <span class="sd-kpi-card__value" x-text="stats.todaySessions ?? '—'"></span>
+                    <template x-if="statsLoaded">
+                        <span class="sd-kpi-card__value" x-text="stats.todaySessions ?? '—'"></span>
+                    </template>
+                    <template x-if="!statsLoaded">
+                        <span class="sd-skeleton sd-skeleton--kpi"></span>
+                    </template>
                 </div>
                 <div class="sd-kpi-card" :class="{ 'sd-kpi-card--alert': (stats.actionsNeeded ?? 0) > 0 }">
                     <span class="sd-kpi-card__label">Acties nodig</span>
-                    <span class="sd-kpi-card__value" x-text="stats.actionsNeeded ?? '—'"></span>
+                    <template x-if="statsLoaded">
+                        <span class="sd-kpi-card__value" x-text="stats.actionsNeeded ?? '—'"></span>
+                    </template>
+                    <template x-if="!statsLoaded">
+                        <span class="sd-skeleton sd-skeleton--kpi"></span>
+                    </template>
                 </div>
             </div>
 
@@ -113,7 +138,8 @@ defined('ABSPATH') || exit;
                             <template x-if="actionQueue.length === 0 && !loading">
                                 <div class="sd-empty">
                                     <span class="sd-empty__icon">✓</span>
-                                    <span class="sd-empty__text">Geen acties nodig — alles is in orde.</span>
+                                    <p class="sd-empty__text">Alles is in orde</p>
+                                    <p class="sd-empty__hint">Geen acties nodig op dit moment.</p>
                                 </div>
                             </template>
                             <template x-for="item in actionQueue" :key="item.rule + (item.subject_id || '')">
@@ -124,11 +150,18 @@ defined('ABSPATH') || exit;
                                     <button class="sd-action-item__dismiss" @click="dismissAction(item.rule, item.subject_id)" title="Negeren">×</button>
                                 </div>
                             </template>
-                            <!-- Health checks -->
-                            <div class="sd-health-checks">
-                                <span class="sd-health-dot" :class="'sd-health-dot--' + healthChecks.registration" title="Inschrijvingsproces"></span>
-                                <span class="sd-health-dot" :class="'sd-health-dot--' + healthChecks.mail" title="E-mail verzending"></span>
-                            </div>
+                        </div>
+                        <!-- Health checks footer -->
+                        <div class="sd-health-checks">
+                            <span class="sd-health-checks__label">Systeem</span>
+                            <span class="sd-health-checks__item">
+                                <span class="sd-health-dot" :class="'sd-health-dot--' + healthChecks.registration"></span>
+                                Inschrijvingen
+                            </span>
+                            <span class="sd-health-checks__item">
+                                <span class="sd-health-dot" :class="'sd-health-dot--' + healthChecks.mail"></span>
+                                E-mail
+                            </span>
                         </div>
                     </div>
 
@@ -150,6 +183,18 @@ defined('ABSPATH') || exit;
                                 </tr>
                             </thead>
                             <tbody>
+                                <template x-if="loading && upcomingSessions.length === 0">
+                                    <template x-for="i in 4" :key="'sk-up-' + i">
+                                        <tr class="sd-skeleton-row">
+                                            <td><span class="sd-skeleton sd-skeleton--line"></span></td>
+                                            <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                            <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                            <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                            <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                            <td><span class="sd-skeleton sd-skeleton--badge"></span></td>
+                                        </tr>
+                                    </template>
+                                </template>
                                 <template x-for="session in upcomingSessions" :key="session.sessionId || session.id">
                                     <tr :class="{'sd-table__row--today': session.isToday, 'sd-table__row--past': session.isPast}">
                                         <td><a :href="'<?php echo esc_url($admin_url); ?>post.php?post=' + session.edition_id + '&action=edit'" x-text="session.edition_title"></a></td>
@@ -163,7 +208,11 @@ defined('ABSPATH') || exit;
                             </tbody>
                         </table>
                         <template x-if="upcomingSessions.length === 0 && !loading">
-                            <div class="sd-empty"><span class="sd-empty__text">Geen sessies gepland voor de komende dagen.</span></div>
+                            <div class="sd-empty">
+                                <span class="sd-empty__icon">📅</span>
+                                <p class="sd-empty__text">Geen komende sessies</p>
+                                <p class="sd-empty__hint">Er staan geen sessies gepland voor de komende dagen.</p>
+                            </div>
                         </template>
                     </div>
 
@@ -173,12 +222,16 @@ defined('ABSPATH') || exit;
 
                     <!-- Quick actions -->
                     <div class="sd-card">
-                        <h3 class="sd-card__title">Snelle acties</h3>
-                        <div class="sd-quick-actions">
-                            <a href="<?php echo esc_url($admin_url); ?>post-new.php?post_type=vad_edition" class="sd-btn sd-btn--ghost sd-btn--block">+ Nieuwe editie</a>
-                            <a href="<?php echo esc_url($admin_url); ?>post-new.php?post_type=vad_trajectory" class="sd-btn sd-btn--ghost sd-btn--block">+ Nieuw traject</a>
-                            <a href="#" @click.prevent="switchView('offertes')" class="sd-btn sd-btn--ghost sd-btn--block">Offertes beheren</a>
-                            <button class="sd-btn sd-btn--ghost sd-btn--block" @click="exportRegistrations()">Inschrijvingen exporteren</button>
+                        <div class="sd-card__header">
+                            <h3 class="sd-card__title">Snelle acties</h3>
+                        </div>
+                        <div class="sd-card__body">
+                            <div class="sd-quick-actions">
+                                <a href="<?php echo esc_url($admin_url); ?>post-new.php?post_type=vad_edition" class="sd-btn sd-btn--ghost sd-btn--block">+ Nieuwe editie</a>
+                                <a href="<?php echo esc_url($admin_url); ?>post-new.php?post_type=vad_trajectory" class="sd-btn sd-btn--ghost sd-btn--block">+ Nieuw traject</a>
+                                <a href="#" @click.prevent="switchView('offertes')" class="sd-btn sd-btn--ghost sd-btn--block">Offertes beheren</a>
+                                <button class="sd-btn sd-btn--ghost sd-btn--block" @click="exportRegistrations()">Inschrijvingen exporteren</button>
+                            </div>
                         </div>
                     </div>
 
@@ -198,7 +251,10 @@ defined('ABSPATH') || exit;
                                 </div>
                             </template>
                             <template x-if="activityFeed.length === 0 && !loading">
-                                <div class="sd-empty"><span class="sd-empty__text">Nog geen activiteit.</span></div>
+                                <div class="sd-empty">
+                                    <span class="sd-empty__icon">·</span>
+                                    <p class="sd-empty__text">Nog geen activiteit</p>
+                                </div>
                             </template>
                             <!-- Activity feed shows last 10 items; no dedicated view yet -->
                         </div>
@@ -206,7 +262,9 @@ defined('ABSPATH') || exit;
 
                     <!-- User search widget -->
                     <div class="sd-card">
-                        <h3 class="sd-card__title">Gebruiker zoeken</h3>
+                        <div class="sd-card__header">
+                            <h3 class="sd-card__title">Gebruiker zoeken</h3>
+                        </div>
                         <div class="sd-card__body">
                             <input type="text"
                                    class="sd-input"
@@ -256,17 +314,38 @@ defined('ABSPATH') || exit;
                        class="sd-input"
                        placeholder="Datumbereik"
                        x-ref="dateRange">
-                <select class="sd-select" x-model="editionFilters.course_tag" @change="loadEditions()">
-                    <option value="">Alle cursussen</option>
-                    <template x-for="tag in courseTags" :key="tag.id">
-                        <option :value="tag.id" x-text="tag.name"></option>
+                <select class="sd-select" x-model="editionFilters.theme" @change="loadEditions()">
+                    <option value="0">Alle onderwerpen</option>
+                    <template x-for="term in editionTaxonomies.theme" :key="term.id">
+                        <option :value="term.id" x-text="term.name"></option>
+                    </template>
+                </select>
+                <select class="sd-select" x-model="editionFilters.format" @change="loadEditions()">
+                    <option value="0">Alle vormen</option>
+                    <template x-for="term in editionTaxonomies.format" :key="term.id">
+                        <option :value="term.id" x-text="term.name"></option>
+                    </template>
+                </select>
+                <select class="sd-select" x-model="editionFilters.tag" @change="loadEditions()" x-show="editionTaxonomies.tag.length > 0">
+                    <option value="0">Alle tags</option>
+                    <template x-for="term in editionTaxonomies.tag" :key="term.id">
+                        <option :value="term.id" x-text="term.name"></option>
                     </template>
                 </select>
                 <button class="sd-btn sd-btn--ghost" @click="resetEditionFilters()">Reset</button>
             </div>
 
+            <!-- Error state -->
+            <template x-if="errors.edities">
+                <div class="sd-error">
+                    <span class="sd-error__icon">!</span>
+                    <p class="sd-error__title" x-text="errors.edities"></p>
+                    <button class="sd-btn sd-btn--ghost sd-btn--sm" @click="loadEditions()">Opnieuw proberen</button>
+                </div>
+            </template>
+
             <!-- Session table -->
-            <div class="sd-card">
+            <div class="sd-card" x-show="!errors.edities">
                 <table class="sd-table">
                     <thead>
                         <tr>
@@ -281,6 +360,21 @@ defined('ABSPATH') || exit;
                         </tr>
                     </thead>
                     <tbody>
+                        <!-- Skeleton rows while loading (no data yet) -->
+                        <template x-if="loading && editionSessions.length === 0">
+                            <template x-for="i in 5" :key="'sk-' + i">
+                                <tr class="sd-skeleton-row">
+                                    <td><span class="sd-skeleton sd-skeleton--line"></span></td>
+                                    <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                    <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                    <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                    <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                    <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                    <td><span class="sd-skeleton sd-skeleton--badge"></span></td>
+                                    <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                </tr>
+                            </template>
+                        </template>
                         <template x-for="session in editionSessions" :key="session.sessionId || session.id">
                             <tr :class="{'sd-table__row--today': session.isToday, 'sd-table__row--past': session.isPast}"
                                 @click="openEdition(session.edition_id)">
@@ -302,7 +396,11 @@ defined('ABSPATH') || exit;
                     </tbody>
                 </table>
                 <template x-if="editionSessions.length === 0 && !loading">
-                    <div class="sd-empty"><span class="sd-empty__text">Geen edities gevonden.</span></div>
+                    <div class="sd-empty">
+                        <span class="sd-empty__icon">📅</span>
+                        <p class="sd-empty__text">Geen edities gevonden</p>
+                        <p class="sd-empty__hint">Probeer een ander filter of bereik.</p>
+                    </div>
                 </template>
             </div>
 
@@ -327,9 +425,9 @@ defined('ABSPATH') || exit;
                     </div>
                     <!-- Tabs -->
                     <div class="sd-slideout__tabs">
-                        <button :class="{'active': editionTab === 'students'}" @click="editionTab = 'students'">Studenten</button>
-                        <button :class="{'active': editionTab === 'attendance'}" @click="editionTab = 'attendance'">Aanwezigheid</button>
-                        <button :class="{'active': editionTab === 'info'}" @click="editionTab = 'info'">Info</button>
+                        <button class="sd-slideout__tab" :class="{'active': editionTab === 'students'}" @click="editionTab = 'students'">Studenten</button>
+                        <button class="sd-slideout__tab" :class="{'active': editionTab === 'attendance'}" @click="editionTab = 'attendance'">Aanwezigheid</button>
+                        <button class="sd-slideout__tab" :class="{'active': editionTab === 'info'}" @click="editionTab = 'info'">Info</button>
                     </div>
                     <!-- Tab content -->
                     <div class="sd-slideout__body">
@@ -347,7 +445,11 @@ defined('ABSPATH') || exit;
                                 </div>
                             </template>
                             <template x-if="editionRegistrations.length === 0">
-                                <div class="sd-empty"><span class="sd-empty__text">Nog geen inschrijvingen.</span></div>
+                                <div class="sd-empty">
+                                    <span class="sd-empty__icon">👤</span>
+                                    <p class="sd-empty__text">Nog geen inschrijvingen</p>
+                                    <p class="sd-empty__hint">Zodra iemand zich inschrijft verschijnt die hier.</p>
+                                </div>
                             </template>
                         </div>
 
@@ -397,7 +499,7 @@ defined('ABSPATH') || exit;
                                 <dt>Capaciteit</dt>
                                 <dd x-text="(selectedEdition?.registered || 0) + '/' + (selectedEdition?.capacity || '∞')"></dd>
                             </dl>
-                            <a :href="'<?php echo esc_url($admin_url); ?>post.php?post=' + selectedEdition?.id + '&action=edit'"
+                            <a :href="selectedEdition?.editUrl || '#'"
                                class="sd-btn sd-btn--ghost"
                                target="_blank"
                                x-show="selectedEdition?.id">Bewerk in WP →</a>
@@ -437,8 +539,17 @@ defined('ABSPATH') || exit;
                 <button class="sd-btn sd-btn--ghost" @click="resetQuoteFilters()">Reset</button>
             </div>
 
+            <!-- Error state -->
+            <template x-if="errors.offertes">
+                <div class="sd-error">
+                    <span class="sd-error__icon">!</span>
+                    <p class="sd-error__title" x-text="errors.offertes"></p>
+                    <button class="sd-btn sd-btn--ghost sd-btn--sm" @click="loadQuotes()">Opnieuw proberen</button>
+                </div>
+            </template>
+
             <!-- Quotes table -->
-            <div class="sd-card">
+            <div class="sd-card" x-show="!errors.offertes">
                 <table class="sd-table">
                     <thead>
                         <tr>
@@ -476,7 +587,11 @@ defined('ABSPATH') || exit;
                     </tbody>
                 </table>
                 <template x-if="quotes.length === 0 && !loading">
-                    <div class="sd-empty"><span class="sd-empty__text">Geen offertes gevonden.</span></div>
+                    <div class="sd-empty">
+                        <span class="sd-empty__icon">€</span>
+                        <p class="sd-empty__text">Geen offertes gevonden</p>
+                        <p class="sd-empty__hint">Probeer een ander filter of zoekterm.</p>
+                    </div>
                 </template>
             </div>
 
@@ -501,8 +616,8 @@ defined('ABSPATH') || exit;
                     </div>
                     <!-- Tabs -->
                     <div class="sd-slideout__tabs">
-                        <button :class="{'active': quoteTab === 'details'}" @click="quoteTab = 'details'">Details</button>
-                        <button :class="{'active': quoteTab === 'items'}" @click="quoteTab = 'items'">Regels</button>
+                        <button class="sd-slideout__tab" :class="{'active': quoteTab === 'details'}" @click="quoteTab = 'details'">Details</button>
+                        <button class="sd-slideout__tab" :class="{'active': quoteTab === 'items'}" @click="quoteTab = 'items'">Regels</button>
                     </div>
                     <!-- Tab content -->
                     <div class="sd-slideout__body">
@@ -527,7 +642,7 @@ defined('ABSPATH') || exit;
                                 <dt>Totaal</dt>
                                 <dd x-text="formatCurrency(selectedQuote?.total)"></dd>
                             </dl>
-                            <a :href="'<?php echo esc_url($admin_url); ?>post.php?post=' + selectedQuote?.id + '&action=edit'"
+                            <a :href="selectedQuote?.editUrl || '#'"
                                class="sd-btn sd-btn--ghost"
                                target="_blank"
                                x-show="selectedQuote?.id">Bewerk in WP →</a>
@@ -586,8 +701,17 @@ defined('ABSPATH') || exit;
                 <button class="sd-btn sd-btn--ghost" @click="resetTrajectoryFilters()">Reset</button>
             </div>
 
+            <!-- Error state -->
+            <template x-if="errors.trajecten">
+                <div class="sd-error">
+                    <span class="sd-error__icon">!</span>
+                    <p class="sd-error__title" x-text="errors.trajecten"></p>
+                    <button class="sd-btn sd-btn--ghost sd-btn--sm" @click="loadTrajectories()">Opnieuw proberen</button>
+                </div>
+            </template>
+
             <!-- Trajectory table -->
-            <div class="sd-card">
+            <div class="sd-card" x-show="!errors.trajecten">
                 <table class="sd-table">
                     <thead>
                         <tr>
@@ -621,7 +745,11 @@ defined('ABSPATH') || exit;
                     </tbody>
                 </table>
                 <template x-if="trajectories.length === 0 && !loading">
-                    <div class="sd-empty"><span class="sd-empty__text">Geen trajecten gevonden.</span></div>
+                    <div class="sd-empty">
+                        <span class="sd-empty__icon">🗂</span>
+                        <p class="sd-empty__text">Geen trajecten gevonden</p>
+                        <p class="sd-empty__hint">Probeer een ander filter of maak een nieuw traject aan.</p>
+                    </div>
                 </template>
             </div>
 
@@ -646,9 +774,9 @@ defined('ABSPATH') || exit;
                     </div>
                     <!-- Tabs -->
                     <div class="sd-slideout__tabs">
-                        <button :class="{'active': trajectoryTab === 'details'}" @click="trajectoryTab = 'details'">Details</button>
-                        <button :class="{'active': trajectoryTab === 'courses'}" @click="trajectoryTab = 'courses'">Cursussen</button>
-                        <button :class="{'active': trajectoryTab === 'students'}" @click="trajectoryTab = 'students'">Studenten</button>
+                        <button class="sd-slideout__tab" :class="{'active': trajectoryTab === 'details'}" @click="trajectoryTab = 'details'">Details</button>
+                        <button class="sd-slideout__tab" :class="{'active': trajectoryTab === 'courses'}" @click="trajectoryTab = 'courses'">Cursussen</button>
+                        <button class="sd-slideout__tab" :class="{'active': trajectoryTab === 'students'}" @click="trajectoryTab = 'students'">Studenten</button>
                     </div>
                     <!-- Tab content -->
                     <div class="sd-slideout__body">
@@ -667,7 +795,7 @@ defined('ABSPATH') || exit;
                                 <dt>Ingeschreven</dt>
                                 <dd x-text="selectedTrajectory?.registered"></dd>
                             </dl>
-                            <a :href="'<?php echo esc_url($admin_url); ?>post.php?post=' + selectedTrajectory?.id + '&action=edit'"
+                            <a :href="selectedTrajectory?.editUrl || '#'"
                                class="sd-btn sd-btn--ghost"
                                target="_blank"
                                x-show="selectedTrajectory?.id">Bewerk in WP →</a>
@@ -684,7 +812,11 @@ defined('ABSPATH') || exit;
                                 </div>
                             </template>
                             <template x-if="trajectoryCourses.length === 0">
-                                <div class="sd-empty"><span class="sd-empty__text">Geen cursussen gekoppeld.</span></div>
+                                <div class="sd-empty">
+                                    <span class="sd-empty__icon">📚</span>
+                                    <p class="sd-empty__text">Geen cursussen gekoppeld</p>
+                                    <p class="sd-empty__hint">Voeg cursussen toe aan dit traject in de WordPress-editor.</p>
+                                </div>
                             </template>
                         </div>
 
@@ -701,7 +833,10 @@ defined('ABSPATH') || exit;
                                 </div>
                             </template>
                             <template x-if="trajectoryRegistrations.length === 0">
-                                <div class="sd-empty"><span class="sd-empty__text">Nog geen inschrijvingen.</span></div>
+                                <div class="sd-empty">
+                                    <span class="sd-empty__icon">👤</span>
+                                    <p class="sd-empty__text">Nog geen inschrijvingen</p>
+                                </div>
                             </template>
                         </div>
 
@@ -755,16 +890,17 @@ defined('ABSPATH') || exit;
                                 </div>
                                 <div class="sd-user-header__actions">
                                     <button class="sd-btn sd-btn--ghost" @click="impersonateUser(selectedUser?.id)" x-show="config.canManage">Bekijk als gebruiker</button>
-                                    <a :href="'<?php echo esc_url($admin_url); ?>user-edit.php?user_id=' + selectedUser?.id"
+                                    <a :href="selectedUser?.id ? '<?php echo esc_url($admin_url); ?>user-edit.php?user_id=' + selectedUser.id : '#'"
                                        class="sd-btn sd-btn--ghost"
-                                       target="_blank">Bewerk in WP →</a>
+                                       target="_blank"
+                                       x-show="selectedUser?.id">Bewerk in WP →</a>
                                     <button class="sd-btn sd-btn--text" @click="selectedUser = null">← Terug</button>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- User registrations -->
+                    <!-- User registrations — pure enrollment info -->
                     <div class="sd-card">
                         <div class="sd-card__header">
                             <h3 class="sd-card__title">Inschrijvingen</h3>
@@ -773,7 +909,7 @@ defined('ABSPATH') || exit;
                             <thead>
                                 <tr>
                                     <th>Editie</th>
-                                    <th>Datum</th>
+                                    <th>Inschrijfdatum</th>
                                     <th>Status</th>
                                     <th>Pad</th>
                                 </tr>
@@ -784,17 +920,67 @@ defined('ABSPATH') || exit;
                                         <td><a :href="'<?php echo esc_url($admin_url); ?>post.php?post=' + reg.edition_id + '&action=edit'" x-text="reg.edition_title"></a></td>
                                         <td x-text="formatDate(reg.date)"></td>
                                         <td><span class="sd-badge" :class="'sd-badge--' + reg.status" x-text="reg.status_label"></span></td>
-                                        <td x-text="reg.enrollment_path || '—'"></td>
+                                        <td x-text="enrollmentPathLabel(reg.enrollment_path)"></td>
                                     </tr>
                                 </template>
                             </tbody>
                         </table>
                         <template x-if="userRegistrations.length === 0">
-                            <div class="sd-empty"><span class="sd-empty__text">Geen inschrijvingen.</span></div>
+                            <div class="sd-empty">
+                                <span class="sd-empty__icon">📝</span>
+                                <p class="sd-empty__text">Nog geen inschrijvingen</p>
+                                <p class="sd-empty__hint">Deze gebruiker heeft zich nog niet ingeschreven voor een editie.</p>
+                            </div>
                         </template>
                     </div>
 
-                    <!-- User quotes -->
+                    <!-- Attendance + progress (one row per sessioned edition) -->
+                    <div class="sd-card">
+                        <div class="sd-card__header">
+                            <h3 class="sd-card__title">Aanwezigheid</h3>
+                        </div>
+                        <table class="sd-table">
+                            <thead>
+                                <tr>
+                                    <th>Editie</th>
+                                    <th>Aanwezigheid</th>
+                                    <th>Uren</th>
+                                    <th>Voortgang</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="reg in sessionedRegistrations" :key="reg.id">
+                                    <tr>
+                                        <td x-text="reg.edition_title"></td>
+                                        <td>
+                                            <div class="sd-attendance-cell-stack">
+                                                <div class="sd-attendance-cell-stack__count">
+                                                    <span x-text="attendancePresent(reg) + '/' + attendanceTotal(reg) + ' sessies'"></span>
+                                                    <span class="sd-attendance-pct" :class="attendancePctClass(reg)" x-text="attendancePct(reg.attendance) + '%'"></span>
+                                                </div>
+                                                <div class="sd-attendance-cell-stack__bar">
+                                                    <div class="sd-attendance-cell-stack__bar-fill"
+                                                         :class="attendanceBarClass(reg.attendance)"
+                                                         :style="'width:' + attendancePct(reg.attendance) + '%'"></div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td x-text="(reg.attendance?.hours ?? 0) + 'u'"></td>
+                                        <td x-text="progressLabel(reg)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                        <template x-if="sessionedRegistrations.length === 0">
+                            <div class="sd-empty">
+                                <span class="sd-empty__icon">⏱</span>
+                                <p class="sd-empty__text">Geen edities met sessies</p>
+                                <p class="sd-empty__hint">Deze gebruiker heeft geen klassikale of blended edities.</p>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- User quotes / invoices -->
                     <div class="sd-card">
                         <div class="sd-card__header">
                             <h3 class="sd-card__title">Offertes</h3>
@@ -806,6 +992,8 @@ defined('ABSPATH') || exit;
                                     <th>Editie</th>
                                     <th>Bedrag</th>
                                     <th>Status</th>
+                                    <th>Verzonden</th>
+                                    <th>Betaald</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -815,12 +1003,18 @@ defined('ABSPATH') || exit;
                                         <td x-text="quote.edition_title || '—'"></td>
                                         <td x-text="formatCurrency(quote.total)"></td>
                                         <td><span class="sd-badge" :class="'sd-badge--' + quote.status" x-text="quote.status_label"></span></td>
+                                        <td x-text="quote.sent_at ? formatShortDate(quote.sent_at) : '—'"></td>
+                                        <td x-text="quote.paid_at ? formatShortDate(quote.paid_at) : '—'"></td>
                                     </tr>
                                 </template>
                             </tbody>
                         </table>
                         <template x-if="userQuotes.length === 0">
-                            <div class="sd-empty"><span class="sd-empty__text">Geen offertes.</span></div>
+                            <div class="sd-empty">
+                                <span class="sd-empty__icon">€</span>
+                                <p class="sd-empty__text">Geen offertes</p>
+                                <p class="sd-empty__hint">Voor deze gebruiker is nog geen offerte aangemaakt.</p>
+                            </div>
                         </template>
                     </div>
 
@@ -844,31 +1038,14 @@ defined('ABSPATH') || exit;
                                 </div>
                             </template>
                             <template x-if="userAuditLog.length === 0">
-                                <div class="sd-empty"><span class="sd-empty__text">Geen audit items.</span></div>
+                                <div class="sd-empty">
+                                    <span class="sd-empty__icon">·</span>
+                                    <p class="sd-empty__text">Geen audit items</p>
+                                </div>
                             </template>
                         </div>
                     </div>
 
-                    <!-- Attendance summary -->
-                    <div class="sd-card">
-                        <div class="sd-card__header">
-                            <h3 class="sd-card__title">Aanwezigheid</h3>
-                        </div>
-                        <div class="sd-card__body">
-                            <template x-for="att in userAttendanceSummary" :key="att.edition_id">
-                                <div class="sd-attendance-summary">
-                                    <div class="sd-attendance-summary__title" x-text="att.edition_title"></div>
-                                    <div class="sd-attendance-summary__stats">
-                                        <span x-text="att.attended + '/' + att.total + ' sessies'"></span>
-                                        <span x-text="att.hours + ' uur'"></span>
-                                    </div>
-                                </div>
-                            </template>
-                            <template x-if="userAttendanceSummary.length === 0">
-                                <div class="sd-empty"><span class="sd-empty__text">Geen aanwezigheidsdata.</span></div>
-                            </template>
-                        </div>
-                    </div>
 
                 </div><!-- /.sd-layout__secondary -->
 

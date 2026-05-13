@@ -58,3 +58,30 @@ function ntdst_enqueue_admin_toolkit(): void
         '1.0.0'
     );
 }
+
+/**
+ * Enqueue the shared NTDST API client (window.ntdstAPI).
+ *
+ * Single source of truth for /wp-json/ntdst/v1/action calls. Use from both
+ * frontend (theme) and admin pages. Localizes the wp_rest nonce as
+ * window.ntdstAPIConfig.restNonce so the client can authenticate the REST
+ * endpoint regardless of context.
+ */
+function ntdst_enqueue_api_client(): void
+{
+    $path = NTDST_PATH . '/assets/js/ntdst-api.js';
+    wp_enqueue_script(
+        'ntdst-api',
+        NTDST_URL . '/assets/js/ntdst-api.js',
+        [],
+        file_exists($path) ? (string) filemtime($path) : '1.0.0',
+        false
+    );
+    wp_add_inline_script(
+        'ntdst-api',
+        'window.ntdstAPIConfig = ' . wp_json_encode([
+            'restNonce' => wp_create_nonce('wp_rest'),
+        ]) . ';',
+        'before'
+    );
+}

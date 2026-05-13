@@ -156,6 +156,9 @@ class StrideSettingsService
         // WP Media Library (for logo upload)
         wp_enqueue_media();
 
+        // Shared NTDST API client (window.ntdstAPI)
+        ntdst_enqueue_api_client();
+
         // Alpine.js from CDN (deferred)
         wp_enqueue_script(
             'alpinejs',
@@ -183,7 +186,7 @@ class StrideSettingsService
             wp_enqueue_script(
                 'stride-settings',
                 plugins_url('assets/js/admin/settings.js', $basePath . '/stride-core.php'),
-                [],
+                ['ntdst-api'],
                 (string) filemtime($jsFile),
                 false // in <head>, not footer
             );

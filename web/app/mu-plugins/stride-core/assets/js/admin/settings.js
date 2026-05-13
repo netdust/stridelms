@@ -372,44 +372,10 @@ function strideSettingsApp() {
         // =====================================================================
 
         /**
-         * Call API using ntdstAPI.call() with fallback to direct REST.
+         * Call API via window.ntdstAPI (enqueued by ntdst_enqueue_api_client()).
          */
         async apiCall(action, params) {
-            if (typeof ntdstAPI !== 'undefined' && ntdstAPI.call) {
-                return ntdstAPI.call(action, params);
-            }
-
-            // Fallback: direct REST call
-            const nonceResponse = await fetch('/wp-json/ntdst/v1/get_nonce', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
-                body: JSON.stringify({ action }),
-            });
-            const nonceData = await nonceResponse.json();
-
-            if (!nonceData.nonce && nonceData.data?.nonce) {
-                nonceData.nonce = nonceData.data.nonce;
-            }
-
-            const response = await fetch('/wp-json/ntdst/v1/action', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
-                body: JSON.stringify({
-                    action,
-                    nonce: nonceData.nonce || nonceData.data?.nonce,
-                    ...params,
-                }),
-            });
-
-            const result = await response.json();
-
-            if (result.success === false || result.error) {
-                throw new Error(result.error || result.message || 'API error');
-            }
-
-            return result.data || result;
+            return ntdstAPI.call(action, params);
         },
     };
 }
