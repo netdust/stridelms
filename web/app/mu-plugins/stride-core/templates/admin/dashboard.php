@@ -129,81 +129,77 @@ defined('ABSPATH') || exit;
             <div class="sd-layout">
                 <div class="sd-layout__primary">
 
-                    <!-- Action Queue -->
-                    <div class="sd-card">
+                    <!-- Unified Acties nodig panel: approvals + post-course sign-offs + stale pendings + system notifications -->
+                    <div class="sd-card" id="action-required-card">
                         <div class="sd-card__header">
                             <h3 class="sd-card__title">Acties nodig</h3>
                         </div>
                         <div class="sd-card__body">
-                            <template x-if="actionQueue.length === 0 && !loading">
-                                <div class="sd-empty">
-                                    <span class="sd-empty__icon">✓</span>
-                                    <p class="sd-empty__text">Alles is in orde</p>
-                                    <p class="sd-empty__hint">Geen acties nodig op dit moment.</p>
-                                </div>
-                            </template>
-                            <template x-for="item in actionQueue" :key="item.rule + (item.subject_id || '')">
-                                <div class="sd-action-item">
-                                    <span class="sd-badge--priority" :class="'sd-badge--priority-' + item.priority"></span>
-                                    <span class="sd-action-item__text" x-text="item.text"></span>
-                                    <a :href="item.url || '#'" class="sd-action-item__link" x-show="item.url">Bekijk →</a>
-                                    <button class="sd-action-item__dismiss" @click="dismissAction(item.rule, item.subject_id)" title="Negeren">×</button>
-                                </div>
-                            </template>
-                        </div>
-                        <!-- Health checks footer -->
-                        <div class="sd-health-checks">
-                            <span class="sd-health-checks__label">Systeem</span>
-                            <span class="sd-health-checks__item">
-                                <span class="sd-health-dot" :class="'sd-health-dot--' + healthChecks.registration"></span>
-                                Inschrijvingen
-                            </span>
-                            <span class="sd-health-checks__item">
-                                <span class="sd-health-dot" :class="'sd-health-dot--' + healthChecks.mail"></span>
-                                E-mail
-                            </span>
-                        </div>
-                    </div>
-
-                    <!-- Inschrijvingen — actie vereist (D-Cap1) -->
-                    <div class="sd-card" id="action-required-card" x-show="(pendingApprovals.counts.approval + pendingApprovals.counts.post_approval + pendingApprovals.counts.stale_user) > 0">
-                        <div class="sd-card__header">
-                            <h3 class="sd-card__title">Inschrijvingen — actie vereist</h3>
-                        </div>
-                        <div class="sd-card__body">
-                            <!-- Sub-tab bar -->
+                            <!-- Tabs (always visible so admin can see "0 wachten" at a glance) -->
                             <div class="sd-tabs" style="display:flex;gap:8px;margin-bottom:12px;border-bottom:1px solid var(--sd-border, #e5e7eb);">
                                 <button
                                     type="button"
                                     class="sd-tab"
-                                    :class="{ 'sd-tab--active': pendingApprovalsTab === 'approval' }"
-                                    @click="pendingApprovalsTab = 'approval'"
-                                    x-show="pendingApprovals.counts.approval > 0">
+                                    :class="{ 'sd-tab--active': pendingApprovalsTab === 'approval', 'sd-tab--empty': pendingApprovals.counts.approval === 0 }"
+                                    @click="pendingApprovalsTab = 'approval'">
                                     Wacht op mij
-                                    <span class="sd-pill" x-text="pendingApprovals.counts.approval"></span>
+                                    <span class="sd-pill" :class="{ 'sd-pill--muted': pendingApprovals.counts.approval === 0 }" x-text="pendingApprovals.counts.approval"></span>
                                 </button>
                                 <button
                                     type="button"
                                     class="sd-tab"
-                                    :class="{ 'sd-tab--active': pendingApprovalsTab === 'post_approval' }"
-                                    @click="pendingApprovalsTab = 'post_approval'"
-                                    x-show="pendingApprovals.counts.post_approval > 0">
+                                    :class="{ 'sd-tab--active': pendingApprovalsTab === 'post_approval', 'sd-tab--empty': pendingApprovals.counts.post_approval === 0 }"
+                                    @click="pendingApprovalsTab = 'post_approval'">
                                     Aftekenen na opleiding
-                                    <span class="sd-pill" x-text="pendingApprovals.counts.post_approval"></span>
+                                    <span class="sd-pill" :class="{ 'sd-pill--muted': pendingApprovals.counts.post_approval === 0 }" x-text="pendingApprovals.counts.post_approval"></span>
                                 </button>
                                 <button
                                     type="button"
                                     class="sd-tab"
-                                    :class="{ 'sd-tab--active': pendingApprovalsTab === 'stale_user' }"
-                                    @click="pendingApprovalsTab = 'stale_user'"
-                                    x-show="pendingApprovals.counts.stale_user > 0">
+                                    :class="{ 'sd-tab--active': pendingApprovalsTab === 'stale_user', 'sd-tab--empty': pendingApprovals.counts.stale_user === 0 }"
+                                    @click="pendingApprovalsTab = 'stale_user'">
                                     Wacht op gebruiker
-                                    <span class="sd-pill sd-pill--warn" x-text="pendingApprovals.counts.stale_user"></span>
+                                    <span class="sd-pill" :class="pendingApprovals.counts.stale_user === 0 ? 'sd-pill--muted' : 'sd-pill--warn'" x-text="pendingApprovals.counts.stale_user"></span>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="sd-tab"
+                                    :class="{ 'sd-tab--active': pendingApprovalsTab === 'notifications', 'sd-tab--empty': actionQueue.length === 0 }"
+                                    @click="pendingApprovalsTab = 'notifications'">
+                                    Meldingen
+                                    <span class="sd-pill" :class="{ 'sd-pill--muted': actionQueue.length === 0 }" x-text="actionQueue.length"></span>
                                 </button>
                             </div>
 
-                            <!-- Items list -->
-                            <table class="sd-table">
+                            <!-- Per-tab empty state -->
+                            <template x-if="!loading && pendingApprovalsTab === 'approval' && pendingApprovals.counts.approval === 0">
+                                <div class="sd-empty">
+                                    <span class="sd-empty__icon">✓</span>
+                                    <p class="sd-empty__text">Geen inschrijvingen wachten op goedkeuring</p>
+                                </div>
+                            </template>
+                            <template x-if="!loading && pendingApprovalsTab === 'post_approval' && pendingApprovals.counts.post_approval === 0">
+                                <div class="sd-empty">
+                                    <span class="sd-empty__icon">✓</span>
+                                    <p class="sd-empty__text">Niets af te tekenen na een opleiding</p>
+                                </div>
+                            </template>
+                            <template x-if="!loading && pendingApprovalsTab === 'stale_user' && pendingApprovals.counts.stale_user === 0">
+                                <div class="sd-empty">
+                                    <span class="sd-empty__icon">✓</span>
+                                    <p class="sd-empty__text">Geen hangende inschrijvingen</p>
+                                    <p class="sd-empty__hint">Inschrijvingen <span x-text="pendingApprovals.stale_threshold_days"></span> dagen of langer zonder activiteit verschijnen hier.</p>
+                                </div>
+                            </template>
+                            <template x-if="!loading && pendingApprovalsTab === 'notifications' && actionQueue.length === 0">
+                                <div class="sd-empty">
+                                    <span class="sd-empty__icon">✓</span>
+                                    <p class="sd-empty__text">Geen meldingen</p>
+                                </div>
+                            </template>
+
+                            <!-- Registration buckets: approval / post_approval / stale_user (active tab only) -->
+                            <table class="sd-table" x-show="pendingApprovalsTab !== 'notifications' && (pendingApprovals.counts[pendingApprovalsTab] || 0) > 0">
                                 <thead>
                                     <tr>
                                         <th>Gebruiker</th>
@@ -237,7 +233,6 @@ defined('ABSPATH') || exit;
                                             </td>
                                             <td x-text="(item.registered_at || '').substring(0, 10)"></td>
                                             <td style="white-space:nowrap;">
-                                                <!-- Primary action per bucket -->
                                                 <template x-if="item.type === 'approval'">
                                                     <button class="sd-btn sd-btn--primary" @click="approveFromRow(item)">Keur goed</button>
                                                 </template>
@@ -249,7 +244,6 @@ defined('ABSPATH') || exit;
                                                        class="sd-btn sd-btn--ghost"
                                                        target="_blank">Bekijk editie →</a>
                                                 </template>
-                                                <!-- Secondary: open user-detail view -->
                                                 <button class="sd-btn sd-btn--text" @click="viewUserInDetail(item.user_id)">Gebruiker →</button>
                                             </td>
                                         </tr>
@@ -260,6 +254,30 @@ defined('ABSPATH') || exit;
                                 Inschrijvingen die <span x-text="pendingApprovals.stale_threshold_days"></span> dagen of langer geen activiteit hebben gehad.
                                 Capaciteit blijft gereserveerd zolang ze openstaan — beslis per geval om te contacteren of te annuleren.
                             </p>
+
+                            <!-- Notifications bucket: the rule-driven action queue -->
+                            <div x-show="pendingApprovalsTab === 'notifications'">
+                                <template x-for="item in actionQueue" :key="item.rule + (item.subject_id || '')">
+                                    <div class="sd-action-item">
+                                        <span class="sd-badge--priority" :class="'sd-badge--priority-' + item.priority"></span>
+                                        <span class="sd-action-item__text" x-text="item.text"></span>
+                                        <a :href="item.url || '#'" class="sd-action-item__link" x-show="item.url" target="_blank">Bekijk →</a>
+                                        <button class="sd-action-item__dismiss" @click="dismissAction(item.rule, item.subject_id)" title="Negeren">×</button>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        <!-- Health checks footer -->
+                        <div class="sd-health-checks">
+                            <span class="sd-health-checks__label">Systeem</span>
+                            <span class="sd-health-checks__item">
+                                <span class="sd-health-dot" :class="'sd-health-dot--' + healthChecks.registration"></span>
+                                Inschrijvingen
+                            </span>
+                            <span class="sd-health-checks__item">
+                                <span class="sd-health-dot" :class="'sd-health-dot--' + healthChecks.mail"></span>
+                                E-mail
+                            </span>
                         </div>
                     </div>
 

@@ -2767,3 +2767,15 @@ body.stride-dashboard .wrap {
     background: #fcf0e3;
     color: #b26200;
 }
+.sd-pill--muted {
+    background: transparent;
+    color: #a7aaad;
+    border: 1px solid #dcdcde;
+    font-weight: 400;
+}
+.sd-tab--empty {
+    color: #a7aaad;
+}
+.sd-tab--empty:not(.sd-tab--active):hover {
+    color: #646970;
+}

@@ -239,11 +239,12 @@ document.addEventListener('alpine:init', () => {
                 }
                 if (approvals.status === 'fulfilled') {
                     this.pendingApprovals = approvals.value;
-                    // Default to the bucket with the most items
+                    // Default-active tab priority: approval > stale_user > post_approval > notifications
                     const c = approvals.value.counts || {};
                     if (c.approval > 0) this.pendingApprovalsTab = 'approval';
                     else if (c.stale_user > 0) this.pendingApprovalsTab = 'stale_user';
                     else if (c.post_approval > 0) this.pendingApprovalsTab = 'post_approval';
+                    else if (this.actionQueue.length > 0) this.pendingApprovalsTab = 'notifications';
 
                     // Deep-link from action-queue: hash `#action-required-<bucket>`
                     // tells us which tab to activate + scrolls the card into view.
