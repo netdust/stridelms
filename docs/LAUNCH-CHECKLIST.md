@@ -78,7 +78,7 @@ Last updated: 2026-05-14 (post §C voucher scope + apply-mode)
 - [x] (P0) **Activity feed redesign** — `AdminActivityMapper` extended with all event cases; controller batch-resolves `entity_id` → display name; graceful "(account niet meer beschikbaar)" fallback for deleted users; 11 new unit tests. **DONE 2026-05-13** (`8a54c475`, also resolves BUG-021).
 - [x] (P1) **Empty states** — `.sd-empty` pattern (circular icon + title + hint) applied across lists/tables. **DONE 2026-05-13** (`8a54c475`).
 - [x] (P1) **Loading / error states** — `.sd-skeleton` with pulse animation in KPI + tables; `.sd-error` blocks with retry buttons; stats default `null` so no flash-of-zero. **DONE 2026-05-13** (`8a54c475`).
-- [ ] (P1) **Density modes** — comfortable default, optional compact mode for power users. (Cheap if done at CSS level.)
+- [~] (Deferred — user decision 2026-05-14) **Density modes** — comfortable default works fine for launch. Optional compact mode can be added post-launch if power users ask.
 
 **Constraints:**
 - No new dashboard framework. Existing Alpine.js + template structure stays.
@@ -178,14 +178,16 @@ These 7 from the original lists were verified fixed in current code:
 
 ## E. Untested Components (P0–P1)
 
-- [ ] (P1) Admin Dashboard shake-out — covered by section A above
-- [ ] (P2) Trajectory module shake-out — *deferred (post-launch feature)*
+- [x] (P1) Admin Dashboard shake-out — covered by section A (Sprint 1 + Track 2 done 2026-05-13)
+- [~] (P2) Trajectory module shake-out — *deferred (post-launch feature)*
 
 ---
 
-## F. Design System — Multi-Brand Demo (P1)
+## F. Design System — Multi-Brand Demo (P1) — DONE for launch
 
 **Goal:** flip a switch and show the same platform looking radically different. Sales demo material.
+
+**Status (2026-05-14):** brand-switching mechanism tested by user — works. BWEEG scaffold + the proven swap capability satisfy the launch requirement. Additional brand scaffolds for sales pitches will be created on-demand when needed.
 
 **Foundation (DONE):**
 - [x] Client customization system via mu-plugin pattern
@@ -196,10 +198,7 @@ These 7 from the original lists were verified fixed in current code:
 - [x] BWEEG demo (1st brand) — `docs/superpowers/specs/2026-03-27-bweeg-homepage-content-design.md`
 
 **Open:**
-- [ ] (P1) Brand scaffold #2 — corporate training or university CPD (pick one), full tokens + content + hero imagery
-- [ ] (P1) Brand scaffold #3 — distinctly different vertical for max contrast (e.g. wellness / public sector)
-- [ ] (P1) Swap mechanic doc — how to install a new brand mu-plugin (1-page guide for sales/dev)
-- [ ] (P2) Side-by-side comparison screenshots for sales deck
+- [~] (Deferred — user decision 2026-05-14) Brand scaffold #2 + #3 + swap mechanic doc + sales screenshots. Brand-switching mechanism tested + works; additional brand scaffolds for the sales demo can be created when actually needed for a pitch. The BWEEG scaffold + the proven swap capability are sufficient evidence for launch.
 
 **Note:** Brand scaffolds are mu-plugin scaffolds. No core changes needed — the swap capability is already proven by BWEEG.
 
