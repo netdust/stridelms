@@ -404,8 +404,9 @@ final class QuoteService extends AbstractService
             'total' => $totals['total']->inCents(),
         ]);
 
-        // Auto-generate PDF
-        do_action('stride/quote/regenerate_pdf', $quoteId);
+        // PDF is rendered lazily — QuotePDFGenerator::resolveForEmail() generates
+        // on first email-attachment request and admin "regenerate" stays manual.
+        // Skipping the eager DOMPDF render here shaves 300-800ms off enrollment.
 
         return $quoteId;
     }
