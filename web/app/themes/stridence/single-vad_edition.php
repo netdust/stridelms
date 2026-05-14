@@ -14,6 +14,7 @@ defined('ABSPATH') || exit;
 
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionService;
+use Stride\Modules\Edition\SessionSelection;
 use Stride\Integrations\LearnDash\LearnDashHelper;
 
 $edition_id = get_the_ID();
@@ -102,6 +103,31 @@ foreach ($all_sessions as $session) {
         $scheduled_sessions[] = $session;
     } else {
         $online_sessions[] = $session;
+    }
+}
+
+// Session-selection model: when admin marks the edition with requires_session_selection
+// + defines slots (groups of alternative sessions), visitor needs to understand
+// "this is a keuzecursus" BEFORE enrolling. We render: mandatory sessions (no slot)
+// in one group, and each configured slot as its own pick-N group.
+$session_selection = ntdst_get(SessionSelection::class);
+$slot_config = $session_selection->getSlotConfig($edition_id);
+$has_slots = !empty($slot_config);
+
+// Group scheduled sessions: by slot name, with a 'mandatory' bucket for slot-less sessions.
+$scheduled_by_slot = ['__mandatory__' => []];
+foreach ($slot_config as $sc) {
+    $name = $sc['slot'] ?? '';
+    if ($name !== '') {
+        $scheduled_by_slot[$name] = [];
+    }
+}
+foreach ($scheduled_sessions as $session) {
+    $slot = $session['slot'] ?? '';
+    if ($slot && isset($scheduled_by_slot[$slot])) {
+        $scheduled_by_slot[$slot][] = $session;
+    } else {
+        $scheduled_by_slot['__mandatory__'][] = $session;
     }
 }
 
@@ -215,24 +241,100 @@ get_header();
                         <?php esc_html_e('Sessies', 'stridence'); ?>
                     </h2>
 
-                    <?php if (!empty($scheduled_sessions)) : ?>
-                        <div class="card divide-y divide-border">
-                            <?php
-                            $hasSelections = !empty($selected_session_ids);
-                            foreach ($scheduled_sessions as $session) :
-                                $isSelected = in_array((int) $session['id'], $selected_session_ids, true);
-                                $notChosen = $hasSelections && !$isSelected && !empty($session['slot']);
-                            ?>
-                                <?php
-                                stridence_template_part('partials/session-row', null, [
-                                    'session'    => (object) $session,
-                                    'attendance' => null,
-                                    'selected'   => $isSelected,
-                                    'not_chosen' => $notChosen,
-                                ]);
+                    <?php if (!empty($scheduled_sessions)) :
+                        $hasSelections = !empty($selected_session_ids);
+                        $mandatory = $scheduled_by_slot['__mandatory__'] ?? [];
+                        ?>
+
+                        <?php if ($has_slots) : ?>
+                            <!-- Mandatory sessions block (only shown when slots also exist) -->
+                            <?php if (!empty($mandatory)) : ?>
+                                <div class="mb-6">
+                                    <h3 class="font-heading text-base font-semibold text-text mb-3">
+                                        <?php esc_html_e('Verplichte sessies', 'stridence'); ?>
+                                        <span class="text-sm font-normal text-text-muted">
+                                            — <?php esc_html_e('iedereen woont deze bij', 'stridence'); ?>
+                                        </span>
+                                    </h3>
+                                    <div class="card divide-y divide-border">
+                                        <?php foreach ($mandatory as $session) :
+                                            $isSelected = in_array((int) $session['id'], $selected_session_ids, true);
+                                        ?>
+                                            <?php stridence_template_part('partials/session-row', null, [
+                                                'session'    => (object) $session,
+                                                'attendance' => null,
+                                                'selected'   => $isSelected,
+                                                'not_chosen' => false,
+                                            ]); ?>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+
+                            <!-- One block per slot -->
+                            <?php foreach ($slot_config as $sc) :
+                                $slotName       = $sc['slot'] ?? '';
+                                $slotLabel      = $sc['label'] ?? $slotName;
+                                $maxSelections  = (int) ($sc['max_selections'] ?? 1);
+                                $required       = !empty($sc['required']);
+                                $slotSessions   = $scheduled_by_slot[$slotName] ?? [];
+                                if ($slotName === '' || empty($slotSessions)) {
+                                    continue;
+                                }
+                                $available = count($slotSessions);
                                 ?>
+                                <div class="mb-6">
+                                    <div class="flex items-baseline justify-between mb-3">
+                                        <h3 class="font-heading text-base font-semibold text-text">
+                                            <?php echo esc_html($slotLabel); ?>
+                                        </h3>
+                                        <span class="text-sm text-primary font-medium">
+                                            <?php
+                                            if ($maxSelections === 1) {
+                                                /* translators: %d = total available alternatives */
+                                                printf(esc_html__('Kies 1 uit %d', 'stridence'), $available);
+                                            } else {
+                                                /* translators: 1: how many to pick, 2: total alternatives */
+                                                printf(esc_html__('Kies %1$d uit %2$d', 'stridence'), $maxSelections, $available);
+                                            }
+                                            if (!$required) {
+                                                echo ' <span class="text-text-muted font-normal">' . esc_html__('(optioneel)', 'stridence') . '</span>';
+                                            }
+                                            ?>
+                                        </span>
+                                    </div>
+                                    <div class="card divide-y divide-border">
+                                        <?php foreach ($slotSessions as $session) :
+                                            $isSelected = in_array((int) $session['id'], $selected_session_ids, true);
+                                            $notChosen = $hasSelections && !$isSelected;
+                                        ?>
+                                            <?php stridence_template_part('partials/session-row', null, [
+                                                'session'    => (object) $session,
+                                                'attendance' => null,
+                                                'selected'   => $isSelected,
+                                                'not_chosen' => $notChosen,
+                                            ]); ?>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
                             <?php endforeach; ?>
-                        </div>
+
+                        <?php else : ?>
+                            <!-- No slots configured: flat list (all sessions mandatory) -->
+                            <div class="card divide-y divide-border">
+                                <?php foreach ($scheduled_sessions as $session) :
+                                    $isSelected = in_array((int) $session['id'], $selected_session_ids, true);
+                                ?>
+                                    <?php stridence_template_part('partials/session-row', null, [
+                                        'session'    => (object) $session,
+                                        'attendance' => null,
+                                        'selected'   => $isSelected,
+                                        'not_chosen' => false,
+                                    ]); ?>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+
                         <?php if (!empty($selected_session_ids) && $complete_url) : ?>
                             <div class="mt-2 text-right">
                                 <a href="<?php echo esc_url($complete_url); ?>"
