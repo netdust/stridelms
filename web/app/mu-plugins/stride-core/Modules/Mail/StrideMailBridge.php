@@ -477,7 +477,7 @@ final class StrideMailBridge extends AbstractService
                 'subject' => 'Bevestiging inschrijving: {{edition.title}}',
                 'trigger' => 'stride/registration/created',
                 'category' => 'transactional',
-                'body' => '<p>Beste {{user.first_name}},</p>'
+                'body' => '<p>Beste {{user.first_name|klant}},</p>'
                     . '<p>Je inschrijving voor <strong>{{edition.title}}</strong> is ontvangen.</p>'
                     . '<p><strong>Startdatum:</strong> {{edition.start_date}}<br>'
                     . '<strong>Locatie:</strong> {{edition.venue}}</p>'
@@ -499,7 +499,7 @@ final class StrideMailBridge extends AbstractService
                 'subject' => 'Inschrijving bevestigd: {{edition.title}}',
                 'trigger' => 'stride/registration/confirmed',
                 'category' => 'transactional',
-                'body' => '<p>Beste {{user.first_name}},</p>'
+                'body' => '<p>Beste {{user.first_name|klant}},</p>'
                     . '<p>Je inschrijving voor <strong>{{edition.title}}</strong> is bevestigd!</p>'
                     . '<p><strong>Startdatum:</strong> {{edition.start_date}}<br>'
                     . '<strong>Locatie:</strong> {{edition.venue}}</p>'
@@ -513,7 +513,7 @@ final class StrideMailBridge extends AbstractService
                 'subject' => 'Inschrijving geannuleerd: {{edition.title}}',
                 'trigger' => 'stride/registration/cancelled',
                 'category' => 'transactional',
-                'body' => '<p>Beste {{user.first_name}},</p>'
+                'body' => '<p>Beste {{user.first_name|klant}},</p>'
                     . '<p>Je inschrijving voor <strong>{{edition.title}}</strong> is geannuleerd.</p>'
                     . '<p>Heb je vragen? Neem gerust contact met ons op.</p>'
                     . '<p>Met vriendelijke groet,<br>{{site.name}}</p>',
@@ -539,7 +539,7 @@ final class StrideMailBridge extends AbstractService
                 'subject' => 'Opleiding voltooid: {{edition.title}}',
                 'trigger' => 'stride/completion/completed',
                 'category' => 'transactional',
-                'body' => '<p>Beste {{user.first_name}},</p>'
+                'body' => '<p>Beste {{user.first_name|klant}},</p>'
                     . '<p>Gefeliciteerd! Je hebt de opleiding <strong>{{edition.title}}</strong> succesvol afgerond.</p>'
                     . '<p>Je certificaat is beschikbaar via je dashboard.</p>'
                     . '<p>Met vriendelijke groet,<br>{{site.name}}</p>',
@@ -549,7 +549,7 @@ final class StrideMailBridge extends AbstractService
                 'subject' => 'Je offerte {{quote.number}} is aangemaakt',
                 'trigger' => 'stride/quote/created',
                 'category' => 'transactional',
-                'body' => '<p>Beste {{user.first_name}},</p>'
+                'body' => '<p>Beste {{user.first_name|klant}},</p>'
                     . '<p>Er is een offerte aangemaakt voor je inschrijving bij <strong>{{edition.title}}</strong>.</p>'
                     . '<p><strong>Offertenummer:</strong> {{quote.number}}<br>'
                     . '<strong>Totaal:</strong> {{quote.total}}</p>'
@@ -561,7 +561,7 @@ final class StrideMailBridge extends AbstractService
                 'subject' => 'Offerte {{quote.number}}',
                 'trigger' => 'stride/quote/sent',
                 'category' => 'transactional',
-                'body' => '<p>Beste {{user.first_name}},</p>'
+                'body' => '<p>Beste {{user.first_name|klant}},</p>'
                     . '<p>In bijlage vind je offerte <strong>{{quote.number}}</strong> voor <strong>{{edition.title}}</strong>.</p>'
                     . '<p><strong>Totaal:</strong> {{quote.total}}</p>'
                     . '<p>Je kunt je offerte ook bekijken in je <a href="{{quote.url}}">dashboard</a>.</p>'
@@ -592,7 +592,7 @@ final class StrideMailBridge extends AbstractService
                 'subject' => 'Inschrijving traject: {{trajectory.title}}',
                 'trigger' => 'stride/trajectory/enrolled',
                 'category' => 'transactional',
-                'body' => '<p>Beste {{user.first_name}},</p>'
+                'body' => '<p>Beste {{user.first_name|klant}},</p>'
                     . '<p>Je inschrijving voor het traject <strong>{{trajectory.title}}</strong> is ontvangen.</p>'
                     . '<p>Je kunt je voortgang volgen in je dashboard.</p>'
                     . '<p>Met vriendelijke groet,<br>{{site.name}}</p>',
