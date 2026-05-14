@@ -618,4 +618,49 @@ class AdminIntegrationTest extends IntegrationTestCase
 
         $wpdb->delete($regTable, ['id' => $regId]);
     }
+
+    // =========================================================================
+    // IMPERSONATION AUDIT — schema regression (H3)
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function impersonationAuditRowLandsWithCorrectColumns(): void
+    {
+        global $wpdb;
+
+        $controller = ntdst_get(\Stride\Admin\AdminAPIController::class);
+
+        $targetId = wp_create_user(
+            'imp_target_' . wp_generate_password(6, false),
+            'pw',
+            'imp_target_' . wp_generate_password(6, false) . '@test.local'
+        );
+        $this->assertIsInt($targetId);
+        self::$testPosts[] = $targetId;
+        get_userdata($targetId)->set_role('subscriber');
+
+        $auditTable = $wpdb->prefix . 'ntdst_audit_log';
+        $wpdb->query("DELETE FROM {$auditTable} WHERE action = 'impersonation.started' AND entity_id = " . (int) $targetId);
+
+        $req = new WP_REST_Request('POST', '/stride/v1/admin/users/' . $targetId . '/impersonate');
+        $req->set_param('id', $targetId);
+        $controller->impersonateUser($req);
+
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT entity_type, entity_id, actor_id, action FROM {$auditTable}
+             WHERE action = %s AND entity_id = %d
+             ORDER BY id DESC LIMIT 1",
+            'impersonation.started',
+            $targetId
+        ));
+
+        $this->assertNotNull($row, 'Audit row must land — subject_id schema mismatch dropped it under MySQL strict mode');
+        $this->assertEquals('user', $row->entity_type);
+        $this->assertEquals($targetId, (int) $row->entity_id);
+        $this->assertEquals(self::$adminUserId, (int) $row->actor_id);
+
+        $wpdb->query("DELETE FROM {$auditTable} WHERE action = 'impersonation.started' AND entity_id = " . (int) $targetId);
+    }
 }

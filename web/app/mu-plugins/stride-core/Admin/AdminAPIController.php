@@ -2861,19 +2861,23 @@ final class AdminAPIController
         $token = $handler->generateToken();
         $handler->storeSession($token, $adminId);
 
-        // Audit trail
+        // Audit trail — schema is entity_type / entity_id (NOT subject_id).
+        // Writing the wrong column previously dropped the row silently under
+        // MySQL strict mode, leaving zero record of who impersonated whom.
         global $wpdb;
         $auditTable = $wpdb->prefix . 'ntdst_audit_log';
         if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $auditTable))) {
             $wpdb->insert($auditTable, [
-                'action'     => 'impersonation.started',
-                'actor_id'   => $adminId,
-                'subject_id' => $targetId,
-                'context'    => wp_json_encode([
+                'action'      => 'impersonation.started',
+                'actor_id'    => $adminId,
+                'actor_type'  => 'user',
+                'entity_type' => 'user',
+                'entity_id'   => $targetId,
+                'context'     => wp_json_encode([
                     'target_name'  => $targetUser->display_name,
                     'target_email' => $targetUser->user_email,
                 ]),
-                'created_at' => current_time('mysql', true),
+                'created_at'  => current_time('mysql', true),
             ]);
         }
 
