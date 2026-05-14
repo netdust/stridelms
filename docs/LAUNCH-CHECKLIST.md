@@ -3,7 +3,32 @@
 **Authoritative list of what must be true before Phase 1 production launch.**
 **Companion to:** `memory/STATE.md` (current-state snapshot) and `tasks/todo.md` (active sprint scratchpad).
 
-Last updated: 2026-05-14 (post §C voucher scope + apply-mode)
+Last updated: 2026-05-14 (post audit phase — codebase feature-complete)
+
+---
+
+## 🎯 What's next (read this first)
+
+**Stride codebase is feature-complete.** All P0 + P1 launch code items are shipped. Next phase: **deep testing**, starting in the coming days.
+
+**Recommended fixes BEFORE deep testing begins** (otherwise testers re-discover them, wasting re-run cycles). Full details in `tasks/audit-2026-05-14-{security,performance}.md`:
+
+| # | What | File | Effort |
+|---|---|---|---|
+| 1 | 🚨 Verify + fix C3 colleague-enrolment PII overwrite | `EnrollmentService.php:591-657` | medium |
+| 2 | 🚨 Fix C1 CSV injection in admin export | `AdminAPIController.php:3040-3074` | 5 min |
+| 3 | 🚨 Fix H1 perf — drop eager PDF render + async-ify mail in enrollment | `QuoteService.php:408` + `StrideMailBridge.php:77` | 30 min |
+| 4 | ⚠ Fix H1 sec — anonymisation gate needs `stride_manage` check | `UserLifecycleService.php:282-303` | 15 min |
+| 5 | ⚠ Fix H3 sec — impersonation audit writes wrong columns | `AdminAPIController.php:2865-2878` | 10 min |
+| 6 | ⚠ Fix H2/H3 perf — batch `searchUsers` + `getUserDetail` quotes | `AdminAPIController.php:2367, 2520` | 1 hr |
+| 7 | ⚠ Fix H4 perf — one-line CAST in taxonomy join | `AdminAPIController.php:1123-1156` | 5 min |
+
+**Deploy-time tasks (NOT code, do at staging/prod push):**
+- Deactivate `netdust-lti` plugin in WP admin
+- Configure real SMTP credentials in Fluent SMTP (currently routes to mailpit)
+- Set `stride_admin_email` option to real VAD admin inbox
+- Recreate 6 footer pages on staging/prod (see commit `d85c7eba`)
+- Decide whether to hide Trajectory admin UI for v1
 
 ---
 
@@ -232,7 +257,7 @@ Tracked but NOT in Phase 1 scope. Keep in memory, surface after launch.
 - [ ] **Deactivate LTI plugin for v1 deploy** — `netdust-lti` plugin is feature-incomplete. User will handle plugin deactivation manually at deploy time. Reactivate when LTI work is finished post-launch.
 - [x] **Move stray PNGs** — moved `bento-section`, `debug-outlines`, `stridelms-fullpage` to `screenshots/` with `.png` extensions. **DONE 2026-05-14** (`aca392eb`).
 - [x] **`tests/_output/` ignored + untracked** — added to `.gitignore`, 211 existing files (47MB) removed from the index via `git rm --cached`. **DONE 2026-05-14** (`aca392eb`).
-- [ ] (P1) **Mail smartcode quality audit** — test sends show empty `{{user.name}}` and `{{edition.title}}` on at least one template (user #40 + edition #1383). Either the resolvers have bugs or the test context was incomplete. Walk through each of the 12 seeded templates with a real registration's context, verify every placeholder renders. Plan: `docs/plans/2026-03-17-stride-mail-integration-design.md` already describes the resolver chain.
+- [x] (P1) **Mail smartcode quality audit** — verified 2026-05-14 (`a515d1f5`). End-to-end test confirmed all smartcodes resolve: `{{edition.title}}`, `{{edition.start_date}}`, `{{edition.venue}}`, `{{completion.url}}`, `{{quote.number}}`. Added `{{user.first_name|klant}}` fallback to 7 user-facing templates so empty first_name renders "Beste klant," instead of "Beste ,". Earlier audit miss: I grep'd `do_action('stride/` directly and missed `$this->dispatch()` wrapper — all 11 expected events DO fire.
 - [ ] (P0) **Configure production SMTP** — fluent-smtp is currently routing to mailpit (DDEV's dev capture). Production needs real credentials for VAD's mail provider. Done at deploy time, not in code.
 - [ ] (P1) **Set `stride_admin_email` for prod** — currently falls back to `admin@stride.local`. Set to the actual VAD admin inbox via WP admin or `wp option update`.
 - [~] **Hide Trajectory admin UI for v1** — Trajectory is unfinished. Deferred per user decision 2026-05-14 — can be hidden manually at deploy time or left visible (admin-only). Partner API does NOT have an admin UI; only REST endpoints + role. Nothing to hide there.
