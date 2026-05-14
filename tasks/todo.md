@@ -80,31 +80,67 @@ Commit `dfb1465f`
 
 ---
 
+## Mail integration ✅ VERIFIED WORKING (2026-05-14)
+
+The mail bridge is 655 LOC + 12 templates seeded + fluent-smtp delivering. End-to-end test confirmed:
+- Enrollment fires user + admin notifications ✅
+- Quote auto-created on enrollment fires customer mail ✅
+- Smartcodes resolve: `{{edition.title}}`, `{{edition.start_date}}`, `{{edition.venue}}`, `{{user.first_name|klant}}` fallback, `{{completion.url}}`, `{{quote.number}}`
+- Commit `a515d1f5` added `|klant` fallback to 7 user-facing templates so empty first_name never produces "Beste ,"
+
+Earlier audit mistake corrected: I grep'd for `do_action('stride/` but missed `$this->dispatch('event/name')` which wraps it. All 11 expected events DO fire.
+
+## Pre-launch cleanup ✅ DONE (2026-05-14, commit `aca392eb`)
+
+- Moved stray PNGs to `screenshots/` with `.png` extensions
+- `tests/_output/` added to `.gitignore`, 211 files (47MB) untracked
+
+---
+
 ## Deferred polish (post-launch nice-to-haves)
 
 - **M1 (voucher shake-out)** — edition pickers render blank entry for vad_edition #5088 (empty post_title). Pre-existing data quality issue. Cosmetic.
-- **Density modes** (§A.2 P1) — CSS compact mode for dashboard tables. Cheap if done at CSS level.
+- **Density modes** (deferred per user 2026-05-14) — CSS compact mode for dashboard tables.
+- **Multi-brand demo** (deferred per user 2026-05-14) — additional brand scaffolds created on-demand when needed for sales pitch. BWEEG + proven swap is enough.
+- **Trajectory admin UI hiding** (deferred per user 2026-05-14) — can be done manually at deploy time.
 - **Anonymise UX polish** — toast persistence, bulk anonymise UI
 
 ---
 
-## Next session — pick from LAUNCH-CHECKLIST
+## Deep-testing phase — STARTS HERE
 
-P1 items remaining for launch:
+Stride codebase is feature-complete. User is starting deep testing in the coming days.
 
-### §F — Multi-brand demo (P1)
-- Brand scaffold #2 (corporate training or university CPD — pick one)
-- Brand scaffold #3 (wellness or public sector for max contrast)
-- Swap mechanic doc (1-page guide for sales/dev)
-- Side-by-side comparison screenshots
+### Pre-deep-testing audit findings (2026-05-14)
 
-### Pre-launch cleanup (mixed P)
-- Stash uncommitted LTI work on `staging`
-- Drop stray PNGs (`bento-section`, `debug-outlines`, `stridelms-fullpage`)
-- Add `tests/_output/` to `.gitignore`
-- Decide stale design drafts (session-price-modifiers, stride-mail-integration, roles-capabilities)
-- Decide: hide Trajectory + Partner API admin UI for v1, or leave visible?
+Full reports: `tasks/audit-2026-05-14-security.md` + `tasks/audit-2026-05-14-performance.md` (commit `5a3b4490`).
 
-### Post-launch tracking (NOT for v1)
-- Task #21 (workspace task list): drop dead `stride_vad_session_registrations` table + migrate 2 rows from `stride_vad_trajectory_enrollments` + remove the stale AdminAPI reference path entirely
-- D.4 (P2): `EditionService::recomputeStatus()` + `wp stride recompute-edition-status` CLI for capacity edits / bulk imports
+**Recommended fixes BEFORE testers start** — otherwise they'll re-discover them and re-runs cost more than the fixes:
+
+#### Security (top 4 of 19)
+1. 🚨 **C3 — Colleague-enrolment PII overwrite** — `EnrollmentService.php:591-657`. Agent says: logged-in user can enrol "a colleague" and overwrite that colleague's user-meta (national_id, billing_*, invoice_email). **Verify the code path against the agent's reading first.** If true: don't call `updateUserProfile($participantId, ...)` for already-existing colleagues. Highest exploitability.
+2. 🚨 **C1 — CSV injection in admin export** — `AdminAPIController::exportRegistrations:3040-3074`. Prefix any cell starting with `=+-@\t\r` with `'`. 5-minute fix.
+3. ⚠ **H1 — Anonymisation gate weak** — `UserLifecycleService::handleAdminAnonymisePost:282-303`. Add `current_user_can('stride_manage')`. Block users with Stride roles.
+4. ⚠ **H3 — Impersonation audit writes wrong columns** — `AdminAPIController:2865-2878`. Schema uses `entity_id`, code writes `subject_id`. Silent log loss.
+
+#### Performance (top 4 of 17)
+1. 🚨 **H1 perf — Enrollment is 1-3s synchronous** — `QuoteService.php:408` fires `regenerate_pdf` eagerly + `StrideMailBridge` sends 2 SMTP synchronously. Drop the eager render (`resolveForEmail()` lazy-renders anyway); push mails to `wp_schedule_single_event`. Biggest UX risk under real SMTP latency.
+2. ⚠ **H2 perf — `searchUsers` N+1** — 20 extra queries per admin keystroke. Batch with `update_meta_cache` + grouped count query.
+3. ⚠ **H3 perf — `getUserDetail` quotes N+1** — ~100 queries. Mirror the existing batched `getQuotes()` pattern.
+4. ⚠ **H4 perf — Taxonomy join cast** — varchar→bigint kills indexes. One-line `CAST(... AS UNSIGNED)`.
+
+### Deploy-time tasks (NOT code changes)
+
+- Deactivate `netdust-lti` plugin in WP admin
+- Configure production SMTP credentials in Fluent SMTP (currently routing to mailpit)
+- Set `stride_admin_email` option to real admin inbox
+- Recreate the 6 footer pages on staging + prod (currently dev-DB only — see commit `d85c7eba`)
+- Decide whether to hide Trajectory admin UI
+
+### Post-launch backlog (NOT for v1)
+
+- Task #21: drop dead `stride_vad_session_registrations` table + retire legacy `stride_vad_trajectory_enrollments`
+- D.4 (P2): `EditionService::recomputeStatus()` + `wp stride recompute-edition-status` CLI
+- 6 MEDIUM + 4 LOW security findings (see audit report)
+- 5 MEDIUM perf findings (see audit report)
+- All P2 polish items deferred during this sprint
