@@ -2929,7 +2929,7 @@ final class AdminAPIController
         // Writing the wrong column previously dropped the row silently under
         // MySQL strict mode, leaving zero record of who impersonated whom.
         global $wpdb;
-        $auditTable = $wpdb->prefix . 'ntdst_audit_log';
+        $auditTable = $wpdb->prefix . 'audit_log';
         if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $auditTable))) {
             $wpdb->insert($auditTable, [
                 'action'      => 'impersonation.started',
@@ -3013,7 +3013,7 @@ final class AdminAPIController
         $lastReadId = (int) get_user_meta($userId, 'stride_last_read_notification_id', true);
 
         global $wpdb;
-        $table = $wpdb->prefix . 'ntdst_audit_log';
+        $table = $wpdb->prefix . 'audit_log';
 
         // Only notification-worthy events
         $actions = [
@@ -3058,7 +3058,7 @@ final class AdminAPIController
         $userId = get_current_user_id();
 
         global $wpdb;
-        $table = $wpdb->prefix . 'ntdst_audit_log';
+        $table = $wpdb->prefix . 'audit_log';
         $latestId = (int) $wpdb->get_var("SELECT MAX(id) FROM {$table}");
 
         update_user_meta($userId, 'stride_last_read_notification_id', $latestId);

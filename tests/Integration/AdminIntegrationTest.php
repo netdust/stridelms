@@ -641,7 +641,7 @@ class AdminIntegrationTest extends IntegrationTestCase
         self::$testPosts[] = $targetId;
         get_userdata($targetId)->set_role('subscriber');
 
-        $auditTable = $wpdb->prefix . 'ntdst_audit_log';
+        $auditTable = $wpdb->prefix . 'audit_log';
         $wpdb->query("DELETE FROM {$auditTable} WHERE action = 'impersonation.started' AND entity_id = " . (int) $targetId);
 
         $req = new WP_REST_Request('POST', '/stride/v1/admin/users/' . $targetId . '/impersonate');
