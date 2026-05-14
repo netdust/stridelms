@@ -137,21 +137,16 @@ defined('ABSPATH') || exit;
                         <div class="sd-card__body">
                             <!-- Tabs (always visible so admin can see "0 wachten" at a glance) -->
                             <div class="sd-tabs" style="display:flex;gap:8px;margin-bottom:12px;border-bottom:1px solid var(--sd-border, #e5e7eb);">
+                                <!-- "Wacht op mij" merges both approval AND post_approval: in both cases admin's
+                                     job is to OK the registration to move it to the next phase. Row badge +
+                                     button label switch per item.type. -->
                                 <button
                                     type="button"
                                     class="sd-tab"
-                                    :class="{ 'sd-tab--active': pendingApprovalsTab === 'approval', 'sd-tab--empty': pendingApprovals.counts.approval === 0 }"
+                                    :class="{ 'sd-tab--active': pendingApprovalsTab === 'approval', 'sd-tab--empty': (pendingApprovals.counts.approval + pendingApprovals.counts.post_approval) === 0 }"
                                     @click="pendingApprovalsTab = 'approval'">
                                     Wacht op mij
-                                    <span class="sd-pill" :class="{ 'sd-pill--muted': pendingApprovals.counts.approval === 0 }" x-text="pendingApprovals.counts.approval"></span>
-                                </button>
-                                <button
-                                    type="button"
-                                    class="sd-tab"
-                                    :class="{ 'sd-tab--active': pendingApprovalsTab === 'post_approval', 'sd-tab--empty': pendingApprovals.counts.post_approval === 0 }"
-                                    @click="pendingApprovalsTab = 'post_approval'">
-                                    Aftekenen na opleiding
-                                    <span class="sd-pill" :class="{ 'sd-pill--muted': pendingApprovals.counts.post_approval === 0 }" x-text="pendingApprovals.counts.post_approval"></span>
+                                    <span class="sd-pill" :class="{ 'sd-pill--muted': (pendingApprovals.counts.approval + pendingApprovals.counts.post_approval) === 0 }" x-text="pendingApprovals.counts.approval + pendingApprovals.counts.post_approval"></span>
                                 </button>
                                 <button
                                     type="button"
@@ -172,16 +167,10 @@ defined('ABSPATH') || exit;
                             </div>
 
                             <!-- Per-tab empty state -->
-                            <template x-if="!loading && pendingApprovalsTab === 'approval' && pendingApprovals.counts.approval === 0">
+                            <template x-if="!loading && pendingApprovalsTab === 'approval' && (pendingApprovals.counts.approval + pendingApprovals.counts.post_approval) === 0">
                                 <div class="sd-empty">
                                     <span class="sd-empty__icon">✓</span>
-                                    <p class="sd-empty__text">Geen inschrijvingen wachten op goedkeuring</p>
-                                </div>
-                            </template>
-                            <template x-if="!loading && pendingApprovalsTab === 'post_approval' && pendingApprovals.counts.post_approval === 0">
-                                <div class="sd-empty">
-                                    <span class="sd-empty__icon">✓</span>
-                                    <p class="sd-empty__text">Niets af te tekenen na een opleiding</p>
+                                    <p class="sd-empty__text">Geen inschrijvingen wachten op jouw goedkeuring</p>
                                 </div>
                             </template>
                             <template x-if="!loading && pendingApprovalsTab === 'stale_user' && pendingApprovals.counts.stale_user === 0">
@@ -198,8 +187,11 @@ defined('ABSPATH') || exit;
                                 </div>
                             </template>
 
-                            <!-- Registration buckets: approval / post_approval / stale_user (active tab only) -->
-                            <table class="sd-table" x-show="pendingApprovalsTab !== 'notifications' && (pendingApprovals.counts[pendingApprovalsTab] || 0) > 0">
+                            <!-- Registration buckets (active tab only) -->
+                            <table class="sd-table" x-show="pendingApprovalsTab !== 'notifications' && (
+                                (pendingApprovalsTab === 'approval' && (pendingApprovals.counts.approval + pendingApprovals.counts.post_approval) > 0) ||
+                                (pendingApprovalsTab === 'stale_user' && pendingApprovals.counts.stale_user > 0)
+                            )">
                                 <thead>
                                     <tr>
                                         <th>Gebruiker</th>
@@ -210,7 +202,7 @@ defined('ABSPATH') || exit;
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <template x-for="item in pendingApprovals.items.filter(i => i.type === pendingApprovalsTab)" :key="item.id">
+                                    <template x-for="item in pendingApprovals.items.filter(i => pendingApprovalsTab === 'approval' ? (i.type === 'approval' || i.type === 'post_approval') : i.type === pendingApprovalsTab)" :key="item.id">
                                         <tr>
                                             <td>
                                                 <a href="#" @click.prevent="viewUserInDetail(item.user_id)" x-text="item.user_name"></a>

@@ -239,23 +239,29 @@ document.addEventListener('alpine:init', () => {
                 }
                 if (approvals.status === 'fulfilled') {
                     this.pendingApprovals = approvals.value;
-                    // Default-active tab priority: approval > stale_user > post_approval > notifications
+                    // Default-active tab priority: approval/post_approval (admin-action) > stale_user > notifications
+                    // approval + post_approval are merged under the "Wacht op mij" tab (key: 'approval')
                     const c = approvals.value.counts || {};
-                    if (c.approval > 0) this.pendingApprovalsTab = 'approval';
+                    if ((c.approval + c.post_approval) > 0) this.pendingApprovalsTab = 'approval';
                     else if (c.stale_user > 0) this.pendingApprovalsTab = 'stale_user';
-                    else if (c.post_approval > 0) this.pendingApprovalsTab = 'post_approval';
                     else if (this.actionQueue.length > 0) this.pendingApprovalsTab = 'notifications';
 
                     // Deep-link from action-queue: hash `#action-required-<bucket>`
                     // tells us which tab to activate + scrolls the card into view.
+                    // post_approval is folded into the 'approval' tab (same UX bucket).
                     const hash = (window.location.hash || '').replace(/^#/, '');
                     const m = hash.match(/^action-required-(approval|post_approval|stale_user)$/);
-                    if (m && c[m[1]] > 0) {
-                        this.pendingApprovalsTab = m[1];
-                        // Defer scroll until Alpine has rendered the card
-                        setTimeout(() => {
-                            document.getElementById('action-required-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }, 100);
+                    if (m) {
+                        const tab = m[1] === 'post_approval' ? 'approval' : m[1];
+                        const hasItems = tab === 'approval'
+                            ? (c.approval + c.post_approval) > 0
+                            : c[tab] > 0;
+                        if (hasItems) {
+                            this.pendingApprovalsTab = tab;
+                            setTimeout(() => {
+                                document.getElementById('action-required-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }, 100);
+                        }
                     }
                 }
             } catch (e) {
