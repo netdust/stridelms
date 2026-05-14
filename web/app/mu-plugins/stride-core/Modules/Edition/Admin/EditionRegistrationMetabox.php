@@ -148,13 +148,39 @@ final class EditionRegistrationMetabox
                     <?php
                     $userId = (int) $registration['user_id'];
                     $user = $users[$userId] ?? null;
-                    if (!$user) {
+                    $regId = (int) $registration['id'];
+                    $registeredAt = $registration['registered_at'] ?? '';
+
+                    // Anonymised or hard-deleted user: faded row, no actions
+                    $anonymisedAt = $user ? (int) get_user_meta($userId, '_stride_anonymised_at', true) : 0;
+                    if (!$user || $anonymisedAt > 0) {
+                        $displayName = $user
+                            ? $user->display_name
+                            : sprintf(__('Gebruiker #%d (verwijderd)', 'stride'), $userId);
+                        $subtitle = $anonymisedAt > 0
+                            ? sprintf(__('Geanonimiseerd op %s', 'stride'), date_i18n('j M Y', $anonymisedAt))
+                            : __('Account verwijderd', 'stride');
+                        ?>
+                        <tr class="registration-row stride-row-anonymised" style="color:#646970;">
+                            <td class="column-name">
+                                <span style="font-style:italic;"><?php echo esc_html($displayName); ?></span>
+                                <div style="font-size:11px;color:#8c8f94;"><?php echo esc_html($subtitle); ?></div>
+                            </td>
+                            <td class="column-email">&mdash;</td>
+                            <td class="column-org">&mdash;</td>
+                            <td class="column-status">
+                                <span class="stride-status-badge"><?php esc_html_e('Inactief', 'stride'); ?></span>
+                            </td>
+                            <td class="column-date">
+                                <?php echo $registeredAt ? esc_html(date_i18n('j M Y', strtotime($registeredAt))) : '&mdash;'; ?>
+                            </td>
+                            <td class="column-actions">&mdash;</td>
+                        </tr>
+                        <?php
                         continue;
                     }
 
-                    $regId = (int) $registration['id'];
                     $status = RegistrationStatus::tryFrom($registration['status'] ?? '') ?? RegistrationStatus::Pending;
-                    $registeredAt = $registration['registered_at'] ?? '';
                     $completionTasks = $this->getCompletionTasks($registration);
                     $meta = $userMeta[$userId] ?? [];
                     $enrollmentData = $this->getEnrollmentData($registration);

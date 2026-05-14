@@ -728,16 +728,34 @@ final class EnrollmentService extends AbstractService
      * Update user profile with enrollment form data.
      */
     /**
-     * Map of form field names to user meta keys.
+     * Map of enrollment form field names → user meta keys.
+     *
+     * Single source of truth shared by:
+     * - {@see EnrollmentService::updateUserProfile()} (persistence)
+     * - {@see \Stride\Modules\Questionnaire\Admin\QuestionnaireSettingsPage} (admin "reserved name" warning)
+     *
+     * When a Questionnaire field name (4-stage form builder under
+     * "Formuliervelden") matches a key here, its value is automatically
+     * persisted to the corresponding user meta in addition to the
+     * per-enrollment `enrollment_data` JSON snapshot.
+     *
+     * Keys are also used by {@see \Stride\Modules\User\UserLifecycleService} to
+     * strip PII on anonymisation.
      *
      * @return array<string, string> inputKey => metaKey
      */
-    private function getUserMetaMapping(): array
+    public static function getUserMetaMapping(): array
     {
         return [
+            // Personal identity
             'phone' => 'phone',
             'organisation' => 'organisation',
             'department' => 'department',
+            'national_id' => 'national_id',
+            'date_of_birth' => 'date_of_birth',
+            'professional_license_number' => 'professional_license_number',
+
+            // Billing
             'vat_number' => 'billing_vat',
             'address' => 'billing_address_1',
             'postal_code' => 'billing_postcode',
@@ -750,7 +768,7 @@ final class EnrollmentService extends AbstractService
 
     public function updateUserProfile(int $userId, array $data): void
     {
-        $metaFields = $this->getUserMetaMapping();
+        $metaFields = self::getUserMetaMapping();
 
         foreach ($metaFields as $inputKey => $metaKey) {
             if (!empty($data[$inputKey])) {

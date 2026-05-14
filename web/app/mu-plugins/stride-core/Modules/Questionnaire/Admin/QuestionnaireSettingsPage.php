@@ -697,21 +697,14 @@ final class QuestionnaireSettingsPage
     /**
      * Field names that map to user meta (and will overwrite on enrollment).
      *
+     * Delegates to {@see \Stride\Modules\Enrollment\EnrollmentService::getUserMetaMapping()}
+     * so the admin "reserved name" warning and the actual persistence path
+     * read from one source.
+     *
      * @return array<string, string>
      */
     private function getUserMetaFieldNames(): array
     {
-        return [
-            'phone'        => 'phone',
-            'organisation' => 'organisation',
-            'department'   => 'department',
-            'vat_number'   => 'billing_vat',
-            'address'      => 'billing_address_1',
-            'postal_code'  => 'billing_postcode',
-            'city'         => 'billing_city',
-            'invoice_email' => 'invoice_email',
-            'gln_number'   => 'gln_number',
-            'company'      => 'billing_company',
-        ];
+        return \Stride\Modules\Enrollment\EnrollmentService::getUserMetaMapping();
     }
 }
