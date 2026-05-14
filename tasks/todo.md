@@ -27,19 +27,27 @@ Working scratchpad. Authoritative launch list lives in `docs/LAUNCH-CHECKLIST.md
 
 ---
 
+## §C — Voucher scope + apply-mode ✅ DONE (2026-05-14)
+
+Supersedes the original 5-category plan. Smaller, more flexible model.
+- 3-way `scope_mode` radio: alle/alleen/behalve (replaces single edition_id dropdown)
+- `apply_mode` dropdown: volledige editie / één sessie (pro rata)
+- `VoucherScopeValidator` + `VoucherProrater` helpers (plain classes, NTDST DI)
+- Legacy back-compat for existing vouchers
+- 6 new integration tests, 8 acceptance tests still green, full suites green
+- Plan: `plans/phase-4-voucher-scope-and-prorating.md`
+- Commits `ae970344` + `95065b4f` + `4709fef3` (CSS fix)
+- Shake-out: `tasks/shake-out-voucher-manifest.md` — 0 CRITICAL, 0 IMPORTANT, 1 MINOR (deferred)
+
+## Deferred polish (post-launch nice-to-haves, not blocking)
+
+- **M1 (from voucher shake-out)** — edition pickers render blank entry for `vad_edition #5088` (empty `post_title`). Cosmetic; pre-existing data quality issue made more visible by the new multi-select. Fix candidates: skip empty-title editions in `get_posts()`, or render `(geen titel)` placeholder. Affects both single + multi pickers in `VoucherAdminController::renderVoucherMetabox()`.
+
+---
+
 ## Next session — pick from LAUNCH-CHECKLIST in priority order
 
-In §C → §D → §F order, or whichever you want to tackle first:
-
-### §C — Phase 4 VAD voucher rules
-Source: `plans/phase-4-voucher-completion.md`
-- Voucher category field (5 types: member, action, speaker, day, social)
-- Edition `is_multi_year_training` flag
-- `VoucherTypeValidator` helper
-- Member voucher rules (blocked for multi-year editions)
-- Day voucher prorating (1 day = 1/N of edition price)
-- Social voucher (50% off)
-- Tests
+In §D → §F order, or whichever you want to tackle first:
 
 ### §D — 11 deferred bugs in launch modules
 - **Completion (5)**: LD course_completed sync, deprecated current_time, cache clear on task update, Withdrawn enum, DI coupling

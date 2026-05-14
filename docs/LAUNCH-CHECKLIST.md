@@ -127,6 +127,8 @@ Last updated: 2026-05-14 (post §C voucher scope + apply-mode)
 
 **Still deferred to Phase 8 (post-launch):** member voucher auto-generation, voucher reversal on cancellation, annual renewal cron.
 
+**Shake-out 2026-05-14:** 0 CRITICAL, 0 IMPORTANT, 1 MINOR (`tasks/shake-out-voucher-manifest.md`). M1 — blank-title edition appears in pickers — deferred to post-launch polish (logged in `tasks/todo.md`).
+
 ---
 
 ## D. Deferred Bugs in Launch Modules — 11 bugs (P0–P1)
