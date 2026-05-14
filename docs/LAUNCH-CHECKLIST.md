@@ -157,7 +157,8 @@ These 7 from the original lists were verified fixed in current code:
 ### D.3 — Real launch items (4)
 
 - [x] (P1) **Deprecated `current_time('timestamp')` calls** — 3 calls (UserDashboardService.php:728-729 + notification-item.php:51) replaced with `time()`. **DONE 2026-05-14** (`5fa9ea92`).
-- [ ] (P0) **6 footer pages return 404** — `stridence/footer.php` links to `/agenda/`, `/contact/`, `/faq/`, `/over-ons/`, `/privacy/`, `/voorwaarden/`. Only `privacy-policy` (draft, wrong slug) exists. Options: create 6 placeholder pages OR remove links until content ready. (Was claimed "7 pages" but actual count is 6.)
+- [x] (P0) **6 footer pages return 404** — 5 placeholder pages created with Dutch H1 + short body (`/agenda/`, `/contact/`, `/faq/`, `/over-ons/`, `/voorwaarden/`); existing `/privacy-policy` draft re-slugged to `/privacy/` and published. All 6 footer URLs now return 200. **DONE 2026-05-14** (dev DB).
+    - **⚠️ Staging/prod follow-up:** content lives in WP DB, not git. Replay via `wp post create` on staging + prod before launch, or copy via DB migration. Stub copy can be edited in WP admin before going live.
 - [ ] (P0) **GDPR anonymisation bundle** — three coupled items, one ~200 LOC change:
     - **D-G1** New `UserLifecycleService::anonymise($userId)` — strips PII (display_name → "Verwijderde gebruiker #N", clear email/login/billing/phone/org/department), keeps `wp_users` row, sets `_stride_anonymised_at` meta. Hook `delete_user` to call it and prevent actual row deletion. Verified absent: zero `delete_user` hooks in stride-core today.
     - **D-G2** `EditionRegistrationMetabox.php:151-153` — replace silent `continue` on missing `$user` with a faded "verwijderd" row; honour `_stride_anonymised_at` display.
