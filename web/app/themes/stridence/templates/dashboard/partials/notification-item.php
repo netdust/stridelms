@@ -48,7 +48,7 @@ $read      = (bool) ($notification['read'] ?? false);
 // Relative time in Dutch
 $timeAgo = '';
 if ($timestamp > 0) {
-    $timeAgo = human_time_diff($timestamp, current_time('timestamp')) . ' ' . __('geleden', 'stridence');
+    $timeAgo = human_time_diff($timestamp, time()) . ' ' . __('geleden', 'stridence');
 }
 ?>
 <a href="<?php echo esc_url($url); ?>"

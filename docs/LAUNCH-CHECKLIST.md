@@ -131,46 +131,45 @@ Last updated: 2026-05-14 (post §C voucher scope + apply-mode)
 
 ---
 
-## D. Deferred Bugs in Launch Modules — 11 bugs (P0–P1)
+## D. Deferred Bugs in Launch Modules — Refreshed 2026-05-14
 
-Per user decision: all 11 in launch-relevant modules are launch blockers.
+**Refresh source:** `tasks/d-audit-2026-05-14.md`
 
-### Completion module (5)
-- [ ] (P0) No LearnDash `course_completed` sync — completion task doesn't propagate to LD
-- [ ] (P1) Deprecated `current_time('timestamp')` calls
-- [ ] (P1) Cache not cleared on task update
-- [ ] (P0) `Withdrawn` enum mismatch
-- [ ] (P1) DI coupling — refactor for testability
+The original framing was "11 deferred bugs." Code-level audit on 2026-05-14 shows **7 were already fixed** in code since the shake-out manifests were written (Feb–Mar 2026); 3 should be dropped from launch scope; **4 real launch items remain**.
 
-**Source:** `tasks/shake-out-completion-manifest.md` (superseded by v2 for fixed ones, but these 5 deferred remain)
+### D.1 — Resolved since shake-out (no action)
 
-### Attendance module (3)
-- [ ] (P0) Cascade delete missing — orphans on session/edition delete
-- [ ] (P1) Orphan `session_registrations` rows
-- [ ] (P1) Semantic count inconsistency
+These 7 from the original lists were verified fixed in current code:
 
-**Source:** `tasks/shake-out-attendance-manifest.md`
+- [x] (P0) LearnDash `course_completed` sync — `EditionCompletion.php:154-155, 184-185` call `learndash_process_mark_complete()`
+- [x] (P1) Cache cleared on completion task update — `RegistrationRepository.php:619` calls `clearCache()` after `updateCompletionTasks()`
+- [x] (P0) `Withdrawn` enum aligned — `RegistrationStatus.php:18` + DB enum match (`'withdrawn'` / `'Uitgetrokken'`)
+- [x] (P0) Cascade delete on edition/session delete — `EditionService.php:301-341` cascades to sessions + registrations + attendance
+- [x] (P1) Orphan `session_registrations` rows — N/A, table doesn't exist in DB; zero code refs
+- [x] (P1) Attendance count semantic inconsistency — both `countAttended()` and `getPresentUserIds()` use `AttendanceStatus::attendedValues()`
 
-### Theme (3)
-- [ ] (P0) 7 footer pages return 404 — links to nowhere on public site
-- [ ] (P1) LearnDash ProPanel script notice (console noise)
-- [ ] (P1) 11 shortcodes not yet implemented — list them, decide replace vs stub
+### D.2 — Dropped from launch scope (deferred or non-actionable)
 
-**Source:** `tasks/shake-out-theme-manifest.md`
+- ~~(P1) Completion module DI coupling refactor~~ — architectural debt, not a bug; matches NTDST thin-handler pattern. Drop.
+- ~~(P1) LearnDash ProPanel script notice~~ — zero ProPanel refs in stride theme; if it appears it's plugin-side and not in our code surface. Drop until reproduced in an env we control.
+- ~~(P1) 11 shortcodes not yet implemented~~ — list was never enumerated; vague. Drop and re-file as a specific spec if/when needed.
 
-### User lifecycle / GDPR (3)
-- [ ] (P0) **Anonymise on user delete, don't `wp_delete_user()`** — registrations/quotes/certificates currently orphan when a user is deleted. New `UserLifecycleService::anonymise($userId)` strips PII (display_name → "Verwijderde gebruiker #N", clear email/login/billing/phone/org/department), keeps the `wp_users` row, adds `_stride_anonymised_at` meta. Hook `delete_user` and prevent actual row deletion. **Why:** GDPR-compliant + preserves historical counts, invoices, certificates.
-- [ ] (P0) **EditionRegistrationMetabox renders anonymised users** — replace silent `continue` on missing `$user` (line 151–153) with a faded "verwijderd" row, no actions. Make metabox match exporter's row count so the badge count is honest. Show `_stride_anonymised_at` if present.
-- [ ] (P1) **One-shot cleanup CLI** — `wp stride anonymise-orphans` finds registrations where `user_id` doesn't exist in `wp_users` and either anonymises (if the row matters) or deletes (if it's seed garbage). Needed for dev environment now; safety net in prod.
+### D.3 — Real launch items (4)
 
-**Why this exists:** discovered on edition 13234 (dev) — 11 registrations, only 1 name visible in metabox, Excel export shows `Gebruiker #2223401` placeholders. Root cause: no `delete_user` hook anywhere in stride-core (verified by grep), so user deletion leaves orphan registrations + stale LearnDash access + unverifiable certificates. GDPR requires anonymisation, not deletion, for training records (BE retention 7–10 years).
+- [ ] (P1) **Deprecated `current_time('timestamp')` calls** — 2 calls at `UserDashboardService.php:728-729`. Replace with `time()` per WP standards. Trivial fix.
+- [ ] (P0) **6 footer pages return 404** — `stridence/footer.php` links to `/agenda/`, `/contact/`, `/faq/`, `/over-ons/`, `/privacy/`, `/voorwaarden/`. Only `privacy-policy` (draft, wrong slug) exists. Options: create 6 placeholder pages OR remove links until content ready. (Was claimed "7 pages" but actual count is 6.)
+- [ ] (P0) **GDPR anonymisation bundle** — three coupled items, one ~200 LOC change:
+    - **D-G1** New `UserLifecycleService::anonymise($userId)` — strips PII (display_name → "Verwijderde gebruiker #N", clear email/login/billing/phone/org/department), keeps `wp_users` row, sets `_stride_anonymised_at` meta. Hook `delete_user` to call it and prevent actual row deletion. Verified absent: zero `delete_user` hooks in stride-core today.
+    - **D-G2** `EditionRegistrationMetabox.php:151-153` — replace silent `continue` on missing `$user` with a faded "verwijderd" row; honour `_stride_anonymised_at` display.
+    - **D-G3** `wp stride anonymise-orphans` CLI — finds registrations where `user_id` doesn't exist in `wp_users`; anonymises or deletes per row matter. Needed for dev cleanup; safety net in prod.
+    - **Why bundled:** D-G2 + D-G3 only make sense after D-G1's data model exists. Why P0: BE training record retention is 7–10 years; hard-deleting a user today orphans registrations, quotes, certificates and is GDPR-non-compliant.
+- [ ] (P1) **Pending registrations hold capacity indefinitely** — `EditionService.php:98` SQL counts `pending + confirmed + completed`. Abandoned pendings hold `Volzet` forever. **Decision needed:** 24-48h auto-expire cron, or accept + document. Not technical, policy.
 
-### Edition capacity / "Volzet" auto-status (2)
+### D.4 — Volzet edge case (P2, defer)
 
-**Status:** auto-promotion to `OfferingStatus::Full` ("Volzet") is wired and works in both directions (`EditionService::onRegistrationCreated` / `onRegistrationCancelled` at lines 266–290). Listens to `stride/registration/created` and `stride/registration/cancelled`. Capacity 0 = unlimited (e-learning). **Not bugs — known edge cases to watch:**
+- [ ] (P2) **`EditionService::recomputeStatus()` missing** — capacity edit or seed/import doesn't fire `stride/registration/created`, so status stays stale. Add method + `wp stride recompute-edition-status` CLI. ~30 LOC. Lower priority than D.3 items.
 
-- [ ] (P1) **Pending registrations hold capacity indefinitely** — `getRegisteredCount()` counts `pending` + `confirmed` + `completed` (EditionService.php:98). Abandoned pendings (user starts enrollment, never finishes) will falsely keep editions at `Volzet`. No cleanup cron exists. **Decide:** stale-pending expiry (e.g. 24–48h auto-cancel) or accept and document for admin awareness.
-- [ ] (P2) **Status doesn't recompute on capacity edit or bulk import** — if admin lowers capacity below current count, or seed/import inserts registrations without firing `stride/registration/created`, the status won't auto-update until the next real registration event. Add a `EditionService::recomputeStatus($editionId)` and call it from the capacity-changed hook + a `wp stride recompute-edition-status` CLI for imports.
+**Why this exists at all:** the original §D was last refreshed before the Sprint 1 / Phase 3 work, which incidentally cleaned up many of the listed module bugs. The 4 real items survived because no commit explicitly targeted them.
 
 ---
 

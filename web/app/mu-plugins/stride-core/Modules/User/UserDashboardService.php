@@ -725,8 +725,8 @@ final class UserDashboardService
             $selOpen       = (bool) $editionModel->getMeta($editionId, 'selection_open');
             $deadline      = $editionModel->getMeta($editionId, 'selection_deadline');
             $startDate     = $editionModel->getMeta($editionId, 'start_date');
-            $pastDeadline  = $deadline && strtotime($deadline) < current_time('timestamp');
-            $courseStarted = $startDate && strtotime($startDate) < current_time('timestamp');
+            $pastDeadline  = $deadline && strtotime($deadline) < time();
+            $courseStarted = $startDate && strtotime($startDate) < time();
 
             if ($selOpen && !$pastDeadline && !$courseStarted) {
                 return ['url' => $completeUrl, 'label' => __('Sessiekeuze wijzigen', 'stridence')];
