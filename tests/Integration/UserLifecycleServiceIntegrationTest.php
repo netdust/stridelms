@@ -199,6 +199,34 @@ class UserLifecycleServiceIntegrationTest extends IntegrationTestCase
 
     /**
      * @test
+     */
+    public function anonymiseRefusesStrideStaff(): void
+    {
+        $unique = uniqid('', true);
+        $coordinatorId = wp_create_user(
+            'coord_' . preg_replace('/[^a-z0-9]/i', '', $unique),
+            'pw',
+            'coord-' . $unique . '@test.local'
+        );
+        $this->assertIsInt($coordinatorId);
+        self::$testPosts[] = $coordinatorId;
+        $user = get_userdata($coordinatorId);
+        $user->set_role('stride_coordinator');
+
+        $result = $this->service->anonymise($coordinatorId);
+
+        $this->assertInstanceOf(\WP_Error::class, $result);
+        $this->assertEquals('cannot_anonymise_staff', $result->get_error_code());
+
+        // Existing meta must be untouched.
+        $this->assertEquals(
+            'coord-' . $unique . '@test.local',
+            get_userdata($coordinatorId)->user_email
+        );
+    }
+
+    /**
+     * @test
      *
      * The core GDPR promise: anonymising a user must NOT delete their
      * historical registrations. The user_id FK keeps pointing at the row.
