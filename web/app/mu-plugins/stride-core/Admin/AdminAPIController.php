@@ -1142,11 +1142,15 @@ final class AdminAPIController
         // so they can be AND-combined. Taxonomy names are hardcoded (internal
         // constants, never user input) to avoid placeholder ordering issues
         // between JOIN and WHERE — only the integer term_id is parameterized.
+        //
+        // CAST the postmeta varchar to UNSIGNED to match term_relationships.object_id
+        // (bigint). Without the explicit cast MySQL coerces the bigint to varchar,
+        // killing the object_id index on a large term_relationships table.
         foreach ($activeFilters as $kind => $termId) {
             $aliasTr = "tr_{$kind}";
             $aliasTt = "tt_{$kind}";
             $taxonomy = esc_sql($taxonomies[$kind]);
-            $joins[] = "INNER JOIN {$wpdb->term_relationships} {$aliasTr} ON pm_course.meta_value = {$aliasTr}.object_id";
+            $joins[] = "INNER JOIN {$wpdb->term_relationships} {$aliasTr} ON CAST(pm_course.meta_value AS UNSIGNED) = {$aliasTr}.object_id";
             $joins[] = "INNER JOIN {$wpdb->term_taxonomy} {$aliasTt} ON {$aliasTr}.term_taxonomy_id = {$aliasTt}.term_taxonomy_id AND {$aliasTt}.taxonomy = '{$taxonomy}'";
             $where[] = "{$aliasTt}.term_id = %d";
             $params[] = (int) $termId;
