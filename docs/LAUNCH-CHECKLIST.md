@@ -229,10 +229,10 @@ Tracked but NOT in Phase 1 scope. Keep in memory, surface after launch.
 
 - [x] (P0) **Stale-database-read sweep** — Swept every `\$wpdb` usage on `vad_*` tables across stride-core + stridence. 7 hits total, only 1 was stale: `AdminAPIController.php:1655` (trajectory dashboard counts). Now swapped to canonical `RegistrationRepository::countByTrajectoryIds()` + `findByTrajectoryIds()`. 3 new integration tests guard the contract. **DONE 2026-05-14** (`0f47f48f`). Legacy tables themselves retire post-launch (task #21). Memory: `gotcha_stale_database_reads.md`.
 - [x] **LTI WIP** — clarified 2026-05-14: all LTI work is already committed to `staging` (15+ feat commits, nothing uncommitted). Real concern is feature-incomplete — needs to be deactivated for v1 deploy.
-- [ ] **Deactivate LTI plugin for v1 deploy** — `netdust-lti` plugin is feature-incomplete and not for launch. Deactivate before shipping. Reactivate when LTI work is finished post-launch.
-- [ ] Move stray PNGs out of repo root (`bento-section`, `debug-outlines`, `stridelms-fullpage`)
-- [ ] Add `tests/_output/` to `.gitignore` (40+ untracked screenshots)
-- [ ] **Hide Trajectory admin UI for v1** — Trajectory is unfinished. Hide the menu item + CPT admin links from non-admin users (or all users) until post-launch. Partner API does NOT have an admin UI — only REST endpoints + role. Nothing to hide there.
+- [ ] **Deactivate LTI plugin for v1 deploy** — `netdust-lti` plugin is feature-incomplete. User will handle plugin deactivation manually at deploy time. Reactivate when LTI work is finished post-launch.
+- [x] **Move stray PNGs** — moved `bento-section`, `debug-outlines`, `stridelms-fullpage` to `screenshots/` with `.png` extensions. **DONE 2026-05-14** (`aca392eb`).
+- [x] **`tests/_output/` ignored + untracked** — added to `.gitignore`, 211 existing files (47MB) removed from the index via `git rm --cached`. **DONE 2026-05-14** (`aca392eb`).
+- [~] **Hide Trajectory admin UI for v1** — Trajectory is unfinished. Deferred per user decision 2026-05-14 — can be hidden manually at deploy time or left visible (admin-only). Partner API does NOT have an admin UI; only REST endpoints + role. Nothing to hide there.
 
 ---
 
