@@ -889,11 +889,16 @@ defined('ABSPATH') || exit;
                                     <div x-text="selectedUser?.organisation || ''" x-show="selectedUser?.organisation"></div>
                                 </div>
                                 <div class="sd-user-header__actions">
-                                    <button class="sd-btn sd-btn--ghost" @click="impersonateUser(selectedUser?.id)" x-show="config.canManage">Bekijk als gebruiker</button>
+                                    <button class="sd-btn sd-btn--ghost" @click="impersonateUser(selectedUser?.id)" x-show="config.canManage && !selectedUser?.isAnonymised">Bekijk als gebruiker</button>
                                     <a :href="selectedUser?.id ? '<?php echo esc_url($admin_url); ?>user-edit.php?user_id=' + selectedUser.id : '#'"
                                        class="sd-btn sd-btn--ghost"
                                        target="_blank"
                                        x-show="selectedUser?.id">Bewerk in WP →</a>
+                                    <a :href="selectedUser?.anonymiseUrl || '#'"
+                                       class="sd-btn sd-btn--ghost"
+                                       x-show="config.canManage && selectedUser?.id && !selectedUser?.isAnonymised && selectedUser?.anonymiseUrl"
+                                       @click="if (!confirmAnonymise()) { $event.preventDefault(); }">Anonimiseer</a>
+                                    <span class="sd-tag sd-tag--muted" x-show="selectedUser?.isAnonymised" x-text="selectedUser?.anonymisedLabel"></span>
                                     <button class="sd-btn sd-btn--text" @click="selectedUser = null">← Terug</button>
                                 </div>
                             </div>

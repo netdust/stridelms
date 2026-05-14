@@ -278,6 +278,48 @@
         <li><strong>Inschrijfformulier</strong> — deelnemers vullen een formulier in bij inschrijving (met vragenlijst, documenten, etc.)</li>
         <li><strong>Sessiekeuze</strong> — deelnemers kiezen zelf welke sessies ze bijwonen</li>
     </ul>
+
+    <h3>Formuliervelden — systeemvelden</h3>
+    <p>
+        Onder <em>Stride → Formuliervelden</em> beheer je de extra velden die op de
+        inschrijf-, intake- en evaluatieformulieren verschijnen. Een veld dat je
+        daar maakt, wordt standaard alleen bij die ene inschrijving bewaard.
+    </p>
+    <p>
+        <strong>Sommige veldnamen zijn echter "systeemvelden":</strong> als je een
+        veld exact één van deze namen geeft, wordt de waarde automatisch
+        opgeslagen op het profiel van de gebruiker. Dat is handig voor stabiele
+        gegevens die de deelnemer maar één keer hoort in te vullen (bv.
+        rijksregisternummer of geboortedatum).
+    </p>
+    <table class="stride-handleiding-table">
+        <thead>
+            <tr>
+                <th>Veldnaam</th>
+                <th>Slaat op als</th>
+                <th>Wanneer gebruiken</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td><code>phone</code></td><td>Telefoonnummer</td><td>Standaard contactgegeven</td></tr>
+            <tr><td><code>organisation</code></td><td>Organisatie / werkgever</td><td>Werkrelaties, rapportering per organisatie</td></tr>
+            <tr><td><code>department</code></td><td>Afdeling</td><td>Detail binnen organisatie</td></tr>
+            <tr><td><code>national_id</code></td><td>Rijksregisternummer</td><td>Wettelijke retentie (7-10 jaar) voor opleidingsrecords</td></tr>
+            <tr><td><code>date_of_birth</code></td><td>Geboortedatum</td><td>Accreditatie, leeftijdscriteria</td></tr>
+            <tr><td><code>professional_license_number</code></td><td>Erkenningsnummer / RIZIV</td><td>Zorg- en welzijnsprofessionals</td></tr>
+            <tr><td><code>company</code></td><td>Bedrijfsnaam (factuur)</td><td>Verschillend van werkgever bij externe facturatie</td></tr>
+            <tr><td><code>vat_number</code></td><td>BTW-nummer</td><td>Belgische BTW</td></tr>
+            <tr><td><code>address</code> / <code>postal_code</code> / <code>city</code></td><td>Factuuradres</td><td>Verzending van offertes en facturen</td></tr>
+            <tr><td><code>invoice_email</code></td><td>Factuur-emailadres</td><td>Apart van het login-emailadres</td></tr>
+            <tr><td><code>gln_number</code></td><td>GLN-nummer</td><td>Ziekenhuizen / grote organisaties</td></tr>
+        </tbody>
+    </table>
+    <p class="stride-tip">
+        💡 Een veld met een andere naam (bv. <code>opmerking</code> of
+        <code>diet</code>) wordt enkel bij de inschrijving bewaard, niet op het
+        gebruikersprofiel. Dat is meestal precies wat je wilt voor
+        cursus-specifieke vragen.
+    </p>
 </section>
 
 <!-- ─── Offertes & Vouchers ─── -->

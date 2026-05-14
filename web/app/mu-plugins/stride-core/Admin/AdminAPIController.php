@@ -2390,6 +2390,17 @@ final class AdminAPIController
             }
         }
 
+        $anonymisedAt = (int) get_user_meta($userId, '_stride_anonymised_at', true);
+        $isAnonymised = $anonymisedAt > 0;
+
+        $anonymiseUrl = null;
+        if (!$isAnonymised && current_user_can('edit_user', $userId) && $userId !== get_current_user_id()) {
+            $anonymiseUrl = wp_nonce_url(
+                admin_url('admin-post.php?action=stride_anonymise_user&user=' . $userId),
+                'stride_anonymise_user_' . $userId
+            );
+        }
+
         $user = [
             'id' => $userId,
             'display_name' => $userData->display_name,
@@ -2398,6 +2409,11 @@ final class AdminAPIController
             'organisation' => get_user_meta($userId, 'organisation', true) ?: '',
             'department' => get_user_meta($userId, 'department', true) ?: '',
             'profile_type' => $profileType,
+            'is_anonymised' => $isAnonymised,
+            'anonymised_label' => $isAnonymised
+                ? sprintf(__('Geanonimiseerd op %s', 'stride'), date_i18n('d M Y', $anonymisedAt))
+                : '',
+            'anonymise_url' => $anonymiseUrl,
         ];
 
         // --- Registrations (paginated, with edition title) ---

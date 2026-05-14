@@ -162,6 +162,8 @@ final class QuestionnaireSettingsPage
                 <?= esc_html__('Beheer vragenlijsten en extra velden voor inschrijf-, intake- en evaluatieformulieren. Maak groepen aan en wijs ze toe aan edities of trajecten.', 'stride') ?>
             </p>
 
+            <?php $this->renderSystemFieldsHelp(); ?>
+
             <?php settings_errors('stride_questionnaire'); ?>
 
             <form method="post" id="stride-questionnaire-form">
@@ -706,5 +708,79 @@ final class QuestionnaireSettingsPage
     private function getUserMetaFieldNames(): array
     {
         return \Stride\Modules\Enrollment\EnrollmentService::getUserMetaMapping();
+    }
+
+    /**
+     * Render the "Systeemvelden" help panel at the top of the form-builder.
+     *
+     * Discoverability for the reserved-names mechanism: when admin gives a
+     * field one of these names, its value automatically persists to the
+     * user's profile (wp_usermeta) in addition to the per-enrollment snapshot.
+     */
+    private function renderSystemFieldsHelp(): void
+    {
+        $groups = [
+            __('Persoonlijk', 'stride') => [
+                'phone'                       => __('Telefoonnummer', 'stride'),
+                'organisation'                => __('Organisatie / werkgever', 'stride'),
+                'department'                  => __('Afdeling', 'stride'),
+                'national_id'                 => __('Rijksregisternummer', 'stride'),
+                'date_of_birth'               => __('Geboortedatum', 'stride'),
+                'professional_license_number' => __('Erkenningsnummer / RIZIV', 'stride'),
+            ],
+            __('Facturatie', 'stride') => [
+                'company'       => __('Bedrijfsnaam (factuur)', 'stride'),
+                'vat_number'    => __('BTW-nummer', 'stride'),
+                'address'       => __('Factuuradres', 'stride'),
+                'postal_code'   => __('Postcode', 'stride'),
+                'city'          => __('Stad', 'stride'),
+                'invoice_email' => __('Factuur-emailadres', 'stride'),
+                'gln_number'    => __('GLN-nummer', 'stride'),
+            ],
+        ];
+        ?>
+        <details class="stride-system-fields-help" style="background:#fff;border:1px solid #c3c4c7;border-radius:4px;padding:0;margin:16px 0;">
+            <summary style="cursor:pointer;padding:12px 16px;font-weight:600;list-style:none;">
+                <span class="dashicons dashicons-info-outline" style="color:#2271b1;"></span>
+                <?= esc_html__('Systeemvelden — namen die opgeslagen worden op het gebruikersprofiel', 'stride') ?>
+                <span style="font-weight:400;color:#646970;font-size:12px;">
+                    <?= esc_html__('(klik om uit te klappen)', 'stride') ?>
+                </span>
+            </summary>
+            <div style="padding:0 16px 16px;">
+                <p style="margin-top:0;color:#3c434a;">
+                    <?= esc_html__('Als je een veld in dit formulier exact één van onderstaande namen geeft, wordt de waarde automatisch op het profiel van de gebruiker opgeslagen — niet alleen bij deze inschrijving. Zo hoeft de gebruiker bv. zijn rijksregisternummer maar één keer in te vullen, en kan een admin het later terugvinden in het gebruikersbeheer.', 'stride') ?>
+                </p>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+                    <?php foreach ($groups as $groupLabel => $fields): ?>
+                        <div>
+                            <h4 style="margin:0 0 8px;font-size:13px;color:#1d2327;">
+                                <?= esc_html($groupLabel) ?>
+                            </h4>
+                            <table class="widefat" style="border:0;">
+                                <tbody>
+                                    <?php foreach ($fields as $name => $label): ?>
+                                        <tr>
+                                            <td style="border:0;padding:4px 8px 4px 0;width:1%;white-space:nowrap;">
+                                                <code style="background:#f0f0f1;padding:2px 6px;border-radius:3px;font-size:12px;">
+                                                    <?= esc_html($name) ?>
+                                                </code>
+                                            </td>
+                                            <td style="border:0;padding:4px 0;color:#3c434a;font-size:12px;">
+                                                <?= esc_html($label) ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+                <p style="margin:12px 0 0;color:#646970;font-size:12px;">
+                    <?= esc_html__('Gebruik je een andere naam? Dan blijft de waarde enkel bij deze ene inschrijving bewaard.', 'stride') ?>
+                </p>
+            </div>
+        </details>
+        <?php
     }
 }

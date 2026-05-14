@@ -594,6 +594,9 @@ document.addEventListener('alpine:init', () => {
                     organisation: data.user?.organisation || '',
                     department: data.user?.department || '',
                     profile_type: data.user?.profile_type || null,
+                    isAnonymised: !!data.user?.is_anonymised,
+                    anonymisedLabel: data.user?.anonymised_label || '',
+                    anonymiseUrl: data.user?.anonymise_url || null,
                     registrations,
                     quotes,
                     attendance_summary,
@@ -619,6 +622,14 @@ document.addEventListener('alpine:init', () => {
             } catch (e) {
                 this.showToast(e.message || 'Impersonatie mislukt', 'error');
             }
+        },
+
+        confirmAnonymise() {
+            return confirm(
+                'Anonimiseer deze gebruiker?\n\n' +
+                'Persoonlijke gegevens worden verwijderd. Inschrijvingen blijven bewaard.\n' +
+                'Deze actie kan niet ongedaan worden gemaakt.'
+            );
         },
 
         // ==============================================================

@@ -97,6 +97,7 @@
     "test": "phpunit",
     "test:unit": "phpunit --testsuite Unit",
     "test:integration": "phpunit -c phpunit-integration.xml.dist",
-    "test:coverage": "phpunit --coverage-html coverage"
+    "test:coverage": "phpunit --coverage-html coverage",
+    "audit:drift": "bash scripts/audit-drift.sh"
   }
 }

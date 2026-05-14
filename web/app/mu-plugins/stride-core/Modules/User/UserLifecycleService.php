@@ -64,12 +64,86 @@ class UserLifecycleService implements \NTDST_Service_Meta
         if (is_admin()) {
             add_filter('user_row_actions', [$this, 'filterRowActions'], 10, 2);
             add_action('admin_post_stride_anonymise_user', [$this, 'handleAdminAnonymisePost']);
+            add_action('admin_notices', [$this, 'renderAdminNotices']);
+            add_action('edit_user_profile', [$this, 'renderUserEditAnonymiseSection']);
         }
         add_action('delete_user', [$this, 'auditHardDelete'], 10, 3);
 
         if (defined('WP_CLI') && WP_CLI) {
             WP_CLI::add_command('stride anonymise-orphans', [$this, 'cliAnonymiseOrphans']);
         }
+    }
+
+    /**
+     * Show a success/error toast on users.php and user-edit.php after the
+     * anonymise action redirects back.
+     */
+    public function renderAdminNotices(): void
+    {
+        if (isset($_GET['stride_anonymised'])) {
+            $id = (int) $_GET['stride_anonymised'];
+            $msg = sprintf(__('Gebruiker #%d is geanonimiseerd. Inschrijvingen blijven bewaard.', 'stride'), $id);
+            echo '<div class="notice notice-success is-dismissible"><p>' . esc_html($msg) . '</p></div>';
+        }
+        if (isset($_GET['stride_anonymise_error'])) {
+            $err = sanitize_text_field((string) $_GET['stride_anonymise_error']);
+            echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__('Anonimisering mislukt: ', 'stride') . esc_html($err) . '</p></div>';
+        }
+    }
+
+    /**
+     * Render the Anonimiseer panel on the user-edit page (wp-admin/user-edit.php).
+     */
+    public function renderUserEditAnonymiseSection(\WP_User $user): void
+    {
+        if (!current_user_can('edit_user', $user->ID)) {
+            return;
+        }
+        if ($user->ID === get_current_user_id()) {
+            return;
+        }
+
+        if ($this->isAnonymised($user->ID)) {
+            $at = (int) get_user_meta($user->ID, self::META_ANONYMISED_AT, true);
+            ?>
+            <h2><?php esc_html_e('Anonimisering', 'stride'); ?></h2>
+            <table class="form-table">
+                <tr>
+                    <th><?php esc_html_e('Status', 'stride'); ?></th>
+                    <td>
+                        <span style="color:#646970;">
+                            <?php echo esc_html(sprintf(__('Geanonimiseerd op %s', 'stride'), date_i18n('d M Y H:i', $at))); ?>
+                        </span>
+                    </td>
+                </tr>
+            </table>
+            <?php
+            return;
+        }
+
+        $url = wp_nonce_url(
+            admin_url('admin-post.php?action=stride_anonymise_user&user=' . $user->ID),
+            'stride_anonymise_user_' . $user->ID
+        );
+        $confirm = esc_attr__('Gebruiker anonimiseren? PII wordt verwijderd; inschrijvingen blijven bewaard.', 'stride');
+        ?>
+        <h2><?php esc_html_e('Anonimisering (GDPR)', 'stride'); ?></h2>
+        <table class="form-table">
+            <tr>
+                <th><?php esc_html_e('Acties', 'stride'); ?></th>
+                <td>
+                    <a href="<?php echo esc_url($url); ?>"
+                       class="button"
+                       onclick="return confirm('<?php echo $confirm; ?>');">
+                        <?php esc_html_e('Anonimiseer gebruiker', 'stride'); ?>
+                    </a>
+                    <p class="description" style="margin-top:8px;">
+                        <?php esc_html_e('Verwijdert persoonlijke gegevens (naam, e-mail, telefoon, adres, RRN, etc.) maar bewaart het account en alle inschrijvingen voor wettelijke retentie. Eenmaal geanonimiseerd kan deze actie niet ongedaan worden gemaakt.', 'stride'); ?>
+                    </p>
+                </td>
+            </tr>
+        </table>
+        <?php
     }
 
     public function isAnonymised(int $userId): bool
