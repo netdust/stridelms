@@ -207,7 +207,7 @@ These 7 from the original lists were verified fixed in current code:
 ## G. Design Drafts to Decide (P2) — audited 2026-05-14
 
 - [x] **session-price-modifiers** — **already shipped**. `price_modifier` field on `vad_session` CPT, admin UI in `EditionSessionsMetabox` + `EditionAdminController`, applied as quote line items by `QuoteService:268-295`. Tests: `tests/Unit/QuoteServiceModifierTest.php` + `tests/frontend/admin/session-price-modifiers.spec.ts`. Checklist drift only.
-- [ ] (P0) **stride-mail-integration** — `StrideMailBridge` stub exists, `netdust-mail` plugin is active, but no smartcodes/triggers/default templates wired. 0 mail templates exist in DB. **Real work** — wire it up before launch or VAD admins have no email notifications at all. Plan: `docs/plans/2026-03-17-stride-mail-integration-design.md`.
+- [x] **stride-mail-integration** — **already shipped**. Re-verified 2026-05-14: 655 LOC `StrideMailBridge` registers all smartcodes + triggers + conditional dispatch. 12 Stride templates seeded (option `stride_mail_templates_seeded = 2`). 281 emails in mailpit confirm the system fires during normal use. Test send via `ndmail_send('stride-enrollment-created-user', ...)` returns true + arrives. Earlier audit conclusion was wrong because `get_posts(['post_type' => 'ndmail_template'])` was missing `post_status => 'any'`. Real remaining work tracked separately below.
 - [x] **roles-capabilities** — **already shipped**. `stride_coordinator` + `stride_supervisor` + `partner` roles all registered with the designed caps. Spec at `docs/superpowers/specs/2026-03-18-roles-capabilities-design.md` (note: path differs from checklist).
 
 ---
@@ -232,6 +232,9 @@ Tracked but NOT in Phase 1 scope. Keep in memory, surface after launch.
 - [ ] **Deactivate LTI plugin for v1 deploy** — `netdust-lti` plugin is feature-incomplete. User will handle plugin deactivation manually at deploy time. Reactivate when LTI work is finished post-launch.
 - [x] **Move stray PNGs** — moved `bento-section`, `debug-outlines`, `stridelms-fullpage` to `screenshots/` with `.png` extensions. **DONE 2026-05-14** (`aca392eb`).
 - [x] **`tests/_output/` ignored + untracked** — added to `.gitignore`, 211 existing files (47MB) removed from the index via `git rm --cached`. **DONE 2026-05-14** (`aca392eb`).
+- [ ] (P1) **Mail smartcode quality audit** — test sends show empty `{{user.name}}` and `{{edition.title}}` on at least one template (user #40 + edition #1383). Either the resolvers have bugs or the test context was incomplete. Walk through each of the 12 seeded templates with a real registration's context, verify every placeholder renders. Plan: `docs/plans/2026-03-17-stride-mail-integration-design.md` already describes the resolver chain.
+- [ ] (P0) **Configure production SMTP** — fluent-smtp is currently routing to mailpit (DDEV's dev capture). Production needs real credentials for VAD's mail provider. Done at deploy time, not in code.
+- [ ] (P1) **Set `stride_admin_email` for prod** — currently falls back to `admin@stride.local`. Set to the actual VAD admin inbox via WP admin or `wp option update`.
 - [~] **Hide Trajectory admin UI for v1** — Trajectory is unfinished. Deferred per user decision 2026-05-14 — can be hidden manually at deploy time or left visible (admin-only). Partner API does NOT have an admin UI; only REST endpoints + role. Nothing to hide there.
 
 ---
