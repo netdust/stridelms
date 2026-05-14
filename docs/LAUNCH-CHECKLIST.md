@@ -109,15 +109,15 @@ Last updated: 2026-05-14 (post §C voucher scope + apply-mode)
 **Source:** `plans/phase-4-voucher-scope-and-prorating.md` (supersedes `plans/phase-4-voucher-completion.md`, 2026-05-14 decision)
 **Why P0:** Voucher infra is generic; VAD needs (a) the ability to *exclude* certain editions from a voucher (instead of only restricting to one) and (b) prorating for multi-session editions when a voucher should only cover one session. Original 5-category plan dropped — adds density without solving real admin problems.
 
-- [x] **Bidirectional scope** — `scope_mode` radio: *Alle / Alleen / Behalve*. Replaces single `edition_id` dropdown. Existing vouchers (no `scope_mode`) auto-detected as "alleen" via legacy back-compat. **DONE 2026-05-14.**
-- [x] **`apply_mode` dropdown** — *Volledige editie / Eén sessie (pro rata)*. When "Eén sessie" + multi-session edition: subtotal divided by session_count before discount applied. 0-session editions silently fall back to full. **DONE 2026-05-14.**
-- [x] **`VoucherScopeValidator` helper** — pure class, no hooks. Resolves legacy + handles `only`/`except` branching. **DONE 2026-05-14.**
-- [x] **`VoucherProrater` helper** — pure math `Money::cents(subtotal / max(N, 1))`. **DONE 2026-05-14.**
-- [x] **`VoucherService::validateVoucher()`** — delegates to scope validator (1 line). Keeps existing `wrong_edition` error code. **DONE 2026-05-14.**
-- [x] **`VoucherService::calculateDiscount()`** — optional `?int $editionId` parameter; prorates subtotal when `apply_mode='single_session'`. Backwards-compatible default `null`. **DONE 2026-05-14.**
-- [x] **Admin form** — 3-way scope radio with show/hide UI, multi-select for "Behalve", apply-mode dropdown. Vanilla JS toggle (no Alpine import). **DONE 2026-05-14.**
-- [x] **Admin list column** — shows "Alleen: X" / "Behalve: A, B +N meer" / "Alle edities" instead of single edition link. **DONE 2026-05-14.**
-- [x] **Tests:** 6 new integration tests (excluded-edition rejection, non-excluded acceptance, legacy back-compat, prorate Full, prorate Percentage, 0-session fallback). 26 voucher integration tests + 674 unit + 227 integration all green. **DONE 2026-05-14.**
+- [x] **Bidirectional scope** — `scope_mode` radio: *Alle / Alleen / Behalve*. Replaces single `edition_id` dropdown. Existing vouchers (no `scope_mode`) auto-detected as "alleen" via legacy back-compat. **DONE 2026-05-14** (`ae970344`).
+- [x] **`apply_mode` dropdown** — *Volledige editie / Eén sessie (pro rata)*. When "Eén sessie" + multi-session edition: subtotal divided by session_count before discount applied. 0-session editions silently fall back to full. **DONE 2026-05-14** (`ae970344`).
+- [x] **`VoucherScopeValidator` helper** — pure class, no hooks. Resolves legacy + handles `only`/`except` branching. **DONE 2026-05-14** (`ae970344`).
+- [x] **`VoucherProrater` helper** — pure math `Money::cents(subtotal / max(N, 1))`. **DONE 2026-05-14** (`ae970344`).
+- [x] **`VoucherService::validateVoucher()`** — delegates to scope validator (1 line). Keeps existing `wrong_edition` error code. **DONE 2026-05-14** (`ae970344`).
+- [x] **`VoucherService::calculateDiscount()`** — optional `?int $editionId` parameter; prorates subtotal when `apply_mode='single_session'`. Backwards-compatible default `null`. **DONE 2026-05-14** (`ae970344`).
+- [x] **Admin form** — 3-way scope radio with show/hide UI, multi-select for "Behalve", apply-mode dropdown. Vanilla JS toggle (no Alpine import). **DONE 2026-05-14** (`ae970344`).
+- [x] **Admin list column** — shows "Alleen: X" / "Behalve: A, B +N meer" / "Alle edities" instead of single edition link. **DONE 2026-05-14** (`ae970344`).
+- [x] **Tests:** 6 new integration tests (excluded-edition rejection, non-excluded acceptance, legacy back-compat, prorate Full, prorate Percentage, 0-session fallback). 26 voucher integration tests + 674 unit + 227 integration all green. **DONE 2026-05-14** (`ae970344`).
 
 **Dropped from original plan (no longer in scope):**
 - ~~5 voucher categories (member/action/speaker/day/social)~~ — admin uses scope + discount type to express same policies without baking categories into code
