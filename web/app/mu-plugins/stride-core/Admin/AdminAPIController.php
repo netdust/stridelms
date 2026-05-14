@@ -3062,7 +3062,7 @@ final class AdminAPIController
                 }
             }
 
-            fputcsv($output, [
+            fputcsv($output, array_map([self::class, 'sanitizeCsvCell'], [
                 $name,
                 $email,
                 $org,
@@ -3070,10 +3070,33 @@ final class AdminAPIController
                 $reg->edition_date ?? '',
                 $reg->status ?? '',
                 $quoteNumber,
-            ], ';');
+            ]), ';');
         }
 
         fclose($output);
         exit;
+    }
+
+    /**
+     * Neutralise CSV / spreadsheet formula injection.
+     *
+     * Excel, LibreOffice and Google Sheets execute any cell whose first
+     * character is `=`, `+`, `-`, `@`, TAB or CR. An attacker who can place
+     * arbitrary text into a user-facing field (display_name, organisation,
+     * edition title) could exfiltrate data via `=WEBSERVICE(...)` when an
+     * admin opens the export. Prefix any such cell with a single quote so
+     * the spreadsheet treats it as a literal string.
+     */
+    private static function sanitizeCsvCell(mixed $value): string
+    {
+        $str = (string) $value;
+        if ($str === '') {
+            return '';
+        }
+        $first = $str[0];
+        if ($first === '=' || $first === '+' || $first === '-' || $first === '@' || $first === "\t" || $first === "\r") {
+            return "'" . $str;
+        }
+        return $str;
     }
 }
