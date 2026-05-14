@@ -159,11 +159,13 @@ These 7 from the original lists were verified fixed in current code:
 - [x] (P1) **Deprecated `current_time('timestamp')` calls** — 3 calls (UserDashboardService.php:728-729 + notification-item.php:51) replaced with `time()`. **DONE 2026-05-14** (`5fa9ea92`).
 - [x] (P0) **6 footer pages return 404** — 5 placeholder pages created with Dutch H1 + short body (`/agenda/`, `/contact/`, `/faq/`, `/over-ons/`, `/voorwaarden/`); existing `/privacy-policy` draft re-slugged to `/privacy/` and published. All 6 footer URLs now return 200. **DONE 2026-05-14** (dev DB).
     - **⚠️ Staging/prod follow-up:** content lives in WP DB, not git. Replay via `wp post create` on staging + prod before launch, or copy via DB migration. Stub copy can be edited in WP admin before going live.
-- [ ] (P0) **GDPR anonymisation bundle** — three coupled items, one ~200 LOC change:
-    - **D-G1** New `UserLifecycleService::anonymise($userId)` — strips PII (display_name → "Verwijderde gebruiker #N", clear email/login/billing/phone/org/department), keeps `wp_users` row, sets `_stride_anonymised_at` meta. Hook `delete_user` to call it and prevent actual row deletion. Verified absent: zero `delete_user` hooks in stride-core today.
-    - **D-G2** `EditionRegistrationMetabox.php:151-153` — replace silent `continue` on missing `$user` with a faded "verwijderd" row; honour `_stride_anonymised_at` display.
-    - **D-G3** `wp stride anonymise-orphans` CLI — finds registrations where `user_id` doesn't exist in `wp_users`; anonymises or deletes per row matter. Needed for dev cleanup; safety net in prod.
-    - **Why bundled:** D-G2 + D-G3 only make sense after D-G1's data model exists. Why P0: BE training record retention is 7–10 years; hard-deleting a user today orphans registrations, quotes, certificates and is GDPR-non-compliant.
+- [x] (P0) **GDPR anonymisation bundle** — D-G1 + D-G2 + D-G3. **DONE 2026-05-14** (`1f087cb9`).
+    - **D-G1** ✅ `UserLifecycleService::anonymise($userId)` — strips wp_users core + 24 user-meta keys (the 13-key mapping + 11 identity/preference keys). Keeps the wp_users row + foreign keys intact. Admin row action replaced with "Anonimiseer"; nuclear `wp_delete_user()` stays available for spam accounts. `delete_user` hook audits hard-deletes (no block).
+    - **D-G2** ✅ `EditionRegistrationMetabox` renders anonymised users as faded rows with "Geanonimiseerd op YYYY-MM-DD" subtitle. Also handles hard-deleted orphans ("Gebruiker #N (verwijderd)"). No actions on either.
+    - **D-G3** ✅ `wp stride anonymise-orphans` scans both active FK tables, dry-run by default, `--commit` flags rows. Dev DB sweep: 190 registration + 55 attendance rows referencing 200 deleted users.
+    - Bonus: 3 new user-meta fields (`national_id` = rijksregisternummer, `date_of_birth`, `professional_license_number`) wired through the existing 4-stage Questionnaire form builder. Admins add them per-edition + mark required-or-not. No new mechanism invented.
+    - Bonus: `EnrollmentService::getUserMetaMapping()` is now a single source of truth — `QuestionnaireSettingsPage::getUserMetaFieldNames()` delegates to it. Eliminates the duplicate-array drift hazard.
+    - 9 new integration tests + end-to-end shake-out (form save → anonymise → metabox render → roll back) all passed.
 - [ ] (P1) **Pending registrations hold capacity indefinitely** — `EditionService.php:98` SQL counts `pending + confirmed + completed`. Abandoned pendings hold `Volzet` forever. **Decision needed:** 24-48h auto-expire cron, or accept + document. Not technical, policy.
 
 ### D.4 — Volzet edge case (P2, defer)
