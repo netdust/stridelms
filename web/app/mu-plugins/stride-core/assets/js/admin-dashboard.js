@@ -16,6 +16,7 @@ document.addEventListener('alpine:init', () => {
         actionQueue: [],
         pendingApprovals: { items: [], counts: { approval: 0, post_approval: 0, stale_user: 0 }, stale_threshold_days: 7 },
         pendingApprovalsTab: 'approval', // 'approval' | 'post_approval' | 'stale_user'
+        userDetailReturnTo: null, // 'dashboard' when admin arrived from actie-vereist card
         upcomingSessions: [],
         activityFeed: [],
         healthChecks: { registration: 'green', mail: 'green' },
@@ -243,6 +244,18 @@ document.addEventListener('alpine:init', () => {
                     if (c.approval > 0) this.pendingApprovalsTab = 'approval';
                     else if (c.stale_user > 0) this.pendingApprovalsTab = 'stale_user';
                     else if (c.post_approval > 0) this.pendingApprovalsTab = 'post_approval';
+
+                    // Deep-link from action-queue: hash `#action-required-<bucket>`
+                    // tells us which tab to activate + scrolls the card into view.
+                    const hash = (window.location.hash || '').replace(/^#/, '');
+                    const m = hash.match(/^action-required-(approval|post_approval|stale_user)$/);
+                    if (m && c[m[1]] > 0) {
+                        this.pendingApprovalsTab = m[1];
+                        // Defer scroll until Alpine has rendered the card
+                        setTimeout(() => {
+                            document.getElementById('action-required-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 100);
+                    }
                 }
             } catch (e) {
                 console.error('Dashboard load error:', e);
@@ -621,6 +634,51 @@ document.addEventListener('alpine:init', () => {
             this.userSearchQuery = '';
             this.userSearchResults = [];
             this.selectedUser = null;
+        },
+
+        // Switch to the gebruikers view AND load user detail in one call.
+        // Used by the actie-vereist card so admin actually sees the user-detail
+        // panel (selectUser alone doesn't change view).
+        // Records 'dashboard' as the return target so "← Terug" can take admin
+        // back to the queue instead of leaving them stranded on an empty
+        // gebruikers search.
+        async viewUserInDetail(userId) {
+            this.userDetailReturnTo = 'dashboard';
+            this.switchView('gebruikers');
+            await this.selectUser(userId);
+        },
+
+        // Close the user-detail panel and route admin back to wherever they
+        // came from. If they navigated from the dashboard's actie-vereist card,
+        // bring them back to the dashboard view; otherwise just clear the
+        // selection and stay on the gebruikers search view.
+        closeUserDetail() {
+            const target = this.userDetailReturnTo;
+            this.selectedUser = null;
+            this.userDetailReturnTo = null;
+            if (target === 'dashboard') {
+                this.switchView('dashboard');
+            }
+        },
+
+        // Approve a registration straight from a dashboard row.
+        async approveFromRow(item) {
+            if (!confirm('Inschrijving goedkeuren?')) return;
+            try {
+                const endpoint = item.type === 'post_approval'
+                    ? '/admin/approve-post-course'
+                    : '/admin/approve-registration';
+                await this.api(endpoint, {
+                    method: 'POST',
+                    body: JSON.stringify({ registration_id: item.id }),
+                });
+                // Remove the row optimistically
+                this.pendingApprovals.items = this.pendingApprovals.items.filter(i => i.id !== item.id);
+                this.pendingApprovals.counts[item.type] = Math.max(0, this.pendingApprovals.counts[item.type] - 1);
+                this.showToast('Inschrijving goedgekeurd', 'success');
+            } catch (e) {
+                this.showToast(e.message || 'Goedkeuring mislukt', 'error');
+            }
         },
 
         async impersonateUser(userId) {

@@ -179,7 +179,9 @@ final class ActionQueueService
             'priority'   => 'red',
             'text'       => sprintf('%d inschrijving%s wacht%s op goedkeuring', $count, $count > 1 ? 'en' : '', $count > 1 ? 'en' : ''),
             'subject_id' => null,
-            'url'        => '/wp/wp-admin/admin.php?page=stride-registrations&status=pending',
+            // Deep-link into the "Inschrijvingen — actie vereist" card on the
+            // dashboard, "Wacht op mij" tab (see admin-dashboard.js hash handler).
+            'url'        => '/wp/wp-admin/admin.php?page=stride-dashboard#action-required-approval',
         ]];
     }
 
@@ -222,7 +224,8 @@ final class ActionQueueService
             'priority'   => 'amber',
             'text'       => sprintf('%d openstaande ta%s', $count, $count > 1 ? 'ken' : 'ak'),
             'subject_id' => null,
-            'url'        => '/wp/wp-admin/admin.php?page=stride-dashboard',
+            // Deep-link to "Wacht op gebruiker" tab of the actie-vereist card.
+            'url'        => '/wp/wp-admin/admin.php?page=stride-dashboard#action-required-stale_user',
         ]];
     }
 }

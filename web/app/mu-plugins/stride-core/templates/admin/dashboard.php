@@ -166,7 +166,7 @@ defined('ABSPATH') || exit;
                     </div>
 
                     <!-- Inschrijvingen — actie vereist (D-Cap1) -->
-                    <div class="sd-card" x-show="(pendingApprovals.counts.approval + pendingApprovals.counts.post_approval + pendingApprovals.counts.stale_user) > 0">
+                    <div class="sd-card" id="action-required-card" x-show="(pendingApprovals.counts.approval + pendingApprovals.counts.post_approval + pendingApprovals.counts.stale_user) > 0">
                         <div class="sd-card__header">
                             <h3 class="sd-card__title">Inschrijvingen — actie vereist</h3>
                         </div>
@@ -217,7 +217,7 @@ defined('ABSPATH') || exit;
                                     <template x-for="item in pendingApprovals.items.filter(i => i.type === pendingApprovalsTab)" :key="item.id">
                                         <tr>
                                             <td>
-                                                <a href="#" @click.prevent="selectUser(item.user_id)" x-text="item.user_name"></a>
+                                                <a href="#" @click.prevent="viewUserInDetail(item.user_id)" x-text="item.user_name"></a>
                                                 <div style="font-size:11px;color:#646970;" x-text="item.user_email"></div>
                                             </td>
                                             <td x-text="item.edition_title"></td>
@@ -236,8 +236,21 @@ defined('ABSPATH') || exit;
                                                 </template>
                                             </td>
                                             <td x-text="(item.registered_at || '').substring(0, 10)"></td>
-                                            <td>
-                                                <a href="#" @click.prevent="selectUser(item.user_id)" class="sd-btn sd-btn--text">Bekijk →</a>
+                                            <td style="white-space:nowrap;">
+                                                <!-- Primary action per bucket -->
+                                                <template x-if="item.type === 'approval'">
+                                                    <button class="sd-btn sd-btn--primary" @click="approveFromRow(item)">Keur goed</button>
+                                                </template>
+                                                <template x-if="item.type === 'post_approval'">
+                                                    <button class="sd-btn sd-btn--primary" @click="approveFromRow(item)">Teken af</button>
+                                                </template>
+                                                <template x-if="item.type === 'stale_user' && item.edition_id">
+                                                    <a :href="'<?php echo esc_url($admin_url); ?>post.php?post=' + item.edition_id + '&action=edit'"
+                                                       class="sd-btn sd-btn--ghost"
+                                                       target="_blank">Bekijk editie →</a>
+                                                </template>
+                                                <!-- Secondary: open user-detail view -->
+                                                <button class="sd-btn sd-btn--text" @click="viewUserInDetail(item.user_id)">Gebruiker →</button>
                                             </td>
                                         </tr>
                                     </template>
@@ -984,7 +997,7 @@ defined('ABSPATH') || exit;
                                        x-show="config.canManage && selectedUser?.id && !selectedUser?.isAnonymised && selectedUser?.anonymiseUrl"
                                        @click="if (!confirmAnonymise()) { $event.preventDefault(); }">Anonimiseer</a>
                                     <span class="sd-tag sd-tag--muted" x-show="selectedUser?.isAnonymised" x-text="selectedUser?.anonymisedLabel"></span>
-                                    <button class="sd-btn sd-btn--text" @click="selectedUser = null">← Terug</button>
+                                    <button class="sd-btn sd-btn--text" @click="closeUserDetail()" x-text="userDetailReturnTo === 'dashboard' ? '← Terug naar dashboard' : '← Terug'"></button>
                                 </div>
                             </div>
                         </div>
