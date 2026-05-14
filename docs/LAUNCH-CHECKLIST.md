@@ -156,7 +156,7 @@ These 7 from the original lists were verified fixed in current code:
 
 ### D.3 — Real launch items (4)
 
-- [ ] (P1) **Deprecated `current_time('timestamp')` calls** — 2 calls at `UserDashboardService.php:728-729`. Replace with `time()` per WP standards. Trivial fix.
+- [x] (P1) **Deprecated `current_time('timestamp')` calls** — 3 calls (UserDashboardService.php:728-729 + notification-item.php:51) replaced with `time()`. **DONE 2026-05-14** (`5fa9ea92`).
 - [ ] (P0) **6 footer pages return 404** — `stridence/footer.php` links to `/agenda/`, `/contact/`, `/faq/`, `/over-ons/`, `/privacy/`, `/voorwaarden/`. Only `privacy-policy` (draft, wrong slug) exists. Options: create 6 placeholder pages OR remove links until content ready. (Was claimed "7 pages" but actual count is 6.)
 - [ ] (P0) **GDPR anonymisation bundle** — three coupled items, one ~200 LOC change:
     - **D-G1** New `UserLifecycleService::anonymise($userId)` — strips PII (display_name → "Verwijderde gebruiker #N", clear email/login/billing/phone/org/department), keeps `wp_users` row, sets `_stride_anonymised_at` meta. Hook `delete_user` to call it and prevent actual row deletion. Verified absent: zero `delete_user` hooks in stride-core today.
