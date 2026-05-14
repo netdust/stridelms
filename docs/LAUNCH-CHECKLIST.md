@@ -166,7 +166,7 @@ These 7 from the original lists were verified fixed in current code:
     - Bonus: 3 new user-meta fields (`national_id` = rijksregisternummer, `date_of_birth`, `professional_license_number`) wired through the existing 4-stage Questionnaire form builder. Admins add them per-edition + mark required-or-not. No new mechanism invented.
     - Bonus: `EnrollmentService::getUserMetaMapping()` is now a single source of truth — `QuestionnaireSettingsPage::getUserMetaFieldNames()` delegates to it. Eliminates the duplicate-array drift hazard.
     - 9 new integration tests + end-to-end shake-out (form save → anonymise → metabox render → roll back) all passed.
-- [ ] (P1) **Pending registrations hold capacity indefinitely** — `EditionService.php:98` SQL counts `pending + confirmed + completed`. Abandoned pendings hold `Volzet` forever. **Decision needed:** 24-48h auto-expire cron, or accept + document. Not technical, policy.
+- [x] (P1) **Pending registrations hold capacity indefinitely** — Decision 2026-05-14: don't auto-cancel; surface to admin for per-case review. Stale pendings (≥7d idle, user tasks open) now appear in a new "Inschrijvingen — actie vereist" dashboard card alongside admin approvals + post-course aftekening, with sub-tabs and counts. **DONE 2026-05-14** (`c3ca3d5f`). Capacity stays held until admin acts; full visibility prevents abandoned slots going unnoticed.
 
 ### D.4 — Volzet edge case (P2, defer)
 
