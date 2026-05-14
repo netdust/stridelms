@@ -3,7 +3,7 @@
 **Authoritative list of what must be true before Phase 1 production launch.**
 **Companion to:** `memory/STATE.md` (current-state snapshot) and `tasks/todo.md` (active sprint scratchpad).
 
-Last updated: 2026-05-13
+Last updated: 2026-05-14 (post §C voucher scope + apply-mode)
 
 ---
 
@@ -27,16 +27,14 @@ Last updated: 2026-05-13
 
 ---
 
-## A. Admin Dashboard — ALL functional bugs fixed (Track 1 done); visual/UX repair remains (P0)
+## A. Admin Dashboard — DONE for launch (P0)
 
 **Source:** `tasks/shake-out-dashboard-manifest.md` (re-swept 2026-05-13, all bugs resolved 2026-05-13)
 **Why P0:** Admin can't operate the platform without this. Largest single blocker.
 
-**Re-sweep result:** 18 of 23 original bugs were already fixed in code; 5 remaining bugs fixed today (2026-05-13). Track 2 (visual/UX repair §A.2) is the remaining work.
-
-**Two parallel tracks in this bucket:**
-- **A.1 — Functional bugs** — ✅ ALL FIXED 2026-05-13.
-- **A.2 — Visual & UX repair** — purple is wrong, layout doesn't feel stable, activity feed isn't useful for "where's my invoice?" / "why is this enrollment missing data?". See §A.2 below.
+**Status (2026-05-14):**
+- **A.1 — Functional bugs** — ✅ ALL 23 fixed (2026-05-13, `8a54c475`).
+- **A.2 — Visual & UX repair** — ✅ All launch items shipped (`8a54c475`). Enrollment-timeline view deferred post-launch (user decision 2026-05-13). Density modes P1 — nice-to-have, not blocking.
 
 ### A.1 — Real bugs to fix (5 verified open)
 
@@ -60,7 +58,9 @@ Last updated: 2026-05-13
 
 > **Trajectory bugs (BUG-003, BUG-004, BUG-014, BUG-017):** Trajectory UI **stays visible for v1** (user decision 2026-05-13). BUG-004/014/017 already resolved. BUG-003 (trajectory detail 404 route) still needs fix — re-add to A.1 if reproducible.
 
-### A.2 — Visual & UX repair (P0)
+### A.2 — Visual & UX repair (P0) — all launch items done
+
+**Status:** 6 of 9 items shipped 2026-05-13 in commit `8a54c475` ("sprint 1 + track 2 — all 23 bugs + neutral UX pass"). Enrollment-timeline view deferred post-launch (user decision 2026-05-13). 1 P1 item still open (density modes) — nice-to-have, not a launch blocker.
 
 **Goal:** dashboard should feel stable, professional, fast. Designed for daily admin tasks — speed up routine work, find things fast, understand what happened and why.
 
@@ -70,14 +70,14 @@ Last updated: 2026-05-13
 
 **Repair items (NOT a full redesign — controlled visual + UX pass):**
 
-- [ ] (P0) **Color system** — purple is wrong. Pick a stable neutral palette (slate/zinc base + 1 accent + status colors). Apply via existing tokens.css; no Tailwind rewrite.
-- [ ] (P0) **Layout stability** — fix density, spacing, header weight, content hierarchy. Dashboard should look like a serious tool, not a demo.
-- [ ] (P0) **Slide-over redesign** — once BUG-002 (positioning) is fixed, audit content: header, tabs, footer actions. Should feel decisive, not floaty.
-- [ ] (P0) **User detail view = the "call center" view** — given a user, show in one screen: enrollments, quotes/invoices with payment status, recent events. This is the answer to "where's my invoice?"
-- [ ] (P0) **Enrollment detail = the "what happened" view** — given an enrollment, show its timeline (created, completed task X, missing field Y, status changes). Plus current state of completion tasks. This is the answer to "what happened to this enrollment?"
-- [ ] (P0) **Activity feed redesign** — group by entity (user, enrollment, quote) instead of flat event stream. Human-readable text (resolves BUG-021). Filterable by entity type + actor.
-- [ ] (P1) **Empty states** — currently broken-looking when data is sparse. Each list/table needs a designed empty state.
-- [ ] (P1) **Loading / error states** — consistent skeletons + error UI across the dashboard.
+- [x] (P0) **Color system** — dropped "Soft Violet"; neutral slate base + single blue accent; all hardcoded violet hex removed. **DONE 2026-05-13** (`8a54c475`).
+- [x] (P0) **Layout stability** — buttons normalized (32px height, unified padding via tokens), inputs/selects matched, KPI row CSS grid (5→3→1), card padding tightened, table headers normal-case with subtle alt bg. **DONE 2026-05-13** (`8a54c475`).
+- [x] (P0) **Slide-over redesign** — fixed missing `sd-slideout__tab` class on three slide-overs; positioning + content audit complete. **DONE 2026-05-13** (`8a54c475`).
+- [x] (P0) **User detail view = the "call center" view** — Inschrijvingen / Aanwezigheid / Offertes tables, per-registration attendance summary, per-quote `sent_at`+`paid_at`, batch queries (no N+1). **DONE 2026-05-13** (`8a54c475`).
+- [~] (Deferred — user decision 2026-05-13) **Enrollment detail = the "what happened" view** — timeline view of a single enrollment (created, task X done, missing field Y, status changes). Dropped from v1 scope; revisit post-launch.
+- [x] (P0) **Activity feed redesign** — `AdminActivityMapper` extended with all event cases; controller batch-resolves `entity_id` → display name; graceful "(account niet meer beschikbaar)" fallback for deleted users; 11 new unit tests. **DONE 2026-05-13** (`8a54c475`, also resolves BUG-021).
+- [x] (P1) **Empty states** — `.sd-empty` pattern (circular icon + title + hint) applied across lists/tables. **DONE 2026-05-13** (`8a54c475`).
+- [x] (P1) **Loading / error states** — `.sd-skeleton` with pulse animation in KPI + tables; `.sd-error` blocks with retry buttons; stats default `null` so no flash-of-zero. **DONE 2026-05-13** (`8a54c475`).
 - [ ] (P1) **Density modes** — comfortable default, optional compact mode for power users. (Cheap if done at CSS level.)
 
 **Constraints:**
@@ -104,20 +104,28 @@ Last updated: 2026-05-13
 
 ---
 
-## C. Phase 4 — VAD Voucher Rules (P0)
+## C. Phase 4 — Voucher Scope + Per-Session Apply Mode (P0) — DONE
 
-**Source:** `plans/phase-4-voucher-completion.md`
-**Why P0:** Voucher infra is built but VAD's actual voucher policy isn't enforced. Members will hit broken vouchers at launch.
+**Source:** `plans/phase-4-voucher-scope-and-prorating.md` (supersedes `plans/phase-4-voucher-completion.md`, 2026-05-14 decision)
+**Why P0:** Voucher infra is generic; VAD needs (a) the ability to *exclude* certain editions from a voucher (instead of only restricting to one) and (b) prorating for multi-session editions when a voucher should only cover one session. Original 5-category plan dropped — adds density without solving real admin problems.
 
-- [ ] Voucher category field — 5 categories: member, action, speaker, day, social (CPT schema + admin dropdown)
-- [ ] Edition `is_multi_year_training` field — needed for member voucher blocking
-- [ ] `VoucherTypeValidator` helper — type-specific rules
-- [ ] Member voucher rules — blocked for multi-year editions
-- [ ] Day voucher prorating — 1 day = 1/N of edition price
-- [ ] Social voucher — flat 50% discount
-- [ ] Tests for all 5 voucher types
+- [x] **Bidirectional scope** — `scope_mode` radio: *Alle / Alleen / Behalve*. Replaces single `edition_id` dropdown. Existing vouchers (no `scope_mode`) auto-detected as "alleen" via legacy back-compat. **DONE 2026-05-14.**
+- [x] **`apply_mode` dropdown** — *Volledige editie / Eén sessie (pro rata)*. When "Eén sessie" + multi-session edition: subtotal divided by session_count before discount applied. 0-session editions silently fall back to full. **DONE 2026-05-14.**
+- [x] **`VoucherScopeValidator` helper** — pure class, no hooks. Resolves legacy + handles `only`/`except` branching. **DONE 2026-05-14.**
+- [x] **`VoucherProrater` helper** — pure math `Money::cents(subtotal / max(N, 1))`. **DONE 2026-05-14.**
+- [x] **`VoucherService::validateVoucher()`** — delegates to scope validator (1 line). Keeps existing `wrong_edition` error code. **DONE 2026-05-14.**
+- [x] **`VoucherService::calculateDiscount()`** — optional `?int $editionId` parameter; prorates subtotal when `apply_mode='single_session'`. Backwards-compatible default `null`. **DONE 2026-05-14.**
+- [x] **Admin form** — 3-way scope radio with show/hide UI, multi-select for "Behalve", apply-mode dropdown. Vanilla JS toggle (no Alpine import). **DONE 2026-05-14.**
+- [x] **Admin list column** — shows "Alleen: X" / "Behalve: A, B +N meer" / "Alle edities" instead of single edition link. **DONE 2026-05-14.**
+- [x] **Tests:** 6 new integration tests (excluded-edition rejection, non-excluded acceptance, legacy back-compat, prorate Full, prorate Percentage, 0-session fallback). 26 voucher integration tests + 674 unit + 227 integration all green. **DONE 2026-05-14.**
 
-**Deferred to Phase 8 (post-launch):** member voucher auto-generation, voucher reversal on cancellation, annual renewal cron.
+**Dropped from original plan (no longer in scope):**
+- ~~5 voucher categories (member/action/speaker/day/social)~~ — admin uses scope + discount type to express same policies without baking categories into code
+- ~~Edition `is_multi_year_training` field~~ — admin adds tweejarige editions to "Behalve" list on member vouchers
+- ~~`VoucherTypeValidator` category dispatcher~~ — replaced by scope validator (narrower, simpler)
+- ~~Social voucher hardcoded 50%~~ — admin sets `discount_type=Percentage value=50`
+
+**Still deferred to Phase 8 (post-launch):** member voucher auto-generation, voucher reversal on cancellation, annual renewal cron.
 
 ---
 

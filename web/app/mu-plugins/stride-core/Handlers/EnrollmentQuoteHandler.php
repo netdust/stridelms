@@ -117,7 +117,7 @@ final class EnrollmentQuoteHandler
             $voucherService = ntdst_get(VoucherService::class);
             $voucher = $voucherService->validateVoucher($voucherCode, $editionId);
             if (!is_wp_error($voucher)) {
-                $discount = $voucherService->calculateDiscount($voucher, $price);
+                $discount = $voucherService->calculateDiscount($voucher, $price, $editionId);
             }
         }
 

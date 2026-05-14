@@ -107,9 +107,22 @@ final class VoucherAdminController
                 'valid_from' => date('Y-m-d'),
                 'valid_until' => date('Y-m-d', strtotime('+1 year')),
                 'edition_id' => 0,
+                'scope_mode' => 'all',
+                'excluded_edition_ids' => [],
+                'apply_mode' => 'full',
                 'created_by' => get_current_user_id(),
             ];
         }
+
+        // Back-compat: legacy voucher with edition_id > 0 and empty scope_mode = "only" mode
+        $scopeMode = $voucher['scope_mode'] ?? '';
+        if ($scopeMode === '') {
+            $scopeMode = ((int) ($voucher['edition_id'] ?? 0) > 0) ? 'only' : 'all';
+        }
+        $applyMode = $voucher['apply_mode'] ?? 'full';
+        $excludedIds = is_array($voucher['excluded_edition_ids'] ?? null)
+            ? array_map('intval', $voucher['excluded_edition_ids'])
+            : [];
 
         wp_nonce_field(self::NONCE_SAVE, self::NONCE_FIELD);
 
@@ -193,34 +206,92 @@ final class VoucherAdminController
                         <p class="description"><?php esc_html_e('€ of % afhankelijk van type', 'stride'); ?></p>
                     </div>
                 </div>
+                <div class="stride-field-row">
+                    <div class="stride-field">
+                        <label for="voucher_apply_mode"><?php esc_html_e('Toepassen op', 'stride'); ?></label>
+                        <select id="voucher_apply_mode" name="ntdst_fields[apply_mode]">
+                            <option value="full" <?php selected($applyMode, 'full'); ?>>
+                                <?php esc_html_e('Volledige editie', 'stride'); ?>
+                            </option>
+                            <option value="single_session" <?php selected($applyMode, 'single_session'); ?>>
+                                <?php esc_html_e('Eén sessie (pro rata)', 'stride'); ?>
+                            </option>
+                        </select>
+                        <p class="description"><?php esc_html_e('Bij "één sessie" wordt het kortingsbedrag gedeeld door het aantal sessies van de editie.', 'stride'); ?></p>
+                    </div>
+                </div>
             </div>
 
             <div class="stride-section">
                 <h4><?php esc_html_e('Beperking', 'stride'); ?></h4>
+                <?php
+                $editions = get_posts([
+                    'post_type' => 'vad_edition',
+                    'post_status' => 'publish',
+                    'posts_per_page' => 200,
+                    'orderby' => 'title',
+                    'order' => 'ASC',
+                ]);
+                ?>
                 <div class="stride-field-row">
                     <div class="stride-field">
-                        <label for="voucher_edition_id"><?php esc_html_e('Beperkt tot editie', 'stride'); ?></label>
+                        <label><?php esc_html_e('Geldig voor', 'stride'); ?></label>
+                        <label class="stride-radio">
+                            <input type="radio" name="ntdst_fields[scope_mode]" value="all"
+                                <?php checked($scopeMode, 'all'); ?>
+                                onclick="strideVoucherToggleScope('all')">
+                            <?php esc_html_e('Alle edities', 'stride'); ?>
+                        </label>
+                        <label class="stride-radio">
+                            <input type="radio" name="ntdst_fields[scope_mode]" value="only"
+                                <?php checked($scopeMode, 'only'); ?>
+                                onclick="strideVoucherToggleScope('only')">
+                            <?php esc_html_e('Alleen voor één editie', 'stride'); ?>
+                        </label>
+                        <label class="stride-radio">
+                            <input type="radio" name="ntdst_fields[scope_mode]" value="except"
+                                <?php checked($scopeMode, 'except'); ?>
+                                onclick="strideVoucherToggleScope('except')">
+                            <?php esc_html_e('Alle edities behalve…', 'stride'); ?>
+                        </label>
+                    </div>
+                </div>
+
+                <div id="stride-scope-only" class="stride-field-row" style="<?php echo $scopeMode === 'only' ? '' : 'display:none;'; ?>">
+                    <div class="stride-field">
+                        <label for="voucher_edition_id"><?php esc_html_e('Editie', 'stride'); ?></label>
                         <select id="voucher_edition_id" name="ntdst_fields[edition_id]">
-                            <option value="0"><?php esc_html_e('Alle edities', 'stride'); ?></option>
-                            <?php
-                            $editions = get_posts([
-                                'post_type' => 'vad_edition',
-                                'post_status' => 'publish',
-                                'posts_per_page' => 100,
-                                'orderby' => 'title',
-                                'order' => 'ASC',
-                            ]);
-                            foreach ($editions as $edition):
-                            ?>
-                            <option value="<?php echo esc_attr($edition->ID); ?>" <?php selected($voucher['edition_id'] ?? 0, $edition->ID); ?>>
+                            <option value="0"><?php esc_html_e('— Kies een editie —', 'stride'); ?></option>
+                            <?php foreach ($editions as $edition): ?>
+                            <option value="<?php echo esc_attr($edition->ID); ?>" <?php selected((int) ($voucher['edition_id'] ?? 0), $edition->ID); ?>>
                                 <?php echo esc_html($edition->post_title); ?>
                             </option>
                             <?php endforeach; ?>
                         </select>
-                        <p class="description"><?php esc_html_e('0 = alle edities', 'stride'); ?></p>
+                    </div>
+                </div>
+
+                <div id="stride-scope-except" class="stride-field-row" style="<?php echo $scopeMode === 'except' ? '' : 'display:none;'; ?>">
+                    <div class="stride-field">
+                        <label for="voucher_excluded_edition_ids"><?php esc_html_e('Uitgesloten edities', 'stride'); ?></label>
+                        <select id="voucher_excluded_edition_ids" name="ntdst_fields[excluded_edition_ids][]" multiple size="8" style="height:auto;">
+                            <?php foreach ($editions as $edition): ?>
+                            <option value="<?php echo esc_attr($edition->ID); ?>" <?php echo in_array($edition->ID, $excludedIds, true) ? 'selected' : ''; ?>>
+                                <?php echo esc_html($edition->post_title); ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <p class="description"><?php esc_html_e('Houd Ctrl/Cmd ingedrukt om meerdere edities te selecteren.', 'stride'); ?></p>
                     </div>
                 </div>
             </div>
+
+            <script>
+            function strideVoucherToggleScope(mode) {
+                document.getElementById('stride-scope-only').style.display = (mode === 'only') ? '' : 'none';
+                document.getElementById('stride-scope-except').style.display = (mode === 'except') ? '' : 'none';
+            }
+            </script>
 
             <input type="hidden" name="ntdst_fields[used_count]" value="<?php echo esc_attr($usedCount); ?>">
             <input type="hidden" name="ntdst_fields[created_by]" value="<?php echo esc_attr($voucher['created_by'] ?? get_current_user_id()); ?>">
@@ -432,10 +503,32 @@ final class VoucherAdminController
             $updateData['valid_until'] = sanitize_text_field($fields['valid_until']);
         }
 
-        // Process edition restriction
-        if (isset($fields['edition_id'])) {
-            $updateData['edition_id'] = absint($fields['edition_id']);
+        // Process scope_mode (alle / alleen / behalve)
+        $scopeMode = 'all';
+        if (isset($fields['scope_mode']) && in_array($fields['scope_mode'], ['all', 'only', 'except'], true)) {
+            $scopeMode = $fields['scope_mode'];
         }
+        $updateData['scope_mode'] = $scopeMode;
+
+        // Process edition_id — only meaningful when scope = "only"
+        $editionId = ($scopeMode === 'only' && isset($fields['edition_id']))
+            ? absint($fields['edition_id'])
+            : 0;
+        $updateData['edition_id'] = $editionId;
+
+        // Process excluded_edition_ids — only meaningful when scope = "except"
+        $excludedIds = [];
+        if ($scopeMode === 'except' && isset($fields['excluded_edition_ids']) && is_array($fields['excluded_edition_ids'])) {
+            $excludedIds = array_values(array_filter(array_map('absint', $fields['excluded_edition_ids'])));
+        }
+        $updateData['excluded_edition_ids'] = $excludedIds;
+
+        // Process apply_mode (full | single_session)
+        $applyMode = 'full';
+        if (isset($fields['apply_mode']) && in_array($fields['apply_mode'], ['full', 'single_session'], true)) {
+            $applyMode = $fields['apply_mode'];
+        }
+        $updateData['apply_mode'] = $applyMode;
 
         // Preserve used_count and created_by
         if (isset($fields['used_count'])) {
@@ -553,17 +646,42 @@ final class VoucherAdminController
                 break;
 
             case 'edition':
+                $scopeMode = (string) $this->repository->getField($postId, 'scope_mode', '');
                 $editionId = (int) $this->repository->getField($postId, 'edition_id', 0);
-                if ($editionId) {
+                $excluded = $this->repository->getField($postId, 'excluded_edition_ids', []);
+                if (!is_array($excluded)) {
+                    $excluded = [];
+                }
+
+                // Back-compat: legacy voucher with empty scope_mode + edition_id > 0 = "only"
+                if ($scopeMode === '' && $editionId > 0) {
+                    $scopeMode = 'only';
+                }
+
+                if ($scopeMode === 'only' && $editionId > 0) {
                     $editionTitle = get_the_title($editionId);
                     $editUrl = get_edit_post_link($editionId);
-                    if ($editUrl) {
-                        echo '<a href="' . esc_url($editUrl) . '">' . esc_html($editionTitle) . '</a>';
+                    $link = $editUrl
+                        ? '<a href="' . esc_url($editUrl) . '">' . esc_html($editionTitle) . '</a>'
+                        : esc_html($editionTitle);
+                    echo '<span style="color:#646970;">' . esc_html__('Alleen:', 'stride') . '</span> ' . $link;
+                } elseif ($scopeMode === 'except' && !empty($excluded)) {
+                    $titles = array_filter(array_map(
+                        fn($id) => get_the_title((int) $id) ?: null,
+                        $excluded
+                    ));
+                    if (count($titles) > 3) {
+                        $preview = array_slice($titles, 0, 3);
+                        $rest = count($titles) - 3;
+                        echo '<span style="color:#646970;">' . esc_html__('Behalve:', 'stride') . '</span> '
+                            . esc_html(implode(', ', $preview))
+                            . ' <span style="color:#999;">' . sprintf(esc_html__('+%d meer', 'stride'), $rest) . '</span>';
                     } else {
-                        echo esc_html($editionTitle);
+                        echo '<span style="color:#646970;">' . esc_html__('Behalve:', 'stride') . '</span> '
+                            . esc_html(implode(', ', $titles));
                     }
                 } else {
-                    echo '<span style="color:#999;">' . __('Alle edities', 'stride') . '</span>';
+                    echo '<span style="color:#999;">' . esc_html__('Alle edities', 'stride') . '</span>';
                 }
                 break;
         }

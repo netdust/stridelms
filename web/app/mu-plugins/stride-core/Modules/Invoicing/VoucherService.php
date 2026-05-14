@@ -7,7 +7,10 @@ namespace Stride\Modules\Invoicing;
 use Stride\Domain\DiscountType;
 use Stride\Domain\Money;
 use Stride\Domain\VoucherStatus;
+use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Invoicing\Helpers\VoucherCodeGenerator;
+use Stride\Modules\Invoicing\Helpers\VoucherProrater;
+use Stride\Modules\Invoicing\Helpers\VoucherScopeValidator;
 use WP_Error;
 use WP_Post;
 
@@ -20,6 +23,9 @@ final class VoucherService
 {
     public function __construct(
         private readonly VoucherRepository $repository,
+        private readonly VoucherScopeValidator $scopeValidator,
+        private readonly VoucherProrater $prorater,
+        private readonly SessionService $sessionService,
     ) {
     }
 
@@ -134,9 +140,10 @@ final class VoucherService
             return new WP_Error('expired', 'Voucher is verlopen');
         }
 
-        // Check edition restriction
-        if ($editionId !== null && $voucher['edition_id'] > 0 && $voucher['edition_id'] !== $editionId) {
-            return new WP_Error('wrong_edition', 'Voucher is niet geldig voor deze editie');
+        // Check edition scope (alle / alleen / behalve)
+        $scopeCheck = $this->scopeValidator->validate($voucher, $editionId);
+        if (is_wp_error($scopeCheck)) {
+            return $scopeCheck;
         }
 
         return $voucher;
@@ -144,18 +151,36 @@ final class VoucherService
 
     /**
      * Calculate discount amount for a voucher.
+     *
+     * When apply_mode is 'single_session' and an edition context is provided,
+     * the subtotal is prorated to one session's share before the discount type
+     * is applied. Editions with zero sessions (e-learning) collapse to "full".
      */
-    public function calculateDiscount(array $voucher, Money $subtotal): Money
+    public function calculateDiscount(array $voucher, Money $subtotal, ?int $editionId = null): Money
     {
+        $effectiveSubtotal = $this->applyModeAdjustment($voucher, $subtotal, $editionId);
         $discountType = DiscountType::tryFrom($voucher['discount_type'] ?? '') ?? DiscountType::Full;
 
         return match ($discountType) {
-            DiscountType::Full => $subtotal,
-            DiscountType::Fixed => Money::cents(min($voucher['discount_value'], $subtotal->inCents())),
+            DiscountType::Full => $effectiveSubtotal,
+            DiscountType::Fixed => Money::cents(min($voucher['discount_value'], $effectiveSubtotal->inCents())),
             DiscountType::Percentage => Money::cents(
-                (int) round($subtotal->inCents() * ($voucher['discount_value'] / 100))
+                (int) round($effectiveSubtotal->inCents() * ($voucher['discount_value'] / 100))
             ),
         };
+    }
+
+    private function applyModeAdjustment(array $voucher, Money $subtotal, ?int $editionId): Money
+    {
+        $applyMode = $voucher['apply_mode'] ?? 'full';
+
+        if ($applyMode !== 'single_session' || $editionId === null) {
+            return $subtotal;
+        }
+
+        $sessions = $this->sessionService->getSessionsForEdition($editionId);
+
+        return $this->prorater->prorate($subtotal, count($sessions));
     }
 
     /**
@@ -282,6 +307,16 @@ final class VoucherService
         $data['used_count'] = (int) ($data['used_count'] ?? 0);
         $data['discount_value'] = (int) ($data['discount_value'] ?? 0);
         $data['edition_id'] = (int) ($data['edition_id'] ?? 0);
+
+        // Scope + apply-mode defaults
+        $data['scope_mode'] = $data['scope_mode'] ?? '';
+        $data['apply_mode'] = $data['apply_mode'] ?? 'full';
+
+        if (!isset($data['excluded_edition_ids']) || !is_array($data['excluded_edition_ids'])) {
+            $data['excluded_edition_ids'] = [];
+        } else {
+            $data['excluded_edition_ids'] = array_map('intval', $data['excluded_edition_ids']);
+        }
 
         // Ensure redemptions is array
         if (!isset($data['redemptions']) || !is_array($data['redemptions'])) {

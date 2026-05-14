@@ -73,10 +73,34 @@ final class VoucherCPT
                 'label' => 'Aantal gebruikt',
                 'default' => 0,
             ],
+            'scope_mode' => [
+                'type' => 'select',
+                'label' => 'Geldig voor',
+                'options' => [
+                    'all' => 'Alle edities',
+                    'only' => 'Alleen voor één editie',
+                    'except' => 'Alle edities behalve…',
+                ],
+                'default' => 'all',
+            ],
             'edition_id' => [
                 'type' => 'int',
-                'label' => 'Beperkt tot editie',
-                'description' => '0 = alle edities',
+                'label' => 'Alleen voor deze editie',
+                'description' => 'Gebruikt wanneer scope = "alleen". 0 = geen.',
+            ],
+            'excluded_edition_ids' => [
+                'type' => 'json',
+                'label' => 'Uitgesloten edities',
+                'description' => 'Array van editie-IDs (alleen gebruikt wanneer scope = "behalve")',
+            ],
+            'apply_mode' => [
+                'type' => 'select',
+                'label' => 'Toepassen op',
+                'options' => [
+                    'full' => 'Volledige editie',
+                    'single_session' => 'Eén sessie (pro rata)',
+                ],
+                'default' => 'full',
             ],
             'valid_from' => [
                 'type' => 'date',
@@ -118,7 +142,7 @@ final class VoucherCPT
             ],
             'discount' => [
                 'title' => 'Korting',
-                'fields' => ['discount_type', 'discount_value'],
+                'fields' => ['discount_type', 'discount_value', 'apply_mode'],
             ],
             'usage' => [
                 'title' => 'Gebruik',
@@ -126,7 +150,7 @@ final class VoucherCPT
             ],
             'validity' => [
                 'title' => 'Geldigheid',
-                'fields' => ['edition_id', 'valid_from', 'valid_until'],
+                'fields' => ['scope_mode', 'edition_id', 'excluded_edition_ids', 'valid_from', 'valid_until'],
             ],
         ];
     }

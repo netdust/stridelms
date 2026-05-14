@@ -439,7 +439,7 @@ final class EnrollmentFormHandler
             return new WP_Error('invalid_item', __('Item niet gevonden.', 'stride'));
         }
 
-        $discount = $vouchers->calculateDiscount($validation, $price);
+        $discount = $vouchers->calculateDiscount($validation, $price, $editionIdForValidation);
 
         ntdst_log('enrollment')->info('Voucher validated', [
             'item_type' => $itemType,

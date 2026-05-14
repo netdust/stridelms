@@ -47,7 +47,12 @@ final class QuoteService extends AbstractService
 
         // Register sub-components as singletons
         $voucherRepo = ntdst_get(VoucherRepository::class);
-        $this->voucherService = new VoucherService($voucherRepo);
+        $this->voucherService = new VoucherService(
+            $voucherRepo,
+            new Helpers\VoucherScopeValidator(),
+            new Helpers\VoucherProrater(),
+            ntdst_get(\Stride\Modules\Edition\SessionService::class),
+        );
         ntdst_set(VoucherService::class, fn() => $this->voucherService);
 
         // Admin UI (registers own hooks in constructor)
@@ -621,7 +626,7 @@ final class QuoteService extends AbstractService
         // Calculate discount
         $subtotalCents = (int) ($meta['subtotal'] ?? 0);
         $subtotal = Money::cents($subtotalCents);
-        $discount = $voucherService->calculateDiscount($voucher, $subtotal);
+        $discount = $voucherService->calculateDiscount($voucher, $subtotal, $editionId > 0 ? $editionId : null);
 
         // Recalculate totals
         $newSubtotal = $subtotal;
