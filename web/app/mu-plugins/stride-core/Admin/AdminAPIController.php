@@ -1142,11 +1142,15 @@ final class AdminAPIController
         // so they can be AND-combined. Taxonomy names are hardcoded (internal
         // constants, never user input) to avoid placeholder ordering issues
         // between JOIN and WHERE — only the integer term_id is parameterized.
+        //
+        // CAST the postmeta varchar to UNSIGNED to match term_relationships.object_id
+        // (bigint). Without the explicit cast MySQL coerces the bigint to varchar,
+        // killing the object_id index on a large term_relationships table.
         foreach ($activeFilters as $kind => $termId) {
             $aliasTr = "tr_{$kind}";
             $aliasTt = "tt_{$kind}";
             $taxonomy = esc_sql($taxonomies[$kind]);
-            $joins[] = "INNER JOIN {$wpdb->term_relationships} {$aliasTr} ON pm_course.meta_value = {$aliasTr}.object_id";
+            $joins[] = "INNER JOIN {$wpdb->term_relationships} {$aliasTr} ON CAST(pm_course.meta_value AS UNSIGNED) = {$aliasTr}.object_id";
             $joins[] = "INNER JOIN {$wpdb->term_taxonomy} {$aliasTt} ON {$aliasTr}.term_taxonomy_id = {$aliasTt}.term_taxonomy_id AND {$aliasTt}.taxonomy = '{$taxonomy}'";
             $where[] = "{$aliasTt}.term_id = %d";
             $params[] = (int) $termId;
@@ -2376,16 +2380,30 @@ final class AdminAPIController
             'fields' => ['ID', 'display_name', 'user_email'],
         ]);
 
-        $users = array_map(function ($user) {
+        $results = $userQuery->get_results();
+        if (empty($results)) {
+            return new WP_REST_Response([]);
+        }
+
+        // Prime user-meta cache once so the per-row get_user_meta() call below
+        // is a cache hit — drops 10 queries on a full result set.
+        $userIds = array_map(static fn($u) => (int) $u->ID, $results);
+        update_meta_cache('user', $userIds);
+
+        // Aggregate registration counts in a single GROUP BY query instead of
+        // one COUNT(*) per row.
+        $counts = $this->batchCountUserRegistrations($userIds);
+
+        $users = array_map(static function ($user) use ($counts) {
             $userId = (int) $user->ID;
             return [
                 'id' => $userId,
                 'name' => $user->display_name,
                 'email' => $user->user_email,
                 'organisation' => get_user_meta($userId, 'organisation', true) ?: '',
-                'registration_count' => $this->countUserRegistrations($userId),
+                'registration_count' => $counts[$userId] ?? 0,
             ];
-        }, $userQuery->get_results());
+        }, $results);
 
         return new WP_REST_Response($users);
     }
@@ -2517,48 +2535,63 @@ final class AdminAPIController
             }
         }
 
-        // --- Quotes (linked to user by billing email or user meta) ---
-        $quotes = [];
-        $quoteQuery = new \WP_Query([
-            'post_type' => QuoteCPT::POST_TYPE,
-            'post_status' => 'publish',
-            'posts_per_page' => 20,
-            'meta_query' => [
-                'relation' => 'OR',
-                [
-                    'key' => 'billing_email',
-                    'value' => $userData->user_email,
-                ],
-                [
-                    'key' => 'user_id',
-                    'value' => $userId,
-                    'type' => 'NUMERIC',
-                ],
-            ],
-            'orderby' => 'date',
-            'order' => 'DESC',
+        // --- Quotes (linked to user by user_id meta or billing email) ---
+        //
+        // WP_Query meta_query OR forces a double LEFT JOIN with no covering
+        // index, then the per-row get_post_meta() loop adds 5-7 lookups per
+        // quote. Mirror getQuotes() instead: one SELECT with explicit joins,
+        // one BatchQueryHelper::batchGetPostMeta() for everything we need.
+        $quotePosts = $wpdb->get_results($wpdb->prepare(
+            "SELECT DISTINCT p.ID, p.post_title, p.post_date
+             FROM {$wpdb->posts} p
+             LEFT JOIN {$wpdb->postmeta} pm_user
+               ON pm_user.post_id = p.ID AND pm_user.meta_key = 'user_id'
+             LEFT JOIN {$wpdb->postmeta} pm_email
+               ON pm_email.post_id = p.ID AND pm_email.meta_key = 'billing_email'
+             WHERE p.post_type = %s
+               AND p.post_status = 'publish'
+               AND (pm_user.meta_value = %s OR pm_email.meta_value = %s)
+             ORDER BY p.post_date DESC
+             LIMIT 20",
+            QuoteCPT::POST_TYPE,
+            (string) $userId,
+            $userData->user_email
+        ));
+
+        $quoteIds = array_map(static fn($q) => (int) $q->ID, $quotePosts);
+        $quoteMeta = BatchQueryHelper::batchGetPostMeta($quoteIds, [
+            'quote_number', 'status', 'total', 'edition_id',
+            'sent_at', 'paid_at', 'valid_until',
         ]);
 
-        foreach ($quoteQuery->posts as $quotePost) {
-            $quoteId = $quotePost->ID;
-            $quoteEditionId = (int) get_post_meta($quoteId, 'edition_id', true);
-            $quoteEdition = $quoteEditionId ? get_post($quoteEditionId) : null;
-            $quoteStatus = get_post_meta($quoteId, 'status', true) ?: '';
+        $quoteEditionIds = array_values(array_unique(array_filter(array_map(
+            static fn($id) => (int) ($quoteMeta[$id]['edition_id'] ?? 0),
+            $quoteIds
+        ))));
+        $quoteEditions = BatchQueryHelper::batchGetPosts($quoteEditionIds, EditionCPT::POST_TYPE);
+
+        $quotes = [];
+        foreach ($quotePosts as $quotePost) {
+            $quoteId = (int) $quotePost->ID;
+            $meta = $quoteMeta[$quoteId] ?? [];
+
+            $quoteEditionId = (int) ($meta['edition_id'] ?? 0);
+            $quoteStatus = (string) ($meta['status'] ?? '');
             $statusEnum = QuoteStatus::tryFrom($quoteStatus);
 
             $quotes[] = [
                 'id' => $quoteId,
                 'title' => $quotePost->post_title,
-                'number' => get_post_meta($quoteId, 'quote_number', true) ?: '',
+                'number' => (string) ($meta['quote_number'] ?? ''),
                 'edition_id' => $quoteEditionId,
-                'edition_title' => $quoteEdition ? $quoteEdition->post_title : '',
+                'edition_title' => isset($quoteEditions[$quoteEditionId]) ? $quoteEditions[$quoteEditionId]->post_title : '',
                 'status' => $quoteStatus,
                 'status_label' => $statusEnum?->label() ?? $quoteStatus,
-                'total' => Money::cents((int) get_post_meta($quoteId, 'total', true))->amount(),
+                'total' => Money::cents((int) ($meta['total'] ?? 0))->amount(),
                 'created_at' => $quotePost->post_date,
-                'sent_at' => get_post_meta($quoteId, 'sent_at', true) ?: null,
-                'paid_at' => get_post_meta($quoteId, 'paid_at', true) ?: null,
-                'valid_until' => get_post_meta($quoteId, 'valid_until', true) ?: null,
+                'sent_at' => ($meta['sent_at'] ?? '') ?: null,
+                'paid_at' => ($meta['paid_at'] ?? '') ?: null,
+                'valid_until' => ($meta['valid_until'] ?? '') ?: null,
             ];
         }
 
@@ -2694,6 +2727,37 @@ final class AdminAPIController
             "SELECT COUNT(*) FROM {$table} WHERE user_id = %d",
             $userId
         ));
+    }
+
+    /**
+     * Batch-count registrations for a list of users in a single query.
+     *
+     * @param int[] $userIds
+     * @return array<int,int> user_id => count (missing user_ids return 0 via caller fallback)
+     */
+    private function batchCountUserRegistrations(array $userIds): array
+    {
+        if (empty($userIds) || !RegistrationTable::exists()) {
+            return [];
+        }
+
+        global $wpdb;
+        $table = RegistrationTable::getTableName();
+        $userIds = array_values(array_unique(array_map('intval', $userIds)));
+        $placeholders = implode(',', array_fill(0, count($userIds), '%d'));
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT user_id, COUNT(*) AS cnt FROM {$table}
+             WHERE user_id IN ({$placeholders})
+             GROUP BY user_id",
+            ...$userIds
+        ));
+
+        $counts = [];
+        foreach ($rows as $row) {
+            $counts[(int) $row->user_id] = (int) $row->cnt;
+        }
+        return $counts;
     }
 
     /**
@@ -2861,19 +2925,23 @@ final class AdminAPIController
         $token = $handler->generateToken();
         $handler->storeSession($token, $adminId);
 
-        // Audit trail
+        // Audit trail — schema is entity_type / entity_id (NOT subject_id).
+        // Writing the wrong column previously dropped the row silently under
+        // MySQL strict mode, leaving zero record of who impersonated whom.
         global $wpdb;
         $auditTable = $wpdb->prefix . 'ntdst_audit_log';
         if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $auditTable))) {
             $wpdb->insert($auditTable, [
-                'action'     => 'impersonation.started',
-                'actor_id'   => $adminId,
-                'subject_id' => $targetId,
-                'context'    => wp_json_encode([
+                'action'      => 'impersonation.started',
+                'actor_id'    => $adminId,
+                'actor_type'  => 'user',
+                'entity_type' => 'user',
+                'entity_id'   => $targetId,
+                'context'     => wp_json_encode([
                     'target_name'  => $targetUser->display_name,
                     'target_email' => $targetUser->user_email,
                 ]),
-                'created_at' => current_time('mysql', true),
+                'created_at'  => current_time('mysql', true),
             ]);
         }
 
@@ -3062,7 +3130,7 @@ final class AdminAPIController
                 }
             }
 
-            fputcsv($output, [
+            fputcsv($output, array_map([self::class, 'sanitizeCsvCell'], [
                 $name,
                 $email,
                 $org,
@@ -3070,10 +3138,33 @@ final class AdminAPIController
                 $reg->edition_date ?? '',
                 $reg->status ?? '',
                 $quoteNumber,
-            ], ';');
+            ]), ';');
         }
 
         fclose($output);
         exit;
+    }
+
+    /**
+     * Neutralise CSV / spreadsheet formula injection.
+     *
+     * Excel, LibreOffice and Google Sheets execute any cell whose first
+     * character is `=`, `+`, `-`, `@`, TAB or CR. An attacker who can place
+     * arbitrary text into a user-facing field (display_name, organisation,
+     * edition title) could exfiltrate data via `=WEBSERVICE(...)` when an
+     * admin opens the export. Prefix any such cell with a single quote so
+     * the spreadsheet treats it as a literal string.
+     */
+    private static function sanitizeCsvCell(mixed $value): string
+    {
+        $str = (string) $value;
+        if ($str === '') {
+            return '';
+        }
+        $first = $str[0];
+        if ($first === '=' || $first === '+' || $first === '-' || $first === '@' || $first === "\t" || $first === "\r") {
+            return "'" . $str;
+        }
+        return $str;
     }
 }

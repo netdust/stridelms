@@ -238,6 +238,111 @@ class EnrollmentServiceIntegrationTest extends IntegrationTestCase
     }
 
     // =========================================================================
+    // COLLEAGUE ENROLLMENT — PII OVERWRITE REGRESSION (C3)
+    //
+    // A colleague enrolment must NEVER overwrite an existing user's profile.
+    // resolveParticipant() matches by email with no ownership check, so an
+    // attacker could otherwise set victim phone / billing / invoice_email.
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function colleagueEnrollmentDoesNotOverwriteExistingUserMeta(): void
+    {
+        $victimId = wp_create_user(
+            'victim_' . wp_generate_password(6, false),
+            'pw',
+            'victim_' . wp_generate_password(6, false) . '@example.test'
+        );
+        $this->assertIsInt($victimId);
+        update_user_meta($victimId, 'phone', '+32-original');
+        update_user_meta($victimId, 'invoice_email', 'victim-real@example.test');
+        update_user_meta($victimId, 'billing_address_1', 'Victim Street 1');
+        wp_update_user(['ID' => $victimId, 'first_name' => 'Victim', 'last_name' => 'Real']);
+        $victimEmail = get_userdata($victimId)->user_email;
+
+        $editionId = $this->createTestEdition();
+
+        $this->actingAs(self::$testUserId);
+        $result = $this->enrollmentService->processEnrollment([
+            'user_id' => self::$testUserId,
+            'edition_id' => $editionId,
+            'enrollment_type' => 'colleague',
+            'email' => $victimEmail,
+            'first_name' => 'Attacker',
+            'last_name' => 'Spoof',
+            'extra_fields' => [
+                'phone' => '+32-attacker',
+                'invoice_email' => 'attacker@evil.test',
+                'address' => 'Attacker Lane 99',
+                'note_for_admin' => 'arbitrary course field',
+            ],
+        ]);
+
+        $this->assertIsArray($result);
+        $this->assertEquals($victimId, $result['participant_id']);
+        $this->testRegistrationIds[] = $result['registration_id'];
+
+        // Existing user meta must be untouched.
+        $this->assertUserMeta($victimId, 'phone', '+32-original');
+        $this->assertUserMeta($victimId, 'invoice_email', 'victim-real@example.test');
+        $this->assertUserMeta($victimId, 'billing_address_1', 'Victim Street 1');
+
+        // wp_users core fields must be untouched.
+        $victimFresh = get_userdata($victimId);
+        $this->assertEquals('Victim', $victimFresh->first_name);
+        $this->assertEquals('Real', $victimFresh->last_name);
+
+        // The form data is still captured per-registration (enrollment_data JSON).
+        $registration = $this->enrollmentService->getRegistration($result['registration_id']);
+        $enrollmentData = is_string($registration->enrollment_data ?? null)
+            ? json_decode($registration->enrollment_data, true)
+            : (array) ($registration->enrollment_data ?? []);
+        $this->assertSame('+32-attacker', $enrollmentData['phone'] ?? null);
+        $this->assertSame('attacker@evil.test', $enrollmentData['invoice_email'] ?? null);
+        $this->assertSame('Attacker Lane 99', $enrollmentData['address'] ?? null);
+        $this->assertSame('arbitrary course field', $enrollmentData['note_for_admin'] ?? null);
+
+        wp_delete_user($victimId);
+    }
+
+    /**
+     * @test
+     */
+    public function colleagueEnrollmentPopulatesFreshlyCreatedUserMeta(): void
+    {
+        $newEmail = 'fresh_' . wp_generate_password(6, false) . '@example.test';
+        $this->assertFalse(get_user_by('email', $newEmail));
+
+        $editionId = $this->createTestEdition();
+
+        $this->actingAs(self::$testUserId);
+        $result = $this->enrollmentService->processEnrollment([
+            'user_id' => self::$testUserId,
+            'edition_id' => $editionId,
+            'enrollment_type' => 'colleague',
+            'email' => $newEmail,
+            'first_name' => 'Fresh',
+            'last_name' => 'Colleague',
+            'extra_fields' => [
+                'phone' => '+32-fresh',
+                'organisation' => 'New Org',
+            ],
+        ]);
+
+        $this->assertIsArray($result);
+        $createdId = $result['participant_id'];
+        $this->testRegistrationIds[] = $result['registration_id'];
+
+        // For freshly-created colleague users, identity meta is populated normally.
+        $this->assertUserMeta($createdId, 'phone', '+32-fresh');
+        $this->assertUserMeta($createdId, 'organisation', 'New Org');
+
+        wp_delete_user($createdId);
+    }
+
+    // =========================================================================
     // TRAJECTORY ENROLLMENT BATCH QUERIES
     //
     // These guard the AdminAPI trajectory dashboard from regressing back to

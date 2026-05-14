@@ -171,6 +171,13 @@ class UserLifecycleService implements \NTDST_Service_Meta
             return new WP_Error('cannot_anonymise_admin', 'Refusing to anonymise an administrator');
         }
 
+        // Also refuse Stride staff (stride_coordinator). Their accounts are
+        // operational, not customer PII, and anonymising one rotates passwords
+        // / blanks display names — destructive and irreversible.
+        if (user_can($user, 'stride_manage')) {
+            return new WP_Error('cannot_anonymise_staff', 'Refusing to anonymise a Stride staff account');
+        }
+
         // Suppress WP email-change / password-change notifications
         add_filter('send_email_change_email', '__return_false');
         add_filter('send_password_change_email', '__return_false');
@@ -282,7 +289,11 @@ class UserLifecycleService implements \NTDST_Service_Meta
     public function handleAdminAnonymisePost(): void
     {
         $userId = isset($_GET['user']) ? (int) $_GET['user'] : 0;
-        if (!$userId || !current_user_can('edit_user', $userId)) {
+        // Require BOTH edit_user (WP-core) AND stride_manage. The edit_user
+        // gate alone is mapped to edit_users on most installs — a third-party
+        // plugin granting edit_users to a non-Stride role would otherwise let
+        // that role wipe any user's PII irreversibly.
+        if (!$userId || !current_user_can('edit_user', $userId) || !current_user_can('stride_manage')) {
             wp_die(__('Geen toestemming.', 'stride'));
         }
         if (!isset($_GET['_wpnonce']) || !wp_verify_nonce((string) $_GET['_wpnonce'], 'stride_anonymise_user_' . $userId)) {

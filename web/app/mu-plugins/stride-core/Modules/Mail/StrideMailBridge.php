@@ -54,14 +54,30 @@ final class StrideMailBridge extends AbstractService
         // Conditional dispatch for task-specific emails
         add_action('stride/enrollment/task_completed', [$this, 'onTaskCompleted']);
 
-        // Admin notification for new enrollments (explicit recipient)
-        add_action('stride/registration/created', [$this, 'onRegistrationCreatedAdminNotify']);
+        // Admin notification for new enrollments — scheduled out of the user's
+        // request thread so SMTP latency / timeouts can't stall enrollment.
+        add_action('stride/registration/created', [$this, 'scheduleAdminNotify']);
+        add_action('stride/mail/admin_notify_async', [$this, 'onRegistrationCreatedAdminNotify']);
 
         // Quote send email (triggered from admin)
         add_action('stride/quote/send_email', [$this, 'onQuoteSendEmail'], 10, 3);
 
         // Seed templates on admin init (once)
         add_action('admin_init', [$this, 'maybeSeedTemplates']);
+    }
+
+    /**
+     * Schedule the admin notification to run on the next wp-cron tick.
+     *
+     * Synchronous PHPMailer sends inside `enroll()` add 200-1500ms per
+     * recipient and fail the user's request on SMTP timeout. The cron-backed
+     * single event hands the send off to a background pass.
+     */
+    public function scheduleAdminNotify(array $data): void
+    {
+        if (!wp_next_scheduled('stride/mail/admin_notify_async', [$data])) {
+            wp_schedule_single_event(time() + 1, 'stride/mail/admin_notify_async', [$data]);
+        }
     }
 
     /**

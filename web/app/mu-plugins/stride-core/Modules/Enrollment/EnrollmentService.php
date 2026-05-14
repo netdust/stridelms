@@ -588,9 +588,11 @@ final class EnrollmentService extends AbstractService
         ]);
 
         // Determine participant and enrollment path
+        $isExistingColleague = false;
         if (in_array($enrollmentType, ['colleague', 'collega'], true)) {
             // Check if user exists before resolving (to detect new user creation)
             $existingUser = get_user_by('email', $data['email']);
+            $isExistingColleague = ($existingUser instanceof \WP_User);
 
             // Colleague enrollment: find or create user by email
             $participantId = $this->resolveParticipant(
@@ -647,6 +649,15 @@ final class EnrollmentService extends AbstractService
                 } else {
                     $courseFields[$key] = $value;
                 }
+            }
+
+            // Never overwrite a pre-existing user's profile from a colleague
+            // enrolment — the enroller does not own that account. Persist the
+            // values per-registration only so the data still reaches the quote
+            // handler without mutating the victim's wp_users / user_meta rows.
+            if ($isExistingColleague && !empty($profileFields)) {
+                $courseFields = array_merge($profileFields, $courseFields);
+                $profileFields = [];
             }
 
             if (!empty($profileFields)) {

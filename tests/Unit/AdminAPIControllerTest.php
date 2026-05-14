@@ -104,4 +104,41 @@ class AdminAPIControllerTest extends TestCase
 
         $this->assertFalse($this->controller->canManageAdmin());
     }
+
+    // =========================================================================
+    // sanitizeCsvCell — CSV / formula injection neutraliser (C1)
+    // =========================================================================
+
+    /**
+     * @test
+     * @dataProvider csvInjectionVectors
+     */
+    public function sanitizeCsvCellPrefixesFormulaTriggers(string $input, string $expected): void
+    {
+        $ref = new \ReflectionMethod(AdminAPIController::class, 'sanitizeCsvCell');
+        $ref->setAccessible(true);
+
+        $this->assertSame($expected, $ref->invoke(null, $input));
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function csvInjectionVectors(): array
+    {
+        return [
+            'equals'        => ['=cmd|\'/C calc\'!A1', "'=cmd|'/C calc'!A1"],
+            'webservice'    => ['=WEBSERVICE("http://evil.test")', "'=WEBSERVICE(\"http://evil.test\")"],
+            'plus'          => ['+1+1', "'+1+1"],
+            'minus'         => ['-2+3', "'-2+3"],
+            'at'            => ['@SUM(A1)', "'@SUM(A1)"],
+            'tab'           => ["\t=1", "'\t=1"],
+            'carriage'      => ["\r=1", "'\r=1"],
+            'safe_name'     => ['Jan Janssens', 'Jan Janssens'],
+            'safe_email'    => ['user@example.test', 'user@example.test'],
+            'empty'         => ['', ''],
+            'numeric_safe'  => ['12345', '12345'],
+            'leading_space' => [' =1', ' =1'],
+        ];
+    }
 }
