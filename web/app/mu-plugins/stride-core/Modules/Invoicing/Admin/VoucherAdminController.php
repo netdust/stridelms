@@ -145,8 +145,16 @@ final class VoucherAdminController
                 .stride-field-row { display: flex; gap: 16px; margin-bottom: 12px; }
                 .stride-field { flex: 1; }
                 .stride-field label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: #1d2327; }
-                .stride-field input, .stride-field select { width: 100%; padding: 6px 10px; }
+                .stride-field input[type="text"],
+                .stride-field input[type="number"],
+                .stride-field input[type="date"],
+                .stride-field input[type="email"],
+                .stride-field select:not([multiple]) { width: 100%; padding: 6px 10px; }
+                .stride-field select[multiple] { width: 100%; padding: 4px; }
                 .stride-field .description { font-size: 11px; color: #646970; margin-top: 3px; }
+                .stride-field .stride-radio { display: flex; align-items: center; gap: 8px; font-weight: 400; font-size: 13px; padding: 4px 0; margin-bottom: 0; cursor: pointer; }
+                .stride-field .stride-radio input[type="radio"] { width: auto; margin: 0; flex: 0 0 auto; }
+                .stride-field > label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: #1d2327; }
             </style>
 
             <input type="hidden" name="ntdst_fields[code]" value="<?php echo esc_attr($voucher['code']); ?>">
