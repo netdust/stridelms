@@ -41,6 +41,9 @@ web/.htaccess
 # Logs
 *.log
 
+# Codeception test artifacts
+tests/_output/
+
 # Dotenv
 .env
 .env.*
