@@ -228,6 +228,7 @@ Tracked but NOT in Phase 1 scope. Keep in memory, surface after launch.
 
 ## Pre-Launch Cleanup
 
+- [ ] (P0) **Stale-database-read sweep** — Stride went through an "unify enrollment tables" refactor. Writes now land in `stride_vad_registrations`, but at least one read still hits the legacy `stride_vad_trajectory_enrollments` (`Admin/AdminAPIController.php:1655`). This is a *silent* class of bug: queries succeed, tests pass, but admin sees stale numbers. **Action:** grep `\$wpdb.*vad_` across `stride-core` + `stridence`, audit each hit against `RegistrationRepository`'s patterns, fix or document. **Why P0:** wrong-number reports could mislead launch decisions and post-launch ops. Memory: `gotcha_stale_database_reads.md`.
 - [ ] Stash or commit uncommitted LTI work on `staging` (don't lose it; not for launch)
 - [ ] Move stray PNGs out of repo root (`bento-section`, `debug-outlines`, `stridelms-fullpage`)
 - [ ] Add `tests/_output/` to `.gitignore` (40+ untracked screenshots)
