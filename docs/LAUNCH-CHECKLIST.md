@@ -204,13 +204,11 @@ These 7 from the original lists were verified fixed in current code:
 
 ---
 
-## G. Design Drafts to Decide (P2)
+## G. Design Drafts to Decide (P2) — audited 2026-05-14
 
-User decision: keep alive, decide later. Re-review before code freeze.
-
-- [ ] `docs/plans/2026-03-16-session-price-modifiers-design.md` — per-session pricing. Niche; confirm if VAD actually needs it for launch
-- [ ] `docs/plans/2026-03-17-stride-mail-integration-design.md` — verify it isn't superseded by the shipped netdust-mail
-- [ ] `docs/plans/2026-03-18-roles-capabilities-design.md` — verify how much is already implemented
+- [x] **session-price-modifiers** — **already shipped**. `price_modifier` field on `vad_session` CPT, admin UI in `EditionSessionsMetabox` + `EditionAdminController`, applied as quote line items by `QuoteService:268-295`. Tests: `tests/Unit/QuoteServiceModifierTest.php` + `tests/frontend/admin/session-price-modifiers.spec.ts`. Checklist drift only.
+- [ ] (P0) **stride-mail-integration** — `StrideMailBridge` stub exists, `netdust-mail` plugin is active, but no smartcodes/triggers/default templates wired. 0 mail templates exist in DB. **Real work** — wire it up before launch or VAD admins have no email notifications at all. Plan: `docs/plans/2026-03-17-stride-mail-integration-design.md`.
+- [x] **roles-capabilities** — **already shipped**. `stride_coordinator` + `stride_supervisor` + `partner` roles all registered with the designed caps. Spec at `docs/superpowers/specs/2026-03-18-roles-capabilities-design.md` (note: path differs from checklist).
 
 ---
 
@@ -230,10 +228,11 @@ Tracked but NOT in Phase 1 scope. Keep in memory, surface after launch.
 ## Pre-Launch Cleanup
 
 - [x] (P0) **Stale-database-read sweep** — Swept every `\$wpdb` usage on `vad_*` tables across stride-core + stridence. 7 hits total, only 1 was stale: `AdminAPIController.php:1655` (trajectory dashboard counts). Now swapped to canonical `RegistrationRepository::countByTrajectoryIds()` + `findByTrajectoryIds()`. 3 new integration tests guard the contract. **DONE 2026-05-14** (`0f47f48f`). Legacy tables themselves retire post-launch (task #21). Memory: `gotcha_stale_database_reads.md`.
-- [ ] Stash or commit uncommitted LTI work on `staging` (don't lose it; not for launch)
+- [x] **LTI WIP** — clarified 2026-05-14: all LTI work is already committed to `staging` (15+ feat commits, nothing uncommitted). Real concern is feature-incomplete — needs to be deactivated for v1 deploy.
+- [ ] **Deactivate LTI plugin for v1 deploy** — `netdust-lti` plugin is feature-incomplete and not for launch. Deactivate before shipping. Reactivate when LTI work is finished post-launch.
 - [ ] Move stray PNGs out of repo root (`bento-section`, `debug-outlines`, `stridelms-fullpage`)
 - [ ] Add `tests/_output/` to `.gitignore` (40+ untracked screenshots)
-- [ ] Decide: hide Trajectory + Partner API admin UI for v1, or leave visible?
+- [ ] **Hide Trajectory admin UI for v1** — Trajectory is unfinished. Hide the menu item + CPT admin links from non-admin users (or all users) until post-launch. Partner API does NOT have an admin UI — only REST endpoints + role. Nothing to hide there.
 
 ---
 
