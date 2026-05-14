@@ -389,6 +389,71 @@ final class RegistrationRepository
         return (int) $wpdb->get_var($wpdb->prepare($sql, ...$params));
     }
 
+    /**
+     * Batch-count enrollments for multiple trajectories.
+     *
+     * @param array<int> $trajectoryIds
+     * @return array<int, int> Map of trajectory_id => count
+     */
+    public function countByTrajectoryIds(array $trajectoryIds): array
+    {
+        if (empty($trajectoryIds)) {
+            return [];
+        }
+
+        global $wpdb;
+        $ids = array_map('intval', $trajectoryIds);
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT trajectory_id, COUNT(*) AS c FROM {$this->table()}
+             WHERE trajectory_id IN ({$placeholders}) AND edition_id IS NULL
+             GROUP BY trajectory_id",
+            ...$ids
+        ));
+
+        $out = array_fill_keys($ids, 0);
+        foreach ($rows as $row) {
+            $out[(int) $row->trajectory_id] = (int) $row->c;
+        }
+        return $out;
+    }
+
+    /**
+     * Batch-find trajectory enrollments grouped by trajectory_id.
+     *
+     * Returns up to $limitPerTrajectory rows per trajectory, newest first.
+     *
+     * @param array<int> $trajectoryIds
+     * @return array<int, array<object>>
+     */
+    public function findByTrajectoryIds(array $trajectoryIds, int $limitPerTrajectory = 50): array
+    {
+        if (empty($trajectoryIds)) {
+            return [];
+        }
+
+        global $wpdb;
+        $ids = array_map('intval', $trajectoryIds);
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, trajectory_id, user_id, status, registered_at FROM {$this->table()}
+             WHERE trajectory_id IN ({$placeholders}) AND edition_id IS NULL
+             ORDER BY trajectory_id, registered_at DESC",
+            ...$ids
+        ));
+
+        $grouped = array_fill_keys($ids, []);
+        foreach ($rows as $row) {
+            $tid = (int) $row->trajectory_id;
+            if (count($grouped[$tid]) < $limitPerTrajectory) {
+                $grouped[$tid][] = $row;
+            }
+        }
+        return $grouped;
+    }
+
     // === User queries ===
 
     /**

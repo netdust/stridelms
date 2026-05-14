@@ -236,4 +236,115 @@ class EnrollmentServiceIntegrationTest extends IntegrationTestCase
         $this->assertEquals(RegistrationRepository::PATH_COLLEAGUE, $registration->enrollment_path);
         $this->assertEquals(999, (int) $registration->enrolled_by);
     }
+
+    // =========================================================================
+    // TRAJECTORY ENROLLMENT BATCH QUERIES
+    //
+    // These guard the AdminAPI trajectory dashboard from regressing back to
+    // reading the legacy stride_vad_trajectory_enrollments table.
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function countByTrajectoryIdsReturnsCountsFromUnifiedTable(): void
+    {
+        $repo = ntdst_get(RegistrationRepository::class);
+        $trajectoryId = wp_insert_post([
+            'post_type' => 'vad_trajectory',
+            'post_title' => 'Test Trajectory ' . time(),
+            'post_status' => 'publish',
+        ]);
+        self::$testPosts[] = $trajectoryId;
+
+        // Create 2 trajectory enrollments via the canonical repository
+        $reg1 = $repo->create([
+            'user_id' => self::$testUserId,
+            'trajectory_id' => $trajectoryId,
+            'status' => 'confirmed',
+            'enrollment_path' => RegistrationRepository::PATH_TRAJECTORY,
+        ]);
+        $reg2 = $repo->create([
+            'user_id' => self::$testUserId + 1,
+            'trajectory_id' => $trajectoryId,
+            'status' => 'confirmed',
+            'enrollment_path' => RegistrationRepository::PATH_TRAJECTORY,
+        ]);
+        $this->testRegistrationIds[] = is_wp_error($reg1) ? null : $reg1;
+        $this->testRegistrationIds[] = is_wp_error($reg2) ? null : $reg2;
+
+        $counts = $repo->countByTrajectoryIds([$trajectoryId]);
+
+        $this->assertArrayHasKey($trajectoryId, $counts);
+        $this->assertEquals(2, $counts[$trajectoryId]);
+    }
+
+    /**
+     * @test
+     */
+    public function findByTrajectoryIdsReturnsRowsFromUnifiedTable(): void
+    {
+        $repo = ntdst_get(RegistrationRepository::class);
+        $trajectoryId = wp_insert_post([
+            'post_type' => 'vad_trajectory',
+            'post_title' => 'Test Trajectory ' . time(),
+            'post_status' => 'publish',
+        ]);
+        self::$testPosts[] = $trajectoryId;
+
+        $regId = $repo->create([
+            'user_id' => self::$testUserId,
+            'trajectory_id' => $trajectoryId,
+            'status' => 'confirmed',
+            'enrollment_path' => RegistrationRepository::PATH_TRAJECTORY,
+        ]);
+        $this->testRegistrationIds[] = is_wp_error($regId) ? null : $regId;
+
+        $grouped = $repo->findByTrajectoryIds([$trajectoryId], 50);
+
+        $this->assertArrayHasKey($trajectoryId, $grouped);
+        $this->assertCount(1, $grouped[$trajectoryId]);
+        $row = $grouped[$trajectoryId][0];
+        $this->assertEquals(self::$testUserId, (int) $row->user_id);
+        $this->assertEquals('confirmed', $row->status);
+        $this->assertNotEmpty($row->registered_at);
+    }
+
+    /**
+     * @test
+     */
+    public function batchTrajectoryQueriesIgnoreEditionEnrollments(): void
+    {
+        // Ensure edition enrollments (which also have trajectory_id NULL or via PATH_TRAJECTORY)
+        // don't pollute the trajectory-only count.
+        $repo = ntdst_get(RegistrationRepository::class);
+        $trajectoryId = wp_insert_post([
+            'post_type' => 'vad_trajectory',
+            'post_title' => 'Test Trajectory ' . time(),
+            'post_status' => 'publish',
+        ]);
+        self::$testPosts[] = $trajectoryId;
+        $editionId = $this->createTestEdition();
+
+        // 1 trajectory-only enrollment (no edition_id)
+        $trajReg = $repo->create([
+            'user_id' => self::$testUserId,
+            'trajectory_id' => $trajectoryId,
+            'status' => 'confirmed',
+            'enrollment_path' => RegistrationRepository::PATH_TRAJECTORY,
+        ]);
+        // 1 edition enrollment linked to the trajectory (edition_id IS NOT NULL)
+        $editReg = $repo->create([
+            'user_id' => self::$testUserId,
+            'edition_id' => $editionId,
+            'trajectory_id' => $trajectoryId,
+            'status' => 'confirmed',
+            'enrollment_path' => RegistrationRepository::PATH_TRAJECTORY,
+        ]);
+        $this->testRegistrationIds[] = is_wp_error($trajReg) ? null : $trajReg;
+        $this->testRegistrationIds[] = is_wp_error($editReg) ? null : $editReg;
+
+        $counts = $repo->countByTrajectoryIds([$trajectoryId]);
+        $this->assertEquals(1, $counts[$trajectoryId], 'Edition enrollments linked to a trajectory must not inflate the trajectory-only count');
+    }
 }

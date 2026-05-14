@@ -1651,14 +1651,8 @@ final class AdminAPIController
             '_ntdst_courses', '_ntdst_price', '_ntdst_price_non_member', '_ntdst_choice_available_date',
         ]);
 
-        // Check if enrollment table exists (once)
-        $enrollmentTable = $wpdb->prefix . 'vad_trajectory_enrollments';
-        $enrollmentTableExists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $enrollmentTable)) === $enrollmentTable;
-
-        // Collect all edition IDs from courses meta and all enrollments
+        // Collect all edition IDs from trajectory courses meta
         $allEditionIds = [];
-        $allEnrollments = []; // trajectoryId => enrollments
-        $enrollmentCounts = []; // trajectoryId => count
 
         foreach ($trajectories as $trajectory) {
             $trajectoryId = (int) $trajectory->ID;
@@ -1684,44 +1678,18 @@ final class AdminAPIController
             }
         }
 
-        // Batch fetch enrollments for all trajectories
+        // Batch fetch trajectory enrollments via canonical RegistrationRepository
+        // (stride_vad_registrations is the unified source; the legacy
+        // stride_vad_trajectory_enrollments table is no longer written to.)
+        $registrationRepo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+        $enrollmentCounts = $registrationRepo->countByTrajectoryIds($trajectoryIds);
+        $allEnrollments = $registrationRepo->findByTrajectoryIds($trajectoryIds, 50);
+
         $allEnrollmentUserIds = [];
-        if ($enrollmentTableExists && !empty($trajectoryIds)) {
-            $placeholders = implode(',', array_fill(0, count($trajectoryIds), '%d'));
-
-            // Get enrollment counts
-            $countResults = $wpdb->get_results($wpdb->prepare(
-                "SELECT trajectory_id, COUNT(*) as count FROM {$enrollmentTable}
-                 WHERE trajectory_id IN ({$placeholders})
-                 GROUP BY trajectory_id",
-                ...$trajectoryIds
-            ));
-            foreach ($countResults as $row) {
-                $enrollmentCounts[(int) $row->trajectory_id] = (int) $row->count;
+        foreach ($allEnrollments as $rows) {
+            foreach ($rows as $row) {
+                $allEnrollmentUserIds[] = (int) $row->user_id;
             }
-
-            // Get enrollment details (limited to 50 per trajectory)
-            // Use a single query with ROW_NUMBER or just fetch all and limit in PHP
-            $enrollmentResults = $wpdb->get_results($wpdb->prepare(
-                "SELECT trajectory_id, user_id, status, enrolled_at FROM {$enrollmentTable}
-                 WHERE trajectory_id IN ({$placeholders})
-                 ORDER BY trajectory_id, enrolled_at DESC",
-                ...$trajectoryIds
-            ));
-
-            // Group by trajectory and limit to 50 per trajectory
-            $enrollmentsByTrajectory = [];
-            foreach ($enrollmentResults as $row) {
-                $trajectoryId = (int) $row->trajectory_id;
-                if (!isset($enrollmentsByTrajectory[$trajectoryId])) {
-                    $enrollmentsByTrajectory[$trajectoryId] = [];
-                }
-                if (count($enrollmentsByTrajectory[$trajectoryId]) < 50) {
-                    $enrollmentsByTrajectory[$trajectoryId][] = $row;
-                    $allEnrollmentUserIds[] = (int) $row->user_id;
-                }
-            }
-            $allEnrollments = $enrollmentsByTrajectory;
         }
 
         // Batch fetch editions for courses
@@ -1792,7 +1760,7 @@ final class AdminAPIController
                         'name' => $user->display_name,
                         'email' => $user->user_email,
                         'status' => $enrollment->status,
-                        'enrolledAt' => $enrollment->enrolled_at,
+                        'enrolledAt' => $enrollment->registered_at,
                     ];
                 }
             }
