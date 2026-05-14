@@ -14,6 +14,8 @@ document.addEventListener('alpine:init', () => {
         // ── Dashboard home ───────────────────────────────────────
         stats: { upcomingEditions: null, totalRegistrations: null, pendingQuotes: null, todaySessions: null, actionsNeeded: null, actionCount: null },
         actionQueue: [],
+        pendingApprovals: { items: [], counts: { approval: 0, post_approval: 0, stale_user: 0 }, stale_threshold_days: 7 },
+        pendingApprovalsTab: 'approval', // 'approval' | 'post_approval' | 'stale_user'
         upcomingSessions: [],
         activityFeed: [],
         healthChecks: { registration: 'green', mail: 'green' },
@@ -196,13 +198,14 @@ document.addEventListener('alpine:init', () => {
             this.loading = true;
             this.errors.dashboard = '';
             try {
-                const [stats, queue, sessions, activity, health, notifs] = await Promise.allSettled([
+                const [stats, queue, sessions, activity, health, notifs, approvals] = await Promise.allSettled([
                     this.api('/admin/stats'),
                     this.api('/admin/action-queue'),
                     this.api('/admin/editions?view=agenda&per_page=10'),
                     this.api('/admin/activity?limit=10'),
                     this.api('/admin/health-checks'),
                     this.api('/admin/notifications'),
+                    this.api('/admin/pending-approvals?stale_days=7'),
                 ]);
                 if (stats.status === 'rejected') {
                     this.errors.dashboard = 'Kon dashboard-data niet laden.';
@@ -232,6 +235,14 @@ document.addEventListener('alpine:init', () => {
                 if (notifs.status === 'fulfilled') {
                     this.notifications = notifs.value.notifications || [];
                     this.unreadCount = notifs.value.unread_count || 0;
+                }
+                if (approvals.status === 'fulfilled') {
+                    this.pendingApprovals = approvals.value;
+                    // Default to the bucket with the most items
+                    const c = approvals.value.counts || {};
+                    if (c.approval > 0) this.pendingApprovalsTab = 'approval';
+                    else if (c.stale_user > 0) this.pendingApprovalsTab = 'stale_user';
+                    else if (c.post_approval > 0) this.pendingApprovalsTab = 'post_approval';
                 }
             } catch (e) {
                 console.error('Dashboard load error:', e);

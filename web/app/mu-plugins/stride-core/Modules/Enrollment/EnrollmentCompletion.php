@@ -423,6 +423,43 @@ final class EnrollmentCompletion
     }
 
     /**
+     * Find the first user-completable task that's still open.
+     * Used to surface "Waarop wachten we?" in the admin stale-pending view.
+     *
+     * @return string|null Task type (e.g. 'session_selection') or null if all user tasks done.
+     */
+    public function getFirstOpenUserTask(array $tasks): ?string
+    {
+        foreach ($tasks as $type => $task) {
+            if ($type === 'approval' || $type === 'post_approval') {
+                continue;
+            }
+            if (($task['status'] ?? 'pending') !== 'completed') {
+                return $type;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Human label for a task type (Dutch, admin-facing).
+     */
+    public static function taskTypeLabel(string $type): string
+    {
+        return match ($type) {
+            'session_selection' => __('Sessiekeuze', 'stride'),
+            'questionnaire'     => __('Intakevragen', 'stride'),
+            'documents'         => __('Documenten uploaden', 'stride'),
+            'approval'          => __('Goedkeuring', 'stride'),
+            'post_evaluation'   => __('Evaluatie na opleiding', 'stride'),
+            'post_documents'    => __('Documenten na opleiding', 'stride'),
+            'post_approval'     => __('Aftekening', 'stride'),
+            default             => $type,
+        };
+    }
+
+    /**
      * Check if all tasks including approval are complete.
      */
     public function isFullyComplete(array $tasks): bool

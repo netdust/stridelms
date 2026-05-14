@@ -1874,7 +1874,15 @@ final class AdminAPIController
     /**
      * GET /admin/pending-approvals
      *
-     * Returns registrations where all user tasks are complete, awaiting admin approval.
+     * Returns "needs admin attention" registrations across three buckets:
+     * - approval        : pending, user tasks complete, waiting for admin
+     * - post_approval   : confirmed, post-course user tasks complete, waiting for sign-off
+     * - stale_user      : pending, user tasks incomplete, idle for ≥ stale_days (default 7)
+     *                     — admin sees who's stuck and decides per case (no auto-cancel)
+     *
+     * Query params:
+     * - stale_days (int, default 7): how many days of inactivity before a user-side
+     *   pending registration is considered "stale".
      */
     public function getPendingApprovals(WP_REST_Request $request): WP_REST_Response
     {
@@ -1883,15 +1891,18 @@ final class AdminAPIController
         $table = RegistrationTable::getTableName();
 
         if (!RegistrationTable::exists()) {
-            return new WP_REST_Response(['items' => []]);
+            return new WP_REST_Response(['items' => [], 'counts' => ['approval' => 0, 'post_approval' => 0, 'stale_user' => 0]]);
         }
 
-        // Enrollment phase: pending registrations with approval task
+        $staleDays = max(1, (int) ($request->get_param('stale_days') ?? 7));
+        $staleThreshold = gmdate('Y-m-d H:i:s', time() - ($staleDays * DAY_IN_SECONDS));
+
+        // Enrollment phase: pending registrations with completion_tasks
         $pendingRows = $wpdb->get_results(
             "SELECT * FROM {$table}
              WHERE status = 'pending'
                AND completion_tasks IS NOT NULL
-             ORDER BY registered_at DESC"
+             ORDER BY registered_at ASC"
         );
 
         // Post-course phase: confirmed registrations with post_approval task
@@ -1900,34 +1911,51 @@ final class AdminAPIController
              WHERE status = 'confirmed'
                AND completion_tasks IS NOT NULL
                AND completion_tasks LIKE '%post_approval%'
-             ORDER BY registered_at DESC"
+             ORDER BY registered_at ASC"
         );
 
         $completionService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
         $items = [];
+        $counts = ['approval' => 0, 'post_approval' => 0, 'stale_user' => 0];
 
-        // Enrollment approvals
         foreach ($pendingRows as $row) {
             $tasks = json_decode($row->completion_tasks ?? '{}', true) ?: [];
+            $userTasksDone = $completionService->areUserTasksComplete($tasks);
 
-            if (!isset($tasks['approval']) || $tasks['approval']['status'] === 'completed') {
+            // Bucket 1: user is done, waiting on admin approval
+            if (
+                $userTasksDone
+                && isset($tasks['approval'])
+                && ($tasks['approval']['status'] ?? 'pending') !== 'completed'
+            ) {
+                $items[] = $this->buildApprovalItem($row, $tasks, 'approval');
+                $counts['approval']++;
                 continue;
             }
-            if (!$completionService->areUserTasksComplete($tasks)) {
-                continue;
-            }
 
-            $items[] = $this->buildApprovalItem($row, $tasks, 'approval');
+            // Bucket 3: user-side stale pending — user hasn't finished tasks and the
+            // registration is older than the threshold. Capacity is held until admin
+            // contacts the user or cancels.
+            if (!$userTasksDone && $row->registered_at && $row->registered_at <= $staleThreshold) {
+                $openTask = $completionService->getFirstOpenUserTask($tasks);
+                $items[] = $this->buildApprovalItem($row, $tasks, 'stale_user', [
+                    'open_task' => $openTask,
+                    'open_task_label' => $openTask
+                        ? \Stride\Modules\Enrollment\EnrollmentCompletion::taskTypeLabel($openTask)
+                        : null,
+                    'days_idle' => (int) floor((time() - strtotime($row->registered_at)) / DAY_IN_SECONDS),
+                ]);
+                $counts['stale_user']++;
+            }
         }
 
-        // Post-course approvals
+        // Bucket 2: post-course approval
         foreach ($confirmedRows as $row) {
             $tasks = json_decode($row->completion_tasks ?? '{}', true) ?: [];
 
             if (!isset($tasks['post_approval']) || $tasks['post_approval']['status'] === 'completed') {
                 continue;
             }
-            // Check post-course user tasks done
             $postUserDone = true;
             foreach (['post_evaluation', 'post_documents'] as $pt) {
                 if (isset($tasks[$pt]) && ($tasks[$pt]['status'] ?? 'pending') !== 'completed') {
@@ -1940,9 +1968,14 @@ final class AdminAPIController
             }
 
             $items[] = $this->buildApprovalItem($row, $tasks, 'post_approval');
+            $counts['post_approval']++;
         }
 
-        return new WP_REST_Response(['items' => $items]);
+        return new WP_REST_Response([
+            'items' => $items,
+            'counts' => $counts,
+            'stale_threshold_days' => $staleDays,
+        ]);
     }
 
     /**
@@ -2773,14 +2806,17 @@ final class AdminAPIController
     /**
      * Build a pending approval item for the REST response.
      */
-    private function buildApprovalItem(object $row, array $tasks, string $type): array
+    /**
+     * @param array<string, mixed> $extra Bucket-specific extra fields (e.g. open_task, days_idle)
+     */
+    private function buildApprovalItem(object $row, array $tasks, string $type, array $extra = []): array
     {
         $userId = (int) $row->user_id;
         $user = get_userdata($userId);
         $editionId = (int) ($row->edition_id ?? 0);
         $edition = $editionId ? get_post($editionId) : null;
 
-        return [
+        return array_merge([
             'id' => (int) $row->id,
             'type' => $type,
             'user_id' => $userId,
@@ -2790,7 +2826,7 @@ final class AdminAPIController
             'edition_title' => $edition ? $edition->post_title : __('Onbekend', 'stride'),
             'registered_at' => $row->registered_at,
             'tasks' => $tasks,
-        ];
+        ], $extra);
     }
 
     /* ---------------------------------------------------------------

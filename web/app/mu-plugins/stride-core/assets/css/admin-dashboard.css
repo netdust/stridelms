@@ -2729,3 +2729,41 @@ body.stride-dashboard .wrap {
         font-size: 12px;
     }
 }
+
+/* ─── Tabs (used by "Inschrijvingen — actie vereist" card) ─────────────── */
+.sd-tab {
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--sd-text-muted, #646970);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: color .15s, border-color .15s;
+}
+.sd-tab:hover {
+    color: var(--sd-text, #1d2327);
+}
+.sd-tab--active {
+    color: var(--sd-text, #1d2327);
+    border-bottom-color: var(--sd-accent, #2271b1);
+    font-weight: 600;
+}
+.sd-pill {
+    display: inline-block;
+    min-width: 18px;
+    padding: 1px 6px;
+    border-radius: 9px;
+    background: #f0f0f1;
+    color: #3c434a;
+    font-size: 11px;
+    font-weight: 600;
+    text-align: center;
+}
+.sd-pill--warn {
+    background: #fcf0e3;
+    color: #b26200;
+}

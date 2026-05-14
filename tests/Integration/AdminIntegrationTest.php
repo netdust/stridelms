@@ -495,4 +495,127 @@ class AdminIntegrationTest extends IntegrationTestCase
 
         $this->assertArrayHasKey('/stride/v1/admin/editions/(?P<id>\\d+)/registrations', $routes);
     }
+
+    // =========================================================================
+    // PENDING APPROVALS / STALE-PENDING (D-Cap1)
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function pendingApprovalsReturnsStaleUserBucket(): void
+    {
+        global $wpdb;
+        $controller = ntdst_get(\Stride\Admin\AdminAPIController::class);
+        $editionId = $this->createTestEdition();
+        $userId = self::$adminUserId;
+
+        // Insert a pending registration with incomplete user task, dated 10 days ago.
+        $tenDaysAgo = gmdate('Y-m-d H:i:s', time() - 10 * DAY_IN_SECONDS);
+        $regTable = $wpdb->prefix . 'vad_registrations';
+        $wpdb->insert($regTable, [
+            'user_id' => $userId,
+            'edition_id' => $editionId,
+            'status' => 'pending',
+            'enrollment_path' => 'individual',
+            'registered_at' => $tenDaysAgo,
+            'completion_tasks' => wp_json_encode([
+                'session_selection' => ['status' => 'pending'],
+                'approval' => ['status' => 'pending'],
+            ]),
+        ]);
+        $regId = (int) $wpdb->insert_id;
+
+        $req = new WP_REST_Request('GET', '/stride/v1/admin/pending-approvals');
+        $req->set_param('stale_days', 7);
+        $response = $controller->getPendingApprovals($req);
+        $data = $response->get_data();
+
+        $stale = array_values(array_filter($data['items'], fn($i) => $i['id'] === $regId));
+        $this->assertCount(1, $stale, 'The stale pending registration should be returned');
+        $this->assertEquals('stale_user', $stale[0]['type']);
+        $this->assertEquals('session_selection', $stale[0]['open_task']);
+        $this->assertGreaterThanOrEqual(10, $stale[0]['days_idle']);
+        $this->assertGreaterThanOrEqual(1, $data['counts']['stale_user']);
+        $this->assertEquals(7, $data['stale_threshold_days']);
+
+        $wpdb->delete($regTable, ['id' => $regId]);
+    }
+
+    /**
+     * @test
+     */
+    public function pendingApprovalsRespectsStaleDaysThreshold(): void
+    {
+        global $wpdb;
+        $controller = ntdst_get(\Stride\Admin\AdminAPIController::class);
+        $editionId = $this->createTestEdition();
+
+        // Recent pending — only 3 days old, should NOT appear with threshold=7
+        $threeDaysAgo = gmdate('Y-m-d H:i:s', time() - 3 * DAY_IN_SECONDS);
+        $regTable = $wpdb->prefix . 'vad_registrations';
+        $wpdb->insert($regTable, [
+            'user_id' => self::$adminUserId,
+            'edition_id' => $editionId,
+            'status' => 'pending',
+            'enrollment_path' => 'individual',
+            'registered_at' => $threeDaysAgo,
+            'completion_tasks' => wp_json_encode([
+                'documents' => ['status' => 'pending'],
+                'approval' => ['status' => 'pending'],
+            ]),
+        ]);
+        $regId = (int) $wpdb->insert_id;
+
+        $req = new WP_REST_Request('GET', '/stride/v1/admin/pending-approvals');
+        $req->set_param('stale_days', 7);
+        $response = $controller->getPendingApprovals($req);
+        $stale = array_values(array_filter($response->get_data()['items'], fn($i) => $i['id'] === $regId));
+        $this->assertCount(0, $stale, '3-day pending must not appear with 7-day threshold');
+
+        // Lower threshold — same registration should now appear
+        $req->set_param('stale_days', 1);
+        $response = $controller->getPendingApprovals($req);
+        $stale = array_values(array_filter($response->get_data()['items'], fn($i) => $i['id'] === $regId));
+        $this->assertCount(1, $stale, '3-day pending must appear with 1-day threshold');
+
+        $wpdb->delete($regTable, ['id' => $regId]);
+    }
+
+    /**
+     * @test
+     */
+    public function pendingApprovalsBucketsDoNotDoubleCount(): void
+    {
+        global $wpdb;
+        $controller = ntdst_get(\Stride\Admin\AdminAPIController::class);
+        $editionId = $this->createTestEdition();
+
+        // Registration where user tasks are DONE — should be 'approval' bucket only,
+        // never stale_user even if old.
+        $tenDaysAgo = gmdate('Y-m-d H:i:s', time() - 10 * DAY_IN_SECONDS);
+        $regTable = $wpdb->prefix . 'vad_registrations';
+        $wpdb->insert($regTable, [
+            'user_id' => self::$adminUserId,
+            'edition_id' => $editionId,
+            'status' => 'pending',
+            'enrollment_path' => 'individual',
+            'registered_at' => $tenDaysAgo,
+            'completion_tasks' => wp_json_encode([
+                'documents' => ['status' => 'completed'],
+                'approval' => ['status' => 'pending'],
+            ]),
+        ]);
+        $regId = (int) $wpdb->insert_id;
+
+        $req = new WP_REST_Request('GET', '/stride/v1/admin/pending-approvals');
+        $req->set_param('stale_days', 7);
+        $items = $controller->getPendingApprovals($req)->get_data()['items'];
+
+        $matching = array_values(array_filter($items, fn($i) => $i['id'] === $regId));
+        $this->assertCount(1, $matching, 'Should only appear in one bucket, not both');
+        $this->assertEquals('approval', $matching[0]['type']);
+
+        $wpdb->delete($regTable, ['id' => $regId]);
+    }
 }

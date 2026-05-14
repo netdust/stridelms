@@ -165,6 +165,91 @@ defined('ABSPATH') || exit;
                         </div>
                     </div>
 
+                    <!-- Inschrijvingen — actie vereist (D-Cap1) -->
+                    <div class="sd-card" x-show="(pendingApprovals.counts.approval + pendingApprovals.counts.post_approval + pendingApprovals.counts.stale_user) > 0">
+                        <div class="sd-card__header">
+                            <h3 class="sd-card__title">Inschrijvingen — actie vereist</h3>
+                        </div>
+                        <div class="sd-card__body">
+                            <!-- Sub-tab bar -->
+                            <div class="sd-tabs" style="display:flex;gap:8px;margin-bottom:12px;border-bottom:1px solid var(--sd-border, #e5e7eb);">
+                                <button
+                                    type="button"
+                                    class="sd-tab"
+                                    :class="{ 'sd-tab--active': pendingApprovalsTab === 'approval' }"
+                                    @click="pendingApprovalsTab = 'approval'"
+                                    x-show="pendingApprovals.counts.approval > 0">
+                                    Wacht op mij
+                                    <span class="sd-pill" x-text="pendingApprovals.counts.approval"></span>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="sd-tab"
+                                    :class="{ 'sd-tab--active': pendingApprovalsTab === 'post_approval' }"
+                                    @click="pendingApprovalsTab = 'post_approval'"
+                                    x-show="pendingApprovals.counts.post_approval > 0">
+                                    Aftekenen na opleiding
+                                    <span class="sd-pill" x-text="pendingApprovals.counts.post_approval"></span>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="sd-tab"
+                                    :class="{ 'sd-tab--active': pendingApprovalsTab === 'stale_user' }"
+                                    @click="pendingApprovalsTab = 'stale_user'"
+                                    x-show="pendingApprovals.counts.stale_user > 0">
+                                    Wacht op gebruiker
+                                    <span class="sd-pill sd-pill--warn" x-text="pendingApprovals.counts.stale_user"></span>
+                                </button>
+                            </div>
+
+                            <!-- Items list -->
+                            <table class="sd-table">
+                                <thead>
+                                    <tr>
+                                        <th>Gebruiker</th>
+                                        <th>Editie</th>
+                                        <th>Status</th>
+                                        <th>Inschrijfdatum</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="item in pendingApprovals.items.filter(i => i.type === pendingApprovalsTab)" :key="item.id">
+                                        <tr>
+                                            <td>
+                                                <a href="#" @click.prevent="selectUser(item.user_id)" x-text="item.user_name"></a>
+                                                <div style="font-size:11px;color:#646970;" x-text="item.user_email"></div>
+                                            </td>
+                                            <td x-text="item.edition_title"></td>
+                                            <td>
+                                                <template x-if="item.type === 'approval'">
+                                                    <span class="sd-status-badge sd-status-badge--pending">Klaar voor goedkeuring</span>
+                                                </template>
+                                                <template x-if="item.type === 'post_approval'">
+                                                    <span class="sd-status-badge sd-status-badge--pending">Aftekening vereist</span>
+                                                </template>
+                                                <template x-if="item.type === 'stale_user'">
+                                                    <span style="color:#b26200;">
+                                                        Wacht op: <strong x-text="item.open_task_label || 'taak'"></strong>
+                                                        <span style="color:#646970;font-size:11px;">— <span x-text="item.days_idle"></span>d openstaand</span>
+                                                    </span>
+                                                </template>
+                                            </td>
+                                            <td x-text="(item.registered_at || '').substring(0, 10)"></td>
+                                            <td>
+                                                <a href="#" @click.prevent="selectUser(item.user_id)" class="sd-btn sd-btn--text">Bekijk →</a>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                            <p style="margin-top:12px;font-size:12px;color:#646970;" x-show="pendingApprovalsTab === 'stale_user'">
+                                Inschrijvingen die <span x-text="pendingApprovals.stale_threshold_days"></span> dagen of langer geen activiteit hebben gehad.
+                                Capaciteit blijft gereserveerd zolang ze openstaan — beslis per geval om te contacteren of te annuleren.
+                            </p>
+                        </div>
+                    </div>
+
                     <!-- Komende sessies -->
                     <div class="sd-card">
                         <div class="sd-card__header">
