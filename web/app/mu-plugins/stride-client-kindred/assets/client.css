@@ -408,6 +408,53 @@ footer a { color: rgb(var(--color-text)); }
   color: rgb(var(--color-success));
 }
 
+/* ── Hardcoded #235af3 overrides ──
+   LD's learndash.css has 50+ rules with hardcoded `color: #235af3` and
+   `background-color: #235af3` that don't go through any CSS variable.
+   These rules can't be skinned via :root token overrides; they must be
+   overridden directly with matching specificity. Listed in document order
+   per learndash.css source. */
+
+/* Focus-mode sidebar header (the big colored bar at top-left) */
+.learndash-wrapper .ld-focus .ld-focus-sidebar .ld-course-navigation-heading {
+  background-color: rgb(var(--color-primary));
+}
+
+/* Sidebar toggle button (the circle with arrow) */
+.learndash-wrapper .ld-focus .ld-focus-sidebar .ld-focus-sidebar-trigger .ld-icon {
+  background: rgb(var(--color-primary));
+}
+
+/* Current-lesson highlight in the sidebar list */
+.learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-item-preview-heading,
+.learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-title {
+  color: rgb(var(--color-primary));
+}
+.learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-item-preview-heading .ld-status-incomplete,
+.learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-title .ld-status-incomplete {
+  border-color: rgb(var(--color-primary));
+}
+
+/* "0% COMPLETE" percentage label in the focus-mode top header */
+.learndash-wrapper .ld-progress .ld-progress-heading .ld-progress-stats .ld-progress-percentage {
+  color: rgb(var(--color-primary));
+}
+
+/* Generic catch-all for any remaining `.ld-primary-color` utility */
+.learndash-wrapper .ld-primary-color,
+.learndash-wrapper .ld-primary-color-hover:hover {
+  color: rgb(var(--color-primary));
+}
+.learndash-wrapper .ld-primary-background {
+  background-color: rgb(var(--color-primary));
+}
+
+/* "Mark Complete" link in the focus-mode top-right header (text style, not the big button) */
+.learndash-wrapper .ld-focus .ld-focus-header .ld-content-action a,
+.learndash-wrapper .ld-focus .ld-focus-header .ld-content-action .ld-button {
+  color: rgb(var(--color-primary));
+}
+
 /* ── Reduced motion ── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
