@@ -22,6 +22,27 @@ final class QuestionnaireSettingsPage
     private const NONCE_ACTION = 'stride_save_questionnaire';
     private const NONCE_FIELD  = 'stride_questionnaire_nonce';
 
+    /**
+     * Field names that must never reach the form-builder: writing to them
+     * from an enrollment form would mean privilege escalation, session
+     * hijacking, or password reset.
+     */
+    private const DENIED_FIELD_NAMES = [
+        'wp_capabilities',
+        'wp_user_level',
+        'session_tokens',
+        'user_pass',
+        'user_login',
+        'user_email',
+        'user_activation_key',
+        'user_registered',
+        'user_status',
+        'spam',
+        'deleted',
+        'primary_blog',
+        'source_domain',
+    ];
+
     public function __construct()
     {
         $this->init();
@@ -548,9 +569,22 @@ final class QuestionnaireSettingsPage
                         continue;
                     }
 
+                    $fieldName = sanitize_key($field['name'] ?? '');
+
+                    // Names matching getUserMetaMapping() intentionally persist
+                    // to wp_usermeta (documented "system fields"). But certain
+                    // WP-internal keys must NEVER be writable from a form, or
+                    // an admin could craft an enrollment that escalates privs
+                    // or hijacks the session.
+                    if ($fieldName !== '' && in_array($fieldName, self::DENIED_FIELD_NAMES, true)) {
+                        // Skip this field entirely. Admin sees it disappear on
+                        // save — clearer than a silent rename.
+                        continue;
+                    }
+
                     $sanitizedField = [
                         'label'    => sanitize_text_field($field['label'] ?? ''),
-                        'name'     => sanitize_key($field['name'] ?? ''),
+                        'name'     => $fieldName,
                         'type'     => $fieldType,
                         'required' => !empty($field['required']),
                     ];

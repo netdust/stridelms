@@ -15,12 +15,13 @@ use WP_Error;
  */
 final class CompletionTaskHandler
 {
+    // .doc / .docx intentionally excluded: macro-bearing Word documents can
+    // execute on the admin's machine when reviewed. Users uploading completion
+    // proof should export to PDF.
     private const ALLOWED_MIME_TYPES = [
         'application/pdf',
         'image/jpeg',
         'image/png',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     ];
     private const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
     private const MAX_FILE_COUNT = 5;
@@ -142,7 +143,7 @@ final class CompletionTaskHandler
 
             if (!in_array($mimeType, self::ALLOWED_MIME_TYPES, true)) {
                 return new WP_Error('invalid_file_type', sprintf(
-                    __('%s: ongeldig bestandstype. Toegestaan: PDF, JPG, PNG, DOC, DOCX.', 'stride'),
+                    __('%s: ongeldig bestandstype. Toegestaan: PDF, JPG, PNG.', 'stride'),
                     $name
                 ));
             }

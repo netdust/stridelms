@@ -289,7 +289,17 @@ final class EnrollmentFormHandler
                 'enrollment_id' => $enrollmentId,
                 'error' => $quoteId->get_error_message(),
             ]);
-            // Don't fail enrollment if quote creation fails, but log it
+
+            // Roll back the enrollment so a missing quote can never let the
+            // user walk past payment. The user can retry; an admin sees the
+            // cancellation in the audit trail.
+            $registrations = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+            $registrations->cancel($enrollmentId);
+
+            return new WP_Error(
+                'quote_creation_failed',
+                __('De inschrijving kon niet worden afgerond omdat de offerte niet aangemaakt werd. Probeer opnieuw of contacteer ons.', 'stride')
+            );
         }
 
         ntdst_log('enrollment')->info('Trajectory enrollment completed', [

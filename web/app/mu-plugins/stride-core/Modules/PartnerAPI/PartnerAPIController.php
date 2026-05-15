@@ -367,21 +367,20 @@ final class PartnerAPIController
             ]);
         }
 
-        $certificates = [];
-
-        // Query LearnDash activity table directly for completed courses
+        // Query LearnDash activity table with SQL-level pagination.
         global $wpdb;
         $userIdList = implode(',', array_map('intval', $userIds));
-        $completions = $wpdb->get_results(
-            "SELECT user_id, post_id AS course_id, activity_completed AS completed_at
+        $offset = ($page - 1) * $perPage;
+
+        $total = (int) $wpdb->get_var(
+            "SELECT COUNT(*)
              FROM {$wpdb->prefix}learndash_user_activity
              WHERE user_id IN ({$userIdList})
                AND activity_type = 'course'
-               AND activity_completed > 0
-             ORDER BY activity_completed DESC"
+               AND activity_completed > 0"
         );
 
-        if (empty($completions)) {
+        if ($total === 0) {
             return new WP_REST_Response([
                 'data' => [],
                 'total' => 0,
@@ -390,10 +389,19 @@ final class PartnerAPIController
             ]);
         }
 
-        // DB-level pagination
-        $total = count($completions);
-        $offset = ($page - 1) * $perPage;
-        $pageResults = array_slice($completions, $offset, $perPage);
+        $pageResults = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT user_id, post_id AS course_id, activity_completed AS completed_at
+                 FROM {$wpdb->prefix}learndash_user_activity
+                 WHERE user_id IN ({$userIdList})
+                   AND activity_type = 'course'
+                   AND activity_completed > 0
+                 ORDER BY activity_completed DESC
+                 LIMIT %d OFFSET %d",
+                $perPage,
+                $offset
+            )
+        );
 
         // Batch-fetch users and courses for this page only
         $pageUserIds = array_unique(array_column($pageResults, 'user_id'));

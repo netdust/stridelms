@@ -208,13 +208,23 @@ final class EnrollmentService extends AbstractService
                 ? RegistrationStatus::Pending
                 : RegistrationStatus::Confirmed;
 
-            // Check for existing interest registration to upgrade (before duplicate check)
+            // Check for existing interest registration to upgrade (before duplicate check).
+            // Only allowed when the enrolling user is acting on their own account
+            // (self-enrollment): any other path lets an attacker pre-seed an
+            // interest row with a victim's email and silently merge their data
+            // into the victim's eventual enrollment.
             $upgradedRegistrationId = null;
+            $callerId = get_current_user_id();
+            $isSelfEnrolment = ($callerId > 0 && $callerId === $userId);
             $user = get_userdata($userId);
             $userEmail = $user ? $user->user_email : '';
-            if ($userEmail) {
+            if ($isSelfEnrolment && $userEmail) {
                 $existingInterest = $this->registrations->findByEmailAndEdition($userEmail, $editionId);
-                if ($existingInterest && $existingInterest->status === RegistrationStatus::Interest->value) {
+                $interestHasNoUser = $existingInterest && (int) ($existingInterest->user_id ?? 0) === 0;
+                if ($existingInterest
+                    && $interestHasNoUser
+                    && $existingInterest->status === RegistrationStatus::Interest->value
+                ) {
                     // Upgrade: set user_id, merge enrollment data
                     $existingData = is_array($existingInterest->enrollment_data)
                         ? $existingInterest->enrollment_data

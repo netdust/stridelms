@@ -279,4 +279,25 @@ final class AttendanceRepository
 
         return $wpdb->delete($this->table(), ['session_id' => $sessionId]) !== false;
     }
+
+    /**
+     * Delete attendance records for many sessions in one query.
+     *
+     * @param array<int> $sessionIds
+     */
+    public function deleteBySessions(array $sessionIds): bool
+    {
+        if (empty($sessionIds)) {
+            return true;
+        }
+
+        global $wpdb;
+
+        $ids = array_map('intval', $sessionIds);
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+
+        $sql = "DELETE FROM {$this->table()} WHERE session_id IN ({$placeholders})";
+
+        return $wpdb->query($wpdb->prepare($sql, ...$ids)) !== false;
+    }
 }

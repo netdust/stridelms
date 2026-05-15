@@ -79,4 +79,11 @@ class ImpersonationHandlerTest extends TestCase
     {
         $this->assertSame(3600, ImpersonationHandler::TTL);
     }
+
+    public function test_getSession_returns_null_for_unknown_token(): void
+    {
+        // Stub get_transient returning false is the WordPress default.
+        $handler = new ImpersonationHandler();
+        $this->assertNull($handler->getSession('does-not-exist'));
+    }
 }

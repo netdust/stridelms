@@ -51,10 +51,39 @@ final class ImpersonationHandler
      *
      * @param string $token           The session token.
      * @param int    $originalAdminId The WP user ID of the admin starting impersonation.
+     * @param int    $targetUserId    The WP user ID of the user being impersonated.
      */
-    public function storeSession(string $token, int $originalAdminId): void
+    public function storeSession(string $token, int $originalAdminId, int $targetUserId = 0): void
     {
-        set_transient(self::TRANSIENT_PREFIX . $token, $originalAdminId, self::TTL);
+        set_transient(
+            self::TRANSIENT_PREFIX . $token,
+            ['admin_id' => $originalAdminId, 'target_id' => $targetUserId],
+            self::TTL
+        );
+    }
+
+    /**
+     * Retrieve the impersonation session payload for a given token.
+     *
+     * @return array{admin_id: int, target_id: int}|null
+     */
+    public function getSession(string $token): ?array
+    {
+        $value = get_transient(self::TRANSIENT_PREFIX . $token);
+
+        if (is_array($value)) {
+            return [
+                'admin_id'  => (int) ($value['admin_id'] ?? 0),
+                'target_id' => (int) ($value['target_id'] ?? 0),
+            ];
+        }
+
+        // Backwards-compatible legacy payload (int admin id only).
+        if (is_int($value) || is_numeric($value)) {
+            return ['admin_id' => (int) $value, 'target_id' => 0];
+        }
+
+        return null;
     }
 
     /**
@@ -66,9 +95,7 @@ final class ImpersonationHandler
      */
     public function getOriginalAdmin(string $token): int
     {
-        $value = get_transient(self::TRANSIENT_PREFIX . $token);
-
-        return is_int($value) ? $value : (int) $value;
+        return $this->getSession($token)['admin_id'] ?? 0;
     }
 
     /**

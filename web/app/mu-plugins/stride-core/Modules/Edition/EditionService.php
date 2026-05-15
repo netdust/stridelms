@@ -90,14 +90,30 @@ class EditionService extends AbstractService implements EditionQueryInterface
 
     public function getRegisteredCount(int $editionId): int
     {
-        global $wpdb;
+        $cacheKey = 'stride_edition_reg_count_' . $editionId;
+        $cached = get_transient($cacheKey);
+        if ($cached !== false) {
+            return (int) $cached;
+        }
 
+        global $wpdb;
         $table = $wpdb->prefix . 'vad_registrations';
 
-        return (int) $wpdb->get_var($wpdb->prepare(
+        $count = (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM {$table} WHERE edition_id = %d AND status IN ('confirmed', 'completed', 'pending')",
             $editionId
         ));
+
+        set_transient($cacheKey, $count, 60);
+
+        return $count;
+    }
+
+    private function invalidateRegisteredCountCache(int $editionId): void
+    {
+        if ($editionId > 0) {
+            delete_transient('stride_edition_reg_count_' . $editionId);
+        }
     }
 
     public function getCapacity(int $editionId): int
@@ -265,7 +281,8 @@ class EditionService extends AbstractService implements EditionQueryInterface
      */
     public function onRegistrationCreated(array $data): void
     {
-        $editionId = $data['edition_id'] ?? 0;
+        $editionId = (int) ($data['edition_id'] ?? 0);
+        $this->invalidateRegisteredCountCache($editionId);
 
         if ($editionId && !$this->hasAvailableSpots($editionId)) {
             $this->repository->updateStatus($editionId, OfferingStatus::Full);
@@ -280,6 +297,8 @@ class EditionService extends AbstractService implements EditionQueryInterface
     public function onRegistrationCancelled(array $data): void
     {
         $editionId = (int) ($data['edition_id'] ?? 0);
+        $this->invalidateRegisteredCountCache($editionId);
+
         $currentStatus = $this->getStatus($editionId);
 
         if ($editionId && $currentStatus === OfferingStatus::Full) {
@@ -325,10 +344,17 @@ class EditionService extends AbstractService implements EditionQueryInterface
             'fields' => 'ids',
         ]);
 
-        // Clean up attendance records before deleting sessions
+        if (empty($sessions)) {
+            return;
+        }
+
+        // Bulk delete attendance records once, then drop the session posts.
+        // Done per-post via wp_delete_post so meta + relationships clean up
+        // through WordPress, but the attendance hit is now a single DELETE.
         $attendanceRepo = ntdst_get(\Stride\Modules\Attendance\AttendanceRepository::class);
+        $attendanceRepo->deleteBySessions($sessions);
+
         foreach ($sessions as $sessionId) {
-            $attendanceRepo->deleteBySession($sessionId);
             wp_delete_post($sessionId, true);
         }
     }

@@ -1435,18 +1435,40 @@ final class AdminAPIController
         $where = ["p.post_type = %s", "p.post_status = 'publish'"];
         $params = [QuoteCPT::POST_TYPE];
 
-        // Search by user name or email
+        // Search by user name or email. Resolve to user IDs first so the main
+        // quote query only filters by meta_value IN (...) instead of running a
+        // double LIKE join against wp_users for every candidate quote.
         if (!empty($search)) {
             $searchPattern = '%' . $wpdb->esc_like($search) . '%';
+            $matchedUserIds = $wpdb->get_col($wpdb->prepare(
+                "SELECT ID FROM {$wpdb->users}
+                 WHERE display_name LIKE %s OR user_email LIKE %s
+                 LIMIT 500",
+                $searchPattern,
+                $searchPattern
+            ));
+
+            if (empty($matchedUserIds)) {
+                // No matching users — short-circuit with an empty result set.
+                return new WP_REST_Response([
+                    'data'     => [],
+                    'total'    => 0,
+                    'page'     => $page,
+                    'per_page' => $perPage,
+                ]);
+            }
+
+            $matchedUserIds = array_map('intval', $matchedUserIds);
+            $idPlaceholders = implode(',', array_fill(0, count($matchedUserIds), '%d'));
             $where[] = "EXISTS (
                 SELECT 1 FROM {$wpdb->postmeta} pm_user
-                INNER JOIN {$wpdb->users} u ON u.ID = pm_user.meta_value
                 WHERE pm_user.post_id = p.ID
                 AND pm_user.meta_key = 'user_id'
-                AND (u.display_name LIKE %s OR u.user_email LIKE %s)
+                AND pm_user.meta_value IN ({$idPlaceholders})
             )";
-            $params[] = $searchPattern;
-            $params[] = $searchPattern;
+            foreach ($matchedUserIds as $uid) {
+                $params[] = $uid;
+            }
         }
 
         // Filter by status
@@ -2422,6 +2444,12 @@ final class AdminAPIController
         $regPage = max(1, (int) $request->get_param('reg_page'));
         $regPerPage = 20;
 
+        // Sensitive fields (phone, audit trail, full quote listing) are only
+        // returned to stride_manage. stride_view (read-only Supervisor role)
+        // gets the safe subset — without this, a Supervisor can dump the
+        // entire user base via /admin/users/{id}/detail.
+        $canSeeSensitive = current_user_can('stride_manage');
+
         // --- User data ---
         $userData = get_userdata($userId);
         if (!$userData) {
@@ -2456,7 +2484,7 @@ final class AdminAPIController
             'id' => $userId,
             'display_name' => $userData->display_name,
             'email' => $userData->user_email,
-            'phone' => get_user_meta($userId, 'phone', true) ?: '',
+            'phone' => $canSeeSensitive ? (get_user_meta($userId, 'phone', true) ?: '') : '',
             'organisation' => get_user_meta($userId, 'organisation', true) ?: '',
             'department' => get_user_meta($userId, 'department', true) ?: '',
             'profile_type' => $profileType,
@@ -2702,10 +2730,10 @@ final class AdminAPIController
             'user' => $user,
             'registrations' => $registrations,
             'registrations_total' => $registrationsTotal,
-            'quotes' => $quotes,
+            'quotes' => $canSeeSensitive ? $quotes : [],
             'attendance' => $attendance,
-            'audit_trail' => $auditTrail,
-            'audit_trail_total' => $auditTrailTotal,
+            'audit_trail' => $canSeeSensitive ? $auditTrail : [],
+            'audit_trail_total' => $canSeeSensitive ? $auditTrailTotal : 0,
         ]);
     }
 
@@ -2923,7 +2951,7 @@ final class AdminAPIController
 
         $adminId = get_current_user_id();
         $token = $handler->generateToken();
-        $handler->storeSession($token, $adminId);
+        $handler->storeSession($token, $adminId, $targetId);
 
         // Audit trail — schema is entity_type / entity_id (NOT subject_id).
         // Writing the wrong column previously dropped the row silently under
@@ -2973,9 +3001,16 @@ final class AdminAPIController
     {
         $handler = new ImpersonationHandler();
         $token = $handler->getTokenFromCookie();
-        $adminId = $handler->getOriginalAdmin($token);
+        $session = $handler->getSession($token);
+        $adminId = $session['admin_id'] ?? 0;
+        $targetId = $session['target_id'] ?? 0;
+        $callerId = get_current_user_id();
 
-        if ($adminId <= 0) {
+        // Caller-is-target check: the only user allowed to walk back into the
+        // original admin's session is the user who is currently impersonated.
+        // Without this, anyone who steals the auth cookie of an impersonated
+        // user (XSS, session theft) could escalate to admin by hitting /end.
+        if ($adminId <= 0 || $callerId <= 0 || ($targetId > 0 && $callerId !== $targetId)) {
             wp_safe_redirect(admin_url());
             exit;
         }
@@ -2989,6 +3024,25 @@ final class AdminAPIController
             'path'    => COOKIEPATH,
             'domain'  => COOKIE_DOMAIN,
         ]);
+
+        // Symmetric audit row — same schema as impersonation.started.
+        global $wpdb;
+        $auditTable = $wpdb->prefix . 'audit_log';
+        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $auditTable))) {
+            $targetUser = $targetId > 0 ? get_userdata($targetId) : null;
+            $wpdb->insert($auditTable, [
+                'action'      => 'impersonation.ended',
+                'actor_id'    => $adminId,
+                'actor_type'  => 'user',
+                'entity_type' => 'user',
+                'entity_id'   => $targetId,
+                'context'     => wp_json_encode([
+                    'target_name'  => $targetUser?->display_name,
+                    'target_email' => $targetUser?->user_email,
+                ]),
+                'created_at'  => current_time('mysql', true),
+            ]);
+        }
 
         // Switch back to admin
         wp_clear_auth_cookie();
