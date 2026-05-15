@@ -1,11 +1,12 @@
 /**
  * Kindred HR — Design Token Overrides
  *
- * Editorial "cool stone + moss" design system.
- * Moss green on warm stone paper. Ink anchors. Instrument Serif for editorial
- * fragments only. Geist for everything else.
+ * Editorial "warm coral + cream" design system.
+ * Warm coral on warm cream paper. Dark warm-ink anchors. Instrument Serif
+ * for editorial fragments only. Geist for everything else.
  *
- * Source: brand-board.css from stridelms brand.zip (2026-05).
+ * Source: brand-board.css from stridelms brand.zip (2026-05),
+ * primary palette: #D97757 / #29261b / #f6f4ef.
  *
  * Design principles:
  * - Restraint over decoration — every element earns its presence
@@ -14,52 +15,52 @@
  */
 
 :root {
-  /* ── Brand Colors — Moss + Stone ── */
-  --color-primary: 31 91 61;              /* #1F5B3D moss */
-  --color-primary-hover: 15 58 37;        /* #0F3A25 deep moss */
-  --color-primary-subtle: 188 212 196;    /* #BCD4C4 soft moss tint */
-  --color-primary-light: 188 212 196;     /* #BCD4C4 (same as subtle, single tint) */
-  --color-primary-dark: 15 58 37;         /* #0F3A25 deep moss */
-  --color-accent: 31 91 61;               /* moss as single accent — no second accent */
-  --color-accent-light: 188 212 196;
+  /* ── Brand Colors — Coral on Warm Cream ── */
+  --color-primary: 217 119 87;            /* #D97757 warm coral */
+  --color-primary-hover: 188 95 65;       /* #BC5F41 deeper coral */
+  --color-primary-subtle: 247 224 213;    /* #F7E0D5 soft coral tint */
+  --color-primary-light: 244 196 175;     /* #F4C4AF light coral */
+  --color-primary-dark: 159 76 49;        /* #9F4C31 burnt coral */
+  --color-accent: 217 119 87;             /* coral as single accent */
+  --color-accent-light: 247 224 213;
 
-  /* ── Neutrals — Cool Stone Paper ── */
-  --color-surface: 241 242 239;           /* #F1F2EF stone base */
-  --color-surface-alt: 232 234 229;       /* #E8EAE5 deeper stone */
-  --color-surface-card: 249 250 247;      /* #F9FAF7 lifted card */
-  --color-border: 225 227 220;            /* #E1E3DC soft line */
-  --color-border-strong: 212 215 208;     /* #D4D7D0 stronger line */
-  --color-text: 17 19 18;                 /* #111312 ink */
-  --color-text-muted: 108 112 107;        /* #6C706B muted stone */
-  --color-text-inverse: 249 250 247;
+  /* ── Neutrals — Warm Cream Paper + Ink ── */
+  --color-surface: 246 244 239;           /* #F6F4EF warm cream base */
+  --color-surface-alt: 237 234 226;       /* #EDEAE2 deeper cream */
+  --color-surface-card: 252 250 245;      /* #FCFAF5 lifted card */
+  --color-border: 226 220 209;            /* #E2DCD1 soft warm line */
+  --color-border-strong: 200 192 178;     /* #C8C0B2 stronger warm line */
+  --color-text: 41 38 27;                 /* #29261B dark ink (warm) */
+  --color-text-muted: 110 104 88;         /* #6E6858 muted warm */
+  --color-text-inverse: 252 250 245;
 
   /* ── 5-tier surface ladder ── */
-  --color-surface-container: 232 234 229;        /* #E8EAE5 emphasised panels */
-  --color-surface-container-high: 225 227 220;   /* #E1E3DC modals / dropdowns */
-  --color-surface-container-highest: 212 215 208;/* #D4D7D0 overlays */
-  --color-secondary-container: 188 212 196;     /* moss tint */
-  --color-tertiary: 17 19 18;                   /* ink as tertiary anchor */
-  --color-tertiary-light: 54 58 54;             /* ink-soft #363A36 */
+  --color-surface-container: 237 234 226;        /* #EDEAE2 emphasised panels */
+  --color-surface-container-high: 226 220 209;   /* #E2DCD1 modals / dropdowns */
+  --color-surface-container-highest: 200 192 178;/* #C8C0B2 overlays */
+  --color-secondary-container: 247 224 213;     /* coral tint */
+  --color-tertiary: 41 38 27;                   /* ink as tertiary anchor */
+  --color-tertiary-light: 73 67 51;             /* warm ink-soft */
 
-  /* ── Status Colors ── */
-  --color-success: 31 91 61;              /* moss for ok */
-  --color-warning: 138 106 28;            /* #8A6A1C umber */
-  --color-error: 138 42 28;               /* #8A2A1C oxblood */
-  --color-info: 31 91 61;
+  /* ── Status Colors — warm-aligned ── */
+  --color-success: 91 130 73;             /* #5B8249 olive green (works with coral) */
+  --color-warning: 191 134 38;            /* #BF8626 amber */
+  --color-error: 168 56 38;               /* #A83826 brick red */
+  --color-info: 217 119 87;               /* coral */
 
-  /* ── Badge Colors — restrained, all on stone surface ── */
-  --color-badge-open-bg: 188 212 196;          /* moss tint */
-  --color-badge-open-text: 15 58 37;
-  --color-badge-few-bg: 232 215 178;           /* warm sand */
-  --color-badge-few-text: 138 106 28;
-  --color-badge-full-bg: 212 215 208;          /* stone — neutral "closed" */
-  --color-badge-full-text: 54 58 54;
-  --color-badge-cancelled-bg: 225 227 220;
-  --color-badge-cancelled-text: 108 112 107;
-  --color-badge-online-bg: 212 220 225;        /* cool grey-blue */
-  --color-badge-online-text: 54 58 54;
-  --color-badge-free-bg: 188 212 196;
-  --color-badge-free-text: 15 58 37;
+  /* ── Badge Colors — warm cream surface ── */
+  --color-badge-open-bg: 232 240 217;          /* olive tint */
+  --color-badge-open-text: 65 99 50;
+  --color-badge-few-bg: 248 230 196;           /* amber tint */
+  --color-badge-few-text: 130 91 28;
+  --color-badge-full-bg: 247 224 213;          /* coral tint as "closed/sold-out" */
+  --color-badge-full-text: 159 76 49;
+  --color-badge-cancelled-bg: 237 234 226;
+  --color-badge-cancelled-text: 110 104 88;
+  --color-badge-online-bg: 226 224 215;        /* warm neutral */
+  --color-badge-online-text: 73 67 51;
+  --color-badge-free-bg: 232 240 217;
+  --color-badge-free-text: 65 99 50;
 
   /* ── Typography ── */
   --font-sans: 'Geist', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -117,15 +118,33 @@ body {
   color: rgb(var(--color-text-inverse));
 }
 
-/* ── Links ── */
-a {
+/* ── Links ──
+   Underline only in prose / editorial content, never globally.
+   Buttons, nav, cards already manage their own affordance via color + hover. */
+.prose-stride a,
+.entry-content a,
+article a {
   color: rgb(var(--color-primary));
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
   transition: color var(--duration-fast) var(--ease-out);
 }
-a:hover { color: rgb(var(--color-primary-hover)); }
+.prose-stride a:hover,
+.entry-content a:hover,
+article a:hover { color: rgb(var(--color-primary-hover)); }
+
+/* Exception: links inside buttons / cards / nav stay un-underlined */
+.prose-stride a.btn-primary,
+.prose-stride a.btn-secondary,
+.prose-stride a.btn-outline-dark,
+.prose-stride a.btn-ghost,
+article a.btn-primary,
+article a.btn-secondary,
+article a.btn-outline-dark,
+article a.btn-ghost,
+article a.card,
+article a.card-interactive { text-decoration: none; }
 
 /* ── Buttons ── */
 .btn-primary,
