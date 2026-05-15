@@ -16,8 +16,8 @@ final class EvaluationShortcodes
         $edition_id = isset($_GET['editie']) ? absint($_GET['editie']) : 0;
         if (!$edition_id) return '';
 
-        ob_start();
-        stridence_template_part('templates/forms/evaluation', null, ['edition_id' => $edition_id]);
-        return ob_get_clean() ?: '';
+        return stridence_template_html('templates/forms/evaluation', null, [
+            'edition_id' => $edition_id,
+        ]);
     }
 }

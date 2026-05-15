@@ -53,9 +53,9 @@ return [
     // NAVIGATION MENUS
     // ========================================
     'menus' => [
-        'primary' => 'Primary Menu',
-        'footer' => 'Footer Menu',
-        'user_dashboard' => 'User Dashboard Menu',
+        'primary' => 'Hoofdmenu',
+        'footer' => 'Footermenu',
+        'user_dashboard' => 'Dashboardmenu',
     ],
 
     // ========================================

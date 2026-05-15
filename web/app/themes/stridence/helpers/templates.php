@@ -1,9 +1,13 @@
 <?php
 /**
- * Template loading with override support.
+ * Template helpers — thin wrappers around NTDST_Response.
  *
- * Wraps get_template_part() with a filter that allows plugins
- * to override any template by providing an alternative file path.
+ * Why wrappers and not direct ntdst_response() calls everywhere?
+ * - ~95 existing callers use stridence_template_part(); rewriting them
+ *   has high blast radius for zero functional gain. The wrapper gives
+ *   them NTDST's path + locate cache for free.
+ * - Client mu-plugins override templates by registering their own
+ *   directories via NTDST_Template_Loader::addPath(), no filter needed.
  *
  * @package stridence
  */
@@ -11,29 +15,66 @@
 declare(strict_types=1);
 
 /**
- * Load a template part with plugin override support.
+ * Echo a template part with NTDST's cached lookup.
  *
- * Works identically to get_template_part() but fires a filter
- * that client plugins can hook into to provide an override path.
+ * Resolution order (highest priority first):
+ *   1. Paths registered via NTDST_Template_Loader::addPath()      (client plugins)
+ *   2. <stylesheet>/templates                                      (NTDST default)
+ *   3. <template>/templates                                        (NTDST default)
+ *   4. <stylesheet>                                                (theme root — added per call)
  *
- * Filter: 'stridence_template_path'
- *   @param string      $override  Override file path (empty = use default)
- *   @param string      $slug      Template slug
- *   @param string|null $name      Template name variant
- *   @param array       $args      Arguments passed to the template
+ * Slug semantics: relative to the theme root, e.g. 'partials/card-course'
+ * or 'templates/course/header'. No leading slash, no .php extension required.
+ *
+ * Template-side contract:
+ *   Templates receive the data dictionary as `$args` (compatible with WP's
+ *   native get_template_part() since 5.5). Every key is also extracted as a
+ *   loose variable, which is what callers of ntdst_response()->html() expect.
+ *   Both contracts work simultaneously.
  *
  * @param string      $slug Template slug (e.g., 'partials/card-course')
- * @param string|null $name Optional template name variant
- * @param array       $args Arguments passed to the template
+ * @param string|null $name Optional name variant — appended as '-{name}'
+ * @param array       $args Variables exposed to the template as $args + extracted
  */
 function stridence_template_part(string $slug, ?string $name = null, array $args = []): void
 {
-    $override = apply_filters('stridence_template_path', '', $slug, $name, $args);
+    echo stridence_template_html($slug, $name, $args);
+}
 
-    if ($override && file_exists($override)) {
-        load_template($override, false, $args);
-        return;
-    }
+/**
+ * Render a template part and return its output as a string.
+ *
+ * Same resolution and $args contract as stridence_template_part(), but
+ * returns instead of echoing — for shortcodes and any caller that needs
+ * the rendered HTML as a value.
+ *
+ * @param string      $slug Template slug (e.g., 'partials/card-course')
+ * @param string|null $name Optional name variant — appended as '-{name}'
+ * @param array       $args Variables exposed to the template as $args + extracted
+ */
+function stridence_template_html(string $slug, ?string $name = null, array $args = []): string
+{
+    $template = $name ? "{$slug}-{$name}" : $slug;
 
-    get_template_part($slug, $name, $args);
+    return ntdst_response()
+        ->addPath(get_stylesheet_directory())
+        ->withData(['args' => $args] + $args)
+        ->html($template);
+}
+
+/**
+ * Render a centered error card with icon, title, message and action link.
+ *
+ * Used by the form shortcodes (enrollment, interest, intake, evaluation)
+ * when their target edition is missing or invalid.
+ */
+function stridence_render_error_state(string $icon, string $title, string $message, string $action_label, string $action_url): string
+{
+    return stridence_template_html('partials/error-state', null, [
+        'icon'         => $icon,
+        'title'        => $title,
+        'message'      => $message,
+        'action_label' => $action_label,
+        'action_url'   => $action_url,
+    ]);
 }

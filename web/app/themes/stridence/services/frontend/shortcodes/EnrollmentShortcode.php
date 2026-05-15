@@ -4,18 +4,19 @@ declare(strict_types=1);
 namespace stridence\services\frontend\shortcodes;
 
 /**
- * Interest form shortcode.
+ * Enrollment form shortcode.
  *
- * Renders anonymous interest form for editions without sessions.
+ * Usage: [stride_enrollment]
+ * Reads the target edition from the `?editie=<id>` query parameter.
  */
-final class InterestShortcodes
+final class EnrollmentShortcode
 {
     public function register(): void
     {
-        add_shortcode('stride_interest', [$this, 'renderInterest']);
+        add_shortcode('stride_enrollment', [$this, 'renderEnrollment']);
     }
 
-    public function renderInterest(array $atts = []): string
+    public function renderEnrollment(array $atts = []): string
     {
         $edition_id = isset($_GET['editie']) ? absint($_GET['editie']) : 0;
 
@@ -40,8 +41,16 @@ final class InterestShortcodes
             );
         }
 
-        return stridence_template_html('templates/forms/interest', null, [
-            'edition_id' => $edition_id,
+        // Pre-fetch edition data for the Alpine component on the template.
+        $item_data = [
+            'id'    => $edition_id,
+            'title' => $edition->post_title,
+        ];
+
+        return stridence_template_html('templates/forms/enrollment', null, [
+            'item_id'   => $edition_id,
+            'item_type' => 'edition',
+            'item_data' => $item_data,
         ]);
     }
 }
