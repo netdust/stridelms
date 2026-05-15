@@ -435,8 +435,12 @@ footer a { color: rgb(var(--color-text)); }
   border-color: rgb(var(--color-primary));
 }
 
-/* "0% COMPLETE" percentage label in the focus-mode top header */
-.learndash-wrapper .ld-progress .ld-progress-heading .ld-progress-stats .ld-progress-percentage {
+/* "0% COMPLETE" percentage label.
+   Two contexts: page-level progress (.ld-progress-heading parent) AND
+   focus-mode top header (no heading wrapper). Match both. */
+.learndash-wrapper .ld-progress .ld-progress-heading .ld-progress-stats .ld-progress-percentage,
+.learndash-wrapper .ld-focus .ld-focus-header .ld-progress .ld-progress-percentage,
+.learndash-wrapper .ld-progress .ld-progress-percentage {
   color: rgb(var(--color-primary));
 }
 
@@ -453,6 +457,20 @@ footer a { color: rgb(var(--color-text)); }
 .learndash-wrapper .ld-focus .ld-focus-header .ld-content-action a,
 .learndash-wrapper .ld-focus .ld-focus-header .ld-content-action .ld-button {
   color: rgb(var(--color-primary));
+}
+
+/* Transparent buttons: "Next Lesson", "Mark Complete" top-right link variant.
+   LD scopes these with :not(.learndash-wrapper--modern) — match the same
+   chain so our selector wins on specificity. */
+.learndash-wrapper:not(.ld-registration__outer-wrapper):not(.learndash-wrapper--modern) .ld-button.ld-button-transparent,
+.learndash-wrapper:not(.ld-registration__outer-wrapper):not(.learndash-wrapper--modern) .ld-button.ld-button-transparent.ld-status-complete,
+.learndash-wrapper:not(.ld-registration__outer-wrapper):not(.learndash-wrapper--modern) .learndash_mark_complete_button.ld-button-transparent,
+.learndash-wrapper:not(.ld-registration__outer-wrapper):not(.learndash-wrapper--modern) #learndash_mark_complete_button.ld-button-transparent {
+  color: rgb(var(--color-primary));
+}
+.learndash-wrapper:not(.ld-registration__outer-wrapper):not(.learndash-wrapper--modern) .ld-button.ld-button-transparent:hover,
+.learndash-wrapper:not(.ld-registration__outer-wrapper):not(.learndash-wrapper--modern) .ld-button.ld-button-transparent:focus {
+  color: rgb(var(--color-primary-hover));
 }
 
 /* ── Reduced motion ── */
