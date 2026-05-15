@@ -327,27 +327,29 @@ footer a { color: rgb(var(--color-text)); }
 /* ═══════════════════════════════════════════ LearnDash ═══════════════════════════════════════════
    LD ships its own design tokens (--ld-color-primitives-* and --ld-color-semantic-*).
    The blue primitives drive brand-primary, links, button bg, focus rings, and the
-   "system-dark" color used for hover states. Remapping the blue ramp to our coral
-   ramp inherits through to all LD semantic + component tokens.
+   "system-dark" color used for hover states. Remapping the blue ramp inherits
+   through to all LD semantic + component tokens.
 
-   We scope the override to .learndash-wrapper so it doesn't leak to non-LD surfaces. */
-.learndash-wrapper,
-.learndash-wrapper--modern,
-.ld-focus,
-.ld-focus-sidebar {
-  /* Blue → coral ramp */
-  --ld-color-primitives-blue-100: 247 240 235;   /* very light coral wash */
-  --ld-color-primitives-blue-150: 247 224 213;   /* matches --color-primary-subtle */
-  --ld-color-primitives-blue-175: 244 196 175;   /* matches --color-primary-light */
-  --ld-color-primitives-blue-200: 232 174 148;
-  --ld-color-primitives-blue-500: #D97757;       /* coral — brand-primary */
-  --ld-color-primitives-blue-800: #9F4C31;       /* deep coral — hover/system-dark */
+   IMPORTANT: LD declares its tokens in :root, and the focus-mode sidebar
+   (.ld-focus, .ld-focus-sidebar) sits OUTSIDE .learndash-wrapper. We must
+   override at :root level so the cascade reaches every LD surface. The token
+   names are all --ld-* prefixed, so this can't leak to non-LD code. */
+:root {
+  /* Blue → coral ramp. LD consumes these as `var(--token)` (direct value), so
+     they must be hex / rgb() functions, NOT bare RGB triplets like our own
+     --color-* tokens. */
+  --ld-color-primitives-blue-100: #FAF1EC;      /* very light coral wash */
+  --ld-color-primitives-blue-150: #F7E0D5;      /* matches --color-primary-subtle */
+  --ld-color-primitives-blue-175: #F4C4AF;      /* matches --color-primary-light */
+  --ld-color-primitives-blue-200: #E8AE94;
+  --ld-color-primitives-blue-500: #D97757;      /* coral — brand-primary */
+  --ld-color-primitives-blue-800: #9F4C31;      /* deep coral — hover/system-dark */
 
   /* Body surface + text → warm cream + warm ink */
-  --ld-color-system-white: #FCFAF5;              /* card surface */
-  --ld-color-system-body-text: #29261B;          /* warm ink */
-  --ld-color-system-dark: #9F4C31;               /* hover */
-  --ld-color-system-border: #E2DCD1;             /* warm border */
+  --ld-color-system-white: #FCFAF5;             /* card surface */
+  --ld-color-system-body-text: #29261B;         /* warm ink */
+  --ld-color-system-dark: #9F4C31;              /* hover */
+  --ld-color-system-border: #E2DCD1;            /* warm border */
 
   /* Buttons */
   --ld-color-button-bg: #D97757;
@@ -362,9 +364,14 @@ footer a { color: rgb(var(--color-text)); }
   /* Primary brand alias */
   --ld-color-brand-primary: #D97757;
 
-  /* Typography — let LD inherit our Geist + Geist Mono */
-  font-family: var(--font-sans);
+  /* Typography — make LD inherit our Geist via its own token */
+  --ld-typography-font-family: 'Geist', system-ui, -apple-system, sans-serif;
 }
+
+/* Apply our font to all LD surfaces (focus mode + wrapper) */
+.learndash-wrapper,
+.ld-focus,
+.ld-focus-sidebar { font-family: var(--font-sans); }
 
 /* LD lesson body content uses prose-like spacing — pick up our serif italic + mono */
 .learndash-wrapper em { font-family: var(--font-serif); font-style: italic; }
@@ -384,6 +391,14 @@ footer a { color: rgb(var(--color-text)); }
   font-weight: 500;
   letter-spacing: -0.02em;
   color: rgb(var(--color-text));
+}
+
+/* Lesson H1 specifically — clamp it down; LD default is 4rem (64px) which is
+   too display-y for a body heading. */
+.learndash-wrapper h1,
+.ld-focus h1 {
+  font-size: clamp(28px, 3vw, 40px);
+  line-height: 1.15;
 }
 
 /* Status icons (complete / incomplete) — recolor the green completed checks
