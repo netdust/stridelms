@@ -40,6 +40,32 @@ final class LTIDataService implements NTDST_Service_Meta
     }
 
     /**
+     * Restrict REST API read access for LTI CPTs to admins only.
+     *
+     * These contain integration credentials (client IDs, RSA keys, endpoints)
+     * that should not be publicly readable.
+     */
+    public function restrictRestAccess(): void
+    {
+        add_filter('rest_pre_dispatch', function ($result, $server, $request) {
+            $route = $request->get_route();
+            $protected = ['/wp/v2/lti-platforms', '/wp/v2/lti-tools', '/wp/v2/lti-resources'];
+
+            foreach ($protected as $prefix) {
+                if (str_starts_with($route, $prefix) && !current_user_can('manage_options')) {
+                    return new \WP_Error(
+                        'rest_forbidden',
+                        __('You do not have permission to access LTI configuration.', 'netdust-lti'),
+                        ['status' => 401]
+                    );
+                }
+            }
+
+            return $result;
+        }, 10, 3);
+    }
+
+    /**
      * Add custom columns for LTI Resources.
      */
     public function addResourceColumns(array $columns): array
@@ -101,32 +127,6 @@ final class LTIDataService implements NTDST_Service_Meta
         );
 
         return $actions;
-    }
-
-    /**
-     * Restrict REST API read access for LTI CPTs to admins only.
-     *
-     * These contain integration credentials (client IDs, RSA keys, endpoints)
-     * that should not be publicly readable.
-     */
-    public function restrictRestAccess(): void
-    {
-        add_filter('rest_pre_dispatch', function ($result, $server, $request) {
-            $route = $request->get_route();
-            $protected = ['/wp/v2/lti-platforms', '/wp/v2/lti-tools', '/wp/v2/lti-resources'];
-
-            foreach ($protected as $prefix) {
-                if (str_starts_with($route, $prefix) && !current_user_can('manage_options')) {
-                    return new \WP_Error(
-                        'rest_forbidden',
-                        __('You do not have permission to access LTI configuration.', 'netdust-lti'),
-                        ['status' => 401]
-                    );
-                }
-            }
-
-            return $result;
-        }, 10, 3);
     }
 
     public function registerModels(): void
