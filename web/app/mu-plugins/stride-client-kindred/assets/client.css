@@ -409,68 +409,63 @@ footer a { color: rgb(var(--color-text)); }
 }
 
 /* ── Hardcoded #235af3 overrides ──
-   LD's learndash.css has 50+ rules with hardcoded `color: #235af3` and
-   `background-color: #235af3` that don't go through any CSS variable.
-   These rules can't be skinned via :root token overrides; they must be
-   overridden directly with matching specificity. Listed in document order
-   per learndash.css source. */
+   LD's learndash.css ships ~50 rules with `color: #235af3` and
+   `background-color: #235af3` hardcoded, bypassing the token system.
+   :root token overrides have no effect; these rules need direct selector
+   matching. Using !important here because LD's specificity stack varies
+   widely across the file and matching every variant is fragile. Scope
+   stays inside .learndash-wrapper so it can't leak outside LD's UI. */
 
 /* Focus-mode sidebar header (the big colored bar at top-left) */
 .learndash-wrapper .ld-focus .ld-focus-sidebar .ld-course-navigation-heading {
-  background-color: rgb(var(--color-primary));
+  background-color: rgb(var(--color-primary)) !important;
 }
 
 /* Sidebar toggle button (the circle with arrow) */
 .learndash-wrapper .ld-focus .ld-focus-sidebar .ld-focus-sidebar-trigger .ld-icon {
-  background: rgb(var(--color-primary));
+  background: rgb(var(--color-primary)) !important;
 }
 
 /* Current-lesson highlight in the sidebar list */
 .learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-item-preview-heading,
 .learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-title {
-  color: rgb(var(--color-primary));
+  color: rgb(var(--color-primary)) !important;
 }
 .learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-item-preview-heading .ld-status-incomplete,
 .learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-title .ld-status-incomplete {
-  border-color: rgb(var(--color-primary));
+  border-color: rgb(var(--color-primary)) !important;
 }
 
-/* "0% COMPLETE" percentage label.
-   Two contexts: page-level progress (.ld-progress-heading parent) AND
-   focus-mode top header (no heading wrapper). Match both. */
-.learndash-wrapper .ld-progress .ld-progress-heading .ld-progress-stats .ld-progress-percentage,
-.learndash-wrapper .ld-focus .ld-focus-header .ld-progress .ld-progress-percentage,
+/* "0% COMPLETE" percentage label — two contexts (page-level + focus-header) */
 .learndash-wrapper .ld-progress .ld-progress-percentage {
-  color: rgb(var(--color-primary));
+  color: rgb(var(--color-primary)) !important;
 }
 
-/* Generic catch-all for any remaining `.ld-primary-color` utility */
+/* .ld-primary-color utility */
 .learndash-wrapper .ld-primary-color,
 .learndash-wrapper .ld-primary-color-hover:hover {
-  color: rgb(var(--color-primary));
+  color: rgb(var(--color-primary)) !important;
 }
 .learndash-wrapper .ld-primary-background {
-  background-color: rgb(var(--color-primary));
+  background-color: rgb(var(--color-primary)) !important;
 }
 
-/* "Mark Complete" link in the focus-mode top-right header (text style, not the big button) */
+/* Transparent buttons: "Next Lesson", focus-header "Mark Complete" link */
+.learndash-wrapper .ld-button.ld-button-transparent,
+.learndash-wrapper .ld-button.ld-button-transparent.ld-status-complete,
+.learndash-wrapper .learndash_mark_complete_button.ld-button-transparent,
+.learndash-wrapper #learndash_mark_complete_button.ld-button-transparent {
+  color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-button.ld-button-transparent:hover,
+.learndash-wrapper .ld-button.ld-button-transparent:focus {
+  color: rgb(var(--color-primary-hover)) !important;
+}
+
+/* Focus-header content action links (top-right top bar) */
 .learndash-wrapper .ld-focus .ld-focus-header .ld-content-action a,
 .learndash-wrapper .ld-focus .ld-focus-header .ld-content-action .ld-button {
-  color: rgb(var(--color-primary));
-}
-
-/* Transparent buttons: "Next Lesson", "Mark Complete" top-right link variant.
-   LD scopes these with :not(.learndash-wrapper--modern) — match the same
-   chain so our selector wins on specificity. */
-.learndash-wrapper:not(.ld-registration__outer-wrapper):not(.learndash-wrapper--modern) .ld-button.ld-button-transparent,
-.learndash-wrapper:not(.ld-registration__outer-wrapper):not(.learndash-wrapper--modern) .ld-button.ld-button-transparent.ld-status-complete,
-.learndash-wrapper:not(.ld-registration__outer-wrapper):not(.learndash-wrapper--modern) .learndash_mark_complete_button.ld-button-transparent,
-.learndash-wrapper:not(.ld-registration__outer-wrapper):not(.learndash-wrapper--modern) #learndash_mark_complete_button.ld-button-transparent {
-  color: rgb(var(--color-primary));
-}
-.learndash-wrapper:not(.ld-registration__outer-wrapper):not(.learndash-wrapper--modern) .ld-button.ld-button-transparent:hover,
-.learndash-wrapper:not(.ld-registration__outer-wrapper):not(.learndash-wrapper--modern) .ld-button.ld-button-transparent:focus {
-  color: rgb(var(--color-primary-hover));
+  color: rgb(var(--color-primary)) !important;
 }
 
 /* ── Reduced motion ── */
