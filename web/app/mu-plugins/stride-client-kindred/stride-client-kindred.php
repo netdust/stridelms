@@ -56,10 +56,21 @@ final class StrideClientKindred
             return;
         }
 
+        // Depend on LearnDash's late stylesheets so our :root token overrides
+        // win against the LD30 modern theme (loaded after our default priority).
+        // Each handle is only listed as a dep if it's actually registered —
+        // wp_style_is() guards against breaking pages where LD isn't loaded.
+        $deps = [];
+        foreach (['learndash-front', 'learndash-ld30-modern', 'learndash-css'] as $handle) {
+            if (wp_style_is($handle, 'registered') || wp_style_is($handle, 'enqueued')) {
+                $deps[] = $handle;
+            }
+        }
+
         wp_enqueue_style(
             'stride-client',
             $this->url . '/assets/client.css',
-            [],
+            $deps,
             (string) filemtime($cssFile)
         );
     }
