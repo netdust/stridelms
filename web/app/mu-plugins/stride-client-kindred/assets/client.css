@@ -119,32 +119,20 @@ body {
 }
 
 /* ── Links ──
-   Underline only in prose / editorial content, never globally.
-   Buttons, nav, cards already manage their own affordance via color + hover. */
-.prose-stride a,
-.entry-content a,
-article a {
+   Underline only inside long-form prose (.prose-stride / .entry-content).
+   Anywhere else: links inherit color, no underline.
+   `:not([class])` keeps buttons, cards, tabs (which all have classes)
+   un-underlined even when nested inside a prose block. */
+.prose-stride a:not([class]),
+.entry-content a:not([class]) {
   color: rgb(var(--color-primary));
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
   transition: color var(--duration-fast) var(--ease-out);
 }
-.prose-stride a:hover,
-.entry-content a:hover,
-article a:hover { color: rgb(var(--color-primary-hover)); }
-
-/* Exception: links inside buttons / cards / nav stay un-underlined */
-.prose-stride a.btn-primary,
-.prose-stride a.btn-secondary,
-.prose-stride a.btn-outline-dark,
-.prose-stride a.btn-ghost,
-article a.btn-primary,
-article a.btn-secondary,
-article a.btn-outline-dark,
-article a.btn-ghost,
-article a.card,
-article a.card-interactive { text-decoration: none; }
+.prose-stride a:not([class]):hover,
+.entry-content a:not([class]):hover { color: rgb(var(--color-primary-hover)); }
 
 /* ── Buttons ── */
 .btn-primary,
