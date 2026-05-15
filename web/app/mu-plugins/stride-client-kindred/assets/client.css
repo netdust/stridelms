@@ -1,0 +1,99 @@
+/**
+ * Kindred HR — Design Token Overrides
+ *
+ * Editorial "cool stone + moss" design system.
+ * Moss green on warm stone paper. Ink anchors. Instrument Serif for editorial
+ * fragments only. Geist for everything else.
+ *
+ * Source: brand-board.css from stridelms brand.zip (2026-05).
+ *
+ * Design principles:
+ * - Restraint over decoration — every element earns its presence
+ * - Editorial typography is the visual system — type does the work
+ * - Tonal layering, no hard borders — surface shifts instead of 1px lines
+ */
+
+:root {
+  /* ── Brand Colors — Moss + Stone ── */
+  --color-primary: 31 91 61;              /* #1F5B3D moss */
+  --color-primary-hover: 15 58 37;        /* #0F3A25 deep moss */
+  --color-primary-subtle: 188 212 196;    /* #BCD4C4 soft moss tint */
+  --color-primary-light: 188 212 196;     /* #BCD4C4 (same as subtle, single tint) */
+  --color-primary-dark: 15 58 37;         /* #0F3A25 deep moss */
+  --color-accent: 31 91 61;               /* moss as single accent — no second accent */
+  --color-accent-light: 188 212 196;
+
+  /* ── Neutrals — Cool Stone Paper ── */
+  --color-surface: 241 242 239;           /* #F1F2EF stone base */
+  --color-surface-alt: 232 234 229;       /* #E8EAE5 deeper stone */
+  --color-surface-card: 249 250 247;      /* #F9FAF7 lifted card */
+  --color-border: 225 227 220;            /* #E1E3DC soft line */
+  --color-border-strong: 212 215 208;     /* #D4D7D0 stronger line */
+  --color-text: 17 19 18;                 /* #111312 ink */
+  --color-text-muted: 108 112 107;        /* #6C706B muted stone */
+  --color-text-inverse: 249 250 247;
+
+  /* ── 5-tier surface ladder ── */
+  --color-surface-container: 232 234 229;        /* #E8EAE5 emphasised panels */
+  --color-surface-container-high: 225 227 220;   /* #E1E3DC modals / dropdowns */
+  --color-surface-container-highest: 212 215 208;/* #D4D7D0 overlays */
+  --color-secondary-container: 188 212 196;     /* moss tint */
+  --color-tertiary: 17 19 18;                   /* ink as tertiary anchor */
+  --color-tertiary-light: 54 58 54;             /* ink-soft #363A36 */
+
+  /* ── Status Colors ── */
+  --color-success: 31 91 61;              /* moss for ok */
+  --color-warning: 138 106 28;            /* #8A6A1C umber */
+  --color-error: 138 42 28;               /* #8A2A1C oxblood */
+  --color-info: 31 91 61;
+
+  /* ── Badge Colors — restrained, all on stone surface ── */
+  --color-badge-open-bg: 188 212 196;          /* moss tint */
+  --color-badge-open-text: 15 58 37;
+  --color-badge-few-bg: 232 215 178;           /* warm sand */
+  --color-badge-few-text: 138 106 28;
+  --color-badge-full-bg: 212 215 208;          /* stone — neutral "closed" */
+  --color-badge-full-text: 54 58 54;
+  --color-badge-cancelled-bg: 225 227 220;
+  --color-badge-cancelled-text: 108 112 107;
+  --color-badge-online-bg: 212 220 225;        /* cool grey-blue */
+  --color-badge-online-text: 54 58 54;
+  --color-badge-free-bg: 188 212 196;
+  --color-badge-free-text: 15 58 37;
+
+  /* ── Typography ── */
+  --font-sans: 'Geist', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-heading: 'Geist', system-ui, sans-serif;
+  --font-serif: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+  --font-label: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-display-alt: 'Fraunces', 'Instrument Serif', Georgia, serif;
+
+  /* ── Spacing ── */
+  --space-section: 6rem;
+  --space-block: 3.5rem;
+  --space-element: 1.5rem;
+
+  /* ── Border Radius — restrained, no pills ── */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --radius-xl: 22px;
+
+  /* ── Shadows — minimal, ink-tinted ── */
+  --shadow-xs: 0 1px 2px rgba(17, 19, 18, 0.04);
+  --shadow-sm: 0 2px 6px rgba(17, 19, 18, 0.05);
+  --shadow-md: 0 8px 20px -6px rgba(17, 19, 18, 0.08);
+  --shadow-lg: 0 20px 40px -12px rgba(17, 19, 18, 0.10);
+  --shadow-overlay: 0 24px 50px -14px rgba(17, 19, 18, 0.14);
+  --shadow-card: var(--shadow-xs);
+  --shadow-elevated: var(--shadow-sm);
+
+  /* ── Motion — slow, premium, never bouncy ── */
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --duration-fast: 180ms;
+  --duration-normal: 320ms;
+
+  /* ── Brand utilities ── */
+  --kindred-page-max: 1320px;
+  --kindred-gutter: clamp(20px, 4vw, 56px);
+}
