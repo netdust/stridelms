@@ -324,6 +324,75 @@ footer a { color: rgb(var(--color-text)); }
   font-weight: 500;
 }
 
+/* ═══════════════════════════════════════════ LearnDash ═══════════════════════════════════════════
+   LD ships its own design tokens (--ld-color-primitives-* and --ld-color-semantic-*).
+   The blue primitives drive brand-primary, links, button bg, focus rings, and the
+   "system-dark" color used for hover states. Remapping the blue ramp to our coral
+   ramp inherits through to all LD semantic + component tokens.
+
+   We scope the override to .learndash-wrapper so it doesn't leak to non-LD surfaces. */
+.learndash-wrapper,
+.learndash-wrapper--modern,
+.ld-focus,
+.ld-focus-sidebar {
+  /* Blue → coral ramp */
+  --ld-color-primitives-blue-100: 247 240 235;   /* very light coral wash */
+  --ld-color-primitives-blue-150: 247 224 213;   /* matches --color-primary-subtle */
+  --ld-color-primitives-blue-175: 244 196 175;   /* matches --color-primary-light */
+  --ld-color-primitives-blue-200: 232 174 148;
+  --ld-color-primitives-blue-500: #D97757;       /* coral — brand-primary */
+  --ld-color-primitives-blue-800: #9F4C31;       /* deep coral — hover/system-dark */
+
+  /* Body surface + text → warm cream + warm ink */
+  --ld-color-system-white: #FCFAF5;              /* card surface */
+  --ld-color-system-body-text: #29261B;          /* warm ink */
+  --ld-color-system-dark: #9F4C31;               /* hover */
+  --ld-color-system-border: #E2DCD1;             /* warm border */
+
+  /* Buttons */
+  --ld-color-button-bg: #D97757;
+  --ld-color-button-bg-hover: #9F4C31;
+  --ld-color-button: #FCFAF5;
+  --ld-color-button-secondary-border: #D97757;
+
+  /* Links */
+  --ld-color-semantic-text-link: #D97757;
+  --ld-color-semantic-text-link-hover: #9F4C31;
+
+  /* Primary brand alias */
+  --ld-color-brand-primary: #D97757;
+
+  /* Typography — let LD inherit our Geist + Geist Mono */
+  font-family: var(--font-sans);
+}
+
+/* LD lesson body content uses prose-like spacing — pick up our serif italic + mono */
+.learndash-wrapper em { font-family: var(--font-serif); font-style: italic; }
+.learndash-wrapper code,
+.learndash-wrapper pre { font-family: var(--font-label); }
+
+/* Focus mode sidebar background — keep warm cream instead of LD's grey */
+.ld-focus,
+.ld-focus-sidebar {
+  background: rgb(var(--color-surface));
+}
+
+/* Lesson title heading — match Kindred display style */
+.learndash-wrapper h1,
+.learndash-wrapper h2 {
+  font-family: var(--font-heading);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: rgb(var(--color-text));
+}
+
+/* Status icons (complete / incomplete) — recolor the green completed checks
+   so they don't clash with coral. Olive matches our --color-success. */
+.learndash-wrapper .ld-status-complete,
+.learndash-wrapper .ld-status-icon-complete {
+  color: rgb(var(--color-success));
+}
+
 /* ── Reduced motion ── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
