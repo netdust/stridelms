@@ -197,6 +197,10 @@ These 7 from the original lists were verified fixed in current code:
 
 - [ ] (P2) **`EditionService::recomputeStatus()` missing** — capacity edit or seed/import doesn't fire `stride/registration/created`, so status stays stale. Add method + `wp stride recompute-edition-status` CLI. ~30 LOC. Lower priority than D.3 items.
 
+### D.5 — Jaarrapport / Annual Report (P1, pre-launch)
+
+- [x] (P1) **Annual Report admin page** — **DONE 2026-05-16**. `Stride → Jaarrapport` submenu with 8 KPIs (enrollments, unique participants, organisations, completions, completion rate, training hours, editions, sessions), 6 section tables (enrollments by course, completion funnel, attendance, top orgs, profile types, quotes), Chart.js bar chart, DOMPDF tables-only export, per-section + "all" CSV downloads with formula-injection mitigation. Year basis = edition `_ntdst_start_date`; previous-year column renders "—" when no prior data. Commits: `9b25e29c` (DTO) → `55313dd3` (report) → `525b9c8b` (KPIs) → `7accea8f` (memo fix) → `3ef4bf5c` (sections) → `78db0e46` (admin page) → `590b303b` (PDF) → `7590a38a` (handlers) → `e852e275` (Alpine load-order fix). 5 integration + 6 unit tests. Plan: `plans/2026-05-16-annual-report.md`.
+
 **Why this exists at all:** the original §D was last refreshed before the Sprint 1 / Phase 3 work, which incidentally cleaned up many of the listed module bugs. The 4 real items survived because no commit explicitly targeted them.
 
 ---
