@@ -65,8 +65,381 @@ class AnnualReportService implements \NTDST_Service_Meta
             previousYear: $year - 1,
             generatedAt: current_time('mysql'),
             kpis: $kpis,
-            sections: [], // populated in Task 4
+            sections: [
+                $this->sectionEnrollmentsByCourse($year),
+                $this->sectionCompletionFunnel($year),
+                $this->sectionAttendanceByCourse($year),
+                $this->sectionTopOrganisations($year),
+                $this->sectionProfileTypeDistribution($year),
+                $this->sectionQuotesSummary($year),
+            ],
         );
+    }
+
+    private function sectionEnrollmentsByCourse(int $year): AnnualReportSection
+    {
+        $current  = $this->enrollmentsByCourse($year);
+        $previous = $this->yearHasData($year - 1) ? $this->enrollmentsByCourse($year - 1) : [];
+
+        arsort($current);
+        $rows = [];
+        foreach (array_slice($current, 0, 20, true) as $courseId => $count) {
+            $title = get_the_title($courseId) ?: '(Onbekende cursus)';
+            $prev  = $previous[$courseId] ?? null;
+            $rows[] = [$title, (int) $count, $prev !== null ? (int) $prev : null];
+        }
+
+        return new AnnualReportSection(
+            id: 'enrollments_by_course',
+            title: __('Inschrijvingen per cursus', 'stride'),
+            headers: [__('Cursus', 'stride'), (string) $year, (string) ($year - 1)],
+            rows: $rows,
+        );
+    }
+
+    /** @return array<int,int> course_id => enrollment_count */
+    private function enrollmentsByCourse(int $year): array
+    {
+        $editionIds = $this->editionIdsForYear($year);
+        if (empty($editionIds)) {
+            return [];
+        }
+        global $wpdb;
+        $table = RegistrationTable::getTableName();
+        $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT pm.meta_value AS course_id, COUNT(r.id) AS cnt
+             FROM {$table} r
+             INNER JOIN {$wpdb->postmeta} pm ON pm.post_id = r.edition_id AND pm.meta_key = %s
+             WHERE r.status IN ('confirmed', 'completed')
+               AND r.edition_id IN ({$placeholders})
+             GROUP BY pm.meta_value",
+            '_ntdst_course_id',
+            ...$editionIds
+        ));
+
+        $out = [];
+        foreach ($rows as $r) {
+            $out[(int) $r->course_id] = (int) $r->cnt;
+        }
+        return $out;
+    }
+
+    private function sectionCompletionFunnel(int $year): AnnualReportSection
+    {
+        $editionIds = $this->editionIdsForYear($year);
+        $rows = [];
+        if (!empty($editionIds)) {
+            global $wpdb;
+            $table = RegistrationTable::getTableName();
+            $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
+
+            $raw = $wpdb->get_results($wpdb->prepare(
+                "SELECT pm.meta_value AS course_id,
+                        SUM(CASE WHEN r.status IN ('confirmed','completed') THEN 1 ELSE 0 END) AS enrolled,
+                        SUM(CASE WHEN r.status = 'completed' THEN 1 ELSE 0 END) AS completed
+                 FROM {$table} r
+                 INNER JOIN {$wpdb->postmeta} pm ON pm.post_id = r.edition_id AND pm.meta_key = %s
+                 WHERE r.edition_id IN ({$placeholders})
+                 GROUP BY pm.meta_value
+                 ORDER BY enrolled DESC",
+                '_ntdst_course_id',
+                ...$editionIds
+            ));
+            foreach ($raw as $r) {
+                $enrolled  = (int) $r->enrolled;
+                $completed = (int) $r->completed;
+                $rate      = $enrolled > 0 ? round(($completed / $enrolled) * 100, 1) : null;
+                $rows[] = [
+                    get_the_title((int) $r->course_id) ?: '(Onbekende cursus)',
+                    $enrolled,
+                    $completed,
+                    $rate,
+                ];
+            }
+        }
+
+        return new AnnualReportSection(
+            id: 'completion_funnel_by_course',
+            title: __('Voltooiing per cursus', 'stride'),
+            headers: [
+                __('Cursus', 'stride'),
+                __('Ingeschreven', 'stride'),
+                __('Voltooid', 'stride'),
+                __('Voltooiingsgraad', 'stride'),
+            ],
+            rows: $rows,
+        );
+    }
+
+    private function sectionAttendanceByCourse(int $year): AnnualReportSection
+    {
+        $editionIds = $this->editionIdsForYear($year);
+        $courseHours = [];        // course_id => total_hours
+        $courseParticipants = []; // course_id => unique_user_count
+
+        if (!empty($editionIds)) {
+            global $wpdb;
+            $start = sprintf('%d-01-01', $year);
+            $end   = sprintf('%d-12-31', $year);
+            $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
+
+            $sessions = $wpdb->get_results($wpdb->prepare(
+                "SELECT p.ID AS session_id,
+                        pm_ed.meta_value AS edition_id,
+                        pm_course.meta_value AS course_id,
+                        pm_start.meta_value AS start_time,
+                        pm_end.meta_value AS end_time
+                 FROM {$wpdb->posts} p
+                 INNER JOIN {$wpdb->postmeta} pm_date   ON p.ID = pm_date.post_id  AND pm_date.meta_key  = %s
+                 INNER JOIN {$wpdb->postmeta} pm_ed     ON p.ID = pm_ed.post_id    AND pm_ed.meta_key    = %s
+                 LEFT  JOIN {$wpdb->postmeta} pm_start  ON p.ID = pm_start.post_id AND pm_start.meta_key = %s
+                 LEFT  JOIN {$wpdb->postmeta} pm_end    ON p.ID = pm_end.post_id   AND pm_end.meta_key   = %s
+                 LEFT  JOIN {$wpdb->postmeta} pm_course ON pm_ed.meta_value = pm_course.post_id AND pm_course.meta_key = %s
+                 WHERE p.post_type = %s
+                   AND p.post_status = 'publish'
+                   AND pm_date.meta_value BETWEEN %s AND %s
+                   AND pm_ed.meta_value IN ({$placeholders})",
+                '_ntdst_date',
+                '_ntdst_edition_id',
+                '_ntdst_start_time',
+                '_ntdst_end_time',
+                '_ntdst_course_id',
+                SessionCPT::POST_TYPE,
+                $start,
+                $end,
+                ...$editionIds
+            ));
+
+            $attendanceTable = AttendanceTable::getTableName();
+            $attendedValues  = AttendanceStatus::attendedValues();
+
+            foreach ($sessions as $s) {
+                $duration = $this->hoursBetween($s->start_time, $s->end_time);
+                if ($duration <= 0) {
+                    continue;
+                }
+                $courseId = (int) $s->course_id;
+                // countAttended on AttendanceService is keyed by user+edition, not session.
+                // Query the attendance table directly for the session, mirroring trainingHours().
+                $attended = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$attendanceTable}
+                     WHERE session_id = %d
+                       AND status IN ({$attendedValues})",
+                    (int) $s->session_id
+                ));
+                $courseHours[$courseId] = ($courseHours[$courseId] ?? 0.0) + ($duration * $attended);
+            }
+
+            // Unique participants per course (from registrations).
+            $registrationsTable = RegistrationTable::getTableName();
+            $rowsParticipants = $wpdb->get_results($wpdb->prepare(
+                "SELECT pm.meta_value AS course_id, COUNT(DISTINCT r.user_id) AS users
+                 FROM {$registrationsTable} r
+                 INNER JOIN {$wpdb->postmeta} pm ON pm.post_id = r.edition_id AND pm.meta_key = %s
+                 WHERE r.status IN ('confirmed','completed')
+                   AND r.edition_id IN ({$placeholders})
+                 GROUP BY pm.meta_value",
+                '_ntdst_course_id',
+                ...$editionIds
+            ));
+            foreach ($rowsParticipants as $r) {
+                $courseParticipants[(int) $r->course_id] = (int) $r->users;
+            }
+        }
+
+        arsort($courseHours);
+        $rowsOut = [];
+        foreach ($courseHours as $courseId => $hours) {
+            $participants = $courseParticipants[$courseId] ?? 0;
+            $avg = $participants > 0 ? round($hours / $participants, 1) : null;
+            $rowsOut[] = [
+                get_the_title($courseId) ?: '(Onbekende cursus)',
+                round($hours, 1),
+                $avg,
+            ];
+        }
+
+        return new AnnualReportSection(
+            id: 'attendance_by_course',
+            title: __('Vormingsuren per cursus', 'stride'),
+            headers: [
+                __('Cursus', 'stride'),
+                __('Totale uren', 'stride'),
+                __('Gem. uren per deelnemer', 'stride'),
+            ],
+            rows: $rowsOut,
+        );
+    }
+
+    private function sectionTopOrganisations(int $year): AnnualReportSection
+    {
+        $current  = $this->organisationCounts($year);
+        $previous = $this->yearHasData($year - 1) ? $this->organisationCounts($year - 1) : [];
+        arsort($current);
+
+        $rows = [];
+        foreach (array_slice($current, 0, 15, true) as $org => $count) {
+            $prev = $previous[$org] ?? null;
+            $rows[] = [$org, (int) $count, $prev !== null ? (int) $prev : null];
+        }
+
+        return new AnnualReportSection(
+            id: 'top_organisations',
+            title: __('Top organisaties', 'stride'),
+            headers: [__('Organisatie', 'stride'), (string) $year, (string) ($year - 1)],
+            rows: $rows,
+        );
+    }
+
+    /** @return array<string,int> org_name => count */
+    private function organisationCounts(int $year): array
+    {
+        $editionIds = $this->editionIdsForYear($year);
+        if (empty($editionIds)) {
+            return [];
+        }
+        global $wpdb;
+        $table = RegistrationTable::getTableName();
+        $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT um.meta_value AS org, COUNT(DISTINCT r.id) AS cnt
+             FROM {$table} r
+             INNER JOIN {$wpdb->usermeta} um ON um.user_id = r.user_id AND um.meta_key = %s
+             WHERE um.meta_value != ''
+               AND r.status IN ('confirmed','completed')
+               AND r.edition_id IN ({$placeholders})
+             GROUP BY um.meta_value",
+            'organisation',
+            ...$editionIds
+        ));
+
+        $out = [];
+        foreach ($rows as $r) {
+            $out[(string) $r->org] = (int) $r->cnt;
+        }
+        return $out;
+    }
+
+    private function sectionProfileTypeDistribution(int $year): AnnualReportSection
+    {
+        $current  = $this->profileTypeCounts($year);
+        $previous = $this->yearHasData($year - 1) ? $this->profileTypeCounts($year - 1) : [];
+        arsort($current);
+
+        $rows = [];
+        foreach ($current as $type => $count) {
+            $prev   = $previous[$type] ?? null;
+            $label  = $type !== '' ? $type : __('(geen)', 'stride');
+            $rows[] = [$label, (int) $count, $prev !== null ? (int) $prev : null];
+        }
+
+        return new AnnualReportSection(
+            id: 'profile_type_distribution',
+            title: __('Verdeling profieltypes', 'stride'),
+            headers: [__('Profieltype', 'stride'), (string) $year, (string) ($year - 1)],
+            rows: $rows,
+        );
+    }
+
+    /** @return array<string,int> profile_type => unique_user_count */
+    private function profileTypeCounts(int $year): array
+    {
+        $editionIds = $this->editionIdsForYear($year);
+        if (empty($editionIds)) {
+            return [];
+        }
+        global $wpdb;
+        $table = RegistrationTable::getTableName();
+        $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT COALESCE(um.meta_value, '') AS pt, COUNT(DISTINCT r.user_id) AS cnt
+             FROM {$table} r
+             LEFT JOIN {$wpdb->usermeta} um ON um.user_id = r.user_id AND um.meta_key = %s
+             WHERE r.status IN ('confirmed','completed')
+               AND r.edition_id IN ({$placeholders})
+             GROUP BY pt",
+            'profile_type',
+            ...$editionIds
+        ));
+
+        $out = [];
+        foreach ($rows as $r) {
+            $out[(string) $r->pt] = (int) $r->cnt;
+        }
+        return $out;
+    }
+
+    private function sectionQuotesSummary(int $year): AnnualReportSection
+    {
+        $cur  = $this->quoteAggregates($year);
+        $prev = $this->yearHasData($year - 1)
+            ? $this->quoteAggregates($year - 1)
+            : ['count' => null, 'invoiced' => null, 'paid' => null, 'outstanding' => null];
+
+        return new AnnualReportSection(
+            id: 'quotes_summary',
+            title: __('Offertes en omzet', 'stride'),
+            headers: [__('Metriek', 'stride'), (string) $year, (string) ($year - 1)],
+            rows: [
+                [__('Aantal offertes', 'stride'),           $cur['count'],       $prev['count']],
+                [__('Totaal gefactureerd (€)', 'stride'),   $cur['invoiced'],    $prev['invoiced']],
+                [__('Betaald (€)', 'stride'),               $cur['paid'],        $prev['paid']],
+                [__('Openstaand (€)', 'stride'),            $cur['outstanding'], $prev['outstanding']],
+            ],
+        );
+    }
+
+    /**
+     * Aggregate quote totals for the given year.
+     *
+     * Project specifics:
+     *  - QuoteCPT has `meta_prefix => ''`, so postmeta keys are `status` and `total` (cents).
+     *  - There is no `issued_at` field; the quote's issue date is the post's `post_date`.
+     *  - Project has no `paid` status — invoicing is handled in Exact Online. The closest
+     *    finalised state in QuoteStatus is `exported` (= processed/sent to Exact).
+     *
+     * @return array{count: int, invoiced: float, paid: float, outstanding: float}
+     */
+    private function quoteAggregates(int $year): array
+    {
+        global $wpdb;
+        $start = sprintf('%d-01-01 00:00:00', $year);
+        $end   = sprintf('%d-12-31 23:59:59', $year);
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT pm_status.meta_value AS status, pm_total.meta_value AS cents
+             FROM {$wpdb->posts} p
+             LEFT JOIN {$wpdb->postmeta} pm_status ON p.ID = pm_status.post_id AND pm_status.meta_key = %s
+             LEFT JOIN {$wpdb->postmeta} pm_total  ON p.ID = pm_total.post_id  AND pm_total.meta_key  = %s
+             WHERE p.post_type = 'vad_quote'
+               AND p.post_status = 'publish'
+               AND p.post_date BETWEEN %s AND %s",
+            'status',
+            'total',
+            $start,
+            $end
+        ));
+
+        $count    = count($rows);
+        $invoiced = 0.0;
+        $paid     = 0.0;
+        foreach ($rows as $r) {
+            $eur = ((int) $r->cents) / 100;
+            $invoiced += $eur;
+            if ($r->status === \Stride\Domain\QuoteStatus::Exported->value) {
+                $paid += $eur;
+            }
+        }
+        return [
+            'count'       => $count,
+            'invoiced'    => round($invoiced, 2),
+            'paid'        => round($paid, 2),
+            'outstanding' => round($invoiced - $paid, 2),
+        ];
     }
 
     /**
