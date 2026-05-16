@@ -133,6 +133,7 @@ add_action('ntdst/features_ready', function () use ($config): void {
         \Stride\Handlers\QuoteUpdateHandler::class,
         \Stride\Handlers\ProfileHandler::class,
         \Stride\Handlers\ICalHandler::class,
+        \Stride\Handlers\AnnualReportHandler::class,
     ];
 
     foreach ($handlers as $handlerClass) {
