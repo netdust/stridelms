@@ -173,6 +173,22 @@ if (!function_exists('__')) {
     }
 }
 
+if (!function_exists('_n')) {
+    function _n(string $single, string $plural, int $number, string $domain = 'default'): string
+    {
+        return $number === 1 ? $single : $plural;
+    }
+}
+
+if (!function_exists('get_post_thumbnail_id')) {
+    function get_post_thumbnail_id($post = null, ?string $size = null)
+    {
+        global $_test_post_meta;
+        $postId = is_object($post) ? $post->ID : (int) $post;
+        return $_test_post_meta[$postId]['_thumbnail_id'][0] ?? 0;
+    }
+}
+
 if (!function_exists('esc_html')) {
     function esc_html(string $text): string
     {

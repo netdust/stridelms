@@ -78,3 +78,144 @@ function stridence_render_error_state(string $icon, string $title, string $messa
         'action_url'   => $action_url,
     ]);
 }
+
+/**
+ * Build course-card partial args from a UserDashboardService enrollment array.
+ *
+ * Maps the dashboard service's enrollment shape (edition or online) into the
+ * normalised contract consumed by templates/components/course-card.php.
+ *
+ * @param array $enrollment One element of $data['active_editions'], $data['active_online'],
+ *                          or $data['completed_items'] from UserDashboardService::getEnrollmentData().
+ * @param bool  $completed  When true: clears primary_cta, sets status_pill to 'Voltooid'.
+ * @return array            See course-card.php docblock for the full contract.
+ */
+function stridence_build_course_card_args_from_enrollment(array $enrollment, bool $completed = false): array
+{
+    $type = $enrollment['type'] ?? 'edition';
+    $isOnline = $type === 'online';
+
+    $courseId    = (int) ($enrollment['course_id'] ?? 0);
+    $courseTitle = (string) ($enrollment['course_title'] ?? '');
+    $thumbnailId = $courseId ? (int) get_post_thumbnail_id($courseId) : 0;
+
+    // Status pill
+    $statusPill = null;
+    if ($completed) {
+        $statusPill = ['label' => __('Voltooid', 'stridence'), 'tone' => 'muted'];
+    } elseif ($isOnline) {
+        $statusPill = ['label' => __('Online', 'stridence'), 'tone' => 'accent'];
+    } else {
+        $statusPill = ['label' => __('Klassikaal', 'stridence'), 'tone' => 'primary'];
+    }
+
+    // Meta (collapsed-header secondary line)
+    $meta = [
+        'start_date'          => null,
+        'venue'               => null,
+        'progress_label'      => null,
+        'days_remaining'      => null,
+        'pending_tasks_count' => null,
+    ];
+
+    // Body (expanded content)
+    $body = [
+        'excerpt'           => null,
+        'progress_pct'      => null,
+        'sessions'          => [],
+        'upcoming_editions' => [],
+        'task_summary'      => null,
+        'primary_cta'       => null,
+        'secondary_cta'     => null,
+    ];
+
+    if ($isOnline) {
+        $totalLessons     = (int) ($enrollment['total_lessons'] ?? 0);
+        $completedLessons = (int) ($enrollment['completed_lessons'] ?? 0);
+        $progressPct      = (int) ($enrollment['progress'] ?? 0);
+
+        $meta['progress_label'] = $totalLessons > 0
+            ? sprintf(
+                _n('%d van %d les', '%d van %d lessen', $totalLessons, 'stridence'),
+                $completedLessons,
+                $totalLessons
+            )
+            : null;
+        $meta['days_remaining'] = isset($enrollment['days_remaining']) ? (int) $enrollment['days_remaining'] : null;
+
+        $body['progress_pct'] = $progressPct;
+
+        if (!$completed) {
+            $ctaUrl = $enrollment['course_url'] ?? '';
+            if (!$ctaUrl && $courseId) {
+                $ctaUrl = get_permalink($courseId) ?: '';
+            }
+            if ($ctaUrl) {
+                $body['primary_cta'] = [
+                    'url'   => $ctaUrl,
+                    'label' => $progressPct > 0
+                        ? __('Verder leren', 'stridence')
+                        : __('Start cursus', 'stridence'),
+                ];
+            }
+        }
+    } else {
+        // edition
+        $meta['start_date'] = !empty($enrollment['start_date']) ? (string) $enrollment['start_date'] : null;
+        $meta['venue']      = !empty($enrollment['venue']) ? (string) $enrollment['venue'] : null;
+
+        $taskSummary = $enrollment['task_summary'] ?? null;
+        if ($taskSummary) {
+            $body['task_summary']       = $taskSummary;
+            $pending                    = (int) ($taskSummary['total'] ?? 0) - (int) ($taskSummary['completed'] ?? 0);
+            $meta['pending_tasks_count'] = $pending > 0 ? $pending : null;
+        }
+
+        // Sessions list (already on the enrollment shape)
+        if (!empty($enrollment['sessions']) && is_array($enrollment['sessions'])) {
+            $body['sessions'] = array_values($enrollment['sessions']);
+        }
+
+        // Progress for editions = attended/required
+        $progress = $enrollment['progress'] ?? null;
+        if (is_array($progress)) {
+            $required = (int) ($progress['required'] ?? 0);
+            $attended = (int) ($progress['attended'] ?? 0);
+            $body['progress_pct'] = $required > 0 ? (int) round(($attended / $required) * 100) : null;
+            if ($required > 0) {
+                $meta['progress_label'] = sprintf(
+                    _n('%d van %d sessie', '%d van %d sessies', $required, 'stridence'),
+                    $attended,
+                    $required
+                );
+            }
+        }
+
+        if (!$completed && !empty($enrollment['cta'])) {
+            $body['primary_cta'] = $enrollment['cta'];
+        }
+    }
+
+    // Secondary CTA: always 'Bekijk cursus' linking to the course permalink, when we have one
+    if ($courseId) {
+        $coursePermalink = get_permalink($courseId);
+        if ($coursePermalink) {
+            $body['secondary_cta'] = [
+                'url'   => $coursePermalink,
+                'label' => __('Bekijk cursus', 'stridence'),
+            ];
+        }
+    }
+
+    return [
+        'course_id'    => $courseId,
+        'course_title' => $courseTitle,
+        'thumbnail_id' => $thumbnailId ?: null,
+        'type'         => $isOnline ? 'online' : 'edition',
+        'status_pill'  => $statusPill,
+        'enrolled'     => true,
+        'initial_open' => false,
+        'meta'         => $meta,
+        'body'         => $body,
+    ];
+}
