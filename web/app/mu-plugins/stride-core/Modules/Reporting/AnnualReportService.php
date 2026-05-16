@@ -23,6 +23,10 @@ class AnnualReportService implements \NTDST_Service_Meta
 
     public function buildReport(int $year): AnnualReport
     {
+        // Reset per-build caches so consecutive buildReport() calls always see fresh data.
+        $this->availableYearsCache = null;
+        $this->editionIdsCache     = [];
+
         $hasPrev = $this->yearHasData($year - 1);
 
         $kpis = [
@@ -442,12 +446,22 @@ class AnnualReportService implements \NTDST_Service_Meta
         ];
     }
 
+    private ?array $availableYearsCache = null;
+
+    /** @var array<int, list<int>> */
+    private array $editionIdsCache = [];
+
     /**
      * Returns distinct years (DESC) that have at least one published edition with a start date.
      *
      * @return list<int>
      */
     public function availableYears(): array
+    {
+        return $this->availableYearsCache ??= $this->fetchAvailableYears();
+    }
+
+    private function fetchAvailableYears(): array
     {
         global $wpdb;
         $rows = $wpdb->get_col($wpdb->prepare(
@@ -476,6 +490,11 @@ class AnnualReportService implements \NTDST_Service_Meta
      * @return list<int>
      */
     private function editionIdsForYear(int $year): array
+    {
+        return $this->editionIdsCache[$year] ??= $this->fetchEditionIdsForYear($year);
+    }
+
+    private function fetchEditionIdsForYear(int $year): array
     {
         global $wpdb;
         $start = sprintf('%d-01-01', $year);
