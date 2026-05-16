@@ -15,6 +15,7 @@ use Stride\Modules\Edition\EditionCPT;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\SessionCPT;
 use Stride\Modules\Edition\SessionRepository;
+use Stride\Modules\Enrollment\EnrollmentService;
 use Stride\Modules\Enrollment\RegistrationTable;
 use Stride\Modules\Invoicing\QuoteCPT;
 use Stride\Modules\Trajectory\TrajectoryCPT;
@@ -321,6 +322,27 @@ final class AdminAPIController
             'args' => [
                 'id' => ['type' => 'integer', 'required' => true],
                 'reg_page' => ['type' => 'integer', 'default' => 1],
+            ],
+        ]);
+
+        // Update user profile (personal + billing)
+        register_rest_route(self::NAMESPACE, '/admin/users/(?P<id>\d+)/profile', [
+            'methods' => 'POST',
+            'callback' => [$this, 'updateUserProfile'],
+            'permission_callback' => [$this, 'canManageAdmin'],
+            'args' => [
+                'id' => ['type' => 'integer', 'required' => true],
+            ],
+        ]);
+
+        // Reveal a single sensitive field (national_id, date_of_birth, professional_license_number)
+        register_rest_route(self::NAMESPACE, '/admin/users/(?P<id>\d+)/reveal', [
+            'methods' => 'GET',
+            'callback' => [$this, 'revealSensitiveField'],
+            'permission_callback' => [$this, 'canManageAdmin'],
+            'args' => [
+                'id' => ['type' => 'integer', 'required' => true],
+                'field' => ['type' => 'string', 'required' => true],
             ],
         ]);
 
@@ -713,8 +735,8 @@ final class AdminAPIController
         global $wpdb;
 
         $view = $request->get_param('view') ?? 'agenda';
-        $page = $request->get_param('page');
-        $perPage = $request->get_param('per_page');
+        $page = max(1, (int) ($request->get_param('page') ?: 1));
+        $perPage = max(1, (int) ($request->get_param('per_page') ?: 20));
         $search = sanitize_text_field($request->get_param('search') ?? '');
         $status = sanitize_text_field($request->get_param('status') ?? '');
         $dateFrom = sanitize_text_field($request->get_param('date_from') ?? '');
@@ -884,8 +906,8 @@ final class AdminAPIController
     {
         global $wpdb;
 
-        $page = $request->get_param('page');
-        $perPage = $request->get_param('per_page');
+        $page = max(1, (int) ($request->get_param('page') ?: 1));
+        $perPage = max(1, (int) ($request->get_param('per_page') ?: 20));
         $search = sanitize_text_field($request->get_param('search') ?? '');
         $status = sanitize_text_field($request->get_param('status') ?? '');
         $dateFrom = sanitize_text_field($request->get_param('date_from') ?? '');
@@ -1424,8 +1446,8 @@ final class AdminAPIController
     {
         global $wpdb;
 
-        $page = $request->get_param('page');
-        $perPage = $request->get_param('per_page');
+        $page = max(1, (int) ($request->get_param('page') ?: 1));
+        $perPage = max(1, (int) ($request->get_param('per_page') ?: 20));
         $search = sanitize_text_field($request->get_param('search') ?? '');
         $status = sanitize_text_field($request->get_param('status') ?? '');
         $editionId = (int) $request->get_param('edition_id');
@@ -1617,8 +1639,8 @@ final class AdminAPIController
     {
         global $wpdb;
 
-        $page = $request->get_param('page');
-        $perPage = $request->get_param('per_page');
+        $page = max(1, (int) ($request->get_param('page') ?: 1));
+        $perPage = max(1, (int) ($request->get_param('per_page') ?: 20));
         $search = sanitize_text_field($request->get_param('search') ?? '');
         $status = sanitize_text_field($request->get_param('status') ?? '');
         $offset = ($page - 1) * $perPage;
@@ -2355,6 +2377,8 @@ final class AdminAPIController
             ? BatchQueryHelper::batchGetUsers(array_unique($userIdsToResolve))
             : [];
 
+        $entries = $this->enrichAuditContexts($entries);
+
         $feed = [];
         foreach ($entries as $entry) {
             // Skip raw/system events that don't have a user-friendly label
@@ -2480,13 +2504,40 @@ final class AdminAPIController
             );
         }
 
+        $sensitivePlaceholder = '••••••';
+
+        $rawNationalId = get_user_meta($userId, 'national_id', true) ?: '';
+        $rawDateOfBirth = get_user_meta($userId, 'date_of_birth', true) ?: '';
+        $rawLicense = get_user_meta($userId, 'professional_license_number', true) ?: '';
+
         $user = [
             'id' => $userId,
+            'first_name' => $userData->first_name ?? '',
+            'last_name' => $userData->last_name ?? '',
             'display_name' => $userData->display_name,
             'email' => $userData->user_email,
             'phone' => $canSeeSensitive ? (get_user_meta($userId, 'phone', true) ?: '') : '',
             'organisation' => get_user_meta($userId, 'organisation', true) ?: '',
             'department' => get_user_meta($userId, 'department', true) ?: '',
+
+            // Sensitive identity fields — read-only masked for non-managers.
+            // Boolean flag tells the UI whether to show a "reveal" affordance.
+            'national_id' => $canSeeSensitive && $rawNationalId !== '' ? $sensitivePlaceholder : '',
+            'national_id_present' => $rawNationalId !== '',
+            'date_of_birth' => $canSeeSensitive && $rawDateOfBirth !== '' ? $sensitivePlaceholder : '',
+            'date_of_birth_present' => $rawDateOfBirth !== '',
+            'professional_license_number' => $canSeeSensitive && $rawLicense !== '' ? $sensitivePlaceholder : '',
+            'professional_license_number_present' => $rawLicense !== '',
+
+            // Billing
+            'billing_company' => get_user_meta($userId, 'billing_company', true) ?: '',
+            'billing_vat' => get_user_meta($userId, 'billing_vat', true) ?: '',
+            'billing_address_1' => get_user_meta($userId, 'billing_address_1', true) ?: '',
+            'billing_postcode' => get_user_meta($userId, 'billing_postcode', true) ?: '',
+            'billing_city' => get_user_meta($userId, 'billing_city', true) ?: '',
+            'invoice_email' => get_user_meta($userId, 'invoice_email', true) ?: '',
+            'gln_number' => get_user_meta($userId, 'gln_number', true) ?: '',
+
             'profile_type' => $profileType,
             'is_anonymised' => $isAnonymised,
             'anonymised_label' => $isAnonymised
@@ -2709,6 +2760,8 @@ final class AdminAPIController
                 ? BatchQueryHelper::batchGetUsers(array_unique($userIdsToResolve))
                 : [];
 
+            $auditEntries = $this->enrichAuditContexts($auditEntries);
+
             foreach ($auditEntries as $entry) {
                 $actorId = (int) ($entry->actor_id ?? 0);
                 $actorUser = $usersMap[$actorId] ?? null;
@@ -2735,6 +2788,222 @@ final class AdminAPIController
             'audit_trail' => $canSeeSensitive ? $auditTrail : [],
             'audit_trail_total' => $canSeeSensitive ? $auditTrailTotal : 0,
         ]);
+    }
+
+    /**
+     * POST /admin/users/{id}/profile
+     *
+     * Updates personal + billing user data. Delegates persistence to
+     * {@see EnrollmentService::updateUserProfile()} so admin edits and
+     * enrollment-form edits share one canonical mutator.
+     */
+    public function updateUserProfile(WP_REST_Request $request): WP_REST_Response
+    {
+        $userId = (int) $request->get_param('id');
+
+        $userData = get_userdata($userId);
+        if (!$userData) {
+            return new WP_REST_Response(['error' => 'User not found'], 404);
+        }
+
+        if (!current_user_can('edit_user', $userId)) {
+            return new WP_REST_Response(['error' => 'Forbidden'], 403);
+        }
+
+        if ((int) get_user_meta($userId, '_stride_anonymised_at', true) > 0) {
+            return new WP_REST_Response([
+                'error' => __('Geanonimiseerde gebruikers kunnen niet bewerkt worden.', 'stride'),
+            ], 403);
+        }
+
+        $body = $request->get_json_params() ?: $request->get_body_params();
+
+        // Update WP user core fields (name/email).
+        $coreUpdate = ['ID' => $userId];
+        $hasCoreChange = false;
+
+        if (array_key_exists('first_name', $body)) {
+            $coreUpdate['first_name'] = sanitize_text_field((string) $body['first_name']);
+            $hasCoreChange = true;
+        }
+        if (array_key_exists('last_name', $body)) {
+            $coreUpdate['last_name'] = sanitize_text_field((string) $body['last_name']);
+            $hasCoreChange = true;
+        }
+        if ($hasCoreChange) {
+            $coreUpdate['display_name'] = trim(
+                ($coreUpdate['first_name'] ?? $userData->first_name ?? '')
+                . ' '
+                . ($coreUpdate['last_name'] ?? $userData->last_name ?? '')
+            );
+        }
+
+        if (array_key_exists('email', $body)) {
+            $email = sanitize_email((string) $body['email']);
+            if ($email === '' || !is_email($email)) {
+                return new WP_REST_Response([
+                    'error' => __('Ongeldig e-mailadres.', 'stride'),
+                ], 400);
+            }
+            $existing = email_exists($email);
+            if ($existing && (int) $existing !== $userId) {
+                return new WP_REST_Response([
+                    'error' => __('Dit e-mailadres is al in gebruik.', 'stride'),
+                ], 400);
+            }
+            $coreUpdate['user_email'] = $email;
+            $hasCoreChange = true;
+        }
+
+        if ($hasCoreChange) {
+            $result = wp_update_user($coreUpdate);
+            if (is_wp_error($result)) {
+                return new WP_REST_Response([
+                    'error' => $result->get_error_message(),
+                ], 400);
+            }
+        }
+
+        // Map request keys to the EnrollmentService::getUserMetaMapping() input keys.
+        $mapping = EnrollmentService::getUserMetaMapping();
+        $profileData = [];
+        foreach (array_keys($mapping) as $inputKey) {
+            if (array_key_exists($inputKey, $body)) {
+                $profileData[$inputKey] = $body[$inputKey];
+            }
+        }
+
+        if (!empty($profileData)) {
+            /** @var EnrollmentService $enrollment */
+            $enrollment = ntdst_get(EnrollmentService::class);
+            $enrollment->updateUserProfile($userId, $profileData);
+        }
+
+        // Audit (event name matches AdminActivityMapper's existing slot).
+        $audit = ntdst_get(\NTDST\Audit\AuditService::class);
+        if ($audit) {
+            $audit->record(
+                'user',
+                $userId,
+                'user.profile_updated',
+                get_current_user_id() ?: null,
+                [
+                    'target_user_id' => $userId,
+                    'fields' => array_keys($profileData) + ($hasCoreChange ? ['core'] : []),
+                ]
+            );
+        }
+
+        return new WP_REST_Response([
+            'success' => true,
+            'message' => __('Gebruiker bijgewerkt.', 'stride'),
+        ]);
+    }
+
+    /**
+     * GET /admin/users/{id}/reveal?field=...
+     *
+     * Returns the raw value of one sensitive identity field. Admin-only,
+     * one field per call — keeps reveal explicit (and audit-friendly later).
+     */
+    public function revealSensitiveField(WP_REST_Request $request): WP_REST_Response
+    {
+        $userId = (int) $request->get_param('id');
+        $field = (string) $request->get_param('field');
+
+        $allowed = ['national_id', 'date_of_birth', 'professional_license_number', 'phone'];
+        if (!in_array($field, $allowed, true)) {
+            return new WP_REST_Response(['error' => 'Invalid field'], 400);
+        }
+
+        if (!get_userdata($userId)) {
+            return new WP_REST_Response(['error' => 'User not found'], 404);
+        }
+
+        $value = get_user_meta($userId, $field, true) ?: '';
+
+        return new WP_REST_Response([
+            'field' => $field,
+            'value' => $value,
+        ]);
+    }
+
+    /**
+     * Batch-load edition / course titles referenced by a set of audit
+     * entries and inject them into each entry's encoded JSON context so the
+     * mapper can render full activity strings without per-row queries.
+     *
+     * Mutates entries in place and returns them for convenience.
+     *
+     * @param array<object> $entries
+     * @return array<object>
+     */
+    private function enrichAuditContexts(array $entries): array
+    {
+        if (empty($entries)) {
+            return $entries;
+        }
+
+        $postIds = [];
+        $decoded = [];
+
+        foreach ($entries as $i => $entry) {
+            $ctx = json_decode($entry->context ?? '{}', true) ?: [];
+            $decoded[$i] = $ctx;
+            if (!empty($ctx['edition_id'])) {
+                $postIds[] = (int) $ctx['edition_id'];
+            }
+            if (!empty($ctx['course_id']) && empty($ctx['course_title'])) {
+                $postIds[] = (int) $ctx['course_id'];
+            }
+            if (!empty($ctx['quote_id'])) {
+                $postIds[] = (int) $ctx['quote_id'];
+            }
+        }
+
+        $titles = $this->fetchPostTitles(array_values(array_unique(array_filter($postIds))));
+
+        foreach ($entries as $i => $entry) {
+            $ctx = $decoded[$i];
+            $editionId = (int) ($ctx['edition_id'] ?? 0);
+            $courseId = (int) ($ctx['course_id'] ?? 0);
+
+            if ($editionId > 0 && empty($ctx['edition_title']) && isset($titles[$editionId])) {
+                $ctx['edition_title'] = $titles[$editionId];
+            }
+            if ($courseId > 0 && empty($ctx['course_title']) && isset($titles[$courseId])) {
+                $ctx['course_title'] = $titles[$courseId];
+            }
+
+            $entry->context = wp_json_encode($ctx);
+        }
+
+        return $entries;
+    }
+
+    /**
+     * Batch fetch post_title for a set of IDs.
+     *
+     * @param array<int> $postIds
+     * @return array<int, string>
+     */
+    private function fetchPostTitles(array $postIds): array
+    {
+        if (empty($postIds)) {
+            return [];
+        }
+        global $wpdb;
+        $placeholders = implode(',', array_fill(0, count($postIds), '%d'));
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT ID, post_title FROM {$wpdb->posts} WHERE ID IN ({$placeholders})",
+            ...$postIds
+        ));
+        $titles = [];
+        foreach ($rows as $row) {
+            $titles[(int) $row->ID] = (string) $row->post_title;
+        }
+        return $titles;
     }
 
     // =========================================================================
@@ -3084,6 +3353,8 @@ final class AdminAPIController
             ...$actions,
         ));
 
+        $entries = $this->enrichAuditContexts($entries ?: []);
+
         $notifications = array_map(function ($entry) use ($lastReadId) {
             $actorName = '';
             if (!empty($entry->actor_id)) {
@@ -3094,7 +3365,7 @@ final class AdminAPIController
             $mapped['read'] = $mapped['id'] <= $lastReadId;
 
             return $mapped;
-        }, $entries ?: []);
+        }, $entries);
 
         $unread = count(array_filter($notifications, fn($n) => !$n['read']));
 

@@ -298,6 +298,13 @@ if (!function_exists('get_locale')) {
     }
 }
 
+if (!function_exists('admin_url')) {
+    function admin_url(string $path = ''): string
+    {
+        return 'http://example.test/wp-admin/' . ltrim($path, '/');
+    }
+}
+
 if (!function_exists('wp_update_user')) {
     function wp_update_user(array $userdata)
     {

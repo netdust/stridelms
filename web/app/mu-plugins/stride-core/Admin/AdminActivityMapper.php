@@ -46,30 +46,68 @@ final class AdminActivityMapper
     /**
      * Convert an audit log entry to an admin-friendly activity array.
      *
+     * Context may be enriched by the controller (edition_title, course_title,
+     * target_user_id, edition_id, etc.) so the mapper doesn't have to query.
+     *
      * @param object $entry  Row from audit log (id, action, actor_id, entity_type, entity_id, context, created_at)
      * @param string $actorName  Display name of the actor
      * @param string $targetName  Display name resolved from entity_id (e.g. for user.* events). Empty if not applicable.
-     * @return array{id: int, type: string, text: string, actor_name: string, timestamp: int}
+     * @return array{id: int, type: string, text: string, target_url: string, actor_name: string, timestamp: int}
      */
     public static function fromAuditEntry(object $entry, string $actorName, string $targetName = ''): array
     {
         $context = json_decode($entry->context ?? '{}', true) ?: [];
-        $edition = $context['edition_title'] ?? '';
+
+        // Course completions / certificates store `course_title`; everything
+        // else stores `edition_title` (when the controller has enriched it).
+        $subject = $context['edition_title'] ?? $context['course_title'] ?? '';
 
         // Allow controller-resolved target to override anything in context
         if ($targetName !== '') {
             $context['target_name'] = $targetName;
         }
 
-        [$type, $text] = self::resolve($entry->action, $actorName, $edition, $context);
+        [$type, $text] = self::resolve($entry->action, $actorName, $subject, $context);
 
         return [
             'id'         => (int) $entry->id,
             'type'       => $type,
             'text'       => $text,
+            'target_url' => self::targetUrl($entry->action, $context),
             'actor_name' => $actorName,
             'timestamp'  => strtotime($entry->created_at),
         ];
+    }
+
+    /**
+     * Resolve a target URL so the frontend can render the activity line as
+     * a link. Returns '' when there's nothing meaningful to link to.
+     */
+    private static function targetUrl(string $action, array $context): string
+    {
+        $editionId = (int) ($context['edition_id'] ?? 0);
+        $courseId = (int) ($context['course_id'] ?? 0);
+
+        if (str_starts_with($action, 'registration.') || str_starts_with($action, 'attendance.') || str_starts_with($action, 'edition.')) {
+            if ($editionId > 0) {
+                return admin_url("post.php?post={$editionId}&action=edit");
+            }
+        }
+
+        if (str_starts_with($action, 'completion.')) {
+            if ($courseId > 0) {
+                return admin_url("post.php?post={$courseId}&action=edit");
+            }
+        }
+
+        if (str_starts_with($action, 'quote.')) {
+            $quoteId = (int) ($context['quote_id'] ?? 0);
+            if ($quoteId > 0) {
+                return admin_url("post.php?post={$quoteId}&action=edit");
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -87,30 +125,38 @@ final class AdminActivityMapper
             return ['user', "Profielgegevens van {$subject} bijgewerkt"];
         }
 
+        $editionLabel = $edition !== '' ? $edition : __('een editie', 'stride');
+
         return match ($action) {
             'registration.created'
-                => ['enrollment', "{$name} heeft zich ingeschreven voor {$edition}"],
+                => ['enrollment', "{$name} heeft zich ingeschreven voor {$editionLabel}"],
 
             'registration.cancelled'
-                => ['enrollment', "Inschrijving van {$name} voor {$edition} is geannuleerd"],
+                => ['enrollment', "Inschrijving van {$name} voor {$editionLabel} is geannuleerd"],
 
             'attendance.marked_present'
-                => ['attendance', self::attendanceText($context, $edition, 'aanwezig')],
+                => ['attendance', self::attendanceText($context, $editionLabel, 'aanwezig')],
 
             'attendance.marked_absent'
-                => ['attendance', self::attendanceText($context, $edition, 'afwezig')],
+                => ['attendance', self::attendanceText($context, $editionLabel, 'afwezig')],
 
             'attendance.marked_excused'
-                => ['attendance', self::attendanceText($context, $edition, 'verontschuldigd')],
+                => ['attendance', self::attendanceText($context, $editionLabel, 'verontschuldigd')],
 
             'completion.course_completed'
-                => ['completion', "{$name} heeft {$edition} afgerond"],
+                => ['completion', $edition !== ''
+                    ? "{$name} heeft {$edition} afgerond"
+                    : "{$name} heeft een opleiding afgerond"],
 
             'completion.certificate_issued'
-                => ['completion', "Certificaat uitgereikt aan {$name} voor {$edition}"],
+                => ['completion', $edition !== ''
+                    ? "Certificaat uitgereikt aan {$name} voor {$edition}"
+                    : "Certificaat uitgereikt aan {$name}"],
 
             'quote.created'
-                => ['quote', "Offerte aangemaakt voor {$name} — {$edition}"],
+                => ['quote', $edition !== ''
+                    ? "Offerte aangemaakt voor {$name} — {$edition}"
+                    : "Offerte aangemaakt voor {$name}"],
 
             'quote.sent'
                 => ['quote', "Offerte verzonden naar {$name}"],

@@ -351,9 +351,14 @@ defined('ABSPATH') || exit;
                         <div class="sd-card__body">
                             <template x-for="entry in activityFeed" :key="entry.id">
                                 <div class="sd-activity-item">
-                                    <div class="sd-avatar sd-avatar--sm" x-text="(entry.actor_name || '?')[0].toUpperCase()"></div>
+                                    <div class="sd-activity-icon" :class="'sd-activity-icon--' + (entry.type || 'action')" :title="entry.actor_name || ''" x-html="activityIcon(entry.type)"></div>
                                     <div class="sd-activity-item__content">
-                                        <span class="sd-activity-item__text" x-text="entry.text"></span>
+                                        <template x-if="entry.target_url">
+                                            <a class="sd-activity-item__text sd-activity-item__text--link" :href="entry.target_url" x-text="entry.text"></a>
+                                        </template>
+                                        <template x-if="!entry.target_url">
+                                            <span class="sd-activity-item__text" x-text="entry.text"></span>
+                                        </template>
                                         <span class="sd-activity-item__time" x-text="formatRelativeTime(entry.timestamp)"></span>
                                     </div>
                                 </div>
@@ -986,28 +991,157 @@ defined('ABSPATH') || exit;
 
                 <div class="sd-layout__primary">
 
-                    <!-- User header card -->
-                    <div class="sd-card">
+                    <!-- User header card (click-to-expand profile details) -->
+                    <div class="sd-card sd-user-card" :class="{ 'sd-user-card--open': userProfileOpen }">
                         <div class="sd-card__body">
-                            <div class="sd-user-header">
+                            <div class="sd-user-header sd-user-header--toggle"
+                                 @click="toggleUserProfile()"
+                                 role="button"
+                                 :aria-expanded="userProfileOpen ? 'true' : 'false'">
                                 <div class="sd-avatar sd-avatar--lg" x-text="(selectedUser?.name || '?')[0].toUpperCase()"></div>
                                 <div class="sd-user-header__info">
                                     <h3 x-text="selectedUser?.name"></h3>
                                     <div x-text="selectedUser?.email"></div>
                                     <div x-text="selectedUser?.organisation || ''" x-show="selectedUser?.organisation"></div>
                                 </div>
-                                <div class="sd-user-header__actions">
+                                <div class="sd-user-header__actions" @click.stop>
                                     <button class="sd-btn sd-btn--ghost" @click="impersonateUser(selectedUser?.id)" x-show="config.canManage && !selectedUser?.isAnonymised">Bekijk als gebruiker</button>
-                                    <a :href="selectedUser?.id ? '<?php echo esc_url($admin_url); ?>user-edit.php?user_id=' + selectedUser.id : '#'"
-                                       class="sd-btn sd-btn--ghost"
-                                       target="_blank"
-                                       x-show="selectedUser?.id">Bewerk in WP →</a>
                                     <a :href="selectedUser?.anonymiseUrl || '#'"
                                        class="sd-btn sd-btn--ghost"
                                        x-show="config.canManage && selectedUser?.id && !selectedUser?.isAnonymised && selectedUser?.anonymiseUrl"
                                        @click="if (!confirmAnonymise()) { $event.preventDefault(); }">Anonimiseer</a>
                                     <span class="sd-tag sd-tag--muted" x-show="selectedUser?.isAnonymised" x-text="selectedUser?.anonymisedLabel"></span>
                                     <button class="sd-btn sd-btn--text" @click="closeUserDetail()" x-text="userDetailReturnTo === 'dashboard' ? '← Terug naar dashboard' : '← Terug'"></button>
+                                </div>
+                                <span class="sd-user-header__caret" aria-hidden="true">▾</span>
+                            </div>
+
+                            <!-- Collapsible profile sections -->
+                            <div class="sd-user-profile" x-show="userProfileOpen" x-cloak>
+
+                                <!-- Persoonlijke gegevens -->
+                                <div class="sd-profile-section">
+                                    <div class="sd-profile-section__header">
+                                        <h4 class="sd-profile-section__title">Persoonsgegevens</h4>
+                                        <div class="sd-profile-section__actions" x-show="config.canManage && !selectedUser?.isAnonymised">
+                                            <template x-if="profileEdit.personal">
+                                                <span>
+                                                    <button class="sd-btn sd-btn--primary sd-btn--sm" @click="saveProfile('personal')" :disabled="profileSaving">
+                                                        <span x-show="!profileSaving">Opslaan</span>
+                                                        <span x-show="profileSaving">Bezig…</span>
+                                                    </button>
+                                                    <button class="sd-btn sd-btn--ghost sd-btn--sm" @click="cancelProfileEdit('personal')" :disabled="profileSaving">Annuleer</button>
+                                                </span>
+                                            </template>
+                                            <template x-if="!profileEdit.personal">
+                                                <button class="sd-btn sd-btn--ghost sd-btn--sm" @click="startProfileEdit('personal')">Bewerken</button>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                    <!-- Read mode -->
+                                    <dl class="sd-profile-grid" x-show="!profileEdit.personal">
+                                        <div><dt>Voornaam</dt><dd x-text="selectedUser?.first_name || '—'"></dd></div>
+                                        <div><dt>Achternaam</dt><dd x-text="selectedUser?.last_name || '—'"></dd></div>
+                                        <div><dt>E-mail</dt><dd x-text="selectedUser?.email || '—'"></dd></div>
+                                        <div><dt>Telefoon</dt>
+                                            <dd>
+                                                <span x-text="selectedUser?.phone || '—'"></span>
+                                            </dd>
+                                        </div>
+                                        <div><dt>Organisatie</dt><dd x-text="selectedUser?.organisation || '—'"></dd></div>
+                                        <div><dt>Afdeling</dt><dd x-text="selectedUser?.department || '—'"></dd></div>
+                                        <div>
+                                            <dt>Rijksregisternummer</dt>
+                                            <dd>
+                                                <span x-show="!selectedUser?.national_id_present">—</span>
+                                                <span x-show="selectedUser?.national_id_present" class="sd-sensitive">
+                                                    <span x-text="revealed.national_id || selectedUser?.national_id"></span>
+                                                    <button class="sd-btn sd-btn--text sd-btn--xs"
+                                                            @click="revealField('national_id')"
+                                                            x-show="!revealed.national_id">Toon</button>
+                                                </span>
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt>Geboortedatum</dt>
+                                            <dd>
+                                                <span x-show="!selectedUser?.date_of_birth_present">—</span>
+                                                <span x-show="selectedUser?.date_of_birth_present" class="sd-sensitive">
+                                                    <span x-text="revealed.date_of_birth || selectedUser?.date_of_birth"></span>
+                                                    <button class="sd-btn sd-btn--text sd-btn--xs"
+                                                            @click="revealField('date_of_birth')"
+                                                            x-show="!revealed.date_of_birth">Toon</button>
+                                                </span>
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt>RIZIV-nummer</dt>
+                                            <dd>
+                                                <span x-show="!selectedUser?.professional_license_number_present">—</span>
+                                                <span x-show="selectedUser?.professional_license_number_present" class="sd-sensitive">
+                                                    <span x-text="revealed.professional_license_number || selectedUser?.professional_license_number"></span>
+                                                    <button class="sd-btn sd-btn--text sd-btn--xs"
+                                                            @click="revealField('professional_license_number')"
+                                                            x-show="!revealed.professional_license_number">Toon</button>
+                                                </span>
+                                            </dd>
+                                        </div>
+                                    </dl>
+
+                                    <!-- Edit mode -->
+                                    <div class="sd-profile-grid sd-profile-grid--edit" x-show="profileEdit.personal">
+                                        <div><label>Voornaam</label><input type="text" class="sd-input" x-model="profileDraft.first_name"></div>
+                                        <div><label>Achternaam</label><input type="text" class="sd-input" x-model="profileDraft.last_name"></div>
+                                        <div><label>E-mail</label><input type="email" class="sd-input" x-model="profileDraft.email"></div>
+                                        <div><label>Telefoon</label><input type="text" class="sd-input" x-model="profileDraft.phone"></div>
+                                        <div><label>Organisatie</label><input type="text" class="sd-input" x-model="profileDraft.organisation"></div>
+                                        <div><label>Afdeling</label><input type="text" class="sd-input" x-model="profileDraft.department"></div>
+                                        <div><label>Rijksregisternummer</label><input type="text" class="sd-input" x-model="profileDraft.national_id" :placeholder="selectedUser?.national_id_present ? '(ongewijzigd laten? leeg laten)' : ''"></div>
+                                        <div><label>Geboortedatum</label><input type="date" class="sd-input" x-model="profileDraft.date_of_birth"></div>
+                                        <div><label>RIZIV-nummer</label><input type="text" class="sd-input" x-model="profileDraft.professional_license_number"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Facturatie -->
+                                <div class="sd-profile-section">
+                                    <div class="sd-profile-section__header">
+                                        <h4 class="sd-profile-section__title">Facturatiegegevens</h4>
+                                        <div class="sd-profile-section__actions" x-show="config.canManage && !selectedUser?.isAnonymised">
+                                            <template x-if="profileEdit.billing">
+                                                <span>
+                                                    <button class="sd-btn sd-btn--primary sd-btn--sm" @click="saveProfile('billing')" :disabled="profileSaving">
+                                                        <span x-show="!profileSaving">Opslaan</span>
+                                                        <span x-show="profileSaving">Bezig…</span>
+                                                    </button>
+                                                    <button class="sd-btn sd-btn--ghost sd-btn--sm" @click="cancelProfileEdit('billing')" :disabled="profileSaving">Annuleer</button>
+                                                </span>
+                                            </template>
+                                            <template x-if="!profileEdit.billing">
+                                                <button class="sd-btn sd-btn--ghost sd-btn--sm" @click="startProfileEdit('billing')">Bewerken</button>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                    <dl class="sd-profile-grid" x-show="!profileEdit.billing">
+                                        <div><dt>Bedrijfsnaam</dt><dd x-text="selectedUser?.billing_company || '—'"></dd></div>
+                                        <div><dt>BTW-nummer</dt><dd x-text="selectedUser?.billing_vat || '—'"></dd></div>
+                                        <div><dt>Adres</dt><dd x-text="selectedUser?.billing_address_1 || '—'"></dd></div>
+                                        <div><dt>Postcode</dt><dd x-text="selectedUser?.billing_postcode || '—'"></dd></div>
+                                        <div><dt>Stad</dt><dd x-text="selectedUser?.billing_city || '—'"></dd></div>
+                                        <div><dt>Facturatie-e-mail</dt><dd x-text="selectedUser?.invoice_email || '—'"></dd></div>
+                                        <div><dt>GLN-nummer</dt><dd x-text="selectedUser?.gln_number || '—'"></dd></div>
+                                    </dl>
+
+                                    <div class="sd-profile-grid sd-profile-grid--edit" x-show="profileEdit.billing">
+                                        <div><label>Bedrijfsnaam</label><input type="text" class="sd-input" x-model="profileDraft.company"></div>
+                                        <div><label>BTW-nummer</label><input type="text" class="sd-input" x-model="profileDraft.vat_number"></div>
+                                        <div><label>Adres</label><input type="text" class="sd-input" x-model="profileDraft.address"></div>
+                                        <div><label>Postcode</label><input type="text" class="sd-input" x-model="profileDraft.postal_code"></div>
+                                        <div><label>Stad</label><input type="text" class="sd-input" x-model="profileDraft.city"></div>
+                                        <div><label>Facturatie-e-mail</label><input type="email" class="sd-input" x-model="profileDraft.invoice_email"></div>
+                                        <div><label>GLN-nummer</label><input type="text" class="sd-input" x-model="profileDraft.gln_number"></div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1143,9 +1277,14 @@ defined('ABSPATH') || exit;
                         <div class="sd-card__body">
                             <template x-for="entry in userAuditLog" :key="entry.id">
                                 <div class="sd-activity-item">
-                                    <div class="sd-avatar sd-avatar--sm" x-text="(entry.actor || '?')[0].toUpperCase()"></div>
+                                    <div class="sd-activity-icon" :class="'sd-activity-icon--' + (entry.type || 'action')" :title="entry.actor_name || ''" x-html="activityIcon(entry.type)"></div>
                                     <div class="sd-activity-item__content">
-                                        <span class="sd-activity-item__text" x-text="entry.text"></span>
+                                        <template x-if="entry.target_url">
+                                            <a class="sd-activity-item__text sd-activity-item__text--link" :href="entry.target_url" x-text="entry.text"></a>
+                                        </template>
+                                        <template x-if="!entry.target_url">
+                                            <span class="sd-activity-item__text" x-text="entry.text"></span>
+                                        </template>
                                         <span class="sd-activity-item__time" x-text="formatRelativeTime(entry.timestamp)"></span>
                                     </div>
                                 </div>

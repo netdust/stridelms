@@ -53,6 +53,13 @@ document.addEventListener('alpine:init', () => {
         userSearchResults: [],
         dashboardUserResults: [],
         selectedUser: null,
+        userProfileOpen: false,
+        profileEdit: { personal: false, billing: false },
+        profileDraft: {},
+        profileSaving: false,
+        // Per-session reveals of sensitive fields (national_id, date_of_birth, license).
+        // Never persisted — cleared when selectedUser changes.
+        revealed: {},
 
         // ── Notifications ────────────────────────────────────────
         notifications: [],
@@ -620,10 +627,25 @@ document.addEventListener('alpine:init', () => {
                     ...data,
                     id: data.user?.id,
                     name: data.user?.display_name || data.user?.name || '',
+                    first_name: data.user?.first_name || '',
+                    last_name: data.user?.last_name || '',
                     email: data.user?.email || '',
                     phone: data.user?.phone || '',
                     organisation: data.user?.organisation || '',
                     department: data.user?.department || '',
+                    national_id: data.user?.national_id || '',
+                    national_id_present: !!data.user?.national_id_present,
+                    date_of_birth: data.user?.date_of_birth || '',
+                    date_of_birth_present: !!data.user?.date_of_birth_present,
+                    professional_license_number: data.user?.professional_license_number || '',
+                    professional_license_number_present: !!data.user?.professional_license_number_present,
+                    billing_company: data.user?.billing_company || '',
+                    billing_vat: data.user?.billing_vat || '',
+                    billing_address_1: data.user?.billing_address_1 || '',
+                    billing_postcode: data.user?.billing_postcode || '',
+                    billing_city: data.user?.billing_city || '',
+                    invoice_email: data.user?.invoice_email || '',
+                    gln_number: data.user?.gln_number || '',
                     profile_type: data.user?.profile_type || null,
                     isAnonymised: !!data.user?.is_anonymised,
                     anonymisedLabel: data.user?.anonymised_label || '',
@@ -632,6 +654,11 @@ document.addEventListener('alpine:init', () => {
                     quotes,
                     attendance_summary,
                 };
+
+                // Reset profile-edit state when switching users.
+                this.profileEdit = { personal: false, billing: false };
+                this.profileDraft = {};
+                this.revealed = {};
             } catch (e) {
                 this.showToast('Gebruiker laden mislukt', 'error');
             }
@@ -663,8 +690,100 @@ document.addEventListener('alpine:init', () => {
             const target = this.userDetailReturnTo;
             this.selectedUser = null;
             this.userDetailReturnTo = null;
+            this.userProfileOpen = false;
+            this.profileEdit = { personal: false, billing: false };
+            this.profileDraft = {};
+            this.revealed = {};
             if (target === 'dashboard') {
                 this.switchView('dashboard');
+            }
+        },
+
+        toggleUserProfile() {
+            this.userProfileOpen = !this.userProfileOpen;
+        },
+
+        startProfileEdit(section) {
+            const u = this.selectedUser || {};
+            if (section === 'personal') {
+                this.profileDraft = {
+                    ...this.profileDraft,
+                    first_name: u.first_name || '',
+                    last_name: u.last_name || '',
+                    email: u.email || '',
+                    phone: u.phone || '',
+                    organisation: u.organisation || '',
+                    department: u.department || '',
+                    national_id: '',
+                    date_of_birth: '',
+                    professional_license_number: '',
+                };
+            } else if (section === 'billing') {
+                this.profileDraft = {
+                    ...this.profileDraft,
+                    company: u.billing_company || '',
+                    vat_number: u.billing_vat || '',
+                    address: u.billing_address_1 || '',
+                    postal_code: u.billing_postcode || '',
+                    city: u.billing_city || '',
+                    invoice_email: u.invoice_email || '',
+                    gln_number: u.gln_number || '',
+                };
+            }
+            this.profileEdit[section] = true;
+            this.userProfileOpen = true;
+        },
+
+        cancelProfileEdit(section) {
+            this.profileEdit[section] = false;
+        },
+
+        async saveProfile(section) {
+            if (!this.selectedUser?.id) return;
+
+            // Build payload for the section being saved. Empty sensitive-field
+            // strings are dropped so admins don't accidentally wipe national_id
+            // by saving the form without re-typing it.
+            const draft = this.profileDraft || {};
+            const personalKeys = ['first_name', 'last_name', 'email', 'phone', 'organisation', 'department'];
+            const sensitiveKeys = ['national_id', 'date_of_birth', 'professional_license_number'];
+            const billingKeys = ['company', 'vat_number', 'address', 'postal_code', 'city', 'invoice_email', 'gln_number'];
+
+            const payload = {};
+            const keys = section === 'personal' ? [...personalKeys, ...sensitiveKeys] : billingKeys;
+            for (const k of keys) {
+                if (k in draft) {
+                    const v = draft[k];
+                    // Skip empty sensitive fields — protects existing values from accidental wipe.
+                    if (sensitiveKeys.includes(k) && (v === '' || v == null)) continue;
+                    payload[k] = v;
+                }
+            }
+
+            this.profileSaving = true;
+            try {
+                await this.api(`/admin/users/${this.selectedUser.id}/profile`, {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                });
+                this.profileEdit[section] = false;
+                this.showToast('Gebruiker bijgewerkt', 'success');
+                await this.selectUser(this.selectedUser.id);
+                this.userProfileOpen = true;
+            } catch (e) {
+                this.showToast(e.message || 'Bijwerken mislukt', 'error');
+            } finally {
+                this.profileSaving = false;
+            }
+        },
+
+        async revealField(field) {
+            if (!this.selectedUser?.id) return;
+            try {
+                const data = await this.api(`/admin/users/${this.selectedUser.id}/reveal?field=${encodeURIComponent(field)}`);
+                this.revealed = { ...this.revealed, [field]: data.value || '—' };
+            } catch (e) {
+                this.showToast(e.message || 'Tonen mislukt', 'error');
             }
         },
 
@@ -756,6 +875,31 @@ document.addEventListener('alpine:init', () => {
             if (diff < 86400) return Math.floor(diff / 3600) + ' uur geleden';
             if (diff < 604800) return Math.floor(diff / 86400) + ' dag(en) geleden';
             return new Date(ts * 1000).toLocaleDateString('nl-BE');
+        },
+
+        // Map audit-entry type → small inline SVG. Stroke uses currentColor
+        // so the per-type CSS modifier controls the colour.
+        activityIcon(type) {
+            const svg = (path) =>
+                '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + path + '</svg>';
+            const icons = {
+                // pencil — enrollment / registration
+                enrollment: '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4Z"/>',
+                // check-circle — attendance
+                attendance: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+                // award — completion / certificate
+                completion: '<circle cx="12" cy="8" r="6"/><path d="m15.5 13-1 7L12 18l-2.5 2-1-7"/>',
+                // receipt — quote
+                quote: '<path d="M4 4v17l3-2 3 2 3-2 3 2 3-2 1 2V4Z"/><path d="M8 9h8M8 13h8M8 17h5"/>',
+                // user
+                user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+                // calendar — edition
+                edition: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/>',
+                // log-in — auth
+                auth: '<path d="M15 3h6v18h-6"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/>',
+                action: '<circle cx="12" cy="12" r="3"/>',
+            };
+            return svg(icons[type] || icons.action);
         },
 
         enrollmentPathLabel(path) {

@@ -1330,6 +1330,37 @@ body.stride-dashboard .wrap {
     color: var(--sd-text-primary);
 }
 
+a.sd-activity-item__text--link {
+    color: var(--sd-text-primary);
+    text-decoration: none;
+}
+
+a.sd-activity-item__text--link:hover {
+    text-decoration: underline;
+}
+
+/* Activity entry icon (replaces actor avatar — event type is what matters here) */
+.sd-activity-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: var(--sd-primary-light);
+    color: var(--sd-primary);
+}
+
+.sd-activity-icon--enrollment   { background: #dbeafe; color: #2563eb; }
+.sd-activity-icon--attendance   { background: #dcfce7; color: var(--sd-success); }
+.sd-activity-icon--completion   { background: #fef3c7; color: var(--sd-warning); }
+.sd-activity-icon--quote        { background: #ede9fe; color: #7c3aed; }
+.sd-activity-icon--user         { background: #e0f2fe; color: #0284c7; }
+.sd-activity-icon--edition      { background: #f1f5f9; color: #475569; }
+.sd-activity-icon--auth         { background: #f3f4f6; color: #6b7280; }
+.sd-activity-icon--action       { background: #f3f4f6; color: #6b7280; }
+
 .sd-activity-item__time {
     font-size: 11px;
     color: var(--sd-text-muted);
@@ -2457,6 +2488,93 @@ body.stride-dashboard .wrap {
     gap: var(--sd-space-2);
     flex-wrap: wrap;
 }
+
+/* Click-to-expand user header */
+.sd-user-header--toggle {
+    cursor: pointer;
+}
+
+.sd-user-header__caret {
+    margin-left: var(--sd-space-2);
+    color: var(--sd-text-muted);
+    transition: transform 150ms ease;
+    font-size: 14px;
+}
+
+.sd-user-card--open .sd-user-header__caret {
+    transform: rotate(180deg);
+}
+
+.sd-user-profile {
+    margin-top: var(--sd-space-4);
+    padding-top: var(--sd-space-4);
+    border-top: 1px solid var(--sd-border);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sd-space-5);
+}
+
+.sd-profile-section__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--sd-space-3);
+}
+
+.sd-profile-section__title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--sd-text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.sd-profile-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: var(--sd-space-3) var(--sd-space-4);
+    margin: 0;
+}
+
+.sd-profile-grid > div {
+    min-width: 0;
+}
+
+.sd-profile-grid dt,
+.sd-profile-grid label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--sd-text-muted);
+    margin: 0 0 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.sd-profile-grid dd {
+    margin: 0;
+    font-size: var(--sd-font-size);
+    color: var(--sd-text-primary);
+    word-break: break-word;
+}
+
+.sd-profile-grid--edit .sd-input {
+    width: 100%;
+}
+
+.sd-sensitive {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sd-space-2);
+}
+
+.sd-btn--xs {
+    padding: 2px 6px;
+    font-size: 11px;
+}
+
+[x-cloak] { display: none !important; }
 
 /* Student row (used in edition/trajectory slide-over students tab) */
 .sd-student-row {
