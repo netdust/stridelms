@@ -1,0 +1,819 @@
+/**
+ * Safe & Sound — Design Token Overrides
+ *
+ * "Festival-flyer prevention zine" design system.
+ * Hot magenta + acid lime on warm poster cream, deep ink navy for night.
+ *
+ * Audience: 14–22 yo festival-goers, parents, event organisers, venues.
+ * Goal: prevention info that doesn't talk down. Looks like a record-label
+ * zine, reads like a friend who knows what they're doing.
+ *
+ * Design principles:
+ * - Punchy, never sleepy: 120ms / 220ms transitions
+ * - Pill buttons + sticker shadows (hard 3px offset, brand-tinted)
+ * - High-vis lime is a STRUCTURAL accent, not decoration
+ * - Mono labels for the wristband / festival-pass feel
+ * - Surfaces are warm cream paper, never grey
+ */
+
+:root {
+  /* ── Brand Colors — Hot Magenta + Hi-Vis Lime ── */
+  --color-primary: 255 45 124;            /* #FF2D7C wristband magenta */
+  --color-primary-hover: 225 20 105;      /* #E11469 deeper magenta on hover */
+  --color-primary-subtle: 255 229 238;    /* #FFE5EE soft blush tint */
+  --color-primary-light: 255 175 204;     /* #FFAFCC bubblegum decorative */
+  --color-primary-dark: 14 18 48;         /* #0E1230 deep ink — after-hours */
+  --color-accent: 201 242 39;             /* #C9F227 hi-vis acid lime */
+  --color-accent-light: 228 251 133;      /* #E4FB85 pale lime highlight */
+
+  /* ── Neutrals — Cool Poster Paper (re-tuned for magenta palette) ── */
+  --color-surface: 253 250 247;           /* #FDFAF7 nearly-white with faint warmth */
+  --color-surface-alt: 247 242 238;       /* #F7F2EE one shade deeper, still neutral */
+  --color-surface-card: 255 255 255;      /* #FFFFFF pure white cards */
+  --color-border: 226 220 212;            /* #E2DCD4 cooler ghost border */
+  --color-border-strong: 20 23 47;        /* #14172F ink — used as deliberate divider */
+  --color-text: 20 23 47;                 /* #14172F deep ink (never pure black) */
+  --color-text-muted: 92 95 122;          /* #5C5F7A muted indigo-grey */
+  --color-text-inverse: 255 255 255;
+
+  /* ── 5-tier surface ladder (cool paper tones) ── */
+  --color-surface-container: 242 237 232;        /* #F2EDE8 emphasised panels */
+  --color-surface-container-high: 236 230 224;   /* #ECE6E0 modals / dropdowns */
+  --color-surface-container-highest: 229 222 214;/* #E5DED6 overlays */
+  --color-secondary-container: 228 251 133;     /* #E4FB85 lime container */
+  --color-tertiary: 14 18 48;                   /* deep ink as tertiary anchor */
+  --color-tertiary-light: 255 175 204;          /* bubblegum highlight */
+
+  /* ── Status Colors (tuned to the palette) ── */
+  --color-success: 91 162 49;             /* #5BA231 grass — reads next to lime */
+  --color-warning: 234 134 35;            /* #EA8623 sunset */
+  --color-error: 211 47 47;               /* #D32F2F red, slightly warm */
+  --color-info: 255 45 124;               /* matches primary */
+
+  /* ── Badge Colors (state-specific, tuned to palette) ── */
+  --color-badge-open-bg: 201 242 39;          /* hi-vis lime — "doors open" */
+  --color-badge-open-text: 14 18 48;          /* ink text on lime */
+  --color-badge-few-bg: 255 218 178;          /* peach */
+  --color-badge-few-text: 138 64 0;           /* burnt umber */
+  --color-badge-full-bg: 255 45 124;          /* magenta — sold out */
+  --color-badge-full-text: 255 255 255;
+  --color-badge-cancelled-bg: 232 226 211;    /* muted paper */
+  --color-badge-cancelled-text: 92 95 122;
+  --color-badge-online-bg: 220 235 255;       /* sky tint */
+  --color-badge-online-text: 18 49 96;
+  --color-badge-free-bg: 228 251 133;         /* pale lime */
+  --color-badge-free-text: 14 18 48;
+
+  /* ── Typography ── */
+  --font-sans: 'Hanken Grotesk', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-heading: 'Bricolage Grotesque', 'Hanken Grotesk', system-ui, sans-serif;
+  --font-serif: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+  --font-label: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* ── Spacing ── */
+  --space-section: 6rem;
+  --space-block: 3.5rem;
+  --space-element: 1.5rem;
+
+  /* ── Border Radius — mixed sharp/pill rhythm ── */
+  --radius-sm: 0.5rem;       /* 8px — inputs, tags */
+  --radius-md: 0.75rem;      /* 12px */
+  --radius-lg: 1.25rem;      /* 20px — cards */
+  --radius-xl: 2.25rem;      /* 36px — statement surfaces */
+
+  /* ── Shadows — soft ambient default + sticker-offset signature ── */
+  --shadow-xs: 0 1px 2px rgba(20, 23, 47, 0.04);
+  --shadow-sm: 0 3px 8px rgba(20, 23, 47, 0.05);
+  --shadow-md: 0 10px 24px -8px rgba(20, 23, 47, 0.10);
+  --shadow-lg: 0 24px 48px -16px rgba(20, 23, 47, 0.12);
+  --shadow-overlay: 0 28px 60px -16px rgba(20, 23, 47, 0.18);
+  --shadow-card: var(--shadow-xs);
+  --shadow-elevated: var(--shadow-md);
+
+  /* ── Motion — punchy, never sleepy ── */
+  --ease-out: cubic-bezier(0.2, 0.9, 0.3, 1.2);   /* slight overshoot */
+  --duration-fast: 120ms;
+  --duration-normal: 220ms;
+}
+
+/* ═══════════════════════════════════════════ Component overrides ═══════════════════════════════════════════ */
+
+/* Base — ensure paper background reads */
+body {
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+  font-family: var(--font-sans);
+}
+
+/* Heading family + tight tracking — Bricolage wants room */
+h1, h2, h3, h4, .h1, .h2, .h3, .h4 {
+  font-family: var(--font-heading);
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+/* Mono label class for wristband / festival-pass micro-UI */
+.label-mono {
+  font-family: var(--font-label);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* ── Buttons: pill, with optional sticker shadow ── */
+.btn-primary,
+.btn-secondary,
+.btn-accent,
+.btn-outline-dark,
+.btn-outline-light,
+.btn-ghost {
+  border-radius: 9999px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-out);
+}
+
+.btn-primary {
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-text-inverse));
+  box-shadow: 3px 3px 0 0 rgb(var(--color-primary-dark));
+}
+.btn-primary:hover {
+  background: rgb(var(--color-primary-hover));
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 0 rgb(var(--color-primary-dark));
+}
+.btn-primary:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 0 rgb(var(--color-primary-dark));
+}
+
+.btn-accent {
+  background: rgb(var(--color-accent));
+  color: rgb(var(--color-primary-dark));
+  box-shadow: 3px 3px 0 0 rgb(var(--color-primary-dark));
+}
+.btn-accent:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 0 rgb(var(--color-primary-dark));
+}
+.btn-accent:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 0 rgb(var(--color-primary-dark));
+}
+
+.btn-secondary {
+  background: rgb(var(--color-primary-dark));
+  color: rgb(var(--color-text-inverse));
+}
+.btn-secondary:hover {
+  background: rgb(var(--color-text));
+}
+
+.btn-outline-dark {
+  background: transparent;
+  color: rgb(var(--color-primary-dark));
+  border: 2px solid rgb(var(--color-primary-dark));
+}
+.btn-outline-dark:hover {
+  background: rgb(var(--color-primary-dark));
+  color: rgb(var(--color-text-inverse));
+}
+
+.btn-outline-light {
+  background: transparent;
+  color: rgb(var(--color-text-inverse));
+  border: 2px solid rgb(var(--color-text-inverse));
+}
+.btn-outline-light:hover {
+  background: rgb(var(--color-text-inverse));
+  color: rgb(var(--color-primary-dark));
+}
+
+.btn-ghost {
+  background: transparent;
+  color: rgb(var(--color-primary-dark));
+}
+.btn-ghost:hover {
+  background: rgb(var(--color-primary-subtle));
+}
+
+/* ── Cards: warm paper, soft lift, ink border on interactive hover ── */
+.card,
+.card-bordered {
+  background: rgb(var(--color-surface-card));
+  border-radius: var(--radius-lg);
+  border: none;
+  box-shadow: var(--shadow-card);
+  transition: transform var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.card-interactive,
+.dash-card-interactive {
+  border-radius: var(--radius-lg);
+  border: none;
+  transition: transform var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+.card-interactive:hover,
+.dash-card-interactive:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 0 rgb(var(--color-primary-dark));
+}
+
+/* Dashboard cards (admin) — keep calm, no offset shadow */
+.dash-card,
+.dash-panel {
+  background: rgb(var(--color-surface-card));
+  border-radius: var(--radius-lg);
+  border: none;
+  box-shadow: var(--shadow-card);
+}
+.dash-card-hero {
+  background: rgb(var(--color-primary-dark));
+  color: rgb(var(--color-text-inverse));
+  border-radius: var(--radius-lg);
+}
+.dash-heading {
+  font-family: var(--font-heading);
+}
+.dash-subheading {
+  font-family: var(--font-label);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  color: rgb(var(--color-text-muted));
+}
+
+/* ── Navigation: cream tinted glass ── */
+.glass-nav {
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  background: rgb(var(--color-surface) / 0.78);
+  border-bottom: 1px solid rgb(var(--color-border) / 0.5);
+}
+
+/* ── Dark section: deep ink ── */
+.dark-section {
+  background: rgb(var(--color-primary-dark));
+  color: rgb(var(--color-text-inverse));
+}
+.dark-section h1, .dark-section h2, .dark-section h3, .dark-section h4 {
+  color: rgb(var(--color-text-inverse));
+}
+
+/* ── Hero watermark: lime hi-vis tint (instead of brand-default subtle) ── */
+.hero-watermark::before {
+  background: rgb(var(--color-accent));
+  opacity: 0.12;
+}
+
+/* ── Tag pills — pill, mono label ── */
+.tag-pill {
+  border-radius: 9999px;
+  font-family: var(--font-label);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.35rem 0.85rem;
+  background: rgb(var(--color-primary-subtle));
+  color: rgb(var(--color-primary-dark));
+}
+
+/* ── Stat card lime — keep the lime, it fits! ── */
+.stat-card-lime {
+  background: rgb(var(--color-accent));
+  color: rgb(var(--color-primary-dark));
+  border-radius: var(--radius-lg);
+  border: 2px solid rgb(var(--color-primary-dark));
+}
+
+/* ── Editorial prose ── */
+.prose-stride {
+  font-family: var(--font-sans);
+  line-height: 1.7;
+}
+.prose-stride h1,
+.prose-stride h2,
+.prose-stride h3 {
+  font-family: var(--font-heading);
+  letter-spacing: -0.02em;
+}
+.prose-stride em {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+  color: rgb(var(--color-primary));
+}
+
+/* ── Links ── */
+a {
+  color: rgb(var(--color-primary));
+  text-decoration: none;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+a:hover {
+  color: rgb(var(--color-primary-hover));
+}
+
+/* ── Form inputs ── */
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+input[type="number"],
+input[type="search"],
+input[type="url"],
+input[type="password"],
+input[type="date"],
+select,
+textarea {
+  background: rgb(var(--color-surface-card));
+  border: 2px solid rgb(var(--color-primary-dark));
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  padding: 0.65rem 0.9rem;
+  transition: border-color var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: rgb(var(--color-primary));
+  box-shadow: 0 0 0 4px rgb(var(--color-primary) / 0.18);
+}
+
+/* ── Footer: ink, no border ── */
+footer {
+  border-top: none !important;
+  background: rgb(var(--color-primary-dark));
+  color: rgb(var(--color-text-inverse));
+}
+
+/* ── Selection: magenta tint ── */
+::selection {
+  background: rgb(var(--color-primary) / 0.28);
+  color: rgb(var(--color-primary-dark));
+}
+
+/* ── Sticker shadow utility (custom — used by templates) ── */
+.sticker-shadow {
+  box-shadow: 4px 4px 0 0 rgb(var(--color-primary-dark));
+}
+.sticker-shadow-lime {
+  box-shadow: 4px 4px 0 0 rgb(var(--color-accent));
+}
+
+/* ═══════════════════════════════════════════ Block-pattern pages (Contact / FAQ / Over ons / Agenda / T&Cs) ═══════════════════════════════════════════ */
+
+/* Shared atoms */
+.sas-eyebrow {
+  color: rgb(var(--color-primary));
+  margin-bottom: 1.5rem;
+}
+.sas-eyebrow-muted {
+  color: rgb(var(--color-text-muted));
+  margin-bottom: 1rem;
+}
+.sas-display em.sas-italic,
+.sas-display-quiet em.sas-italic,
+em.sas-italic {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+  color: rgb(var(--color-primary));
+}
+.sas-page-hero .sas-display { margin: 0 0 1.5rem; }
+.sas-page-hero.sas-hero-quiet { padding-bottom: 1.5rem; }
+.sas-lede { color: rgb(var(--color-text-muted)); max-width: 36rem; }
+
+/* Contact — info card + form placeholder */
+.sas-contact-grid { gap: 3rem; }
+.sas-info-card {
+  background: rgb(var(--color-primary-dark));
+  color: rgb(var(--color-text-inverse));
+  border-radius: var(--radius-lg);
+  padding: 2.25rem 2rem;
+  box-shadow: 4px 4px 0 0 rgb(var(--color-primary));
+  position: sticky;
+  top: 7rem;
+}
+.sas-info-card .label-mono { color: rgb(var(--color-accent)); margin-bottom: 0.5rem; }
+.sas-info-card h3 { margin: 0 0 0.5rem; }
+.sas-info-card p { margin: 0 0 1.25rem; }
+.sas-info-divider {
+  background: rgb(var(--color-accent));
+  height: 1px; border: 0; margin: 1.5rem 0 1.25rem;
+  opacity: 0.35;
+}
+.sas-press-note {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  background: rgb(var(--color-primary-subtle));
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.sas-form-placeholder {
+  margin-top: 1.5rem;
+  padding: 1.75rem;
+  background: rgb(var(--color-surface-card));
+  border: 2px dashed rgb(var(--color-primary));
+  border-radius: var(--radius-md);
+}
+.sas-form-placeholder .label-mono { color: rgb(var(--color-primary)); margin-bottom: 0.5rem; }
+.sas-form-placeholder code {
+  font-family: var(--font-label);
+  background: rgb(var(--color-primary-subtle));
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+/* FAQ — accordion */
+.sas-faq-section-label { margin-top: 3rem; }
+.sas-faq-section-label:first-of-type { margin-top: 0; }
+.sas-faq-item {
+  border-top: 1px solid rgb(var(--color-border));
+  padding: 1.25rem 0;
+}
+.sas-faq-item:last-of-type { border-bottom: 1px solid rgb(var(--color-border)); }
+.sas-faq-item summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  cursor: pointer;
+  padding: 0.5rem 0;
+}
+.sas-faq-item summary::-webkit-details-marker { display: none; }
+.sas-faq-q {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: clamp(18px, 1.6vw, 22px);
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+  color: rgb(var(--color-text));
+}
+.sas-faq-toggle {
+  font-family: var(--font-label);
+  font-size: 1.5rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  display: grid;
+  place-items: center;
+  border-radius: 9999px;
+  background: rgb(var(--color-primary-subtle));
+  color: rgb(var(--color-primary));
+  flex-shrink: 0;
+  transition: transform var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out);
+}
+.sas-faq-item[open] .sas-faq-toggle {
+  transform: rotate(45deg);
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-text-inverse));
+}
+.sas-faq-a {
+  padding: 0.75rem 0 0.5rem;
+  color: rgb(var(--color-text-muted));
+  line-height: 1.7;
+  max-width: 60ch;
+}
+.sas-faq-cta {
+  margin-top: 3rem;
+  padding: 1.75rem 2rem;
+  background: rgb(var(--color-primary-subtle));
+  border-radius: var(--radius-lg);
+  gap: 1rem;
+}
+.sas-faq-cta-text { margin: 0; }
+
+/* About — pull-quote card, stats strip */
+.sas-about-story { gap: 3rem; align-items: flex-start; }
+.sas-pullquote-card {
+  background: rgb(var(--color-primary-dark));
+  color: rgb(var(--color-text-inverse));
+  border-radius: var(--radius-lg);
+  padding: 2.5rem 2rem;
+  box-shadow: 4px 4px 0 0 rgb(var(--color-accent));
+  position: sticky;
+  top: 7rem;
+}
+.sas-pullquote-card .label-mono { margin-bottom: 1.25rem; }
+.sas-pullquote-text {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: clamp(20px, 2.1vw, 26px);
+  line-height: 1.3;
+  color: rgb(var(--color-text-inverse));
+  margin: 0;
+}
+.sas-stats-row { gap: 3rem; align-items: flex-start; }
+.sas-stat-label {
+  color: rgb(var(--color-primary-dark)) !important;
+  opacity: 0.55;
+  margin-bottom: 0.75rem;
+}
+.sas-stat-number {
+  font-family: var(--font-heading);
+  font-size: clamp(56px, 8vw, 96px);
+  line-height: 0.9;
+  letter-spacing: -0.04em;
+  font-weight: 800;
+  color: rgb(var(--color-primary-dark));
+  margin: 0 0 0.5rem;
+}
+.sas-stat-caption {
+  font-family: var(--font-heading);
+  font-size: clamp(15px, 1.3vw, 18px);
+  line-height: 1.3;
+  font-weight: 700;
+  color: rgb(var(--color-primary-dark));
+  max-width: 18ch;
+  margin: 0;
+}
+
+/* Agenda — format grid */
+.sas-format-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+  margin-top: 2.5rem;
+}
+@media (max-width: 720px) {
+  .sas-format-grid { grid-template-columns: 1fr; }
+}
+.sas-format-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 2.25rem;
+  border-radius: var(--radius-lg);
+  border: 2px solid rgb(var(--color-primary-dark));
+  text-decoration: none;
+  transition: transform var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+.sas-format-card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 0 rgb(var(--color-primary-dark));
+  text-decoration: none;
+}
+.sas-format-card--primary { background: rgb(var(--color-primary)); color: rgb(var(--color-text-inverse)); }
+.sas-format-card--card    { background: rgb(var(--color-surface-card)); color: rgb(var(--color-text)); }
+.sas-format-card--dark    { background: rgb(var(--color-primary-dark)); color: rgb(var(--color-text-inverse)); }
+.sas-format-card--accent  { background: rgb(var(--color-accent)); color: rgb(var(--color-primary-dark)); }
+.sas-format-card--primary:hover { box-shadow: 6px 6px 0 0 rgb(var(--color-accent)); }
+.sas-format-card--dark:hover    { box-shadow: 6px 6px 0 0 rgb(var(--color-accent)); }
+.sas-format-eyebrow {
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  opacity: 0.85;
+}
+.sas-format-card--card .sas-format-eyebrow { color: rgb(var(--color-text-muted)); opacity: 1; }
+.sas-format-title {
+  font-family: var(--font-heading);
+  font-size: clamp(28px, 3.2vw, 40px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  margin: 0;
+}
+.sas-format-body {
+  font-size: 15px;
+  line-height: 1.55;
+  margin: 0;
+  opacity: 0.92;
+}
+.sas-format-card--card .sas-format-body { color: rgb(var(--color-text-muted)); opacity: 1; }
+.sas-format-cta {
+  margin-top: auto;
+  font-family: var(--font-label);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+/* T&Cs — legal body */
+.sas-display-quiet { letter-spacing: -0.025em; }
+.sas-legal-notice {
+  margin-top: 2rem;
+  padding: 1.25rem 1.5rem;
+  background: rgb(var(--color-accent));
+  color: rgb(var(--color-primary-dark));
+  border-radius: var(--radius-md);
+  border: 2px solid rgb(var(--color-primary-dark));
+}
+.sas-legal-notice p { margin: 0; font-size: 14.5px; line-height: 1.55; }
+.sas-legal-body h2 {
+  font-family: var(--font-heading);
+  font-size: clamp(22px, 2.4vw, 28px);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  margin: 0 0 1rem;
+}
+.sas-legal-body .label-mono { margin-top: 2.75rem; margin-bottom: 0.5rem; }
+.sas-legal-body .label-mono:first-of-type { margin-top: 0; }
+.sas-legal-body p {
+  font-size: 16px;
+  line-height: 1.7;
+  color: rgb(var(--color-text-muted));
+  max-width: 65ch;
+  margin: 0 0 1.25rem;
+}
+.sas-legal-body p strong { color: rgb(var(--color-text)); }
+.sas-legal-body p em {
+  font-family: var(--font-label);
+  font-style: normal;
+  font-size: 0.92em;
+  background: rgb(var(--color-primary-subtle));
+  padding: 0.05rem 0.4rem;
+  border-radius: 4px;
+  color: rgb(var(--color-primary-dark));
+}
+
+/* Button block styles — match brand buttons */
+.is-style-sas-primary .wp-block-button__link {
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-text-inverse));
+  border-radius: 9999px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  box-shadow: 3px 3px 0 0 rgb(var(--color-primary-dark));
+  transition: transform var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+.is-style-sas-primary .wp-block-button__link:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 0 rgb(var(--color-primary-dark));
+}
+.is-style-sas-outline-light .wp-block-button__link {
+  background: transparent;
+  color: rgb(var(--color-text-inverse));
+  border: 2px solid rgb(var(--color-text-inverse));
+  border-radius: 9999px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+}
+.is-style-sas-outline-light .wp-block-button__link:hover {
+  background: rgb(var(--color-text-inverse));
+  color: rgb(var(--color-primary-dark));
+}
+
+/* Collapse sticky cards on narrow viewports — they fight the layout */
+@media (max-width: 920px) {
+  .sas-info-card,
+  .sas-pullquote-card { position: static; }
+}
+
+/* ═══════════════════════════════════════════ LearnDash ═══════════════════════════════════════════
+   See ~/.claude/projects/-home-ntdst-Sites-stride/memory/gotcha_learndash_css_skin.md
+   for the full theory. Per-brand mapping below; structure copied from
+   stride-client-kindred. */
+:root {
+  /* Blue → magenta ramp. LD consumes these via var() directly, must be hex. */
+  --ld-color-primitives-blue-100: #FFE5EE;
+  --ld-color-primitives-blue-150: #FFE5EE;
+  --ld-color-primitives-blue-175: #FFAFCC;
+  --ld-color-primitives-blue-200: #FFAFCC;
+  --ld-color-primitives-blue-500: #FF2D7C;      /* magenta — brand-primary */
+  --ld-color-primitives-blue-800: #E11469;      /* deeper magenta — hover/system-dark */
+
+  /* Body surface + text → poster cream + deep ink */
+  --ld-color-system-white: #FDFAF7;
+  --ld-color-system-body-text: #14172F;
+  --ld-color-system-dark: #E11469;
+  --ld-color-system-border: #E2DCD4;
+
+  --ld-color-button-bg: #FF2D7C;
+  --ld-color-button-bg-hover: #E11469;
+  --ld-color-button: #FDFAF7;
+  --ld-color-button-secondary-border: #FF2D7C;
+
+  --ld-color-semantic-text-link: #FF2D7C;
+  --ld-color-semantic-text-link-hover: #E11469;
+
+  --ld-color-brand-primary: #FF2D7C;
+
+  --ld-typography-font-family: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+}
+
+.learndash-wrapper,
+.ld-focus,
+.ld-focus-sidebar { font-family: var(--font-sans); }
+
+.learndash-wrapper em { font-family: var(--font-serif); font-style: italic; }
+.learndash-wrapper code,
+.learndash-wrapper pre { font-family: var(--font-label); }
+
+/* Focus-mode background unification: body canvas + inner panels all share
+   --color-surface, sidebar stays LD's default white. */
+body.ld-in-focus-mode,
+body.ld-in-focus-mode .learndash-wrapper,
+.learndash-wrapper .ld-focus .ld-focus-main,
+.learndash-wrapper .ld-focus .ld-focus-main .ld-focus-content,
+.learndash-wrapper .ld-focus .ld-tabs-content,
+.learndash-wrapper .ld-focus .ld-tab-content {
+  background: rgb(var(--color-surface)) !important;
+}
+
+.learndash-wrapper .ld-focus .ld-focus-header {
+  background: rgb(var(--color-surface)) !important;
+  border-bottom-color: rgb(var(--color-border)) !important;
+}
+
+.learndash-wrapper h1,
+.learndash-wrapper h2 {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: rgb(var(--color-text));
+}
+
+.learndash-wrapper h1,
+.ld-focus h1 {
+  font-size: clamp(28px, 3vw, 40px);
+  line-height: 1.15;
+}
+
+.learndash-wrapper .ld-status-complete,
+.learndash-wrapper .ld-status-icon-complete {
+  color: rgb(var(--color-success));
+}
+
+/* ── Hardcoded #235af3 overrides ──
+   LD's learndash.css ships ~50 rules with `color: #235af3` and
+   `background-color: #235af3` hardcoded, bypassing the token system.
+   Direct selector overrides with !important since LD's specificity stack
+   varies across the file. Scope stays inside .learndash-wrapper. */
+
+.learndash-wrapper .ld-focus .ld-focus-sidebar .ld-course-navigation-heading {
+  background-color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-focus .ld-focus-sidebar .ld-focus-sidebar-trigger .ld-icon {
+  background: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-item-preview-heading,
+.learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-title {
+  color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-item-preview-heading .ld-status-incomplete,
+.learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-title .ld-status-incomplete {
+  border-color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-progress .ld-progress-percentage {
+  color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-primary-color,
+.learndash-wrapper .ld-primary-color-hover:hover {
+  color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-primary-background {
+  background-color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-button.ld-button-transparent,
+.learndash-wrapper .ld-button.ld-button-transparent.ld-status-complete,
+.learndash-wrapper .learndash_mark_complete_button.ld-button-transparent,
+.learndash-wrapper #learndash_mark_complete_button.ld-button-transparent {
+  color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-button.ld-button-transparent:hover,
+.learndash-wrapper .ld-button.ld-button-transparent:focus {
+  color: rgb(var(--color-primary-hover)) !important;
+}
+.learndash-wrapper .ld-focus .ld-focus-header .ld-content-action a,
+.learndash-wrapper .ld-focus .ld-focus-header .ld-content-action .ld-button {
+  color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-focus-header a,
+.learndash-wrapper .ld-focus-header a:visited,
+.learndash-wrapper .ld-focus-header button {
+  color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-focus-header a:hover,
+.learndash-wrapper .ld-focus-header button:hover {
+  color: rgb(var(--color-primary-hover)) !important;
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .btn-primary:hover,
+  .btn-accent:hover,
+  .card-interactive:hover {
+    transform: none !important;
+  }
+}

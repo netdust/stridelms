@@ -1,0 +1,110 @@
+<?php
+/**
+ * Plugin Name: Stride Client — CareCommunity
+ * Description: CareCommunity hospice care look & feel. Editorial teal palette, Noto Serif + Inter fonts, tonal layering.
+ * Version: 1.0.0
+ * Author: Netdust
+ *
+ * Demonstrates the Stride client customization system:
+ * - CSS token overrides for full palette/font swap
+ * - Google Fonts URL override via stridence_font_url filter
+ * - Homepage template override via front-page template
+ * - Component CSS overrides for editorial design principles
+ *
+ * @package stride-client-carecommunity
+ */
+
+declare(strict_types=1);
+
+defined('ABSPATH') || exit;
+
+final class StrideClientCareCommunity
+{
+    private string $dir;
+    private string $url;
+
+    public function __construct()
+    {
+        $this->dir = __DIR__;
+        $this->url = plugins_url('', __FILE__);
+        $this->init();
+    }
+
+    private function init(): void
+    {
+        // Template overrides: NTDST_Response/locate_template() and
+        // stridence_template_part() will pick files from <plugin>/templates
+        // ahead of the theme's own templates.
+        if (class_exists('\NTDST_Template_Loader')) {
+            \NTDST_Template_Loader::addPath($this->dir . '/templates');
+        }
+
+        // Full page template overrides (front-page, header, footer)
+        add_filter('template_include', [$this, 'overridePageTemplate'], 20);
+
+        // CSS branding overrides (load after theme styles)
+        add_action('wp_enqueue_scripts', [$this, 'enqueueStyles'], 100);
+
+        // Google Fonts swap: Noto Serif + Inter instead of Plus Jakarta Sans + Fraunces
+        add_filter('stridence_font_url', [$this, 'overrideFontUrl']);
+    }
+
+    /**
+     * Override full page templates (front-page.php, etc).
+     *
+     * WordPress template_include filter allows replacing the entire
+     * template file. This is how we override get_header/get_footer
+     * indirectly — by providing a complete front-page that calls
+     * its own header/footer partials.
+     */
+    public function overridePageTemplate(string $template): string
+    {
+        if (is_front_page()) {
+            $override = $this->dir . '/templates/front-page.php';
+            if (file_exists($override)) {
+                return $override;
+            }
+        }
+
+        return $template;
+    }
+
+    /**
+     * Enqueue client CSS after theme styles.
+     */
+    public function enqueueStyles(): void
+    {
+        $cssFile = $this->dir . '/assets/client.css';
+        if (!file_exists($cssFile)) {
+            return;
+        }
+
+        // Depend on LearnDash's late stylesheets so our :root token overrides
+        // win against the LD30 modern theme (loaded after our default priority).
+        // Each handle is only listed as a dep if it's actually registered —
+        // wp_style_is() guards against breaking pages where LD isn't loaded.
+        $deps = [];
+        foreach (['learndash-front', 'learndash-ld30-modern', 'learndash-css'] as $handle) {
+            if (wp_style_is($handle, 'registered') || wp_style_is($handle, 'enqueued')) {
+                $deps[] = $handle;
+            }
+        }
+
+        wp_enqueue_style(
+            'stride-client',
+            $this->url . '/assets/client.css',
+            $deps,
+            (string) filemtime($cssFile)
+        );
+    }
+
+    /**
+     * Swap Google Fonts to Noto Serif + Inter.
+     */
+    public function overrideFontUrl(string $url): string
+    {
+        return 'https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap';
+    }
+}
+
+new StrideClientCareCommunity();

@@ -1,0 +1,306 @@
+/**
+ * CareCommunity — Design Token Overrides
+ *
+ * "Compassionate Editorial" design system.
+ * Teal palette, Noto Serif + Inter, tonal layering, no hard borders.
+ *
+ * Design principles:
+ * - No 1px borders between sections — use background color shifts
+ * - Ambient shadows: 30-60px blur, 4-8% opacity, tinted (never pure black)
+ * - Surface hierarchy via 5 tonal tiers (not shadows)
+ * - 300ms minimum transitions for compassionate feel
+ * - Noto Serif for headlines only, Inter for everything else
+ */
+
+:root {
+  /* ── Brand Colors — CareCommunity Teal ── */
+  --color-primary: 54 93 123;            /* #365D7B deep teal — buttons, active states */
+  --color-primary-hover: 79 118 149;     /* #4F7695 primary container — hover states */
+  --color-primary-subtle: 203 230 255;   /* #CBE6FF primary-fixed — subtle highlights */
+  --color-primary-light: 163 203 237;    /* #A3CBED primary-fixed-dim — decorative accent */
+  --color-primary-dark: 0 30 48;         /* #001E30 on-primary-fixed — deep variant */
+  --color-accent: 54 93 123;             /* #365D7B teal — links, progress bars (same as primary) */
+  --color-accent-light: 67 97 127;       /* #43617F secondary — hover variant */
+
+  /* ── Neutral Colors (warm whites) ── */
+  --color-surface: 251 249 248;          /* #FBF9F8 warm white */
+  --color-surface-alt: 245 243 243;      /* #F5F3F3 surface-container-low */
+  --color-surface-card: 255 255 255;     /* #FFFFFF surface-container-lowest */
+  --color-border: 194 199 206;           /* #C2C7CE outline-variant — ghost borders only */
+  --color-border-strong: 114 120 126;    /* #72787E outline */
+  --color-text: 27 28 28;               /* #1B1C1C on-surface (never pure black) */
+  --color-text-muted: 66 71 77;          /* #42474D on-surface-variant */
+  --color-text-inverse: 255 255 255;
+
+  /* ── Status Colors ── */
+  --color-success: 22 163 74;
+  --color-warning: 217 119 6;
+  --color-error: 186 26 26;             /* #BA1A1A Material error */
+  --color-info: 54 93 123;              /* match primary */
+
+  /* ── Badge Colors (teal-tinted) ── */
+  --color-badge-open-bg: 203 230 255;
+  --color-badge-open-text: 0 30 48;
+  --color-badge-few-bg: 254 252 232;
+  --color-badge-few-text: 161 98 7;
+  --color-badge-full-bg: 255 218 214;
+  --color-badge-full-text: 147 0 10;
+  --color-badge-cancelled-bg: 239 237 237;
+  --color-badge-cancelled-text: 107 114 128;
+  --color-badge-online-bg: 201 230 255;
+  --color-badge-online-text: 0 30 47;
+  --color-badge-free-bg: 203 230 255;
+  --color-badge-free-text: 33 74 103;
+
+  /* ── Typography — Noto Serif + Inter ── */
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-heading: 'Noto Serif', Georgia, 'Times New Roman', serif;
+  --font-serif: 'Noto Serif', Georgia, 'Times New Roman', serif;
+  --font-label: 'Inter', system-ui, sans-serif;
+
+  /* ── Spacing (slightly more generous) ── */
+  --space-section: 7rem;
+  --space-block: 4rem;
+  --space-element: 1.5rem;
+
+  /* ── Border Radius (softer, rounder) ── */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+
+  /* ── Shadows — Ambient, tinted, diffuse (never pure black) ── */
+  --shadow-xs: 0 1px 3px rgba(27, 28, 28, 0.03);
+  --shadow-sm: 0 4px 12px rgba(27, 28, 28, 0.04);
+  --shadow-md: 0 12px 30px -6px rgba(27, 28, 28, 0.06);
+  --shadow-lg: 0 24px 48px -12px rgba(27, 28, 28, 0.06);
+  --shadow-overlay: 0 32px 60px -16px rgba(27, 28, 28, 0.08);
+  --shadow-card: var(--shadow-xs);
+  --shadow-elevated: var(--shadow-md);
+
+  /* ── Transitions (slower, compassionate) ── */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 200ms;
+  --duration-normal: 350ms;
+
+  /* ── Editorial Surface Containers (5-tier tonal layering) ── */
+  --color-tertiary: 56 93 120;
+  --color-tertiary-light: 165 203 234;
+  --color-secondary-container: 188 218 253;   /* #BCDAFD */
+  --color-surface-container: 239 237 237;      /* #EFEDED */
+  --color-surface-container-high: 233 232 231; /* #E9E8E7 */
+  --color-surface-container-highest: 228 226 226; /* #E4E2E2 */
+}
+
+/* ── Component Overrides ── */
+
+/* Glass nav: warmer tint for teal palette */
+.glass-nav {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgb(var(--color-surface) / 0.85);
+}
+
+/* No border on footer — use tonal shift */
+footer {
+  border-top: none !important;
+}
+
+/* Dark section: deep teal instead of forest green */
+.dark-section {
+  background: rgb(var(--color-primary-dark));
+}
+
+/* Hero watermark: subtle teal tint */
+.hero-watermark::before {
+  opacity: 0.04;
+}
+
+/* Buttons: rounded-full for approachable feel */
+.btn-primary,
+.btn-secondary,
+.btn-accent,
+.btn-outline-dark,
+.btn-outline-light {
+  border-radius: 9999px;
+  transition-duration: var(--duration-normal);
+}
+
+/* Cards: no border, tonal lift only */
+.card,
+.card-interactive,
+.dash-card {
+  border: none;
+  transition-duration: var(--duration-normal);
+}
+
+/* Card hover: ambient shadow instead of border highlight */
+.card-interactive:hover,
+.dash-card-interactive:hover {
+  box-shadow: var(--shadow-md);
+}
+
+/* Stat cards: tonal background instead of lime accent */
+.stat-card-lime {
+  background: rgb(var(--color-primary-subtle));
+}
+
+/* Tag pills: softer, teal-tinted */
+.tag-pill {
+  border-radius: 9999px;
+}
+
+/* Links: teal, not rust */
+a {
+  transition-duration: var(--duration-normal);
+}
+
+/* Prose: slightly wider line-height for editorial readability */
+.prose-stride {
+  line-height: 1.8;
+}
+
+/* Selection: teal tint */
+::selection {
+  background: rgb(var(--color-primary) / 0.15);
+}
+
+/* ═══════════════════════════════════════════ LearnDash ═══════════════════════════════════════════
+   See ~/.claude/projects/-home-ntdst-Sites-stride/memory/gotcha_learndash_css_skin.md
+   for the full theory. Per-brand mapping below; structure copied from
+   stride-client-kindred. */
+:root {
+  /* Blue → teal ramp. LD consumes these via var() directly, must be hex. */
+  --ld-color-primitives-blue-100: #E8F2FA;
+  --ld-color-primitives-blue-150: #CBE6FF;
+  --ld-color-primitives-blue-175: #A3CBED;
+  --ld-color-primitives-blue-200: #7AAFD4;
+  --ld-color-primitives-blue-500: #365D7B;      /* deep teal — brand-primary */
+  --ld-color-primitives-blue-800: #001E30;      /* deepest teal — hover/system-dark */
+
+  /* Body surface + text → warm white + dark ink */
+  --ld-color-system-white: #FFFFFF;
+  --ld-color-system-body-text: #1B1C1C;
+  --ld-color-system-dark: #4F7695;
+  --ld-color-system-border: #C2C7CE;
+
+  --ld-color-button-bg: #365D7B;
+  --ld-color-button-bg-hover: #4F7695;
+  --ld-color-button: #FFFFFF;
+  --ld-color-button-secondary-border: #365D7B;
+
+  --ld-color-semantic-text-link: #365D7B;
+  --ld-color-semantic-text-link-hover: #4F7695;
+
+  --ld-color-brand-primary: #365D7B;
+
+  --ld-typography-font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.learndash-wrapper,
+.ld-focus,
+.ld-focus-sidebar { font-family: var(--font-sans); }
+
+.learndash-wrapper em { font-family: var(--font-serif); font-style: italic; }
+.learndash-wrapper code,
+.learndash-wrapper pre { font-family: var(--font-label); }
+
+/* Focus-mode background unification: body canvas + inner panels all share
+   --color-surface, sidebar stays LD's default white. */
+body.ld-in-focus-mode,
+body.ld-in-focus-mode .learndash-wrapper,
+.learndash-wrapper .ld-focus .ld-focus-main,
+.learndash-wrapper .ld-focus .ld-focus-main .ld-focus-content,
+.learndash-wrapper .ld-focus .ld-tabs-content,
+.learndash-wrapper .ld-focus .ld-tab-content {
+  background: rgb(var(--color-surface)) !important;
+}
+
+.learndash-wrapper .ld-focus .ld-focus-header {
+  background: rgb(var(--color-surface)) !important;
+  border-bottom-color: rgb(var(--color-border)) !important;
+}
+
+.learndash-wrapper h1,
+.learndash-wrapper h2 {
+  font-family: var(--font-heading);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: rgb(var(--color-text));
+}
+
+.learndash-wrapper h1,
+.ld-focus h1 {
+  font-size: clamp(28px, 3vw, 40px);
+  line-height: 1.15;
+}
+
+.learndash-wrapper .ld-status-complete,
+.learndash-wrapper .ld-status-icon-complete {
+  color: rgb(var(--color-success));
+}
+
+/* ── Hardcoded #235af3 overrides ──
+   LD's learndash.css ships ~50 rules with `color: #235af3` and
+   `background-color: #235af3` hardcoded, bypassing the token system.
+   Direct selector overrides with !important since LD's specificity stack
+   varies across the file. Scope stays inside .learndash-wrapper. */
+
+.learndash-wrapper .ld-focus .ld-focus-sidebar .ld-course-navigation-heading {
+  background-color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-focus .ld-focus-sidebar .ld-focus-sidebar-trigger .ld-icon {
+  background: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-item-preview-heading,
+.learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-title {
+  color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-item-preview-heading .ld-status-incomplete,
+.learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-title .ld-status-incomplete {
+  border-color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-progress .ld-progress-percentage {
+  color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-primary-color,
+.learndash-wrapper .ld-primary-color-hover:hover {
+  color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-primary-background {
+  background-color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-button.ld-button-transparent,
+.learndash-wrapper .ld-button.ld-button-transparent.ld-status-complete,
+.learndash-wrapper .learndash_mark_complete_button.ld-button-transparent,
+.learndash-wrapper #learndash_mark_complete_button.ld-button-transparent {
+  color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-button.ld-button-transparent:hover,
+.learndash-wrapper .ld-button.ld-button-transparent:focus {
+  color: rgb(var(--color-primary-hover)) !important;
+}
+.learndash-wrapper .ld-focus .ld-focus-header .ld-content-action a,
+.learndash-wrapper .ld-focus .ld-focus-header .ld-content-action .ld-button {
+  color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-focus-header a,
+.learndash-wrapper .ld-focus-header a:visited,
+.learndash-wrapper .ld-focus-header button {
+  color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-focus-header a:hover,
+.learndash-wrapper .ld-focus-header button:hover {
+  color: rgb(var(--color-primary-hover)) !important;
+}
+
+/* Reduced motion respects the slower defaults */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
