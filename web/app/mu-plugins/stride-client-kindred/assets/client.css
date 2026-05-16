@@ -378,14 +378,10 @@ footer a { color: rgb(var(--color-text)); }
 .learndash-wrapper code,
 .learndash-wrapper pre { font-family: var(--font-label); }
 
-/* Focus mode — make all chrome use ONE warm cream surface consistently.
-   LD ships focus-header, focus-content, focus-main, sidebar all as `white`
-   on a grey body. User wants the whole focus-mode UI to share the same
-   cream surface — no card-lift, no contrast steps. */
-.ld-focus,
-.ld-focus-sidebar,
-.ld-focus-sidebar .ld-focus-sidebar-wrapper,
-.learndash-wrapper .ld-focus .ld-focus-header,
+/* Focus mode — keep sidebar WHITE (LD default) so the coral course-heading
+   sits on a clean canvas. The CONTENT column (header bar + body + lesson
+   content card) all share the warm cream body so there's no white card
+   floating on the page. */
 .learndash-wrapper .ld-focus .ld-focus-main,
 .learndash-wrapper .ld-focus .ld-focus-main .ld-focus-content,
 .learndash-wrapper .ld-focus .ld-tabs-content,
@@ -394,6 +390,7 @@ footer a { color: rgb(var(--color-text)); }
 }
 
 .learndash-wrapper .ld-focus .ld-focus-header {
+  background: rgb(var(--color-surface)) !important;
   border-bottom-color: rgb(var(--color-border)) !important;
 }
 
