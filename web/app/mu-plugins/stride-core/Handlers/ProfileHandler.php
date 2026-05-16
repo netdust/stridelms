@@ -181,8 +181,20 @@ final class ProfileHandler
     /**
      * Handle GDPR account erasure request.
      *
-     * Uses WordPress built-in privacy request system (GDPR remove_personal_data).
-     * Sends a confirmation email to the user; once confirmed, WP processes the erasure.
+     * The previous flow used wp_create_user_request → user-confirms → WP's
+     * privacy_personal_data_erasers fires. That callback (in ntdst-auth)
+     * only wiped 3 consent meta keys and left every Stride business record
+     * intact. Worse, it ran without admin awareness — VAD couldn't talk to
+     * the user first about open invoices, certificates in progress, etc.
+     *
+     * New flow: the request becomes an admin ticket. We email the configured
+     * stride_admin_email, log the request in the audit trail, and reply to
+     * the user that admin will follow up. Admin then runs anonymise() (or
+     * the WP hard-delete row action) manually after assessing the situation.
+     *
+     * No automated anonymise — the choice between anonymise (keep business
+     * records pseudonymised) and hard-delete (nuke everything) is context-
+     * dependent and needs a human decision.
      */
     public function handleGdprErase(mixed $data, array $params): array|WP_Error
     {
@@ -192,19 +204,63 @@ final class ProfileHandler
         }
 
         $user = get_userdata($userId);
-        $requestId = wp_create_user_request($user->user_email, 'remove_personal_data');
-
-        if (is_wp_error($requestId)) {
-            return $requestId;
+        if (!$user) {
+            return new WP_Error('user_not_found', __('Gebruiker niet gevonden.', 'stride'));
         }
 
-        wp_send_user_request($requestId);
+        $adminEmail = \Stride\Modules\Mail\StrideMailBridge::getAdminEmail();
+        if (!$adminEmail) {
+            ntdst_log('profile')->error('GDPR erasure request: no admin email configured', [
+                'user_id' => $userId,
+            ]);
+            return new WP_Error('no_admin_email', __('Er kon geen aanvraag verstuurd worden. Neem rechtstreeks contact op met de beheerder.', 'stride'));
+        }
 
-        ntdst_log('profile')->info('GDPR erasure requested', ['user_id' => $userId]);
+        $reason = sanitize_textarea_field((string) ($params['reason'] ?? ''));
+
+        $userLine = sprintf(
+            '%s <%s> (ID %d)',
+            $user->display_name ?: $user->user_login,
+            $user->user_email,
+            $userId
+        );
+
+        $body = sprintf(
+            "Gebruiker %s heeft via /mijn-account/?tab=profiel om verwijdering van het account verzocht.\n\n",
+            $userLine
+        );
+        if ($reason !== '') {
+            $body .= "Toelichting van de gebruiker:\n" . $reason . "\n\n";
+        }
+        $body .= "Volgende stappen voor de beheerder:\n"
+            . "1. Neem contact op met de gebruiker om de aanvraag te bevestigen.\n"
+            . "2. Anonimiseer het account via Gebruikers → " . get_edit_user_link($userId) . "\n"
+            . "   (of kies hard delete als geen historie bewaard moet blijven).\n\n"
+            . "Deze aanvraag is automatisch gelogd in de audit trail.";
+
+        $sent = wp_mail(
+            $adminEmail,
+            sprintf(__('[Stride] Account-verwijdering aangevraagd door %s', 'stride'), $user->display_name ?: $user->user_email),
+            $body
+        );
+
+        ntdst_log('profile')->info('GDPR erasure request forwarded to admin', [
+            'user_id' => $userId,
+            'admin_email' => $adminEmail,
+            'mail_sent' => $sent,
+            'reason_provided' => $reason !== '',
+        ]);
+
+        do_action('stride/gdpr/erasure_requested', [
+            'user_id' => $userId,
+            'email' => $user->user_email,
+            'reason' => $reason,
+            'requested_at' => time(),
+        ]);
 
         return [
             'success' => true,
-            'message' => __('Je ontvangt een bevestigingsmail om de verwijdering te bevestigen.', 'stride'),
+            'message' => __('Je aanvraag is doorgestuurd. De beheerder neemt zo snel mogelijk contact met je op.', 'stride'),
         ];
     }
 
