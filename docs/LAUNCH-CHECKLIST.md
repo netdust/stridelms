@@ -244,9 +244,10 @@ Tracked but NOT in Phase 1 scope. Keep in memory, surface after launch.
 - Assistant CSV/Excel/DOCX exports — `memory/project_assistant_exports.md`
 - Assistant evolution: headless mode, WP-CLI, event-triggered AI — `memory/project_assistant_vision.md`
 - Trajectory module — never shake-out tested
-- Partner API — 5 deferred bugs, foundational design done
+- Partner API — 5 deferred bugs, foundational design done. Also: **extract into own plugin** as the pathfinder for the capability-plugin architecture below.
 - LTI plugin — in progress on staging branch, not for launch
 - Phase 8 voucher automations — auto-generation, renewal cron, reversal on cancellation
+- **Capability-plugin architecture + Conference (headless) plugin** — split outward-facing capabilities out of `stride-core`. Two pieces: (1) extract Partner API to its own plugin (~2 days, validates pattern), (2) new `stride-conference` plugin exposing public `stride/v1/public/*` API + structured editorial content (speakers, sponsors, hero, FAQ) for conference frontends like `studiedag.stride.be` (~1-2 weeks). Design: `docs/superpowers/specs/2026-05-16-post-launch-capability-plugins-design.md`.
 
 ---
 
