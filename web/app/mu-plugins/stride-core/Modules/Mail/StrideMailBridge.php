@@ -560,6 +560,20 @@ final class StrideMailBridge extends AbstractService
                     . '<p>Je certificaat is beschikbaar via je dashboard.</p>'
                     . '<p>Met vriendelijke groet,<br>{{site.name}}</p>',
             ],
+            // Fires after the classroom/attendance phase is done but post-course
+            // tasks still need to be completed (post_evaluation, post_documents,
+            // post_approval). LD completion + certificate come later, when those
+            // are finished — that's when `stride-completion-user` fires.
+            'stride-attendance-complete' => [
+                'title' => 'Aanwezigheid voltooid',
+                'subject' => 'Aanwezigheid afgerond: {{edition.title}}',
+                'trigger' => 'stride/completion/attendance_complete',
+                'category' => 'transactional',
+                'body' => '<p>Beste {{user.first_name|klant}},</p>'
+                    . '<p>Je aanwezigheid bij <strong>{{edition.title}}</strong> is bevestigd. Er volgen nog enkele afsluitende taken voor je je certificaat ontvangt.</p>'
+                    . '<p><a href="{{completion.url}}" class="button">Opleiding afronden</a></p>'
+                    . '<p>Met vriendelijke groet,<br>{{site.name}}</p>',
+            ],
             'stride-quote-created' => [
                 'title' => 'Offerte aangemaakt',
                 'subject' => 'Je offerte {{quote.number}} is aangemaakt',
