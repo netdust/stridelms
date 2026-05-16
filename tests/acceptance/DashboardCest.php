@@ -59,4 +59,28 @@ class DashboardCest
         ");
         \PHPUnit\Framework\Assert::assertTrue((bool) $secondOpenAfterClick, 'second card should be open after clicking its header');
     }
+
+    /**
+     * SCENARIO: Mijn opleidingen tab — first active card auto-expands.
+     *
+     *   GIVEN: seed_student1 has at least 1 active classroom edition
+     *   WHEN:  visiting /mijn-account/?tab=inschrijvingen
+     *   THEN:  the first card in Klassikale opleidingen is expanded.
+     */
+    public function courseCardOnInschrijvingenTabAutoExpandsFirst(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify the first card on inschrijvingen tab auto-expands');
+
+        $userId = (int) $I->grabFromDatabase('stride_users', 'ID', ['user_login' => 'seed_student1']);
+        $I->loginAsUserId($userId, '/mijn-account/?tab=inschrijvingen');
+
+        $I->waitForElement('section', 5);
+
+        $firstOpen = $I->executeJS("
+            const cards = document.querySelectorAll('[x-data^=\"expandable\"]');
+            if (cards.length === 0) return null;
+            return Alpine.\$data(cards[0]).open;
+        ");
+        \PHPUnit\Framework\Assert::assertTrue($firstOpen, 'first card on inschrijvingen tab should be open by default');
+    }
 }
