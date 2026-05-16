@@ -10,7 +10,7 @@ use Stride\Tests\TestCase;
  * Unit tests for course-card builder helpers.
  *
  * Targets two pure-mapping functions in themes/stridence/helpers/templates.php:
- * - stridence_build_course_card_args_from_enrollment()
+ * - \stridence_build_course_card_args_from_enrollment()
  * - stridence_build_course_card_args_from_trajectory_course()
  */
 final class CourseCardBuilderTest extends TestCase
@@ -39,7 +39,7 @@ final class CourseCardBuilderTest extends TestCase
             'progress'     => ['attended' => 0, 'required' => 0],
         ];
 
-        $args = stridence_build_course_card_args_from_enrollment($enrollment);
+        $args = \stridence_build_course_card_args_from_enrollment($enrollment);
 
         $this->assertSame('edition', $args['type']);
         $this->assertTrue($args['enrolled']);
@@ -65,7 +65,7 @@ final class CourseCardBuilderTest extends TestCase
             'days_remaining'    => 28,
         ];
 
-        $args = stridence_build_course_card_args_from_enrollment($enrollment);
+        $args = \stridence_build_course_card_args_from_enrollment($enrollment);
 
         $this->assertSame('online', $args['type']);
         $this->assertTrue($args['enrolled']);
@@ -90,7 +90,7 @@ final class CourseCardBuilderTest extends TestCase
             'certificate_url'   => 'https://example.test/cert',
         ];
 
-        $args = stridence_build_course_card_args_from_enrollment($enrollment, completed: true);
+        $args = \stridence_build_course_card_args_from_enrollment($enrollment, completed: true);
 
         $this->assertSame(['label' => 'Voltooid', 'tone' => 'muted'], $args['status_pill']);
         $this->assertNull($args['body']['primary_cta']);
@@ -111,7 +111,7 @@ final class CourseCardBuilderTest extends TestCase
             'completed_lessons' => 0,
         ];
 
-        $args = stridence_build_course_card_args_from_enrollment($enrollment);
+        $args = \stridence_build_course_card_args_from_enrollment($enrollment);
 
         $this->assertSame('Start cursus', $args['body']['primary_cta']['label']);
     }
@@ -136,7 +136,7 @@ final class CourseCardBuilderTest extends TestCase
             'progress'     => ['attended' => 0, 'required' => 2],
         ];
 
-        $args = stridence_build_course_card_args_from_enrollment($enrollment);
+        $args = \stridence_build_course_card_args_from_enrollment($enrollment);
 
         $this->assertCount(2, $args['body']['sessions']);
         $this->assertSame('2026-06-10', $args['body']['sessions'][0]['date']);
