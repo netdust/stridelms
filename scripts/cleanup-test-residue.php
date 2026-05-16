@@ -10,6 +10,9 @@
  *   - vad_voucher: "TESTCREATE%", "FIXED1%", "PERCENT1%", "VAD-XXXX-XXXX" (4-4 random)
  *   - vad_session with empty post_title (canAddSession residue — now covered by
  *     AdminEditionCest::_after but historical rows remain)
+ *   - vad_quote: every non-seed quote. Quotes are derived from registrations
+ *     so once test editions are dropped, the orphan quotes have no purpose.
+ *     Real seed quotes carry _stride_seed_data and are kept.
  *
  * Real seed data is identified by post_id presence in the {_stride_seed_data}
  * meta flag and is NEVER touched.
@@ -55,12 +58,20 @@ $sessionIds = $wpdb->get_col(
        AND post_title = ''"
 );
 
+// 4) Non-seed vad_quote rows (test-run residue, accumulates per registration).
+$quoteIds = $wpdb->get_col(
+    "SELECT ID FROM {$wpdb->posts}
+     WHERE post_type = 'vad_quote'
+       AND ID NOT IN (SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_stride_seed_data')"
+);
+
 WP_CLI::log(sprintf(
-    '%sFound: %d editions, %d vouchers, %d empty-title sessions.',
+    '%sFound: %d editions, %d vouchers, %d empty-title sessions, %d quotes.',
     $dryRun ? '[dry-run] ' : '',
     count($editionIds),
     count($voucherIds),
-    count($sessionIds)
+    count($sessionIds),
+    count($quoteIds)
 ));
 
 if ($dryRun) {
@@ -70,12 +81,15 @@ if ($dryRun) {
     if (!empty($voucherIds)) {
         WP_CLI::log('Voucher IDs sample: ' . implode(',', array_slice($voucherIds, 0, 5)) . (count($voucherIds) > 5 ? '…' : ''));
     }
+    if (!empty($quoteIds)) {
+        WP_CLI::log('Quote IDs sample: ' . implode(',', array_slice($quoteIds, 0, 5)) . (count($quoteIds) > 5 ? '…' : ''));
+    }
     WP_CLI::success('[dry-run] No changes made.');
     return;
 }
 
 $deleted = 0;
-foreach (array_merge($editionIds, $voucherIds, $sessionIds) as $id) {
+foreach (array_merge($editionIds, $voucherIds, $sessionIds, $quoteIds) as $id) {
     if (wp_delete_post((int) $id, true)) {
         $deleted++;
     }
