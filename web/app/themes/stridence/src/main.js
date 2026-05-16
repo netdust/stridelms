@@ -247,8 +247,8 @@ Alpine.data('dropdown', () => ({
  * Expandable card/accordion
  * Usage: x-data="expandable()"
  */
-Alpine.data('expandable', () => ({
-  open: false,
+Alpine.data('expandable', (initialOpen = false) => ({
+  open: Boolean(initialOpen),
 
   toggle() {
     this.open = !this.open;
