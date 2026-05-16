@@ -312,4 +312,108 @@ class ProfileHandlerIntegrationTest extends IntegrationTestCase
         $this->assertTrue($result['success']);
         $this->assertStringContainsString('Persoonlijke', $result['message']);
     }
+
+    // =========================================================================
+    // PARTIAL UPDATE REGRESSION (B3-001 / B3-002)
+    //
+    // Pre-fix bug: the handler wrote every field unconditionally, defaulting
+    // missing input to ''. A caller that posted only one field (e.g. an
+    // inline-edit AJAX call) wiped all other personal/billing fields and
+    // also wiped wp_users.first_name + last_name + display_name via
+    // wp_update_user.
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function partialPersonalUpdateLeavesOtherMetaUntouched(): void
+    {
+        // Seed the user with existing personal data
+        wp_update_user([
+            'ID' => self::$testUserId,
+            'first_name' => 'Pieter',
+            'last_name' => 'Janssen',
+            'display_name' => 'Pieter Janssen',
+        ]);
+        update_user_meta(self::$testUserId, 'phone', '+32470111222');
+        update_user_meta(self::$testUserId, 'organisation', 'BWEEG vzw');
+        update_user_meta(self::$testUserId, 'department', 'Opleidingen');
+
+        // Submit ONLY the phone field — mimics a single-field inline edit
+        $result = $this->handler->handleUpdateProfile([], [
+            'form_type' => 'personal',
+            'phone' => '+32470999000',
+        ]);
+
+        $this->assertTrue($result['success']);
+
+        $this->assertUserMeta(self::$testUserId, 'phone', '+32470999000');
+        $this->assertUserMeta(self::$testUserId, 'organisation', 'BWEEG vzw');
+        $this->assertUserMeta(self::$testUserId, 'department', 'Opleidingen');
+
+        $user = get_userdata(self::$testUserId);
+        $this->assertSame('Pieter', $user->first_name);
+        $this->assertSame('Janssen', $user->last_name);
+        $this->assertSame('Pieter Janssen', $user->display_name);
+    }
+
+    /**
+     * @test
+     */
+    public function partialBillingUpdateLeavesOtherMetaUntouched(): void
+    {
+        update_user_meta(self::$testUserId, 'billing_company', 'BWEEG vzw');
+        update_user_meta(self::$testUserId, 'billing_vat', 'BE0123456789');
+        update_user_meta(self::$testUserId, 'billing_address_1', 'Sportstraat 42');
+        update_user_meta(self::$testUserId, 'billing_postcode', '9000');
+        update_user_meta(self::$testUserId, 'billing_city', 'Gent');
+        update_user_meta(self::$testUserId, 'invoice_email', 'facturatie@bweeg.be');
+        update_user_meta(self::$testUserId, 'gln_number', '5400112345678');
+
+        $result = $this->handler->handleUpdateProfile([], [
+            'form_type' => 'billing',
+            'company' => 'BWEEG NV',
+        ]);
+
+        $this->assertTrue($result['success']);
+
+        $this->assertUserMeta(self::$testUserId, 'billing_company', 'BWEEG NV');
+        $this->assertUserMeta(self::$testUserId, 'billing_vat', 'BE0123456789');
+        $this->assertUserMeta(self::$testUserId, 'billing_address_1', 'Sportstraat 42');
+        $this->assertUserMeta(self::$testUserId, 'billing_postcode', '9000');
+        $this->assertUserMeta(self::$testUserId, 'billing_city', 'Gent');
+        $this->assertUserMeta(self::$testUserId, 'invoice_email', 'facturatie@bweeg.be');
+        $this->assertUserMeta(self::$testUserId, 'gln_number', '5400112345678');
+
+        // Cleanup billing meta the base tearDown doesn't know about
+        delete_user_meta(self::$testUserId, 'billing_company');
+        delete_user_meta(self::$testUserId, 'billing_vat');
+        delete_user_meta(self::$testUserId, 'billing_address_1');
+        delete_user_meta(self::$testUserId, 'billing_postcode');
+        delete_user_meta(self::$testUserId, 'billing_city');
+    }
+
+    /**
+     * @test
+     */
+    public function explicitlyEmptyStringStillClearsField(): void
+    {
+        // User opens the section, blanks out organisation, saves. The field
+        // IS present in the payload, value is ''. That's an explicit clear
+        // and must still wipe the meta.
+        update_user_meta(self::$testUserId, 'organisation', 'Old Org');
+
+        $result = $this->handler->handleUpdateProfile([], [
+            'form_type' => 'personal',
+            'first_name' => 'X',
+            'last_name' => 'Y',
+            'phone' => '+32470000000',
+            'organisation' => '',
+            'department' => '',
+        ]);
+
+        $this->assertTrue($result['success']);
+        $this->assertUserMeta(self::$testUserId, 'organisation', '');
+        $this->assertUserMeta(self::$testUserId, 'department', '');
+    }
 }

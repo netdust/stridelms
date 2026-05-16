@@ -55,34 +55,49 @@ final class ProfileHandler
     /**
      * Update personal profile data.
      *
+     * Partial update: only fields present in $params are written. Missing
+     * keys are left untouched. Empty-string values still wipe the field —
+     * that's an explicit clear by the user.
+     *
      * @param int $userId User ID
      * @param array<string, mixed> $params Request parameters
      * @return array<string, mixed>|WP_Error
      */
     private function updatePersonal(int $userId, array $params): array|WP_Error
     {
-        $firstName = sanitize_text_field($params['first_name'] ?? '');
-        $lastName = sanitize_text_field($params['last_name'] ?? '');
+        // Build the wp_update_user payload only with keys actually posted.
+        // display_name is recomputed only when first/last name was sent.
+        $userUpdate = ['ID' => $userId];
+        if (isset($params['first_name'])) {
+            $userUpdate['first_name'] = sanitize_text_field($params['first_name']);
+        }
+        if (isset($params['last_name'])) {
+            $userUpdate['last_name'] = sanitize_text_field($params['last_name']);
+        }
+        if (isset($userUpdate['first_name']) || isset($userUpdate['last_name'])) {
+            $current = get_userdata($userId);
+            $first = $userUpdate['first_name'] ?? ($current->first_name ?? '');
+            $last = $userUpdate['last_name'] ?? ($current->last_name ?? '');
+            $userUpdate['display_name'] = trim($first . ' ' . $last);
+        }
 
-        $result = wp_update_user([
-            'ID' => $userId,
-            'first_name' => $firstName,
-            'last_name' => $lastName,
-            'display_name' => trim($firstName . ' ' . $lastName),
-        ]);
-
-        if (is_wp_error($result)) {
-            return $result;
+        if (count($userUpdate) > 1) {
+            $result = wp_update_user($userUpdate);
+            if (is_wp_error($result)) {
+                return $result;
+            }
         }
 
         $metaFields = [
-            'phone' => sanitize_text_field($params['phone'] ?? ''),
-            'organisation' => sanitize_text_field($params['organisation'] ?? ''),
-            'department' => sanitize_text_field($params['department'] ?? ''),
+            'phone' => 'phone',
+            'organisation' => 'organisation',
+            'department' => 'department',
         ];
 
-        foreach ($metaFields as $key => $value) {
-            update_user_meta($userId, $key, $value);
+        foreach ($metaFields as $inputKey => $metaKey) {
+            if (isset($params[$inputKey])) {
+                update_user_meta($userId, $metaKey, sanitize_text_field($params[$inputKey]));
+            }
         }
 
         ntdst_log('profile')->info('Personal profile updated', [
@@ -98,24 +113,29 @@ final class ProfileHandler
     /**
      * Update billing profile data.
      *
+     * Partial update: only fields present in $params are written.
+     *
      * @param int $userId User ID
      * @param array<string, mixed> $params Request parameters
      * @return array<string, mixed>|WP_Error
      */
     private function updateBilling(int $userId, array $params): array|WP_Error
     {
-        $billingFields = [
-            'billing_company' => sanitize_text_field($params['company'] ?? ''),
-            'billing_vat' => sanitize_text_field($params['vat_number'] ?? ''),
-            'billing_address_1' => sanitize_text_field($params['address'] ?? ''),
-            'billing_postcode' => sanitize_text_field($params['postal_code'] ?? ''),
-            'billing_city' => sanitize_text_field($params['city'] ?? ''),
-            'invoice_email' => sanitize_email($params['invoice_email'] ?? ''),
-            'gln_number' => sanitize_text_field($params['gln_number'] ?? ''),
+        // input key => [meta key, sanitiser]
+        $billingMap = [
+            'company'       => ['billing_company',    'sanitize_text_field'],
+            'vat_number'    => ['billing_vat',        'sanitize_text_field'],
+            'address'       => ['billing_address_1',  'sanitize_text_field'],
+            'postal_code'   => ['billing_postcode',   'sanitize_text_field'],
+            'city'          => ['billing_city',       'sanitize_text_field'],
+            'invoice_email' => ['invoice_email',      'sanitize_email'],
+            'gln_number'    => ['gln_number',         'sanitize_text_field'],
         ];
 
-        foreach ($billingFields as $metaKey => $value) {
-            update_user_meta($userId, $metaKey, $value);
+        foreach ($billingMap as $inputKey => [$metaKey, $sanitiser]) {
+            if (isset($params[$inputKey])) {
+                update_user_meta($userId, $metaKey, $sanitiser($params[$inputKey]));
+            }
         }
 
         ntdst_log('profile')->info('Billing profile updated', [
