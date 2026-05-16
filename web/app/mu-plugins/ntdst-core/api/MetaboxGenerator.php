@@ -43,23 +43,28 @@ final class NTDST_MetaboxGenerator
             return;
         }
 
-        // Enqueue theme-services.js (includes metabox-fields.js)
-        $theme_dist = get_stylesheet_directory_uri() . '/assets/dist';
-        wp_enqueue_script(
-            'ntdst-theme-services',
-            $theme_dist . '/theme-services.js',
-            ['jquery', 'jquery-ui-sortable'],
-            null,
-            true
-        );
+        // Enqueue theme-services.js (includes metabox-fields.js) if the
+        // active theme actually ships it. Themes without this build artefact
+        // (e.g. Tailwind-only stridence) work fine without it.
+        $theme_dist_path = get_stylesheet_directory() . '/assets/dist/theme-services.js';
+        if (file_exists($theme_dist_path)) {
+            $theme_dist_uri = get_stylesheet_directory_uri() . '/assets/dist';
+            wp_enqueue_script(
+                'ntdst-theme-services',
+                $theme_dist_uri . '/theme-services.js',
+                ['jquery', 'jquery-ui-sortable'],
+                null,
+                true
+            );
 
-        // Add type="module" for ES module support
-        add_filter('script_loader_tag', function ($tag, $handle) {
-            if ($handle === 'ntdst-theme-services') {
-                return str_replace(' src', ' type="module" src', $tag);
-            }
-            return $tag;
-        }, 10, 2);
+            // Add type="module" for ES module support
+            add_filter('script_loader_tag', function ($tag, $handle) {
+                if ($handle === 'ntdst-theme-services') {
+                    return str_replace(' src', ' type="module" src', $tag);
+                }
+                return $tag;
+            }, 10, 2);
+        }
     }
 
     public static function instance(): self

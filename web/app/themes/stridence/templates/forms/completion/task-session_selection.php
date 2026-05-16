@@ -164,7 +164,9 @@ $renderOption = function (array $session) {
             <?php foreach ($slotConfig as $sc):
                 $slotName = $sc['slot'] ?? '';
                 $slotLabel = $sc['label'] ?? $slotName;
-                $pickCount = (int) ($sc['pick_count'] ?? 1);
+                // Canonical key is `max_selections` (saved by admin);
+                // `pick_count` retained for legacy DB rows. See B-001.
+                $pickCount = (int) ($sc['max_selections'] ?? $sc['pick_count'] ?? 1);
                 $required = $sc['required'] ?? false;
                 $slotSessions = $grouped[$slotName] ?? [];
 

@@ -602,14 +602,16 @@ class StrideSeedData {
                         // Selection deadline: must choose sessions 1 week before start
                         'selection_deadline' => date('Y-m-d', strtotime('+4 weeks')),
                         // Session slots: define which sessions are alternatives
-                        'session_slots' => json_encode([
+                        // Plain PHP array — WP serializes via update_post_meta.
+                        // `max_selections` matches admin form key (B-001).
+                        'session_slots' => [
                             [
                                 'slot' => 'Verdieping (kies 1)',
                                 'label' => 'Verdieping (kies 1)',
                                 'required' => true,
-                                'pick_count' => 1,
+                                'max_selections' => 1,
                             ],
-                        ]),
+                        ],
                         'sessions' => [
                             // Mandatory day 1
                             ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Basisprincipes gezonde voeding', 'optional' => false],

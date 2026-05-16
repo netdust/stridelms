@@ -37,19 +37,16 @@ foreach ($notifications as $n) {
 <div class="space-y-6">
     <?php if (!empty($notifications)) : ?>
 
-        <!-- Header with mark-all-read -->
-        <div class="flex items-center justify-between">
-            <h2 class="dash-heading">
-                <?php esc_html_e('Meldingen', 'stridence'); ?>
-            </h2>
-            <?php if ($unreadCount > 0) : ?>
+        <!-- Mark-all-read action (page title is rendered by page-mijn-account.php) -->
+        <?php if ($unreadCount > 0) : ?>
+            <div class="flex justify-end">
                 <button type="button"
                         class="text-sm text-primary hover:underline"
                         onclick="(async () => { await ntdstAPI.call('stride_mark_notifications_read'); window.location.reload(); })()">
                     <?php esc_html_e('Alles gelezen', 'stridence'); ?>
                 </button>
-            <?php endif; ?>
-        </div>
+            </div>
+        <?php endif; ?>
 
         <!-- Vandaag -->
         <?php if (!empty($groups['today'])) : ?>

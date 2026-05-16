@@ -212,7 +212,10 @@ final class SessionSelection
         foreach ($slots as $slot) {
             $slotName = $slot['slot'] ?? '';
             $required = $slot['required'] ?? false;
-            $pickCount = $slot['pick_count'] ?? 1;
+            // Admin saves the chooser count as `max_selections` (canonical key,
+            // set by EditionSessionsMetabox). Legacy slot configs from seed
+            // data + JSON-stored rows used `pick_count` — keep as fallback.
+            $pickCount = $slot['max_selections'] ?? $slot['pick_count'] ?? 1;
 
             if (!$required) {
                 continue;

@@ -70,12 +70,12 @@ $unread_count = $notificationService->getUnreadCount($user->ID);
 
 $page_titles = [
     'home'           => $greeting . ', ' . $firstName,
-    'inschrijvingen' => '',
+    'inschrijvingen' => __('Opleidingen', 'stridence'),
     'trajecten'      => __('Trajecten', 'stridence'),
     'offertes'       => __('Offertes', 'stridence'),
     'certificaten'   => __('Certificaten', 'stridence'),
     'profiel'        => __('Profiel', 'stridence'),
-    'meldingen'      => '',
+    'meldingen'      => __('Meldingen', 'stridence'),
     'downloads'      => __('Downloads', 'stridence'),
 ];
 
