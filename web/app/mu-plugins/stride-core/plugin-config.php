@@ -47,6 +47,7 @@ return [
         \Stride\Modules\User\UserLifecycleService::class,
         \Stride\Modules\Assistant\ReadAbilityRegistrar::class,
         \Stride\Modules\Assistant\WriteAbilityRegistrar::class,
+        \Stride\Modules\Reporting\AnnualReportService::class,
     ],
 
     /**
