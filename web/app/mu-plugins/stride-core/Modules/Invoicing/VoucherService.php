@@ -273,6 +273,72 @@ final class VoucherService
     }
 
     /**
+     * Reverse of redeemVoucher: remove the (userId, quoteId) redemption
+     * and decrement used_count. Idempotent — returns false if no matching
+     * redemption was found.
+     *
+     * Used when:
+     *   - a quote's voucher is replaced (apply a different code)
+     *   - a quote is cancelled with a voucher attached
+     */
+    public function releaseVoucher(string $code, int $userId, int $quoteId): bool
+    {
+        global $wpdb;
+
+        $voucher = $this->getVoucherByCode($code);
+        if (!$voucher) {
+            return false;
+        }
+
+        $voucherId = (int) $voucher['id'];
+
+        try {
+            $wpdb->query('START TRANSACTION');
+
+            $wpdb->get_row($wpdb->prepare(
+                "SELECT ID FROM {$wpdb->posts} WHERE ID = %d FOR UPDATE",
+                $voucherId
+            ));
+
+            $voucher = $this->getVoucher($voucherId);
+            if (!$voucher) {
+                $wpdb->query('ROLLBACK');
+                return false;
+            }
+
+            $newUsedCount = max(0, ((int) ($voucher['used_count'] ?? 0)) - 1);
+
+            // If the voucher was Exhausted and now has capacity again, flip
+            // back to Active. Otherwise keep the current status.
+            $newStatus = $voucher['status_enum'];
+            $limit = (int) ($voucher['usage_limit'] ?? 0);
+            if ($newStatus === VoucherStatus::Exhausted && ($limit === 0 || $newUsedCount < $limit)) {
+                $newStatus = VoucherStatus::Active;
+            }
+
+            $removed = $this->repository->removeRedemption($voucherId, $userId, $quoteId, $newUsedCount, $newStatus);
+
+            if (!$removed) {
+                $wpdb->query('ROLLBACK');
+                return false;
+            }
+
+            $wpdb->query('COMMIT');
+
+            do_action('stride/voucher/released', [
+                'voucher_id' => $voucherId,
+                'user_id' => $userId,
+                'quote_id' => $quoteId,
+            ]);
+
+            return true;
+        } catch (\Exception $e) {
+            $wpdb->query('ROLLBACK');
+            return false;
+        }
+    }
+
+    /**
      * Hydrate voucher data.
      *
      * @param array<string, mixed>|WP_Post $voucher

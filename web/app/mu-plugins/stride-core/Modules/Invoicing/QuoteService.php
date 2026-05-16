@@ -578,6 +578,15 @@ final class QuoteService extends AbstractService
         $result = $this->repository->updateStatus($quoteId, QuoteStatus::Cancelled);
 
         if ($result) {
+            // Release any voucher attached to the cancelled quote so its
+            // used_count is reversed. Otherwise quota silently drains.
+            $meta = $quote->meta ?? [];
+            $voucherCode = (string) ($meta['voucher_code'] ?? '');
+            $userId = (int) ($meta['user_id'] ?? 0);
+            if ($voucherCode !== '' && $userId > 0) {
+                $this->voucherService->releaseVoucher($voucherCode, $userId, $quoteId);
+            }
+
             ntdst_log('invoicing')->info('Quote cancelled', [
                 'quote_id' => $quoteId,
             ]);
@@ -622,6 +631,16 @@ final class QuoteService extends AbstractService
                 'error' => $voucher->get_error_message(),
             ]);
             return $voucher;
+        }
+
+        // If the quote already has a voucher, release it first so the
+        // previous redemption + used_count are reversed. Without this the
+        // replaced voucher stays "redeemed" against the quote forever and
+        // its quota silently drains.
+        $previousCode = (string) ($meta['voucher_code'] ?? '');
+        $userIdForRedemption = (int) ($meta['user_id'] ?? 0);
+        if ($previousCode !== '' && $previousCode !== $voucherCode && $userIdForRedemption > 0) {
+            $voucherService->releaseVoucher($previousCode, $userIdForRedemption, $quoteId);
         }
 
         // Calculate discount

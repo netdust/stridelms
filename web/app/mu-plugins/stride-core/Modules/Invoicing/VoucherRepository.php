@@ -96,4 +96,42 @@ final class VoucherRepository extends AbstractRepository
             'status' => $newStatus->value,
         ]);
     }
+
+    /**
+     * Reverse of recordRedemption: remove the redemption matching
+     * (userId, quoteId) and write back the decremented count + status.
+     *
+     * Returns true when a matching redemption was removed, false when no
+     * such redemption existed (no state change).
+     */
+    public function removeRedemption(int $voucherId, int $userId, int $quoteId, int $newUsedCount, VoucherStatus $newStatus): bool
+    {
+        $currentRedemptions = $this->model()->getMeta($voucherId, 'redemptions', []);
+        if (!is_array($currentRedemptions)) {
+            $currentRedemptions = [];
+        }
+
+        $removed = false;
+        $remaining = [];
+        foreach ($currentRedemptions as $r) {
+            if (!$removed
+                && (int) ($r['user_id'] ?? 0) === $userId
+                && (int) ($r['quote_id'] ?? 0) === $quoteId
+            ) {
+                $removed = true;
+                continue;
+            }
+            $remaining[] = $r;
+        }
+
+        if (!$removed) {
+            return false;
+        }
+
+        return $this->model()->updateMetaBatch($voucherId, [
+            'used_count' => $newUsedCount,
+            'redemptions' => $remaining,
+            'status' => $newStatus->value,
+        ]);
+    }
 }
