@@ -96,7 +96,7 @@ class Acceptance extends Module
      * @param int $userId The user ID to activate
      * @param string $redirect Optional URL to redirect to after activation
      */
-    public function activateUserById(int $userId, string $redirect = '/login/'): void
+    public function activateUserById(int $userId, string $redirect = '/aanmelden/'): void
     {
         $webDriver = $this->getModule('WPWebDriver');
 

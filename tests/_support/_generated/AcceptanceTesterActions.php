@@ -8432,7 +8432,7 @@ trait AcceptanceTesterActions
      * @param string $redirect Optional URL to redirect to after activation
      * @see \Tests\Support\Helper\Acceptance::activateUserById()
      */
-    public function activateUserById(int $userId, string $redirect = "\/login\/"): void {
+    public function activateUserById(int $userId, string $redirect = "\/aanmelden\/"): void {
         $this->getScenario()->runStep(new \Codeception\Step\Action('activateUserById', func_get_args()));
     }
 }

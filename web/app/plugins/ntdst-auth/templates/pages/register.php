@@ -16,7 +16,6 @@ $fields = $settings['registration_fields'] ?? ['email', 'first_name', 'last_name
 <head>
     <meta charset="<?php bloginfo('charset'); ?>">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php esc_html_e('Register', 'ntdst-auth'); ?> | <?php bloginfo('name'); ?></title>
     <?php wp_head(); ?>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uikit@3.21.5/dist/css/uikit.min.css">
     <link rel="stylesheet" href="<?php echo esc_url(NTDST_AUTH_URL . 'assets/css/auth.css'); ?>">

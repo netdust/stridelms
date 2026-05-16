@@ -18,7 +18,7 @@ use Tests\Support\AcceptanceTester;
  * This is an end-to-end test that simulates the entire user experience.
  *
  * URLs:
- * - Registration: /register (ntdst-auth plugin)
+ * - Registration: /registreren (ntdst-auth plugin)
  * - Enrollment: /vormingen/{slug}/inschrijving/ (route-based)
  * - Dashboard: /mijn-account/ (page template)
  * - Profile: /mijn-account/?tab=profiel
@@ -136,7 +136,7 @@ class FullUserJourneyCest
     {
         $I->wantTo('register a new user account');
 
-        $I->amOnPage('/register');
+        $I->amOnPage('/registreren');
 
         // Wait for Alpine.js to initialize
         $I->waitForElement('#email', 5);
@@ -198,7 +198,7 @@ class FullUserJourneyCest
         ]);
 
         // Activate user using test helper
-        $I->activateUserById($userId, '/login/');
+        $I->activateUserById($userId, '/aanmelden/');
 
         // Verify activation worked
         $I->seeInDatabase('stride_usermeta', [

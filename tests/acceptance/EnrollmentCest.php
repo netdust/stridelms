@@ -88,8 +88,8 @@ class EnrollmentCest
         $I->amOnPage($this->enrollmentUrl());
 
         // EnrollmentRouter redirects unauthenticated users to wp_login_url
-        // which is redirected to /login by ntdst-auth
-        $I->seeInCurrentUrl('login');
+        // which is redirected to /aanmelden by ntdst-auth
+        $I->seeInCurrentUrl('aanmelden');
     }
 
     /**

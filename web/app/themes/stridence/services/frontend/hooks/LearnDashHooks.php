@@ -17,7 +17,22 @@ final class LearnDashHooks
             ->filter('body_class', [$this, 'addScormBodyClass'])
             ->filter('learndash_focus_header_element', [$this, 'focusHeaderBackButton'], 10, 4)
             ->filter('learndash_focus_header_user_dropdown_items', [$this, 'focusHeaderUserMenu'], 10, 3)
-            ->filter('option_learndash_settings_permalinks', [$this, 'overrideCoursePermalink']);
+            ->filter('option_learndash_settings_permalinks', [$this, 'overrideCoursePermalink'])
+            ->on('wp_enqueue_scripts', [$this, 'dequeueTinCannyOutsideLDContext'], 999);
+    }
+
+    public function dequeueTinCannyOutsideLDContext(): void
+    {
+        if (is_singular(['sfwd-courses', 'sfwd-lessons', 'sfwd-topic', 'sfwd-quiz', 'sfwd-assignment', 'sfwd-certificates'])) {
+            return;
+        }
+        wp_dequeue_script('tc_runtime');
+        wp_dequeue_script('tc_vendors');
+        wp_dequeue_script('wp-h5p-xapi');
+        wp_dequeue_style('wp-h5p-xapi');
+        wp_dequeue_style('datatables-styles');
+        wp_dequeue_style('uotc-group-quiz-report');
+        wp_dequeue_style('snc-style');
     }
 
     public function addScormBodyClass(array $classes): array

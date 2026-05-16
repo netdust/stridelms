@@ -83,8 +83,8 @@ final class AuthService implements \NTDST_Service_Meta
 
     public function registerRoutes(): void
     {
-        $loginUrl = ltrim(Config::get('login_url', '/login'), '/');
-        $registerUrl = ltrim(Config::get('register_url', '/register'), '/');
+        $loginUrl = ltrim(Config::get('login_url', '/aanmelden'), '/');
+        $registerUrl = ltrim(Config::get('register_url', '/registreren'), '/');
 
         // Login page
         ntdst_router()->get($loginUrl, function () {
@@ -102,7 +102,7 @@ final class AuthService implements \NTDST_Service_Meta
                 exit;
             }
             if (!Config::get('enable_registration', true)) {
-                wp_redirect(home_url(Config::get('login_url', '/login')));
+                wp_redirect(home_url(Config::get('login_url', '/aanmelden')));
                 exit;
             }
             return $this->renderPage('register');
@@ -145,7 +145,7 @@ final class AuthService implements \NTDST_Service_Meta
      */
     public function filterLoginUrl(string $login_url, string $redirect = '', bool $force_reauth = false): string
     {
-        $customLogin = home_url(Config::get('login_url', '/login'));
+        $customLogin = home_url(Config::get('login_url', '/aanmelden'));
         if ($redirect) {
             $customLogin = add_query_arg('redirect_to', urlencode($redirect), $customLogin);
         }
@@ -154,8 +154,8 @@ final class AuthService implements \NTDST_Service_Meta
 
     public function preventCanonicalLoginRedirect(): void
     {
-        $loginUrl = ltrim(Config::get('login_url', '/login'), '/');
-        $registerUrl = ltrim(Config::get('register_url', '/register'), '/');
+        $loginUrl = ltrim(Config::get('login_url', '/aanmelden'), '/');
+        $registerUrl = ltrim(Config::get('register_url', '/registreren'), '/');
         $currentPath = trim(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH), '/');
 
         $authPaths = [$loginUrl, $registerUrl, 'auth/logout'];
@@ -309,7 +309,7 @@ final class AuthService implements \NTDST_Service_Meta
             wp_logout();
         }
 
-        $redirectUrl = home_url(Config::get('redirect_after_logout', '/login'));
+        $redirectUrl = home_url(Config::get('redirect_after_logout', '/aanmelden'));
         wp_safe_redirect($redirectUrl);
         exit;
     }
@@ -333,7 +333,7 @@ final class AuthService implements \NTDST_Service_Meta
             return;
         }
 
-        $loginUrl = home_url(Config::get('login_url', '/login'));
+        $loginUrl = home_url(Config::get('login_url', '/aanmelden'));
 
         // Preserve redirect_to parameter
         if (!empty($_GET['redirect_to'])) {

@@ -28,7 +28,16 @@ final class BrowserHooks
             ->on('send_headers', [$this, 'noCacheLoggedIn'])
             ->on('init', [$this, 'blockPrefetchRequests'], 1)
             ->filter('wp_speculation_rules_configuration', '__return_null')
-            ->filter('body_class', [$this, 'addPageStateClasses']);
+            ->filter('body_class', [$this, 'addPageStateClasses'])
+            ->filter('show_admin_bar', [$this, 'hideAdminBarForLearners']);
+    }
+
+    public function hideAdminBarForLearners(bool $show): bool
+    {
+        if (!$show || !is_user_logged_in()) {
+            return $show;
+        }
+        return current_user_can('stride_view');
     }
 
     public function pwaMeta(): void

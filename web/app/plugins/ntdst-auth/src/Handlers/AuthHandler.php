@@ -77,7 +77,7 @@ final class AuthHandler implements \NTDST_Service_Meta
     public function ajaxLoginPassword(): void
     {
         $isRedirect = !empty($_POST['_redirect']);
-        $loginUrl = home_url(Config::get('login_url', '/login'));
+        $loginUrl = home_url(Config::get('login_url', '/aanmelden'));
 
         if (!$this->verifyNonce('ntdst_auth_login')) {
             $msg = __('Invalid security token. Please try again.', 'ntdst-auth');

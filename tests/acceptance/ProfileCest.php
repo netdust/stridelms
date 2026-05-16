@@ -51,7 +51,7 @@ class ProfileCest
         $I->amOnPage('/mijn-account/?tab=profiel');
 
         // page-mijn-account.php redirects to login if not authenticated
-        $I->seeInCurrentUrl('login');
+        $I->seeInCurrentUrl('aanmelden');
     }
 
     /**

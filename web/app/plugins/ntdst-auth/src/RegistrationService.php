@@ -191,7 +191,7 @@ final class RegistrationService implements \NTDST_Service_Meta
 
     private function sendAlreadyRegisteredEmail(string $email): void
     {
-        $loginUrl = home_url(Config::get('login_url', '/login'));
+        $loginUrl = home_url(Config::get('login_url', '/aanmelden'));
 
         ntdst_mail()
             ->to($email)
@@ -205,7 +205,7 @@ final class RegistrationService implements \NTDST_Service_Meta
 
     private function sendWelcomeEmail(string $email): void
     {
-        $loginUrl = home_url(Config::get('login_url', '/login'));
+        $loginUrl = home_url(Config::get('login_url', '/aanmelden'));
 
         ntdst_mail()
             ->to($email)

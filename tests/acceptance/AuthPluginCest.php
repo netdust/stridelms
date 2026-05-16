@@ -19,13 +19,13 @@ class AuthPluginCest
     /**
      * SCENARIO: Login page loads correctly
      *   GIVEN: I am not logged in
-     *   WHEN: I visit /login
+     *   WHEN: I visit /aanmelden
      *   THEN: I see the login page with email form
      */
     public function loginPageLoads(AcceptanceTester $I): void
     {
         $I->wantTo('verify the custom login page loads');
-        $I->amOnPage('/login');
+        $I->amOnPage('/aanmelden');
         $I->seeElement('input[type="email"]');
         $I->seeElement('button[type="submit"]');
         $I->dontSee('Fatal error');
@@ -34,13 +34,13 @@ class AuthPluginCest
 
     /**
      * SCENARIO: Login page shows magic link form by default
-     *   GIVEN: I am on /login
+     *   GIVEN: I am on /aanmelden
      *   THEN: I see magic link request form
      */
     public function loginPageShowsMagicLinkForm(AcceptanceTester $I): void
     {
         $I->wantTo('verify login page shows magic link form');
-        $I->amOnPage('/login');
+        $I->amOnPage('/aanmelden');
         // Structural signal that this is the Stride custom login page (not wp-login.php):
         // the magic-link form has an Alpine @submit handler unique to our auth plugin.
         $I->seeInSource('requestMagicLink');
@@ -56,13 +56,13 @@ class AuthPluginCest
     /**
      * SCENARIO: Register page loads correctly
      *   GIVEN: I am not logged in
-     *   WHEN: I visit /register
+     *   WHEN: I visit /registreren
      *   THEN: I see the registration form elements
      */
     public function registerPageLoads(AcceptanceTester $I): void
     {
         $I->wantTo('verify the custom register page loads');
-        $I->amOnPage('/register');
+        $I->amOnPage('/registreren');
         $I->seeElement('input[type="email"]');
         $I->seeElement('input[type="checkbox"]');
         $I->seeElement('button[type="submit"]');
@@ -75,7 +75,7 @@ class AuthPluginCest
 
     /**
      * SCENARIO: Magic link request shows success regardless of email existence
-     *   GIVEN: I am on /login
+     *   GIVEN: I am on /aanmelden
      *   WHEN: I switch to magic link tab, enter any email and submit
      *   THEN: I see success message (anti-enumeration)
      *
@@ -86,7 +86,7 @@ class AuthPluginCest
     public function magicLinkRequestShowsSuccessForAnyEmail(AcceptanceTester $I): void
     {
         $I->wantTo('verify magic link request shows success for any email');
-        $I->amOnPage('/login');
+        $I->amOnPage('/aanmelden');
 
         // Wait for Alpine.js to initialize
         $I->waitForElement('input[type="email"]', 5);
@@ -128,7 +128,7 @@ class AuthPluginCest
 
     /**
      * SCENARIO: Registration shows success message
-     *   GIVEN: I am on /register
+     *   GIVEN: I am on /registreren
      *   WHEN: I fill required fields (including profile type) and accept terms
      *   THEN: I see "inbox" message
      *
@@ -144,7 +144,7 @@ class AuthPluginCest
         // Clear rate limits to avoid being blocked by previous test runs
         $I->dontHaveInDatabase('stride_options', ['option_name LIKE' => '%ntdst_auth_rate%']);
 
-        $I->amOnPage('/register');
+        $I->amOnPage('/registreren');
 
         // Wait for Alpine.js to initialize
         $I->waitForElement('#email', 5);
@@ -260,7 +260,7 @@ class AuthPluginCest
     {
         $I->wantTo('verify auth/logout route redirects to login');
         $I->amOnPage('/auth/logout');
-        $I->seeInCurrentUrl('/login');
+        $I->seeInCurrentUrl('/aanmelden');
     }
 
     // -------------------------------------------------------------------------
@@ -271,13 +271,13 @@ class AuthPluginCest
      * SCENARIO: wp-login.php redirects to custom login
      *   GIVEN: The redirect_wp_login setting is enabled
      *   WHEN: I visit wp-login.php
-     *   THEN: I am redirected to /login
+     *   THEN: I am redirected to /aanmelden
      */
     public function wpLoginRedirectsToCustomLogin(AcceptanceTester $I): void
     {
         $I->wantTo('verify wp-login.php redirects to custom login');
         $I->amOnPage('/wp/wp-login.php');
-        $I->seeInCurrentUrl('/login');
+        $I->seeInCurrentUrl('/aanmelden');
         // Custom login page exposes the Alpine-driven magic link form;
         // wp-login.php does not. Brand-name-agnostic.
         $I->seeInSource('requestMagicLink');
@@ -317,7 +317,7 @@ class AuthPluginCest
 
     /**
      * SCENARIO: Password login attempt increments rate limit counter
-     *   GIVEN: I am on /login with password auth enabled
+     *   GIVEN: I am on /aanmelden with password auth enabled
      *   WHEN: I submit invalid credentials
      *   THEN: A rate limit transient is created for my IP
      *
@@ -327,7 +327,7 @@ class AuthPluginCest
     public function passwordLoginIncrementsRateLimit(AcceptanceTester $I): void
     {
         $I->wantTo('verify password login attempt increments rate limit counter');
-        $I->amOnPage('/login');
+        $I->amOnPage('/aanmelden');
         $I->waitForElement('input[type="email"]', 5);
 
         // Submit invalid credentials via the password form
@@ -351,7 +351,7 @@ class AuthPluginCest
 
     /**
      * SCENARIO: Registration attempt increments rate limit counter
-     *   GIVEN: I am on /register
+     *   GIVEN: I am on /registreren
      *   WHEN: I submit a registration form
      *   THEN: A rate limit transient is created for my IP
      */
@@ -362,7 +362,7 @@ class AuthPluginCest
         // Clear any existing rate limit transients so this test isn't blocked
         $I->dontHaveInDatabase('stride_options', ['option_name LIKE' => '%ntdst_auth_rate%']);
 
-        $I->amOnPage('/register');
+        $I->amOnPage('/registreren');
         $I->waitForElement('#email', 5);
 
         $testEmail = 'ratelimit-test-' . time() . '@example.com';
