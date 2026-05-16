@@ -122,3 +122,33 @@ WP 6.9 Speculation Rules + Brave cookie stripping = unauthenticated prefetched p
 - `main` is production-only
 - Feature branches → staging → main
 - Remote: `origin` → `github.com:netdust/stridelms`
+
+---
+
+## Working Discipline
+
+### `memory/STATE.md` and `memory/lessons.md` are MY responsibility to update
+CLAUDE.md says "Memory and tasks are managed automatically by global hooks" but in practice the hooks don't always fire / aren't reliable for project-local memory. Stefan called this out 2026-05-16: STATE.md was 3 days stale and lessons.md was 2 months stale during an active session. The auto-memory at `~/.claude/projects/.../memory/` is a SEPARATE store from this project-local `memory/` directory — don't conflate them.
+
+**Rule:** At the end of any session with meaningful work (design docs, decisions, refactors, debugging breakthroughs), update `memory/STATE.md` AND `memory/lessons.md` directly before considering the session done. Don't assume a hook handled it. The "Last refresh:" line at the top of STATE.md is the canary — if it's older than today, the file is stale.
+
+### Project-local memory vs auto-memory
+Two distinct stores exist:
+- **`memory/STATE.md` + `memory/lessons.md`** — project-checked-in, project-scoped, source-of-truth for project continuity. Updated by hand.
+- **`~/.claude/projects/-home-ntdst-Sites-stride/memory/`** — Claude's auto-memory (cross-session, includes `MEMORY.md` index + named topic files). Useful but separate.
+The project memory is what survives in git for the team. Auto-memory survives for me across sessions on this machine.
+
+---
+
+## API Design Decisions
+
+### WordPress REST API is the wrong choice for a public consumption API
+Enabling `show_in_rest => true` on a CPT seems like a free win but: (a) the response shape leaks `_ntdst_` prefixes and serves prices as strings, (b) every meta field becomes publicly readable unless individually gated (security footgun), (c) computed/joined data (capacity remaining, edition+sessions+course in one trip) needs custom controllers anyway, (d) mixes inconsistently with the existing `stride/v1/...` namespace pattern.
+
+**Rule:** For any *public consumption* API, hand-shape a `stride/v1/public/*` namespace. Use WP REST only for what it's designed for (Gutenberg authoring, internal tooling). This mirrors how WooCommerce coexists: `wp/v2/products` exists, but `wc/v3/products` is the actual product.
+
+### Core vs Capability split
+PartnerAPI was sitting inside `stride-core/Modules/PartnerAPI/` despite being outward-facing and per-client optional. Same trap would happen if Conference API or LTI got added to core. **Rule:** "Capability plugin = anything outward-facing or optional per client." If a client without partners shouldn't load partner code, it's not core. Outward-facing capabilities become their own mu-plugins, depending on `stride-core` via the DI container and public interfaces only.
+
+### Extract before invent
+When establishing a new architectural pattern (e.g. "capability plugin extends core"), refactor existing working code into the new shape FIRST (the refactor is low-risk and validates the pattern with a known-good test suite), then build the second instance against the proven shape. Inventing the pattern on greenfield code is harder to verify.

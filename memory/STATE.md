@@ -3,7 +3,7 @@
 Current state of the project for session continuity. Updated after meaningful work.
 **For "what's left to launch" see `docs/LAUNCH-CHECKLIST.md` (single source of truth).**
 
-Last refresh: 2026-05-13
+Last refresh: 2026-05-16
 
 ---
 
@@ -20,7 +20,7 @@ Two parallel goals:
 
 ## What shipped 2026-05-13
 
-Three commits this session:
+Three commits:
 - `8a54c475` Sprint 1 + Track 2 — all 23 dashboard bugs resolved + neutral UX pass + user-detail rework (enrollment / attendance / invoice tables) + empty/loading/error states
 - `01b9a346` Phase 3 tail — bulk lock/unlock quotes from edition + customer-facing edit restriction
 - `7c5f04f5` Perf benchmark script — confirms `getUserDetail` at 50 enrollments is 13 queries / 5 ms (no N+1)
@@ -31,26 +31,44 @@ Plus `ba09bec6` docs commit with the new `docs/LAUNCH-CHECKLIST.md` as the singl
 
 ---
 
+## What happened 2026-05-14 → 2026-05-16
+
+- `2026-05-14` — Pre-deep-testing security + performance audits done. 36 findings (3 CRITICAL security + 4 HIGH perf). Reports in `tasks/audit-2026-05-14-{security,performance}.md`. Stale-database-read sweep + 1 fix (`0f47f48f`).
+- `2026-05-15` — Kindred client mu-plugin built (coral palette) from `stridelms brand.zip`. Replaces safeandsound as active client. LD skin work ongoing. Design: `docs/superpowers/specs/2026-05-15-stride-client-kindred-design.md`. Recent commits: `81b6b454` (port LD-skin fixes to safeandsound + carecommunity), `89422849` (kindred body.ld-in-focus-mode bottom canvas), `577497e4` (shake-out manifest), `6720bb46` (4 test suites green), `770b361e` (shake-out session slot keys + dashboard headings + admin asset 404).
+- `2026-05-16` (this session) — Brainstormed post-launch ideas: conference subsites (`studiedag.stride.be`) + livestreams. Audited Stride's API surface for headless fit. Wrote design `docs/superpowers/specs/2026-05-16-post-launch-capability-plugins-design.md` proposing core+capability-plugin architecture: extract Partner API to own plugin (~2d, refactor), then build new `stride-conference` plugin (~1-2w) with public `stride/v1/public/*` API + structured editorial content. Committed `77b2744c`. Livestreams left for future design. **No code changes — design-only session, respecting ship-mode.**
+
+---
+
 ## Biggest Open Work (per LAUNCH-CHECKLIST)
+
+Codebase is **feature-complete** (per LAUNCH-CHECKLIST top: "all P0+P1 launch code items shipped"). Next phase: deep testing.
 
 | Area | Item | Status |
 |------|------|--------|
 | §A Admin Dashboard | All 23 bugs + visual/UX repair | ✅ DONE |
-| §B Phase 3 tail | Bulk lock/unlock + edit restriction | ✅ DONE (OGM + cron dropped from v1) |
-| §C Phase 4 vouchers | 5 VAD-specific rules (categories, member, prorating, social) | OPEN |
-| §D Deferred bugs in launch modules | 11 bugs across Completion, Attendance, Theme | OPEN |
-| §F Multi-brand demo | 2 more brand scaffolds + swap doc | OPEN |
-| Pre-launch cleanup | stash LTI WIP, drop stray PNGs, gitignore tests/_output | OPEN |
+| §B Phase 3 tail | Bulk lock/unlock + edit restriction | ✅ DONE |
+| §C Phase 4 vouchers | Scope + per-session apply mode | ✅ DONE 2026-05-14 |
+| §D Deferred bugs in launch modules | Refresh found 7 already fixed, 3 dropped, 4 real items | 4 OPEN |
+| §F Multi-brand demo | Scaffolds | ✅ DONE for launch |
+| Pre-launch cleanup | LTI plugin deactivation at deploy time | 1 OPEN |
+| Audit fixes (pre-testing) | 3 CRITICAL sec + 4 HIGH perf items from 2026-05-14 audit | Open — recommended before deep testing |
 
 ---
 
-## Decisions this session
+## Decisions this session (2026-05-16)
+
+- **Post-launch capability-plugin architecture decided.** Partner API extracts to own plugin (post-launch pathfinder refactor). New `stride-conference` plugin built on the proven pattern. Documented in `docs/superpowers/specs/2026-05-16-post-launch-capability-plugins-design.md`.
+- **WP REST API rejected as the public consumption contract.** Default shape leaks internals, every meta becomes public, computed/joined data needs custom controllers anyway. Hand-shape `stride/v1/public/*` instead. Mirrors WooCommerce's `wp/v2/products` vs `wc/v3/products` split.
+- **Conference frontend handoff = hard redirect, not embed.** Re-implementing the enrollment wizard on a separate frontend duplicates Stride's most complex part for cosmetic gain.
+- **Livestreams = deferred to its own design doc.** Unrelated to the plugin architecture decision.
+
+## Earlier decisions (2026-05-13)
 
 - **OGM payment reference** — dropped from v1. Stride creates quotes, not invoices; OGM belongs on the Exact-generated invoice.
 - **Auto-lock cron** — dropped. Admin decides when to lock (single toggle on edition sidebar).
-- **Trajectory UI** — stays visible for v1 (user decision after Track 1 sweep).
-- **Activity feed grouping** — skipped per user. Current flat list is good enough for launch.
-- **Per-enrollment timeline view** — skipped per user.
+- **Trajectory UI** — stays visible for v1.
+- **Activity feed grouping** — skipped. Current flat list is good enough for launch.
+- **Per-enrollment timeline view** — skipped.
 
 ---
 
