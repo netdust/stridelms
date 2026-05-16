@@ -378,10 +378,23 @@ footer a { color: rgb(var(--color-text)); }
 .learndash-wrapper code,
 .learndash-wrapper pre { font-family: var(--font-label); }
 
-/* Focus mode sidebar background — keep warm cream instead of LD's grey */
+/* Focus mode — make all chrome use ONE warm cream surface consistently.
+   LD ships focus-header, focus-content, focus-main, sidebar all as `white`
+   on a grey body. User wants the whole focus-mode UI to share the same
+   cream surface — no card-lift, no contrast steps. */
 .ld-focus,
-.ld-focus-sidebar {
-  background: rgb(var(--color-surface));
+.ld-focus-sidebar,
+.ld-focus-sidebar .ld-focus-sidebar-wrapper,
+.learndash-wrapper .ld-focus .ld-focus-header,
+.learndash-wrapper .ld-focus .ld-focus-main,
+.learndash-wrapper .ld-focus .ld-focus-main .ld-focus-content,
+.learndash-wrapper .ld-focus .ld-tabs-content,
+.learndash-wrapper .ld-focus .ld-tab-content {
+  background: rgb(var(--color-surface)) !important;
+}
+
+.learndash-wrapper .ld-focus .ld-focus-header {
+  border-bottom-color: rgb(var(--color-border)) !important;
 }
 
 /* Lesson title heading — match Kindred display style */
