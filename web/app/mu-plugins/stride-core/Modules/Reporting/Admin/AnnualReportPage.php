@@ -81,12 +81,26 @@ class AnnualReportPage implements \NTDST_Service_Meta
             true
         );
 
+        // Page component MUST register on window before Alpine boots.
+        // Loaded in footer with chart-js as dep; Alpine listed as its dep so it
+        // is enqueued, but our script appears BEFORE Alpine in the DOM via the
+        // dependency below (Alpine depends on stride-annual-report).
+        if (file_exists($jsFile)) {
+            wp_enqueue_script(
+                'stride-annual-report',
+                plugins_url('assets/js/admin/annual-report.js', $basePath . '/stride-core.php'),
+                ['chart-js'],
+                (string) filemtime($jsFile),
+                true
+            );
+        }
+
         wp_enqueue_script(
             'alpinejs',
             'https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js',
-            ['chart-js'],
+            ['stride-annual-report'],
             '3.14.9',
-            ['strategy' => 'defer']
+            ['strategy' => 'defer', 'in_footer' => true]
         );
 
         // Add crossorigin for CDN scripts (consistent with AdminDashboardService).
@@ -96,16 +110,6 @@ class AnnualReportPage implements \NTDST_Service_Meta
             }
             return $tag;
         }, 10, 2);
-
-        if (file_exists($jsFile)) {
-            wp_enqueue_script(
-                'stride-annual-report',
-                plugins_url('assets/js/admin/annual-report.js', $basePath . '/stride-core.php'),
-                ['alpinejs'],
-                (string) filemtime($jsFile),
-                true
-            );
-        }
 
         $requestedYear  = $this->resolveRequestedYear();
         $availableYears = $this->service->availableYears();

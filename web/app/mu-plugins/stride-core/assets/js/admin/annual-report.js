@@ -1,16 +1,17 @@
-/* global Chart */
+/* global Chart, Alpine */
 /**
  * Annual Report admin page Alpine.js component.
  *
- * Reads the localized payload from window.StrideAnnualReport, renders a
- * Chart.js bar chart of enrollments-by-course, and provides helpers for
- * KPI formatting, year switching, and CSV/PDF URL building.
+ * Registers on the `alpine:init` event so the component factory is in place
+ * before Alpine evaluates any `x-data="strideAnnualReport()"` directive,
+ * regardless of script load order between Alpine and this file.
  */
 function strideAnnualReport() {
     const cfg = window.StrideAnnualReport || {};
     return {
-        year: cfg.year,
-        availableYears: cfg.availableYears || [],
+        // wp_localize_script string-casts top-level scalars; coerce back to int.
+        year: parseInt(cfg.year, 10) || new Date().getFullYear(),
+        availableYears: (cfg.availableYears || []).map((y) => parseInt(y, 10)),
         report: cfg.report || {
             kpis: {},
             sections: [],
@@ -107,3 +108,13 @@ function strideAnnualReport() {
 }
 
 window.strideAnnualReport = strideAnnualReport;
+
+// Also register via Alpine's init hook for robust ordering. The `x-data`
+// directive in the template uses `strideAnnualReport()` (function form), so
+// the window assignment above is the primary path; this listener is a safety
+// net in case Alpine evaluates before this script if loading order changes.
+document.addEventListener('alpine:init', () => {
+    if (typeof window.Alpine !== 'undefined' && typeof window.Alpine.data === 'function') {
+        window.Alpine.data('strideAnnualReport', strideAnnualReport);
+    }
+});
