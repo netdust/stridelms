@@ -48,6 +48,7 @@ return [
         \Stride\Modules\Assistant\ReadAbilityRegistrar::class,
         \Stride\Modules\Assistant\WriteAbilityRegistrar::class,
         \Stride\Modules\Reporting\AnnualReportService::class,
+        \Stride\Modules\Reporting\AnnualReportPdfGenerator::class,
         \Stride\Modules\Reporting\Admin\AnnualReportPage::class,
     ],
 
