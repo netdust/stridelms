@@ -378,10 +378,15 @@ footer a { color: rgb(var(--color-text)); }
 .learndash-wrapper code,
 .learndash-wrapper pre { font-family: var(--font-label); }
 
-/* Focus mode — keep sidebar WHITE (LD default) so the coral course-heading
-   sits on a clean canvas. The CONTENT column (header bar + body + lesson
-   content card) all share the warm cream body so there's no white card
-   floating on the page. */
+/* Focus mode background layers.
+   LD sets background: #fff at TWO body-level layers (body.ld-in-focus-mode
+   and body.ld-in-focus-mode .learndash-wrapper) — these are the bottom
+   canvas under everything. Plus the inner focus-header, focus-main,
+   focus-content, and tab-content also hardcode white. Override ALL of
+   them to cream so the content column reads as one continuous surface.
+   Sidebar stays white (LD default, not touched here). */
+body.ld-in-focus-mode,
+body.ld-in-focus-mode .learndash-wrapper,
 .learndash-wrapper .ld-focus .ld-focus-main,
 .learndash-wrapper .ld-focus .ld-focus-main .ld-focus-content,
 .learndash-wrapper .ld-focus .ld-tabs-content,
