@@ -69,6 +69,11 @@ class UserLifecycleService implements \NTDST_Service_Meta
         }
         add_action('delete_user', [$this, 'auditHardDelete'], 10, 3);
 
+        // GDPR self-service: expose a complete export covering registrations,
+        // quotes, attendance, and completion-task data. Without this Stride
+        // only emits what ntdst-auth's ConsentHelper provides (3 meta keys).
+        add_filter('wp_privacy_personal_data_exporters', [$this, 'registerPrivacyExporter']);
+
         if (defined('WP_CLI') && WP_CLI) {
             WP_CLI::add_command('stride anonymise-orphans', [$this, 'cliAnonymiseOrphans']);
         }
@@ -416,5 +421,178 @@ class UserLifecycleService implements \NTDST_Service_Meta
         }
 
         WP_CLI::success(sprintf('Flagged %d registration row(s). Attendance rows left as-is (no notes column).', $touchedRegs));
+    }
+
+    // -------------------------------------------------------------------------
+    // GDPR data export (B4-001a)
+    //
+    // Register a Stride privacy exporter that complements ntdst-auth's
+    // ConsentHelper exporter. We emit the user's business data — enrollments,
+    // quotes, attendance — so the WP Privacy Tools export ZIP is actually
+    // useful for a right-to-access request.
+    //
+    // This is a read-only operation triggered by wp_create_user_request +
+    // user-confirmed via email, so it's safe to run without admin involvement.
+    // -------------------------------------------------------------------------
+
+    /**
+     * @param array<string, array<string, mixed>> $exporters
+     * @return array<string, array<string, mixed>>
+     */
+    public function registerPrivacyExporter(array $exporters): array
+    {
+        $exporters['stride'] = [
+            'exporter_friendly_name' => __('Stride opleidingsgegevens', 'stride'),
+            'callback' => [$this, 'exportUserData'],
+        ];
+        return $exporters;
+    }
+
+    /**
+     * WP privacy exporter callback shape:
+     *   array{data: array<int, array{group_id: string, group_label: string, item_id: string, data: array<int, array{name: string, value: string}>}>, done: bool}
+     */
+    public function exportUserData(string $email, int $page = 1): array
+    {
+        $user = get_user_by('email', $email);
+        if (!$user) {
+            return ['data' => [], 'done' => true];
+        }
+
+        $userId = (int) $user->ID;
+        $items = array_merge(
+            $this->exportRegistrations($userId),
+            $this->exportQuotes($userId),
+            $this->exportAttendance($userId)
+        );
+
+        return ['data' => $items, 'done' => true];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function exportRegistrations(int $userId): array
+    {
+        global $wpdb;
+        $regs = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, edition_id, trajectory_id, status, enrollment_path, registered_at, completion_tasks, notes
+             FROM {$wpdb->prefix}vad_registrations
+             WHERE user_id = %d
+             ORDER BY registered_at DESC",
+            $userId
+        ));
+
+        $items = [];
+        foreach ($regs as $reg) {
+            $editionTitle = $reg->edition_id ? get_the_title((int) $reg->edition_id) : '';
+            $trajectoryTitle = $reg->trajectory_id ? get_the_title((int) $reg->trajectory_id) : '';
+            $taskSummary = $reg->completion_tasks
+                ? implode(', ', array_keys(json_decode($reg->completion_tasks, true) ?: []))
+                : '';
+
+            $rowData = [
+                ['name' => __('Inschrijving-ID', 'stride'), 'value' => (string) $reg->id],
+                ['name' => __('Opleiding', 'stride'), 'value' => $editionTitle ?: $trajectoryTitle],
+                ['name' => __('Status', 'stride'), 'value' => (string) $reg->status],
+                ['name' => __('Inschrijving-pad', 'stride'), 'value' => (string) $reg->enrollment_path],
+                ['name' => __('Ingeschreven op', 'stride'), 'value' => (string) $reg->registered_at],
+            ];
+            if ($taskSummary !== '') {
+                $rowData[] = ['name' => __('Voltooiingstaken', 'stride'), 'value' => $taskSummary];
+            }
+            if ($reg->notes) {
+                $rowData[] = ['name' => __('Notities', 'stride'), 'value' => (string) $reg->notes];
+            }
+
+            $items[] = [
+                'group_id' => 'stride-registrations',
+                'group_label' => __('Stride — Inschrijvingen', 'stride'),
+                'item_id' => 'registration-' . $reg->id,
+                'data' => $rowData,
+            ];
+        }
+        return $items;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function exportQuotes(int $userId): array
+    {
+        global $wpdb;
+        // vad_quote stores its meta WITHOUT a prefix (unlike vad_session +
+        // vad_edition which use _ntdst_). Quote model in stride-core does
+        // not declare a meta_prefix in NTDST Data Manager.
+        $quoteIds = $wpdb->get_col($wpdb->prepare(
+            "SELECT p.ID FROM {$wpdb->posts} p
+             INNER JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID AND pm.meta_key = 'user_id'
+             WHERE p.post_type = 'vad_quote' AND pm.meta_value = %d
+             ORDER BY p.post_date DESC",
+            $userId
+        ));
+
+        $items = [];
+        foreach ($quoteIds as $quoteId) {
+            $qid = (int) $quoteId;
+            $number = (string) get_post_meta($qid, 'quote_number', true);
+            $status = (string) get_post_meta($qid, 'status', true);
+            $totalCents = (int) get_post_meta($qid, 'total', true);
+            $totalEur = number_format($totalCents / 100, 2, ',', '.');
+            $billing = get_post_meta($qid, 'billing', true);
+
+            $rowData = [
+                ['name' => __('Offerte-nummer', 'stride'), 'value' => $number],
+                ['name' => __('Status', 'stride'), 'value' => $status],
+                ['name' => __('Totaalbedrag', 'stride'), 'value' => '€ ' . $totalEur],
+                ['name' => __('Aangemaakt op', 'stride'), 'value' => (string) get_the_date('Y-m-d H:i', $qid)],
+            ];
+            if (is_array($billing) && !empty($billing['company'])) {
+                $rowData[] = ['name' => __('Factuurnaam', 'stride'), 'value' => (string) ($billing['company'] ?? '')];
+                $rowData[] = ['name' => __('Factuuradres', 'stride'), 'value' => trim(($billing['address'] ?? '') . ', ' . ($billing['postal_code'] ?? '') . ' ' . ($billing['city'] ?? ''), ', ')];
+            }
+
+            $items[] = [
+                'group_id' => 'stride-quotes',
+                'group_label' => __('Stride — Offertes', 'stride'),
+                'item_id' => 'quote-' . $qid,
+                'data' => $rowData,
+            ];
+        }
+        return $items;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function exportAttendance(int $userId): array
+    {
+        global $wpdb;
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, edition_id, session_id, status, marked_at
+             FROM {$wpdb->prefix}vad_attendance
+             WHERE user_id = %d
+             ORDER BY marked_at DESC",
+            $userId
+        ));
+
+        $items = [];
+        foreach ($rows as $r) {
+            $editionTitle = $r->edition_id ? get_the_title((int) $r->edition_id) : '';
+            $sessionTitle = $r->session_id ? get_the_title((int) $r->session_id) : '';
+
+            $items[] = [
+                'group_id' => 'stride-attendance',
+                'group_label' => __('Stride — Aanwezigheid', 'stride'),
+                'item_id' => 'attendance-' . $r->id,
+                'data' => [
+                    ['name' => __('Opleiding', 'stride'), 'value' => $editionTitle],
+                    ['name' => __('Sessie', 'stride'), 'value' => $sessionTitle],
+                    ['name' => __('Status', 'stride'), 'value' => (string) $r->status],
+                    ['name' => __('Geregistreerd op', 'stride'), 'value' => (string) $r->marked_at],
+                ],
+            ];
+        }
+        return $items;
     }
 }
