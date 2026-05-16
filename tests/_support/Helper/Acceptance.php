@@ -51,6 +51,41 @@ class Acceptance extends Module
     }
 
     /**
+     * Find a published vad_edition that has at least N sessions linked via
+     * `_ntdst_edition_id` postmeta. Returns 0 if none found.
+     *
+     * Avoids hardcoded edition IDs in tests — seed data changes and IDs drift.
+     */
+    public function grabEditionWithMinSessions(int $minSessions = 2): int
+    {
+        $db = $this->getModule('WPDb');
+        $rows = $db->grabColumnFromDatabase(
+            'stride_postmeta',
+            'meta_value',
+            ['meta_key' => '_ntdst_edition_id']
+        );
+
+        $counts = array_count_values(array_map('intval', $rows));
+        arsort($counts);
+
+        foreach ($counts as $editionId => $count) {
+            if ($count >= $minSessions) {
+                // Verify the edition is published
+                $exists = (int) $db->grabFromDatabase('stride_posts', 'ID', [
+                    'ID'          => $editionId,
+                    'post_type'   => 'vad_edition',
+                    'post_status' => 'publish',
+                ]);
+                if ($exists) {
+                    return $exists;
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    /**
      * Activate a user account using the test activation helper.
      *
      * This bypasses email verification by directly setting the activation

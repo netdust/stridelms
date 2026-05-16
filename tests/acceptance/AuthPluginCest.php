@@ -41,7 +41,9 @@ class AuthPluginCest
     {
         $I->wantTo('verify login page shows magic link form');
         $I->amOnPage('/login');
-        $I->see('Stride LMS');
+        // Structural signal that this is the Stride custom login page (not wp-login.php):
+        // the magic-link form has an Alpine @submit handler unique to our auth plugin.
+        $I->seeInSource('requestMagicLink');
         $I->see('Email');
         $I->seeElement('input[type="email"]');
         $I->seeElement('button[type="submit"]');
@@ -276,7 +278,9 @@ class AuthPluginCest
         $I->wantTo('verify wp-login.php redirects to custom login');
         $I->amOnPage('/wp/wp-login.php');
         $I->seeInCurrentUrl('/login');
-        $I->see('Stride LMS');
+        // Custom login page exposes the Alpine-driven magic link form;
+        // wp-login.php does not. Brand-name-agnostic.
+        $I->seeInSource('requestMagicLink');
     }
 
     /**

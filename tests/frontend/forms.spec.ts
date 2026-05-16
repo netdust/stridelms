@@ -18,23 +18,21 @@ test.describe('Login Form', () => {
   });
 
   test('submit button is clickable', async ({ page }) => {
-    const submitButton = page.locator('button[type="submit"]');
+    // Stride login page renders TWO forms (password mode + magic-link mode),
+    // each with its own submit button. Default mode='password' is the visible
+    // one — scope to it explicitly.
+    const submitButton = page.locator('form[x-show*="password"] button[type="submit"]');
     await expect(submitButton).toBeEnabled();
   });
 
   test('form shows loading state on submit', async ({ page }) => {
-    const emailField = page.locator('#email');
-    await emailField.fill('test@example.com');
-
-    const submitButton = page.locator('button[type="submit"]');
-    await submitButton.click();
+    const passwordForm = page.locator('form[x-show*="password"]');
+    await passwordForm.locator('#email').fill('test@example.com');
+    await passwordForm.locator('button[type="submit"]').click();
 
     // Alpine.js should show loading state (spinner or disabled button)
     // Wait a moment for state change
     await page.waitForTimeout(500);
-
-    // Form should respond (either loading or showing message)
-    const hasResponse = await page.locator('[x-show="loading"], [x-show="success"], [x-show="error"], .uk-alert').first().isVisible().catch(() => false);
 
     // At minimum, no JS errors should occur
     const body = await page.locator('body');
@@ -42,7 +40,7 @@ test.describe('Login Form', () => {
   });
 
   test('empty form shows validation', async ({ page }) => {
-    const submitButton = page.locator('button[type="submit"]');
+    const submitButton = page.locator('form[x-show*="password"] button[type="submit"]');
     await submitButton.click();
 
     // HTML5 validation should prevent submission
@@ -98,6 +96,11 @@ test.describe('Registration Form', () => {
     await page.locator('#last_name').fill('User');
     const uniqueEmail = `test_${Date.now()}@example.com`;
     await page.locator('#email').fill(uniqueEmail);
+    // profile_type is a required <select> — pick the first non-empty option so
+    // HTML5 validation passes and the form actually submits via AJAX.
+    const profileType = page.locator('#profile_type');
+    const firstOption = await profileType.locator('option').nth(1).getAttribute('value');
+    if (firstOption) await profileType.selectOption(firstOption);
     await page.locator('#consent_terms').check();
     await page.locator('#consent_privacy').check();
 

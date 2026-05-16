@@ -174,18 +174,19 @@ test.describe('Create Edition', () => {
     await expect(page.locator('#stride_edition_actions')).toBeVisible();
   });
 
-  test('details metabox has three tabs', async ({ page }) => {
+  test('details metabox has expected tabs', async ({ page }) => {
     await gotoNewEdition(page);
 
     const detailsBox = page.locator('#stride_edition_details');
     const tabs = detailsBox.locator('.stride-tabs-nav .stride-tab');
 
-    // Algemeen, Informatie, Prijzen
-    await expect(tabs).toHaveCount(3);
+    // Algemeen, Informatie, Prijzen, Documenten, Cursusinstellingen (hidden by default)
+    await expect(tabs).toHaveCount(5);
 
     await expect(tabs.nth(0)).toContainText('Algemeen');
     await expect(tabs.nth(1)).toContainText('Informatie');
     await expect(tabs.nth(2)).toContainText('Prijzen');
+    await expect(tabs.nth(3)).toContainText('Documenten');
   });
 
   test('tab switching shows correct content', async ({ page }) => {

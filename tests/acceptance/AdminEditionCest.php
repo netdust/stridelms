@@ -13,6 +13,7 @@ use Tests\Support\AcceptanceTester;
 class AdminEditionCest
 {
     private ?int $adminId = null;
+    private ?int $editionWithSessionsId = null;
 
     public function _before(AcceptanceTester $I): void
     {
@@ -25,6 +26,60 @@ class AdminEditionCest
 
         // Login as admin
         $I->loginAsUserId($this->adminId, '/wp/wp-admin/');
+    }
+
+    /**
+     * Strip artefacts the tests could have created.
+     *  - canAddSession adds a vad_session via the admin UI without a title
+     *    (defaults submit). Empty-title sessions = test residue.
+     *  - canCreateNewEdition creates 'Test Edition <unix-ts>'. Same pattern.
+     * Without this teardown the row counts grow monotonically across runs
+     * and pollute voucher prorating math + admin Edities listing.
+     */
+    public function _after(AcceptanceTester $I): void
+    {
+        $I->dontHaveInDatabase('stride_posts', [
+            'post_type'  => 'vad_session',
+            'post_title' => '',
+        ]);
+        $I->dontHaveInDatabase('stride_posts', [
+            'post_type'        => 'vad_edition',
+            'post_title LIKE'  => 'Test Edition %',
+        ]);
+    }
+
+    /**
+     * Force a WP admin metabox open. WP persists per-user collapse state in
+     * usermeta, so a metabox can land closed for the admin user on the picked
+     * edition — making inner controls invisible to getVisibleText() / unable
+     * to interact with via fillField().
+     */
+    private function openMetabox(AcceptanceTester $I, string $metaboxId): void
+    {
+        $I->executeJS(sprintf(
+            'const box = document.getElementById(%s); if (box) { box.classList.remove("closed"); }',
+            json_encode($metaboxId)
+        ));
+    }
+
+    /**
+     * Resolve a published edition that has at least two sessions. Hardcoding
+     * IDs in tests is brittle — seed data changes and old IDs are dropped on
+     * reseed. Helper method lives in Tests\Support\Helper\Acceptance.
+     */
+    private function editionWithSessions(AcceptanceTester $I): int
+    {
+        if ($this->editionWithSessionsId !== null) {
+            return $this->editionWithSessionsId;
+        }
+
+        $editionId = $I->grabEditionWithMinSessions(2);
+
+        if (!$editionId) {
+            $I->fail('No published edition with 2+ sessions found in seed data');
+        }
+
+        return $this->editionWithSessionsId = $editionId;
     }
 
     // =========================================================================
@@ -235,8 +290,8 @@ class AdminEditionCest
     {
         $I->wantTo('verify sessions metabox shows existing session data');
 
-        // Edition 7929 has 2 seeded sessions
-        $I->amOnPage('/wp/wp-admin/post.php?post=7929&action=edit');
+        $editionId = $this->editionWithSessions($I);
+        $I->amOnPage('/wp/wp-admin/post.php?post=' . $editionId . '&action=edit');
         $I->see('Sessies');
         $I->waitForElement('.session-row', 5);
 
@@ -246,7 +301,7 @@ class AdminEditionCest
         \PHPUnit\Framework\Assert::assertGreaterThanOrEqual(
             2,
             (int) $sessionCount,
-            'Edition 7929 should have at least 2 sessions'
+            'Edition should have at least 2 sessions'
         );
     }
 
@@ -264,8 +319,8 @@ class AdminEditionCest
     {
         $I->wantTo('add a session to an edition via the admin UI');
 
-        // Use edition 7929 which has the sessions metabox and existing sessions
-        $I->amOnPage('/wp/wp-admin/post.php?post=7929&action=edit');
+        $editionId = $this->editionWithSessions($I);
+        $I->amOnPage('/wp/wp-admin/post.php?post=' . $editionId . '&action=edit');
         $I->dontSee('Fatal error');
 
         $sessionsBefore = $I->executeJS(
@@ -315,8 +370,15 @@ class AdminEditionCest
     {
         $I->wantTo('verify the notes metabox renders with input form');
 
-        $I->amOnPage('/wp/wp-admin/post.php?post=7929&action=edit');
+        $editionId = $this->editionWithSessions($I);
+        $I->amOnPage('/wp/wp-admin/post.php?post=' . $editionId . '&action=edit');
         $I->see('Notities');
+
+        // WP persists per-user metabox collapse state. Force the notes box open
+        // so its inner controls (e.g. the "Notitie toevoegen" button) become
+        // visible to getVisibleText().
+        $this->openMetabox($I, 'stride_edition_notes');
+
         $I->see('Notitie toevoegen');
 
         // Hidden field exists in DOM (not visible to seeElement)
@@ -338,8 +400,11 @@ class AdminEditionCest
     {
         $I->wantTo('add a note to an edition via the admin UI');
 
-        $I->amOnPage('/wp/wp-admin/post.php?post=7929&action=edit');
+        $editionId = $this->editionWithSessions($I);
+        $I->amOnPage('/wp/wp-admin/post.php?post=' . $editionId . '&action=edit');
         $I->see('Notities');
+
+        $this->openMetabox($I, 'stride_edition_notes');
 
         $I->fillField('textarea[placeholder*="notitie"]', 'Acceptance test note');
         $I->click('Notitie toevoegen');

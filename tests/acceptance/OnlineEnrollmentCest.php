@@ -29,6 +29,38 @@ class OnlineEnrollmentCest
     {
         $this->courseData = $this->resolveSeedData($I);
         $this->studentUserId = (int) $I->grabFromDatabase('stride_users', 'ID', ['user_login' => 'seed_student1']);
+
+        $this->cleanupRegistrations($I);
+    }
+
+    public function _after(AcceptanceTester $I): void
+    {
+        $this->cleanupRegistrations($I);
+    }
+
+    private function cleanupRegistrations(AcceptanceTester $I): void
+    {
+        foreach ($this->courseData as $scenario) {
+            $I->dontHaveInDatabase('stride_vad_registrations', [
+                'user_id'    => $this->studentUserId,
+                'edition_id' => $scenario['edition_id'],
+            ]);
+        }
+
+        // Mindfulness (minimal scenario) is the only course this Cest may grant
+        // LearnDash access for. Other seed scenarios already have legitimate
+        // seed-data LD usermeta we must not touch.
+        $minimalCourseId = $this->courseData['minimal']['course_id'] ?? 0;
+        if ($minimalCourseId) {
+            $I->dontHaveInDatabase('stride_usermeta', [
+                'user_id'  => $this->studentUserId,
+                'meta_key' => 'course_' . $minimalCourseId . '_access_from',
+            ]);
+            $I->dontHaveInDatabase('stride_usermeta', [
+                'user_id'  => $this->studentUserId,
+                'meta_key' => 'learndash_course_' . $minimalCourseId . '_enrolled_at',
+            ]);
+        }
     }
 
     private function resolveSeedData(AcceptanceTester $I): array
@@ -83,10 +115,7 @@ class OnlineEnrollmentCest
         $this->loginAsStudent($I, $this->courseData['default']['enrollment_url']);
         $I->waitForElement('form', 10);
 
-        $I->see('Gegevens');
-        $I->see('Bevestigen');
-        $I->dontSee('Voor wie is deze inschrijving');
-        $I->dontSee('Facturatie');
+        $this->assertProgressBarHasOnlySteps($I, ['Gegevens', 'Bevestigen']);
     }
 
     /**
@@ -99,10 +128,33 @@ class OnlineEnrollmentCest
         $this->loginAsStudent($I, $this->courseData['minimal']['enrollment_url']);
         $I->waitForElement('form', 10);
 
-        $I->see('Gegevens');
-        $I->see('Bevestigen');
-        $I->dontSee('Voor wie is deze inschrijving');
-        $I->dontSee('Facturatie');
+        $this->assertProgressBarHasOnlySteps($I, ['Gegevens', 'Bevestigen']);
+    }
+
+    /**
+     * Scope step assertions to the progress bar so that strings appearing inside
+     * Alpine <template x-if> fragments elsewhere on the page (e.g. the billing
+     * recap on step-confirm) don't pollute the result. Selenium's getText()
+     * includes <template> content even though the user never sees it.
+     */
+    private function assertProgressBarHasOnlySteps(AcceptanceTester $I, array $expectedLabels): void
+    {
+        $progressLabels = $I->executeJS(<<<'JS'
+            const nav = document.querySelector('nav[aria-label="Voortgang"]');
+            if (!nav) return null;
+            return Array.from(nav.querySelectorAll('li')).map(li => li.innerText.trim()).filter(Boolean);
+        JS);
+
+        // Strip the "1 Gegevens", "2 Bevestigen" numbering — keep just labels.
+        $cleaned = array_map(static function ($label) {
+            return trim((string) preg_replace('/^\d+\s+/', '', (string) $label));
+        }, $progressLabels ?? []);
+
+        \PHPUnit\Framework\Assert::assertSame(
+            $expectedLabels,
+            $cleaned,
+            'Progress bar should show exactly: ' . implode(', ', $expectedLabels)
+        );
     }
 
     /**
@@ -122,7 +174,7 @@ class OnlineEnrollmentCest
             if (comp) {
                 comp.form.enrollment_type = 'self';
                 comp.form.terms_accepted = true;
-                comp.stepIndex = comp.steps.stepMap.length - 1;
+                comp.stepIndex = comp.stepMap.length - 1;
             }
         ");
         $I->wait(1);
@@ -255,6 +307,8 @@ class OnlineEnrollmentCest
     {
         $I->wantTo('verify enrolled online course appears in dashboard');
 
+        $courseId = $this->courseData['minimal']['course_id'];
+
         $I->haveInDatabase('stride_vad_registrations', [
             'user_id'         => $this->studentUserId,
             'edition_id'      => $this->courseData['minimal']['edition_id'],
@@ -263,7 +317,17 @@ class OnlineEnrollmentCest
             'registered_at'   => date('Y-m-d H:i:s'),
         ]);
 
-        $this->loginAsStudent($I, '/dashboard/');
+        // Online courses surface on the dashboard via LearnDash usermeta — not
+        // vad_registrations. Mirror what EnrollmentService → LMSAdapter::grantAccess
+        // writes in production, so the dashboard "Online cursussen" section picks
+        // this enrollment up.
+        $now = time();
+        $I->haveUserMetaInDatabase($this->studentUserId, 'course_' . $courseId . '_access_from', (string) $now);
+        $I->haveUserMetaInDatabase($this->studentUserId, 'learndash_course_' . $courseId . '_enrolled_at', (string) $now);
+
+        // WP core redirects /dashboard/ → /wp-admin/ via wp_redirect_admin_locations();
+        // the real user dashboard lives at /mijn-account/.
+        $this->loginAsStudent($I, '/mijn-account/?tab=inschrijvingen');
         $I->waitForElement('body', 10);
 
         $I->see('Mindfulness');

@@ -1,5 +1,6 @@
 import { test as baseTest, expect, type Page } from '@playwright/test';
 import * as fs from 'fs';
+import * as crypto from 'crypto';
 
 /**
  * E2E UAT: Enrollment Completion Flow
@@ -27,6 +28,13 @@ import * as fs from 'fs';
 const TEST_EMAIL = 'student1@seed.test';
 const TEST_PASSWORD = 'seedpass123';
 
+// seed_student1 user id (from scripts/seed.php). Hardcoded because the test-
+// login backdoor in web/app/mu-plugins/test-login-helper.php signs by user_id.
+// Drifts safely: the backdoor wp_die's "User not found" if the ID is stale,
+// which surfaces immediately as a test failure rather than silent skip.
+const TEST_USER_ID = 3194;
+const TEST_LOGIN_SECRET = 'stride_codeception_test_secret_2024';
+
 // ---------------------------------------------------------------------------
 // Auth helpers
 // ---------------------------------------------------------------------------
@@ -35,32 +43,29 @@ const AUTH_FILE_USER = '/tmp/stride-completion-user-auth.json';
 
 async function userLogin(
   page: Page,
-  email = TEST_EMAIL,
-  password = TEST_PASSWORD,
+  userId: number = TEST_USER_ID,
 ): Promise<void> {
-  await page.goto('/login/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+  // Skip the real /login UI: it's AJAX-driven, rate-limited (5/15min per IP),
+  // and parallel Playwright workers tripped the limit during baseline runs.
+  // Use the same backdoor as acceptance tests (tests/_support/Helper/Acceptance.php).
+  const testKey = crypto
+    .createHash('md5')
+    .update(`stride_test_${userId}_${TEST_LOGIN_SECRET}`)
+    .digest('hex');
 
-  // Already logged in (redirected away from login)?
-  if (!page.url().includes('login')) return;
+  await page.goto(`/?stride_test_login=1&user_id=${userId}&test_key=${testKey}`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 30000,
+  });
 
-  await page.waitForLoadState('domcontentloaded');
-
-  const isWpLogin = page.url().includes('wp-login.php');
-
-  if (isWpLogin) {
-    await page.fill('#user_login', email);
-    await page.fill('#user_pass', password);
-    await page.click('#wp-submit');
-    await page.waitForURL((url) => !url.pathname.includes('wp-login'), {
-      timeout: 30000,
-      waitUntil: 'domcontentloaded',
-    });
-  } else {
-    await page.waitForSelector('input[type="password"]', { state: 'visible', timeout: 10000 });
-    await page.locator('input[type="email"], input[type="text"]').first().fill(email);
-    await page.locator('input[type="password"]').first().fill(password);
-    await page.click('button[type="submit"]');
-    await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30000 });
+  // The backdoor wp_safe_redirects to home_url('/') after setting the auth
+  // cookie. If we still see /login, the backdoor isn't enabled (CODECEPTION_TEST
+  // env or DDEV_PROJECT=stride is required — see test-login-helper.php).
+  if (page.url().includes('/login')) {
+    throw new Error(
+      `Test-login backdoor unavailable for user ${userId}. ` +
+        `Verify web/app/mu-plugins/test-login-helper.php is active in this env.`,
+    );
   }
 }
 
@@ -70,13 +75,12 @@ async function userLogin(
 async function gotoAuthenticated(
   page: Page,
   url: string,
-  email = TEST_EMAIL,
-  password = TEST_PASSWORD,
+  userId: number = TEST_USER_ID,
 ): Promise<void> {
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
   if (page.url().includes('/login') || page.url().includes('wp-login.php')) {
-    await userLogin(page, email, password);
+    await userLogin(page, userId);
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
   }
 }
@@ -162,9 +166,11 @@ test.describe('Completion: Dashboard enrollment visibility', () => {
   test('pending enrollment shows task indicator dot', async ({ page }) => {
     await gotoAuthenticated(page, '/mijn-account/?tab=inschrijvingen');
 
-    // The amber dot indicator for pending tasks
-    // Template renders: <span class="w-2 h-2 rounded-full bg-amber-400 ...">
-    const indicators = page.locator('.bg-amber-400');
+    // Pending-task indicator on enrollment cards. Template renders:
+    //   <span class="w-2 h-2 rounded-full bg-warning shrink-0 mt-2" title="...">
+    // (see templates/dashboard/tab-inschrijvingen.php). `.bg-warning` is the
+    // semantic Tailwind token we currently use for these dots.
+    const indicators = page.locator('span.bg-warning.rounded-full');
     const count = await indicators.count();
 
     // At least one enrollment should have pending tasks from seed data
@@ -711,9 +717,16 @@ test.describe('Completion: Questionnaire / Evaluation task', () => {
       await page.goto(href);
       await page.waitForLoadState('networkidle');
 
-      // Check for either enrollment-phase or post-course evaluation task
+      // Look for an *open / available* questionnaire or evaluation task.
+      // Completed tasks render the same header label but their body shows only
+      // "Voltooid" — the task-questionnaire.php partial is skipped, so neither
+      // the <form> nor "Geen vragenlijst geconfigureerd." message exists.
+      // Available tasks render with the open Alpine state (header chevron is
+      // not opacity-60 and no completed check icon).
       const qTask = page.locator('.card').filter({
         hasText: /Vragenlijst invullen|Evaluatie invullen/,
+      }).filter({
+        hasNot: page.locator('.bg-status-success-subtle'),
       });
       if ((await qTask.count()) > 0) {
         return true;

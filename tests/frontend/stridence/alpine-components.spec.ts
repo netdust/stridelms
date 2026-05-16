@@ -27,7 +27,12 @@ test.describe('Alpine.js Initialization', () => {
 
     const apiAvailable = await page.evaluate(() => {
       const api = (window as any).ntdstAPI;
-      return api && typeof api.call === 'function' && typeof api.post === 'function';
+      // The wrapper exposes call/upload/download (nonce-managed REST calls).
+      // `post` was removed when the API moved fully off admin-ajax.
+      return api
+        && typeof api.call === 'function'
+        && typeof api.upload === 'function'
+        && typeof api.download === 'function';
     });
 
     expect(apiAvailable).toBeTruthy();

@@ -260,8 +260,27 @@ class PartnerAPIIntegrationTest extends IntegrationTestCase
         $otherRegId = (int) $wpdb->insert_id;
         self::$testRegistrationIds[] = $otherRegId;
 
+        // Also create a registration for our company so the result is non-empty —
+        // an empty result would trivially satisfy the assertion below.
+        $ourEditionId = $this->createTestEdition();
+        $ourRegId = $repo->create([
+            'user_id' => self::$testUserId,
+            'edition_id' => $ourEditionId,
+            'company_id' => self::$companyId,
+            'status' => 'confirmed',
+            'enrollment_path' => 'individual',
+        ]);
+        if (!is_wp_error($ourRegId)) {
+            self::$testRegistrationIds[] = $ourRegId;
+        }
+
         // Query our company
         $result = $repo->findByCompany(self::$companyId);
+
+        // Sentinel: our own registration must be in the result so the filter
+        // check below is testing something meaningful.
+        $ourRegIds = array_map(static fn ($r) => (int) $r->id, $result['data']);
+        $this->assertContains($ourRegId, $ourRegIds, 'Own-company registration should be in results');
 
         // Verify the other company's registration is not in results
         foreach ($result['data'] as $row) {

@@ -6,12 +6,19 @@
  */
 
 import type { Page } from '@playwright/test';
+import * as crypto from 'crypto';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 export const WP_ADMIN = '/wp/wp-admin';
+
+// seed_admin user id (from scripts/seed.php). The test-login backdoor in
+// web/app/mu-plugins/test-login-helper.php signs by user_id; see
+// tests/_support/Helper/Acceptance.php for the matching acceptance helper.
+const SEED_ADMIN_USER_ID = 3191;
+const TEST_LOGIN_SECRET = 'stride_codeception_test_secret_2024';
 
 export const adminUsers = {
   admin: {
@@ -25,51 +32,39 @@ export const adminUsers = {
 // ---------------------------------------------------------------------------
 
 /**
- * Log in to WordPress admin.
+ * Log in to WordPress admin via the test-login backdoor.
  *
- * Stride uses a custom login page at /login/ with Alpine.js.
- * The form has Email + Password fields and a "Sign In" button.
- * After login, we navigate to wp-admin.
+ * Skips the real /login/ UI which is AJAX-driven, rate-limited
+ * (5 attempts / 15 min per IP), and tripped during parallel Playwright runs.
+ * Backdoor is gated by CODECEPTION_TEST env or DDEV_PROJECT=stride —
+ * see web/app/mu-plugins/test-login-helper.php.
  */
 export async function wpAdminLogin(
   page: Page,
-  user = adminUsers.admin,
+  _user = adminUsers.admin,
 ): Promise<void> {
-  // Try navigating to wp-admin — if already logged in, we'll get through
+  // Try wp-admin first — if we already have a session cookie, we're done.
   await page.goto(`${WP_ADMIN}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-
-  // If we ended up on wp-admin (no login redirect), we're done
   if (page.url().includes('wp-admin') && !page.url().includes('login')) return;
 
-  await page.waitForLoadState('domcontentloaded');
+  // Use the test-login backdoor: same pattern as acceptance suite (see
+  // tests/_support/Helper/Acceptance.php::loginAsUserId).
+  const testKey = crypto
+    .createHash('md5')
+    .update(`stride_test_${SEED_ADMIN_USER_ID}_${TEST_LOGIN_SECRET}`)
+    .digest('hex');
 
-  // Detect which login form we're on: custom Stride or standard WordPress
-  const isWpLogin = page.url().includes('wp-login.php');
+  await page.goto(
+    `/?stride_test_login=1&user_id=${SEED_ADMIN_USER_ID}&test_key=${testKey}` +
+      `&redirect=${encodeURIComponent(`${WP_ADMIN}/`)}`,
+    { waitUntil: 'domcontentloaded', timeout: 30000 },
+  );
 
-  if (isWpLogin) {
-    // Standard WordPress login form
-    await page.fill('#user_login', user.email);
-    await page.fill('#user_pass', user.password);
-    await page.click('#wp-submit');
-    // Wait for login redirect (may go to wp-admin or site root)
-    await page.waitForURL((url) => !url.pathname.includes('wp-login'), { timeout: 15000 });
-    // Ensure we end up in wp-admin
-    if (!page.url().includes('wp-admin')) {
-      await page.goto(`${WP_ADMIN}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    }
-  } else {
-    // Custom Stride login page (Alpine.js)
-    await page.waitForSelector('input[type="password"], #password', { state: 'visible', timeout: 10000 });
-
-    const emailField = page.locator('input[type="email"], input[type="text"]').first();
-    await emailField.fill(user.email);
-
-    const passwordField = page.locator('input[type="password"]').first();
-    await passwordField.fill(user.password);
-
-    await page.click('button[type="submit"]');
-    await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 15000 });
-    await page.goto(`${WP_ADMIN}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  if (page.url().includes('/login') || page.url().includes('wp-login')) {
+    throw new Error(
+      `Test-login backdoor unavailable for admin user ${SEED_ADMIN_USER_ID}. ` +
+        `Verify web/app/mu-plugins/test-login-helper.php is active in this env.`,
+    );
   }
 }
 

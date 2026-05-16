@@ -27,6 +27,11 @@ import {
   submitEnrollment,
 } from './fixtures/test-data';
 
+// Trajectories are explicitly out of scope for v1 launch (see
+// docs/LAUNCH-CHECKLIST.md §H + memory/project_production_priorities.md).
+// File is excluded from runs via playwright.config.ts `testIgnore`.
+// Re-enable when the trajectory feature is reactivated post-launch.
+
 // ============================================================================
 // DISCOVERY & NAVIGATION
 // ============================================================================

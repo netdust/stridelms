@@ -1,4 +1,4 @@
-<?php  //[STAMP] 1f07da27a3a8ad943f3cd80a50bf9973
+<?php  //[STAMP] b6ec55ca68a019fe36f55b0814a5a635
 // phpcs:ignoreFile
 namespace Tests\Support\_generated;
 
@@ -8401,6 +8401,20 @@ trait AcceptanceTesterActions
      */
     public function loginAsUserId(int $userId, string $redirect = "\/"): void {
         $this->getScenario()->runStep(new \Codeception\Step\Action('loginAsUserId', func_get_args()));
+    }
+
+ 
+    /**
+     * [!] Method is generated. Documentation taken from corresponding module.
+     *
+     * Find a published vad_edition that has at least N sessions linked via
+     * `_ntdst_edition_id` postmeta. Returns 0 if none found.
+     *
+     * Avoids hardcoded edition IDs in tests — seed data changes and IDs drift.
+     * @see \Tests\Support\Helper\Acceptance::grabEditionWithMinSessions()
+     */
+    public function grabEditionWithMinSessions(int $minSessions = 2): int {
+        return $this->getScenario()->runStep(new \Codeception\Step\Action('grabEditionWithMinSessions', func_get_args()));
     }
 
  
