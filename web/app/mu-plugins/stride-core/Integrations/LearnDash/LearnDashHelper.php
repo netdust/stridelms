@@ -43,6 +43,13 @@ final class LearnDashHelper
             return false;
         }
 
+        // Guard against non-existent / deleted courses. `sfwd_lms_has_access`
+        // returns true permissively for unknown IDs, which lets orphan
+        // enrollment IDs render as if active.
+        if (get_post_type($courseId) !== 'sfwd-courses') {
+            return false;
+        }
+
         $userId = $userId ?? get_current_user_id();
 
         // Open courses - everyone has access

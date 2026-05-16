@@ -71,6 +71,10 @@ class LearnDashServiceTest extends TestCase
                 }
             ');
         }
+        // Course must exist (B3-005 guard).
+        $post = new \stdClass();
+        $post->post_type = 'sfwd-courses';
+        $GLOBALS['_test_posts'] = [100 => $post];
 
         $result = $this->service->grantAccess(42, 100);
 
@@ -94,6 +98,10 @@ class LearnDashServiceTest extends TestCase
                 }
             ');
         }
+        // Course must exist (B3-005 guard).
+        $post = new \stdClass();
+        $post->post_type = 'sfwd-courses';
+        $GLOBALS['_test_posts'] = [100 => $post];
 
         $result = $this->service->revokeAccess(42, 100);
 
@@ -144,5 +152,91 @@ class LearnDashServiceTest extends TestCase
         $result = $this->service->isComplete(42, 100);
 
         $this->assertFalse($result);
+    }
+
+    // === Regression for B3-005: course-exists guard ===
+
+    /**
+     * @test
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function testGrantAccessRejectsNonExistentCourse(): void
+    {
+        $this->service = new LearnDashService();
+
+        if (!function_exists('ld_update_course_access')) {
+            // Track LD invocation to assert it WASN'T called.
+            eval('
+                function ld_update_course_access(int $userId, int $courseId, bool $remove = false): bool
+                {
+                    $GLOBALS["_ld_call_count"] = ($GLOBALS["_ld_call_count"] ?? 0) + 1;
+                    return true;
+                }
+            ');
+        }
+        $GLOBALS['_ld_call_count'] = 0;
+        // Stubs/wordpress-stubs.php::get_post_type uses $_test_posts global;
+        // an unset post_id returns false.
+        $GLOBALS['_test_posts'] = [];
+
+        $result = $this->service->grantAccess(42, 99999);
+
+        $this->assertFalse($result);
+        $this->assertSame(0, $GLOBALS['_ld_call_count'], 'LD should not be touched for non-existent course');
+    }
+
+    /**
+     * @test
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function testRevokeAccessRejectsNonExistentCourse(): void
+    {
+        $this->service = new LearnDashService();
+
+        if (!function_exists('ld_update_course_access')) {
+            eval('
+                function ld_update_course_access(int $userId, int $courseId, bool $remove = false): bool
+                {
+                    $GLOBALS["_ld_call_count"] = ($GLOBALS["_ld_call_count"] ?? 0) + 1;
+                    return true;
+                }
+            ');
+        }
+        $GLOBALS['_ld_call_count'] = 0;
+        $GLOBALS['_test_posts'] = [];
+
+        $result = $this->service->revokeAccess(42, 99999);
+
+        $this->assertFalse($result);
+        $this->assertSame(0, $GLOBALS['_ld_call_count']);
+    }
+
+    /**
+     * @test
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function testGrantAccessAcceptsRealCourse(): void
+    {
+        $this->service = new LearnDashService();
+
+        if (!function_exists('ld_update_course_access')) {
+            eval('
+                function ld_update_course_access(int $userId, int $courseId, bool $remove = false): bool
+                {
+                    return true;
+                }
+            ');
+        }
+        // Register a fake sfwd-courses post via the stub global.
+        $post = new \stdClass();
+        $post->post_type = 'sfwd-courses';
+        $GLOBALS['_test_posts'] = [100 => $post];
+
+        $result = $this->service->grantAccess(42, 100);
+
+        $this->assertTrue($result);
     }
 }

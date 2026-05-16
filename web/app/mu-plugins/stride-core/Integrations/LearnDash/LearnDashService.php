@@ -43,6 +43,11 @@ final class LearnDashService extends AbstractService implements LMSAdapterInterf
         if (!function_exists('ld_update_course_access')) {
             return false;
         }
+        // Guard against non-existent / wrong-type course IDs. LD core
+        // accepts any int and silently records orphan usermeta otherwise.
+        if (get_post_type($courseId) !== 'sfwd-courses') {
+            return false;
+        }
 
         ld_update_course_access($userId, $courseId, false);
 
@@ -52,6 +57,9 @@ final class LearnDashService extends AbstractService implements LMSAdapterInterf
     public function revokeAccess(int $userId, int $courseId): bool
     {
         if (!function_exists('ld_update_course_access')) {
+            return false;
+        }
+        if (get_post_type($courseId) !== 'sfwd-courses') {
             return false;
         }
 
