@@ -6,6 +6,7 @@ namespace Stride\Tests\Unit;
 
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
+use Stride\Modules\Membership\MembershipService;
 use Stride\Domain\Money;
 use Stride\Tests\TestCase;
 
@@ -13,73 +14,41 @@ class EditionServicePricingTest extends TestCase
 {
     private EditionService $service;
     private EditionRepository $repository;
+    private MembershipService $membership;
 
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->repository = $this->createMock(EditionRepository::class);
+        $this->membership = $this->createMock(MembershipService::class);
 
         // EditionService extends AbstractService which calls init() in constructor.
         // We need to bypass that for unit testing.
         $this->service = $this->getMockBuilder(EditionService::class)
-            ->setConstructorArgs([$this->repository])
+            ->setConstructorArgs([$this->repository, $this->membership])
             ->onlyMethods(['init'])
             ->getMock();
     }
 
-    // === isMember() ===
+    // === isMember() — thin delegate to MembershipService ===
 
-    public function testIsMemberReturnsTrueWhenMetaIsSet(): void
-    {
-        $userId = 1;
-        update_user_meta($userId, 'is_vad_member', true);
-
-        $this->assertTrue($this->service->isMember($userId));
-    }
-
-    public function testIsMemberReturnsFalseWhenMetaNotSet(): void
-    {
-        $userId = 2;
-
-        $this->assertFalse($this->service->isMember($userId));
-    }
-
-    public function testIsMemberReturnsFalseWhenMetaIsFalse(): void
-    {
-        $userId = 3;
-        update_user_meta($userId, 'is_vad_member', false);
-
-        $this->assertFalse($this->service->isMember($userId));
-    }
-
-    public function testIsMemberFilterCanOverride(): void
-    {
-        $userId = 4;
-        update_user_meta($userId, 'is_vad_member', false);
-
-        add_filter('stride/membership/is_member', function (bool $isMember, int $uid): bool {
-            return true;
-        }, 10, 2);
-
-        $this->assertTrue($this->service->isMember($userId));
-    }
-
-    public function testIsMemberFilterReceivesCorrectArgs(): void
+    public function testIsMemberDelegatesToMembershipService(): void
     {
         $userId = 5;
-        update_user_meta($userId, 'is_vad_member', true);
+        $this->membership->expects(self::once())
+            ->method('isMember')
+            ->with($userId)
+            ->willReturn(true);
 
-        $receivedArgs = [];
-        add_filter('stride/membership/is_member', function (bool $isMember, int $uid) use (&$receivedArgs): bool {
-            $receivedArgs = ['isMember' => $isMember, 'userId' => $uid];
-            return $isMember;
-        }, 10, 2);
+        self::assertTrue($this->service->isMember($userId));
+    }
 
-        $this->service->isMember($userId);
+    public function testIsMemberReturnsFalseWhenMembershipServiceSaysNo(): void
+    {
+        $this->membership->method('isMember')->willReturn(false);
 
-        $this->assertTrue($receivedArgs['isMember']);
-        $this->assertSame(5, $receivedArgs['userId']);
+        self::assertFalse($this->service->isMember(7));
     }
 
     // === getPrice() ===
@@ -87,7 +56,6 @@ class EditionServicePricingTest extends TestCase
     public function testGetPriceWithoutUserIdReturnsNonMemberPrice(): void
     {
         $editionId = 100;
-
         $this->repository->method('getField')
             ->willReturnMap([
                 [$editionId, 'price_non_member', 0, 350.0],
@@ -95,70 +63,46 @@ class EditionServicePricingTest extends TestCase
 
         $price = $this->service->getPrice($editionId);
 
-        $this->assertInstanceOf(Money::class, $price);
-        $this->assertSame(35000, $price->inCents());
-    }
-
-    public function testGetPriceWithMemberUserIdReturnsMemberPrice(): void
-    {
-        $editionId = 100;
-        $userId = 10;
-        update_user_meta($userId, 'is_vad_member', true);
-
-        $this->repository->method('getField')
-            ->willReturnMap([
-                [$editionId, 'price', 0, 250.0],
-            ]);
-
-        $price = $this->service->getPrice($editionId, $userId);
-
-        $this->assertSame(25000, $price->inCents());
+        self::assertInstanceOf(Money::class, $price);
+        self::assertSame(35000, $price->inCents());
     }
 
     public function testGetPriceWithNonMemberUserIdReturnsNonMemberPrice(): void
     {
         $editionId = 100;
-        $userId = 11;
-
+        $this->membership->method('isMember')->willReturn(false);
         $this->repository->method('getField')
             ->willReturnMap([
                 [$editionId, 'price_non_member', 0, 350.0],
             ]);
 
-        $price = $this->service->getPrice($editionId, $userId);
+        $price = $this->service->getPrice($editionId, 11);
 
-        $this->assertSame(35000, $price->inCents());
+        self::assertSame(35000, $price->inCents());
     }
 
-    public function testGetPriceFilterCanOverridePrice(): void
+    public function testGetPriceWithMemberUserIdReturnsMemberPriceWhenFilterEnablesMembership(): void
     {
+        // For v1 MembershipService::isMember always returns false. But the
+        // pricing pipeline must still route via the `price` meta when the
+        // service is told a user IS a member (e.g. a future filter override).
         $editionId = 100;
-        $userId = 12;
-        update_user_meta($userId, 'is_vad_member', true);
-
+        $this->membership->method('isMember')->willReturn(true);
         $this->repository->method('getField')
             ->willReturnMap([
                 [$editionId, 'price', 0, 250.0],
             ]);
 
-        add_filter('stride/membership/price', function (Money $price, int $eid, ?int $uid, bool $isMember): Money {
-            if ($isMember) {
-                return Money::cents((int) round($price->inCents() * 0.9));
-            }
-            return $price;
-        }, 10, 4);
+        $price = $this->service->getPrice($editionId, 10);
 
-        $price = $this->service->getPrice($editionId, $userId);
-
-        $this->assertSame(22500, $price->inCents());
+        self::assertSame(25000, $price->inCents());
     }
 
     public function testGetPriceFilterReceivesCorrectArgs(): void
     {
         $editionId = 100;
         $userId = 13;
-        update_user_meta($userId, 'is_vad_member', true);
-
+        $this->membership->method('isMember')->willReturn(true);
         $this->repository->method('getField')
             ->willReturnMap([
                 [$editionId, 'price', 0, 200.0],
@@ -172,16 +116,15 @@ class EditionServicePricingTest extends TestCase
 
         $this->service->getPrice($editionId, $userId);
 
-        $this->assertSame(20000, $receivedArgs['price']->inCents());
-        $this->assertSame(100, $receivedArgs['eid']);
-        $this->assertSame(13, $receivedArgs['uid']);
-        $this->assertTrue($receivedArgs['isMember']);
+        self::assertSame(20000, $receivedArgs['price']->inCents());
+        self::assertSame(100, $receivedArgs['eid']);
+        self::assertSame(13, $receivedArgs['uid']);
+        self::assertTrue($receivedArgs['isMember']);
     }
 
     public function testGetPriceWithNullUserIdPassesNullToFilter(): void
     {
         $editionId = 100;
-
         $this->repository->method('getField')
             ->willReturnMap([
                 [$editionId, 'price_non_member', 0, 350.0],
@@ -195,6 +138,6 @@ class EditionServicePricingTest extends TestCase
 
         $this->service->getPrice($editionId);
 
-        $this->assertNull($receivedUid);
+        self::assertNull($receivedUid);
     }
 }

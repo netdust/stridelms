@@ -32,6 +32,7 @@ return [
     'services' => [
         \Stride\Integrations\LearnDash\LearnDashService::class,
         \Stride\Admin\AdminDashboardService::class,
+        \Stride\Modules\Membership\MembershipService::class,
         \Stride\Modules\Edition\EditionService::class,
         \Stride\Modules\Enrollment\EnrollmentService::class,
         \Stride\Modules\Questionnaire\QuestionnaireService::class,

@@ -397,12 +397,20 @@ final class EditionAdminController
             }
         }
 
-        // Process pricing fields (convert to cents)
-        if (isset($fields['price'])) {
-            $updateData['price'] = (int) round((float) $fields['price'] * 100);
-        }
+        // Process pricing fields (convert to cents).
+        // v1 has no member tier — the admin form posts a single value as
+        // `price_non_member` (canonical for v1). Sync `price` to the same
+        // value so any reader still routing through member/non-member meta
+        // sees one source of truth.
         if (isset($fields['price_non_member'])) {
-            $updateData['price_non_member'] = (int) round((float) $fields['price_non_member'] * 100);
+            $cents = (int) round((float) $fields['price_non_member'] * 100);
+            $updateData['price_non_member'] = $cents;
+            $updateData['price'] = $cents;
+        } elseif (isset($fields['price'])) {
+            // Back-compat path if a caller still posts the legacy `price` key.
+            $cents = (int) round((float) $fields['price'] * 100);
+            $updateData['price'] = $cents;
+            $updateData['price_non_member'] = $cents;
         }
 
         // Process boolean checkbox fields (sidebar requirements)

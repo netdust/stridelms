@@ -28,6 +28,15 @@ class MembershipPricingCest
 
     public function _before(AcceptanceTester $I): void
     {
+        // v1 has no member feature — there is no UI to onboard a member,
+        // MembershipService::isMember() always returns false, and admin
+        // edits a single price. These tests assert two-tier behaviour that
+        // no longer exists.
+        // Re-enable when membership is re-introduced (likely via a separate
+        // stride-membership mu-plugin).
+        $I->wantTo('SKIP — membership feature disabled in v1');
+        \PHPUnit\Framework\Assert::markTestSkipped('Membership feature disabled in v1');
+
         $timestamp = time();
 
         // Create test course

@@ -200,9 +200,9 @@ class StrideSeedData {
             }
 
             update_user_meta($userId, self::SEED_META_KEY, true);
-            if (isset($userData['is_member'])) {
-                update_user_meta($userId, 'is_vad_member', $userData['is_member']);
-            }
+            // Membership feature is disabled for v1 (no UI / no onboarding).
+            // Skip seeding `is_vad_member` so seed data matches production
+            // state — everyone is a non-member.
             if (isset($userData['company_id'])) {
                 update_user_meta($userId, '_stride_company_id', $userData['company_id']);
             }
@@ -1083,14 +1083,20 @@ class StrideSeedData {
         }
         $endDate = $endDate ?? $data['start_date'];
 
+        // v1 has no member feature — both price meta keys must hold the
+        // same value. `price_non_member` from the seed dataset is canonical
+        // (it's what every user sees); copy it to `price` so future reads
+        // of either key return the same number.
+        $effectivePrice = $data['price_non_member'] ?? $data['price'] ?? 0;
+
         $result = $this->editionRepository->create([
             'title' => $postTitle,
             'post_status' => 'publish',
             'course_id' => $courseId,
             'start_date' => $data['start_date'],
             'end_date' => $endDate,
-            'price' => $data['price'],
-            'price_non_member' => $data['price_non_member'],
+            'price' => $effectivePrice,
+            'price_non_member' => $effectivePrice,
             'capacity' => $data['capacity'],
             'venue' => $data['venue'],
             'speakers' => $data['speakers'] ?? '',
@@ -1969,7 +1975,8 @@ class StrideSeedData {
             } else {
                 update_post_meta($testTrajectoryId, '_ntdst_mode', TrajectoryMode::Cohort->value);
                 update_post_meta($testTrajectoryId, '_ntdst_status', OfferingStatus::Open->value);
-                update_post_meta($testTrajectoryId, '_ntdst_price', 500);
+                // v1: single price (no member tier)
+                update_post_meta($testTrajectoryId, '_ntdst_price', 600);
                 update_post_meta($testTrajectoryId, '_ntdst_price_non_member', 600);
                 update_post_meta($testTrajectoryId, '_ntdst_enrollment_deadline', date('Y-m-d', strtotime('+30 days')));
                 update_post_meta($testTrajectoryId, '_ntdst_capacity', 20);

@@ -176,24 +176,22 @@ final class EditionDetailsMetabox
         $priceEur = $price > 0 ? number_format($price / 100, 2, '.', '') : '';
         $priceNonMemberEur = $priceNonMember > 0 ? number_format($priceNonMember / 100, 2, '.', '') : '';
         ?>
+        <?php
+        // v1 has no member feature — single price applies to everyone.
+        // The displayed price is `price_non_member` (canonical for v1).
+        // EditionAdminController writes the same value to both meta keys so
+        // pricing logic that still routes via member/non-member meta stays
+        // correct should membership be re-enabled later.
+        ?>
         <div class="stride-edition-columns">
             <div class="stride-edition-main">
-                <h4><?php esc_html_e('Prijzen', 'stride'); ?></h4>
-                <div class="stride-field-row two-col">
-                    <div class="stride-field">
-                        <label for="edition_price"><?php esc_html_e('Prijs leden', 'stride'); ?></label>
-                        <input type="number" name="ntdst_fields[price]" id="edition_price"
-                               value="<?php echo esc_attr($priceEur); ?>"
-                               min="0" step="0.01" placeholder="0.00">
-                        <p class="description"><?php esc_html_e('excl. BTW', 'stride'); ?></p>
-                    </div>
-                    <div class="stride-field">
-                        <label for="edition_price_non_member"><?php esc_html_e('Prijs niet-leden', 'stride'); ?></label>
-                        <input type="number" name="ntdst_fields[price_non_member]" id="edition_price_non_member"
-                               value="<?php echo esc_attr($priceNonMemberEur); ?>"
-                               min="0" step="0.01" placeholder="0.00">
-                        <p class="description"><?php esc_html_e('excl. BTW', 'stride'); ?></p>
-                    </div>
+                <h4><?php esc_html_e('Prijs', 'stride'); ?></h4>
+                <div class="stride-field">
+                    <label for="edition_price"><?php esc_html_e('Prijs', 'stride'); ?></label>
+                    <input type="number" name="ntdst_fields[price_non_member]" id="edition_price"
+                           value="<?php echo esc_attr($priceNonMemberEur); ?>"
+                           min="0" step="0.01" placeholder="0.00">
+                    <p class="description"><?php esc_html_e('excl. BTW', 'stride'); ?></p>
                 </div>
             </div>
         </div>

@@ -20,6 +20,7 @@ class EditionService extends AbstractService implements EditionQueryInterface
 {
     public function __construct(
         private readonly EditionRepository $repository,
+        private readonly \Stride\Modules\Membership\MembershipService $membership,
     ) {
         parent::__construct();
     }
@@ -222,14 +223,12 @@ class EditionService extends AbstractService implements EditionQueryInterface
     /**
      * Check if a user is a member.
      *
-     * Uses `is_vad_member` user meta as default.
-     * Override via `stride/membership/is_member` filter.
+     * Delegates to MembershipService. Kept as a thin pass-through so
+     * existing callers (`$editionService->isMember($id)`) keep working.
      */
     public function isMember(int $userId): bool
     {
-        $isMember = (bool) get_user_meta($userId, 'is_vad_member', true);
-
-        return (bool) apply_filters('stride/membership/is_member', $isMember, $userId);
+        return $this->membership->isMember($userId);
     }
 
     /**
