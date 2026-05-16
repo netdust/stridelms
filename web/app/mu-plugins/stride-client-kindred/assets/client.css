@@ -468,6 +468,20 @@ footer a { color: rgb(var(--color-text)); }
   color: rgb(var(--color-primary)) !important;
 }
 
+/* ── Focus-header sledgehammer ──
+   Modern theme's focus-header uses Tailwind utilities + various class
+   combos for the "Mark Complete" text link top-right. Rather than chasing
+   each one, force any link descendant of .ld-focus-header to coral. */
+.learndash-wrapper .ld-focus-header a,
+.learndash-wrapper .ld-focus-header a:visited,
+.learndash-wrapper .ld-focus-header button {
+  color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-focus-header a:hover,
+.learndash-wrapper .ld-focus-header button:hover {
+  color: rgb(var(--color-primary-hover)) !important;
+}
+
 /* ── Reduced motion ── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
