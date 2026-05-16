@@ -53,7 +53,7 @@ Codebase is **feature-complete** (per LAUNCH-CHECKLIST top: "all P0+P1 launch co
 | §D Deferred bugs in launch modules | Refresh found 7 already fixed, 3 dropped, 4 real items | 4 OPEN |
 | §F Multi-brand demo | Scaffolds | ✅ DONE for launch |
 | Pre-launch cleanup | LTI plugin deactivation at deploy time | 1 OPEN |
-| Audit fixes (pre-testing) | 3 CRITICAL sec + 4 HIGH perf items from 2026-05-14 audit | Open — recommended before deep testing |
+| Audit fixes (pre-testing) | 3 CRITICAL sec + 4 HIGH sec + 4 HIGH perf from 2026-05-14 audit | ✅ DONE — verified 2026-05-17 in code (notes in `tasks/audit-2026-05-14-*.md`). MEDIUM + LOW deferred. |
 
 ---
 

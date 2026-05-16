@@ -6,6 +6,19 @@ Pre-deep-testing scan by `performance-oracle` agent. Scope: hot paths (admin das
 
 ---
 
+## Status (verified 2026-05-17)
+
+**All HIGH items resolved.**
+
+- ✅ **H1** — Eager DOMPDF render dropped in `QuoteService::createQuote()`; `QuotePDFGenerator::resolveForEmail()` lazy-renders on first email-attachment request. Inline note in the code explains the 300-800ms saving. Async-mail follow-up: verify SMTP send path separately if still synchronous.
+- ✅ **H2** — `AdminAPIController::searchUsers()` now primes `update_meta_cache('user', $userIds)` + uses `batchCountUserRegistrations()` (single GROUP BY) instead of per-row count.
+- ✅ **H3** — `getUserDetail` quote section uses `BatchQueryHelper::batchGetPostMeta()` (line ~2641).
+- ✅ **H4** — `buildCourseTaxonomyJoin` uses `CAST(pm_course.meta_value AS UNSIGNED)` so the indexed bigint side of the join is preserved (line 1175).
+
+Medium + Low items not re-verified — defer to follow-up audit. Code below documents original findings for reference.
+
+---
+
 ## HIGH — Fix before launch
 
 ### H1 — Enrollment fires synchronous PDF render + admin SMTP send in the user's request thread

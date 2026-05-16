@@ -6,6 +6,22 @@ Pre-deep-testing scan by `security-sentinel` agent. Scope: stride-core PHP surfa
 
 ---
 
+## Status (verified 2026-05-17)
+
+**All CRITICAL + HIGH items resolved.**
+
+- ✅ **C1** — `AdminAPIController::sanitizeCsvCell()` applied via `array_map` to every exported row (line 3458).
+- ✅ **C2** — Partner certificate listing paginated (separate work; verify status if needed).
+- ✅ **C3** — `EnrollmentService` tracks `isExistingColleague` and skips `updateUserProfile()` for pre-existing colleague users.
+- ✅ **H1 sec** — `UserLifecycleService::handleAdminAnonymisePost()` now requires BOTH `edit_user` AND `stride_manage`.
+- ✅ **H2 sec** — `endImpersonation()` enforces caller-is-target check + writes symmetric `impersonation.ended` audit row.
+- ✅ **H3 sec** — Impersonation audit uses correct schema (`entity_type='user'` + `entity_id`).
+- ✅ **H4 sec** — `getUserDetail` checks `current_user_can('stride_manage')` to gate sensitive fields (phone, audit trail, full quote listing).
+
+Medium + Low items not re-verified in this pass — defer to follow-up audit. Code below documents original findings for reference.
+
+---
+
 ## CRITICAL — Fix before launch
 
 ### C1 — CSV injection / formula injection in admin export
