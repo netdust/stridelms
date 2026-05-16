@@ -35,6 +35,7 @@ $venue             = $meta['venue'] ?? null;
 $progressLabel     = $meta['progress_label'] ?? null;
 $daysRemaining     = $meta['days_remaining'] ?? null;
 $pendingTasksCount = (int) ($meta['pending_tasks_count'] ?? 0);
+$imminence         = $meta['imminence'] ?? null;
 
 $excerpt          = $body['excerpt'] ?? null;
 $progressPct      = $body['progress_pct'] ?? null;
@@ -56,16 +57,24 @@ $pillClass = $statusPill ? ($pillToneClasses[$statusPill['tone'] ?? 'muted'] ?? 
     <button type="button"
             class="w-full p-4 flex items-center gap-4 text-left"
             @click="toggle()">
-        <!-- Thumbnail -->
-        <div class="w-14 h-14 rounded overflow-hidden flex-shrink-0">
-            <?php if ($thumbnailId) : ?>
-                <?php echo wp_get_attachment_image($thumbnailId, 'thumbnail', false, ['class' => 'w-full h-full object-cover']); ?>
-            <?php else : ?>
-                <div class="w-full h-full bg-surface-alt flex items-center justify-center">
-                    <?php echo stridence_icon('book-open', 'w-6 h-6 text-text-muted'); ?>
-                </div>
-            <?php endif; ?>
-        </div>
+        <!-- Thumbnail / imminence badge -->
+        <?php if ($imminence === 'today' || $imminence === 'tomorrow') : ?>
+            <span class="w-14 h-14 rounded bg-primary/10 flex items-center justify-center shrink-0">
+                <span class="text-xs font-bold text-primary leading-none uppercase">
+                    <?php echo $imminence === 'today' ? esc_html__('Vandaag', 'stridence') : esc_html__('Morgen', 'stridence'); ?>
+                </span>
+            </span>
+        <?php else : ?>
+            <div class="w-14 h-14 rounded overflow-hidden flex-shrink-0">
+                <?php if ($thumbnailId) : ?>
+                    <?php echo wp_get_attachment_image($thumbnailId, 'thumbnail', false, ['class' => 'w-full h-full object-cover']); ?>
+                <?php else : ?>
+                    <div class="w-full h-full bg-surface-alt flex items-center justify-center">
+                        <?php echo stridence_icon('book-open', 'w-6 h-6 text-text-muted'); ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
 
         <!-- Title + meta line -->
         <div class="flex-1 min-w-0">

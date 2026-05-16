@@ -116,6 +116,7 @@ function stridence_build_course_card_args_from_enrollment(array $enrollment, boo
         'progress_label'      => null,
         'days_remaining'      => null,
         'pending_tasks_count' => null,
+        'imminence'           => null, // 'today' | 'tomorrow' | null — drives Vandaag/Morgen badge
     ];
 
     // Body (expanded content)
@@ -164,6 +165,16 @@ function stridence_build_course_card_args_from_enrollment(array $enrollment, boo
         $meta['start_date'] = !empty($enrollment['start_date']) ? (string) $enrollment['start_date'] : null;
         $meta['venue']      = !empty($enrollment['venue']) ? (string) $enrollment['venue'] : null;
 
+        // Imminence: prefer next_session date, fall back to start_date
+        $imminenceDate = $enrollment['next_session']['date'] ?? $enrollment['start_date'] ?? null;
+        if ($imminenceDate) {
+            if ($imminenceDate === date('Y-m-d')) {
+                $meta['imminence'] = 'today';
+            } elseif ($imminenceDate === date('Y-m-d', strtotime('+1 day'))) {
+                $meta['imminence'] = 'tomorrow';
+            }
+        }
+
         $taskSummary = $enrollment['task_summary'] ?? null;
         if ($taskSummary) {
             $body['task_summary']       = $taskSummary;
@@ -205,6 +216,14 @@ function stridence_build_course_card_args_from_enrollment(array $enrollment, boo
                 'label' => __('Bekijk cursus', 'stridence'),
             ];
         }
+    }
+
+    // Completed enrollments: surface certificate download as primary CTA when present
+    if ($completed && !empty($enrollment['certificate_url'])) {
+        $body['primary_cta'] = [
+            'url'   => (string) $enrollment['certificate_url'],
+            'label' => __('Download certificaat', 'stridence'),
+        ];
     }
 
     return [
@@ -285,6 +304,7 @@ function stridence_build_course_card_args_from_trajectory_course(\WP_Post $cours
             'progress_label'      => null,
             'days_remaining'      => null,
             'pending_tasks_count' => null,
+            'imminence'           => null,
         ],
         'body'         => [
             'excerpt'           => $excerpt ?: null,

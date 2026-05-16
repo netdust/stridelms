@@ -75,9 +75,30 @@ final class CourseCardBuilderTest extends TestCase
         $this->assertSame('Verder leren', $args['body']['primary_cta']['label']);
     }
 
-    // --- from_enrollment: completed flag ---
+    // --- from_enrollment: completed flag without certificate clears primary CTA ---
 
-    public function test_enrollment_completed_clears_primary_cta_and_sets_voltooid_pill(): void
+    public function test_enrollment_completed_without_cert_clears_primary_cta_and_sets_voltooid_pill(): void
+    {
+        $enrollment = [
+            'type'              => 'online',
+            'course_id'         => 50,
+            'course_title'      => 'Sportpsychologie 101',
+            'progress'          => 100,
+            'total_lessons'     => 5,
+            'completed_lessons' => 5,
+            'completed_at'      => '2026-04-20',
+        ];
+
+        $args = \stridence_build_course_card_args_from_enrollment($enrollment, completed: true);
+
+        $this->assertSame(['label' => 'Voltooid', 'tone' => 'muted'], $args['status_pill']);
+        $this->assertNull($args['body']['primary_cta']);
+        $this->assertSame(100, $args['body']['progress_pct']);
+    }
+
+    // --- from_enrollment: completed with certificate surfaces download CTA ---
+
+    public function test_enrollment_completed_with_cert_surfaces_download_primary_cta(): void
     {
         $enrollment = [
             'type'              => 'online',
@@ -92,9 +113,9 @@ final class CourseCardBuilderTest extends TestCase
 
         $args = \stridence_build_course_card_args_from_enrollment($enrollment, completed: true);
 
-        $this->assertSame(['label' => 'Voltooid', 'tone' => 'muted'], $args['status_pill']);
-        $this->assertNull($args['body']['primary_cta']);
-        $this->assertSame(100, $args['body']['progress_pct']);
+        $this->assertNotNull($args['body']['primary_cta']);
+        $this->assertSame('Download certificaat', $args['body']['primary_cta']['label']);
+        $this->assertSame('https://example.test/cert', $args['body']['primary_cta']['url']);
     }
 
     // --- from_enrollment: edition online progress = 0 means 'Start cursus' ---
@@ -141,6 +162,57 @@ final class CourseCardBuilderTest extends TestCase
         $this->assertCount(2, $args['body']['sessions']);
         $this->assertSame('2026-06-10', $args['body']['sessions'][0]['date']);
         $this->assertNull($args['body']['primary_cta']);
+    }
+
+    // --- from_enrollment: imminence — Vandaag/Morgen badge driven by next_session ---
+
+    public function test_enrollment_edition_today_session_sets_imminence_today(): void
+    {
+        $today = date('Y-m-d');
+        $enrollment = [
+            'type'         => 'edition',
+            'edition_id'   => 100,
+            'course_id'    => 50,
+            'course_title' => 'Today course',
+            'start_date'   => '2026-06-10',
+            'next_session' => ['date' => $today, 'start_time' => '09:00', 'end_time' => '12:00'],
+        ];
+
+        $args = \stridence_build_course_card_args_from_enrollment($enrollment);
+
+        $this->assertSame('today', $args['meta']['imminence']);
+    }
+
+    public function test_enrollment_edition_tomorrow_session_sets_imminence_tomorrow(): void
+    {
+        $tomorrow = date('Y-m-d', strtotime('+1 day'));
+        $enrollment = [
+            'type'         => 'edition',
+            'edition_id'   => 100,
+            'course_id'    => 50,
+            'course_title' => 'Tomorrow course',
+            'start_date'   => '2026-06-10',
+            'next_session' => ['date' => $tomorrow],
+        ];
+
+        $args = \stridence_build_course_card_args_from_enrollment($enrollment);
+
+        $this->assertSame('tomorrow', $args['meta']['imminence']);
+    }
+
+    public function test_enrollment_edition_far_future_leaves_imminence_null(): void
+    {
+        $enrollment = [
+            'type'         => 'edition',
+            'edition_id'   => 100,
+            'course_id'    => 50,
+            'course_title' => 'Far future course',
+            'start_date'   => '2099-01-01',
+        ];
+
+        $args = \stridence_build_course_card_args_from_enrollment($enrollment);
+
+        $this->assertNull($args['meta']['imminence']);
     }
 
     // --- from_trajectory_course: required course with editions ---
