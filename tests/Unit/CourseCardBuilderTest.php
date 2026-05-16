@@ -142,4 +142,84 @@ final class CourseCardBuilderTest extends TestCase
         $this->assertSame('2026-06-10', $args['body']['sessions'][0]['date']);
         $this->assertNull($args['body']['primary_cta']);
     }
+
+    // --- from_trajectory_course: required course with editions ---
+
+    public function test_trajectory_required_course_with_editions_populates_body_editions(): void
+    {
+        $course = $this->createMock(\WP_Post::class);
+        $course->ID = 50;
+        $course->post_title = 'Verplichte basiscursus';
+
+        // Stride/EditionService is invoked via ntdst_get(); see _registerEditionServiceStub() helper
+        $this->_registerEditionServiceStub([
+            ['id' => 100, 'start_date' => '2026-06-10', 'venue' => 'Brussel', 'can_enroll' => true],
+            ['id' => 101, 'start_date' => '2026-07-15', 'venue' => 'Gent',    'can_enroll' => true],
+        ]);
+
+        $pill = ['label' => 'Verplicht', 'tone' => 'primary'];
+        $args = \stridence_build_course_card_args_from_trajectory_course($course, $pill);
+
+        $this->assertSame('public', $args['type']);
+        $this->assertFalse($args['enrolled']);
+        $this->assertSame($pill, $args['status_pill']);
+        $this->assertCount(2, $args['body']['upcoming_editions']);
+        $this->assertSame('2026-06-10', $args['meta']['start_date']);
+        $this->assertNotNull($args['body']['secondary_cta']);
+        $this->assertNull($args['body']['primary_cta']);
+    }
+
+    // --- from_trajectory_course: course with no editions ---
+
+    public function test_trajectory_course_with_no_editions_leaves_meta_start_date_null(): void
+    {
+        $course = $this->createMock(\WP_Post::class);
+        $course->ID = 51;
+        $course->post_title = 'Cursus zonder editie';
+
+        $this->_registerEditionServiceStub([]);
+
+        $args = \stridence_build_course_card_args_from_trajectory_course($course, ['label' => 'Keuzevak', 'tone' => 'accent']);
+
+        $this->assertSame([], $args['body']['upcoming_editions']);
+        $this->assertNull($args['meta']['start_date']);
+    }
+
+    // --- from_trajectory_course: status pill passes through unchanged ---
+
+    public function test_trajectory_course_passes_status_pill_through(): void
+    {
+        $course = $this->createMock(\WP_Post::class);
+        $course->ID = 52;
+        $course->post_title = 'Cursus C';
+
+        $this->_registerEditionServiceStub([]);
+
+        $pill = ['label' => 'Speciaal', 'tone' => 'accent'];
+        $args = \stridence_build_course_card_args_from_trajectory_course($course, $pill);
+
+        $this->assertSame($pill, $args['status_pill']);
+    }
+
+    /**
+     * Register an EditionService stub in the DI container that returns the given
+     * edition rows from getEditionsForCourse() and treats can_enroll/canEnroll as truthy.
+     */
+    private function _registerEditionServiceStub(array $editions): void
+    {
+        $stub = new class($editions) {
+            public function __construct(private array $editions) {}
+            public function getEditionsForCourse(int $courseId): array { return $this->editions; }
+            public function canEnroll(int $editionId): bool
+            {
+                foreach ($this->editions as $ed) {
+                    if ((int) ($ed['id'] ?? 0) === $editionId) {
+                        return (bool) ($ed['can_enroll'] ?? false);
+                    }
+                }
+                return false;
+            }
+        };
+        $this->registerService(\Stride\Modules\Edition\EditionService::class, $stub);
+    }
 }

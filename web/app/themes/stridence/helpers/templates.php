@@ -219,3 +219,84 @@ function stridence_build_course_card_args_from_enrollment(array $enrollment, boo
         'body'         => $body,
     ];
 }
+
+/**
+ * Build course-card partial args from a trajectory course WP_Post.
+ *
+ * Used by `templates/trajectory/course-groups.php` to render each required or
+ * elective course as an expandable card. Always produces the 'public' mode
+ * (no per-user state, no progress, secondary "Bekijk cursus" CTA only).
+ *
+ * @param \WP_Post $course      Course post (sfwd-courses)
+ * @param array    $statusPill  ['label' => string, 'tone' => 'primary'|'accent']
+ * @return array                See course-card.php docblock for the full contract.
+ */
+function stridence_build_course_card_args_from_trajectory_course(\WP_Post $course, array $statusPill): array
+{
+    $courseId    = (int) $course->ID;
+    $courseTitle = (string) $course->post_title;
+    $thumbnailId = (int) get_post_thumbnail_id($courseId);
+
+    // Excerpt: prefer the WP excerpt, fall back to trimmed content
+    $excerpt = has_excerpt($courseId)
+        ? get_the_excerpt($courseId)
+        : wp_trim_words(get_post_field('post_content', $courseId), 25);
+
+    // Upcoming editions via EditionService (DI)
+    $editionService    = ntdst_get(\Stride\Modules\Edition\EditionService::class);
+    $allEditions       = $editionService->getEditionsForCourse($courseId);
+    $upcomingEditions  = [];
+    $nextStartDate     = null;
+
+    if (is_array($allEditions)) {
+        $editionModel = ntdst_data()->get('vad_edition');
+        foreach ($allEditions as $ed) {
+            $editionId = (int) ($ed['id'] ?? $ed['ID'] ?? 0);
+            if (!$editionId || !$editionService->canEnroll($editionId)) {
+                continue;
+            }
+            $startDate = (string) ($ed['start_date'] ?? $editionModel->getMeta($editionId, 'start_date', ''));
+            $venue     = (string) ($ed['venue'] ?? $editionModel->getMeta($editionId, 'venue', ''));
+            $upcomingEditions[] = [
+                'id'         => $editionId,
+                'start_date' => $startDate ?: null,
+                'venue'      => $venue ?: null,
+            ];
+            if ($nextStartDate === null && $startDate) {
+                $nextStartDate = $startDate;
+            }
+            if (count($upcomingEditions) >= 3) {
+                break;
+            }
+        }
+    }
+
+    return [
+        'course_id'    => $courseId,
+        'course_title' => $courseTitle,
+        'thumbnail_id' => $thumbnailId ?: null,
+        'type'         => 'public',
+        'status_pill'  => $statusPill,
+        'enrolled'     => false,
+        'initial_open' => false,
+        'meta'         => [
+            'start_date'          => $nextStartDate,
+            'venue'               => null,
+            'progress_label'      => null,
+            'days_remaining'      => null,
+            'pending_tasks_count' => null,
+        ],
+        'body'         => [
+            'excerpt'           => $excerpt ?: null,
+            'progress_pct'      => null,
+            'sessions'          => [],
+            'upcoming_editions' => $upcomingEditions,
+            'task_summary'      => null,
+            'primary_cta'       => null,
+            'secondary_cta'     => [
+                'url'   => get_permalink($courseId) ?: '',
+                'label' => __('Bekijk cursus', 'stridence'),
+            ],
+        ],
+    ];
+}

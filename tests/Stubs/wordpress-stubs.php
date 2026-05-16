@@ -189,6 +189,54 @@ if (!function_exists('get_post_thumbnail_id')) {
     }
 }
 
+if (!function_exists('has_excerpt')) {
+    function has_excerpt($post = null): bool
+    {
+        global $_test_posts;
+        $postId = is_object($post) ? $post->ID : (int) $post;
+        $p = $_test_posts[$postId] ?? null;
+        return !empty($p->post_excerpt ?? '');
+    }
+}
+
+if (!function_exists('get_the_excerpt')) {
+    function get_the_excerpt($post = null): string
+    {
+        global $_test_posts;
+        $postId = is_object($post) ? $post->ID : (int) $post;
+        $p = $_test_posts[$postId] ?? null;
+        return $p->post_excerpt ?? '';
+    }
+}
+
+if (!function_exists('get_post_field')) {
+    function get_post_field(string $field, $post = null, string $context = 'edit'): string
+    {
+        global $_test_posts;
+        $postId = is_object($post) ? $post->ID : (int) $post;
+        $p = $_test_posts[$postId] ?? null;
+        return (string) ($p->$field ?? '');
+    }
+}
+
+if (!function_exists('wp_trim_words')) {
+    function wp_trim_words(string $text, int $num_words = 55, ?string $more = null): string
+    {
+        if ($more === null) {
+            $more = '&hellip;';
+        }
+        $words = preg_split("/[\n\r\t ]+/", $text, $num_words + 1, PREG_SPLIT_NO_EMPTY);
+        if (!is_array($words)) {
+            return $text;
+        }
+        if (count($words) > $num_words) {
+            array_pop($words);
+            return implode(' ', $words) . $more;
+        }
+        return implode(' ', $words);
+    }
+}
+
 if (!function_exists('esc_html')) {
     function esc_html(string $text): string
     {
