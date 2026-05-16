@@ -17,7 +17,7 @@ namespace Stride\Modules\Membership;
  *   - a membership filter on price routing
  *
  * Until then, this service centralises the read path so callers stop
- * looking up `is_vad_member` user meta directly.
+ * looking up user meta directly.
  */
 final class MembershipService implements \NTDST_Service_Meta
 {

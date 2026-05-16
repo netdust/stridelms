@@ -36,13 +36,15 @@ final class MembershipServiceTest extends TestCase
         self::assertFalse($this->service->isMember(-1));
     }
 
-    public function testIgnoresLegacyIsVadMemberUserMeta(): void
+    public function testIgnoresArbitraryMembershipShapedUserMeta(): void
     {
-        // Pre-v1 we read user meta directly. v1 deliberately does NOT —
-        // there's no way to onboard a member, so stale meta must not give
-        // someone unintended discounted pricing.
+        // Pre-v1 the codebase read membership from user meta directly. v1
+        // deliberately does NOT — there is no UI to onboard a member, so
+        // any membership-shaped meta left over from imports or past flows
+        // must not silently grant discounted pricing.
         $userId = 100;
-        update_user_meta($userId, 'is_vad_member', true);
+        update_user_meta($userId, 'membership_active', true);
+        update_user_meta($userId, '_member', '1');
 
         self::assertFalse($this->service->isMember($userId));
     }
