@@ -78,10 +78,12 @@ Codebase is **feature-complete** (per LAUNCH-CHECKLIST top: "all P0+P1 launch co
 
 All major modules done. Admin dashboard fully resolved (was the last blocker).
 
-**Remaining deferred bugs in launch modules (per §D):**
-- Completion (5) — LD course_completed sync, deprecated current_time, cache, Withdrawn enum, DI coupling
-- Attendance (3) — cascade delete, orphan session_registrations, semantic count
-- Theme (3) — 7 footer 404s, LD ProPanel notice, 11 shortcodes
+**Remaining deferred bugs in launch modules (per §D):** Re-audited 2026-05-17 against the 2026-05-14 d-audit + current code. Headline was stale.
+
+- Completion: all 5 originally listed bugs ✅ resolved (D-C1 LD sync, D-C2 current_time, D-C3 cache, D-C4 Withdrawn enum — all fixed; D-C5 DI coupling dropped as architectural debt).
+- Attendance: all 3 ✅ resolved (D-A1 cascade delete, D-A2 N/A, D-A3 semantic count).
+- Theme: D-T1 footer pages fixed in dev DB; **D-T1 staging/prod replay still needed** (page rows are not in git). D-T2 ProPanel + D-T3 "11 shortcodes" — drop (unreproducible / never enumerated).
+- Capacity: **D-Cap1 stale-pending registrations** holding a Volzet seat indefinitely — still open, policy decision pending (auto-expire 24-48h vs accept + document). D-Cap2 recomputeStatus → P2, defer.
 
 Partner API's 5 deferred bugs stay deferred (post-launch).
 
