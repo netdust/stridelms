@@ -151,3 +151,4 @@ Inventory only — left in place per user instruction:
 - OGM payment reference — re-add when Stride generates invoices or when Exact integration is built
 - Enrollment timeline view — answers "what happened to this enrollment?"
 - Activity feed grouping — group by entity, filter chips
+[2026-05-17] — session ended (no significant changes captured; haiku=skip:no-api-key)
