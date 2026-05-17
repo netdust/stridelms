@@ -153,6 +153,15 @@ Inventory only — left in place per user instruction:
 - Activity feed grouping — group by entity, filter chips
 [2026-05-17] — session ended (no significant changes captured; haiku=skip:no-api-key)
 [2026-05-17] — session ended (no significant changes captured; haiku=skip:no-api-key)
-[2026-05-17] — ⚠ memory hook errored: error:json
 [2026-05-17] — session ended (no significant changes captured; haiku=skip:no-api-key)
-[2026-05-17] — ⚠ memory hook errored: error:json
+[2026-05-17] — ⚠ memory hook errored: error:timeout
+[2026-05-17] — ⚠ memory hook errored: error:timeout
+
+---
+### 2026-05-17 — tagged capture
+
+**Decisions**
+- postpone trajectory feature until after Phase 1 ships.
+
+**Risks**
+- kindred mu-plugin LD skin not tested with multi-brand swap.

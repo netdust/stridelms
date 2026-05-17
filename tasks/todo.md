@@ -144,3 +144,7 @@ Full reports: `tasks/audit-2026-05-14-security.md` + `tasks/audit-2026-05-14-per
 - 6 MEDIUM + 4 LOW security findings (see audit report)
 - 5 MEDIUM perf findings (see audit report)
 - All P2 polish items deferred during this sprint
+
+---
+## Carried forward (2026-05-17)
+- [ ] verify dashboard route /aanmelden doesn't break with WPML.
