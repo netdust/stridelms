@@ -64,6 +64,13 @@ class EditionService extends AbstractService implements EditionQueryInterface
             ntdst_get(\Stride\Modules\Attendance\AttendanceRepository::class),
         );
 
+        new Admin\RegistrationModalController(
+            $this,
+            $sessionService,
+            ntdst_get(\Stride\Modules\Edition\SessionSelection::class),
+            ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class),
+        );
+
         // Register hooks for capacity updates
         add_action('stride/registration/created', [$this, 'onRegistrationCreated']);
         add_action('stride/registration/cancelled', [$this, 'onRegistrationCancelled']);
