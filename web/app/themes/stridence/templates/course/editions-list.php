@@ -110,7 +110,7 @@ $render_edition_card = function (array $row, bool $faded = false) {
     </h2>
 
     <?php if (!empty($upcoming)) : ?>
-        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="grid sm:grid-cols-2 gap-4">
             <?php foreach ($upcoming as $row) : ?>
                 <?php $render_edition_card($row, false); ?>
             <?php endforeach; ?>
@@ -132,7 +132,7 @@ $render_edition_card = function (array $row, bool $faded = false) {
                 <?php printf(esc_html(_n('%d voorbije editie tonen', '%d voorbije edities tonen', count($past), 'stridence')), count($past)); ?>
                 <?php echo stridence_icon('chevron-down', 'w-4 h-4 group-open:rotate-180 transition'); ?>
             </summary>
-            <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+            <div class="grid sm:grid-cols-2 gap-4 mt-4">
                 <?php foreach ($past as $row) : ?>
                     <?php $render_edition_card($row, true); ?>
                 <?php endforeach; ?>

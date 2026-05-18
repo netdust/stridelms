@@ -106,14 +106,16 @@ get_header();
                 </div>
             </div>
         <?php else : ?>
-            <div class="max-w-4xl mx-auto space-y-12">
-                <?php
-                stridence_template_part('templates/course/content', null, [
-                    'course_id' => $course_id,
-                    'is_online' => $is_online,
-                    'editions'  => $editions,
-                ]);
-                ?>
+            <div class="grid lg:grid-cols-3 gap-8 lg:gap-12">
+                <div class="lg:col-span-2 space-y-12">
+                    <?php
+                    stridence_template_part('templates/course/content', null, [
+                        'course_id' => $course_id,
+                        'is_online' => $is_online,
+                        'editions'  => $editions,
+                    ]);
+                    ?>
+                </div>
             </div>
         <?php endif; ?>
     </div>
