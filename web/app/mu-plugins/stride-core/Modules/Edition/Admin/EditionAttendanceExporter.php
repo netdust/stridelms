@@ -9,6 +9,7 @@ use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\SimpleType\Jc;
 use PhpOffice\PhpWord\SimpleType\TblWidth;
 use PhpOffice\PhpWord\Style\Cell as CellStyle;
+use PhpOffice\PhpWord\Writer\WriterInterface;
 use Stride\Infrastructure\BatchQueryHelper;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
@@ -29,6 +30,42 @@ final class EditionAttendanceExporter
     ) {}
 
     public function export(int $editionId): void
+    {
+        $writer = $this->buildWriter($editionId);
+
+        // Stream to browser
+        $editionTitle = html_entity_decode(get_the_title($editionId), ENT_QUOTES, 'UTF-8');
+        $slug = sanitize_title($editionTitle ?: 'editie-' . $editionId);
+        $filename = 'presentielijst-' . $slug . '-' . date('Y-m-d') . '.docx';
+
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+
+        header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Cache-Control: max-age=0');
+
+        $writer->save('php://output');
+        exit;
+    }
+
+    /**
+     * Build the attendance Word doc to a path on disk, without HTTP headers.
+     *
+     * Produces byte-identical content to export() but writes to a file instead
+     * of streaming to the browser. Used by EditionBundleZipExporter.
+     */
+    public function buildToFile(int $editionId, string $path): void
+    {
+        $this->buildWriter($editionId)->save($path);
+    }
+
+    /**
+     * Build a PhpWord Word2007 writer with the full attendance sheet loaded.
+     * Shared by export() (streams to browser) and buildToFile() (writes to disk).
+     */
+    private function buildWriter(int $editionId): WriterInterface
     {
         $registrations = $this->getConfirmedRegistrations($editionId);
 
@@ -190,22 +227,7 @@ final class EditionAttendanceExporter
             );
         }
 
-        // Stream to browser
-        $editionTitle = html_entity_decode($editionTitle, ENT_QUOTES, 'UTF-8');
-        $slug = sanitize_title($editionTitle ?: 'editie-' . $editionId);
-        $filename = 'presentielijst-' . $slug . '-' . date('Y-m-d') . '.docx';
-
-        if (ob_get_level()) {
-            ob_end_clean();
-        }
-
-        header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-        header('Content-Disposition: attachment; filename="' . $filename . '"');
-        header('Cache-Control: max-age=0');
-
-        $writer = IOFactory::createWriter($phpWord, 'Word2007');
-        $writer->save('php://output');
-        exit;
+        return IOFactory::createWriter($phpWord, 'Word2007');
     }
 
     private function getConfirmedRegistrations(int $editionId): array

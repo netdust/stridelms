@@ -68,7 +68,42 @@ final class EditionRegistrationExporter
 
         $writer = new Writer($options);
         $writer->openToBrowser($filename);
+        $this->writeAllSheets($writer, $data);
+        $writer->close();
+        exit;
+    }
 
+    /**
+     * Build the XLSX to a path on disk, without sending HTTP headers.
+     *
+     * Produces byte-identical content to export() but writes to a file instead
+     * of streaming to the browser. Used by EditionBundleZipExporter.
+     */
+    public function buildToFile(int $editionId, string $path): void
+    {
+        $data = $this->gatherData($editionId);
+
+        $options = new Options();
+        $options->DEFAULT_ROW_HEIGHT = 20;
+
+        $writer = new Writer($options);
+        $writer->openToFile($path);
+        $this->writeAllSheets($writer, $data);
+        $writer->close();
+    }
+
+    /**
+     * Write all sheets to the open writer — shared by export() and buildToFile().
+     *
+     * Sheets:
+     *   1. Overzicht (always)
+     *   2. Deelnemers (always)
+     *   3. Facturatie (always)
+     *   4. Aanwezigheid (only when sessions exist)
+     *   5. Taken & Vragenlijst (only when any registration has completion tasks)
+     */
+    private function writeAllSheets(Writer $writer, array $data): void
+    {
         // Sheet 1: Overzicht (default sheet)
         $sheet = $writer->getCurrentSheet();
         $sheet->setName('Overzicht');
@@ -97,9 +132,6 @@ final class EditionRegistrationExporter
             $sheet->setName('Taken & Vragenlijst');
             $this->writeTasksSheet($writer, $sheet, $data);
         }
-
-        $writer->close();
-        exit;
     }
 
     // =========================================================================
