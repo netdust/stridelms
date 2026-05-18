@@ -7,6 +7,7 @@ namespace Stride\Modules\Edition\Admin;
 use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
+use Stride\Modules\Edition\SessionService;
 use WP_Post;
 
 /**
@@ -61,7 +62,7 @@ final class EditionDetailsMetabox
 
                 <!-- Tab: Algemeen -->
                 <div class="stride-tab-content active" data-tab="algemeen">
-                    <?php $this->renderAlgemeenTab($courses, $courseId, $startDate, $endDate, $capacity, $venue); ?>
+                    <?php $this->renderAlgemeenTab($courses, $courseId, $startDate, $endDate, $capacity, $venue, $post->ID); ?>
                 </div>
 
                 <!-- Tab: Informatie -->
@@ -89,8 +90,10 @@ final class EditionDetailsMetabox
         <?php
     }
 
-    private function renderAlgemeenTab(array $courses, int $courseId, string $startDate, string $endDate, int $capacity, string $venue): void
+    private function renderAlgemeenTab(array $courses, int $courseId, string $startDate, string $endDate, int $capacity, string $venue, int $editionId): void
     {
+        $drift = $this->detectDateDrift($editionId, $startDate, $endDate);
+
         ?>
         <div class="stride-edition-columns">
             <div class="stride-edition-main">
@@ -123,6 +126,14 @@ final class EditionDetailsMetabox
                                    value="<?php echo esc_attr($endDate); ?>">
                         </div>
                     </div>
+                    <?php if (!empty($drift)) : ?>
+                        <div class="notice notice-warning inline" style="margin: 8px 0; padding: 8px 12px;">
+                            <p style="margin: 0;">
+                                <strong><?php esc_html_e('Let op:', 'stride'); ?></strong>
+                                <?php echo esc_html($drift); ?>
+                            </p>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -331,6 +342,75 @@ final class EditionDetailsMetabox
         }
 
         return $courses;
+    }
+
+    /**
+     * Return a human-readable warning when edition.start_date / end_date
+     * doesn't bracket the actual session dates. Empty string when in sync.
+     *
+     * Editions store their own start/end (used for sorting + visibility);
+     * sessions store per-day dates. Nothing auto-syncs them, so the admin
+     * needs a nudge when they drift.
+     */
+    private function detectDateDrift(int $editionId, string $startDate, string $endDate): string
+    {
+        if (!$editionId) {
+            return '';
+        }
+        $sessionService = ntdst_get(SessionService::class);
+        $sessions = $sessionService->getSessionsForEdition($editionId);
+        if (empty($sessions)) {
+            return '';
+        }
+
+        $dates = [];
+        foreach ($sessions as $s) {
+            $d = (string) ($s['date'] ?? '');
+            if ($d !== '') {
+                $dates[] = $d;
+            }
+        }
+        if (empty($dates)) {
+            return '';
+        }
+        sort($dates);
+        $sessionMin = $dates[0];
+        $sessionMax = end($dates);
+
+        $warnings = [];
+        if ($startDate && $sessionMin !== $startDate) {
+            $warnings[] = sprintf(
+                /* translators: 1: stored start date, 2: first session date */
+                __('Startdatum (%1$s) komt niet overeen met de eerste sessie (%2$s).', 'stride'),
+                $startDate,
+                $sessionMin
+            );
+        }
+        if ($endDate && $sessionMax !== $endDate) {
+            $warnings[] = sprintf(
+                /* translators: 1: stored end date, 2: last session date */
+                __('Einddatum (%1$s) komt niet overeen met de laatste sessie (%2$s).', 'stride'),
+                $endDate,
+                $sessionMax
+            );
+        }
+        // Missing edition dates but sessions exist
+        if (!$startDate) {
+            $warnings[] = sprintf(
+                /* translators: %s: first session date */
+                __('Startdatum is leeg, terwijl de eerste sessie op %s gepland staat.', 'stride'),
+                $sessionMin
+            );
+        }
+        if (!$endDate && $sessionMin !== $sessionMax) {
+            $warnings[] = sprintf(
+                /* translators: %s: last session date */
+                __('Einddatum is leeg, terwijl de laatste sessie op %s gepland staat.', 'stride'),
+                $sessionMax
+            );
+        }
+
+        return implode(' ', $warnings);
     }
 
     private function renderDocumentenTab(int $postId): void
