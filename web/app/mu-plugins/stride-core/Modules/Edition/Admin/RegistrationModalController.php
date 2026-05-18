@@ -108,8 +108,46 @@ final class RegistrationModalController
 
         return [
             'title' => $this->buildTitle($type, $user->display_name, $editionTitle),
-            'html' => '',
+            'html'  => $this->renderHtml($type, $registration),
         ];
+    }
+
+    private function renderHtml(string $type, object $registration): string
+    {
+        if ($type === 'completion') {
+            return $this->renderCompletion($registration);
+        }
+        return $this->renderEnrollment($registration);
+    }
+
+    private function renderEnrollment(object $registration): string
+    {
+        $enrollmentData = $this->decodeJson($registration->enrollment_data ?? '');
+        $sessionSelections = []; // Filled in Task 7
+        $questionnaireAnswers = []; // Filled in Task 8
+        $documents = []; // Filled in Task 9
+
+        ob_start();
+        $partialPath = dirname(__DIR__, 3) . '/templates/admin/partials/registration-modal-enrollment.php';
+        include $partialPath;
+        return (string) ob_get_clean();
+    }
+
+    private function renderCompletion(object $registration): string
+    {
+        return ''; // Implemented in Task 10
+    }
+
+    private function decodeJson(mixed $value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+        if (is_string($value) && $value !== '') {
+            $decoded = json_decode($value, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+        return [];
     }
 
     private function buildTitle(string $type, string $userName, string $editionTitle): string

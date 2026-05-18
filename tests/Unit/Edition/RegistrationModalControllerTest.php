@@ -85,4 +85,45 @@ class RegistrationModalControllerTest extends TestCase
 
         \delete_user_meta(42, '_stride_anonymised_at');
     }
+
+    public function testEnrollmentModalRendersFormSection(): void
+    {
+        $reg = (object) [
+            'id' => 1,
+            'user_id' => 42,
+            'edition_id' => 99,
+            'enrollment_data' => wp_json_encode(['phone_secondary' => '+32 123', 'organisation' => 'X']),
+            'completion_tasks' => '{}',
+        ];
+
+        $registrations = $this->createMock(RegistrationRepository::class);
+        $registrations->method('find')->willReturn($reg);
+
+        $editionService = $this->createMock(EditionService::class);
+        $editionService->method('getEdition')->willReturn(new \WP_Post(['post_title' => 'My Edition']));
+
+        // Seed user 42 so get_userdata() resolves (the stub reads $_test_users[$id]).
+        global $_test_users;
+        $user = new \WP_User();
+        $user->ID = 42;
+        $user->display_name = 'Test User';
+        $_test_users[42] = $user;
+
+        $controller = new RegistrationModalController(
+            $editionService,
+            $this->createMock(SessionService::class),
+            $this->createMock(SessionSelection::class),
+            $registrations,
+        );
+
+        $result = $controller->buildPayload(1, 'enrollment');
+
+        unset($_test_users[42]);
+
+        self::assertIsArray($result);
+        self::assertStringContainsString('Inschrijvingsformulier', $result['html']);
+        self::assertStringContainsString('+32 123', $result['html']);
+        // Identity fields (organisation) MUST be skipped — already shown inline
+        self::assertStringNotContainsString('class="stride-form-row" data-key="organisation"', $result['html']);
+    }
 }
