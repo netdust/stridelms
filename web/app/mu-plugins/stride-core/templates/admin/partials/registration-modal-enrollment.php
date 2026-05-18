@@ -42,7 +42,29 @@ $skipKeys = ['organisation', 'department'];
 
     <section class="stride-modal-section" data-section="sessions" data-open="1">
         <h3 class="stride-modal-section-title"><?php esc_html_e('Sessiekeuzes', 'stride'); ?></h3>
-        <p class="stride-modal-empty"><?php esc_html_e('Geen sessiekeuze van toepassing.', 'stride'); ?></p>
+        <?php if (empty($sessionSelections)): ?>
+            <p class="stride-modal-empty"><?php esc_html_e('Geen sessiekeuze van toepassing.', 'stride'); ?></p>
+        <?php else: ?>
+            <ul class="stride-modal-sessions">
+                <?php foreach ($sessionSelections as $row): ?>
+                    <?php $session = $row['session']; ?>
+                    <li class="stride-modal-session">
+                        <?php if (!empty($row['slot_label'])): ?>
+                            <span class="stride-modal-slot-label"><?php echo esc_html($row['slot_label']); ?></span>
+                        <?php endif; ?>
+                        <span class="stride-modal-session-date">
+                            <?php echo esc_html(date_i18n('j M Y', strtotime((string) ($session['date'] ?? '')))); ?>
+                        </span>
+                        <?php if (!empty($session['start_time'])): ?>
+                            <span class="stride-modal-session-time"><?php echo esc_html((string) $session['start_time']); ?></span>
+                        <?php endif; ?>
+                        <?php if (!empty($session['location'])): ?>
+                            <span class="stride-modal-session-loc"><?php echo esc_html((string) $session['location']); ?></span>
+                        <?php endif; ?>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
     </section>
 
     <section class="stride-modal-section" data-section="questionnaire" data-open="1">

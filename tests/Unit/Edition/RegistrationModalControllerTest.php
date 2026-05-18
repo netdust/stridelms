@@ -126,4 +126,43 @@ class RegistrationModalControllerTest extends TestCase
         // Identity fields (organisation) MUST be skipped — already shown inline
         self::assertStringNotContainsString('class="stride-form-row" data-key="organisation"', $result['html']);
     }
+
+    public function testEnrollmentModalRendersSessionSelections(): void
+    {
+        $reg = (object) [
+            'id' => 1, 'user_id' => 42, 'edition_id' => 99,
+            'enrollment_data' => '{}',
+            'completion_tasks' => '{}',
+        ];
+
+        $registrations = $this->createMock(RegistrationRepository::class);
+        $registrations->method('find')->willReturn($reg);
+
+        $editionService = $this->createMock(EditionService::class);
+        $editionService->method('getEdition')->willReturn(new \WP_Post(['post_title' => 'E']));
+
+        $sessionSelection = $this->createMock(SessionSelection::class);
+        $sessionSelection->method('getSelections')->with(1)->willReturn([501]);
+        $sessionSelection->method('getSlotConfig')->with(99)->willReturn([
+            ['slot' => 'a', 'label' => 'Module 1 — Kies 1 uit 2'],
+        ]);
+
+        $sessionService = $this->createMock(SessionService::class);
+        $sessionService->method('getSession')->with(501)->willReturn([
+            'id' => 501, 'date' => '2026-06-01', 'start_time' => '09:00',
+            'slot' => 'a', 'location' => 'Brussel',
+        ]);
+
+        // Seed user 42 in stubs (same pattern as Task 6's test).
+        global $_test_users;
+        $_test_users[42] = new \WP_User((object) ['ID' => 42, 'display_name' => 'Test User']);
+
+        $controller = new RegistrationModalController($editionService, $sessionService, $sessionSelection, $registrations);
+        $result = $controller->buildPayload(1, 'enrollment');
+
+        unset($_test_users[42]);
+
+        self::assertStringContainsString('Module 1 — Kies 1 uit 2', $result['html']);
+        self::assertStringContainsString('Brussel', $result['html']);
+    }
 }

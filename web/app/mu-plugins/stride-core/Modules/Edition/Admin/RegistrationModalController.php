@@ -123,7 +123,10 @@ final class RegistrationModalController
     private function renderEnrollment(object $registration): string
     {
         $enrollmentData = $this->decodeJson($registration->enrollment_data ?? '');
-        $sessionSelections = []; // Filled in Task 7
+        $sessionSelections = $this->buildSessionSelections(
+            (int) $registration->id,
+            (int) $registration->edition_id,
+        );
         $questionnaireAnswers = []; // Filled in Task 8
         $documents = []; // Filled in Task 9
 
@@ -131,6 +134,39 @@ final class RegistrationModalController
         $partialPath = dirname(__DIR__, 3) . '/templates/admin/partials/registration-modal-enrollment.php';
         include $partialPath;
         return (string) ob_get_clean();
+    }
+
+    /**
+     * @return array<int, array{slot_label: ?string, session: ?array}>
+     */
+    private function buildSessionSelections(int $registrationId, int $editionId): array
+    {
+        $selectedIds = $this->sessionSelection->getSelections($registrationId);
+        if (empty($selectedIds)) {
+            return [];
+        }
+
+        $slotConfig = $this->sessionSelection->getSlotConfig($editionId);
+        $slotLabelByKey = [];
+        foreach ($slotConfig as $slot) {
+            $key = (string) ($slot['slot'] ?? '');
+            $slotLabelByKey[$key] = (string) ($slot['label'] ?? $key);
+        }
+
+        $rows = [];
+        foreach ($selectedIds as $sessionId) {
+            $session = $this->sessionService->getSession((int) $sessionId);
+            if (!$session) {
+                continue;
+            }
+            $slotKey = (string) ($session['slot'] ?? '');
+            $rows[] = [
+                'slot_label' => $slotKey !== '' ? ($slotLabelByKey[$slotKey] ?? __('Verplichte sessie', 'stride')) : null,
+                'session' => $session,
+            ];
+        }
+
+        return $rows;
     }
 
     private function renderCompletion(object $registration): string
