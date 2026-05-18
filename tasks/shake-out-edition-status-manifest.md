@@ -4,7 +4,19 @@
 **Scope:** Verify every `OfferingStatus` value drives a correct CTA, message, badge, and form on the public frontend.
 **Method:** Pinned existing editions to each of the 9 statuses, fetched single-edition page, online-course detail page, and catalog grid; parsed CTA / badge / sidebar / mobile-sticky for each. State restored after sweep.
 
-**Iron Law:** This is a manifest. No fixes applied.
+**Status:** All 9 bugs resolved. Final sweep verified — 867 unit + 61 integration tests pass.
+
+| # | Status |
+|---|--------|
+| 1 | ✅ Fixed — derive spots from `capacity − getRegisteredCount()` in `single-vad_edition.php` + `card-edition.php` |
+| 2 | ✅ Fixed — sidebar h3 branches on status (Cancelled/Postponed/InProgress/Completed/Archived) |
+| 3 | ✅ Fixed — Cluster A: `badge-status.php` now sources from `OfferingStatus::label()` + new `frontendBadgeClass()` |
+| 4 | ✅ Fixed — `sidebar-online.php` + `mobile-cta.php` gate on edition status when an edition exists; pure-LD untouched |
+| 5 | ✅ Fixed — catalog filter is now `IN [announcement, open, full, in_progress]` (positive list) |
+| 6 | ✅ Fixed — Cluster A: postponed → `badge-few` amber; archived → `badge-cancelled` grey |
+| 7 | ✅ Fixed — Cluster A: `in_progress` → `badge-online` teal (distinct from open green) |
+| 8 | ✅ Fixed — `EnrollmentRouter::handleCourseEnrollment` 302-redirects when mode === closed |
+| 9 | ✅ Fixed — `editions-list.php` skips non-public statuses except for the user's own enrollment |
 
 ---
 
