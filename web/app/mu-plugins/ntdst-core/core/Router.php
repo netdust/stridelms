@@ -42,16 +42,18 @@ class NTDST_Router
      */
     public function preventRedirectForRoutes(string|false $redirect_url, ?string $requested_url = null): string|false
     {
-        // Check both current URL and redirect target
+        // Check both current URL and redirect target. Guards: $_SERVER keys
+        // can be missing under CLI/test SAPIs, and parse_url returns null on
+        // malformed URLs.
         $urls_to_check = [
-            trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/'),
+            trim(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?? '', '/'),
         ];
 
         if ($redirect_url) {
-            $urls_to_check[] = trim(parse_url($redirect_url, PHP_URL_PATH), '/');
+            $urls_to_check[] = trim(parse_url($redirect_url, PHP_URL_PATH) ?? '', '/');
         }
 
-        $method = $_SERVER['REQUEST_METHOD'];
+        $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
         foreach ($this->routes as $route) {
             if ($route['method'] !== $method) {
@@ -69,7 +71,18 @@ class NTDST_Router
     }
 
     /**
-     * Register a URL pattern route
+     * Register a URL pattern route.
+     *
+     * The callback receives (array $params, string $template) — $params holds
+     * the named URL placeholders. Query-string parameters are NOT passed;
+     * callbacks must read $_GET directly when needed.
+     *
+     * Return contract:
+     *  - string (existing file path) → used as the resolved template
+     *  - null  → callback handled output itself; the request is exited
+     *  - true  → same as null
+     *  - false → fall through to the next matching route
+     *  - anything else → ignored, original $template is returned
      *
      * @param string $pattern URL pattern (/path/:param/:id)
      * @param callable $callback Handler function
@@ -198,7 +211,13 @@ class NTDST_Router
     }
 
     /**
-     * Conditional route - executes when condition is true
+     * Conditional route - executes when condition is true.
+     *
+     * Note: every call to when() registers a new template_include filter.
+     * Call it once per condition; do not invoke in a loop.
+     *
+     * Callback receives (?WP_Post $post, string $template). See register()
+     * for the return-value contract.
      */
     public function when(callable $condition, callable $callback): self
     {
@@ -236,8 +255,9 @@ class NTDST_Router
      */
     public function handleTemplateInclude(string $template): string
     {
-        $url = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
-        $method = $_SERVER['REQUEST_METHOD'];
+        // $_SERVER keys can be missing under CLI/test SAPIs; default safely.
+        $url = trim(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?? '', '/');
+        $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
         foreach ($this->routes as $route) {
             // Check method
@@ -281,43 +301,70 @@ class NTDST_Router
     }
 
     /**
-     * Compile URL pattern to regex
-     * Converts /path/:param/:id to regex with named groups
+     * Compile URL pattern to regex.
+     *
+     * Converts /path/:param/:id to regex with named groups. Literal segments
+     * are preg_quote'd so dots/plus-signs/parens in the URL pattern aren't
+     * treated as regex metacharacters (e.g. "v1.0/users" matches that path
+     * literally, not "v1X0/users").
      */
     protected function compilePattern(string $pattern): string
     {
-        // Escape forward slashes
         $pattern = trim($pattern, '/');
 
-        // Replace :param with named regex group
-        $regex = preg_replace_callback('/:([a-zA-Z_][a-zA-Z0-9_]*)/', function ($matches) {
-            return '(?P<' . $matches[1] . '>[^/]+)';
-        }, $pattern);
+        // Split on :param placeholders while keeping them via PREG_SPLIT_DELIM_CAPTURE.
+        $tokens = preg_split('/(:[a-zA-Z_][a-zA-Z0-9_]*)/', $pattern, -1, PREG_SPLIT_DELIM_CAPTURE);
+
+        $regex = '';
+        foreach ($tokens as $token) {
+            if ($token === '') {
+                continue;
+            }
+            if ($token[0] === ':') {
+                $name = substr($token, 1);
+                $regex .= '(?P<' . $name . '>[^/]+)';
+            } else {
+                $regex .= preg_quote($token, '#');
+            }
+        }
 
         // Allow optional trailing slash
         return '#^' . $regex . '/?$#';
     }
 
     /**
-     * Generate URL from pattern and parameters
+     * Generate URL from pattern and parameters.
+     *
+     * Param values are urlencoded so slashes / spaces / hashes don't break
+     * routing. Params that don't match a :placeholder in the pattern are
+     * silently ignored (no query-string append).
      */
     public function url(string $pattern, array $params = []): string
     {
         $url = $pattern;
 
         foreach ($params as $key => $value) {
-            $url = str_replace(':' . $key, $value, $url);
+            $url = str_replace(':' . $key, urlencode((string) $value), $url);
         }
 
         return home_url($url);
     }
 
     /**
-     * Redirect to URL
+     * Redirect to URL.
+     *
+     * Uses wp_safe_redirect() by default — restricts the target to the same
+     * host as the site, blocking open-redirect attacks when $url is derived
+     * from user input. Pass $allowExternal=true only when the destination is
+     * trusted and intentionally off-site.
      */
-    public function redirect(string $url, int $status = 302): never
+    public function redirect(string $url, int $status = 302, bool $allowExternal = false): never
     {
-        wp_redirect($url, $status);
+        if ($allowExternal) {
+            wp_redirect($url, $status);
+        } else {
+            wp_safe_redirect($url, $status);
+        }
         exit;
     }
 }
@@ -325,18 +372,22 @@ class NTDST_Router
 /**
  * Global helper - get router instance (singleton)
  */
-function ntdst_router(): NTDST_Router
-{
-    static $router = null;
-    return $router ??= new NTDST_Router();
+if (!function_exists('ntdst_router')) {
+    function ntdst_router(): NTDST_Router
+    {
+        static $router = null;
+        return $router ??= new NTDST_Router();
+    }
 }
 
 /**
  * Quick route registration helper
  */
-function ntdst_route(string $pattern, callable $callback, string $method = 'GET'): NTDST_Router
-{
-    return ntdst_router()->register($pattern, $callback, $method);
+if (!function_exists('ntdst_route')) {
+    function ntdst_route(string $pattern, callable $callback, string $method = 'GET'): NTDST_Router
+    {
+        return ntdst_router()->register($pattern, $callback, $method);
+    }
 }
 
 // Initialize router early to register redirect prevention hook
