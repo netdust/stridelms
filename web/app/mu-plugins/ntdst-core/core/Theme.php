@@ -7,6 +7,29 @@ defined('ABSPATH') || exit;
 // THEME BOOTSTRAP CLASS
 // ========================================
 
+/**
+ * Hook + filter naming conventions:
+ *  - Actions: `ntdst_*` for new code
+ *  - Module filters (config / enabled / before / after): `netdust_{module}_*` —
+ *    historical, kept for compatibility with Bootstrap.php. Do not propagate
+ *    this naming to new APIs.
+ *
+ * Mixin rules:
+ *  - Method-injection mixins are dispatched via __call(), so they cannot
+ *    override methods that already exist on NTDST_Theme. To override a
+ *    built-in method, extend the class instead.
+ *  - $theme->module('slug')->get() resolves the slug through the DI
+ *    container. Stride registers services by FQCN, not slug, so get() only
+ *    works for modules that explicitly bind by slug.
+ *  - $theme->module('slug')->disable() registers an enabled-false filter at
+ *    priority 999, which is intentionally overridable. A later filter at
+ *    priority 1000+ wins.
+ *
+ * I18n note: register_nav_menus receives translated labels via __($desc).
+ * Because the descriptions come from a variable, xgettext/wp i18n make-pot
+ * cannot extract them. Put the literal strings somewhere static for
+ * translators if you need full coverage.
+ */
 class NTDST_Theme
 {
     private array $config;
@@ -28,17 +51,29 @@ class NTDST_Theme
     }
 
     /**
-     * Wire up NTDST service instances as mixins
-     * Called automatically in constructor
+     * Wire up NTDST service instances as mixins.
+     * Called automatically in constructor.
+     *
+     * Each helper is guarded so missing optional services (e.g. ntdst_mail
+     * when the mail plugin isn't installed) don't break theme construction.
      */
     private function wireMixins(): void
     {
-        $this
-            ->mixin('data', ntdst_data())         // ORM: $theme->data()->get('model')->register()
-            ->mixin('router', ntdst_router())     // Routing: $theme->router()->single()
-            ->mixin('response', ntdst_response()) // Response: $theme->response()->json()
-            ->mixin('log', ntdst_log())           // Logger: $theme->log()->info()
-            ->mixin('mail', ntdst_mail());        // Mailer: $theme->mail()->to()->send()
+        if (function_exists('ntdst_data')) {
+            $this->mixin('data', ntdst_data());
+        }
+        if (function_exists('ntdst_router')) {
+            $this->mixin('router', ntdst_router());
+        }
+        if (function_exists('ntdst_response')) {
+            $this->mixin('response', ntdst_response());
+        }
+        if (function_exists('ntdst_log')) {
+            $this->mixin('log', ntdst_log());
+        }
+        if (function_exists('ntdst_mail')) {
+            $this->mixin('mail', ntdst_mail());
+        }
     }
 
     private function init(): void
@@ -120,92 +155,7 @@ class NTDST_Theme
 
     public function enqueue_assets(): void
     {
-        // Allow filtering assets before enqueueing
-        $assets = apply_filters('ntdst_theme_assets', $this->config['assets']);
-
-        // Store script/style attributes for later filtering
-        $script_attrs = [];
-        $style_attrs = [];
-
-        // Enqueue styles
-        foreach ($assets['styles'] ?? [] as $handle => $asset) {
-            // Skip if disabled
-            if (isset($asset['enabled']) && !$asset['enabled']) {
-                continue;
-            }
-
-            wp_enqueue_style(
-                sanitize_key($handle),
-                esc_url($asset['src']),
-                array_map('sanitize_key', $asset['deps'] ?? []),
-                esc_attr($asset['version'] ?? ''),
-                esc_attr($asset['media'] ?? 'all'),
-            );
-
-            // Store attributes if provided
-            if (!empty($asset['attrs'])) {
-                $style_attrs[sanitize_key($handle)] = $asset['attrs'];
-            }
-        }
-
-        // Enqueue scripts
-        foreach ($assets['scripts'] ?? [] as $handle => $asset) {
-            // Skip if disabled
-            if (isset($asset['enabled']) && !$asset['enabled']) {
-                continue;
-            }
-
-            wp_enqueue_script(
-                sanitize_key($handle),
-                esc_url($asset['src']),
-                array_map('sanitize_key', $asset['deps'] ?? []),
-                esc_attr($asset['version'] ?? ''),
-                (bool) ($asset['in_footer'] ?? true),
-            );
-
-            // Store attributes if provided
-            if (!empty($asset['attrs'])) {
-                $script_attrs[sanitize_key($handle)] = $asset['attrs'];
-            }
-        }
-
-        // Add script attributes via filter
-        if (!empty($script_attrs)) {
-            add_filter('script_loader_tag', function ($tag, $handle, $src) use ($script_attrs) {
-                if (isset($script_attrs[$handle])) {
-                    foreach ($script_attrs[$handle] as $attr => $value) {
-                        // Boolean attributes (e.g., defer, async, nomodule)
-                        if ($value === true || $value === '') {
-                            $tag = str_replace(' src', ' ' . esc_attr($attr) . ' src', $tag);
-                        }
-                        // Attributes with values (e.g., type="module", crossorigin="anonymous")
-                        else {
-                            $tag = str_replace(' src', ' ' . esc_attr($attr) . '="' . esc_attr($value) . '" src', $tag);
-                        }
-                    }
-                }
-                return $tag;
-            }, 10, 3);
-        }
-
-        // Add style attributes via filter
-        if (!empty($style_attrs)) {
-            add_filter('style_loader_tag', function ($html, $handle, $href, $media) use ($style_attrs) {
-                if (isset($style_attrs[$handle])) {
-                    foreach ($style_attrs[$handle] as $attr => $value) {
-                        // Boolean attributes
-                        if ($value === true || $value === '') {
-                            $html = str_replace(' href', ' ' . esc_attr($attr) . ' href', $html);
-                        }
-                        // Attributes with values
-                        else {
-                            $html = str_replace(' href', ' ' . esc_attr($attr) . '="' . esc_attr($value) . '" href', $html);
-                        }
-                    }
-                }
-                return $html;
-            }, 10, 4);
-        }
+        $this->enqueueAssetsFor('frontend');
 
         // Localize script with secure data (use different variable name to avoid conflicts)
         wp_localize_script('ntdst-theme', 'ntdstConfig', [
@@ -216,21 +166,28 @@ class NTDST_Theme
 
     public function enqueue_admin_assets(): void
     {
-        // Allow filtering assets before enqueueing
-        $assets = apply_filters('ntdst_theme_assets', $this->config['assets']);
+        $this->enqueueAssetsFor('admin');
+    }
 
-        // Store script/style attributes for later filtering
+    /**
+     * Shared enqueue logic for frontend and admin contexts.
+     *
+     * Admin context requires assets to be marked `'admin' => true`; frontend
+     * picks up everything not disabled. Both branches collect attrs into
+     * script_loader_tag / style_loader_tag filters.
+     */
+    private function enqueueAssetsFor(string $context): void
+    {
+        $assets = apply_filters('ntdst_theme_assets', $this->config['assets']);
+        $isAdmin = $context === 'admin';
+
         $script_attrs = [];
         $style_attrs = [];
 
-        // Enqueue styles marked for admin
         foreach ($assets['styles'] ?? [] as $handle => $asset) {
-            // Skip if not for admin
-            if (!isset($asset['admin']) || !$asset['admin']) {
+            if ($isAdmin && empty($asset['admin'])) {
                 continue;
             }
-
-            // Skip if disabled
             if (isset($asset['enabled']) && !$asset['enabled']) {
                 continue;
             }
@@ -243,20 +200,15 @@ class NTDST_Theme
                 esc_attr($asset['media'] ?? 'all'),
             );
 
-            // Store attributes if provided
             if (!empty($asset['attrs'])) {
                 $style_attrs[sanitize_key($handle)] = $asset['attrs'];
             }
         }
 
-        // Enqueue scripts marked for admin
         foreach ($assets['scripts'] ?? [] as $handle => $asset) {
-            // Skip if not for admin
-            if (!isset($asset['admin']) || !$asset['admin']) {
+            if ($isAdmin && empty($asset['admin'])) {
                 continue;
             }
-
-            // Skip if disabled
             if (isset($asset['enabled']) && !$asset['enabled']) {
                 continue;
             }
@@ -269,13 +221,11 @@ class NTDST_Theme
                 (bool) ($asset['in_footer'] ?? true),
             );
 
-            // Store attributes if provided
             if (!empty($asset['attrs'])) {
                 $script_attrs[sanitize_key($handle)] = $asset['attrs'];
             }
         }
 
-        // Add script attributes via filter (same as frontend)
         if (!empty($script_attrs)) {
             add_filter('script_loader_tag', function ($tag, $handle, $src) use ($script_attrs) {
                 if (isset($script_attrs[$handle])) {
@@ -291,7 +241,6 @@ class NTDST_Theme
             }, 10, 3);
         }
 
-        // Add style attributes via filter (same as frontend)
         if (!empty($style_attrs)) {
             add_filter('style_loader_tag', function ($html, $handle, $href, $media) use ($style_attrs) {
                 if (isset($style_attrs[$handle])) {
@@ -333,23 +282,37 @@ class NTDST_Theme
             ],
         ];
 
+        // Force expected shapes for keys we iterate later — fail upfront
+        // instead of crashing inside a foreach with a confusing message.
+        foreach (['theme_support', 'image_sizes', 'menus', 'sidebars'] as $arrayKey) {
+            if (isset($config[$arrayKey]) && !is_array($config[$arrayKey])) {
+                throw new InvalidArgumentException(
+                    "NTDST_Theme config['{$arrayKey}'] must be an array"
+                );
+            }
+        }
+
         // Merge config with defaults
         $merged = array_merge($defaults, $config);
 
         // Ensure assets has both styles and scripts keys
-        if (isset($merged['assets'])) {
+        if (isset($merged['assets']) && is_array($merged['assets'])) {
             $merged['assets'] = array_merge(
                 ['styles' => [], 'scripts' => []],
                 $merged['assets'],
             );
+        } else {
+            $merged['assets'] = ['styles' => [], 'scripts' => []];
         }
 
         // Ensure module_settings has all keys
-        if (isset($merged['module_settings'])) {
+        if (isset($merged['module_settings']) && is_array($merged['module_settings'])) {
             $merged['module_settings'] = array_merge(
                 $defaults['module_settings'],
                 $merged['module_settings'],
             );
+        } else {
+            $merged['module_settings'] = $defaults['module_settings'];
         }
 
         return $merged;
@@ -559,14 +522,14 @@ class NTDST_Theme
             $priority = $args;
         }
 
-        // Wrap callback with capability check if needed
+        // Wrap callback with capability check if needed. Capability failures
+        // return a WP_Error so Endpoints::handle_action sends a proper error
+        // response — returning an array would look like a success body.
         $wrapped_callback = function ($data, $params) use ($callback, $capability) {
-            // Check capability if specified
             if ($capability && !current_user_can($capability)) {
-                return ['error' => 'Insufficient permissions', 'code' => 'forbidden'];
+                return new \WP_Error('forbidden', 'Insufficient permissions', ['status' => 403]);
             }
 
-            // Execute the actual callback
             return $callback($data, $params);
         };
 
@@ -752,9 +715,11 @@ class NTDST_Theme
             return $this;
         }
 
-        // Invalid usage
-        trigger_error('Invalid mixin usage. Use either mixin($name, $instance) or mixin($object)', E_USER_WARNING);
-        return $this;
+        // Invalid usage — fail loud rather than emit a warning that gets
+        // swallowed outside of WP_DEBUG_LOG.
+        throw new InvalidArgumentException(
+            'Invalid mixin usage. Use either mixin($name, $instance) or mixin($object)'
+        );
     }
 
     /**

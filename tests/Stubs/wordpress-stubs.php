@@ -791,6 +791,14 @@ if (!function_exists('is_user_logged_in')) {
     }
 }
 
+if (!function_exists('sanitize_key')) {
+    function sanitize_key(string $key): string
+    {
+        $key = strtolower($key);
+        return preg_replace('/[^a-z0-9_\-]/', '', $key);
+    }
+}
+
 if (!function_exists('site_url')) {
     function site_url(string $path = '', ?string $scheme = null): string
     {
