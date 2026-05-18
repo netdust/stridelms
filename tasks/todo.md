@@ -116,6 +116,7 @@ Earlier audit mistake corrected: I grep'd for `do_action('stride/` but missed `$
 - **Multi-brand demo** (deferred per user 2026-05-14) — additional brand scaffolds created on-demand when needed for sales pitch. BWEEG + proven swap is enough.
 - **Trajectory admin UI hiding** (deferred per user 2026-05-14) — can be done manually at deploy time.
 - **Anonymise UX polish** — toast persistence, bulk anonymise UI
+- **Enrollment form 'Voor wie' step — make optional per edition** (2026-05-18). Today step 0 (type picker) is always shown for long-form enrollment, even though everyone enrolls themselves. Add an edition-level setting (something like `_ntdst_allow_colleague_enrollment` bool) that controls whether the picker is shown. When false: skip step 0, default `form.enrollment_type='werknemer'`, drop `'Type'` from progress bar. The picker code already exists scoped to `currentStep===0`, so re-enabling is just toggling the include in `enrollment.php` + adding `0` back into the stepMap in `enrollment.js`. See commit `304a4e87` for the visible-selected-state fix that's already in place.
 
 ---
 
