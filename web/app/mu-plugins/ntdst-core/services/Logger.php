@@ -17,6 +17,15 @@ declare(strict_types=1);
  * - No raw SQL - everything goes through ORM
  * - Logs stored as custom post type with metadata
  *
+ * Conventions:
+ *  - Filter `netdust_trusted_proxies` is historical — do not propagate the
+ *    `netdust_*` prefix to new filters; use `ntdst_*` instead.
+ *
+ * Production note:
+ *  - Log files land in WP_CONTENT_DIR/logs. On Bedrock that's web/app/logs,
+ *    which sits inside the webroot. .htaccess + index.html block direct
+ *    access on Apache; on Nginx, the server config MUST deny /logs.
+ *
  * Usage:
  *   ntdst_log()->info('User logged in', ['user_id' => 123]);
  *   ntdst_log()->error('Payment failed', ['order_id' => 456, 'error' => $e]);
@@ -128,29 +137,40 @@ class NTDST_Logger
             }
         };
 
-        // Database handler (for critical errors)
-        // Uses Data.php for consistency with system architecture
-        $this->handlers['database'] = function ($level, $message, $context) {
-            if ($level >= LogLevel::Error->value) {
-                try {
-                    $model = ntdst_data()->get('log_entry');
+        // Database handler (for critical errors). Off by default in prod
+        // because every error triggers wp_insert_post + N meta writes + a
+        // save_post action cascade — exactly the wrong load profile during
+        // an incident. Opt in by returning true from `ntdst_log_database_enabled`
+        // or by enabling WP_DEBUG.
+        $dbEnabled = apply_filters(
+            'ntdst_log_database_enabled',
+            defined('WP_DEBUG') && WP_DEBUG
+        );
 
-                    // Create log entry via Data.php ORM
-                    $model->create([
-                        'title' => $message,                        // post_title
-                        'author' => get_current_user_id() ?: 0,     // post_author
-                        'channel' => $this->channel,                // meta
-                        'level' => LogLevel::tryFrom($level)?->label() ?? 'UNKNOWN', // meta
-                        'context' => $context,                      // meta (auto JSON encoded)
-                        'ip_address' => $this->getClientIp(),       // meta
-                        'url' => $_SERVER['REQUEST_URI'] ?? '',     // meta
-                    ]);
-                } catch (Exception $e) {
-                    // Fail silently to prevent logging errors from breaking the app
-                    error_log('Logger database handler failed: ' . $e->getMessage());
+        if ($dbEnabled) {
+            $this->handlers['database'] = function ($level, $message, $context) {
+                if ($level >= LogLevel::Error->value) {
+                    try {
+                        $model = ntdst_data()->get('log_entry');
+
+                        // Create log entry via Data.php ORM
+                        $model->create([
+                            'title' => $message,                        // post_title
+                            'author' => get_current_user_id() ?: 0,     // post_author
+                            'channel' => $this->channel,                // meta
+                            'level' => LogLevel::tryFrom($level)?->label() ?? 'UNKNOWN', // meta
+                            'context' => $context,                      // meta (auto JSON encoded)
+                            'ip_address' => $this->getClientIp(),       // meta
+                            'url' => $_SERVER['REQUEST_URI'] ?? '',     // meta
+                        ]);
+                    } catch (\Throwable $e) {
+                        // Fail silently to prevent logging errors from breaking
+                        // the app — bypass ntdst_log to avoid recursion.
+                        error_log('Logger database handler failed: ' . $e->getMessage());
+                    }
                 }
-            }
-        };
+            };
+        }
     }
 
     /**
@@ -177,7 +197,11 @@ class NTDST_Logger
     }
 
     /**
-     * Write log entry to file immediately
+     * Write log entry to file immediately.
+     *
+     * Uses file_put_contents with FILE_APPEND | LOCK_EX for consistency
+     * with the batched-flush path. error_log(_, 3, _) is supported but
+     * inconsistent style for the same operation.
      */
     protected function writeToLogFile(string $log_entry): void
     {
@@ -188,15 +212,31 @@ class NTDST_Logger
             wp_mkdir_p($log_dir);
         }
 
-        // Protect logs directory
-        $htaccess = $log_dir . '/.htaccess';
-        if (!file_exists($htaccess)) {
-            file_put_contents($htaccess, "Deny from all\n");
-        }
+        // Protect logs directory (defense-in-depth on Apache; Nginx hosts
+        // need server config to deny /logs).
+        self::ensureLogDirProtected($log_dir);
 
         // Write to daily log file
         $log_file = $log_dir . '/' . $this->channel . '-' . date('Y-m-d') . '.log';
-        error_log($log_entry, 3, $log_file);
+        file_put_contents($log_file, $log_entry, FILE_APPEND | LOCK_EX);
+    }
+
+    /**
+     * Drop Apache .htaccess and an empty index.html into the log dir
+     * so directory listings and direct fetches are blocked where
+     * supported. On Nginx these files are inert; server config must
+     * deny the /logs path explicitly.
+     */
+    protected static function ensureLogDirProtected(string $dir): void
+    {
+        $htaccess = $dir . '/.htaccess';
+        if (!file_exists($htaccess)) {
+            file_put_contents($htaccess, "Deny from all\n");
+        }
+        $index = $dir . '/index.html';
+        if (!file_exists($index)) {
+            file_put_contents($index, '');
+        }
     }
 
     /**
@@ -217,10 +257,7 @@ class NTDST_Logger
         }
 
         // Protect logs directory
-        $htaccess = $log_dir . '/.htaccess';
-        if (!file_exists($htaccess)) {
-            file_put_contents($htaccess, "Deny from all\n");
-        }
+        self::ensureLogDirProtected($log_dir);
 
         // Write all batched entries to their respective files
         foreach (self::$batchedLogs as $filename => $entries) {
@@ -285,8 +322,9 @@ class NTDST_Logger
         foreach ($this->handlers as $handler) {
             try {
                 $handler($level, $message, $context);
-            } catch (Exception $e) {
-                // Fail silently to prevent logging errors from breaking the app
+            } catch (\Throwable $e) {
+                // Fail silently to prevent logging errors from breaking the
+                // app — bypass ntdst_log to avoid recursion.
                 error_log("Logger handler failed: " . $e->getMessage());
             }
         }
@@ -407,7 +445,7 @@ class NTDST_Logger
                     'url' => $log->fields['url'] ?? '',
                 ];
             }, $logs);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             error_log('Logger recent() failed: ' . $e->getMessage());
             return [];
         }
@@ -440,7 +478,7 @@ class NTDST_Logger
             }
 
             return $deleted;
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             error_log('Logger clearOld() failed: ' . $e->getMessage());
             return 0;
         }
@@ -450,31 +488,39 @@ class NTDST_Logger
 /**
  * Global helper - get logger instance
  */
-function ntdst_log(string $channel = 'app'): NTDST_Logger
-{
-    static $loggers = [];
+if (!function_exists('ntdst_log')) {
+    function ntdst_log(string $channel = 'app'): NTDST_Logger
+    {
+        static $loggers = [];
 
-    if (!isset($loggers[$channel])) {
-        $loggers[$channel] = new NTDST_Logger($channel);
+        if (!isset($loggers[$channel])) {
+            $loggers[$channel] = new NTDST_Logger($channel);
+        }
+
+        return $loggers[$channel];
     }
-
-    return $loggers[$channel];
 }
 
 /**
  * Quick log helpers
  */
-function ntdst_log_debug(string $message, array $context = []): void
-{
-    ntdst_log()->debug($message, $context);
+if (!function_exists('ntdst_log_debug')) {
+    function ntdst_log_debug(string $message, array $context = []): void
+    {
+        ntdst_log()->debug($message, $context);
+    }
 }
 
-function ntdst_log_info(string $message, array $context = []): void
-{
-    ntdst_log()->info($message, $context);
+if (!function_exists('ntdst_log_info')) {
+    function ntdst_log_info(string $message, array $context = []): void
+    {
+        ntdst_log()->info($message, $context);
+    }
 }
 
-function ntdst_log_error(string $message, array $context = []): void
-{
-    ntdst_log()->error($message, $context);
+if (!function_exists('ntdst_log_error')) {
+    function ntdst_log_error(string $message, array $context = []): void
+    {
+        ntdst_log()->error($message, $context);
+    }
 }

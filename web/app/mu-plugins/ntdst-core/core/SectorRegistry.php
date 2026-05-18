@@ -325,7 +325,13 @@ final class NTDST_SectorRegistry
     }
 
     /**
-     * Check if sector meets a minimum tier requirement
+     * Check if sector meets a minimum tier requirement.
+     *
+     * Asymmetric handling of unknown tiers (intentional):
+     *  - Unknown current tier → treated as lowest (degrade gracefully on
+     *    misconfigured options so the site keeps running).
+     *  - Unknown required tier → returns false (fail-safe; an unknown
+     *    requirement can't be guaranteed to be met).
      *
      * @param string $sector Sector key
      * @param string $minTier Minimum tier required
@@ -512,7 +518,9 @@ final class NTDST_SectorRegistry
  *
  * @return NTDST_SectorRegistry
  */
-function ntdst_sectors(): NTDST_SectorRegistry
-{
-    return NTDST_SectorRegistry::instance();
+if (!function_exists('ntdst_sectors')) {
+    function ntdst_sectors(): NTDST_SectorRegistry
+    {
+        return NTDST_SectorRegistry::instance();
+    }
 }
