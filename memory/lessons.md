@@ -152,6 +152,3 @@ PartnerAPI was sitting inside `stride-core/Modules/PartnerAPI/` despite being ou
 
 ### Extract before invent
 When establishing a new architectural pattern (e.g. "capability plugin extends core"), refactor existing working code into the new shape FIRST (the refactor is low-risk and validates the pattern with a known-good test suite), then build the second instance against the proven shape. Inventing the pattern on greenfield code is harder to verify.
-
-### 2026-05-17
-- when bulk-fixing template files, run shake-out manifest BEFORE the fixes, not after.
