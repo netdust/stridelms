@@ -307,6 +307,30 @@ class EditionService extends AbstractService implements EditionQueryInterface
         return $this->canEnroll($editionId);
     }
 
+    /**
+     * Display status for the public frontend.
+     *
+     * Stored `_ntdst_status` reflects admin intent — but doesn't auto-transition
+     * when end_date passes. For display (badges, cards, single page header),
+     * we lay an `isPast` check over the stored status: a past edition reads
+     * as Completed regardless of what's stored.
+     *
+     * Use this anywhere a status is shown to a visitor. Use `getStatus()`
+     * when admin intent matters (queries by stored status, transitions, etc.).
+     */
+    public function getEffectiveStatus(int $editionId): OfferingStatus
+    {
+        $stored = $this->getStatus($editionId);
+        if ($stored->isTerminal()) {
+            // Stored Cancelled/Completed/Archived always wins
+            return $stored;
+        }
+        if ($this->isPast($editionId)) {
+            return OfferingStatus::Completed;
+        }
+        return $stored;
+    }
+
     // === Event Handlers ===
 
     /**

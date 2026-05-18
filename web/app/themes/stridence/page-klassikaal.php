@@ -26,6 +26,12 @@ if (is_wp_error($themes)) {
 // Query all open editions
 $editionService = ntdst_get(EditionService::class);
 
+// Hide editions whose end_date is more than 2 days in the past. The 2-day
+// grace keeps just-finished cohorts findable for visitors who got the link
+// emailed/shared the day after the last session. Their effective status
+// already reads as "Afgelopen" via EditionService::getEffectiveStatus().
+$past_cutoff = date('Y-m-d', strtotime('-2 days'));
+
 $edition_args = [
     'post_type'      => 'vad_edition',
     'posts_per_page' => 200,
@@ -35,6 +41,29 @@ $edition_args = [
             'key'     => '_ntdst_status',
             'value'   => ['announcement', 'open', 'full', 'in_progress'],
             'compare' => 'IN',
+        ],
+        [
+            'relation' => 'OR',
+            [
+                'key'     => '_ntdst_end_date',
+                'value'   => $past_cutoff,
+                'compare' => '>=',
+                'type'    => 'DATE',
+            ],
+            [
+                // Fallback when end_date is missing: use start_date
+                'relation' => 'AND',
+                [
+                    'key'     => '_ntdst_end_date',
+                    'compare' => 'NOT EXISTS',
+                ],
+                [
+                    'key'     => '_ntdst_start_date',
+                    'value'   => $past_cutoff,
+                    'compare' => '>=',
+                    'type'    => 'DATE',
+                ],
+            ],
         ],
     ],
     'orderby'        => 'meta_value',

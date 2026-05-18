@@ -30,7 +30,10 @@ final class EditionCPT
             ],
             'public' => true,
             'publicly_queryable' => true,
-            'has_archive' => true,
+            // No public CPT archive — /klassikaal/ and /online/ are the
+            // discovery surfaces. Individual /vormingen/<slug>/ URLs keep
+            // working via the rewrite slug below.
+            'has_archive' => false,
             'show_ui' => true,
             'show_in_menu' => 'stride-dashboard',
             'menu_icon' => 'dashicons-calendar-alt',

@@ -39,7 +39,7 @@ if (is_wp_error($edition)) {
 // Get edition fields via service
 $course_id  = $editionService->getCourseId($edition_id);
 $course     = $course_id ? get_post($course_id) : null;
-$status     = $editionService->getStatus($edition_id);
+$status     = $editionService->getEffectiveStatus($edition_id);
 $price      = $editionService->getPrice($edition_id, get_current_user_id() ?: null);
 $can_enroll  = $editionService->canEnroll($edition_id);
 $is_past     = $editionService->isPast($edition_id);

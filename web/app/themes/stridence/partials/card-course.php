@@ -14,12 +14,65 @@
 defined('ABSPATH') || exit;
 
 use Stride\Integrations\LearnDash\LearnDashHelper;
+use Stride\Modules\Edition\EditionService;
+use Stride\Domain\OfferingStatus;
 
 $course = $args['course'] ?? null;
 
 // Early return if no course
 if (!$course instanceof WP_Post) {
     return;
+}
+
+/**
+ * Find the course's primary visible edition (if any). Same shape as the
+ * /vormingen/<course>/ router's resolver: enrollable > active > nothing.
+ * Returns ['id' => int, 'status' => OfferingStatus, 'spots' => ?int]
+ * or null when no visible edition exists (pure-LD course).
+ */
+$primary_edition = null;
+$edition_ids = get_posts([
+    'post_type'      => 'vad_edition',
+    'post_status'    => 'publish',
+    'posts_per_page' => -1,
+    'fields'         => 'ids',
+    'meta_query'     => [
+        ['key' => '_ntdst_course_id', 'value' => $course->ID],
+        [
+            'key'     => '_ntdst_status',
+            'value'   => ['announcement', 'open', 'full', 'in_progress'],
+            'compare' => 'IN',
+        ],
+    ],
+]);
+
+if (!empty($edition_ids)) {
+    $editionSvc = ntdst_get(EditionService::class);
+    $best = null;
+    $bestRank = -1;
+    foreach ($edition_ids as $eid) {
+        $eff = $editionSvc->getEffectiveStatus((int) $eid);
+        // Effective status may flip a past edition to Completed — filter that out
+        // (we already wanted active statuses; the date-flip is a stale visibility leak).
+        if (!$eff->isActive()) {
+            continue;
+        }
+        $rank = $eff->allowsEnrollment() ? 2 : 1;
+        if ($rank > $bestRank) {
+            $best = ['id' => (int) $eid, 'status' => $eff];
+            $bestRank = $rank;
+            if ($rank === 2) {
+                break;
+            }
+        }
+    }
+    if ($best) {
+        $capacity = (int) $editionSvc->getCapacity($best['id']);
+        $best['spots'] = $capacity > 0
+            ? max(0, $capacity - $editionSvc->getRegisteredCount($best['id']))
+            : null;
+        $primary_edition = $best;
+    }
 }
 
 // Get course data
@@ -38,9 +91,14 @@ $thumbnail = get_the_post_thumbnail(
     ['class' => 'w-full h-full object-cover transition-transform hover:scale-105']
 );
 
-// Determine user-specific status badge
+// Determine status badge.
+// User-level state (enrolled / in-progress / completed) wins when present —
+// that's the visitor's own status with the course, regardless of edition.
+// Otherwise: if course has a primary visible edition, show its effective
+// status. Pure-LD courses (no edition) fall back to the generic "Beschikbaar"
+// availability badge.
 $userId = get_current_user_id();
-$badge_status = null;
+$badge_status = null;     // 'edition' → render via badge-status partial; else inline
 $badge_class = '';
 $badge_label = '';
 $badge_icon = '';
@@ -64,8 +122,11 @@ if ($userId && LearnDashHelper::isActive() && LearnDashHelper::isEnrolled($cours
         $badge_label = __('Ingeschreven', 'stridence');
         $badge_icon = 'check';
     }
+} elseif ($primary_edition) {
+    // Course has an edition — its status drives the card badge.
+    $badge_status = 'edition';
 } else {
-    // Not enrolled - show availability
+    // Pure-LD course (no edition) — generic availability badge.
     $badge_status = 'available';
     $badge_class = 'bg-surface text-text-muted border border-border';
     $badge_label = __('Beschikbaar', 'stridence');
@@ -86,10 +147,17 @@ if ($userId && LearnDashHelper::isActive() && LearnDashHelper::isEnrolled($cours
 
         <!-- Status Badge -->
         <div class="absolute top-3 right-3">
-            <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium <?php echo esc_attr($badge_class); ?>">
-                <?php echo stridence_icon($badge_icon, 'w-3 h-3'); ?>
-                <?php echo esc_html($badge_label); ?>
-            </span>
+            <?php if ($badge_status === 'edition' && $primary_edition) : ?>
+                <?php stridence_template_part('partials/badge-status', null, [
+                    'status' => $primary_edition['status']->value,
+                    'spots'  => $primary_edition['spots'],
+                ]); ?>
+            <?php else : ?>
+                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium <?php echo esc_attr($badge_class); ?>">
+                    <?php echo stridence_icon($badge_icon, 'w-3 h-3'); ?>
+                    <?php echo esc_html($badge_label); ?>
+                </span>
+            <?php endif; ?>
         </div>
     </a>
 

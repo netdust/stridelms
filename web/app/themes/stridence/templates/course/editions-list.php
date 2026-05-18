@@ -51,7 +51,7 @@ foreach ($editions as $edition) {
     $start_date    = (string) $editionRepo->getField($edition_id, 'start_date', '');
     $end_date      = (string) $editionRepo->getField($edition_id, 'end_date', '');
     $venue         = (string) $editionRepo->getField($edition_id, 'venue', '');
-    $status        = $editionService->getStatus($edition_id);
+    $status        = $editionService->getEffectiveStatus($edition_id);
     $session_count = $sessionService->getSessionCount($edition_id);
     $is_enrolled   = $enrollmentService && $enrollmentService->isEnrolled($user_id, $edition_id);
 
