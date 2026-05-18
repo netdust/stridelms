@@ -112,7 +112,9 @@ final class EnrollmentRouter
         }
 
         $editionService = ntdst_get(EditionService::class);
-        $status = $editionService->getStatus($edition->ID);
+        // Effective status routes klassikaal-no-sessions and past editions
+        // to the correct mode (interest / closed) before we render anything.
+        $status = $editionService->getEffectiveStatus($edition->ID);
         $mode = $this->computeEnrollmentMode(
             $status,
             $editionService->requiresApproval($edition->ID),

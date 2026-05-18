@@ -175,8 +175,10 @@ final class EnrollmentService extends AbstractService
             return new WP_Error('edition_past', 'Deze editie is voorbij');
         }
 
-        // Check enrollment allowed
-        $status = $this->editions->getStatus($editionId);
+        // Check enrollment allowed — effective status folds in past-date,
+        // missing-sessions, and other display overrides so the server can't
+        // accept what the frontend won't offer.
+        $status = $this->editions->getEffectiveStatus($editionId);
         if (!$status->allowsEnrollment()) {
             // Distinguish between "full" and other closed reasons
             if ($status === \Stride\Domain\OfferingStatus::Full) {
@@ -374,7 +376,9 @@ final class EnrollmentService extends AbstractService
                 return new WP_Error('invalid_edition', 'Edition does not exist');
             }
 
-            $status = $this->editions->getStatus($editionId);
+            // Effective status — accepts announcement-by-policy AND
+            // klassikaal-no-sessions editions that fall back to interest.
+            $status = $this->editions->getEffectiveStatus($editionId);
             if (!$status->allowsInterest()) {
                 return new WP_Error('interest_closed', 'Interest registration is not available for this edition');
             }

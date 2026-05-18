@@ -269,13 +269,14 @@ class EditionService extends AbstractService implements EditionQueryInterface
      */
     public function canEnroll(int $editionId): bool
     {
-        $status = $this->getStatus($editionId);
+        // Effective status folds in past-date and missing-sessions overrides:
+        // a klassikaal edition with no scheduled sessions reads as Announcement
+        // (interest-only), a past edition reads as Completed, and so on. We
+        // delegate to that primitive so the answer matches what the visitor
+        // actually sees in the CTA chain.
+        $status = $this->getEffectiveStatus($editionId);
 
         if (!$status->allowsEnrollment()) {
-            return false;
-        }
-
-        if ($this->isPast($editionId)) {
             return false;
         }
 
@@ -310,10 +311,15 @@ class EditionService extends AbstractService implements EditionQueryInterface
     /**
      * Display status for the public frontend.
      *
-     * Stored `_ntdst_status` reflects admin intent — but doesn't auto-transition
-     * when end_date passes. For display (badges, cards, single page header),
-     * we lay an `isPast` check over the stored status: a past edition reads
-     * as Completed regardless of what's stored.
+     * Stored `_ntdst_status` reflects admin intent — but several conditions
+     * can override what we actually show:
+     *
+     *  - Terminal stored statuses (Cancelled/Completed/Archived) always win
+     *    over derived overrides.
+     *  - Past end_date → Completed, regardless of stored status.
+     *  - Klassikaal edition with zero scheduled sessions → Announcement.
+     *    You can't enroll in a date that doesn't exist yet; the visitor
+     *    can express interest until the admin schedules sessions.
      *
      * Use this anywhere a status is shown to a visitor. Use `getStatus()`
      * when admin intent matters (queries by stored status, transitions, etc.).
@@ -322,13 +328,62 @@ class EditionService extends AbstractService implements EditionQueryInterface
     {
         $stored = $this->getStatus($editionId);
         if ($stored->isTerminal()) {
-            // Stored Cancelled/Completed/Archived always wins
             return $stored;
         }
         if ($this->isPast($editionId)) {
             return OfferingStatus::Completed;
         }
+        if ($this->isClassroom($editionId) && !$this->hasPublishedSessions($editionId)) {
+            return OfferingStatus::Announcement;
+        }
         return $stored;
+    }
+
+    /**
+     * True when the edition's course is classified as classroom format.
+     *
+     * Differs from `!isOnline()`: requires a positive classroom signal so
+     * we don't accidentally apply klassikaal-specific rules to editions
+     * without any course taxonomy (data-invalid editions, test fixtures,
+     * legacy imports).
+     */
+    private function isClassroom(int $editionId): bool
+    {
+        $courseId = $this->getCourseId($editionId);
+        if (!$courseId) {
+            return false;
+        }
+        $formats = get_the_terms($courseId, 'stride_format');
+        if (!$formats || is_wp_error($formats)) {
+            return false;
+        }
+        foreach ($formats as $fmt) {
+            if (in_array($fmt->slug, ['klassikaal', 'classroom'], true)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * True when the edition has at least one published session row.
+     *
+     * Online editions (e-learning, webinars) don't need session rows —
+     * the LD content IS the schedule. Only meaningful for klassikaal.
+     */
+    private function hasPublishedSessions(int $editionId): bool
+    {
+        $ids = get_posts([
+            'post_type'      => SessionCPT::POST_TYPE,
+            'post_status'    => 'publish',
+            'posts_per_page' => 1,
+            'fields'         => 'ids',
+            'meta_query'     => [[
+                'key'   => '_ntdst_edition_id',
+                'value' => $editionId,
+            ]],
+        ]);
+        return !empty($ids);
     }
 
     // === Event Handlers ===
