@@ -99,9 +99,9 @@ get_header();
 
             <!-- Main Content Area -->
             <main class="flex-1 min-w-0">
-                <!-- Page Header -->
+                <!-- Page Header (home tab renders its own greeting inside the actions panel) -->
                 <?php $pageTitle = $page_titles[$current_tab] ?? ''; ?>
-                <?php if ($pageTitle) : ?>
+                <?php if ($pageTitle && $current_tab !== 'home') : ?>
                     <div class="mb-6">
                         <h1 class="text-lg font-semibold text-text tracking-tight">
                             <?php echo esc_html($pageTitle); ?>
@@ -115,6 +115,8 @@ get_header();
                     stridence_template_part('templates/dashboard/tab-home', null, [
                         'user'      => $user,
                         'home_data' => $home_data,
+                        'greeting'  => $greeting,
+                        'firstName' => $firstName,
                     ]);
                 } else {
                     stridence_template_part("templates/dashboard/tab-{$current_tab}", null, [

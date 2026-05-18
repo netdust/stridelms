@@ -18,6 +18,8 @@ defined('ABSPATH') || exit;
 
 $user      = $args['user'] ?? wp_get_current_user();
 $home_data = $args['home_data'] ?? [];
+$greeting  = $args['greeting'] ?? '';
+$firstName = $args['firstName'] ?? '';
 
 $actions    = $home_data['actions'] ?? [];
 $sessions   = $home_data['upcoming_sessions'] ?? [];
@@ -50,12 +52,29 @@ foreach ($enrollments as $enrollment) {
 <div class="space-y-8" x-data="dashboardHome()">
     <?php if ($hasContent) : ?>
 
-        <!-- Acties -->
-        <?php if (!empty($actions)) :
+        <!-- Greeting + Acties (elevated panel) -->
+        <?php
             $visibleCount = 3;
-            $hasMore = count($actions) > $visibleCount;
+            $hasMore = !empty($actions) && count($actions) > $visibleCount;
         ?>
-            <section class="space-y-2" <?php echo $hasMore ? 'x-data="{ expanded: false }"' : ''; ?>>
+        <section class="rounded-xl bg-primary-subtle shadow-lg ring-1 ring-primary/10 p-6 sm:p-8"
+                 <?php echo $hasMore ? 'x-data="{ expanded: false }"' : ''; ?>>
+
+            <?php if ($greeting && $firstName) : ?>
+                <div class="flex items-baseline justify-between mb-6">
+                    <h1 class="text-xl font-semibold text-text tracking-tight">
+                        <?php echo esc_html($greeting . ', ' . $firstName); ?>
+                    </h1>
+                    <?php if (!empty($actions)) : ?>
+                        <span class="text-xs font-medium text-text-muted">
+                            <?php echo esc_html(sprintf(_n('%d actie nodig', '%d acties nodig', count($actions), 'stridence'), count($actions))); ?>
+                        </span>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+
+            <?php if (!empty($actions)) : ?>
+            <div class="space-y-2">
                 <?php foreach ($actions as $i => $action) :
                     $total      = (int) ($action['total_tasks'] ?? 0);
                     $done       = (int) ($action['done_tasks'] ?? 0);
@@ -104,8 +123,9 @@ foreach ($enrollments as $enrollment) {
                         <span x-show="expanded" x-cloak><?php esc_html_e('Minder tonen', 'stridence'); ?></span>
                     </button>
                 <?php endif; ?>
-            </section>
-        <?php endif; ?>
+            </div>
+            <?php endif; ?>
+        </section>
 
         <!-- Agenda -->
         <?php if (!empty($sessions)) : ?>
