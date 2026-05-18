@@ -60,4 +60,29 @@ class RegistrationModalControllerTest extends TestCase
         self::assertInstanceOf(\WP_Error::class, $result);
         self::assertSame('registration_not_found', $result->get_error_code());
     }
+
+    public function testBuildPayloadReturnsErrorForAnonymisedUser(): void
+    {
+        $reg = (object) ['id' => 1, 'user_id' => 42, 'edition_id' => 99];
+
+        $registrations = $this->createMock(RegistrationRepository::class);
+        $registrations->method('find')->willReturn($reg);
+
+        // Stride\Tests\Stubs::set_user_meta to simulate anonymised user
+        \update_user_meta(42, '_stride_anonymised_at', time());
+
+        $controller = new RegistrationModalController(
+            $this->createMock(EditionService::class),
+            $this->createMock(SessionService::class),
+            $this->createMock(SessionSelection::class),
+            $registrations,
+        );
+
+        $result = $controller->buildPayload(1, 'enrollment');
+
+        self::assertInstanceOf(\WP_Error::class, $result);
+        self::assertSame('user_unavailable', $result->get_error_code());
+
+        \delete_user_meta(42, '_stride_anonymised_at');
+    }
 }
