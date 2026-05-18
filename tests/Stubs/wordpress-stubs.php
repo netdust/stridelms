@@ -784,6 +784,30 @@ if (!function_exists('is_admin')) {
     }
 }
 
+if (!function_exists('is_user_logged_in')) {
+    function is_user_logged_in(): bool
+    {
+        return get_current_user_id() > 0;
+    }
+}
+
+if (!function_exists('site_url')) {
+    function site_url(string $path = '', ?string $scheme = null): string
+    {
+        global $_test_options;
+        $url = $_test_options['siteurl'] ?? 'https://example.com';
+        return rtrim($url, '/') . '/' . ltrim($path, '/');
+    }
+}
+
+if (!function_exists('has_filter')) {
+    function has_filter(string $hook, $callback = false): bool
+    {
+        global $_test_filters;
+        return !empty($_test_filters[$hook]);
+    }
+}
+
 // Options storage
 global $_test_options;
 $_test_options = [];

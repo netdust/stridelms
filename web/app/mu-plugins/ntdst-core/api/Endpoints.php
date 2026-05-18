@@ -13,13 +13,22 @@ declare(strict_types=1);
  * Endpoints:
  * - POST /wp-json/ntdst/v1/get_nonce
  * - POST /wp-json/ntdst/v1/action
+ *
+ * Conventions:
+ *  - Filter prefixes: `ntdst/api/*` for new code. `netdust_trusted_proxies`
+ *    is historical — do not propagate that naming.
+ *  - Public-action nonces are issued without auth. Handlers for public
+ *    actions MUST NOT assume the caller is authenticated; treat all input
+ *    as untrusted.
+ *  - The `_files` key in request params is reserved for uploaded files
+ *    (overwritten by get_request_params). Do not pass `_files` as data.
  */
 
 if (!defined('ABSPATH')) exit;
 
-final class Endpoints
+final class NTDST_Endpoints
 {
-    private const NAMESPACE = 'ntdst/v1';
+    private const REST_NAMESPACE = 'ntdst/v1';
     private const CACHE_GROUP = 'ntdst_posts';
 
     /**
@@ -61,7 +70,7 @@ final class Endpoints
 
     private function register_nonce_endpoint(): void
     {
-        register_rest_route(self::NAMESPACE, '/get_nonce', [
+        register_rest_route(self::REST_NAMESPACE, '/get_nonce', [
             'methods'             => 'POST',
             'callback'            => [$this, 'handle_get_nonce'],
             'permission_callback' => [$this, 'check_nonce_permission'],
@@ -76,7 +85,7 @@ final class Endpoints
 
     private function register_action_endpoint(): void
     {
-        register_rest_route(self::NAMESPACE, '/action', [
+        register_rest_route(self::REST_NAMESPACE, '/action', [
             'methods'             => 'POST',
             'callback'            => [$this, 'handle_action'],
             'permission_callback' => [$this, 'check_action_permission'],
@@ -103,14 +112,13 @@ final class Endpoints
      */
     public function check_nonce_permission(WP_REST_Request $request): bool
     {
-        // Rate limiting check first
-        if (!$this->checkRateLimit()) {
-            return false;
-        }
-
-        // Get the requested action
+        // Resolve action first so the rate limit can be per-action.
         $params = $this->get_request_params($request);
         $action = sanitize_text_field($params['action'] ?? $request->get_param('action') ?? '');
+
+        if (!$this->checkRateLimit($action)) {
+            return false;
+        }
 
         // Get public actions dynamically (allows late registration)
         $public_actions = apply_filters('ntdst/api/public_actions', $this->public_actions);
@@ -130,8 +138,11 @@ final class Endpoints
      */
     public function check_action_permission(WP_REST_Request $request): bool
     {
-        // Rate limiting check
-        if (!$this->checkRateLimit()) {
+        $params = $this->get_request_params($request);
+        $action = sanitize_text_field($params['action'] ?? '');
+
+        // Rate limiting check (per-action so sensitive actions can be tighter)
+        if (!$this->checkRateLimit($action)) {
             return false;
         }
 
@@ -144,23 +155,40 @@ final class Endpoints
     }
 
     /**
-     * Rate limiting to prevent API abuse
-     * Returns false if rate limit exceeded
+     * Rate limiting to prevent API abuse.
+     *
+     * Keying strategy:
+     *  - Logged-in: bucket per (user_id, action) — fair to NAT'd users
+     *  - Anonymous: bucket per (ip, action)
+     *
+     * Limits and windows are filterable per-action so sensitive operations
+     * (e.g. magic-link send) can be much stricter than the default 30/min.
+     *
+     * @return bool false when limit exceeded
      */
-    private function checkRateLimit(): bool
+    private function checkRateLimit(string $action = ''): bool
     {
-        $ip = $this->getClientIp();
-        $key = 'ntdst_rate_' . md5($ip);
+        $limit = (int) apply_filters("ntdst/api/rate_limit/{$action}", self::RATE_LIMIT, $action);
+        $window = (int) apply_filters("ntdst/api/rate_window/{$action}", self::RATE_WINDOW, $action);
+
+        if ($limit <= 0) {
+            // A filter explicitly disabled the limit.
+            return true;
+        }
+
+        $userId = function_exists('get_current_user_id') ? (int) get_current_user_id() : 0;
+        $bucket = $userId > 0
+            ? "u{$userId}"
+            : 'ip' . md5($this->getClientIp());
+        $key = 'ntdst_rate_' . md5($bucket . '|' . $action);
 
         $count = (int) get_transient($key);
 
-        if ($count >= self::RATE_LIMIT) {
-            // Rate limit exceeded
+        if ($count >= $limit) {
             return false;
         }
 
-        // Increment counter
-        set_transient($key, $count + 1, self::RATE_WINDOW);
+        set_transient($key, $count + 1, $window);
 
         return true;
     }
@@ -192,9 +220,13 @@ final class Endpoints
             }
         }
 
-        // Referer must start with our full URL (existing logic is correct)
+        // Referer must start with our full URL — use trailing slash so
+        // `https://example.com.evil.com/x` does NOT match
+        // `https://example.com` via simple prefix.
         if (!empty($referer)) {
-            if (str_starts_with($referer, home_url()) || str_starts_with($referer, site_url())) {
+            $homeUrl = home_url('/');
+            $siteUrl = site_url('/');
+            if (str_starts_with($referer, $homeUrl) || str_starts_with($referer, $siteUrl)) {
                 return true;
             }
         }
@@ -299,18 +331,19 @@ final class Endpoints
             return $this->error('Invalid or expired nonce', 'invalid_nonce');
         }
 
+        // Distinguish "no handler registered" from "handler returned nothing"
+        // so a legitimate empty result (e.g. zero search hits) isn't a 404.
+        if (!has_filter("ntdst/api_data/{$action}")) {
+            return $this->error('Unknown action request', 'unknown_action');
+        }
+
         $data = apply_filters("ntdst/api_data/{$action}", [], $params);
 
-        // Handle WP_Error responses from filters
         if (is_wp_error($data)) {
             return $this->error($data->get_error_message(), $data->get_error_code());
         }
 
-        if (empty($data)) {
-            return $this->error('Unknown action request', 'unknown_action');
-        }
-
-        return $this->success($data);
+        return $this->success(is_array($data) ? $data : []);
     }
 
 
@@ -320,9 +353,11 @@ final class Endpoints
 
     public function clear_post_cache(int $post_id): void
     {
+        // Clear per-post entries only. NTDST_Query_Cache's onPostSave hook
+        // already bumps the per-post-type version, which invalidates query
+        // caches granularly — flushing the whole group here defeats that.
         wp_cache_delete("post_meta_{$post_id}", self::CACHE_GROUP);
         wp_cache_delete("post_terms_{$post_id}", self::CACHE_GROUP);
-        wp_cache_flush_group(self::CACHE_GROUP); // Optional: full flush
     }
 
     // =========================================================================
@@ -367,6 +402,11 @@ final class Endpoints
 
         // Search users
         add_filter('ntdst/api_data/search_users', function ($data, $params) {
+            // Listing users by email/login leaks PII — require list_users.
+            if (!current_user_can('list_users')) {
+                return $this->error('Insufficient permissions', 'forbidden');
+            }
+
             $search = trim(sanitize_text_field($params['search'] ?? ''));
             if (empty($search)) {
                 return $this->error('Search term required', 'empty_search');
@@ -432,8 +472,16 @@ final class Endpoints
 /**
  * Global helper - get endpoints instance
  */
-function ntdst_endpoints(): Endpoints
-{
-    static $manager = null;
-    return $manager ??= new Endpoints();
+if (!function_exists('ntdst_endpoints')) {
+    function ntdst_endpoints(): NTDST_Endpoints
+    {
+        static $manager = null;
+        return $manager ??= new NTDST_Endpoints();
+    }
+}
+
+// Back-compat: keep the old unprefixed class name working for callers
+// outside this codebase. New code should use NTDST_Endpoints.
+if (!class_exists('Endpoints', false)) {
+    class_alias(NTDST_Endpoints::class, 'Endpoints');
 }

@@ -60,6 +60,7 @@ $ntdstCoreFiles = [
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/core/SectorRegistry.php',
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/core/Bootstrap.php',
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/core/Router.php',
+    dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/api/Endpoints.php',
 ];
 
 foreach ($ntdstCoreFiles as $file) {
