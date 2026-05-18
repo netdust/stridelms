@@ -52,21 +52,22 @@
 
 ---
 
-### BUG-RL-3: Anonymous users cannot reach interest/waitlist form via enrollment URL [NEEDS DECISION]
+### BUG-RL-3: Anonymous users cannot reach interest/waitlist form via enrollment URL [FIXED]
 
 **What was tested:** `GET /vormingen/{slug}/inschrijving/` while not logged in, for an `Announcement` and a `Full` edition.
 **Expected:** Form renders so anonymous user can submit interest / waitlist (handlers are public).
 **Actual:** Router immediately redirects to `wp-login.php`.
 
-**Root cause:** `EnrollmentRouter::handleCourseEnrollment()` has an unconditional `if (!is_user_logged_in()) { wp_safe_redirect(wp_login_url(...)); exit; }` at line 98-101. It runs before mode resolution, so even modes that explicitly allow anonymous (interest, waitlist) are gated.
+**Root cause:** `EnrollmentRouter::handleCourseEnrollment()` has an unconditional login redirect. This affected the existing "Interesse melden" CTA too — both were silently broken when the CTA pointed at `stride_enrollment_url()`.
 
-**Current workaround:** Anonymous interest works only via the `[stride_interest]` shortcode embedded on a custom page. Waitlist has no shortcode equivalent.
+**RESOLVED:** Mirrored the existing `[stride_interest]` shortcode + dedicated-page pattern for waitlist:
+- New `WaitlistShortcodes` class registers `[stride_waitlist]` (anonymous-allowed, mirrors `InterestShortcodes`)
+- New `templates/forms/waitlist.php` (mirrors `interest.php`)
+- New `/wachtlijst/` page (post ID 30457) containing `[stride_waitlist]`
+- Desktop + mobile CTAs on `single-vad_edition.php` now point to `/interesse/?editie={id}` and `/wachtlijst/?editie={id}` (was: `stride_enrollment_url()` — login-gated)
+- `page.php` full-width body-class detection extended to `stride_waitlist`
 
-**Open question:** Should the enrollment URL be made public for interest + waitlist modes (consistent UX, one URL), OR should waitlist also have a dedicated shortcode (`[stride_waitlist]`) and the CTA link to a custom page (consistent with existing interest pattern)?
-
-**Files:** `EnrollmentRouter.php:98-101`, `themes/stridence/single-vad_edition.php:487` (CTA target)
-
-**Status:** NOT FIXED — requires product decision.
+**Verified end-to-end:** Anonymous user hits `/wachtlijst/?editie=13222` → 200 → submits via public REST (`ntdst/v1/get_nonce` then `ntdst/v1/action`) → row created with `user_id=NULL` + correct `enrollment_data.waitlist` → user gets confirmation mail. Same flow for interest.
 
 ---
 
@@ -204,9 +205,10 @@ Cancelled / Completed are terminal states reached from confirmed.
 
 ## Open product/design decisions
 
-1. **BUG-RL-3** — Should anonymous users reach the enrollment route for interest/waitlist editions? Or should waitlist (like interest) have its own shortcode + dedicated page, with the CTA pointing there?
-2. **Withdrawn semantics** — Implement user-initiated withdraw distinct from admin-initiated cancel? Or remove withdrawn from the enum entirely?
-3. **F3 waitlist upgrade** — When admin invites a waitlisted user and they self-enroll: should the waitlist row be reused/promoted, or a fresh row created (current behavior)?
+1. **Withdrawn semantics** — Implement user-initiated withdraw distinct from admin-initiated cancel? Or remove withdrawn from the enum entirely?
+2. **F3 waitlist upgrade** — When admin invites a waitlisted user and they self-enroll: should the waitlist row be reused/promoted, or a fresh row created (current behavior)?
+
+(BUG-RL-3 resolved 2026-05-18 by adding `[stride_waitlist]` shortcode + `/wachtlijst/` page.)
 
 ---
 
