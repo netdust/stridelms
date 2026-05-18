@@ -102,6 +102,15 @@ final class EditionRegistrationMetabox
                                     <span class="dashicons dashicons-clipboard"></span>
                                     <?php esc_html_e('Presentielijst (Word)', 'stride'); ?>
                                 </a>
+                                <div class="stride-export-divider" role="separator" aria-hidden="true"></div>
+                                <a href="<?php echo esc_url(admin_url('admin-ajax.php?action=stride_export_registrations&type=files&edition_id=' . $this->currentEditionId . '&nonce=' . $exportNonce)); ?>">
+                                    <span class="dashicons dashicons-portfolio"></span>
+                                    <?php esc_html_e('Uploads (ZIP)', 'stride'); ?>
+                                </a>
+                                <a href="<?php echo esc_url(admin_url('admin-ajax.php?action=stride_export_registrations&type=bundle&edition_id=' . $this->currentEditionId . '&nonce=' . $exportNonce)); ?>">
+                                    <span class="dashicons dashicons-archive"></span>
+                                    <?php esc_html_e('Volledig pakket (ZIP)', 'stride'); ?>
+                                </a>
                             </div>
                         </div>
                     <?php endif; ?>

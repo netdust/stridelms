@@ -1851,3 +1851,10 @@ body.stride-modal-open { overflow: hidden; }
 .stride-modal-progress-fill { height: 100%; background: #2271b1; }
 
 .stride-modal-empty { color: #8c8f94; font-style: italic; margin: 0; }
+
+/* Export menu divider — separates Excel/Word from ZIP exports */
+.stride-export-menu .stride-export-divider {
+    height: 1px;
+    background: #dcdcde;
+    margin: 4px 0;
+}
