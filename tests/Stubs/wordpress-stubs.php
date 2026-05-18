@@ -255,10 +255,29 @@ if (!function_exists('sanitize_title')) {
     function sanitize_title(string $title, string $fallback_title = '', string $context = 'save'): string
     {
         $title = strtolower($title);
-        $title = preg_replace('/[^a-z0-9\s-]/', '', $title);
+        // Match real WP sanitize_title_with_dashes: collapse whitespace AND
+        // underscores into dashes BEFORE stripping non-alphanum/dash chars.
         $title = preg_replace('/[\s_]+/', '-', $title);
+        $title = preg_replace('/[^a-z0-9-]/', '', $title);
+        $title = preg_replace('/-+/', '-', $title);
         $title = trim($title, '-');
         return $title ?: $fallback_title;
+    }
+}
+
+if (!function_exists('sanitize_file_name')) {
+    function sanitize_file_name(string $filename): string
+    {
+        // Match WP behaviour closely enough for tests: strip special chars
+        // that filesystems dislike, collapse whitespace to dashes, preserve
+        // the rest (including dots, underscores, dashes).
+        $special_chars = ["?", "[", "]", "/", "\\", "=", "<", ">", ":", ";", ",",
+            "'", '"', "&", "\$", "#", "*", "(", ")", "|", "~", "`", "!", "{", "}",
+            "%", "+", "\xc2\xa0", chr(0)];
+        $filename = str_replace($special_chars, '', $filename);
+        $filename = preg_replace('/[\s-]+/', '-', $filename);
+        $filename = trim($filename, '.-_');
+        return $filename;
     }
 }
 
