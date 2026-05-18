@@ -72,6 +72,7 @@ get_header();
         'course_id'   => $course_id,
         'breadcrumbs' => $breadcrumbs,
         'is_online'   => $is_online,
+        'editions'    => $editions,
     ]);
     ?>
 
@@ -120,15 +121,18 @@ get_header();
         <?php endif; ?>
     </div>
 
-    <!-- Mobile Sticky CTA -->
-    <?php
-    stridence_template_part('templates/course/mobile-cta', null, [
-        'course_id'      => $course_id,
-        'is_online'      => $is_online,
-        'enrollment_url' => $enrollment_url,
-        'user_enrolled'  => $user_enrolled,
-    ]);
-    ?>
+    <!-- Mobile Sticky CTA — online courses only. In-person courses route through
+         the inline edition list (no course-level CTA). -->
+    <?php if ($is_online) : ?>
+        <?php
+        stridence_template_part('templates/course/mobile-cta', null, [
+            'course_id'      => $course_id,
+            'is_online'      => $is_online,
+            'enrollment_url' => $enrollment_url,
+            'user_enrolled'  => $user_enrolled,
+        ]);
+        ?>
+    <?php endif; ?>
 </article>
 
 <?php get_footer(); ?>
