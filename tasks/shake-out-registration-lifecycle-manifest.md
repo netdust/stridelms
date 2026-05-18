@@ -1,28 +1,114 @@
 # Shake-out Manifest: Registration Table Lifecycle
 
 **Date:** 2026-05-18
-**Scope:** Full lifecycle on `wp_vad_registrations` — from interest (no account) → confirmed enrollment → completion → cancellation, including all data persistence.
-**Status:** Pending — manifest only, no execution yet.
+**Scope:** Full lifecycle on `stride_vad_registrations` — interest → waitlist → enrollment → completion → cancellation, including data persistence.
+**Status:** Smoke test phase 1 complete (13 scenarios run, 4 bugs found, 2 fixed, 2 documented for decision).
 
 ---
 
 ## Status semantics (verified from code)
 
-Two enum values are **defined but not implemented**. Tests will flag them; no fixes proposed in this manifest.
-
-| Status | Implemented? | Source of truth |
+| Status | Implemented? | Notes |
 |---|---|---|
-| `interest` | ✅ Yes — `EnrollmentService::registerInterest` + `QuestionnaireHandler::handleSubmitInterest` (anonymous) | Edition must be in `Announcement` state (`OfferingStatus::allowsInterest()`) |
-| `pending` | ✅ Yes — initial status when edition has completion requirements OR `requiresApproval` is set | `EnrollmentService::enroll` line 207–209 |
-| `confirmed` | ✅ Yes — direct on enroll (no requirements/approval) OR after `confirmRegistration` | Default ENUM value |
-| `completed` | ✅ Yes — `RegistrationRepository::updateStatus(Completed)` sets `completed_at` | Triggered post-course |
-| `cancelled` | ✅ Yes — `cancel()` writes this. Fires `stride/registration/cancelled` → cancels quote, frees seat, audit log | Only terminal-cancel path that exists |
-| `waitlist` | ❌ **Dead value.** Admin dropdown shows "Wachtlijst", JS has `.waitlist` class. Zero writes in service layer. | — |
-| `withdrawn` | ❌ **Dead value.** Treated as synonym of `cancelled` in re-enrollment check (`RegistrationRepository.php:70`). Zero writes. | — |
+| `interest` | ✅ Yes — `EnrollmentService::registerInterest` + `QuestionnaireHandler::handleSubmitInterest` (anonymous). | Requires `OfferingStatus::Announcement`. Dedup by email (anonymous) or by user+edition. |
+| `waitlist` | ✅ Yes (added 2026-05-18) — `EnrollmentService::registerWaitlist` + `QuestionnaireHandler::handleSubmitWaitlist`. | Requires `OfferingStatus::Full`. No automation — admin manually mails when seats free up. |
+| `pending` | ✅ Yes — initial status when edition has completion requirements OR `requiresApproval`. | |
+| `confirmed` | ✅ Yes — direct on enroll OR after `confirmRegistration`. | Default ENUM value. |
+| `completed` | ✅ Yes — `updateStatus(Completed)` sets `completed_at`. | |
+| `cancelled` | ✅ Yes — `cancel()` writes this. Fires `stride/registration/cancelled` → quote cancelled, seat freed, audit log, notification. | Only terminal-cancel path that exists. |
+| `withdrawn` | ❌ **Dead value.** Treated as synonym of cancelled in re-enrollment dedup (`RegistrationRepository.php:73`). Zero writes anywhere. | Document & decide later — either implement user-initiated cancel as withdrawn, or remove from enum. |
 
-**Cancelled vs Withdrawn:** functionally identical today. Both block re-enrollment dedup and both are excluded from "active." The probable intent ("admin cancelled" vs "user withdrew") is not encoded.
+**Cancelled vs Withdrawn:** functionally identical. Probable intent ("admin cancelled" vs "user withdrew") is not encoded.
 
-**Interest vs Waitlist:** different concepts in principle ("not planned yet" vs "full"), but only Interest is built. User-facing "add me to waitlist" UX for `Full` editions does not exist.
+---
+
+## Bugs found during smoke test
+
+### BUG-RL-1: Anonymous waitlist creation rejected by repository [FIXED]
+
+**What was tested:** `QuestionnaireHandler::handleSubmitWaitlist` with `user_id=null`.
+**Expected:** Row created with `status=waitlist`, `user_id=NULL`, data in `enrollment_data.waitlist`.
+**Actual:** `RegistrationRepository::create()` returned `WP_Error('missing_field', 'Required: user_id (except for interest registrations)')`.
+
+**Root cause:** The user_id exemption was hard-coded to `RegistrationStatus::Interest` only. Waitlist is the other anonymous-allowed status but wasn't whitelisted.
+
+**Files:** `RegistrationRepository.php:48`
+
+**RESOLVED:** Replaced single-status check with `$anonymousAllowedStatuses` array containing both `Interest` and `Waitlist`. Smoke test re-run: anonymous waitlist now creates a row with `user_id=NULL`.
+
+---
+
+### BUG-RL-2: Mail templates never seeded after rename [FIXED]
+
+**What was tested:** `ndmail_send('stride-waitlist-registered-user', ...)` via the handler.
+**Expected:** User receives confirmation email.
+**Actual:** `ndmail_send` returned `WP_Error('Template "stride-waitlist-registered-user" not found')`.
+
+**Root cause:** `seedTemplates()` is version-gated (`stride_mail_templates_seeded` option). Old template slug `stride-interest-registered-admin` was renamed to `stride-interest-registered-user` + new `stride-waitlist-registered-user` was added, but the version constant wasn't bumped → seeder skipped → DB still has the old orphan + missing new ones.
+
+**Files:** `StrideMailBridge.php:486` (version constant `'2'`)
+
+**RESOLVED:** Bumped version to `'3'`. Manually deleted the orphan `stride-interest-registered-admin` template post + re-ran `seedTemplates()`. Both new templates now present (IDs 30455, 30456). Smoke test re-run: both anonymous and logged-in waitlist/interest submissions trigger user confirmation emails landing in Mailpit.
+
+---
+
+### BUG-RL-3: Anonymous users cannot reach interest/waitlist form via enrollment URL [NEEDS DECISION]
+
+**What was tested:** `GET /vormingen/{slug}/inschrijving/` while not logged in, for an `Announcement` and a `Full` edition.
+**Expected:** Form renders so anonymous user can submit interest / waitlist (handlers are public).
+**Actual:** Router immediately redirects to `wp-login.php`.
+
+**Root cause:** `EnrollmentRouter::handleCourseEnrollment()` has an unconditional `if (!is_user_logged_in()) { wp_safe_redirect(wp_login_url(...)); exit; }` at line 98-101. It runs before mode resolution, so even modes that explicitly allow anonymous (interest, waitlist) are gated.
+
+**Current workaround:** Anonymous interest works only via the `[stride_interest]` shortcode embedded on a custom page. Waitlist has no shortcode equivalent.
+
+**Open question:** Should the enrollment URL be made public for interest + waitlist modes (consistent UX, one URL), OR should waitlist also have a dedicated shortcode (`[stride_waitlist]`) and the CTA link to a custom page (consistent with existing interest pattern)?
+
+**Files:** `EnrollmentRouter.php:98-101`, `themes/stridence/single-vad_edition.php:487` (CTA target)
+
+**Status:** NOT FIXED — requires product decision.
+
+---
+
+### BUG-RL-4: Capacity propagation question [DOCUMENTATION]
+
+**What was tested:** N/A — observation during smoke test setup.
+**Note:** `OfferingStatus::Full` is set automatically by `EditionService::onRegistrationCreated()` when capacity is reached. But the auto-flip Full → Open in `onRegistrationCancelled()` does NOT consider waitlist rows — it just checks `hasAvailableSpots()`. This is correct for our model (no auto-promotion), but worth documenting: when a seat frees up, the edition flips back to `Open`, NEW users can enroll first-come-first-served, and existing waitlist rows stay as `waitlist` until admin manually contacts them. Admin must be aware.
+
+**Status:** Not a bug. Behavior documented.
+
+---
+
+## Scenarios executed in smoke test (Phase A + waitlist)
+
+| # | Status | Scenario | Result |
+|---|---|---|---|
+| T1 | waitlist | Anonymous submit, `email=anon.waiter@smoke.test` on Full edition 13222 | ✅ Row created, `user_id=NULL`, `enrollment_data.waitlist.email` set, user mail sent |
+| T2 | waitlist | Same anonymous email submits again | ✅ Upsert — existing row updated, no duplicate |
+| T3 | waitlist | Logged-in user 3195 (`student2@seed.test`) on same edition | ✅ Row created, `user_id=3195`, user mail sent |
+| T4 | waitlist | User 3195 attempts second waitlist submit | ✅ Rejected with `already_registered` |
+| T5 | waitlist | User 3195 attempts waitlist on Open edition 13230 | ✅ Rejected with `waitlist_closed` |
+| T6 | waitlist | User 3195 attempts waitlist on non-existent edition 999999 | ✅ Rejected with `invalid_edition` |
+| T7 | waitlist | Anonymous submit with missing email | ✅ Rejected with `validation_error` |
+| I1 | interest | Anonymous submit on Announcement edition 13224 | ✅ Row created, mail sent |
+| I2 | interest | Same anonymous email resubmits | ✅ Upsert |
+| I3 | interest | Logged-in user 3196 (`student3@seed.test`) | ✅ Row created, mail sent |
+| I4 | interest | User 3196 attempts second interest submit | ✅ Rejected with `already_registered` |
+| I5 | interest | User 3196 attempts interest on Open edition | ✅ Rejected with `interest_closed` |
+| I6 | interest | User 3196 attempts interest on Full edition | ✅ Rejected with `interest_closed` (Full doesn't allow interest) |
+
+**Mail verification (Mailpit):**
+- ✅ `Bevestiging wachtlijst` mail to `anon.waiter@smoke.test`
+- ✅ `Bevestiging wachtlijst` mail to `student2@seed.test`
+- ✅ `Bevestiging interesse` mail to `anon.interest@smoke.test` (×2 — dedup correctly resent confirmation)
+- ✅ `Bevestiging interesse` mail to `student3@seed.test`
+- ✅ **No admin mails sent for interest or waitlist** — as required
+
+**Excel export verification:**
+- ✅ Edition 13222 (Full): export has 6 sheets — Overzicht, Deelnemers, Facturatie, Aanwezigheid, Taken, **Wachtlijst** (last 5 only when relevant data present)
+- ✅ Edition 13224 (Announcement): export has 5 sheets ending in **Interesse**
+- ✅ Wachtlijst sheet contains both rows with correct "Bron" (Anoniem / Account)
+- ✅ Deelnemers sheet does NOT contain waitlist/interest rows — partition working
 
 ---
 
@@ -31,160 +117,113 @@ Two enum values are **defined but not implemented**. Tests will flag them; no fi
 ```
                                    ┌─────────────────────────────────────┐
                                    │ Edition state: Announcement         │
-                                   └─────────────────────────────────────┘
-                                                    │
-                          ┌─────────────────────────┴──────────────────────┐
-                          │                                                │
-              ┌───────────▼───────────┐                          ┌─────────▼─────────┐
+                                   └──────────────┬──────────────────────┘
+                                                  │
+                          ┌───────────────────────┴───────────────────────┐
+                          │                                               │
+              ┌───────────▼───────────┐                          ┌────────▼──────────┐
               │ Anonymous interest    │                          │ Logged-in interest│
-              │ (no user_id)          │                          │ (registerInterest)│
-              │ enrollment_data.      │                          │ user_id set       │
-              │   interest = {...}    │                          │                   │
-              └───────────┬───────────┘                          └─────────┬─────────┘
-                          │                                                │
-                          │ Edition opens (Announcement → Open)            │
-                          │ User self-enrolls with matching email          │
-                          │ → upgradeFromInterest()                        │
-                          └────────────────────────┬───────────────────────┘
-                                                   │
-                          ┌────────────────────────▼───────────────────────┐
-                          │ Edition state: Open                            │
-                          │                                                │
-                          │  Requirements? OR requiresApproval?            │
-                          │  ┌─────────yes──────────┐  ┌───────no────────┐ │
-                          │  │ status = Pending     │  │ status =        │ │
-                          │  │ (no LMS access)      │  │   Confirmed     │ │
-                          │  │ completion_tasks=set │  │ (LMS granted)   │ │
-                          │  └──────────┬───────────┘  └─────────────────┘ │
-                          │             │                                  │
-                          │  Tasks done OR admin confirms                  │
-                          │  → confirmRegistration()                       │
-                          │             │                                  │
-                          │             ▼                                  │
-                          │     status = Confirmed                         │
-                          │     LMS access granted                         │
-                          └────────────────────┬───────────────────────────┘
-                                               │
-                                               │ Course + post-course tasks done
-                                               ▼
-                                       status = Completed
-                                       completed_at set
-                                               │
-                          ┌────────────────────┴───────────────────┐
-                          │   Either path can also cancel at any   │
-                          │   non-terminal point:                  │
-                          │   status = Cancelled                   │
-                          │   cancelled_at set                     │
-                          │   → quote cancelled, seat freed        │
-                          └────────────────────────────────────────┘
+              │ (no user_id)          │                          │ user_id set       │
+              │ data.interest = {...} │                          │                   │
+              └───────────┬───────────┘                          └────────┬──────────┘
+                          │                                               │
+                          │ Edition opens (Announcement → Open)           │
+                          │ User self-enrolls with matching email         │
+                          │ → upgradeFromInterest()                       │
+                          └───────────────────────┬───────────────────────┘
+                                                  │
+                                   ┌──────────────▼──────────────────────┐
+                                   │ Edition state: Open                 │
+                                   │   ↓ regular enrollment              │
+                                   │   pending (if requirements/approval)│
+                                   │   confirmed (otherwise)             │
+                                   └──────────────┬──────────────────────┘
+                                                  │
+                                   ┌──────────────▼──────────────────────┐
+                                   │ Edition state: Full                 │
+                                   │   ↓ NEW users get waitlist option   │
+                                   │ waitlist rows accumulate            │
+                                   │ (admin contacts manually)           │
+                                   └──────────────┬──────────────────────┘
+                                                  │ if seat freed
+                                                  ↓ → flips back to Open
+                                          (waitlist users still stuck;
+                                           admin must mail them)
+
+Cancelled / Completed are terminal states reached from confirmed.
 ```
 
 ---
 
-## Test scenarios
+## Outstanding test scenarios (not yet executed)
 
-### Phase A: Interest (Announcement edition)
-
-| # | Scenario | Expected state |
-|---|---|---|
-| A1 | Anonymous user submits interest form (name + email + extra fields) | New row: `user_id=NULL`, `status=interest`, `enrollment_data.interest = {name, email, ...}`, edition_id set. Admin email fires. |
-| A2 | Same anonymous user submits again (same email + edition) | No new row. Existing row's `enrollment_data.interest` is overwritten/merged. No duplicate. |
-| A3 | Logged-in user calls `registerInterest()` | New row: `user_id` set, `status=interest`. No LMS access granted. No quote. `company_id` propagated from `_stride_company_id` meta. |
-| A4 | Interest attempt on edition in `Open` (not `Announcement`) | Returns `WP_Error('interest_closed')`. No row created. |
-| A5 | Same user submits interest twice (logged in) | Second call returns `WP_Error('already_registered')`. |
-| A6 | Interest on trajectory (not edition) | Row created with `trajectory_id` set, `edition_id=NULL`. |
-| A7 | **Upgrade path** — anonymous interest exists for `email@x`, then user with that email self-enrolls when edition opens | Existing row promoted: `user_id` set, `status` becomes `pending`/`confirmed`, `enrollment_data` merged (interest data preserved + new enrollment_personal added). **No duplicate row.** |
-| A8 | Upgrade path attempted by **someone else** for victim's email (security check) | Upgrade refused: `$isSelfEnrolment` check blocks it. Either falls through to dedup error or creates separate row. Verify victim's interest row is not silently merged into attacker's enrollment. |
-
-### Phase B: Direct enrollment (Open edition, no requirements)
-
-| # | Scenario | Expected state |
-|---|---|---|
-| B1 | Self-enrollment on edition without completion requirements + no admin approval | `status=confirmed` immediately. LMS access granted. `registered_at` set. Quote auto-created. |
-| B2 | Self-enrollment on edition with completion requirements (questionnaire/docs) | `status=pending`. No LMS access yet. `completion_tasks` JSON initialized with task list. |
-| B3 | Self-enrollment on edition with `requiresApproval=true` | `status=pending`. Awaiting admin confirm. |
-| B4 | Colleague enrollment (`enrollment_path=colleague`) — covered already in `shake-out-enrollment-v2-manifest.md` | Verify only that `enrolled_by` is set and `user_id` is the colleague, not the caller. |
-| B5 | Capacity full — concurrent enrollment racing the last seat | One succeeds, one gets `WP_Error('edition_full')`. Row count vs capacity holds under transaction (`countConfirmedForUpdate` + `FOR UPDATE` lock). |
-| B6 | Already-enrolled guard | Second `enroll()` for same user/edition returns `WP_Error('already_enrolled')`. No second row. |
+### Phase B: Direct enrollment on Open
+- B1 self-enrollment without requirements → `confirmed`
+- B2 self-enrollment with requirements → `pending`, completion_tasks set
+- B3 with `requiresApproval` → `pending` regardless of requirements
+- B4 colleague enrollment → already covered in `shake-out-enrollment-v2-manifest.md`
+- B5 concurrent enrollment race for last seat
+- B6 already-enrolled guard
 
 ### Phase C: Pending → Confirmed
-
-| # | Scenario | Expected state |
-|---|---|---|
-| C1 | User on pending row completes all `completion_tasks` (auto-approve path) | Status auto-promotes to `confirmed` (verify which service does this — likely `EnrollmentCompletion`). |
-| C2 | Admin clicks "Bevestigen" on a pending row | `confirmRegistration()` runs: `status=confirmed`, LMS access granted, `stride/registration/confirmed` event fires. |
-| C3 | Admin tries to confirm a non-pending row (e.g. already confirmed) | Returns `WP_Error('invalid_status')`. No state change. |
-| C4 | Pending row that requires approval — what unblocks it: tasks done OR admin click? | Verify exact semantics. If both, document precedence. |
+- C1 user completes all tasks → auto-promote? (which service)
+- C2 admin clicks "Bevestigen" → `confirmRegistration()`
+- C3 admin tries to confirm a non-pending row → error
+- C4 precedence when both task-completion and admin-confirm could apply
 
 ### Phase D: Completed
-
-| # | Scenario | Expected state |
-|---|---|---|
-| D1 | User completes course + all post-course tasks | `status=completed`, `completed_at` set. LMS access typically remains. Verify whether anything is revoked. |
-| D2 | LearnDash marks course complete but post-course tasks (evaluation) still pending | Status stays `confirmed`. `completion_tasks` updated. No premature `completed_at`. |
-| D3 | All tasks done but LearnDash course not 100% (e.g. quiz failed) | Status stays `confirmed`. Verify which signal wins. |
+- D1 user completes course + post-course tasks
+- D2 LearnDash complete but post-course tasks pending
+- D3 all tasks done but LearnDash quiz failed
 
 ### Phase E: Cancellation
+- E1 admin cancels confirmed → quote/seat/audit/mail
+- E2 admin cancels pending
+- E3 admin cancels interest (does cancel() handle non-terminal statuses gracefully?)
+- E4 user self-cancel (is the UI exposed?)
+- E5 re-enroll after cancel → reactivation logic at `RegistrationRepository.php:70-93`
+- E6 cancel a completed row — allowed?
 
-| # | Scenario | Expected state |
-|---|---|---|
-| E1 | Admin cancels a confirmed registration | `status=cancelled`, `cancelled_at` set. `stride/registration/cancelled` fires → quote cancelled → seat freed → audit log → notification mail. |
-| E2 | Admin cancels a pending registration | Same as E1. No quote may exist; verify graceful handling. |
-| E3 | Admin cancels an interest-only registration | Verify whether `cancel()` handles this gracefully or errors. Probably fine since `interest` is non-terminal. |
-| E4 | User attempts to cancel themselves | Verify whether self-cancel is exposed in UI/API. If not, document gap. If yes, verify same state change. |
-| E5 | **Re-enroll after cancel** | User on `cancelled` row re-enrolls in same edition → `RegistrationRepository.php:70` reactivates the existing row instead of creating a duplicate. `status` flips back to confirmed/pending. `cancelled_at` cleared? — verify. |
-| E6 | Cancel a row that's already `completed` | Verify whether allowed. If yes, what does it mean (revoke certificate?). If no, error. |
+### Phase F: Interest/Waitlist upgrade paths
+- F1 logged-in interest → user later enrolls (Announcement → Open flip) → row promoted
+- F2 anonymous interest → user later registers WP account with matching email → enrolls → upgradeFromInterest path security check holds
+- F3 **Waitlist promotion** — admin manually contacts waitlist user, user self-enrolls when Edition flips back to Open → does the waitlist row get reused? (Currently: no — a NEW row would be created because `hasActiveRegistration` excludes waitlist? — verify)
+- F4 `enrollment_data` round-trips: interest → enrollment_personal → intake → evaluation
 
-### Phase F: Edge cases on data columns
+### Phase G: Data column edge cases
+- G1 Anonymous interest with `user_id=NULL` in all repository read paths (find, findByEmailAndEdition, findByCompany, exports)
+- G2 `completion_tasks` merge on partial update
+- G3 `selections` lock at edition start
+- G4 `company_id` propagation through Partner API
 
-| # | Scenario | Expected state |
-|---|---|---|
-| F1 | Anonymous interest with `user_id=NULL` survives all repository read paths | `find()`, `findByEmailAndEdition()`, `findByCompany()`, exports — no PHP warnings, no broken UI. |
-| F2 | `enrollment_data` round-trips through stages | After full flow: contains `interest` + `enrollment_personal` (+ optional `enrollment_billing`, `intake`, `evaluation`) keys. JSON valid at every step. |
-| F3 | `completion_tasks` JSON survives partial updates | Marking one task complete doesn't wipe other tasks. `updateCompletionTasks()` does merge, not replace (verify). |
-| F4 | `selections` (Keuzecursus) locked at edition start | After `selections_locked_at` is set, user can no longer change session selections via the API. |
-| F5 | `company_id` propagation | Set on register when user has `_stride_company_id` meta. Partner API queries by company return correct rows. |
-| F6 | `quote_id` ↔ registration linkage | Quote cancellation cancels its registration (and vice versa). Verify no orphaned quotes after registration cancel. |
-
-### Phase G: Dead enum values (FLAG, do not fix)
-
-| # | Scenario | Expected outcome |
-|---|---|---|
-| G1 | Manually insert a row with `status='waitlist'` via SQL, browse admin | UI shows "Wachtlijst" label correctly but no business logic acts on it (no waitlist queue, no promote-to-pending). Document the gap. |
-| G2 | Manually insert a row with `status='withdrawn'` via SQL | Re-enrollment dedup treats it like cancelled. Verify nothing else (audit, notifications, reports) special-cases it. |
-| G3 | Look for any UI affordance to write either status | Grep admin templates + JS for status-change controls. Confirm dropdowns expose only the implemented states. |
+### Phase H: Dead enum value (withdrawn)
+- H1 Manually insert `status='withdrawn'` row → confirm UI handles label, no special-case business logic
+- H2 Find any UI surface that could write withdrawn
 
 ---
 
-## What's already covered (do not re-test)
+## Open product/design decisions
 
-These exist in prior manifests — link, don't duplicate:
-
-- Enrollment form mechanics (self/colleague/voucher) → `shake-out-enrollment-v2-manifest.md`
-- Completion tasks UX (questionnaire/documents/approval card) → `shake-out-enrollment-completion-manifest.md`
-- Online enrollment scenarios (closed LD, mobile CTA, webinar) → `shake-out-online-enrollment-manifest.md`
-
-This manifest focuses on the **state machine and data persistence** — what each status means, when it's written, what side-effects fire, what data lives where.
+1. **BUG-RL-3** — Should anonymous users reach the enrollment route for interest/waitlist editions? Or should waitlist (like interest) have its own shortcode + dedicated page, with the CTA pointing there?
+2. **Withdrawn semantics** — Implement user-initiated withdraw distinct from admin-initiated cancel? Or remove withdrawn from the enum entirely?
+3. **F3 waitlist upgrade** — When admin invites a waitlisted user and they self-enroll: should the waitlist row be reused/promoted, or a fresh row created (current behavior)?
 
 ---
 
-## Test approach
+## Files touched during smoke test
 
-1. **Setup:** reseed DB. Create 3 editions in 3 states: Announcement, Open (no requirements), Open (with questionnaire + approval). Plus 1 Full edition for G1.
-2. **Phase A** — browser + anonymous tab + Mailpit for admin notifications.
-3. **Phase B/C/D** — browser as seed_student, admin actions as seed_admin.
-4. **Phase E** — verify cancel side-effects via `wp db query` on `quote`/`registration` rows + audit log table.
-5. **Phase F** — direct `wp eval` + DB inspection.
-6. **Phase G** — manual SQL inserts, then exercise admin UI.
-7. Log each scenario as PASS / BUG-RL-N with severity.
-
----
-
-## Open questions before execution
-
-- C1: which service actually flips pending → confirmed when tasks complete? (`EnrollmentCompletion` exists but exact code path needs tracing.)
-- D3: precedence between completion_tasks done vs LearnDash course completion when both are required.
-- E5: does cancel reactivation clear `cancelled_at`, or does it leave stale data?
-- E6: is cancelling a completed registration allowed? What's the audit/certificate impact?
-
-These should be answered during execution (via code reading + browser testing) and incorporated as findings.
+- `RegistrationRepository.php` — anonymous-allowed status whitelist (BUG-RL-1)
+- `RegistrationRepository.php` — added `findByEmailAndEditionForStage()` helper (waitlist dedup)
+- `StrideMailBridge.php` — bumped seed version to '3' (BUG-RL-2)
+- `OfferingStatus.php` — added `allowsWaitlist()`
+- `EnrollmentService.php` — added `registerWaitlist()`
+- `EnrollmentRouter.php` — added waitlist mode to `computeEnrollmentMode()`
+- `QuestionnaireHandler.php` — added `handleSubmitWaitlist()` + public action registration
+- `QuestionnaireRepository.php` — added `waitlist` to STAGES
+- `QuestionnaireSettingsPage.php` — added waitlist stage label + badge color
+- `enrollment/form.php` — allow waitlist mode when enrollment is closed
+- `enrollment.js` — added waitlist stepConfig + submit label/action
+- `step-personal.php` — waitlist gets same UI treatment as interest
+- `single-vad_edition.php` — desktop + mobile CTAs for `allowsWaitlist()` editions
+- `EditionRegistrationExporter.php` — partition out interest/waitlist + add Interesse/Wachtlijst sheets
+- `Tests/Unit/Questionnaire/QuestionnaireRepositoryTest.php` — updated STAGES expected list
