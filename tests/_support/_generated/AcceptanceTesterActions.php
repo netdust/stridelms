@@ -1,4 +1,4 @@
-<?php  //[STAMP] b6ec55ca68a019fe36f55b0814a5a635
+<?php  //[STAMP] ed272662ecd9d74ae061a8d5ce564dab
 // phpcs:ignoreFile
 namespace Tests\Support\_generated;
 
@@ -8415,6 +8415,18 @@ trait AcceptanceTesterActions
      */
     public function grabEditionWithMinSessions(int $minSessions = 2): int {
         return $this->getScenario()->runStep(new \Codeception\Step\Action('grabEditionWithMinSessions', func_get_args()));
+    }
+
+ 
+    /**
+     * [!] Method is generated. Documentation taken from corresponding module.
+     *
+     * Find a published vad_edition that has at least one registration.
+     * Avoids hardcoded edition IDs in tests — seed data changes and IDs drift.
+     * @see \Tests\Support\Helper\Acceptance::grabEditionWithRegistrations()
+     */
+    public function grabEditionWithRegistrations(): int {
+        return $this->getScenario()->runStep(new \Codeception\Step\Action('grabEditionWithRegistrations', func_get_args()));
     }
 
  

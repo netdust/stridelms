@@ -86,6 +86,46 @@ class Acceptance extends Module
     }
 
     /**
+     * Find a published vad_edition that has at least one registration whose
+     * user still exists. Seed data can contain orphaned registrations
+     * (e.g. user_id 2220323 → no matching wp_users row) — those would hit
+     * the user_unavailable guard in RegistrationModalController and break
+     * tests that don't care about that branch.
+     */
+    public function grabEditionWithRegistrations(): int
+    {
+        $db = $this->getModule('WPDb');
+
+        $userIds = array_flip(array_map('intval', $db->grabColumnFromDatabase('stride_users', 'ID')));
+
+        // Load (edition_id, user_id) pairs together so we can correlate per-row.
+        $regs = $db->grabAllFromDatabase('stride_vad_registrations', 'edition_id, user_id', []);
+
+        $counts = [];
+        foreach ($regs as $r) {
+            $userId = (int) $r['user_id'];
+            $editionId = (int) $r['edition_id'];
+            if (isset($userIds[$userId])) {
+                $counts[$editionId] = ($counts[$editionId] ?? 0) + 1;
+            }
+        }
+        arsort($counts);
+
+        foreach (array_keys($counts) as $editionId) {
+            $exists = (int) $db->grabFromDatabase('stride_posts', 'ID', [
+                'ID'          => $editionId,
+                'post_type'   => 'vad_edition',
+                'post_status' => 'publish',
+            ]);
+            if ($exists) {
+                return $exists;
+            }
+        }
+
+        return 0;
+    }
+
+    /**
      * Activate a user account using the test activation helper.
      *
      * This bypasses email verification by directly setting the activation
