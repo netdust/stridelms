@@ -115,6 +115,22 @@ final class EditionRegistrationMetabox
                     <?php $this->renderAttendanceTab($post, $registrations, $users, $userMeta); ?>
                 </div>
             </div>
+
+            <div id="stride-registration-modal" class="stride-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="stride-registration-modal-title">
+                <div class="stride-modal-backdrop" data-stride-modal-close></div>
+                <div class="stride-modal-dialog">
+                    <header class="stride-modal-header">
+                        <h2 id="stride-registration-modal-title" class="stride-modal-title"></h2>
+                        <button type="button" class="stride-modal-close" data-stride-modal-close aria-label="<?php esc_attr_e('Sluiten', 'stride'); ?>">
+                            <span class="dashicons dashicons-no-alt"></span>
+                        </button>
+                    </header>
+                    <div class="stride-modal-content"></div>
+                    <div class="stride-modal-skeleton" hidden>
+                        <p><?php esc_html_e('Laden…', 'stride'); ?></p>
+                    </div>
+                </div>
+            </div>
         </div>
         <?php
     }
@@ -267,6 +283,35 @@ final class EditionRegistrationMetabox
                                     <span class="dashicons dashicons-yes-alt" style="color: #2271b1;"></span>
                                 </button>
                             <?php endif; ?>
+
+                            <span class="stride-action-divider" aria-hidden="true"></span>
+
+                            <button type="button"
+                                    class="button-link stride-view-enrollment"
+                                    data-reg-id="<?php echo esc_attr((string) $regId); ?>"
+                                    title="<?php esc_attr_e('Inschrijvingsgegevens bekijken', 'stride'); ?>">
+                                <span class="dashicons dashicons-clipboard"></span>
+                            </button>
+                            <button type="button"
+                                    class="button-link stride-view-completion"
+                                    data-reg-id="<?php echo esc_attr((string) $regId); ?>"
+                                    title="<?php esc_attr_e('Voltooiingsdata bekijken', 'stride'); ?>">
+                                <span class="dashicons dashicons-yes"></span>
+                            </button>
+                            <?php if (!empty($quotes[$regId]['id'])): ?>
+                                <a href="<?php echo esc_url((string) get_edit_post_link((int) $quotes[$regId]['id'])); ?>"
+                                   class="button-link stride-view-quote"
+                                   title="<?php esc_attr_e('Offerte bekijken', 'stride'); ?>"
+                                   target="_blank" rel="noopener">
+                                    <span class="dashicons dashicons-media-text"></span>
+                                </a>
+                            <?php else: ?>
+                                <span class="button-link stride-view-quote disabled"
+                                      title="<?php esc_attr_e('Geen offerte', 'stride'); ?>"
+                                      aria-disabled="true">
+                                    <span class="dashicons dashicons-media-text"></span>
+                                </span>
+                            <?php endif; ?>
                         </td>
                     </tr>
                     <tr class="registration-detail" data-reg-id="<?php echo esc_attr((string) $regId); ?>" style="display:none">
@@ -283,13 +328,14 @@ final class EditionRegistrationMetabox
     private function renderDetailRow(\WP_User $user, array $meta, array $registration, array $completionTasks, ?array $quote = null): void
     {
         $phone = $meta['phone'] ?? '';
+        $organisation = $meta['organisation'] ?? '';
+        $department = $meta['department'] ?? '';
         $company = $meta['billing_company'] ?? '';
         $vatNumber = $meta['billing_vat'] ?? '';
-        $department = $meta['department'] ?? '';
         $notes = $registration['notes'] ?? '';
-        $enrollmentData = $this->getEnrollmentData($registration);
 
-        $organisation = $meta['organisation'] ?? '';
+        $hasContent = ($phone || $organisation || $department || $vatNumber || $notes
+            || ($company && $company !== $organisation));
         ?>
         <div class="stride-detail-panels">
             <dl class="stride-detail-dl">
@@ -313,89 +359,14 @@ final class EditionRegistrationMetabox
                     <dt><?php esc_html_e('BTW-nummer', 'stride'); ?></dt>
                     <dd><?php echo esc_html($vatNumber); ?></dd>
                 <?php endif; ?>
-                <?php
-                // Show extra fields from enrollment_data (excluding organisation, already shown above)
-                foreach ($enrollmentData as $key => $value) {
-                    if ($key === 'organisation' || $key === 'department' || $value === '' || $value === false) {
-                        continue;
-                    }
-                    ?>
-                    <dt><?php echo esc_html(ucfirst(str_replace('_', ' ', $key))); ?></dt>
-                    <dd><?php echo esc_html($value === true ? __('Ja', 'stride') : (string) $value); ?></dd>
-                <?php } ?>
-                <?php if ($quote): ?>
-                    <?php
-                    $quoteStatus = \Stride\Domain\QuoteStatus::tryFrom($quote['status'] ?? '');
-                    $quoteTotal = (int) ($quote['total'] ?? 0);
-                    ?>
-                    <dt><?php esc_html_e('Offerte', 'stride'); ?></dt>
-                    <dd>
-                        <a href="<?php echo esc_url(get_edit_post_link((int) $quote['id'])); ?>">
-                            <?php echo esc_html($quote['quote_number'] ?? '—'); ?>
-                        </a>
-                        <?php if ($quoteStatus): ?>
-                            <span class="stride-status-badge small <?php echo esc_attr($quoteStatus->value); ?>">
-                                <?php echo esc_html($quoteStatus->label()); ?>
-                            </span>
-                        <?php endif; ?>
-                        <?php if ($quoteTotal > 0): ?>
-                            — &euro; <?php echo esc_html(number_format($quoteTotal / 100, 2, ',', '.')); ?>
-                        <?php endif; ?>
-                    </dd>
-                <?php endif; ?>
                 <?php if ($notes): ?>
                     <dt><?php esc_html_e('Opmerking', 'stride'); ?></dt>
                     <dd><?php echo esc_html($notes); ?></dd>
                 <?php endif; ?>
-                <?php if (!$phone && !$organisation && !$department && !$vatNumber && !$notes && empty($enrollmentData) && empty($completionTasks) && !$quote): ?>
+                <?php if (!$hasContent): ?>
                     <dd class="stride-detail-empty"><?php esc_html_e('Geen aanvullende gegevens.', 'stride'); ?></dd>
                 <?php endif; ?>
             </dl>
-
-            <?php if (!empty($completionTasks)): ?>
-                <?php
-                $taskLabels = [
-                    'questionnaire'     => __('Vragenlijst', 'stride'),
-                    'documents'         => __('Documenten', 'stride'),
-                    'approval'          => __('Goedkeuring', 'stride'),
-                    'session_selection' => __('Sessiekeuze', 'stride'),
-                    'post_evaluation'   => __('Evaluatie', 'stride'),
-                    'post_documents'    => __('Documenten (na afloop)', 'stride'),
-                    'post_approval'     => __('Goedkeuring (na afloop)', 'stride'),
-                ];
-                ?>
-                <ul class="stride-task-list">
-                    <?php foreach ($completionTasks as $taskType => $task): ?>
-                        <?php
-                        $taskStatus = $task['status'] ?? 'pending';
-                        $taskLabel = $taskLabels[$taskType] ?? ucfirst(str_replace('_', ' ', $taskType));
-                        $taskData = $task['data'] ?? [];
-                        ?>
-                        <li class="stride-task-item <?php echo esc_attr($taskStatus); ?>">
-                            <span class="dashicons <?php echo $taskStatus === 'completed' ? 'dashicons-yes-alt' : 'dashicons-clock'; ?>"></span>
-                            <span class="task-label"><?php echo esc_html($taskLabel); ?></span>
-
-                            <?php if (!empty($taskData['files']) && is_array($taskData['files'])): ?>
-                                <div class="task-files">
-                                    <?php foreach ($taskData['files'] as $fileId): ?>
-                                        <?php
-                                        $url = wp_get_attachment_url((int) $fileId);
-                                        $filename = basename(get_attached_file((int) $fileId) ?: '');
-                                        if (!$url) {
-                                            continue;
-                                        }
-                                        ?>
-                                        <a href="<?php echo esc_url($url); ?>" target="_blank" class="task-file-link">
-                                            <span class="dashicons dashicons-media-default"></span>
-                                            <?php echo esc_html($filename ?: __('Bestand', 'stride')); ?>
-                                        </a>
-                                    <?php endforeach; ?>
-                                </div>
-                            <?php endif; ?>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            <?php endif; ?>
         </div>
         <?php
     }
