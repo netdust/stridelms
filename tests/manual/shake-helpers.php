@@ -17,11 +17,23 @@ function shake_reset_editions(): void
     $repo->updateStatus(13265, OfferingStatus::Open);
     $repo->updateStatus(13311, OfferingStatus::Open);
 
-    // Clear any post-course requirement meta leaked from prior shake-out tests.
-    // These metas drive the "defer LD completion" branch in processCompletion;
-    // leftover values pollute every subsequent flow.
+    // Push test editions into the near future so EditionService::isPast() doesn't
+    // reject our enrollment-path scenarios. Seed dates are stale relative to
+    // wall-clock time; we set them to today + 30/60 days so the suite works
+    // regardless of when it's run.
+    //
+    // Also clear any post-course requirement meta leaked from prior runs.
+    // Split into two updateMetaBatch calls: a single batch that mixes string
+    // date fields with boolean fields returns false on the whole batch when
+    // any single field rejects, leaving the others untouched.
     $model = ntdst_data()->get('vad_edition');
+    $future_start = date('Y-m-d', strtotime('+30 days'));
+    $future_end   = date('Y-m-d', strtotime('+60 days'));
     foreach ([13222, 13224, 13230, 13234, 13240, 13257, 13265, 13311] as $id) {
+        $model->updateMetaBatch($id, [
+            'start_date' => $future_start,
+            'end_date'   => $future_end,
+        ]);
         $model->updateMetaBatch($id, [
             'post_requires_evaluation' => false,
             'post_requires_documents'  => false,

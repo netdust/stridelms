@@ -42,6 +42,7 @@ $course     = $course_id ? get_post($course_id) : null;
 $status     = $editionService->getStatus($edition_id);
 $price      = $editionService->getPrice($edition_id, get_current_user_id() ?: null);
 $can_enroll  = $editionService->canEnroll($edition_id);
+$is_past     = $editionService->isPast($edition_id);
 $capacity    = $editionService->getCapacity($edition_id);
 $enrollmentService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class);
 $is_enrolled = is_user_logged_in() && $enrollmentService->isEnrolled(get_current_user_id(), $edition_id);
@@ -176,12 +177,18 @@ get_header();
                 <h1 class="font-heading text-3xl lg:text-4xl font-bold text-text flex-1">
                     <?php echo $course ? esc_html(get_the_title($course)) : the_title(); ?>
                 </h1>
-                <?php
-                stridence_template_part('partials/badge-status', null, [
-                    'status' => $status->value,
-                    'spots'  => $spots,
-                ]);
-                ?>
+                <?php if ($is_past) : ?>
+                    <span class="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-surface-alt text-text-muted">
+                        <?php esc_html_e('Afgelopen', 'stridence'); ?>
+                    </span>
+                <?php else : ?>
+                    <?php
+                    stridence_template_part('partials/badge-status', null, [
+                        'status' => $status->value,
+                        'spots'  => $spots,
+                    ]);
+                    ?>
+                <?php endif; ?>
             </div>
 
             <div class="flex flex-wrap gap-6 text-text-muted">
@@ -432,7 +439,13 @@ get_header();
             <div class="lg:col-span-1">
                 <div class="card p-6 sticky top-24">
                     <h3 class="font-heading font-semibold text-lg mb-4">
-                        <?php esc_html_e('Inschrijven', 'stridence'); ?>
+                        <?php
+                        if ($is_past) {
+                            esc_html_e('Deze editie is afgelopen', 'stridence');
+                        } else {
+                            esc_html_e('Inschrijven', 'stridence');
+                        }
+                        ?>
                     </h3>
 
                     <div class="space-y-3 mb-6">
@@ -479,6 +492,10 @@ get_header();
                         <span class="btn-secondary w-full text-center block">
                             <?php esc_html_e('Ingeschreven', 'stridence'); ?>
                         </span>
+                    <?php elseif ($is_past) : ?>
+                        <button type="button" class="btn-secondary w-full text-center opacity-50 cursor-not-allowed" disabled>
+                            <?php esc_html_e('Editie is afgelopen', 'stridence'); ?>
+                        </button>
                     <?php elseif ($can_enroll) : ?>
                         <a href="<?php echo esc_url(stride_enrollment_url($edition_id)); ?>" class="btn-primary w-full text-center">
                             <?php esc_html_e('Nu inschrijven', 'stridence'); ?>
@@ -507,13 +524,15 @@ get_header();
         </div>
     </div>
 
-    <!-- Mobile Sticky CTA (hidden on lg+) -->
+    <!-- Mobile Sticky CTA (hidden on lg+). Past editions show no CTA. -->
     <?php if ($enrolled_cta) : ?>
         <div class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 lg:hidden z-40 safe-area-bottom">
             <a href="<?php echo esc_url($enrolled_cta['url']); ?>" class="btn-primary w-full text-center">
                 <?php echo esc_html($enrolled_cta['label']); ?>
             </a>
         </div>
+    <?php elseif ($is_past) : ?>
+        <?php /* No sticky CTA for past editions. */ ?>
     <?php elseif ($can_enroll) : ?>
         <div class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 lg:hidden z-40 safe-area-bottom">
             <a href="<?php echo esc_url(stride_enrollment_url($edition_id)); ?>" class="btn-primary w-full text-center">

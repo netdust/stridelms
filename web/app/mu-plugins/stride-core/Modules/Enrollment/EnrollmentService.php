@@ -163,6 +163,18 @@ final class EnrollmentService extends AbstractService
             return new WP_Error('invalid_edition', 'Edition does not exist');
         }
 
+        // Reject when the edition is in the past. OfferingStatus is admin-managed
+        // and doesn't auto-transition when a date passes, so without this guard
+        // an admin who forgot to update the status would let users enroll in
+        // something that already happened.
+        if ($this->editions->isPast($editionId)) {
+            ntdst_log('enrollment')->warning('Enrollment rejected: edition is in the past', [
+                'user_id' => $userId,
+                'edition_id' => $editionId,
+            ]);
+            return new WP_Error('edition_past', 'Deze editie is voorbij');
+        }
+
         // Check enrollment allowed
         $status = $this->editions->getStatus($editionId);
         if (!$status->allowsEnrollment()) {

@@ -258,6 +258,11 @@ class EditionService extends AbstractService implements EditionQueryInterface
 
     /**
      * Check if enrollment is allowed.
+     *
+     * Combines admin-managed status, capacity, AND a calendar-aware past-check.
+     * The past-check guards against an admin who forgot to flip an Open edition
+     * to Completed/Archived after its end_date passed — we won't let users
+     * enroll in something that already happened.
      */
     public function canEnroll(int $editionId): bool
     {
@@ -267,7 +272,28 @@ class EditionService extends AbstractService implements EditionQueryInterface
             return false;
         }
 
+        if ($this->isPast($editionId)) {
+            return false;
+        }
+
         return $this->hasAvailableSpots($editionId);
+    }
+
+    /**
+     * True when the edition's end_date (or start_date as fallback) is in the past.
+     *
+     * Pure calendar check — independent of OfferingStatus. Use this anywhere
+     * UI logic depends on "can a user still take action on this edition?".
+     */
+    public function isPast(int $editionId): bool
+    {
+        $endDate   = (string) $this->repository->getField($editionId, 'end_date', '');
+        $startDate = (string) $this->repository->getField($editionId, 'start_date', '');
+        $reference = $endDate ?: $startDate;
+        if (!$reference) {
+            return false;
+        }
+        return strtotime($reference) < strtotime(date('Y-m-d'));
     }
 
     /**
