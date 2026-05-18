@@ -54,6 +54,7 @@ final class EditionDuplicator implements NTDST_Service_Meta
     {
         add_filter('post_row_actions', [$this, 'addDuplicateRowAction'], 10, 2);
         add_action('admin_action_stride_duplicate_edition', [$this, 'handleDuplicate']);
+        add_action('admin_notices', [$this, 'renderDuplicateNotice']);
     }
 
     public function addDuplicateRowAction(array $actions, WP_Post $post): array
@@ -83,7 +84,69 @@ final class EditionDuplicator implements NTDST_Service_Meta
 
     public function handleDuplicate(): void
     {
-        // implemented in later tasks
+        $sourceId = isset($_GET['edition_id']) ? (int) $_GET['edition_id'] : 0;
+
+        if ($sourceId <= 0) {
+            $this->redirectToList('missing_id');
+        }
+
+        $nonce = isset($_GET['_wpnonce']) ? sanitize_text_field(wp_unslash($_GET['_wpnonce'])) : '';
+        if (!wp_verify_nonce($nonce, 'stride_duplicate_edition_' . $sourceId)) {
+            $this->redirectToList('invalid_nonce');
+        }
+
+        if (!current_user_can('edit_post', $sourceId)) {
+            $this->redirectToList('forbidden');
+        }
+
+        $newId = $this->duplicate($sourceId);
+
+        if (is_wp_error($newId)) {
+            $this->redirectToList('duplicate_failed');
+        }
+
+        $editUrl = get_edit_post_link($newId, 'raw');
+        wp_safe_redirect($editUrl ?: admin_url('edit.php?post_type=vad_edition'));
+        exit;
+    }
+
+    private function redirectToList(string $notice): never
+    {
+        $url = add_query_arg(
+            ['post_type' => 'vad_edition', 'stride_notice' => $notice],
+            admin_url('edit.php')
+        );
+        wp_safe_redirect($url);
+        exit;
+    }
+
+    public function renderDuplicateNotice(): void
+    {
+        if (empty($_GET['stride_notice'])) {
+            return;
+        }
+
+        $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+        if (!$screen || $screen->post_type !== EditionCPT::POST_TYPE) {
+            return;
+        }
+
+        $notice = sanitize_key((string) $_GET['stride_notice']);
+        $messages = [
+            'missing_id'       => __('Geen editie geselecteerd om te dupliceren.', 'stride'),
+            'invalid_nonce'    => __('Beveiligingscontrole mislukt. Probeer opnieuw.', 'stride'),
+            'forbidden'        => __('Geen toestemming om deze editie te dupliceren.', 'stride'),
+            'duplicate_failed' => __('Dupliceren mislukt. Controleer de bron-editie.', 'stride'),
+        ];
+
+        if (!isset($messages[$notice])) {
+            return;
+        }
+
+        printf(
+            '<div class="notice notice-error is-dismissible"><p>%s</p></div>',
+            esc_html($messages[$notice])
+        );
     }
 
     /**
