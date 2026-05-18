@@ -848,6 +848,42 @@ final class EditionAdminController
                 $exporter->export($editionId);
                 break;
 
+            case 'files':
+                $filesExporter = new EditionFilesZipExporter(
+                    $this->editionService,
+                    $this->editionRepository,
+                    ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class),
+                );
+                $filesExporter->export($editionId);
+                break;
+
+            case 'bundle':
+                $filesExporter = new EditionFilesZipExporter(
+                    $this->editionService,
+                    $this->editionRepository,
+                    ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class),
+                );
+                $bundleExporter = new EditionBundleZipExporter(
+                    new EditionRegistrationExporter(
+                        $this->editionService,
+                        $this->editionRepository,
+                        $this->sessionService,
+                        $this->attendanceRepository,
+                    ),
+                    new EditionNamecardExporter(
+                        $this->editionService,
+                        $this->editionRepository,
+                    ),
+                    new EditionAttendanceExporter(
+                        $this->editionService,
+                        $this->editionRepository,
+                        $this->sessionService,
+                    ),
+                    $filesExporter,
+                );
+                $bundleExporter->export($editionId);
+                break;
+
             default: // 'excel'
                 $exporter = new EditionRegistrationExporter(
                     $this->editionService,
