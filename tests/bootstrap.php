@@ -53,6 +53,9 @@ require_once __DIR__ . '/Stubs/stride-infrastructure-stubs.php';
 // Base test case
 require_once __DIR__ . '/TestCase.php';
 
+// Define NTDST_PATH so files that reference it load cleanly
+defined('NTDST_PATH') || define('NTDST_PATH', dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core');
+
 // Load NTDST Core classes needed for testing
 $ntdstCoreFiles = [
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/api/Response.php',
@@ -63,6 +66,7 @@ $ntdstCoreFiles = [
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/api/Endpoints.php',
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/core/Theme.php',
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/api/MetaboxGenerator.php',
+    dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/services/Mailer.php',
 ];
 
 foreach ($ntdstCoreFiles as $file) {
