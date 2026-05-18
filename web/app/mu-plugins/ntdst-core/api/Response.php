@@ -151,25 +151,30 @@ class NTDST_Response
     // =========================================================================
 
     /**
-     * Return JSON response
+     * Return JSON response.
+     *
+     * If the payload fails to serialize (non-UTF-8 strings, circular refs),
+     * we fall back to a structured error body rather than emitting a blank
+     * response that clients would mistake for a network failure.
      */
     public function json(): never
     {
         http_response_code($this->status);
         header('Content-Type: application/json');
 
-        if ($this->error) {
-            echo json_encode([
+        $payload = $this->error
+            ? ['success' => false, 'error' => $this->error]
+            : ['success' => true, 'data' => $this->data];
+
+        $body = json_encode($payload);
+        if ($body === false) {
+            $body = json_encode([
                 'success' => false,
-                'error' => $this->error,
-            ]);
-        } else {
-            echo json_encode([
-                'success' => true,
-                'data' => $this->data,
+                'error' => 'serialization_failed: ' . json_last_error_msg(),
             ]);
         }
 
+        echo $body;
         exit;
     }
 
@@ -267,7 +272,12 @@ class NTDST_Response
     }
 
     /**
-     * Send file response
+     * Send file response.
+     *
+     * Filename is sanitized to strip CRLF (header injection) and double
+     * quotes (Content-Disposition value boundary). Adds both `filename=`
+     * (ASCII fallback) and `filename*=UTF-8''…` per RFC 5987 so non-ASCII
+     * names (Dutch accents etc.) render correctly across browsers.
      */
     protected function sendFile(
         string $content,
@@ -277,9 +287,16 @@ class NTDST_Response
     ): never {
         $contentType ??= self::getMimeType($filename);
 
+        // basename strips paths; the regex strips header-injection chars
+        // and quotes that would break the Content-Disposition value.
+        $safe = preg_replace('/[\r\n"]/', '', basename($filename)) ?? '';
+        // ASCII fallback for `filename=`
+        $ascii = preg_replace('/[^\x20-\x7e]/', '_', $safe) ?? $safe;
+        $utf8 = "filename*=UTF-8''" . rawurlencode($safe);
+
         nocache_headers();
         header('Content-Type: ' . $contentType);
-        header('Content-Disposition: ' . $disposition . '; filename="' . basename($filename) . '"');
+        header('Content-Disposition: ' . $disposition . '; filename="' . $ascii . '"; ' . $utf8);
         header('Content-Length: ' . strlen($content));
 
         echo $content;
@@ -308,7 +325,12 @@ class NTDST_Response
     // =========================================================================
 
     /**
-     * Locate template file
+     * Locate template file.
+     *
+     * Defense-in-depth: ensures the resolved file is inside its declared
+     * template base. Stride's templates are hardcoded strings, but if any
+     * future caller passes a user-influenced template name, this prevents
+     * traversal like `../../../../etc/passwd`.
      */
     protected function locate(string $template): ?string
     {
@@ -322,7 +344,7 @@ class NTDST_Response
 
         foreach ($this->template_paths as $path) {
             $file = $path . '/' . $template;
-            if (file_exists($file)) {
+            if (file_exists($file) && $this->isInside($file, $path)) {
                 self::$template_cache[$template] = $file;
                 return $file;
             }
@@ -334,6 +356,19 @@ class NTDST_Response
         self::$template_cache[$template] = $result;
 
         return $result;
+    }
+
+    /**
+     * Check that a resolved file lives within an allowed base directory.
+     */
+    protected function isInside(string $file, string $base): bool
+    {
+        $realFile = realpath($file);
+        $realBase = realpath($base);
+        if ($realFile === false || $realBase === false) {
+            return false;
+        }
+        return str_starts_with($realFile, $realBase . DIRECTORY_SEPARATOR);
     }
 
     /**
@@ -376,9 +411,11 @@ class NTDST_Response
 /**
  * Create response instance
  */
-function ntdst_response(): NTDST_Response
-{
-    return new NTDST_Response();
+if (!function_exists('ntdst_response')) {
+    function ntdst_response(): NTDST_Response
+    {
+        return new NTDST_Response();
+    }
 }
 
 /**
@@ -386,10 +423,12 @@ function ntdst_response(): NTDST_Response
  *
  * @example ntdst_redirect(home_url('/dashboard'));
  */
-function ntdst_redirect(string $url, int $status = 302): never
-{
-    wp_safe_redirect($url, $status);
-    exit;
+if (!function_exists('ntdst_redirect')) {
+    function ntdst_redirect(string $url, int $status = 302): never
+    {
+        wp_safe_redirect($url, $status);
+        exit;
+    }
 }
 
 /**
@@ -397,9 +436,11 @@ function ntdst_redirect(string $url, int $status = 302): never
  *
  * @example ntdst_download($content, 'file.pdf');
  */
-function ntdst_download(string $content, string $filename, ?string $contentType = null): never
-{
-    ntdst_response()->download($content, $filename, $contentType);
+if (!function_exists('ntdst_download')) {
+    function ntdst_download(string $content, string $filename, ?string $contentType = null): never
+    {
+        ntdst_response()->download($content, $filename, $contentType);
+    }
 }
 
 /**
@@ -407,9 +448,11 @@ function ntdst_download(string $content, string $filename, ?string $contentType 
  *
  * @example ntdst_inline($pdf, 'document.pdf');
  */
-function ntdst_inline(string $content, string $filename, ?string $contentType = null): never
-{
-    ntdst_response()->inline($content, $filename, $contentType);
+if (!function_exists('ntdst_inline')) {
+    function ntdst_inline(string $content, string $filename, ?string $contentType = null): never
+    {
+        ntdst_response()->inline($content, $filename, $contentType);
+    }
 }
 
 // =============================================================================
