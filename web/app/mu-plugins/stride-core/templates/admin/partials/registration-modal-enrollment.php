@@ -87,6 +87,28 @@ $skipKeys = ['organisation', 'department'];
 
     <section class="stride-modal-section" data-section="documents" data-open="1">
         <h3 class="stride-modal-section-title"><?php esc_html_e('Documenten', 'stride'); ?></h3>
-        <p class="stride-modal-empty"><?php esc_html_e('Geen documenten geüpload.', 'stride'); ?></p>
+        <?php if (empty($documents)): ?>
+            <p class="stride-modal-empty"><?php esc_html_e('Geen documenten geüpload.', 'stride'); ?></p>
+        <?php else: ?>
+            <ul class="stride-modal-docs">
+                <?php foreach ($documents as $doc): ?>
+                    <li class="stride-modal-doc">
+                        <?php if (!empty($doc['url'])): ?>
+                            <a href="<?php echo esc_url($doc['url']); ?>" target="_blank" rel="noopener">
+                                <span class="dashicons dashicons-media-default"></span>
+                                <?php echo esc_html($doc['filename']); ?>
+                            </a>
+                        <?php else: ?>
+                            <span><?php echo esc_html($doc['filename']); ?></span>
+                        <?php endif; ?>
+                        <?php if (!empty($doc['uploaded_at'])): ?>
+                            <span class="stride-modal-doc-date">
+                                <?php echo esc_html(date_i18n('j M Y', strtotime((string) $doc['uploaded_at']))); ?>
+                            </span>
+                        <?php endif; ?>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
     </section>
 </div>

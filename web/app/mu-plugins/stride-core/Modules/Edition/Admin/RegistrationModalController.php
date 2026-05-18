@@ -131,7 +131,7 @@ final class RegistrationModalController
         $questionnaireAnswers = is_array($tasks['questionnaire']['data']['answers'] ?? null)
             ? $tasks['questionnaire']['data']['answers']
             : [];
-        $documents = []; // Filled in Task 9
+        $documents = $this->buildDocuments($tasks);
 
         ob_start();
         $partialPath = dirname(__DIR__, 3) . '/templates/admin/partials/registration-modal-enrollment.php';
@@ -175,6 +175,34 @@ final class RegistrationModalController
     private function renderCompletion(object $registration): string
     {
         return ''; // Implemented in Task 10
+    }
+
+    /**
+     * @return array<int, array{id:int, filename:string, url:string, uploaded_at:?string}>
+     */
+    private function buildDocuments(array $tasks): array
+    {
+        $docs = [];
+        foreach (['documents', 'post_documents'] as $taskKey) {
+            $files = $tasks[$taskKey]['data']['files'] ?? null;
+            if (!is_array($files)) {
+                continue;
+            }
+            foreach ($files as $fileId) {
+                $id = (int) $fileId;
+                if ($id <= 0) {
+                    continue;
+                }
+                $path = get_attached_file($id);
+                $docs[] = [
+                    'id' => $id,
+                    'filename' => $path ? basename((string) $path) : sprintf(__('Bestand #%d', 'stride'), $id),
+                    'url' => (string) wp_get_attachment_url($id),
+                    'uploaded_at' => get_post_field('post_date', $id) ?: null,
+                ];
+            }
+        }
+        return $docs;
     }
 
     private function decodeJson(mixed $value): array

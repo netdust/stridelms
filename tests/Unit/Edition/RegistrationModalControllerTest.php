@@ -201,4 +201,41 @@ class RegistrationModalControllerTest extends TestCase
         self::assertStringContainsString('Wat is uw ervaring?', $result['html']);
         self::assertStringContainsString('Veel', $result['html']);
     }
+
+    public function testEnrollmentModalRendersDocuments(): void
+    {
+        $reg = (object) [
+            'id' => 1, 'user_id' => 42, 'edition_id' => 99,
+            'enrollment_data' => '{}',
+            'completion_tasks' => wp_json_encode([
+                'documents' => ['status' => 'completed', 'data' => ['files' => [123]]],
+            ]),
+        ];
+
+        $registrations = $this->createMock(RegistrationRepository::class);
+        $registrations->method('find')->willReturn($reg);
+
+        $editionService = $this->createMock(EditionService::class);
+        $editionService->method('getEdition')->willReturn(new \WP_Post(['post_title' => 'E']));
+
+        global $_test_users;
+        $_test_users[42] = new \WP_User((object) ['ID' => 42, 'display_name' => 'Test User']);
+
+        $controller = new RegistrationModalController(
+            $editionService,
+            $this->createMock(SessionService::class),
+            $this->createMock(SessionSelection::class),
+            $registrations,
+        );
+        $result = $controller->buildPayload(1, 'enrollment');
+
+        unset($_test_users[42]);
+
+        // The unit test does not stub wp_get_attachment_url; just verify the section
+        // renders something other than the empty-state when files exist.
+        self::assertStringNotContainsString(
+            'Geen documenten geüpload',
+            $result['html'],
+        );
+    }
 }

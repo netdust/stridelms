@@ -1700,6 +1700,14 @@ if (!function_exists('get_attached_file')) {
     }
 }
 
+if (!function_exists('wp_get_attachment_url')) {
+    function wp_get_attachment_url($attachment_id = 0)
+    {
+        global $_test_attachment_urls;
+        return $_test_attachment_urls[$attachment_id] ?? false;
+    }
+}
+
 // Admin menu functions
 if (!function_exists('add_submenu_page')) {
     function add_submenu_page($parent_slug, $page_title, $menu_title, $capability, $menu_slug, $callback = '', $position = null)
