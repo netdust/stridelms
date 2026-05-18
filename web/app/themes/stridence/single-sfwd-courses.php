@@ -82,22 +82,19 @@ get_header();
     ]);
     ?>
 
-    <!-- Two Column Layout -->
+    <!-- Layout: two columns for online (content + LD sidebar), single column for in-person (editions are inline) -->
     <div class="container py-8 lg:py-12">
-        <div class="grid lg:grid-cols-3 gap-8 lg:gap-12">
-            <!-- Main Content (2/3) -->
-            <div class="lg:col-span-2 space-y-12">
-                <?php
-                stridence_template_part('templates/course/content', null, [
-                    'course_id' => $course_id,
-                    'is_online' => $is_online,
-                ]);
-                ?>
-            </div>
-
-            <!-- Sidebar (1/3) -->
-            <div class="lg:col-span-1">
-                <?php if ($is_online) : ?>
+        <?php if ($is_online) : ?>
+            <div class="grid lg:grid-cols-3 gap-8 lg:gap-12">
+                <div class="lg:col-span-2 space-y-12">
+                    <?php
+                    stridence_template_part('templates/course/content', null, [
+                        'course_id' => $course_id,
+                        'is_online' => $is_online,
+                    ]);
+                    ?>
+                </div>
+                <div class="lg:col-span-1">
                     <?php
                     stridence_template_part('templates/course/sidebar-online', null, [
                         'course_id'      => $course_id,
@@ -106,16 +103,19 @@ get_header();
                         'edition_price'  => $edition_price,
                     ]);
                     ?>
-                <?php else : ?>
-                    <?php
-                    stridence_template_part('templates/course/sidebar-edition', null, [
-                        'editions'  => $editions,
-                        'course_id' => $course_id,
-                    ]);
-                    ?>
-                <?php endif; ?>
+                </div>
             </div>
-        </div>
+        <?php else : ?>
+            <div class="max-w-4xl mx-auto space-y-12">
+                <?php
+                stridence_template_part('templates/course/content', null, [
+                    'course_id' => $course_id,
+                    'is_online' => $is_online,
+                    'editions'  => $editions,
+                ]);
+                ?>
+            </div>
+        <?php endif; ?>
     </div>
 
     <!-- Mobile Sticky CTA -->

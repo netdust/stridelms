@@ -5,8 +5,9 @@
  * Main content sections for course detail page.
  *
  * @param array $args {
- *     @type int  $course_id Course post ID
- *     @type bool $is_online Whether course is online
+ *     @type int   $course_id Course post ID
+ *     @type bool  $is_online Whether course is online
+ *     @type array $editions  Scheduled editions for in-person courses (optional)
  * }
  */
 
@@ -16,6 +17,7 @@ use Stride\Integrations\LearnDash\LearnDashHelper;
 
 $course_id = $args['course_id'] ?? get_the_ID();
 $is_online = $args['is_online'] ?? false;
+$editions  = $args['editions'] ?? [];
 
 ?>
 
@@ -93,6 +95,16 @@ endif;
         <?php echo apply_filters('the_content', get_post_field('post_content', $course_id)); ?>
     </div>
 </section>
+
+<!-- Edities Section (in-person courses only) -->
+<?php if (!$is_online) : ?>
+    <?php
+    stridence_template_part('templates/course/editions-list', null, [
+        'editions'  => $editions,
+        'course_id' => $course_id,
+    ]);
+    ?>
+<?php endif; ?>
 
 <!-- Programma Section -->
 <section id="programma" class="scroll-mt-32">
