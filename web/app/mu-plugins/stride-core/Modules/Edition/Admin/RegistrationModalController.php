@@ -57,7 +57,17 @@ final class RegistrationModalController
             return;
         }
 
-        wp_send_json_success(['html' => '', 'title' => '']);
+        $payload = $this->buildPayload($registrationId, $type);
+
+        if ($payload instanceof \WP_Error) {
+            wp_send_json_error(
+                ['message' => $payload->get_error_message()],
+                404,
+            );
+            return;
+        }
+
+        wp_send_json_success($payload);
     }
 
     /**
