@@ -112,11 +112,15 @@ class EditionFilesZipExporter
 
     public function dutchTaskKey(string $key): string
     {
+        // Fallback explicitly converts _ to - because real WP sanitize_title
+        // preserves underscores (the test stub does not). Without this, an
+        // unmapped task key like "foo_bar" would slug to "foo_bar" in prod
+        // and "foo-bar" in tests.
         return [
             'questionnaire'  => 'vragenlijst',
             'documents'      => 'documenten',
             'post_documents' => 'post-documenten',
-        ][$key] ?? sanitize_title($key);
+        ][$key] ?? str_replace('_', '-', sanitize_title($key));
     }
 
     /**

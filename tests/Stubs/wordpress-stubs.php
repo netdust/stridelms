@@ -252,11 +252,15 @@ if (!function_exists('sanitize_text_field')) {
 }
 
 if (!function_exists('sanitize_title')) {
+    /**
+     * Simplified stub of WP sanitize_title.
+     * NOT byte-identical to real WP: converts `_` to `-` (real WP preserves
+     * underscores), doesn't handle entities, periods, or UTF-8. Sufficient
+     * for the tests in this repo; do not rely on for entity/period inputs.
+     */
     function sanitize_title(string $title, string $fallback_title = '', string $context = 'save'): string
     {
         $title = strtolower($title);
-        // Match real WP sanitize_title_with_dashes: collapse whitespace AND
-        // underscores into dashes BEFORE stripping non-alphanum/dash chars.
         $title = preg_replace('/[\s_]+/', '-', $title);
         $title = preg_replace('/[^a-z0-9-]/', '', $title);
         $title = preg_replace('/-+/', '-', $title);
