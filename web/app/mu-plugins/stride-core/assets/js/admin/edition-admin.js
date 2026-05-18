@@ -1034,8 +1034,8 @@
 
             // Toggle detail row (clicking anywhere on the registration row)
             $(document).on('click', 'tr.stride-toggle-detail', function(e) {
-                // Don't toggle when clicking action buttons
-                if ($(e.target).closest('.stride-confirm-reg, .stride-reject-reg, .stride-approve-post-course').length) {
+                // Don't toggle when clicking action buttons or view-info icons
+                if ($(e.target).closest('.stride-confirm-reg, .stride-reject-reg, .stride-approve-post-course, .stride-view-enrollment, .stride-view-completion, .stride-view-quote').length) {
                     return;
                 }
                 var regId = $(this).data('reg-id');

@@ -3,6 +3,7 @@
  * @var array<string, array{status:string,label:string,completed_at:?string,completed_by:?string}> $taskRows
  * @var int $ldProgress         // 0–100
  * @var ?string $ldCompletionDate
+ * @var bool $showAttendance
  * @var float $hoursAttended
  * @var float $hoursTotal
  * @var string $certificateUrl  // '' if none
@@ -66,17 +67,19 @@ if (!defined('ABSPATH')) {
         <?php endif; ?>
     </section>
 
-    <section class="stride-modal-section" data-section="attendance" data-open="1">
-        <h3 class="stride-modal-section-title"><?php esc_html_e('Aanwezigheid', 'stride'); ?></h3>
-        <p>
-            <?php echo esc_html(sprintf(
-                /* translators: 1: hours attended, 2: hours required */
-                __('%1$s / %2$s uur', 'stride'),
-                number_format_i18n($hoursAttended, 1),
-                number_format_i18n($hoursTotal, 1),
-            )); ?>
-        </p>
-    </section>
+    <?php if (!empty($showAttendance)): ?>
+        <section class="stride-modal-section" data-section="attendance" data-open="1">
+            <h3 class="stride-modal-section-title"><?php esc_html_e('Aanwezigheid', 'stride'); ?></h3>
+            <p>
+                <?php echo esc_html(sprintf(
+                    /* translators: 1: hours attended, 2: hours required */
+                    __('%1$s / %2$s uur', 'stride'),
+                    number_format_i18n($hoursAttended, 1),
+                    number_format_i18n($hoursTotal, 1),
+                )); ?>
+            </p>
+        </section>
+    <?php endif; ?>
 
     <?php if (!empty($certificateUrl)): ?>
         <section class="stride-modal-section" data-section="cert" data-open="1">

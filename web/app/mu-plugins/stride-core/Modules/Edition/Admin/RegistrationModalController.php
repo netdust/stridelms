@@ -104,10 +104,15 @@ final class RegistrationModalController
 
         $editionId = (int) $registration->edition_id;
         $edition = $this->editionService->getEdition($editionId);
-        $editionTitle = $edition instanceof \WP_Post ? $edition->post_title : '';
+        if (!$edition instanceof \WP_Post) {
+            return new \WP_Error(
+                'edition_not_found',
+                __('De editie van deze inschrijving bestaat niet meer.', 'stride'),
+            );
+        }
 
         return [
-            'title' => $this->buildTitle($type, $user->display_name, $editionTitle),
+            'title' => $this->buildTitle($type, $user->display_name, $edition->post_title),
             'html'  => $this->renderHtml($type, $registration),
         ];
     }
@@ -195,13 +200,17 @@ final class RegistrationModalController
             }
         }
 
+        // Aanwezigheid is only meaningful when we can compute attended hours.
+        // Until SessionService::getHoursAttended lands, hide the section
+        // rather than render misleading "0,0 / X uur".
+        $showAttendance = method_exists($this->sessionService, 'getHoursAttended');
         $hoursAttended = 0.0;
         $hoursTotal = 0.0;
-        if (method_exists($this->sessionService, 'getTotalHours')) {
-            $hoursTotal = $this->sessionService->getTotalHours($editionId);
-        }
-        if (method_exists($this->sessionService, 'getHoursAttended')) {
+        if ($showAttendance) {
             $hoursAttended = $this->sessionService->getHoursAttended($userId, $editionId);
+            $hoursTotal = method_exists($this->sessionService, 'getTotalHours')
+                ? $this->sessionService->getTotalHours($editionId)
+                : 0.0;
         }
 
         ob_start();
