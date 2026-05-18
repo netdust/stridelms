@@ -5,27 +5,20 @@ declare(strict_types=1);
 namespace Stride\Tests\Unit\Edition;
 
 use Stride\Modules\Edition\EditionDuplicator;
-use Stride\Modules\Edition\EditionRepository;
-use Stride\Modules\Edition\SessionRepository;
 use Stride\Tests\TestCase;
 use WP_Error;
 
 class EditionDuplicatorTest extends TestCase
 {
-    private EditionRepository $editions;
-    private SessionRepository $sessions;
     private EditionDuplicator $duplicator;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->editions = $this->createMock(EditionRepository::class);
-        $this->sessions = $this->createMock(SessionRepository::class);
-
         // Bypass init() so hook registration doesn't fire in unit context.
         $this->duplicator = $this->getMockBuilder(EditionDuplicator::class)
-            ->setConstructorArgs([$this->editions, $this->sessions])
+            ->setConstructorArgs([])
             ->onlyMethods([])
             ->getMock();
     }
