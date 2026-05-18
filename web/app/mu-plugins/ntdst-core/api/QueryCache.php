@@ -1,6 +1,4 @@
 <?php
-declare(strict_types=1);
-
 /**
  * NTDST Query Cache - Centralized caching for data queries
  *
@@ -13,10 +11,11 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
-final class NTDST_Query_Cache
+class NTDST_Query_Cache
 {
     private static ?self $instance = null;
     private bool $hooks_registered = false;
+    private array $meta_prefixes = ['_ntdst_'];
 
     /**
      * Get singleton instance
@@ -136,6 +135,26 @@ final class NTDST_Query_Cache
     }
 
     /**
+     * Register a model meta prefix so direct post-meta updates invalidate cached queries.
+     */
+    public function registerMetaPrefix(string $prefix): void
+    {
+        if ($prefix === '' || in_array($prefix, $this->meta_prefixes, true)) {
+            return;
+        }
+
+        $this->meta_prefixes[] = $prefix;
+    }
+
+    /**
+     * Get registered model meta prefixes.
+     */
+    public function getMetaPrefixes(): array
+    {
+        return $this->meta_prefixes;
+    }
+
+    /**
      * Get cached value
      */
     public function get(string $key, string $group): mixed
@@ -245,7 +264,7 @@ final class NTDST_Query_Cache
     /**
      * Common logic for meta change invalidation
      *
-     * Only invalidates for _ntdst_ prefixed keys or explicitly important meta.
+     * Only invalidates for registered model prefixes or explicitly important meta.
      * Filters out WordPress internal meta to avoid unnecessary invalidations.
      */
     private function invalidateOnMetaChange(int $post_id, string $meta_key): void
@@ -259,13 +278,20 @@ final class NTDST_Query_Cache
         }
 
         // Allowlist: meta keys that should trigger invalidation
-        $should_invalidate = str_starts_with($meta_key, '_ntdst_')  // Our framework meta
-            || in_array($meta_key, [
-                '_thumbnail_id',   // Featured image
-                '_price',          // WooCommerce price
-                '_stock',          // WooCommerce stock
-                '_stock_status',   // WooCommerce stock status
-            ], true);
+        $should_invalidate = false;
+        foreach ($this->meta_prefixes as $prefix) {
+            if ($prefix !== '' && str_starts_with($meta_key, $prefix)) {
+                $should_invalidate = true;
+                break;
+            }
+        }
+
+        $should_invalidate = $should_invalidate || in_array($meta_key, [
+            '_thumbnail_id',   // Featured image
+            '_price',          // WooCommerce price
+            '_stock',          // WooCommerce stock
+            '_stock_status',   // WooCommerce stock status
+        ], true);
 
         // Allow filtering for custom post types to register their meta keys
         $should_invalidate = apply_filters(
