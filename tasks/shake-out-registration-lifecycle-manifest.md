@@ -168,11 +168,13 @@ These are not part of the unit-test or integration-test suites — they're opera
 
 ---
 
-## Open product/design decisions (not bugs)
+## Open product/design decisions (resolved 2026-05-18)
 
-1. **D4 follow-up:** Should `updateStatus(Completed)` preserve `completed_at` if it's already set, or always update it? Current behavior: always overwrites. Low impact but worth a one-line guard.
-2. **E7 follow-up:** Cancelling a completed registration is currently allowed. What's the right intent? Should it be blocked, or should it also revoke a certificate?
-3. **Withdrawn semantics:** Implement user-initiated withdraw distinct from admin-initiated cancel, OR remove withdrawn from the enum.
+All three deferred decisions have been resolved:
+
+1. **D4 → preserve timestamp.** `updateStatus(Completed)` and `updateStatus(Cancelled)` now set their timestamps only on the FIRST transition. Subsequent calls are idempotent on both status and timestamp. (`RegistrationRepository.php:771-790`)
+2. **E7 → block cancel on terminal states.** `EnrollmentService::cancel()` now returns `WP_Error('already_completed')` for completed rows and `WP_Error('already_cancelled')` for cancelled rows. Completed registrations are immutable. (`EnrollmentService.php:543-564`)
+3. **Withdrawn → removed from enum.** No code path wrote it, it was a dead value. Removed from `RegistrationStatus` enum, from `RegistrationTable` baseline, from reactivation lists in both `RegistrationRepository::create()` and `EnrollmentService::enroll()`, and from admin-dashboard JS labels. Live DB ENUM column altered to drop the value (no existing rows had it).
 
 ---
 
@@ -210,6 +212,6 @@ These are not part of the unit-test or integration-test suites — they're opera
 ## Final test status
 
 - ✅ 867 unit tests pass
-- ✅ 55+ shake-out pass markers across 7 phases, 0 fails
+- ✅ All 7 phases (50+ scenarios) PASS, 0 fails
 - ✅ All 6 bugs fixed
-- ⚠️ 3 product decisions deferred (D4, E7, withdrawn semantics)
+- ✅ All 3 product decisions resolved (D4 idempotent timestamps, E7 blocks cancel on completed, Withdrawn removed)
