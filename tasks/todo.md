@@ -4,6 +4,18 @@ Working scratchpad. Authoritative launch list lives in `docs/LAUNCH-CHECKLIST.md
 
 ---
 
+## Pre-existing test failure — investigate post-launch
+
+`WPDataConnectorTest::canUpdateExistingPlatform` (Integration) fails on staging — **not** caused by the 2026-05-18 ntdst-core port from PR #2 (verified: same failure with both the old and new Data.php).
+
+Symptom: platform name update doesn't stick — reload returns the original "Test Platform XXX" instead of "Updated Platform Name".
+
+Likely lives in `web/app/plugins/netdust-lti/src/ToolProvider/PlatformRepository.php::update()` which maps `name → title` and calls `$model->update($id, ['title' => ...])`. Either the title write or the find-after-update is reading stale data.
+
+Not blocking launch — LTI is not on the Phase 1 launch checklist.
+
+---
+
 ## Sprint 1 — Admin Dashboard ✅ DONE (2026-05-13)
 
 - Track 1 — all 23 bugs verified resolved (5 fixed, 18 already in code)
