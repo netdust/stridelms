@@ -18,12 +18,17 @@
 defined('ABSPATH') || exit;
 
 use Stride\Integrations\LearnDash\LearnDashHelper;
+use Stride\Domain\OfferingStatus;
 
-$course_id      = $args['course_id'] ?? get_the_ID();
-$is_online      = $args['is_online'] ?? false;
-$enrollment_url = $args['enrollment_url'] ?? '';
-$user_enrolled  = $args['user_enrolled'] ?? false;
-$user_id        = get_current_user_id();
+$course_id              = $args['course_id'] ?? get_the_ID();
+$is_online              = $args['is_online'] ?? false;
+$enrollment_url         = $args['enrollment_url'] ?? '';
+$user_enrolled          = $args['user_enrolled'] ?? false;
+$primary_edition_id     = (int) ($args['primary_edition_id'] ?? 0);
+$primary_edition_status = $args['primary_edition_status'] ?? null;
+$user_id                = get_current_user_id();
+
+$has_edition = $primary_edition_id > 0 && $primary_edition_status instanceof OfferingStatus;
 
 // Online course enrollment state
 $has_access  = $is_online && $user_id && LearnDashHelper::hasAccess($course_id, $user_id);
@@ -68,8 +73,23 @@ $is_open     = $is_online && LearnDashHelper::getAccessMode($course_id) === Lear
                 <?php esc_html_e('Inschrijven', 'stridence'); ?>
             </a>
 
+        <?php elseif ($is_online && $has_edition && $primary_edition_status->allowsInterest()) : ?>
+            <a href="<?php echo esc_url(home_url('/interesse/?editie=' . $primary_edition_id)); ?>" class="btn btn-primary w-full text-center">
+                <?php esc_html_e('Interesse melden', 'stridence'); ?>
+            </a>
+
+        <?php elseif ($is_online && $has_edition && $primary_edition_status->allowsWaitlist()) : ?>
+            <a href="<?php echo esc_url(home_url('/wachtlijst/?editie=' . $primary_edition_id)); ?>" class="btn btn-primary w-full text-center">
+                <?php esc_html_e('Op wachtlijst plaatsen', 'stridence'); ?>
+            </a>
+
+        <?php elseif ($is_online && $has_edition) : ?>
+            <button type="button" class="btn btn-secondary w-full text-center opacity-50 cursor-not-allowed" disabled>
+                <?php esc_html_e('Niet beschikbaar', 'stridence'); ?>
+            </button>
+
         <?php elseif ($is_online) : ?>
-            <!-- Online not enrolled: LD payment or fallback CTA -->
+            <!-- Online not enrolled, no edition: LD payment or fallback CTA -->
             <?php
             $ld_mobile_buttons = function_exists('learndash_payment_buttons') ? learndash_payment_buttons($course_id) : '';
             $mobile_price_type = LearnDashHelper::getAccessMode($course_id);

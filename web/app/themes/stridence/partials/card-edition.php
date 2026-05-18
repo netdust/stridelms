@@ -38,9 +38,20 @@ $edition_title   = $get('title');
 $start_date      = $get('start_date');
 $venue           = $get('venue') ?? $get('location');
 $price           = $get('price');
-$spots_remaining = $get('spots_remaining');
 $status          = $get('status', 'open');
 $course_id       = $get('course_id');
+
+// Derive spots remaining from capacity − registered. The raw meta
+// `_ntdst_spots_remaining` isn't part of the schema, so reading it returns
+// nothing. `capacity = 0` means unlimited — no countdown to show.
+$spots_remaining = null;
+if ($edition_id) {
+    $capacity = (int) $get('capacity', 0);
+    if ($capacity > 0) {
+        $editionSvc = ntdst_get(\Stride\Modules\Edition\EditionService::class);
+        $spots_remaining = max(0, $capacity - $editionSvc->getRegisteredCount((int) $edition_id));
+    }
+}
 
 // Fetch course if not provided but course_id available
 if (!$course && $course_id) {

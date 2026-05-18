@@ -19,12 +19,19 @@ defined('ABSPATH') || exit;
 
 use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Domain\Money;
+use Stride\Domain\OfferingStatus;
 
-$course_id       = $args['course_id'] ?? get_the_ID();
-$enrollment_url  = $args['enrollment_url'] ?? '';
-$stride_enrolled = $args['user_enrolled'] ?? false;
-$edition_price   = $args['edition_price'] ?? null; // Money object from edition
-$user_id         = get_current_user_id();
+$course_id              = $args['course_id'] ?? get_the_ID();
+$enrollment_url         = $args['enrollment_url'] ?? '';
+$stride_enrolled        = $args['user_enrolled'] ?? false;
+$edition_price          = $args['edition_price'] ?? null; // Money object from edition
+$primary_edition_id     = (int) ($args['primary_edition_id'] ?? 0);
+$primary_edition_status = $args['primary_edition_status'] ?? null; // OfferingStatus|null
+$user_id                = get_current_user_id();
+
+// When an edition exists for this online course, edition status gates the CTA.
+// Pure-LD courses (no edition) keep the original LD payment-button flow.
+$has_edition = $primary_edition_id > 0 && $primary_edition_status instanceof OfferingStatus;
 
 // ── Enrollment state ──
 // Check both LearnDash access AND Stride registration (covers sync delays)
@@ -241,6 +248,24 @@ $expiration_ts = ($days_remaining !== null)
                 <a href="<?php echo esc_url($enrollment_url); ?>" class="btn btn-primary w-full text-center">
                     <?php esc_html_e('Inschrijven', 'stridence'); ?>
                 </a>
+            <?php elseif ($has_edition && $primary_edition_status->allowsInterest()) : ?>
+                <a href="<?php echo esc_url(home_url('/interesse/?editie=' . $primary_edition_id)); ?>" class="btn btn-primary w-full text-center block">
+                    <?php esc_html_e('Interesse melden', 'stridence'); ?>
+                </a>
+                <p class="text-xs text-text-muted mt-3 text-center">
+                    <?php esc_html_e('Deze editie is nog in voorbereiding. Meld je interesse en we houden je op de hoogte.', 'stridence'); ?>
+                </p>
+            <?php elseif ($has_edition && $primary_edition_status->allowsWaitlist()) : ?>
+                <a href="<?php echo esc_url(home_url('/wachtlijst/?editie=' . $primary_edition_id)); ?>" class="btn btn-primary w-full text-center block">
+                    <?php esc_html_e('Op wachtlijst plaatsen', 'stridence'); ?>
+                </a>
+                <p class="text-xs text-text-muted mt-3 text-center">
+                    <?php esc_html_e('Deze editie is volzet. Laat je gegevens achter en we nemen contact op als er een plaats vrijkomt.', 'stridence'); ?>
+                </p>
+            <?php elseif ($has_edition) : ?>
+                <button type="button" class="btn btn-secondary w-full text-center opacity-50 cursor-not-allowed" disabled>
+                    <?php esc_html_e('Niet beschikbaar', 'stridence'); ?>
+                </button>
             <?php elseif ($ld_buttons) : ?>
                 <div class="ld-course-buttons">
                     <?php echo $ld_buttons; ?>

@@ -33,8 +33,8 @@ $edition_args = [
     'meta_query'     => [
         [
             'key'     => '_ntdst_status',
-            'value'   => ['draft', 'completed', 'archived'],
-            'compare' => 'NOT IN',
+            'value'   => ['announcement', 'open', 'full', 'in_progress'],
+            'compare' => 'IN',
         ],
     ],
     'orderby'        => 'meta_value',

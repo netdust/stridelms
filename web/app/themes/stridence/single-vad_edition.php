@@ -88,7 +88,13 @@ if ($has_pending_tasks) {
 $editionModel = ntdst_data()->get('vad_edition');
 $start_date   = $editionModel->getMeta($edition_id, 'start_date', '');
 $venue        = $editionModel->getMeta($edition_id, 'venue', '');
-$spots        = $editionModel->getMeta($edition_id, 'spots_remaining');
+
+// Spots remaining: derived from capacity minus current registrations.
+// `capacity = 0` means unlimited — there's nothing meaningful to count down.
+$spots = null;
+if ($capacity > 0) {
+    $spots = max(0, $capacity - $editionService->getRegisteredCount($edition_id));
+}
 
 // Get sessions via SessionService and group by type
 $all_sessions = $sessionService->getSessionsForEdition($edition_id);
@@ -443,7 +449,15 @@ get_header();
                         if ($is_past) {
                             esc_html_e('Deze editie is afgelopen', 'stridence');
                         } else {
-                            esc_html_e('Inschrijven', 'stridence');
+                            $sidebar_header = match (true) {
+                                $status === \Stride\Domain\OfferingStatus::Cancelled  => __('Editie geannuleerd', 'stridence'),
+                                $status === \Stride\Domain\OfferingStatus::Postponed  => __('Editie uitgesteld', 'stridence'),
+                                $status === \Stride\Domain\OfferingStatus::InProgress => __('Editie is bezig', 'stridence'),
+                                $status === \Stride\Domain\OfferingStatus::Completed  => __('Deze editie is afgelopen', 'stridence'),
+                                $status === \Stride\Domain\OfferingStatus::Archived   => __('Editie gearchiveerd', 'stridence'),
+                                default => __('Inschrijven', 'stridence'),
+                            };
+                            echo esc_html($sidebar_header);
                         }
                         ?>
                     </h3>

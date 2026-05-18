@@ -15,9 +15,12 @@ defined('ABSPATH') || exit;
 
 use Stride\Integrations\LearnDash\LearnDashHelper;
 
-$course_id = $args['course_id'] ?? get_the_ID();
-$is_online = $args['is_online'] ?? false;
-$editions  = $args['editions'] ?? [];
+$course_id    = $args['course_id'] ?? get_the_ID();
+$is_online    = $args['is_online'] ?? false;
+$editions     = $args['editions'] ?? [];
+// When rendered on /vormingen/<course-slug>/ (the enrollment surface itself),
+// we don't repeat the editions list — the visitor is already past discovery.
+$show_editions = $args['show_editions'] ?? true;
 
 ?>
 
@@ -96,12 +99,15 @@ endif;
     </div>
 </section>
 
-<!-- Edities Section (in-person courses only) -->
-<?php if (!$is_online) : ?>
+<!-- Edities Section — every course (including pure-LD) shows editions on the
+     /opleidingen/ container view. The list is the visitor's entry point into
+     /vormingen/<slug>/ where the CTA lives. -->
+<?php if ($show_editions) : ?>
     <?php
     stridence_template_part('templates/course/editions-list', null, [
         'editions'  => $editions,
         'course_id' => $course_id,
+        'is_online' => $is_online,
     ]);
     ?>
 <?php endif; ?>

@@ -78,6 +78,9 @@ class EditionService extends AbstractService implements EditionQueryInterface
         // Cascade delete: clean up sessions and registrations when an edition is deleted
         add_action('before_delete_post', [$this, 'onEditionDeleted']);
         add_action('wp_trash_post', [$this, 'onEditionTrashed']);
+
+        // Route /vormingen/<slug>/ → pure-LD course fallback when slug isn't an edition
+        (new EditionRouter())->register();
     }
 
     // === EditionQueryInterface Implementation ===

@@ -87,6 +87,28 @@ enum OfferingStatus: string
     }
 
     /**
+     * Get the Tailwind class used to render this status on the public frontend.
+     *
+     * Maps every status to one of the five badge tokens defined in
+     * `themes/stridence/src/css/tokens.css`. Distinct from badgeConfig()
+     * which is admin-only (raw hex colours for WP admin badges).
+     */
+    public function frontendBadgeClass(): string
+    {
+        return match ($this) {
+            self::Draft => 'badge-cancelled',
+            self::Announcement => 'badge-few',
+            self::Open => 'badge-open',
+            self::Full => 'badge-full',
+            self::InProgress => 'badge-online',
+            self::Postponed => 'badge-few',
+            self::Cancelled => 'badge-full',
+            self::Completed => 'badge-cancelled',
+            self::Archived => 'badge-cancelled',
+        };
+    }
+
+    /**
      * Get badge styling config for admin UI.
      *
      * @return array{color: string, bg: string, icon: string}

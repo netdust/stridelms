@@ -26,6 +26,7 @@ use Stride\Modules\Enrollment\EnrollmentService;
 
 $editions  = $args['editions'] ?? [];
 $course_id = (int) ($args['course_id'] ?? 0);
+$is_online = (bool) ($args['is_online'] ?? false);
 $user_id   = get_current_user_id();
 
 $editionService    = ntdst_get(EditionService::class);
@@ -53,6 +54,16 @@ foreach ($editions as $edition) {
     $status        = $editionService->getStatus($edition_id);
     $session_count = $sessionService->getSessionCount($edition_id);
     $is_enrolled   = $enrollmentService && $enrollmentService->isEnrolled($user_id, $edition_id);
+
+    // Hide editions that should never reach the public discovery surface.
+    // Active statuses (Announcement/Open/Full/InProgress) go in upcoming;
+    // Completed lives in the collapsed "past" block. Anything else (Draft,
+    // Postponed, Cancelled, Archived) is suppressed unless the visitor is
+    // enrolled in it — they need to see their own registration even if the
+    // edition got cancelled.
+    if (!$is_enrolled && !$status->isActive() && $status !== \Stride\Domain\OfferingStatus::Completed) {
+        continue;
+    }
 
     try {
         $price = $editionService->getPrice($edition_id, $user_id ?: null);
@@ -189,6 +200,33 @@ $render_edition_row = function (array $row, bool $faded = false) {
                 <?php $render_edition_row($row, false); ?>
             <?php endforeach; ?>
         </div>
+    <?php elseif ($is_online && $course_id) : ?>
+        <?php
+        // Pure-LD online course: no scheduled editions exist. Treat the course
+        // itself as the single enrollable instance — link to /vormingen/<course-slug>/
+        // where the CTA chain lives.
+        $course_post = get_post($course_id);
+        $course_url  = $course_post ? home_url('/vormingen/' . $course_post->post_name . '/') : '';
+        ?>
+        <a href="<?php echo esc_url($course_url); ?>"
+           class="flex items-center gap-4 p-4 border border-border bg-surface-card rounded-lg hover:border-primary/40 hover:shadow-sm transition">
+            <div class="shrink-0 w-20 text-center">
+                <?php echo stridence_icon('book-open', 'w-8 h-8 mx-auto text-primary'); ?>
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1 flex-wrap">
+                    <span class="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-surface-alt text-text-muted">
+                        <?php esc_html_e('Direct beschikbaar', 'stridence'); ?>
+                    </span>
+                </div>
+                <div class="text-sm text-text-muted">
+                    <?php esc_html_e('Online cursus — leer in je eigen tempo.', 'stridence'); ?>
+                </div>
+            </div>
+            <div class="shrink-0 text-text-muted">
+                <?php echo stridence_icon('chevron-right', 'w-5 h-5'); ?>
+            </div>
+        </a>
     <?php else : ?>
         <div class="p-6 border border-border rounded-lg text-center">
             <p class="text-text-muted mb-4">

@@ -119,6 +119,14 @@ final class EnrollmentRouter
             $status->allowsEnrollment() && $editionService->hasAvailableSpots($edition->ID),
         );
 
+        // Closed mode: edition is cancelled, postponed, in progress, completed,
+        // archived, or past its date. Don't render the form — punt back to the
+        // edition page where the correct disabled CTA / explanation lives.
+        if ($mode === 'closed') {
+            wp_safe_redirect(get_permalink($edition->ID));
+            exit;
+        }
+
         $isOnline = $editionService->isOnline($edition->ID);
         $formType = $editionService->getEnrollmentForm($edition->ID);
 

@@ -2,52 +2,57 @@
 /**
  * Badge Status Partial
  *
- * Renders a status badge with appropriate styling and Dutch label.
+ * Renders a status badge with appropriate Tailwind class + Dutch label.
+ *
+ * Edition statuses (draft, announcement, open, full, in_progress, postponed,
+ * cancelled, completed, archived) source from Stride\Domain\OfferingStatus.
+ *
+ * Registration / UI statuses (confirmed, pending, enrolled, action_required,
+ * awaiting_approval, completing) remain in a local map below — they aren't
+ * part of OfferingStatus.
+ *
+ * The pseudo-status `few_spots` is auto-detected when status=open + spots ≤ 5.
  *
  * @param array $args {
- *     @type string $status Status key: open, vol, few_spots, cancelled, completed, confirmed, pending
+ *     @type string $status Status key
  *     @type int    $spots  Optional spots remaining for auto-detecting "few spots" (≤5)
  * }
  */
 
 defined('ABSPATH') || exit;
 
+use Stride\Domain\OfferingStatus;
+
 $status = $args['status'] ?? 'open';
 $spots  = isset($args['spots']) ? (int) $args['spots'] : null;
 
 // Auto-detect few_spots when status is open and spots are low (1-5)
 if ($status === 'open' && $spots !== null && $spots > 0 && $spots <= 5) {
-    $status = 'few_spots';
+    $class = 'badge-few';
+    $label = sprintf('Nog %d %s', $spots, $spots === 1 ? 'plaats' : 'plaatsen');
+} elseif ($offeringStatus = OfferingStatus::tryFrom($status)) {
+    $class = $offeringStatus->frontendBadgeClass();
+    $label = $offeringStatus->label();
+} else {
+    // Registration / UI statuses outside OfferingStatus
+    $registration_config = [
+        'vol'               => ['class' => 'badge-full',      'label' => 'Volzet'],
+        'confirmed'         => ['class' => 'badge-open',      'label' => 'Bevestigd'],
+        'pending'           => ['class' => 'badge-few',       'label' => 'In behandeling'],
+        'enrolled'          => ['class' => 'badge-open',      'label' => 'Ingeschreven'],
+        'action_required'   => ['class' => 'badge-few',       'label' => 'Voltooi inschrijving'],
+        'awaiting_approval' => ['class' => 'badge-few',       'label' => 'In afwachting'],
+        'completing'        => ['class' => 'badge-few',       'label' => 'Rond af'],
+    ];
+    $config = $registration_config[$status] ?? ['class' => 'badge-cancelled', 'label' => ucfirst($status)];
+    $class = $config['class'];
+    $label = $config['label'];
 }
 
-// Status configuration: class and Dutch label
-$status_config = [
-    'open'         => ['class' => 'badge-open',      'label' => 'Open voor inschrijving'],
-    'announcement' => ['class' => 'badge-few',       'label' => 'Vooraankondiging'],
-    'few_spots'    => ['class' => 'badge-few',       'label' => sprintf('Nog %d %s', $spots ?? 0, ($spots === 1) ? 'plaats' : 'plaatsen')],
-    'full'         => ['class' => 'badge-full',      'label' => 'Volzet'],
-    'vol'          => ['class' => 'badge-full',      'label' => 'Volzet'],
-    'in_progress'  => ['class' => 'badge-open',      'label' => 'Lopend'],
-    'postponed'    => ['class' => 'badge-cancelled',  'label' => 'Uitgesteld'],
-    'cancelled'    => ['class' => 'badge-cancelled', 'label' => 'Geannuleerd'],
-    'completed'    => ['class' => 'badge-online',    'label' => 'Afgerond'],
-    'archived'     => ['class' => 'badge-cancelled', 'label' => 'Gearchiveerd'],
-    'draft'        => ['class' => 'badge-cancelled', 'label' => 'Concept'],
-    'confirmed'    => ['class' => 'badge-open',      'label' => 'Bevestigd'],
-    'pending'      => ['class' => 'badge-few',       'label' => 'In behandeling'],
-    'enrolled'          => ['class' => 'badge-open',      'label' => 'Ingeschreven'],
-    'action_required'   => ['class' => 'badge-few',       'label' => 'Voltooi inschrijving'],
-    'awaiting_approval' => ['class' => 'badge-few',       'label' => 'In afwachting'],
-    'completing'        => ['class' => 'badge-few',       'label' => 'Rond af'],
-];
-
-// Fallback for unknown status
-$config = $status_config[$status] ?? ['class' => 'badge-cancelled', 'label' => ucfirst($status)];
-
 ?>
-<span class="<?php echo esc_attr($config['class']); ?>"><?php
+<span class="<?php echo esc_attr($class); ?>"><?php
 if ($status === 'action_required' || $status === 'completing') {
     echo stridence_icon('alert-circle', 'w-3.5 h-3.5 inline-block -mt-0.5 mr-0.5');
 }
-echo esc_html($config['label']);
+echo esc_html($label);
 ?></span>
