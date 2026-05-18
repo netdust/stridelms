@@ -1726,3 +1726,128 @@ tr.stride-toggle-detail.expanded .stride-detail-arrow {
         display: none;
     }
 }
+
+/* ============ Deelnemers — action icons ============ */
+
+.stride-registration-table .column-actions .button-link {
+    margin-right: 4px;
+    color: #50575e;
+}
+.stride-registration-table .column-actions .button-link:hover,
+.stride-registration-table .column-actions .button-link:focus { color: #2271b1; }
+
+.stride-registration-table .column-actions .button-link.disabled,
+.stride-registration-table .column-actions [aria-disabled="true"] {
+    color: #c3c4c7;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.stride-action-divider {
+    display: inline-block;
+    width: 1px;
+    height: 14px;
+    background: #dcdcde;
+    vertical-align: middle;
+    margin: 0 6px;
+}
+
+/* ============ Modal ============ */
+
+body.stride-modal-open { overflow: hidden; }
+
+.stride-modal[hidden] { display: none; }
+
+.stride-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100100;
+}
+
+.stride-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.stride-modal-dialog {
+    position: relative;
+    margin: 5vh auto;
+    width: min(880px, calc(100% - 32px));
+    max-height: 90vh;
+    background: #fff;
+    border-radius: 4px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+}
+
+.stride-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid #dcdcde;
+}
+
+.stride-modal-title { margin: 0; font-size: 16px; }
+
+.stride-modal-close {
+    background: none;
+    border: 0;
+    cursor: pointer;
+    padding: 4px;
+    color: #50575e;
+}
+
+.stride-modal-content {
+    padding: 16px 20px;
+    overflow-y: auto;
+}
+
+.stride-modal-skeleton {
+    padding: 24px 20px;
+    color: #646970;
+    font-style: italic;
+}
+
+.stride-modal-error { color: #b32d2e; }
+
+.stride-modal-section + .stride-modal-section { margin-top: 20px; }
+
+.stride-modal-section-title {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #1d2327;
+    margin: 0 0 8px;
+}
+
+.stride-modal-dl { margin: 0; }
+.stride-modal-dl .stride-form-row { display: flex; gap: 12px; padding: 4px 0; }
+.stride-modal-dl dt { min-width: 180px; font-weight: 600; color: #1d2327; }
+.stride-modal-dl dd { margin: 0; color: #1d2327; }
+
+.stride-modal-sessions { list-style: none; margin: 0; padding: 0; }
+.stride-modal-session { padding: 6px 0; border-bottom: 1px solid #f0f0f1; display: flex; gap: 12px; align-items: baseline; }
+.stride-modal-slot-label { font-weight: 600; color: #50575e; }
+
+.stride-modal-qa { padding-left: 18px; }
+.stride-modal-qa-item + .stride-modal-qa-item { margin-top: 10px; }
+.stride-modal-qa-q { font-weight: 600; }
+.stride-modal-qa-a { color: #50575e; }
+
+.stride-modal-docs { list-style: none; margin: 0; padding: 0; }
+.stride-modal-doc { padding: 6px 0; border-bottom: 1px solid #f0f0f1; }
+.stride-modal-doc a .dashicons { vertical-align: middle; margin-right: 4px; }
+.stride-modal-doc-date { color: #8c8f94; margin-left: 8px; font-size: 12px; }
+
+.stride-modal-task-table { width: 100%; border-collapse: collapse; }
+.stride-modal-task-table th, .stride-modal-task-table td {
+    padding: 6px 8px; text-align: left; border-bottom: 1px solid #f0f0f1;
+}
+.stride-modal-progress { display: flex; align-items: center; gap: 12px; }
+.stride-modal-progress-bar { flex: 1; height: 8px; background: #f0f0f1; border-radius: 4px; overflow: hidden; }
+.stride-modal-progress-fill { height: 100%; background: #2271b1; }
+
+.stride-modal-empty { color: #8c8f94; font-style: italic; margin: 0; }
