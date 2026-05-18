@@ -1330,29 +1330,48 @@ final class AdminAPIController
         // Get attendance records if table exists (already optimized with batch)
         $attendanceByUser = BatchQueryHelper::batchGetAttendance($editionId);
 
-        // Format registrations with pre-fetched data
+        // Format registrations with pre-fetched data.
+        // Anonymous interest/waitlist rows have no user record — fall back to
+        // the name/email captured in enrollment_data so admin can see them.
         $items = [];
         foreach ($registrations as $reg) {
             $userId = (int) $reg->user_id;
-            $user = $users[$userId] ?? null;
+            $user = $userId ? ($users[$userId] ?? null) : null;
 
-            if (!$user) {
-                continue;
+            $name = $user ? $user->display_name : '';
+            $email = $user ? $user->user_email : '';
+            $isAnon = !$user;
+
+            if ($isAnon) {
+                $stageData = [];
+                $raw = $reg->enrollment_data ?? '';
+                if (is_string($raw) && $raw !== '') {
+                    $decoded = json_decode($raw, true);
+                    if (is_array($decoded)) {
+                        // status maps to the stage key (interest/waitlist)
+                        $stageData = $decoded[$reg->status] ?? [];
+                    }
+                }
+                $name = $stageData['name'] ?? '(anoniem)';
+                $email = $stageData['email'] ?? '';
             }
 
-            // Build attendance map for this user
+            // Build attendance map for this user (anon rows have empty attendance)
             $attendance = [];
-            foreach ($sessionIds as $sessionId) {
-                $attendance[$sessionId] = $attendanceByUser[$userId][$sessionId] ?? null;
+            if ($userId) {
+                foreach ($sessionIds as $sessionId) {
+                    $attendance[$sessionId] = $attendanceByUser[$userId][$sessionId] ?? null;
+                }
             }
 
             $items[] = [
                 'id' => (int) $reg->id,
                 'user' => [
                     'id' => $userId,
-                    'name' => $user->display_name,
-                    'email' => $user->user_email,
+                    'name' => $name,
+                    'email' => $email,
                 ],
+                'anonymous' => $isAnon,
                 'status' => $reg->status,
                 'enrollmentPath' => $reg->enrollment_path,
                 'registeredAt' => $reg->registered_at,

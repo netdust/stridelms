@@ -283,7 +283,7 @@ class QuestionnaireRepositoryTest extends TestCase
     /** @test */
     public function testStagesConstantContainsAllExpectedStages(): void
     {
-        $expected = ['interest', 'enrollment_personal', 'enrollment_billing', 'intake', 'evaluation'];
+        $expected = ['interest', 'waitlist', 'enrollment_personal', 'enrollment_billing', 'intake', 'evaluation'];
         $this->assertSame($expected, QuestionnaireRepository::STAGES);
     }
 

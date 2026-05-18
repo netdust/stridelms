@@ -21,7 +21,8 @@ get_header();
 
             // Check if content contains our form shortcodes (full-width layout)
             $has_form_shortcode = has_shortcode(get_the_content(), 'stride_enrollment')
-                               || has_shortcode(get_the_content(), 'stride_interest');
+                               || has_shortcode(get_the_content(), 'stride_interest')
+                               || has_shortcode(get_the_content(), 'stride_waitlist');
 
             if ($has_form_shortcode) {
                 // Full-width output for form pages (shortcode handles its own container)

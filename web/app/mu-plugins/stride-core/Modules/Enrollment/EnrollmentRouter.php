@@ -256,6 +256,10 @@ final class EnrollmentRouter
             return 'interest';
         }
 
+        if ($status->allowsWaitlist()) {
+            return 'waitlist';
+        }
+
         if ($enrollmentOpen) {
             return $requiresApproval ? 'pending_approval' : 'enrollment';
         }

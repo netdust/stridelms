@@ -239,6 +239,7 @@ final class QuestionnaireSettingsPage
         // Stage badge color map
         $stageBadgeColors = [
             'interest'            => '#0d7a3e',
+            'waitlist'            => '#996300',
             'enrollment_personal' => '#2271b1',
             'enrollment_billing'  => '#135e96',
             'intake'              => '#6c3483',
@@ -643,6 +644,7 @@ final class QuestionnaireSettingsPage
     {
         return [
             'interest'            => __('Interesse', 'stride'),
+            'waitlist'            => __('Wachtlijst', 'stride'),
             'enrollment_personal' => __('Inschrijving — Persoonlijk', 'stride'),
             'enrollment_billing'  => __('Inschrijving — Facturatie', 'stride'),
             'intake'              => __('Intake (voor opleiding)', 'stride'),

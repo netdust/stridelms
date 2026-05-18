@@ -22,12 +22,14 @@ final class QuestionnaireHandler
     private function init(): void
     {
         add_filter('ntdst/api_data/stride_submit_interest', [$this, 'handleSubmitInterest'], 10, 2);
+        add_filter('ntdst/api_data/stride_submit_waitlist', [$this, 'handleSubmitWaitlist'], 10, 2);
         add_filter('ntdst/api_data/stride_submit_intake', [$this, 'handleSubmitStage'], 10, 2);
         add_filter('ntdst/api_data/stride_submit_evaluation', [$this, 'handleSubmitStage'], 10, 2);
 
-        // Interest is public (anonymous)
+        // Interest and waitlist are public (anonymous allowed)
         add_filter('ntdst/api/public_actions', function (array $actions): array {
             $actions[] = 'stride_submit_interest';
+            $actions[] = 'stride_submit_waitlist';
             return $actions;
         });
     }
@@ -50,17 +52,18 @@ final class QuestionnaireHandler
             return $validationResult;
         }
 
-        // Check for existing interest (upsert)
+        // Check for existing anonymous row (any pre-enrollment stage). One row per
+        // email/edition: edition status determines current stage, we just append data.
         $registrations = ntdst_get(RegistrationRepository::class);
-        $existing = $registrations->findByEmailAndEdition($email, $editionId);
+        $existing = $registrations->findAnonymousForEmailAndEdition($email, $editionId);
 
         $stageData = array_merge(['name' => $name, 'email' => $email], $extraFields);
 
         if ($existing) {
-            // Merge with existing data, update interest key
             $existingData = json_decode($existing->enrollment_data ?? '{}', true) ?: [];
             $existingData['interest'] = $stageData;
             $registrations->update((int) $existing->id, [
+                'status' => RegistrationStatus::Interest->value,
                 'enrollment_data' => wp_json_encode($existingData),
             ]);
         } else {
@@ -78,21 +81,78 @@ final class QuestionnaireHandler
             }
         }
 
-        // Notify admin via netdust-mail
+        // Send confirmation to the user
         if (function_exists('ndmail_send')) {
             $edition = get_post($editionId);
-            $adminEmail = \Stride\Modules\Mail\StrideMailBridge::getAdminEmail();
-            ndmail_send('stride-interest-registered-admin', [
-                'name'         => $name,
-                'email'        => $email,
+            ndmail_send('stride-interest-registered-user', [
+                'registration' => ['name' => $name, 'email' => $email],
                 'edition_id'   => $editionId,
-                'edition_title' => $edition ? $edition->post_title : "Editie #{$editionId}",
-            ], ['to' => $adminEmail]);
+                'edition'      => ['title' => $edition ? $edition->post_title : "Editie #{$editionId}"],
+            ], ['to' => $email]);
         }
 
         return [
             'success' => true,
             'message' => __('Je interesse is geregistreerd. We houden je op de hoogte!', 'stride'),
+        ];
+    }
+
+    public function handleSubmitWaitlist(mixed $data, array $params): array|WP_Error
+    {
+        $editionId = absint($params['edition_id'] ?? 0);
+        $name = sanitize_text_field($params['name'] ?? '');
+        $email = sanitize_email($params['email'] ?? '');
+
+        if (!$editionId || empty($name) || empty($email)) {
+            return new WP_Error('validation_error', __('Naam, e-mailadres en editie zijn vereist.', 'stride'));
+        }
+
+        $extraFields = $this->sanitizeExtraFields($params['extra_fields'] ?? []);
+        $validator = ntdst_get(QuestionnaireValidator::class);
+        $validationResult = $validator->validate($extraFields, $editionId, 'waitlist');
+        if (is_wp_error($validationResult)) {
+            return $validationResult;
+        }
+
+        $registrations = ntdst_get(RegistrationRepository::class);
+        $existing = $registrations->findAnonymousForEmailAndEdition($email, $editionId);
+
+        $stageData = array_merge(['name' => $name, 'email' => $email], $extraFields);
+
+        if ($existing) {
+            $existingData = json_decode($existing->enrollment_data ?? '{}', true) ?: [];
+            $existingData['waitlist'] = $stageData;
+            $registrations->update((int) $existing->id, [
+                'status' => RegistrationStatus::Waitlist->value,
+                'enrollment_data' => wp_json_encode($existingData),
+            ]);
+        } else {
+            $registrationId = $registrations->create([
+                'user_id' => null,
+                'edition_id' => $editionId,
+                'status' => RegistrationStatus::Waitlist->value,
+                'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
+                'enrollment_data' => ['waitlist' => $stageData],
+            ]);
+
+            if (is_wp_error($registrationId)) {
+                return $registrationId;
+            }
+        }
+
+        // Send confirmation to the user
+        if (function_exists('ndmail_send')) {
+            $edition = get_post($editionId);
+            ndmail_send('stride-waitlist-registered-user', [
+                'registration' => ['name' => $name, 'email' => $email],
+                'edition_id'   => $editionId,
+                'edition'      => ['title' => $edition ? $edition->post_title : "Editie #{$editionId}"],
+            ], ['to' => $email]);
+        }
+
+        return [
+            'success' => true,
+            'message' => __('Je staat op de wachtlijst. We nemen contact op als er een plaats vrijkomt.', 'stride'),
         ];
     }
 

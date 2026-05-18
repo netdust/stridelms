@@ -59,6 +59,11 @@ final class StrideMailBridge extends AbstractService
         add_action('stride/registration/created', [$this, 'scheduleAdminNotify']);
         add_action('stride/mail/admin_notify_async', [$this, 'onRegistrationCreatedAdminNotify']);
 
+        // User confirmations for logged-in interest / waitlist submissions.
+        // Anonymous submissions send their confirmation inline from QuestionnaireHandler.
+        add_action('stride/registration/interest_registered', [$this, 'onInterestRegisteredUserMail']);
+        add_action('stride/registration/waitlisted', [$this, 'onWaitlistRegisteredUserMail']);
+
         // Quote send email (triggered from admin)
         add_action('stride/quote/send_email', [$this, 'onQuoteSendEmail'], 10, 3);
 
@@ -91,6 +96,55 @@ final class StrideMailBridge extends AbstractService
         }
 
         ndmail_send('stride-enrollment-created-admin', $data, ['to' => $adminEmail]);
+    }
+
+    /**
+     * Send user confirmation when a logged-in user registers interest.
+     *
+     * @param array{registration_id: int, user_id: int, edition_id?: int|null} $data
+     */
+    public function onInterestRegisteredUserMail(array $data): void
+    {
+        $this->sendUserStageMail('stride-interest-registered-user', $data);
+    }
+
+    /**
+     * Send user confirmation when a logged-in user joins the waitlist.
+     *
+     * @param array{registration_id: int, user_id: int, edition_id?: int|null} $data
+     */
+    public function onWaitlistRegisteredUserMail(array $data): void
+    {
+        $this->sendUserStageMail('stride-waitlist-registered-user', $data);
+    }
+
+    /**
+     * Shared helper for the two user-confirmation mails above.
+     *
+     * @param array{user_id: int, edition_id?: int|null} $data
+     */
+    private function sendUserStageMail(string $template, array $data): void
+    {
+        $userId = (int) ($data['user_id'] ?? 0);
+        if (!$userId) {
+            return;
+        }
+        $user = get_userdata($userId);
+        if (!$user || !$user->user_email) {
+            return;
+        }
+
+        $editionId = (int) ($data['edition_id'] ?? 0);
+        $edition = $editionId ? get_post($editionId) : null;
+
+        ndmail_send($template, [
+            'registration' => [
+                'name' => trim($user->first_name . ' ' . $user->last_name) ?: $user->display_name,
+                'email' => $user->user_email,
+            ],
+            'edition_id' => $editionId,
+            'edition' => ['title' => $edition ? $edition->post_title : ''],
+        ], ['to' => $user->user_email]);
     }
 
     /**
@@ -429,7 +483,7 @@ final class StrideMailBridge extends AbstractService
      */
     public function maybeSeedTemplates(): void
     {
-        $currentVersion = '2';
+        $currentVersion = '3';
         if (get_option('stride_mail_templates_seeded') === $currentVersion) {
             return;
         }
@@ -607,15 +661,25 @@ final class StrideMailBridge extends AbstractService
                     . '<strong>Deelnemer:</strong> {{user.display_name}}</p>'
                     . '<p>Controleer de offerte en pas deze handmatig aan indien nodig.</p>',
             ],
-            'stride-interest-registered-admin' => [
-                'title' => 'Nieuwe interesse (admin)',
-                'subject' => 'Nieuwe interesse: {{edition.title}}',
+            'stride-interest-registered-user' => [
+                'title' => 'Bevestiging interesse (gebruiker)',
+                'subject' => 'Bevestiging interesse: {{edition.title}}',
                 'trigger' => '',
-                'category' => 'notification',
-                'body' => '<p>Er is een nieuwe interesse geregistreerd.</p>'
-                    . '<p><strong>Naam:</strong> {{registration.name}}<br>'
-                    . '<strong>E-mail:</strong> {{registration.email}}<br>'
-                    . '<strong>Editie:</strong> {{edition.title}}</p>',
+                'category' => 'transactional',
+                'body' => '<p>Beste {{registration.name}},</p>'
+                    . '<p>Je interesse voor <strong>{{edition.title}}</strong> is goed ontvangen.</p>'
+                    . '<p>We nemen contact met je op zodra de inschrijvingen openen.</p>'
+                    . '<p>Met vriendelijke groet,<br>{{site.name}}</p>',
+            ],
+            'stride-waitlist-registered-user' => [
+                'title' => 'Bevestiging wachtlijst (gebruiker)',
+                'subject' => 'Bevestiging wachtlijst: {{edition.title}}',
+                'trigger' => '',
+                'category' => 'transactional',
+                'body' => '<p>Beste {{registration.name}},</p>'
+                    . '<p>Je staat op de wachtlijst voor <strong>{{edition.title}}</strong>.</p>'
+                    . '<p>We nemen contact met je op zodra er een plaats vrijkomt of als er een nieuwe editie wordt ingepland.</p>'
+                    . '<p>Met vriendelijke groet,<br>{{site.name}}</p>',
             ],
             'stride-trajectory-enrolled' => [
                 'title' => 'Traject inschrijving',

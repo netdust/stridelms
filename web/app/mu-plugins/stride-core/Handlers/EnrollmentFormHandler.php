@@ -293,8 +293,8 @@ final class EnrollmentFormHandler
             // Roll back the enrollment so a missing quote can never let the
             // user walk past payment. The user can retry; an admin sees the
             // cancellation in the audit trail.
-            $registrations = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
-            $registrations->cancel($enrollmentId);
+            $enrollmentService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class);
+            $enrollmentService->cancel($enrollmentId);
 
             return new WP_Error(
                 'quote_creation_failed',

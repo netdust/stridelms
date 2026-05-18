@@ -416,7 +416,6 @@ document.addEventListener('alpine:init', () => {
                 const regStatusLabels = {
                     confirmed: 'Bevestigd', completed: 'Afgerond', cancelled: 'Geannuleerd',
                     pending: 'In afwachting', interest: 'Interesse', waitlist: 'Wachtlijst',
-                    withdrawn: 'Teruggetrokken',
                 };
                 this.editionRegistrations = (regs.registrations || regs.items || []).map(reg => ({
                     ...reg,
@@ -594,7 +593,6 @@ document.addEventListener('alpine:init', () => {
                 const regStatusLabels = {
                     confirmed: 'Bevestigd', completed: 'Afgerond', cancelled: 'Geannuleerd',
                     pending: 'In afwachting', interest: 'Interesse', waitlist: 'Wachtlijst',
-                    withdrawn: 'Teruggetrokken',
                 };
                 const quoteStatusLabels = { draft: 'Concept', sent: 'Verzonden', exported: 'Geëxporteerd', cancelled: 'Geannuleerd' };
 

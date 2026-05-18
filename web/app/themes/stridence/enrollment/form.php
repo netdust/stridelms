@@ -34,8 +34,11 @@ if (!empty($already_enrolled)) {
     return;
 }
 
-// Closed mode: show message instead of form
-if ($enrollment_mode === 'closed' || !$enrollment_open) {
+// Closed mode: show message instead of form.
+// Interest and waitlist modes are allowed even when enrollment_open is false —
+// they're the alternative paths for Announcement / Full editions.
+$allowsAlternativePath = in_array($enrollment_mode, ['interest', 'waitlist'], true);
+if ($enrollment_mode === 'closed' || (!$enrollment_open && !$allowsAlternativePath)) {
     stridence_template_part('partials/empty-state', null, [
         'icon'    => 'alert-circle',
         'title'   => __('Inschrijving niet mogelijk', 'stridence'),

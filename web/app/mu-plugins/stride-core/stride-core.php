@@ -27,14 +27,6 @@ add_action('init', function (): void {
     }
 }, 1);
 
-// Migrate registration table to unified schema (v2)
-add_action('init', function (): void {
-    if (!get_option('stride_registration_table_v2')) {
-        \Stride\Modules\Enrollment\RegistrationTable::migrate();
-        update_option('stride_registration_table_v2', '1');
-    }
-}, 1);
-
 // Create attendance table if missing
 add_action('init', function (): void {
     if (!get_option('stride_attendance_table_created')) {

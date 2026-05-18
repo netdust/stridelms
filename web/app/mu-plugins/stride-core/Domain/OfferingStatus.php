@@ -40,6 +40,14 @@ enum OfferingStatus: string
     }
 
     /**
+     * Check if waitlist registration is allowed.
+     */
+    public function allowsWaitlist(): bool
+    {
+        return $this === self::Full;
+    }
+
+    /**
      * Check if offering is visible to the public.
      */
     public function isActive(): bool

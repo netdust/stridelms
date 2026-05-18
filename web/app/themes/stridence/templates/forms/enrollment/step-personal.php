@@ -74,8 +74,8 @@ $form_type       = $args['form_type'] ?? 'default';
             ?>
         <?php endforeach; ?>
 
-        <!-- Message field for interest mode -->
-        <template x-if="mode === 'interest'">
+        <!-- Message field for interest / waitlist modes -->
+        <template x-if="mode === 'interest' || mode === 'waitlist'">
             <div class="pt-4 border-t border-border">
                 <label class="input-label" for="message">Opmerking (optioneel)</label>
                 <textarea id="message" name="message" x-model="form.message" rows="3"
@@ -87,8 +87,8 @@ $form_type       = $args['form_type'] ?? 'default';
 
     <div class="mt-8 flex justify-between">
         <button type="button" @click="prevStep" class="btn-secondary"
-                x-show="mode !== 'interest' && stepIndex > 0">Vorige</button>
-        <span x-show="mode === 'interest' || stepIndex === 0"></span>
+                x-show="mode !== 'interest' && mode !== 'waitlist' && stepIndex > 0">Vorige</button>
+        <span x-show="mode === 'interest' || mode === 'waitlist' || stepIndex === 0"></span>
         <button type="button" @click="nextStep" class="btn-primary">Volgende</button>
     </div>
 </div>

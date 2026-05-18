@@ -150,7 +150,14 @@ final class EditionCompletion
             return true;
         }
 
-        // Mark complete in LearnDash
+        // Mark complete in LearnDash. This enforces LD's own completion rules
+        // (lessons, quizzes, etc.) — if the user has unfinished LD content,
+        // this is a no-op and LD's `learndash_course_completed` action never
+        // fires, so the Stride registration stays at `confirmed`.
+        //
+        // Implication for in-person courses: their linked LD course MUST be
+        // content-free (no required lessons/quizzes), otherwise attendance alone
+        // won't transition the registration to `completed`. See manifest.
         if (function_exists('learndash_process_mark_complete')) {
             learndash_process_mark_complete($userId, $courseId);
         }
@@ -223,7 +230,8 @@ final class EditionCompletion
             return;
         }
 
-        // Find editions linked to this course
+        // Find editions linked to this course. EditionRepository returns
+        // associative arrays with 'id' (lowercase), not WP_Post objects.
         $editions = $this->editionService->getEditionsForCourse($courseId);
 
         if (empty($editions)) {
@@ -233,7 +241,11 @@ final class EditionCompletion
         $repo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
 
         foreach ($editions as $edition) {
-            $reg = $repo->findByUserAndEdition($userId, $edition->ID);
+            $editionId = (int) ($edition['id'] ?? $edition['ID'] ?? 0);
+            if (!$editionId) {
+                continue;
+            }
+            $reg = $repo->findByUserAndEdition($userId, $editionId);
             if ($reg && $reg->status === 'confirmed') {
                 $repo->updateStatus((int) $reg->id, \Stride\Domain\RegistrationStatus::Completed);
             }

@@ -237,11 +237,13 @@ function stridence_fallback_menu_mobile(): void
 
 require_once __DIR__ . '/services/frontend/shortcodes/EnrollmentShortcode.php';
 require_once __DIR__ . '/services/frontend/shortcodes/InterestShortcodes.php';
+require_once __DIR__ . '/services/frontend/shortcodes/WaitlistShortcodes.php';
 require_once __DIR__ . '/services/frontend/shortcodes/IntakeShortcodes.php';
 require_once __DIR__ . '/services/frontend/shortcodes/EvaluationShortcodes.php';
 
 (new \stridence\services\frontend\shortcodes\EnrollmentShortcode())->register();
 (new \stridence\services\frontend\shortcodes\InterestShortcodes())->register();
+(new \stridence\services\frontend\shortcodes\WaitlistShortcodes())->register();
 (new \stridence\services\frontend\shortcodes\IntakeShortcodes())->register();
 (new \stridence\services\frontend\shortcodes\EvaluationShortcodes())->register();
 

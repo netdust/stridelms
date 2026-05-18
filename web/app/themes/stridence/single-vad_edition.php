@@ -484,11 +484,18 @@ get_header();
                             <?php esc_html_e('Nu inschrijven', 'stridence'); ?>
                         </a>
                     <?php elseif ($status->allowsInterest()) : ?>
-                        <a href="<?php echo esc_url(stride_enrollment_url($edition_id)); ?>" class="btn-primary w-full text-center block">
+                        <a href="<?php echo esc_url(home_url('/interesse/?editie=' . $edition_id)); ?>" class="btn-primary w-full text-center block">
                             <?php esc_html_e('Interesse melden', 'stridence'); ?>
                         </a>
                         <p class="text-xs text-text-muted mt-3 text-center">
                             <?php esc_html_e('Deze editie is nog in voorbereiding. Meld je interesse en we houden je op de hoogte.', 'stridence'); ?>
+                        </p>
+                    <?php elseif ($status->allowsWaitlist()) : ?>
+                        <a href="<?php echo esc_url(home_url('/wachtlijst/?editie=' . $edition_id)); ?>" class="btn-primary w-full text-center block">
+                            <?php esc_html_e('Op wachtlijst plaatsen', 'stridence'); ?>
+                        </a>
+                        <p class="text-xs text-text-muted mt-3 text-center">
+                            <?php esc_html_e('Deze editie is volzet. Laat je gegevens achter en we nemen contact op als er een plaats vrijkomt.', 'stridence'); ?>
                         </p>
                     <?php else : ?>
                         <button type="button" class="btn-secondary w-full text-center opacity-50 cursor-not-allowed" disabled>
@@ -515,8 +522,14 @@ get_header();
         </div>
     <?php elseif ($status->allowsInterest()) : ?>
         <div class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 lg:hidden z-40 safe-area-bottom">
-            <a href="<?php echo esc_url(stride_enrollment_url($edition_id)); ?>" class="btn-primary w-full text-center">
+            <a href="<?php echo esc_url(home_url('/interesse/?editie=' . $edition_id)); ?>" class="btn-primary w-full text-center">
                 <?php esc_html_e('Interesse melden', 'stridence'); ?>
+            </a>
+        </div>
+    <?php elseif ($status->allowsWaitlist()) : ?>
+        <div class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 lg:hidden z-40 safe-area-bottom">
+            <a href="<?php echo esc_url(home_url('/wachtlijst/?editie=' . $edition_id)); ?>" class="btn-primary w-full text-center">
+                <?php esc_html_e('Op wachtlijst plaatsen', 'stridence'); ?>
             </a>
         </div>
     <?php endif; ?>

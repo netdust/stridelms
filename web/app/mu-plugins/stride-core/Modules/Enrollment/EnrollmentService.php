@@ -250,8 +250,18 @@ final class EnrollmentService extends AbstractService
                 $registrationId = $upgradedRegistrationId;
                 $wpdb->query('COMMIT');
             } else {
-                // Check not already registered (within transaction)
-                if ($this->hasActiveRegistration($userId, editionId: $editionId)) {
+                // Check not already registered (within transaction).
+                // Interest + Waitlist rows are NOT considered blocking here — they
+                // represent prior intent and get reactivated by RegistrationRepository::create().
+                $existing = $this->registrations->findByUserAndEdition($userId, $editionId);
+                $existingStatus = $existing ? RegistrationStatus::tryFrom($existing->status) : null;
+                $isReactivatable = in_array($existingStatus, [
+                    RegistrationStatus::Cancelled,
+                    RegistrationStatus::Interest,
+                    RegistrationStatus::Waitlist,
+                ], true);
+
+                if ($existing && !$isReactivatable && $existingStatus && $existingStatus->blocksDuplicate()) {
                     $wpdb->query('ROLLBACK');
                     ntdst_log('enrollment')->warning('Enrollment rejected: already registered', [
                         'user_id' => $userId,
@@ -363,6 +373,23 @@ final class EnrollmentService extends AbstractService
             }
         }
 
+        if ($trajectoryId) {
+            $trajectoryService = ntdst_get(\Stride\Modules\Trajectory\TrajectoryService::class);
+            $trajectory = $trajectoryService->getTrajectory($trajectoryId);
+            if (!$trajectory) {
+                return new WP_Error('invalid_trajectory', 'Trajectory does not exist');
+            }
+
+            $status = $trajectory['status_enum'] ?? null;
+            if (!$status || !$status->allowsInterest()) {
+                return new WP_Error('interest_closed', 'Interest registration is not available for this trajectory');
+            }
+
+            if ($this->hasActiveRegistration($userId, trajectoryId: $trajectoryId)) {
+                return new WP_Error('already_registered', 'Je hebt al interesse gemeld voor dit traject');
+            }
+        }
+
         // Build registration data
         $registrationData = [
             'user_id' => $userId,
@@ -394,6 +421,93 @@ final class EnrollmentService extends AbstractService
         ]);
 
         ntdst_log('enrollment')->info('Interest registered', [
+            'user_id' => $userId,
+            'edition_id' => $editionId,
+            'trajectory_id' => $trajectoryId,
+            'registration_id' => $registrationId,
+        ]);
+
+        return $registrationId;
+    }
+
+    /**
+     * Register on the waitlist for a full edition.
+     *
+     * Lightweight registration: no capacity checks, no LMS access, no quote.
+     * Mirrors registerInterest() but gated on OfferingStatus::Full instead of Announcement.
+     *
+     * @param array{edition_id?: int, trajectory_id?: int, notes?: string} $options
+     * @return int|WP_Error Registration ID or error
+     */
+    public function registerWaitlist(int $userId, array $options = []): int|WP_Error
+    {
+        $editionId = $options['edition_id'] ?? null;
+        $trajectoryId = $options['trajectory_id'] ?? null;
+
+        if (!$editionId && !$trajectoryId) {
+            return new WP_Error('invalid_input', 'Edition or trajectory ID is required');
+        }
+
+        if ($editionId) {
+            if (!$this->editions->exists($editionId)) {
+                return new WP_Error('invalid_edition', 'Edition does not exist');
+            }
+
+            $status = $this->editions->getStatus($editionId);
+            if (!$status->allowsWaitlist()) {
+                return new WP_Error('waitlist_closed', 'Waitlist registration is not available for this edition');
+            }
+
+            if ($this->hasActiveRegistration($userId, editionId: $editionId)) {
+                return new WP_Error('already_registered', 'Je staat al op de wachtlijst of bent al ingeschreven voor deze editie');
+            }
+        }
+
+        if ($trajectoryId) {
+            $trajectoryService = ntdst_get(\Stride\Modules\Trajectory\TrajectoryService::class);
+            $trajectory = $trajectoryService->getTrajectory($trajectoryId);
+            if (!$trajectory) {
+                return new WP_Error('invalid_trajectory', 'Trajectory does not exist');
+            }
+
+            $status = $trajectory['status_enum'] ?? null;
+            if (!$status || !$status->allowsWaitlist()) {
+                return new WP_Error('waitlist_closed', 'Waitlist registration is not available for this trajectory');
+            }
+
+            if ($this->hasActiveRegistration($userId, trajectoryId: $trajectoryId)) {
+                return new WP_Error('already_registered', 'Je staat al op de wachtlijst of bent al ingeschreven voor dit traject');
+            }
+        }
+
+        $registrationData = [
+            'user_id' => $userId,
+            'edition_id' => $editionId,
+            'trajectory_id' => $trajectoryId,
+            'status' => RegistrationStatus::Waitlist->value,
+            'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
+            'notes' => $options['notes'] ?? null,
+        ];
+
+        $companyId = (int) get_user_meta($userId, '_stride_company_id', true);
+        if ($companyId) {
+            $registrationData['company_id'] = $companyId;
+        }
+
+        $registrationId = $this->registrations->create($registrationData);
+
+        if (is_wp_error($registrationId)) {
+            return $registrationId;
+        }
+
+        $this->dispatch('registration/waitlisted', [
+            'registration_id' => $registrationId,
+            'user_id' => $userId,
+            'edition_id' => $editionId,
+            'trajectory_id' => $trajectoryId,
+        ]);
+
+        ntdst_log('enrollment')->info('Waitlist registered', [
             'user_id' => $userId,
             'edition_id' => $editionId,
             'trajectory_id' => $trajectoryId,
@@ -458,6 +572,10 @@ final class EnrollmentService extends AbstractService
 
     /**
      * Cancel enrollment.
+     *
+     * Cannot cancel a registration that is already in a terminal state.
+     * Completed registrations are immutable — they represent course completion
+     * and may have an attached certificate. Already-cancelled is a no-op error.
      */
     public function cancel(int $registrationId): bool|WP_Error
     {
@@ -469,6 +587,14 @@ final class EnrollmentService extends AbstractService
 
         if ($registration === null) {
             return new WP_Error('not_found', 'Registration not found');
+        }
+
+        $status = RegistrationStatus::tryFrom($registration->status);
+        if ($status === RegistrationStatus::Completed) {
+            return new WP_Error('already_completed', 'Cannot cancel a completed registration');
+        }
+        if ($status === RegistrationStatus::Cancelled) {
+            return new WP_Error('already_cancelled', 'Registration is already cancelled');
         }
 
         // Update status
@@ -522,7 +648,7 @@ final class EnrollmentService extends AbstractService
     /**
      * Check if user has any active registration (blocks duplicate submissions).
      *
-     * Active = confirmed, pending, or interest (anything that isn't cancelled/withdrawn).
+     * Active = anything except cancelled (uses RegistrationStatus::blocksDuplicate).
      */
     public function hasActiveRegistration(int $userId, ?int $editionId = null, ?int $trajectoryId = null): bool
     {

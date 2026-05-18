@@ -45,8 +45,12 @@ final class RegistrationRepository
         }
 
         $status = $data['status'] ?? 'confirmed';
-        if (empty($data['user_id']) && $status !== RegistrationStatus::Interest->value) {
-            return new WP_Error('missing_field', 'Required: user_id (except for interest registrations)');
+        $anonymousAllowedStatuses = [
+            RegistrationStatus::Interest->value,
+            RegistrationStatus::Waitlist->value,
+        ];
+        if (empty($data['user_id']) && !in_array($status, $anonymousAllowedStatuses, true)) {
+            return new WP_Error('missing_field', 'Required: user_id (except for interest/waitlist registrations)');
         }
 
         // Check for duplicate
@@ -66,14 +70,38 @@ final class RegistrationRepository
         if ($existing) {
             $existingStatus = RegistrationStatus::tryFrom($existing->status);
 
-            // If cancelled or withdrawn, reactivate
-            if ($existingStatus === RegistrationStatus::Cancelled || $existingStatus === RegistrationStatus::Withdrawn) {
+            // Reactivate-eligible statuses:
+            // - Cancelled: terminal-cancel state, re-enrolling reopens the row.
+            // - Interest / Waitlist: pre-enrollment holding states, the user already
+            //   expressed intent — enrolling promotes that row instead of blocking.
+            // For Interest specifically, EnrollmentService::enroll() has a separate
+            // upgrade path that merges enrollment_data when the row is anonymous
+            // (user_id=0). That path runs BEFORE this method, so we only land here
+            // when the existing Interest row already belongs to this user.
+            $reactivatableStatuses = [
+                RegistrationStatus::Cancelled,
+                RegistrationStatus::Interest,
+                RegistrationStatus::Waitlist,
+            ];
+            if (in_array($existingStatus, $reactivatableStatuses, true)) {
+                // Preserve existing enrollment_data (interest/waitlist stage payloads
+                // collected earlier) unless the caller passes new data to merge.
+                $existingData = is_string($existing->enrollment_data ?? null) && $existing->enrollment_data !== ''
+                    ? (json_decode($existing->enrollment_data, true) ?: [])
+                    : (is_array($existing->enrollment_data ?? null) ? $existing->enrollment_data : []);
+                $newData = is_array($data['enrollment_data'] ?? null) ? $data['enrollment_data'] : [];
+                $mergedData = $existingData;
+                foreach ($newData as $k => $v) {
+                    $mergedData[$k] = $v;
+                }
+
                 $reactivate = [
                     'status' => $data['status'] ?? RegistrationStatus::Confirmed->value,
+                    'enrollment_path' => $data['enrollment_path'] ?? ($existing->enrollment_path ?? 'individual'),
                     'registered_at' => current_time('mysql'),
                     'cancelled_at' => null,
                     'notes' => isset($data['notes']) ? sanitize_textarea_field($data['notes']) : null,
-                    'enrollment_data' => isset($data['enrollment_data']) ? wp_json_encode($data['enrollment_data']) : null,
+                    'enrollment_data' => $mergedData ? wp_json_encode($mergedData) : null,
                     'quote_id' => isset($data['quote_id']) ? absint($data['quote_id']) : null,
                     'selections' => isset($data['selections']) ? wp_json_encode($data['selections']) : null,
                     'completion_tasks' => null,
@@ -191,18 +219,61 @@ final class RegistrationRepository
      */
     public function findByEmailAndEdition(string $email, int $editionId): ?object
     {
-        global $wpdb;
+        return $this->findByEmailAndEditionForStage($email, $editionId, RegistrationStatus::Interest);
+    }
 
+    /**
+     * Find any anonymous row for this email + edition across interest + waitlist stages.
+     *
+     * Used to upsert when a user submits interest now and waitlist later (or vice
+     * versa) for the same edition — we want a single row, not two, since both stages
+     * are pre-enrollment intent on the same offering.
+     */
+    public function findAnonymousForEmailAndEdition(string $email, int $editionId): ?object
+    {
+        global $wpdb;
         $table = $this->table();
 
         return $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$table}
              WHERE edition_id = %d
-             AND status = %s
-             AND JSON_UNQUOTE(JSON_EXTRACT(enrollment_data, '$.interest.email')) = %s
+             AND user_id IS NULL
+             AND status IN (%s, %s)
+             AND (
+                JSON_UNQUOTE(JSON_EXTRACT(enrollment_data, '$.interest.email')) = %s
+                OR JSON_UNQUOTE(JSON_EXTRACT(enrollment_data, '$.waitlist.email')) = %s
+             )
              LIMIT 1",
             $editionId,
             RegistrationStatus::Interest->value,
+            RegistrationStatus::Waitlist->value,
+            $email,
+            $email
+        ));
+    }
+
+    /**
+     * Find a registration by email and edition for a given status/stage.
+     *
+     * Looks for the email inside enrollment_data.{stage}.email, where stage
+     * matches the status value (e.g. 'interest' or 'waitlist').
+     */
+    public function findByEmailAndEditionForStage(string $email, int $editionId, RegistrationStatus $status): ?object
+    {
+        global $wpdb;
+
+        $table = $this->table();
+        $jsonPath = '$.' . $status->value . '.email';
+
+        return $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$table}
+             WHERE edition_id = %d
+             AND status = %s
+             AND JSON_UNQUOTE(JSON_EXTRACT(enrollment_data, %s)) = %s
+             LIMIT 1",
+            $editionId,
+            $status->value,
+            $jsonPath,
             $email
         ));
     }
@@ -725,24 +796,44 @@ final class RegistrationRepository
 
     /**
      * Update registration status.
+     *
+     * `completed_at` and `cancelled_at` are set on the FIRST transition only.
+     * Subsequent calls to updateStatus with the same terminal status are
+     * idempotent and preserve the original timestamp.
      */
     public function updateStatus(int $id, RegistrationStatus $status): bool
     {
         $data = ['status' => $status->value];
 
+        // Clear completion_tasks when moving to Cancelled — they're stage-specific
+        // and don't apply to a terminated registration. On re-enroll the
+        // reactivation path initializes fresh tasks anyway.
         if ($status === RegistrationStatus::Cancelled) {
-            $data['cancelled_at'] = current_time('mysql');
+            $data['completion_tasks'] = null;
         }
 
-        if ($status === RegistrationStatus::Completed) {
-            $data['completed_at'] = current_time('mysql');
+        if ($status === RegistrationStatus::Cancelled || $status === RegistrationStatus::Completed) {
+            $existing = $this->find($id);
+            if ($existing) {
+                if ($status === RegistrationStatus::Cancelled && empty($existing->cancelled_at)) {
+                    $data['cancelled_at'] = current_time('mysql');
+                }
+                if ($status === RegistrationStatus::Completed && empty($existing->completed_at)) {
+                    $data['completed_at'] = current_time('mysql');
+                }
+            }
         }
 
         return $this->update($id, $data);
     }
 
     /**
-     * Cancel a registration.
+     * Cancel a registration (data-only).
+     *
+     * Does NOT fire stride/registration/cancelled — callers must use
+     * EnrollmentService::cancel() for the full lifecycle (LMS revoke, quote
+     * cancel, audit, mail). This method is the raw data write; the event is
+     * dispatched by the service so listeners see a fully consistent state.
      */
     public function cancel(int $id): bool
     {
@@ -751,18 +842,7 @@ final class RegistrationRepository
             return false;
         }
 
-        $result = $this->updateStatus($id, RegistrationStatus::Cancelled);
-
-        if ($result) {
-            do_action('stride/registration/cancelled', [
-                'registration_id' => $id,
-                'user_id' => $registration->user_id,
-                'edition_id' => $registration->edition_id,
-                'trajectory_id' => $registration->trajectory_id,
-            ]);
-        }
-
-        return $result;
+        return $this->updateStatus($id, RegistrationStatus::Cancelled);
     }
 
     // === Cache management ===

@@ -2,7 +2,8 @@
  * Enrollment Form — Alpine.js Component
  *
  * Multi-step enrollment form with mode-based step flow.
- * Modes: 'interest' (skip type/billing), 'pending_approval', 'enrollment' (full flow).
+ * Modes: 'interest' (skip type/billing), 'waitlist' (full edition, skip type/billing),
+ * 'pending_approval', 'enrollment' (full flow).
  *
  * @param {Object} config
  * @param {number} config.itemId
@@ -27,6 +28,10 @@ function enrollmentForm(config) {
 
     const stepConfig = {
         interest: {
+            labels: ['Gegevens', 'Bevestigen'],
+            stepMap: [1, 3],
+        },
+        waitlist: {
             labels: ['Gegevens', 'Bevestigen'],
             stepMap: [1, 3],
         },
@@ -78,6 +83,7 @@ function enrollmentForm(config) {
         get submitLabel() {
             const labels = {
                 interest: 'Interesse melden',
+                waitlist: 'Op wachtlijst plaatsen',
                 pending_approval: 'Inschrijving indienen',
                 enrollment: 'Nu inschrijven',
             };
@@ -85,11 +91,13 @@ function enrollmentForm(config) {
         },
 
         get submitAction() {
-            return this.mode === 'interest' ? 'stride_submit_interest' : 'stride_submit_enrollment';
+            if (this.mode === 'interest') return 'stride_submit_interest';
+            if (this.mode === 'waitlist') return 'stride_submit_waitlist';
+            return 'stride_submit_enrollment';
         },
 
         form: {
-            enrollment_type: (mode === 'interest' || isShortForm) ? 'self' : 'werknemer',
+            enrollment_type: (mode === 'interest' || mode === 'waitlist' || isShortForm) ? 'self' : 'werknemer',
             first_name: config.prefill.first_name || '',
             last_name: config.prefill.last_name || '',
             email: config.userEmail || '',

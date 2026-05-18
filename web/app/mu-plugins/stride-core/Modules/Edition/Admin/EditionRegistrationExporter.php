@@ -132,6 +132,20 @@ final class EditionRegistrationExporter
             $sheet->setName('Taken & Vragenlijst');
             $this->writeTasksSheet($writer, $sheet, $data);
         }
+
+        // Sheet 6: Interesse (only if any interest rows exist)
+        if (!empty($data['interestRegistrations'])) {
+            $sheet = $writer->addNewSheetAndMakeItCurrent();
+            $sheet->setName('Interesse');
+            $this->writeStageSheet($writer, $sheet, $data['interestRegistrations'], $data, 'interest');
+        }
+
+        // Sheet 7: Wachtlijst (only if any waitlist rows exist)
+        if (!empty($data['waitlistRegistrations'])) {
+            $sheet = $writer->addNewSheetAndMakeItCurrent();
+            $sheet->setName('Wachtlijst');
+            $this->writeStageSheet($writer, $sheet, $data['waitlistRegistrations'], $data, 'waitlist');
+        }
     }
 
     // =========================================================================
@@ -140,11 +154,31 @@ final class EditionRegistrationExporter
 
     private function gatherData(int $editionId): array
     {
-        $registrations = $this->getRegistrations($editionId);
+        $allRegistrations = $this->getRegistrations($editionId);
 
-        $userIds = array_unique(array_filter(
-            array_map(fn($r) => (int) $r['user_id'], $registrations)
-        ));
+        // Partition out interest and waitlist rows so the participant sheets
+        // (Deelnemers / Facturatie / Aanwezigheid / Taken) stay focused on
+        // actual enrollments. Interest + waitlist get their own sheets.
+        $interestRegistrations = [];
+        $waitlistRegistrations = [];
+        $registrations = [];
+        foreach ($allRegistrations as $r) {
+            $status = $r['status'] ?? '';
+            if ($status === RegistrationStatus::Interest->value) {
+                $interestRegistrations[] = $r;
+            } elseif ($status === RegistrationStatus::Waitlist->value) {
+                $waitlistRegistrations[] = $r;
+            } else {
+                $registrations[] = $r;
+            }
+        }
+
+        // Collect user IDs across ALL registrations (interest may be anonymous → 0 → filtered).
+        // Also include enrolled_by so we can resolve who registered a colleague.
+        $userIds = array_unique(array_filter(array_merge(
+            array_map(fn($r) => (int) $r['user_id'], $allRegistrations),
+            array_map(fn($r) => (int) ($r['enrolled_by'] ?? 0), $allRegistrations),
+        )));
         $users = BatchQueryHelper::batchGetUsers($userIds);
         $userMeta = $this->batchGetUserMeta($userIds);
 
@@ -176,16 +210,19 @@ final class EditionRegistrationExporter
         // Use the Questionnaire module for additional fields instead.
         $extraFields = [];
 
-        // Parse enrollment_data JSON for each registration
-        foreach ($registrations as &$r) {
-            $raw = $r['enrollment_data'] ?? '';
-            if (is_string($raw) && $raw !== '') {
-                $r['enrollment_data_parsed'] = json_decode($raw, true) ?: [];
-            } else {
-                $r['enrollment_data_parsed'] = [];
+        // Parse enrollment_data JSON for each registration slice
+        $parseEnrollmentData = function (array &$rows): void {
+            foreach ($rows as &$r) {
+                $raw = $r['enrollment_data'] ?? '';
+                $r['enrollment_data_parsed'] = (is_string($raw) && $raw !== '')
+                    ? (json_decode($raw, true) ?: [])
+                    : [];
             }
-        }
-        unset($r);
+            unset($r);
+        };
+        $parseEnrollmentData($registrations);
+        $parseEnrollmentData($interestRegistrations);
+        $parseEnrollmentData($waitlistRegistrations);
 
         // Batch-fetch quote data for registrations that have a quote_id
         $quotes = [];
@@ -205,9 +242,9 @@ final class EditionRegistrationExporter
             }
         }
 
-        // Status counts
+        // Status counts (across the full set so the overview reflects everything)
         $statusCounts = [];
-        foreach ($registrations as $r) {
+        foreach ($allRegistrations as $r) {
             $s = $r['status'] ?? 'unknown';
             $statusCounts[$s] = ($statusCounts[$s] ?? 0) + 1;
         }
@@ -224,6 +261,8 @@ final class EditionRegistrationExporter
             'capacity' => $capacity,
             'price' => $price,
             'registrations' => $registrations,
+            'interestRegistrations' => $interestRegistrations,
+            'waitlistRegistrations' => $waitlistRegistrations,
             'users' => $users,
             'userMeta' => $userMeta,
             'sessions' => $sessions,
@@ -326,9 +365,10 @@ final class EditionRegistrationExporter
 
         // Metadata columns
         $headers = array_merge($headers, [
-            'Status', 'Inschrijfwijze', 'Inschrijfdatum', 'Sessieselectie', 'Opmerking',
+            'Status', 'Inschrijfwijze', 'Ingeschreven door', 'Inschrijfdatum',
+            'Voltooid op', 'Geannuleerd op', 'Sessieselectie', 'Extra gegevens', 'Opmerking',
         ]);
-        $colWidths = array_merge($colWidths, [14, 14, 18, 14, 30]);
+        $colWidths = array_merge($colWidths, [14, 14, 22, 18, 18, 18, 14, 30, 30]);
 
         // Set column widths (OpenSpout uses 1-indexed columns)
         foreach ($colWidths as $idx => $width) {
@@ -394,8 +434,26 @@ final class EditionRegistrationExporter
             // Metadata columns
             $cells[] = Cell::fromValue($status?->label() ?? ($registration['status'] ?? ''));
             $cells[] = Cell::fromValue($this->enrollmentPathLabel($registration['enrollment_path'] ?? ''));
+
+            // Ingeschreven door — resolve enrolled_by user name (for colleague enrollments)
+            $enrolledBy = (int) ($registration['enrolled_by'] ?? 0);
+            $enrolledByLabel = '';
+            if ($enrolledBy) {
+                $byUser = $data['users'][$enrolledBy] ?? null;
+                $enrolledByLabel = $byUser ? trim(($byUser->first_name ?? '') . ' ' . ($byUser->last_name ?? '')) ?: $byUser->display_name : 'Gebruiker #' . $enrolledBy;
+            }
+            $cells[] = Cell::fromValue($enrolledByLabel);
+
             $cells[] = Cell::fromValue($registeredAt ? date_i18n('d/m/Y H:i', strtotime($registeredAt)) : '');
+            $cells[] = Cell::fromValue(!empty($registration['completed_at']) ? date_i18n('d/m/Y H:i', strtotime($registration['completed_at'])) : '');
+            $cells[] = Cell::fromValue(!empty($registration['cancelled_at']) ? date_i18n('d/m/Y H:i', strtotime($registration['cancelled_at'])) : '');
             $cells[] = Cell::fromValue($selectionsText);
+
+            // Extra gegevens — summarize enrollment_data stage payloads (enrollment_personal etc.)
+            // Excludes the per-stage email/name which are already shown in the email column.
+            $extraSummary = $this->summarizeEnrollmentData($enrollmentData);
+            $cells[] = Cell::fromValue($extraSummary);
+
             $cells[] = Cell::fromValue($registration['notes'] ?? '');
 
             $style = ($index % 2 === 0) ? $this->rowStyleEven : $this->rowStyleOdd;
@@ -643,9 +701,22 @@ final class EditionRegistrationExporter
                 continue;
             }
 
-            foreach ($tasks as $task) {
-                $taskType = $task['type'] ?? $task['label'] ?? '';
-                $taskLabel = $task['label'] ?? ucfirst($taskType);
+            $taskLabels = [
+                'questionnaire'    => 'Vragenlijst',
+                'documents'        => 'Documenten',
+                'approval'         => 'Goedkeuring',
+                'session_selection' => 'Sessiekeuze',
+                'post_evaluation'  => 'Evaluatie (na opleiding)',
+                'post_documents'   => 'Documenten (na opleiding)',
+                'post_approval'    => 'Goedkeuring (na opleiding)',
+            ];
+
+            foreach ($tasks as $taskType => $task) {
+                // Tasks are keyed by type. Allow $task['type'] override for forward compat.
+                if (is_int($taskType)) {
+                    $taskType = $task['type'] ?? '';
+                }
+                $taskLabel = $task['label'] ?? ($taskLabels[$taskType] ?? ucfirst((string) $taskType));
                 $taskStatus = ($task['status'] ?? '') === 'completed' ? 'Voltooid' : 'In afwachting';
                 $completedAt = $task['completed_at'] ?? '';
                 if ($completedAt) {
@@ -675,10 +746,13 @@ final class EditionRegistrationExporter
                     $details[] = 'Bestanden: ' . implode(', ', $fileNames);
                 }
 
-                if (!empty($taskData['selected_sessions']) && is_array($taskData['selected_sessions'])) {
+                // session_selection task stores chosen IDs under data.session_ids
+                // (per RegistrationRepository::setSelections / CompletionTaskHandler).
+                $selectedSessionIds = $taskData['session_ids'] ?? $taskData['selected_sessions'] ?? null;
+                if (!empty($selectedSessionIds) && is_array($selectedSessionIds)) {
                     $sessionLabels = [];
                     foreach ($data['sessions'] as $s) {
-                        if (in_array((int) $s['id'], array_map('intval', $taskData['selected_sessions']), true)) {
+                        if (in_array((int) $s['id'], array_map('intval', $selectedSessionIds), true)) {
                             $sessionLabels[] = (!empty($s['date']) ? date_i18n('j M', strtotime($s['date'])) . ' ' : '') . ($s['title'] ?? '');
                         }
                     }
@@ -767,6 +841,99 @@ final class EditionRegistrationExporter
             'trajectory' => 'Traject',
             default => $path ?: '—',
         };
+    }
+
+    /**
+     * Build a human-readable summary of enrollment_data extra fields.
+     *
+     * enrollment_data is stage-keyed: { interest: {...}, waitlist: {...},
+     * enrollment_personal: {...}, intake: {...}, evaluation: {...} }.
+     * For the participant Deelnemers sheet we want everything from the user's
+     * pre-enrollment stages (enrollment_personal, intake, evaluation) shown
+     * inline so admins can answer "what did this person tell us?" without
+     * cross-referencing the questionnaire builder.
+     *
+     * @param array<string, mixed> $enrollmentData parsed enrollment_data JSON
+     */
+    private function summarizeEnrollmentData(array $enrollmentData): string
+    {
+        $stagesToShow = ['enrollment_personal', 'intake', 'evaluation'];
+        // Fields already present in their own columns — don't repeat them.
+        $skipKeys = ['name', 'email', 'phone', 'first_name', 'last_name',
+                     'company', 'billing_company', 'billing_vat', 'billing_address_1',
+                     'billing_postcode', 'billing_city', 'invoice_email', 'gln_number',
+                     'organisation', 'department'];
+        $lines = [];
+        foreach ($stagesToShow as $stage) {
+            if (empty($enrollmentData[$stage]) || !is_array($enrollmentData[$stage])) {
+                continue;
+            }
+            foreach ($enrollmentData[$stage] as $key => $value) {
+                if (in_array($key, $skipKeys, true)) {
+                    continue;
+                }
+                $rendered = is_scalar($value) ? (string) $value : json_encode($value);
+                $lines[] = $key . ': ' . $rendered;
+            }
+        }
+        return implode("\n", $lines);
+    }
+
+    // =========================================================================
+     // Sheets 6/7: Interesse / Wachtlijst (shared layout)
+     // =========================================================================
+
+    /**
+     * Write a stage-specific sheet (interest or waitlist).
+     *
+     * Handles both logged-in rows (data on user record) and anonymous rows
+     * (data on enrollment_data.{stage}).
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @param array<string, mixed> $data
+     */
+    private function writeStageSheet(Writer $writer, $sheet, array $rows, array $data, string $stage): void
+    {
+        $headers = ['Naam', 'E-mail', 'Telefoon', 'Organisatie', 'Geregistreerd op', 'Opmerking', 'Bron'];
+        $colWidths = [24, 28, 16, 22, 18, 32, 14];
+
+        foreach ($colWidths as $idx => $width) {
+            $sheet->setColumnWidth($width, $idx + 1);
+        }
+
+        $writer->addRow(new Row(
+            array_map(fn($h) => Cell::fromValue($h), $headers),
+            $this->headerStyle
+        ));
+
+        foreach ($rows as $index => $registration) {
+            $userId = (int) ($registration['user_id'] ?? 0);
+            $user = $userId ? ($data['users'][$userId] ?? null) : null;
+            $meta = $userId ? ($data['userMeta'][$userId] ?? []) : [];
+            $stageData = $registration['enrollment_data_parsed'][$stage] ?? [];
+
+            $name = $user
+                ? trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')) ?: ($user->display_name ?? '')
+                : ($stageData['name'] ?? '');
+            $email = $user->user_email ?? ($stageData['email'] ?? '');
+            $phone = $meta['phone'] ?? ($stageData['phone'] ?? '');
+            $organisation = $meta['organisation'] ?? ($stageData['organisation'] ?? '');
+            $registeredAt = $registration['registered_at'] ?? '';
+            $source = $userId ? 'Account' : 'Anoniem';
+
+            $cells = [
+                Cell::fromValue($name),
+                Cell::fromValue($email),
+                Cell::fromValue($phone),
+                Cell::fromValue($organisation),
+                Cell::fromValue($registeredAt ? date_i18n('d/m/Y H:i', strtotime($registeredAt)) : ''),
+                Cell::fromValue($registration['notes'] ?? ''),
+                Cell::fromValue($source),
+            ];
+
+            $style = ($index % 2 === 0) ? $this->rowStyleEven : $this->rowStyleOdd;
+            $writer->addRow(new Row($cells, $style));
+        }
     }
 
     private function getRegistrations(int $editionId): array

@@ -16,6 +16,7 @@ class QuestionnaireRepository
 
     public const STAGES = [
         'interest',
+        'waitlist',
         'enrollment_personal',
         'enrollment_billing',
         'intake',

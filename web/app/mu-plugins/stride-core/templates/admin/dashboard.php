@@ -569,7 +569,10 @@ defined('ABSPATH') || exit;
                                 <div class="sd-student-row">
                                     <div class="sd-avatar" x-text="(reg.name || '?')[0].toUpperCase()"></div>
                                     <div>
-                                        <div class="sd-student-row__name" x-text="reg.name"></div>
+                                        <div class="sd-student-row__name">
+                                            <span x-text="reg.name"></span>
+                                            <em x-show="reg.anonymous" class="sd-anon-tag">(anoniem)</em>
+                                        </div>
                                         <div class="sd-student-row__email" x-text="reg.email"></div>
                                     </div>
                                     <span class="sd-badge" :class="'sd-badge--' + reg.status" x-text="reg.status_label"></span>
