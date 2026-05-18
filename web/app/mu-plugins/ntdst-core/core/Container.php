@@ -40,6 +40,13 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
+/**
+ * Conventions:
+ * - Register bindings before the `ntdst/features_ready` hook. After that, only
+ *   mutate the container from tests.
+ * - Rebinding an ID does NOT invalidate consumers that already resolved it.
+ *   If a test needs fresh resolution after rebinding, call flush().
+ */
 class NTDST_Container
 {
     protected array $services = [];
@@ -58,6 +65,11 @@ class NTDST_Container
      */
     protected array $factoryCache = [];
 
+    /**
+     * Tracks IDs currently being resolved to detect circular dependencies.
+     */
+    protected array $resolving = [];
+
     public function __construct()
     {
         // Auto-register container itself
@@ -67,10 +79,13 @@ class NTDST_Container
 
     /**
      * Register a service (value, class, or factory)
+     *
+     * Passing no second argument means "register the ID as its own class".
+     * Passing an explicit null stores null as the value.
      */
     public function set(string $id, mixed $value = null): self
     {
-        $this->services[$id] = $value ?? $id;
+        $this->services[$id] = (func_num_args() < 2) ? $id : $value;
         unset($this->resolved[$id]); // Clear cache
         return $this;
     }
@@ -80,8 +95,9 @@ class NTDST_Container
      */
     public function get(string $id): mixed
     {
-        // Return cached if exists
-        if (isset($this->resolved[$id])) {
+        // Return cached if exists. array_key_exists so a resolved null
+        // value still hits the cache.
+        if (array_key_exists($id, $this->resolved)) {
             return $this->resolved[$id];
         }
 
@@ -94,6 +110,9 @@ class NTDST_Container
 
     /**
      * Create fresh instance (autowired, not cached)
+     *
+     * Keys in $params must match constructor parameter names. Unknown keys
+     * throw so typos surface immediately rather than silently autowiring.
      */
     public function make(string $id, array $params = []): object
     {
@@ -101,15 +120,33 @@ class NTDST_Container
             throw new RuntimeException("Class {$id} does not exist");
         }
 
+        if ($params) {
+            $constructor = $this->getReflection($id)->getConstructor();
+            $known = $constructor
+                ? array_map(fn($p) => $p->getName(), $constructor->getParameters())
+                : [];
+            $unknown = array_diff(array_keys($params), $known);
+            if ($unknown) {
+                throw new RuntimeException(
+                    "Unknown parameter(s) for {$id}: " . implode(', ', $unknown)
+                );
+            }
+        }
+
         return $this->resolveClass($id, $params);
     }
 
     /**
-     * Check if service exists
+     * Check if get($id) will resolve without throwing (PSR-11 semantics).
+     *
+     * Returns true for registered IDs AND for unregistered classes that exist
+     * and can be autowired.
      */
     public function has(string $id): bool
     {
-        return isset($this->services[$id]) || isset($this->resolved[$id]);
+        return array_key_exists($id, $this->services)
+            || array_key_exists($id, $this->resolved)
+            || class_exists($id);
     }
 
     /**
@@ -117,38 +154,67 @@ class NTDST_Container
      */
     protected function resolve(string $id): mixed
     {
-        // If not registered, try to resolve as class
-        if (!isset($this->services[$id])) {
-            if (class_exists($id)) {
-                return $this->resolveClass($id);
+        if (isset($this->resolving[$id])) {
+            $chain = implode(' -> ', array_keys($this->resolving)) . " -> {$id}";
+            throw new RuntimeException("Circular dependency detected: {$chain}");
+        }
+
+        $this->resolving[$id] = true;
+        try {
+            // If not registered, try to resolve as class. array_key_exists so a
+            // registered null value isn't treated as "not registered".
+            if (!array_key_exists($id, $this->services)) {
+                if (class_exists($id)) {
+                    return $this->resolveClass($id);
+                }
+                throw new RuntimeException("Service {$id} not found");
             }
-            throw new RuntimeException("Service {$id} not found");
+
+            $service = $this->services[$id];
+
+            // If closure (factory), execute it
+            if ($service instanceof Closure) {
+                return $this->resolveFactory($service);
+            }
+
+            // If string: resolve as class. Distinguish "non-class string value"
+            // from "typo'd class binding" so misconfigured bindings fail loud.
+            if (is_string($service) && $service !== $id && $this->looksLikeClassName($service)) {
+                if (!class_exists($service)) {
+                    throw new RuntimeException("Binding {$id} points to non-existent class {$service}");
+                }
+                return $this->get($service);
+            }
+
+            if (is_string($service) && class_exists($service)) {
+                return $service === $id ? $this->resolveClass($service) : $this->get($service);
+            }
+
+            // Return as-is (primitive value)
+            return $service;
+        } finally {
+            unset($this->resolving[$id]);
         }
+    }
 
-        $service = $this->services[$id];
-
-        // If closure (factory), execute it
-        if ($service instanceof Closure) {
-            return $this->resolveFactory($service);
-        }
-
-        // If string and is a class: reuse singleton for aliases, resolve for self-references
-        if (is_string($service) && class_exists($service)) {
-            return $service === $id ? $this->resolveClass($service) : $this->get($service);
-        }
-
-        // Return as-is (primitive value)
-        return $service;
+    /**
+     * Heuristic: does this string look like it's meant to be a class name?
+     * Used so that primitive string values aren't mistaken for typo'd bindings.
+     */
+    protected function looksLikeClassName(string $value): bool
+    {
+        return str_contains($value, '\\') || (isset($value[0]) && ctype_upper($value[0]));
     }
 
     /**
      * Resolve factory closure
      * PERFORMANCE: Caches reflection analysis to avoid repeated introspection
      *
-     * If the factory has at least one parameter, the container is passed.
-     * This allows both typed and untyped parameter styles:
-     *   - function (NTDST_Container $c) { ... }
-     *   - function ($c) { ... }
+     * If the factory's first parameter is untyped or typed as the container,
+     * the container is passed. Otherwise the factory is called with no args.
+     *   - function (NTDST_Container $c) { ... }   // container passed
+     *   - function ($c) { ... }                   // container passed
+     *   - function (int $count = 5) { ... }       // called with no args
      */
     protected function resolveFactory(Closure $factory): mixed
     {
@@ -159,8 +225,14 @@ class NTDST_Container
             $reflection = new ReflectionFunction($factory);
             $params = $reflection->getParameters();
 
-            // Pass container if factory expects any parameter
-            $this->factoryCache[$hash] = isset($params[0]);
+            $passContainer = false;
+            if (isset($params[0])) {
+                $type = $params[0]->getType();
+                $passContainer = $type === null
+                    || (!$type->isBuiltin() && is_a(self::class, $type->getName(), true));
+            }
+
+            $this->factoryCache[$hash] = $passContainer;
         }
 
         // Use cached result
@@ -227,7 +299,9 @@ class NTDST_Container
                 continue;
             }
 
-            throw new RuntimeException("Cannot resolve parameter: {$name} in {$parameter->getDeclaringClass()->getName()}");
+            $where = $parameter->getDeclaringClass()?->getName() ?? '<global>';
+            $typeLabel = $type ? (string) $type : 'untyped';
+            throw new RuntimeException("Cannot resolve parameter: {$name} ({$typeLabel}) in {$where}");
         }
 
         return $dependencies;
@@ -290,7 +364,7 @@ class NTDST_Container
      */
     public function forget(string $id): self
     {
-        unset($this->services[$id], $this->resolved[$id]);
+        unset($this->services[$id], $this->resolved[$id], $this->reflections[$id]);
         return $this;
     }
 
@@ -304,6 +378,8 @@ class NTDST_Container
         $this->services = [self::class => $container];
         $this->resolved = [self::class => $container];
         $this->reflections = [];
+        $this->callableReflections = [];
+        $this->factoryCache = [];
 
         return $this;
     }
@@ -320,32 +396,45 @@ class NTDST_Container
 /**
  * Global helper - get container instance (singleton)
  */
-function ntdst_container(): NTDST_Container
-{
-    static $container = null;
-    return $container ??= new NTDST_Container();
+if (!function_exists('ntdst_container')) {
+    function ntdst_container(): NTDST_Container
+    {
+        static $container = null;
+        return $container ??= new NTDST_Container();
+    }
 }
 
 /**
- * Quick register helper
+ * Quick register helper.
+ *
+ * Mirrors NTDST_Container::set() — passing one arg means "register the ID as
+ * its own class"; passing two args (even null) stores the second argument.
  */
-function ntdst_set(string $id, mixed $value = null): NTDST_Container
-{
-    return ntdst_container()->set($id, $value);
+if (!function_exists('ntdst_set')) {
+    function ntdst_set(string $id, mixed $value = null): NTDST_Container
+    {
+        return func_num_args() < 2
+            ? ntdst_container()->set($id)
+            : ntdst_container()->set($id, $value);
+    }
 }
 
 /**
  * Quick get helper (singleton)
  */
-function ntdst_get(string $id): mixed
-{
-    return ntdst_container()->get($id);
+if (!function_exists('ntdst_get')) {
+    function ntdst_get(string $id): mixed
+    {
+        return ntdst_container()->get($id);
+    }
 }
 
 /**
  * Quick make helper (fresh instance)
  */
-function ntdst_make(string $id, array $params = []): object
-{
-    return ntdst_container()->make($id, $params);
+if (!function_exists('ntdst_make')) {
+    function ntdst_make(string $id, array $params = []): object
+    {
+        return ntdst_container()->make($id, $params);
+    }
 }

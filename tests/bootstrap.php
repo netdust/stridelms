@@ -56,6 +56,7 @@ require_once __DIR__ . '/TestCase.php';
 // Load NTDST Core classes needed for testing
 $ntdstCoreFiles = [
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/api/Response.php',
+    dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/core/Container.php',
 ];
 
 foreach ($ntdstCoreFiles as $file) {
