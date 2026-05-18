@@ -59,4 +59,64 @@ final class RegistrationModalController
 
         wp_send_json_success(['html' => '', 'title' => '']);
     }
+
+    /**
+     * Build the payload (title + html) for a modal, or a WP_Error.
+     *
+     * @return array{title: string, html: string}|\WP_Error
+     */
+    public function buildPayload(int $registrationId, string $type): array|\WP_Error
+    {
+        $registration = $this->registrations->find($registrationId);
+        if (!$registration) {
+            return new \WP_Error(
+                'registration_not_found',
+                __('Inschrijving niet gevonden.', 'stride'),
+            );
+        }
+
+        $userId = (int) $registration->user_id;
+        $anonymisedAt = (int) get_user_meta($userId, '_stride_anonymised_at', true);
+        if ($anonymisedAt > 0) {
+            return new \WP_Error(
+                'user_unavailable',
+                __('Gegevens van deze gebruiker zijn niet meer beschikbaar.', 'stride'),
+            );
+        }
+
+        $user = get_userdata($userId);
+        if (!$user) {
+            return new \WP_Error(
+                'user_unavailable',
+                __('Gegevens van deze gebruiker zijn niet meer beschikbaar.', 'stride'),
+            );
+        }
+
+        $editionId = (int) $registration->edition_id;
+        $edition = $this->editionService->getEdition($editionId);
+        $editionTitle = $edition instanceof \WP_Post ? $edition->post_title : '';
+
+        return [
+            'title' => $this->buildTitle($type, $user->display_name, $editionTitle),
+            'html' => '',
+        ];
+    }
+
+    private function buildTitle(string $type, string $userName, string $editionTitle): string
+    {
+        if ($type === 'completion') {
+            return sprintf(
+                /* translators: %s: user display name */
+                __('Voltooiing — %s', 'stride'),
+                $userName,
+            );
+        }
+
+        return sprintf(
+            /* translators: 1: user display name, 2: edition title */
+            __('Inschrijving — %1$s — %2$s', 'stride'),
+            $userName,
+            $editionTitle,
+        );
+    }
 }

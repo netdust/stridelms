@@ -42,4 +42,22 @@ class RegistrationModalControllerTest extends TestCase
             RegistrationModalController::NONCE_AJAX
         );
     }
+
+    public function testBuildPayloadReturnsErrorWhenRegistrationNotFound(): void
+    {
+        $registrations = $this->createMock(RegistrationRepository::class);
+        $registrations->method('find')->willReturn(null);
+
+        $controller = new RegistrationModalController(
+            $this->createMock(EditionService::class),
+            $this->createMock(SessionService::class),
+            $this->createMock(SessionSelection::class),
+            $registrations,
+        );
+
+        $result = $controller->buildPayload(123, 'enrollment');
+
+        self::assertInstanceOf(\WP_Error::class, $result);
+        self::assertSame('registration_not_found', $result->get_error_code());
+    }
 }
