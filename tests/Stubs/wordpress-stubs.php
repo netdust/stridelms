@@ -2172,6 +2172,13 @@ if (!function_exists('date_i18n')) {
     }
 }
 
+if (!function_exists('number_format_i18n')) {
+    function number_format_i18n($number, int $decimals = 0): string
+    {
+        return number_format((float) $number, $decimals, ',', '.');
+    }
+}
+
 if (!function_exists('content_url')) {
     function content_url(string $path = ''): string
     {

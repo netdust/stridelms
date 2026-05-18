@@ -238,4 +238,40 @@ class RegistrationModalControllerTest extends TestCase
             $result['html'],
         );
     }
+
+    public function testCompletionModalRendersTasksAndProgress(): void
+    {
+        $reg = (object) [
+            'id' => 1, 'user_id' => 42, 'edition_id' => 99,
+            'enrollment_data' => '{}',
+            'completion_tasks' => wp_json_encode([
+                'questionnaire' => ['status' => 'completed', 'completed_at' => '2026-05-01 10:00:00'],
+                'documents'     => ['status' => 'pending'],
+            ]),
+        ];
+
+        $registrations = $this->createMock(RegistrationRepository::class);
+        $registrations->method('find')->willReturn($reg);
+
+        $editionService = $this->createMock(EditionService::class);
+        $editionService->method('getEdition')->willReturn(new \WP_Post(['post_title' => 'E']));
+        $editionService->method('getCourseId')->willReturn(777);
+
+        global $_test_users;
+        $_test_users[42] = new \WP_User((object) ['ID' => 42, 'display_name' => 'Test User']);
+
+        $controller = new RegistrationModalController(
+            $editionService,
+            $this->createMock(SessionService::class),
+            $this->createMock(SessionSelection::class),
+            $registrations,
+        );
+        $result = $controller->buildPayload(1, 'completion');
+
+        unset($_test_users[42]);
+
+        self::assertStringContainsString('Voltooiing', $result['title']);
+        self::assertStringContainsString('Vragenlijst', $result['html']);
+        self::assertStringContainsString('Documenten', $result['html']);
+    }
 }

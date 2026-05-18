@@ -174,7 +174,70 @@ final class RegistrationModalController
 
     private function renderCompletion(object $registration): string
     {
-        return ''; // Implemented in Task 10
+        $taskRows = $this->buildTaskRows(
+            $this->decodeJson($registration->completion_tasks ?? ''),
+        );
+
+        $editionId = (int) $registration->edition_id;
+        $userId = (int) $registration->user_id;
+        $courseId = (int) ($this->editionService->getCourseId($editionId) ?? 0);
+
+        $ldProgress = 0;
+        $ldCompletionDate = null;
+        $certificateUrl = '';
+
+        if ($courseId > 0 && class_exists(\Stride\Integrations\LearnDash\LearnDashHelper::class)) {
+            $ldProgress = \Stride\Integrations\LearnDash\LearnDashHelper::getProgress($courseId, $userId);
+            $completionTs = \Stride\Integrations\LearnDash\LearnDashHelper::getCompletionDate($courseId, $userId);
+            $ldCompletionDate = $completionTs ? date('Y-m-d H:i:s', $completionTs) : null;
+            if (\Stride\Integrations\LearnDash\LearnDashHelper::isComplete($courseId, $userId)) {
+                $certificateUrl = \Stride\Integrations\LearnDash\LearnDashHelper::getCertificateLink($courseId, $userId);
+            }
+        }
+
+        $hoursAttended = 0.0;
+        $hoursTotal = 0.0;
+        if (method_exists($this->sessionService, 'getTotalHours')) {
+            $hoursTotal = $this->sessionService->getTotalHours($editionId);
+        }
+        if (method_exists($this->sessionService, 'getHoursAttended')) {
+            $hoursAttended = $this->sessionService->getHoursAttended($userId, $editionId);
+        }
+
+        ob_start();
+        $partialPath = dirname(__DIR__, 3) . '/templates/admin/partials/registration-modal-completion.php';
+        include $partialPath;
+        return (string) ob_get_clean();
+    }
+
+    /**
+     * @return array<int, array{status:string,label:string,completed_at:?string,completed_by:?string}>
+     */
+    private function buildTaskRows(array $tasks): array
+    {
+        $labels = [
+            'questionnaire'     => __('Vragenlijst', 'stride'),
+            'documents'         => __('Documenten', 'stride'),
+            'approval'          => __('Goedkeuring', 'stride'),
+            'session_selection' => __('Sessiekeuze', 'stride'),
+            'post_evaluation'   => __('Evaluatie', 'stride'),
+            'post_documents'    => __('Documenten (na afloop)', 'stride'),
+            'post_approval'     => __('Goedkeuring (na afloop)', 'stride'),
+        ];
+
+        $rows = [];
+        foreach ($tasks as $taskKey => $task) {
+            if (!is_array($task)) {
+                continue;
+            }
+            $rows[] = [
+                'status'       => (string) ($task['status'] ?? 'pending'),
+                'label'        => $labels[$taskKey] ?? ucfirst(str_replace('_', ' ', (string) $taskKey)),
+                'completed_at' => isset($task['completed_at']) ? (string) $task['completed_at'] : null,
+                'completed_by' => isset($task['completed_by']) ? (string) $task['completed_by'] : null,
+            ];
+        }
+        return $rows;
     }
 
     /**
