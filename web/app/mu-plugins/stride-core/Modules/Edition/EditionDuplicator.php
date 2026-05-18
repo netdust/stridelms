@@ -73,6 +73,15 @@ final class EditionDuplicator implements NTDST_Service_Meta
      */
     public function duplicate(int $sourceEditionId): int|WP_Error
     {
+        $source = get_post($sourceEditionId);
+
+        if (!$source instanceof WP_Post || $source->post_type !== EditionCPT::POST_TYPE) {
+            return new WP_Error(
+                'not_found',
+                __('Bron-editie niet gevonden.', 'stride')
+            );
+        }
+
         return new WP_Error('not_implemented', 'Not implemented yet');
     }
 }
