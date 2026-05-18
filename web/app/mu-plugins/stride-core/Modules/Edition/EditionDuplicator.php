@@ -84,10 +84,17 @@ final class EditionDuplicator implements NTDST_Service_Meta
 
     public function handleDuplicate(): void
     {
-        $sourceId = isset($_GET['edition_id']) ? (int) $_GET['edition_id'] : 0;
+        $sourceId = isset($_GET['edition_id']) ? absint(wp_unslash($_GET['edition_id'])) : 0;
 
         if ($sourceId <= 0) {
             $this->redirectToList('missing_id');
+        }
+
+        // Verify the target is actually an edition BEFORE the capability check —
+        // edit_post can legitimately resolve true for other post types the user owns.
+        $source = get_post($sourceId);
+        if (!$source instanceof WP_Post || $source->post_type !== EditionCPT::POST_TYPE) {
+            $this->redirectToList('not_found');
         }
 
         $nonce = isset($_GET['_wpnonce']) ? sanitize_text_field(wp_unslash($_GET['_wpnonce'])) : '';
@@ -134,6 +141,7 @@ final class EditionDuplicator implements NTDST_Service_Meta
         $notice = sanitize_key((string) $_GET['stride_notice']);
         $messages = [
             'missing_id'       => __('Geen editie geselecteerd om te dupliceren.', 'stride'),
+            'not_found'        => __('Editie niet gevonden.', 'stride'),
             'invalid_nonce'    => __('Beveiligingscontrole mislukt. Probeer opnieuw.', 'stride'),
             'forbidden'        => __('Geen toestemming om deze editie te dupliceren.', 'stride'),
             'duplicate_failed' => __('Dupliceren mislukt. Controleer de bron-editie.', 'stride'),
