@@ -1371,3 +1371,93 @@
     window.StrideEditionAdmin = EditionAdmin;
 
 })(jQuery);
+
+// ========================================
+// REGISTRATION VIEW-INFO MODAL
+// ========================================
+//
+// Wires the action icons (.stride-view-enrollment / .stride-view-completion)
+// on registration rows to an AJAX-loaded modal. Kept in a separate IIFE so
+// the modal concern stays isolated from EditionAdmin's state.
+(function ($) {
+    'use strict';
+
+    var $modal = null;
+
+    function ensureModal() {
+        if ($modal && $modal.length) return $modal;
+        $modal = $('#stride-registration-modal');
+        if ($modal.length) {
+            $modal.on('click', '[data-stride-modal-close]', closeModal);
+            $(document).on('keydown.strideModal', function (e) {
+                if (e.key === 'Escape' && !$modal.attr('hidden')) closeModal();
+            });
+        }
+        return $modal;
+    }
+
+    function openModal(title, html) {
+        var $m = ensureModal();
+        if (!$m.length) return;
+        $m.find('.stride-modal-title').text(title || '');
+        $m.find('.stride-modal-content').html(html || '');
+        $m.removeAttr('hidden').attr('aria-hidden', 'false');
+        $('body').addClass('stride-modal-open');
+    }
+
+    function showSkeleton() {
+        var $m = ensureModal();
+        if (!$m.length) return;
+        $m.find('.stride-modal-content').empty();
+        $m.find('.stride-modal-skeleton').removeAttr('hidden');
+        $m.removeAttr('hidden').attr('aria-hidden', 'false');
+        $('body').addClass('stride-modal-open');
+    }
+
+    function hideSkeleton() {
+        ensureModal().find('.stride-modal-skeleton').attr('hidden', 'hidden');
+    }
+
+    function closeModal() {
+        var $m = ensureModal();
+        if (!$m.length) return;
+        $m.attr('hidden', 'hidden').attr('aria-hidden', 'true');
+        $m.find('.stride-modal-content').empty();
+        $('body').removeClass('stride-modal-open');
+    }
+
+    function fetchAndOpen(regId, type) {
+        showSkeleton();
+        $.post(window.strideEditionAdmin.ajaxurl, {
+            action: 'stride_get_registration_modal',
+            nonce: window.strideEditionAdmin.nonce,
+            registration_id: regId,
+            type: type,
+        }).done(function (resp) {
+            hideSkeleton();
+            if (resp && resp.success) {
+                openModal(resp.data.title, resp.data.html);
+            } else {
+                var msg = (resp && resp.data && resp.data.message) || window.strideEditionAdmin.i18n.error;
+                openModal('', '<p class="stride-modal-error">' + msg + '</p>');
+            }
+        }).fail(function () {
+            hideSkeleton();
+            openModal('', '<p class="stride-modal-error">' + window.strideEditionAdmin.i18n.error + '</p>');
+        });
+    }
+
+    $(document).on('click', '.stride-view-enrollment', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var regId = $(this).data('reg-id');
+        if (regId) fetchAndOpen(regId, 'enrollment');
+    });
+
+    $(document).on('click', '.stride-view-completion', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var regId = $(this).data('reg-id');
+        if (regId) fetchAndOpen(regId, 'completion');
+    });
+})(jQuery);
