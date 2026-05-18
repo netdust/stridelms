@@ -69,6 +69,12 @@ $ntdstCoreFiles = [
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/services/Mailer.php',
 ];
 
+// RelationField depends on NTDST_Service_Meta — load the contract first
+// (if not already provided by the infrastructure stubs).
+if (!interface_exists('NTDST_Service_Meta', false)) {
+    require_once dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/core/ServiceInterface.php';
+}
+
 foreach ($ntdstCoreFiles as $file) {
     if (file_exists($file)) {
         require_once $file;

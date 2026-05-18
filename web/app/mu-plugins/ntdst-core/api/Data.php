@@ -1491,6 +1491,18 @@ class NTDST_Data_Manager
     }
 
     /**
+     * Check whether a model has been explicitly registered.
+     *
+     * Unlike get(), this does NOT auto-create a phantom empty model as a
+     * side effect. Use this when iterating over post types to find ones
+     * that actually have schemas.
+     */
+    public function isRegistered(string $name): bool
+    {
+        return isset(self::$models[$name]);
+    }
+
+    /**
      * Get post meta from WordPress cache (after update_postmeta_cache primed it)
      *
      * This is the optimized version that reads from primed cache.

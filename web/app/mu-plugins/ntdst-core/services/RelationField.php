@@ -79,40 +79,38 @@ final class NTDST_RelationField implements NTDST_Service_Meta
     }
 
     /**
-     * Get all registered models with relation fields
+     * Get all registered models with relation fields.
+     *
+     * Uses NTDST_Data_Manager::isRegistered() so iterating over public
+     * post types doesn't auto-create phantom model entries for built-in
+     * types (post, page, sfwd-courses, etc.) that have no NTDST schema.
      */
     private function getModelsWithRelations(): array
     {
         $models = [];
+        $data_manager = ntdst_data();
 
         // Get all registered post types
         $post_types = get_post_types(['public' => true], 'names');
 
         foreach ($post_types as $post_type) {
-            // Try to get the model config from Data Manager
+            if (!$data_manager->isRegistered($post_type)) {
+                continue;
+            }
+
             try {
-                $data_manager = ntdst_data();
                 $model = $data_manager->get($post_type);
-
-                if (!$model) {
-                    continue;
-                }
-
-                // Get schema using public method
                 $schema = $model->getSchema();
-
                 if (empty($schema)) {
                     continue;
                 }
 
-                // Find relation fields
                 foreach ($schema as $field_name => $field_config) {
                     if (is_array($field_config) && ($field_config['type'] ?? '') === 'relation') {
                         $models[$post_type][$field_name] = $field_config;
                     }
                 }
-            } catch (Exception $e) {
-                // Model not registered, skip
+            } catch (\Throwable $e) {
                 continue;
             }
         }
@@ -151,29 +149,54 @@ final class NTDST_RelationField implements NTDST_Service_Meta
     }
 
     /**
-     * Find posts that reference the given post ID in a relation field
+     * Find posts that reference the given post ID in a relation field.
+     *
+     * Data.php stores relation values as JSON arrays ([6, 7]), not PHP
+     * serialized. The old implementation searched for serialized patterns
+     * which never matched. We now narrow the candidate set with a JSON-
+     * shape LIKE (matches `:6,`, `:6]`, `[6,`, `[6]`) and then verify each
+     * candidate by JSON-decoding and looking for the ID, avoiding false
+     * positives like ID 60 matching when searching for ID 6.
      */
     private function findReferringPosts(int $post_id, string $post_type, string $field_name): array
     {
         global $wpdb;
 
-        // Query posts that have this post_id in their relation field meta
-        // WordPress stores arrays as PHP serialized: a:1:{i:0;i:6;}
-        // We search for the pattern 'i:{$post_id};' which represents the integer value in serialized format
+        // Narrow candidate set: rows whose JSON meta_value contains the ID
+        // bounded by JSON delimiters (start-of-array, comma, end-of-array).
         $sql = $wpdb->prepare(
             "SELECT DISTINCT p.* FROM {$wpdb->posts} p
             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
             WHERE p.post_type = %s
             AND p.post_status = 'publish'
             AND pm.meta_key = %s
-            AND pm.meta_value LIKE %s
+            AND (
+                pm.meta_value LIKE %s
+                OR pm.meta_value LIKE %s
+                OR pm.meta_value LIKE %s
+                OR pm.meta_value LIKE %s
+            )
             ORDER BY p.post_title ASC",
             $post_type,
             $field_name,
-            '%i:' . $post_id . ';%'  // Serialized integer pattern
+            '[' . $post_id . ']',            // single-element exact
+            '[' . $post_id . ',%',           // first element
+            '%,' . $post_id . ',%',          // middle element
+            '%,' . $post_id . ']'            // last element
         );
+        $candidates = $wpdb->get_results($sql) ?: [];
 
-        return $wpdb->get_results($sql);
+        // Verify each candidate by decoding the meta value — guards against
+        // false positives in unexpected meta shapes.
+        $matches = [];
+        foreach ($candidates as $candidate) {
+            $raw = get_post_meta($candidate->ID, $field_name, true);
+            $ids = is_array($raw) ? $raw : (is_string($raw) ? (json_decode($raw, true) ?: []) : []);
+            if (in_array($post_id, array_map('intval', $ids), true)) {
+                $matches[] = $candidate;
+            }
+        }
+        return $matches;
     }
 }
 
