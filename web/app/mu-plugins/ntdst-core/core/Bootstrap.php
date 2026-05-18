@@ -18,11 +18,23 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
+/**
+ * Hook + filter naming conventions:
+ *  - Actions: `ntdst/*` (e.g. `ntdst/core_ready`)
+ *  - Database options: `ntdst_service_*`
+ *  - Filters: `netdust_*` — historical, kept for backwards compatibility.
+ *    DO NOT propagate this naming to new filters; use `ntdst_*` instead.
+ *
+ * Boot order with equal priority is best-effort (PHP's uasort isn't stable).
+ * If two services depend on each other, set their priorities — never rely on
+ * registration order.
+ */
 class NTDST_Bootstrap
 {
     private array $config;
     private array $services = [];
     private array $bootedServices = [];
+    private bool $servicesRegistered = false;
     private bool $coreBooted = false;
     private bool $featuresBooted = false;
 
@@ -67,6 +79,12 @@ class NTDST_Bootstrap
      */
     public function register(): self
     {
+        if ($this->servicesRegistered) {
+            return $this;
+        }
+
+        $countBefore = count($this->services);
+
         // Auto-discover root services if enabled (sector-independent)
         if ($this->config['services']['auto_discover'] ?? false) {
             $this->discoverServices();
@@ -74,6 +92,12 @@ class NTDST_Bootstrap
 
         // Auto-discover sector services from enabled sectors
         $this->discoverSectorServices();
+
+        // If auto-discovery was on but found nothing, flag it — usually a misconfigured path.
+        if (($this->config['services']['auto_discover'] ?? false) && count($this->services) === $countBefore) {
+            $paths = $this->config['services']['discovery_paths'] ?? [];
+            ntdst_log()->debug('NTDST Bootstrap: auto-discovery found 0 services. Paths scanned: ' . implode(', ', $paths));
+        }
 
         // Register explicitly configured core services
         foreach ($this->config['services']['core'] ?? [] as $service) {
@@ -97,6 +121,8 @@ class NTDST_Bootstrap
         // Always log registration summary
         ntdst_log()->debug('NTDST Bootstrap: Registered ' . count($this->services) . ' services');
 
+        $this->servicesRegistered = true;
+
         do_action('ntdst/services_registered', $this);
 
         return $this;
@@ -118,6 +144,7 @@ class NTDST_Bootstrap
 
         // For namespaced services, try to load the file first
         // Maps namespace to file path, e.g. ntdstheme\services\gallery\ArtistService => services/gallery/ArtistService.php
+        $attemptedPaths = [];
         if (!class_exists($class) && str_contains($class, '\\')) {
             foreach ($this->config['services']['discovery_paths'] ?? [] as $basePath) {
                 $relativePath = str_replace('\\', '/', $class) . '.php';
@@ -130,6 +157,7 @@ class NTDST_Bootstrap
                 }
 
                 $filePath = dirname($basePath) . '/' . $relativePath;
+                $attemptedPaths[] = $filePath;
 
                 if (file_exists($filePath)) {
                     require_once $filePath;
@@ -140,7 +168,8 @@ class NTDST_Bootstrap
 
         // Check if class exists
         if (!class_exists($class)) {
-            ntdst_log()->debug("NTDST Bootstrap: Service class {$class} not found");
+            $detail = $attemptedPaths ? ' (attempted: ' . implode(', ', $attemptedPaths) . ')' : '';
+            ntdst_log()->debug("NTDST Bootstrap: Service class {$class} not found{$detail}");
             return;
         }
 
@@ -201,6 +230,9 @@ class NTDST_Bootstrap
             ntdst_log()->debug('NTDST Bootstrap: Starting bootCore()');
             ntdst_log()->debug('NTDST Bootstrap: Registered services: ' . count($this->services));
         }
+
+        // Sort by priority so within-core ordering is deterministic.
+        uasort($this->services, fn($a, $b) => $a['priority'] <=> $b['priority']);
 
         // Boot services with priority < 10 (critical services)
         foreach ($this->services as $class => $service) {
@@ -299,9 +331,18 @@ class NTDST_Bootstrap
             // Fire after hook
             do_action("ntdst/service_after_boot/{$class}", $instance, $this);
 
-        } catch (Exception $e) {
-            ntdst_log()->debug("NTDST Bootstrap: Failed to boot service {$class}: " . $e->getMessage());
+        } catch (\Throwable $e) {
+            // Log at error level so failures are visible without WP_DEBUG.
+            // Catches Error subclasses (TypeError, RuntimeException) too, so a
+            // service whose constructor throws fails loudly instead of silently
+            // disappearing from the boot list.
+            ntdst_log()->error("NTDST Bootstrap: Failed to boot service {$class}: " . $e->getMessage());
             ntdst_log()->debug($e->getTraceAsString());
+
+            // In debug mode, rethrow so the error surfaces in dev environments.
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                throw $e;
+            }
         }
     }
 
@@ -466,8 +507,8 @@ class NTDST_Bootstrap
             $namespace = trim($matches[1]);
         }
 
-        // Extract class name
-        if (preg_match('/^\s*class\s+(\w+)/m', $content, $matches)) {
+        // Extract class name (allow final/abstract modifiers)
+        if (preg_match('/^\s*(?:abstract\s+|final\s+)?class\s+(\w+)/m', $content, $matches)) {
             $class = $matches[1];
         }
 
@@ -637,11 +678,12 @@ class NTDST_Bootstrap
         }
 
         // Support dot notation: 'modules.barba.animationDuration'
+        // array_key_exists so a literal null value round-trips through config().
         $keys = explode('.', $key);
         $value = $this->config;
 
         foreach ($keys as $k) {
-            if (!isset($value[$k])) {
+            if (!is_array($value) || !array_key_exists($k, $value)) {
                 return $default;
             }
             $value = $value[$k];
@@ -671,7 +713,11 @@ class NTDST_Bootstrap
     }
 
     /**
-     * Check if a service is registered
+     * Check if a service is registered through this Bootstrap.
+     *
+     * Note: this is Bootstrap-scope only. Services registered directly via
+     * ntdst_set() (e.g. repositories in stride-core.php) are not tracked here.
+     * To check the DI container, use ntdst_container()->has($class).
      *
      * @param string $class Service class name
      * @return bool

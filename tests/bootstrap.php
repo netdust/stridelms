@@ -57,6 +57,8 @@ require_once __DIR__ . '/TestCase.php';
 $ntdstCoreFiles = [
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/api/Response.php',
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/core/Container.php',
+    dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/core/SectorRegistry.php',
+    dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/core/Bootstrap.php',
 ];
 
 foreach ($ntdstCoreFiles as $file) {

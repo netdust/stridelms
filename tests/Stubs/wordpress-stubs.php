@@ -772,6 +772,18 @@ if (!function_exists('http_response_code')) {
     // Already exists in PHP, no stub needed
 }
 
+// Admin-context flag (settable by tests)
+global $_test_is_admin;
+$_test_is_admin = false;
+
+if (!function_exists('is_admin')) {
+    function is_admin(): bool
+    {
+        global $_test_is_admin;
+        return (bool) $_test_is_admin;
+    }
+}
+
 // Options storage
 global $_test_options;
 $_test_options = [];
