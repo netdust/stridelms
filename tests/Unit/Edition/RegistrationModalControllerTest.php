@@ -35,7 +35,7 @@ class RegistrationModalControllerTest extends TestCase
             ->getMock();
     }
 
-    public function testNonceConstantMatchesEditionAdminController(): void
+    public function testNonceConstantPinsExpectedValue(): void
     {
         self::assertSame(
             'stride_edition_admin',

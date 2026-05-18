@@ -40,11 +40,13 @@ final class RegistrationModalController
     {
         if (!current_user_can('manage_options')) {
             wp_send_json_error(['message' => __('Onvoldoende rechten.', 'stride')], 403);
+            return;
         }
 
         $nonce = isset($_REQUEST['nonce']) ? sanitize_text_field((string) $_REQUEST['nonce']) : '';
         if (!wp_verify_nonce($nonce, self::NONCE_AJAX)) {
             wp_send_json_error(['message' => __('Ongeldige sessie. Herlaad de pagina.', 'stride')], 403);
+            return;
         }
 
         $registrationId = isset($_REQUEST['registration_id']) ? (int) $_REQUEST['registration_id'] : 0;
@@ -52,6 +54,7 @@ final class RegistrationModalController
 
         if ($registrationId <= 0 || !in_array($type, ['enrollment', 'completion'], true)) {
             wp_send_json_error(['message' => __('Ongeldige aanvraag.', 'stride')], 400);
+            return;
         }
 
         wp_send_json_success(['html' => '', 'title' => '']);
