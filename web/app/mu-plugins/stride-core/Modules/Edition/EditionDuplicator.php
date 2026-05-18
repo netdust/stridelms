@@ -58,6 +58,26 @@ final class EditionDuplicator implements NTDST_Service_Meta
 
     public function addDuplicateRowAction(array $actions, WP_Post $post): array
     {
+        if ($post->post_type !== EditionCPT::POST_TYPE) {
+            return $actions;
+        }
+
+        if (!current_user_can('edit_post', $post->ID)) {
+            return $actions;
+        }
+
+        $url = wp_nonce_url(
+            admin_url('admin.php?action=stride_duplicate_edition&edition_id=' . $post->ID),
+            'stride_duplicate_edition_' . $post->ID
+        );
+
+        $actions['stride_duplicate'] = sprintf(
+            '<a href="%s" aria-label="%s">%s</a>',
+            esc_url($url),
+            esc_attr__('Dupliceer deze editie', 'stride'),
+            esc_html__('Dupliceren', 'stride')
+        );
+
         return $actions;
     }
 
