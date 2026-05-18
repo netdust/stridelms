@@ -215,7 +215,9 @@ class AdminDashboardService extends AbstractService
 
         wp_localize_script('alpinejs', 'StrideConfig', [
             'apiUrl' => rest_url('stride/v1'),
+            'adminUrl' => admin_url(),
             'nonce' => wp_create_nonce('wp_rest'),
+            'exportNonce' => wp_create_nonce('stride_edition_admin'),
             'user' => [
                 'id' => $user->ID,
                 'name' => $user->display_name,

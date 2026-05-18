@@ -39,7 +39,6 @@ document.addEventListener('alpine:init', () => {
         quoteEditions: [],
         selectedQuote: null,
         quoteTab: 'details',
-        quickSendTarget: null,
 
         // ── Trajectories ─────────────────────────────────────────
         trajectories: [],
@@ -68,6 +67,8 @@ document.addEventListener('alpine:init', () => {
 
         // ── UI ───────────────────────────────────────────────────
         toast: null,
+        // Which slide-over kebab is open: 'edition' | 'quote' | 'trajectory' | null
+        kebabOpen: null,
 
         // ==============================================================
         //  COMPUTED GETTERS
@@ -105,9 +106,14 @@ document.addEventListener('alpine:init', () => {
             return this.selectedUser?.quotes || [];
         },
 
-        /** Audit log for the selected user */
+        /** Audit log for the selected user (capped at 30 — full log linked separately) */
         get userAuditLog() {
-            return this.selectedUser?.audit_trail || [];
+            return (this.selectedUser?.audit_trail || []).slice(0, 30);
+        },
+
+        /** Total audit-entry count (so we can show "X meer" when truncated) */
+        get userAuditLogTotal() {
+            return (this.selectedUser?.audit_trail || []).length;
         },
 
         /** Attendance summary for the selected user (legacy, kept for callers) */
@@ -176,6 +182,16 @@ document.addEventListener('alpine:init', () => {
             this.selectedEdition = null;
             this.selectedQuote = null;
             this.selectedTrajectory = null;
+            this.kebabOpen = null;
+        },
+
+        // Build a stride_export_registrations URL for the selected edition.
+        // Nonce is keyed `stride_edition_admin`; types: excel | attendance | namecards.
+        editionExportUrl(type) {
+            const id = this.selectedEdition?.id;
+            if (!id) return '#';
+            const nonce = this.config.exportNonce || '';
+            return `${this.config.adminUrl || '/wp-admin/'}admin-ajax.php?action=stride_export_registrations&type=${encodeURIComponent(type)}&edition_id=${id}&nonce=${encodeURIComponent(nonce)}`;
         },
 
         // ==============================================================
@@ -504,23 +520,6 @@ document.addEventListener('alpine:init', () => {
             this.selectedQuote = quote;
             this.quoteTab = 'details';
             if (this.selectedQuote) this.openSlideOver();
-        },
-
-        showQuickSend(quote) {
-            this.quickSendTarget = quote;
-        },
-
-        async confirmQuickSend() {
-            if (!this.quickSendTarget) return;
-            const quoteId = this.quickSendTarget.id;
-            try {
-                await this.api(`/admin/quotes/${quoteId}/send`, { method: 'POST' });
-                this.showToast('Offerte verzonden', 'success');
-                this.quickSendTarget = null;
-                this.loadQuotes(this.quotePagination.page);
-            } catch (e) {
-                this.showToast('Offerte verzenden mislukt \u2014 probeer opnieuw', 'error');
-            }
         },
 
         resetQuoteFilters() {

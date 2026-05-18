@@ -3,7 +3,7 @@
  * Admin Dashboard Template — Soft Violet
  *
  * Full-screen Alpine.js application for Stride admin.
- * Views: Dashboard, Edities, Offertes, Trajecten, Gebruikers
+ * Views: Dashboard, Opkomende Sessies, Offertes, Trajecten, Gebruikers
  *
  * @var string $admin_url Base admin URL
  * @var string $user_name Current user display name
@@ -25,7 +25,7 @@ defined('ABSPATH') || exit;
                         @click="switchView('dashboard')">Dashboard</button>
                 <button class="sd-header__tab"
                         :class="{ 'sd-header__tab--active': view === 'edities' }"
-                        @click="switchView('edities')">Edities</button>
+                        @click="switchView('edities')">Opkomende Sessies</button>
                 <button class="sd-header__tab"
                         :class="{ 'sd-header__tab--active': view === 'offertes' }"
                         @click="switchView('offertes')">Offertes</button>
@@ -534,7 +534,25 @@ defined('ABSPATH') || exit;
                 <div class="sd-slideout__panel">
                     <div class="sd-slideout__header">
                         <h3 x-text="selectedEdition?.title"></h3>
-                        <button @click="closeSlideOver()" class="sd-slideout__close">×</button>
+                        <div class="sd-slideout__header-actions">
+                            <div class="sd-kebab" @click.outside="kebabOpen = null" x-show="selectedEdition?.id">
+                                <button class="sd-kebab__trigger"
+                                        @click="kebabOpen = kebabOpen === 'edition' ? null : 'edition'"
+                                        :aria-expanded="kebabOpen === 'edition' ? 'true' : 'false'"
+                                        aria-label="Meer acties">⋮</button>
+                                <div class="sd-kebab__menu" x-show="kebabOpen === 'edition'" x-cloak>
+                                    <a :href="selectedEdition?.editUrl || '#'" class="sd-kebab__item" target="_blank" @click="kebabOpen = null">Bewerk in WP →</a>
+                                    <div class="sd-kebab__divider"></div>
+                                    <a :href="editionExportUrl('excel')" class="sd-kebab__item" target="_blank" @click="kebabOpen = null">Exporteer studenten (Excel)</a>
+                                    <a :href="editionExportUrl('attendance')" class="sd-kebab__item" target="_blank" @click="kebabOpen = null">Exporteer aanwezigheid</a>
+                                    <a :href="editionExportUrl('namecards')" class="sd-kebab__item" target="_blank" @click="kebabOpen = null">Naamkaartjes (PDF)</a>
+                                    <div class="sd-kebab__divider"></div>
+                                    <a :href="selectedEdition?.editUrl || '#'" class="sd-kebab__item" target="_blank" @click="kebabOpen = null">Dupliceer / Annuleer in WP →</a>
+                                </div>
+                            </div>
+
+                            <button @click="closeSlideOver()" class="sd-slideout__close">×</button>
+                        </div>
                     </div>
                     <!-- Tabs -->
                     <div class="sd-slideout__tabs">
@@ -612,10 +630,6 @@ defined('ABSPATH') || exit;
                                 <dt>Capaciteit</dt>
                                 <dd x-text="(selectedEdition?.registered || 0) + '/' + (selectedEdition?.capacity || '∞')"></dd>
                             </dl>
-                            <a :href="selectedEdition?.editUrl || '#'"
-                               class="sd-btn sd-btn--ghost"
-                               target="_blank"
-                               x-show="selectedEdition?.id">Bewerk in WP →</a>
                         </div>
 
                     </div><!-- /.sd-slideout__body -->
@@ -690,10 +704,6 @@ defined('ABSPATH') || exit;
                                     <a :href="'<?php echo esc_url($admin_url); ?>post.php?post=' + quote.id + '&action=edit'"
                                        class="sd-btn sd-btn--text"
                                        title="Bewerken">✎</a>
-                                    <button class="sd-btn sd-btn--text"
-                                            @click="quickSendTarget = quote"
-                                            title="Verzenden"
-                                            x-show="quote.status === 'draft'">✉</button>
                                 </td>
                             </tr>
                         </template>
@@ -725,7 +735,28 @@ defined('ABSPATH') || exit;
                 <div class="sd-slideout__panel">
                     <div class="sd-slideout__header">
                         <h3>Offerte <span x-text="selectedQuote?.number"></span></h3>
-                        <button @click="closeSlideOver()" class="sd-slideout__close">×</button>
+                        <div class="sd-slideout__header-actions">
+                            <div class="sd-kebab" @click.outside="kebabOpen = null" x-show="selectedQuote?.id">
+                                <button class="sd-kebab__trigger"
+                                        @click="kebabOpen = kebabOpen === 'quote' ? null : 'quote'"
+                                        :aria-expanded="kebabOpen === 'quote' ? 'true' : 'false'"
+                                        aria-label="Meer acties">⋮</button>
+                                <div class="sd-kebab__menu" x-show="kebabOpen === 'quote'" x-cloak>
+                                    <a :href="selectedQuote?.editUrl || '#'" class="sd-kebab__item" target="_blank" @click="kebabOpen = null">Bewerk in WP →</a>
+                                    <div class="sd-kebab__divider"></div>
+                                    <a :href="selectedQuote?.editUrl || '#'" class="sd-kebab__item" target="_blank" @click="kebabOpen = null">PDF tonen / verzenden →</a>
+                                    <a :href="selectedQuote?.editUrl || '#'" class="sd-kebab__item" target="_blank" @click="kebabOpen = null">Markeer geëxporteerd →</a>
+                                    <div class="sd-kebab__divider" x-show="config.canManage && selectedQuote?.status !== 'cancelled'"></div>
+                                    <a :href="selectedQuote?.editUrl || '#'"
+                                       class="sd-kebab__item sd-kebab__item--danger"
+                                       target="_blank"
+                                       @click="kebabOpen = null"
+                                       x-show="config.canManage && selectedQuote?.status !== 'cancelled'">Annuleer offerte →</a>
+                                </div>
+                            </div>
+
+                            <button @click="closeSlideOver()" class="sd-slideout__close">×</button>
+                        </div>
                     </div>
                     <!-- Tabs -->
                     <div class="sd-slideout__tabs">
@@ -755,10 +786,6 @@ defined('ABSPATH') || exit;
                                 <dt>Totaal</dt>
                                 <dd x-text="formatCurrency(selectedQuote?.total)"></dd>
                             </dl>
-                            <a :href="selectedQuote?.editUrl || '#'"
-                               class="sd-btn sd-btn--ghost"
-                               target="_blank"
-                               x-show="selectedQuote?.id">Bewerk in WP →</a>
                         </div>
 
                         <!-- Items tab -->
@@ -883,7 +910,21 @@ defined('ABSPATH') || exit;
                 <div class="sd-slideout__panel">
                     <div class="sd-slideout__header">
                         <h3 x-text="selectedTrajectory?.title"></h3>
-                        <button @click="closeSlideOver()" class="sd-slideout__close">×</button>
+                        <div class="sd-slideout__header-actions">
+                            <div class="sd-kebab" @click.outside="kebabOpen = null" x-show="selectedTrajectory?.id">
+                                <button class="sd-kebab__trigger"
+                                        @click="kebabOpen = kebabOpen === 'trajectory' ? null : 'trajectory'"
+                                        :aria-expanded="kebabOpen === 'trajectory' ? 'true' : 'false'"
+                                        aria-label="Meer acties">⋮</button>
+                                <div class="sd-kebab__menu" x-show="kebabOpen === 'trajectory'" x-cloak>
+                                    <a :href="selectedTrajectory?.editUrl || '#'" class="sd-kebab__item" target="_blank" @click="kebabOpen = null">Bewerk in WP →</a>
+                                    <div class="sd-kebab__divider"></div>
+                                    <a :href="selectedTrajectory?.editUrl || '#'" class="sd-kebab__item sd-kebab__item--danger" target="_blank" @click="kebabOpen = null">Annuleer in WP →</a>
+                                </div>
+                            </div>
+
+                            <button @click="closeSlideOver()" class="sd-slideout__close">×</button>
+                        </div>
                     </div>
                     <!-- Tabs -->
                     <div class="sd-slideout__tabs">
@@ -908,10 +949,6 @@ defined('ABSPATH') || exit;
                                 <dt>Ingeschreven</dt>
                                 <dd x-text="selectedTrajectory?.registered"></dd>
                             </dl>
-                            <a :href="selectedTrajectory?.editUrl || '#'"
-                               class="sd-btn sd-btn--ghost"
-                               target="_blank"
-                               x-show="selectedTrajectory?.id">Bewerk in WP →</a>
                         </div>
 
                         <!-- Courses tab -->
@@ -1269,7 +1306,7 @@ defined('ABSPATH') || exit;
 
                 <div class="sd-layout__secondary">
 
-                    <!-- Audit timeline -->
+                    <!-- Audit timeline (capped at 30 — link below for full log) -->
                     <div class="sd-card">
                         <div class="sd-card__header">
                             <h3 class="sd-card__title">Audit log</h3>
@@ -1296,6 +1333,13 @@ defined('ABSPATH') || exit;
                                 </div>
                             </template>
                         </div>
+                        <div class="sd-card__footer" x-show="selectedUser?.id">
+                            <a :href="'<?php echo esc_url($admin_url); ?>admin.php?page=ntdst-audit-log&actor_id=' + selectedUser.id"
+                               class="sd-btn sd-btn--text sd-btn--block">
+                                <span x-show="userAuditLogTotal > 30">Toon alle <span x-text="userAuditLogTotal"></span> items in volledige audit log →</span>
+                                <span x-show="userAuditLogTotal <= 30">Open in volledige audit log →</span>
+                            </a>
+                        </div>
                     </div>
 
 
@@ -1314,17 +1358,6 @@ defined('ABSPATH') || exit;
         <div class="sd-toast" :class="'sd-toast--' + (toast?.type || 'info')">
             <span x-text="toast?.message"></span>
             <button @click="toast = null">×</button>
-        </div>
-    </div>
-
-    <!-- ============================================================
-         QUICK-SEND POPOVER
-         ============================================================ -->
-    <div class="sd-popover" x-show="quickSendTarget" @click.outside="quickSendTarget = null" x-transition>
-        <p>Offerte <span x-text="quickSendTarget?.number"></span> verzenden naar <strong x-text="quickSendTarget?.client_email"></strong>?</p>
-        <div class="sd-popover__actions">
-            <button class="sd-btn" @click="confirmQuickSend()">Verzenden</button>
-            <button class="sd-btn sd-btn--ghost" @click="quickSendTarget = null">Annuleren</button>
         </div>
     </div>
 

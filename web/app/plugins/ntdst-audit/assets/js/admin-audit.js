@@ -44,6 +44,14 @@ function strideAuditApp() {
             this.filters.from = thirtyDaysAgo.toISOString().split('T')[0];
             this.filters.to = now.toISOString().split('T')[0];
 
+            // Pre-populate actor filter from URL (?actor_id=N) — used when deep-linked
+            // from the Stride user-detail view's "Open in volledige audit log" link.
+            const urlParams = new URLSearchParams(window.location.search);
+            const actorId = urlParams.get('actor_id');
+            if (actorId) {
+                this.filters.actor_id = actorId;
+            }
+
             // Load initial data
             this.loadEntries();
         },

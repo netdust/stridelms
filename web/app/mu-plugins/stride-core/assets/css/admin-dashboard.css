@@ -894,28 +894,120 @@ body.stride-dashboard .wrap {
 
 .sd-slideout__header {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
+    gap: var(--sd-space-4);
     padding: var(--sd-space-5) var(--sd-space-6);
     border-bottom: 1px solid var(--sd-border);
 }
 
 .sd-slideout__header h3 {
+    flex: 1;
+    min-width: 0;
     margin: 0;
     font-size: 17px;
     font-weight: 600;
+    line-height: 1.4;
     color: var(--sd-text-primary);
 }
 
-.sd-slideout__close {
-    width: 32px;
-    height: 32px;
-    border: none;
+.sd-slideout__header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--sd-space-2);
+    flex-shrink: 0;
+    /* Ride the top line of the title — visual baseline is ~1.4em above the box top */
+    margin-top: 2px;
+}
+
+/* Kebab dropdown — used in slide-over headers for secondary actions */
+.sd-kebab {
+    position: relative;
+    display: inline-block;
+}
+
+.sd-kebab__trigger {
+    width: var(--sd-control-height-sm);
+    height: var(--sd-control-height-sm);
+    padding: 0;
+    border: 1px solid transparent;
     background: none;
-    font-size: 20px;
+    font-size: 18px;
+    line-height: 1;
     color: var(--sd-text-muted);
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--sd-radius-xs);
+    transition: all var(--sd-ease);
+}
+
+.sd-kebab__trigger:hover {
+    background: var(--sd-primary-subtle);
+    border-color: var(--sd-border);
+    color: var(--sd-text-primary);
+}
+
+.sd-kebab__menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    min-width: 240px;
+    background: #fff;
+    border: 1px solid var(--sd-border);
+    border-radius: var(--sd-radius-sm);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+    padding: 4px;
+    z-index: 30;
     display: flex;
+    flex-direction: column;
+}
+
+.sd-kebab__item {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: none;
+    text-align: left;
+    font-size: 13px;
+    color: var(--sd-text-primary);
+    text-decoration: none;
+    cursor: pointer;
+    border-radius: var(--sd-radius-xs);
+    line-height: 1.4;
+}
+
+.sd-kebab__item:hover {
+    background: var(--sd-primary-subtle);
+}
+
+.sd-kebab__item--danger {
+    color: var(--sd-danger);
+}
+
+.sd-kebab__item--danger:hover {
+    background: #fef2f2;
+}
+
+.sd-kebab__divider {
+    height: 1px;
+    background: var(--sd-border);
+    margin: 4px 0;
+}
+
+.sd-slideout__close {
+    width: var(--sd-control-height-sm);
+    height: var(--sd-control-height-sm);
+    padding: 0;
+    border: 1px solid transparent;
+    background: none;
+    font-size: 20px;
+    line-height: 1;
+    color: var(--sd-text-muted);
+    cursor: pointer;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     border-radius: var(--sd-radius-xs);
@@ -924,6 +1016,7 @@ body.stride-dashboard .wrap {
 
 .sd-slideout__close:hover {
     background: var(--sd-primary-subtle);
+    border-color: var(--sd-border);
     color: var(--sd-text-primary);
 }
 
