@@ -69,7 +69,20 @@ $skipKeys = ['organisation', 'department'];
 
     <section class="stride-modal-section" data-section="questionnaire" data-open="1">
         <h3 class="stride-modal-section-title"><?php esc_html_e('Vragenlijst', 'stride'); ?></h3>
-        <p class="stride-modal-empty"><?php esc_html_e('Geen vragenlijst voor deze editie.', 'stride'); ?></p>
+        <?php if (empty($questionnaireAnswers)): ?>
+            <p class="stride-modal-empty"><?php esc_html_e('Geen vragenlijst voor deze editie.', 'stride'); ?></p>
+        <?php else: ?>
+            <ol class="stride-modal-qa">
+                <?php foreach ($questionnaireAnswers as $question => $answer): ?>
+                    <li class="stride-modal-qa-item">
+                        <div class="stride-modal-qa-q"><?php echo esc_html((string) $question); ?></div>
+                        <div class="stride-modal-qa-a">
+                            <?php echo esc_html(is_string($answer) ? $answer : (string) wp_json_encode($answer)); ?>
+                        </div>
+                    </li>
+                <?php endforeach; ?>
+            </ol>
+        <?php endif; ?>
     </section>
 
     <section class="stride-modal-section" data-section="documents" data-open="1">

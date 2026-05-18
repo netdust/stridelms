@@ -127,7 +127,10 @@ final class RegistrationModalController
             (int) $registration->id,
             (int) $registration->edition_id,
         );
-        $questionnaireAnswers = []; // Filled in Task 8
+        $tasks = $this->decodeJson($registration->completion_tasks ?? '');
+        $questionnaireAnswers = is_array($tasks['questionnaire']['data']['answers'] ?? null)
+            ? $tasks['questionnaire']['data']['answers']
+            : [];
         $documents = []; // Filled in Task 9
 
         ob_start();

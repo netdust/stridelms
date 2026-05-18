@@ -165,4 +165,40 @@ class RegistrationModalControllerTest extends TestCase
         self::assertStringContainsString('Module 1 — Kies 1 uit 2', $result['html']);
         self::assertStringContainsString('Brussel', $result['html']);
     }
+
+    public function testEnrollmentModalRendersQuestionnaireAnswers(): void
+    {
+        $reg = (object) [
+            'id' => 1, 'user_id' => 42, 'edition_id' => 99,
+            'enrollment_data' => '{}',
+            'completion_tasks' => wp_json_encode([
+                'questionnaire' => [
+                    'status' => 'completed',
+                    'data' => ['answers' => ['Wat is uw ervaring?' => 'Veel']],
+                ],
+            ]),
+        ];
+
+        $registrations = $this->createMock(RegistrationRepository::class);
+        $registrations->method('find')->willReturn($reg);
+
+        $editionService = $this->createMock(EditionService::class);
+        $editionService->method('getEdition')->willReturn(new \WP_Post(['post_title' => 'E']));
+
+        global $_test_users;
+        $_test_users[42] = new \WP_User((object) ['ID' => 42, 'display_name' => 'Test User']);
+
+        $controller = new RegistrationModalController(
+            $editionService,
+            $this->createMock(SessionService::class),
+            $this->createMock(SessionSelection::class),
+            $registrations,
+        );
+        $result = $controller->buildPayload(1, 'enrollment');
+
+        unset($_test_users[42]);
+
+        self::assertStringContainsString('Wat is uw ervaring?', $result['html']);
+        self::assertStringContainsString('Veel', $result['html']);
+    }
 }
