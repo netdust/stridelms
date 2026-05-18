@@ -799,6 +799,15 @@ if (!function_exists('sanitize_key')) {
     }
 }
 
+if (!function_exists('sanitize_textarea_field')) {
+    function sanitize_textarea_field($value): string
+    {
+        $value = is_string($value) ? $value : '';
+        // Strip tags but preserve newlines (WP behavior approximation)
+        return trim(strip_tags($value));
+    }
+}
+
 if (!function_exists('site_url')) {
     function site_url(string $path = '', ?string $scheme = null): string
     {

@@ -62,6 +62,7 @@ $ntdstCoreFiles = [
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/core/Router.php',
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/api/Endpoints.php',
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/core/Theme.php',
+    dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/api/MetaboxGenerator.php',
 ];
 
 foreach ($ntdstCoreFiles as $file) {

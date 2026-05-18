@@ -619,13 +619,20 @@ final class NTDST_MetaboxGenerator
     }
 
     /**
-     * Render individual field based on type
+     * Render individual field based on type.
+     *
+     * Defense-in-depth: $name, $field_id, $field_name, and $label all come
+     * from CPT-config field keys (developer-controlled, not user input), but
+     * we esc_attr/esc_html them anyway so a typo'd or third-party CPT
+     * registration can't introduce an XSS path.
      */
     private function render_field(string $name, mixed $type, mixed $value): void
     {
         $label = ucwords(str_replace('_', ' ', $name));
         $field_id = "ntdst_field_{$name}";
         $field_name = "ntdst_fields[{$name}]";
+        $field_id_attr = esc_attr($field_id);
+        $field_name_attr = esc_attr($field_name);
 
         // Ensure value is never null for string contexts
         $safe_value = $value ?? '';
@@ -656,7 +663,7 @@ final class NTDST_MetaboxGenerator
         }
 
         echo '<div class="ntdst-field">';
-        echo "<label for=\"{$field_id}\">{$label}</label>";
+        echo '<label for="' . $field_id_attr . '">' . esc_html($label) . '</label>';
 
         // If readonly and not a select, just display as text
         if ($readonly && $type !== 'select' && $type !== 'array' && $type !== 'json') {
@@ -668,7 +675,7 @@ final class NTDST_MetaboxGenerator
             } else {
                 echo '<strong>' . esc_html($safe_value) . '</strong>';
             }
-            echo '<input type="hidden" name="' . $field_name . '" value="' . esc_attr($safe_value) . '">';
+            echo '<input type="hidden" name="' . $field_name_attr . '" value="' . esc_attr($safe_value) . '">';
             echo '<p class="description">This value is automatically calculated and cannot be edited.</p>';
             echo '</div>';
             echo '</div>';
@@ -677,69 +684,69 @@ final class NTDST_MetaboxGenerator
 
         switch ($type) {
             case 'select':
-                echo "<select id=\"{$field_id}\" name=\"{$field_name}\" class=\"regular-text\" " . ($readonly ? 'disabled' : '') . ">";
+                echo '<select id="' . $field_id_attr . '" name="' . $field_name_attr . '" class="regular-text"' . ($readonly ? ' disabled' : '') . '>';
                 foreach ($options as $opt_value => $opt_label) {
-                    $selected = ($safe_value == $opt_value) ? 'selected' : '';
-                    echo "<option value=\"" . esc_attr($opt_value) . "\" {$selected}>" . esc_html($opt_label) . "</option>";
+                    $selected = ($safe_value == $opt_value) ? ' selected' : '';
+                    echo '<option value="' . esc_attr($opt_value) . '"' . $selected . '>' . esc_html($opt_label) . '</option>';
                 }
-                echo "</select>";
+                echo '</select>';
                 // If readonly, add hidden input to preserve value
                 if ($readonly) {
-                    echo "<input type=\"hidden\" name=\"{$field_name}\" value=\"" . esc_attr($safe_value) . "\">";
+                    echo '<input type="hidden" name="' . $field_name_attr . '" value="' . esc_attr($safe_value) . '">';
                 }
                 break;
 
             case 'text':
             case 'string':
-                echo "<input type=\"text\" id=\"{$field_id}\" name=\"{$field_name}\" value=\"" . esc_attr($safe_value) . "\" class=\"regular-text\">";
+                echo '<input type="text" id="' . $field_id_attr . '" name="' . $field_name_attr . '" value="' . esc_attr($safe_value) . '" class="regular-text">';
                 break;
 
             case 'email':
-                echo "<input type=\"email\" id=\"{$field_id}\" name=\"{$field_name}\" value=\"" . esc_attr($safe_value) . "\" class=\"regular-text\">";
+                echo '<input type="email" id="' . $field_id_attr . '" name="' . $field_name_attr . '" value="' . esc_attr($safe_value) . '" class="regular-text">';
                 break;
 
             case 'integer':
             case 'int':
                 $int_value = $value !== null && $value !== '' ? esc_attr($value) : '';
-                echo "<input type=\"number\" id=\"{$field_id}\" name=\"{$field_name}\" value=\"{$int_value}\" step=\"1\" class=\"small-text\">";
+                echo '<input type="number" id="' . $field_id_attr . '" name="' . $field_name_attr . '" value="' . $int_value . '" step="1" class="small-text">';
                 break;
 
             case 'float':
             case 'decimal':
                 $float_value = $value !== null && $value !== '' ? esc_attr($value) : '';
-                echo "<input type=\"number\" id=\"{$field_id}\" name=\"{$field_name}\" value=\"{$float_value}\" step=\"0.01\" class=\"small-text\">";
+                echo '<input type="number" id="' . $field_id_attr . '" name="' . $field_name_attr . '" value="' . $float_value . '" step="0.01" class="small-text">';
                 break;
 
             case 'boolean':
             case 'bool':
-                $checked = $value ? 'checked' : '';
-                echo "<label><input type=\"checkbox\" id=\"{$field_id}\" name=\"{$field_name}\" value=\"1\" {$checked}> Yes</label>";
+                $checked = $value ? ' checked' : '';
+                echo '<label><input type="checkbox" id="' . $field_id_attr . '" name="' . $field_name_attr . '" value="1"' . $checked . '> Yes</label>';
                 break;
 
             case 'textarea':
             case 'longtext':
-                echo "<textarea id=\"{$field_id}\" name=\"{$field_name}\" rows=\"5\" class=\"large-text\">" . esc_textarea($safe_value) . "</textarea>";
+                echo '<textarea id="' . $field_id_attr . '" name="' . $field_name_attr . '" rows="5" class="large-text">' . esc_textarea($safe_value) . '</textarea>';
                 break;
 
             case 'array':
             case 'json':
                 $json_value = is_array($value) ? json_encode($value, JSON_PRETTY_PRINT) : ($value ?? '');
                 echo '<div class="ntdst-field-array">';
-                echo "<textarea id=\"{$field_id}\" name=\"{$field_name}\" rows=\"8\" class=\"large-text code\">" . esc_textarea($json_value) . "</textarea>";
+                echo '<textarea id="' . $field_id_attr . '" name="' . $field_name_attr . '" rows="8" class="large-text code">' . esc_textarea($json_value) . '</textarea>';
                 echo '<p class="description">Enter valid JSON array. Example: ["value1", "value2"]</p>';
                 echo '</div>';
                 break;
 
             case 'date':
-                echo "<input type=\"date\" id=\"{$field_id}\" name=\"{$field_name}\" value=\"" . esc_attr($safe_value) . "\">";
+                echo '<input type="date" id="' . $field_id_attr . '" name="' . $field_name_attr . '" value="' . esc_attr($safe_value) . '">';
                 break;
 
             case 'datetime':
-                echo "<input type=\"datetime-local\" id=\"{$field_id}\" name=\"{$field_name}\" value=\"" . esc_attr($safe_value) . "\">";
+                echo '<input type="datetime-local" id="' . $field_id_attr . '" name="' . $field_name_attr . '" value="' . esc_attr($safe_value) . '">';
                 break;
 
             case 'url':
-                echo "<input type=\"url\" id=\"{$field_id}\" name=\"{$field_name}\" value=\"" . esc_attr($safe_value) . "\" class=\"regular-text\">";
+                echo '<input type="url" id="' . $field_id_attr . '" name="' . $field_name_attr . '" value="' . esc_attr($safe_value) . '" class="regular-text">';
                 break;
 
             case 'relation':
@@ -759,7 +766,7 @@ final class NTDST_MetaboxGenerator
 
             default:
                 // Default to text input
-                echo "<input type=\"text\" id=\"{$field_id}\" name=\"{$field_name}\" value=\"" . esc_attr($safe_value) . "\" class=\"regular-text\">";
+                echo '<input type="text" id="' . $field_id_attr . '" name="' . $field_name_attr . '" value="' . esc_attr($safe_value) . '" class="regular-text">';
                 break;
         }
 
@@ -1402,7 +1409,7 @@ final class NTDST_MetaboxGenerator
             return;
         }
 
-        if (!wp_verify_nonce($_POST[$nonce_name], $nonce_action)) {
+        if (!wp_verify_nonce(wp_unslash($_POST[$nonce_name]), $nonce_action)) {
             return;
         }
 
@@ -1419,8 +1426,6 @@ final class NTDST_MetaboxGenerator
 
         // Get submitted fields
         $fields_data = $_POST['ntdst_fields'] ?? [];
-
-        // DEBUG: Log what's being submitted
 
         if (empty($fields_data)) {
             add_action('save_post', [$this, 'save_metabox_data'], 10, 2);
@@ -1461,8 +1466,6 @@ final class NTDST_MetaboxGenerator
         // Check if this is a registered Data model or native post type
         $is_data_model = $this->isDataModel($model_name);
 
-        // DEBUG
-
         if ($is_data_model) {
             // Save using Data.php ORM for registered models
             try {
@@ -1472,7 +1475,6 @@ final class NTDST_MetaboxGenerator
                 if ($existing && !is_wp_error($existing)) {
                     // Update existing
                     $result = $model->update($post_id, $sanitized_data);
-                    // DEBUG
                 } else {
                     // Create new
                     $sanitized_data['post_id'] = $post_id;
@@ -1481,9 +1483,10 @@ final class NTDST_MetaboxGenerator
 
                 // Fire hook for extensibility
                 do_action("ntdst/metabox_saved/{$model_name}", $post_id, $sanitized_data);
-            } catch (\Exception $e) {
-                // Log error silently
-                error_log("NTDST Metabox Save Error [{$model_name}]: " . $e->getMessage());
+            } catch (\Throwable $e) {
+                if (function_exists('ntdst_log')) {
+                    ntdst_log('metabox')->error("Save failed for {$model_name}: " . $e->getMessage());
+                }
             }
         } else {
             // Use WordPress native functions for unregistered/native post types
@@ -1505,20 +1508,16 @@ final class NTDST_MetaboxGenerator
     }
 
     /**
-     * Check if a model is registered in the Data manager
+     * Check if this model has a Data-layer schema (ORM-backed).
+     *
+     * We check our OWN registry rather than calling NTDST_Data_Manager::get(),
+     * which auto-creates an empty model entry as a side effect. Auto-creating
+     * a phantom model would persist across the request and shadow later
+     * registrations.
      */
     private function isDataModel(string $model_name): bool
     {
-        try {
-            $data_manager = ntdst_data();
-            $model = $data_manager->get($model_name);
-
-            // Check if the model has a registered schema
-            $schema = $model->getSchema();
-            return !empty($schema);
-        } catch (\Exception $e) {
-            return false;
-        }
+        return !empty($this->registered_models[$model_name]['fields'] ?? []);
     }
 
     /**
@@ -1565,9 +1564,13 @@ final class NTDST_MetaboxGenerator
                 // Try to decode JSON
                 $decoded = json_decode(trim($value), true);
 
-                // Check for JSON errors
+                // Check for JSON errors. Log the failure but NOT the value
+                // itself — users may paste PII into form fields and we don't
+                // want it ending up in plaintext error logs.
                 if (json_last_error() !== JSON_ERROR_NONE) {
-                    error_log("NTDST Metabox JSON Error: " . json_last_error_msg() . " | Value: " . substr($value, 0, 100));
+                    if (function_exists('ntdst_log')) {
+                        ntdst_log('metabox')->error('JSON decode error: ' . json_last_error_msg());
+                    }
                     return [];
                 }
 
@@ -1659,7 +1662,9 @@ final class NTDST_MetaboxGenerator
 /**
  * Global helper - get metabox generator instance
  */
-function ntdst_metabox(): NTDST_MetaboxGenerator
-{
-    return NTDST_MetaboxGenerator::instance();
+if (!function_exists('ntdst_metabox')) {
+    function ntdst_metabox(): NTDST_MetaboxGenerator
+    {
+        return NTDST_MetaboxGenerator::instance();
+    }
 }
