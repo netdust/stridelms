@@ -93,7 +93,7 @@ defined('ABSPATH') || exit;
                                  x-transition:leave-start="opacity-100 translate-y-0"
                                  x-transition:leave-end="opacity-0 translate-y-1"
                                  @click.outside="close()"
-                                 class="absolute right-0 mt-2 w-48 bg-surface-card rounded-xl shadow-overlay py-1 z-50">
+                                 class="absolute right-0 mt-2 w-48 bg-surface-card rounded-xl shadow-overlay z-50 overflow-hidden">
                                 <a href="<?php echo esc_url(home_url('/mijn-account/')); ?>" class="block px-4 py-2 text-sm hover:bg-surface-alt">
                                     <?php esc_html_e('Mijn account', 'stridence'); ?>
                                 </a>
