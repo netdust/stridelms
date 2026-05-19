@@ -6,7 +6,7 @@ namespace Stride\Modules\Edition;
 
 use Stride\Contracts\LMSAdapterInterface;
 use Stride\Domain\CompletionMode;
-use Stride\Modules\Attendance\AttendanceService;
+use Stride\Modules\Attendance\AttendanceRepository;
 use WP_Error;
 
 /**
@@ -40,7 +40,7 @@ final class EditionCompletion
         $mode = $this->getCompletionMode($editionId);
         $threshold = $this->getCompletionThreshold($editionId);
         $totalSessions = $this->sessions->countByEdition($editionId);
-        $attended = ntdst_get(AttendanceService::class)->countAttended($userId, $editionId);
+        $attended = ntdst_get(AttendanceRepository::class)->countAttended($userId, $editionId);
 
         return match ($mode) {
             CompletionMode::AttendAll => $attended >= $totalSessions,
@@ -57,7 +57,7 @@ final class EditionCompletion
     public function getProgress(int $editionId, int $userId): array
     {
         $totalSessions = $this->sessions->countByEdition($editionId);
-        $attended = ntdst_get(AttendanceService::class)->countAttended($userId, $editionId);
+        $attended = ntdst_get(AttendanceRepository::class)->countAttended($userId, $editionId);
         $mode = $this->getCompletionMode($editionId);
         $threshold = $this->getCompletionThreshold($editionId);
         $isComplete = $this->isComplete($editionId, $userId);

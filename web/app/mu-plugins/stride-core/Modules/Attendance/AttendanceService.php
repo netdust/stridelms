@@ -113,14 +113,6 @@ final class AttendanceService extends AbstractService
     // === Queries ===
 
     /**
-     * Check if user is present for a session.
-     */
-    public function isPresent(int $sessionId, int $userId): bool
-    {
-        return $this->repository->isPresent($sessionId, $userId);
-    }
-
-    /**
      * Get attendance status for user at session.
      */
     public function getStatus(int $sessionId, int $userId): ?AttendanceStatus
@@ -132,16 +124,6 @@ final class AttendanceService extends AbstractService
         }
 
         return AttendanceStatus::tryFrom($record->status);
-    }
-
-    /**
-     * Get all attendees for a session.
-     *
-     * @return array<int> User IDs
-     */
-    public function getAttendees(int $sessionId): array
-    {
-        return $this->repository->getPresentUserIds($sessionId);
     }
 
     /**
@@ -189,14 +171,6 @@ final class AttendanceService extends AbstractService
     // === Statistics ===
 
     /**
-     * Count sessions attended by user in edition.
-     */
-    public function countAttended(int $userId, int $editionId): int
-    {
-        return $this->repository->countAttended($userId, $editionId);
-    }
-
-    /**
      * Get hours attended by user in edition.
      */
     public function getHoursAttended(int $userId, int $editionId): float
@@ -237,7 +211,7 @@ final class AttendanceService extends AbstractService
             return 0.0;
         }
 
-        $attended = $this->countAttended($userId, $editionId);
+        $attended = $this->repository->countAttended($userId, $editionId);
 
         return ($attended / $totalSessions) * 100;
     }
