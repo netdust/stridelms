@@ -117,30 +117,56 @@ Implement as a single early-priority hook in stride-core that pattern-matches `/
 
 ## Decision rules on /opleidingen/<slug>/ (resolved 2026-05-19)
 
-The page branches on **active-edition presence first**, then on **format**:
+The page branches on **active-edition presence first**, then on **format**. The CTA target for an active edition further branches on whether the edition requires a form.
 
 ```
 if (course has any active edition):
-    → "edition surface wins" — show the editions list, NO self-enroll CTA
-    → if exactly 1 active edition, the card/CTA links directly to /edities/<slug>/
-    → if multiple, render the list and let the user pick
+    → "edition surface wins" — show the editions list, NO inline self-enroll CTA
+    → CTA target per edition uses the existing edition flow:
+        /edities/<edition-slug>/inschrijving/
+      which is already form-aware (see below).
 
 elif (course has format=online):
     → render self-enroll CTA (the only place /opleidingen/<slug>/ shows a CTA)
-    → behaviour as specified earlier:
+    → behaviour:
         - has_access → first lesson
-        - logged in, not enrolled → grant access + first lesson
+        - logged in, not enrolled → grant LD access + first lesson
         - guest → login with return-to first lesson
 
 elif (course has format=klassikaal, 0 active editions):
-    → show course info + small "Geen actieve edities" notice
+    → course info + small "Geen actieve edities" notice
     → NO CTA, NO interest form
 ```
 
-This means:
-- **Online courses without editions** are the only courses with a self-enroll CTA on `/opleidingen/<slug>/`.
-- **Mixed-format courses** (online + 1+ active edition) hide the self-enroll CTA. The active edition wins. To enroll online, the editor must end the edition first.
-- **Klassikaal courses without active editions** are info-only. Visitors who want to enroll wait.
+### How the existing edition flow handles forms (already works, don't reinvent)
+
+The form-vs-no-form branch is already implemented in `EnrollmentRouter::handleEnrollmentRoute()` (line 132-138) and `EditionService::getEnrollmentForm()`:
+
+- Edition meta `enrollment_form` (string, default `'default'`) drives the branch.
+- `'direct'` → `EnrollmentRouter::handleDirectEnrollment()` enrolls silently via `EnrollmentService::enroll()` and redirects to `/edities/<slug>/?enrolled=1`.
+- Any other value (`'default'`, `'intake'`, etc.) → renders the form template.
+
+After silent enrollment, the edition page's enrolled-state CTA (`single-vad_edition.php` line 77-83) calls `LearnDashHelper::getCourseAction()` which returns "Start cursus" → first lesson URL for online editions with LD content.
+
+**So for online edition + no form, the user clicks twice:**
+1. Edition CTA → backend enrolls + grants LD access + bounces to edition page with `?enrolled=1`
+2. Enrolled-state CTA on edition page → "Start cursus" → first lesson
+
+That's by design — the `?enrolled=1` page is the confirmation moment.
+
+**For online edition + form, the user clicks twice:**
+1. Edition CTA → form page
+2. Submit form → enrolled, redirected somewhere (existing behaviour)
+
+**For klassikaal edition + form (the common case)**, same as online + form.
+
+### Implications
+
+- **Online courses without editions** = the only courses with a self-enroll CTA on `/opleidingen/<slug>/`.
+- **Online courses with an active edition** = edition wins. The edition's CTA handles the "self-enroll" feel via `enrollment_form='direct'` if the editor wants it.
+- **Klassikaal courses with active editions** = edition list on `/opleidingen/<slug>/`, each edition's CTA flows through its own form (or direct).
+- **Klassikaal without editions** = info only.
+- **Mixed format** = if any active edition exists, edition surface wins regardless of format. To re-enable self-enroll on the online flow, editor must archive/end the edition.
 
 ## Sidebar logic consolidation
 
