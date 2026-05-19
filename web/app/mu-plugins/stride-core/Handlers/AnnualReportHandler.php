@@ -15,6 +15,16 @@ use Stride\Modules\Reporting\AnnualReportService;
  * Thin handler — guards (nonce + capability), resolves params, delegates to
  * AnnualReportService + AnnualReportPdfGenerator, streams the response.
  *
+ * Why wp_ajax_* instead of ntdst/api_data/*:
+ * The admin page renders the PDF/CSV download buttons as plain <a href>
+ * anchors so the user can click them and the browser triggers a native
+ * download. NTDST_Endpoints registers `/wp-json/ntdst/v1/action` as POST-only
+ * with a separately-fetched nonce (see ntdst-core/api/Endpoints.php:88), so
+ * the api_data path is incompatible with direct-anchor downloads — it
+ * requires a JS-driven POST + blob handoff (the path ICalHandler uses via
+ * ntdstAPI.download()). The admin export UX is anchor-link clicks, not JS,
+ * so wp_ajax_* with GET + nonce-in-URL is the right tool for this surface.
+ *
  * CSV cells are passed through {@see self::sanitizeCsvCell()} to neutralise
  * formula-injection (leading =, +, -, @, tab, CR). See audit finding C1.
  */
