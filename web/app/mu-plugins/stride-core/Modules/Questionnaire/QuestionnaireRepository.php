@@ -8,7 +8,7 @@ namespace Stride\Modules\Questionnaire;
  * QuestionnaireRepository
  *
  * Manages field group definitions stored in wp_options.
- * Plain class — not a service. No constructor DI.
+ * Plain class — not a service (no hooks). Resolved via DI autowiring when injected.
  */
 class QuestionnaireRepository
 {

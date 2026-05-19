@@ -62,10 +62,17 @@ final class QuestionnaireHandler
         if ($existing) {
             $existingData = json_decode($existing->enrollment_data ?? '{}', true) ?: [];
             $existingData['interest'] = $stageData;
-            $registrations->update((int) $existing->id, [
+            $updated = $registrations->update((int) $existing->id, [
                 'status' => RegistrationStatus::Interest->value,
                 'enrollment_data' => wp_json_encode($existingData),
             ]);
+            if (!$updated) {
+                ntdst_log('enrollment')->error('Interest registration update failed', [
+                    'registration_id' => (int) $existing->id,
+                    'edition_id' => $editionId,
+                ]);
+                return new WP_Error('update_failed', __('Je interesse kon niet worden opgeslagen. Probeer het later opnieuw.', 'stride'));
+            }
         } else {
             // Create new interest registration
             $registrationId = $registrations->create([
@@ -122,10 +129,17 @@ final class QuestionnaireHandler
         if ($existing) {
             $existingData = json_decode($existing->enrollment_data ?? '{}', true) ?: [];
             $existingData['waitlist'] = $stageData;
-            $registrations->update((int) $existing->id, [
+            $updated = $registrations->update((int) $existing->id, [
                 'status' => RegistrationStatus::Waitlist->value,
                 'enrollment_data' => wp_json_encode($existingData),
             ]);
+            if (!$updated) {
+                ntdst_log('enrollment')->error('Waitlist registration update failed', [
+                    'registration_id' => (int) $existing->id,
+                    'edition_id' => $editionId,
+                ]);
+                return new WP_Error('update_failed', __('Je aanvraag kon niet worden opgeslagen. Probeer het later opnieuw.', 'stride'));
+            }
         } else {
             $registrationId = $registrations->create([
                 'user_id' => null,
@@ -196,9 +210,17 @@ final class QuestionnaireHandler
         $existingData = json_decode($registration->enrollment_data ?? '{}', true) ?: [];
         $existingData[$stage] = $extraFields;
 
-        $registrations->update((int) $registration->id, [
+        $updated = $registrations->update((int) $registration->id, [
             'enrollment_data' => wp_json_encode($existingData),
         ]);
+        if (!$updated) {
+            ntdst_log('enrollment')->error('Stage submission update failed', [
+                'registration_id' => (int) $registration->id,
+                'edition_id' => $editionId,
+                'stage' => $stage,
+            ]);
+            return new WP_Error('update_failed', __('Je antwoorden konden niet worden opgeslagen. Probeer het later opnieuw.', 'stride'));
+        }
 
         return [
             'success' => true,

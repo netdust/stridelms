@@ -68,7 +68,7 @@ $billing_groups = $args['billing_groups'] ?? [];
         <!-- Dynamic field groups for billing step -->
         <?php foreach ($billing_groups as $group) : ?>
             <?php
-            stridence_template_part('templates/forms/fields/field-group', null, [
+            stridence_template_part('forms/fields/field-group', null, [
                 'group' => $group,
             ]);
             ?>

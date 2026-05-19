@@ -17,6 +17,13 @@ require_once __DIR__ . '/autoload.php';
 // Load config
 $config = require __DIR__ . '/plugin-config.php';
 
+// Register stride-core's own template path so mu-plugin code can render
+// shared presentation partials (templates/forms/fields, templates/admin,
+// templates/pdf) without depending on the active theme.
+if (class_exists('NTDST_Template_Loader')) {
+    NTDST_Template_Loader::addPath(__DIR__ . '/templates');
+}
+
 // CPTs registered via their services (EditionService, SessionService, etc.)
 
 // Create custom tables on activation

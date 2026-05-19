@@ -68,7 +68,7 @@ $form_type       = $args['form_type'] ?? 'default';
         <!-- Dynamic field groups for personal step -->
         <?php foreach ($personal_groups as $group) : ?>
             <?php
-            stridence_template_part('templates/forms/fields/field-group', null, [
+            stridence_template_part('forms/fields/field-group', null, [
                 'group' => $group,
             ]);
             ?>

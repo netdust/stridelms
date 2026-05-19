@@ -29,9 +29,9 @@ if (empty($fields)) {
 
     <?php foreach ($fields as $field) : ?>
         <?php
-        stridence_template_part('templates/forms/fields/dynamic-field', null, [
-            'field' => $field,
-        ]);
+        echo ntdst_response()
+            ->withData(['args' => ['field' => $field], 'field' => $field])
+            ->html('forms/fields/dynamic-field');
         ?>
     <?php endforeach; ?>
 </div>

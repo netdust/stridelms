@@ -54,7 +54,7 @@ $alpine_config = json_encode([
                 </div>
 
                 <?php foreach ($field_groups as $group) : ?>
-                    <?php stridence_template_part('templates/forms/fields/field-group', null, ['group' => $group]); ?>
+                    <?php stridence_template_part('forms/fields/field-group', null, ['group' => $group]); ?>
                 <?php endforeach; ?>
             </div>
 

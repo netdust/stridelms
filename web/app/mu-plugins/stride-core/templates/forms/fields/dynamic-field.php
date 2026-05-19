@@ -37,7 +37,9 @@ $modelBinding = "form.extra_fields['{$name}']";
 
 // Delegate to specialized templates for new types
 if (in_array($type, ['radio', 'scale', 'description'], true)) {
-    stridence_template_part('templates/forms/fields/field-' . $type, null, ['field' => $field]);
+    echo ntdst_response()
+        ->withData(['args' => ['field' => $field], 'field' => $field])
+        ->html('forms/fields/field-' . $type);
     return;
 }
 ?>

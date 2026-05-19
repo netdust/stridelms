@@ -71,7 +71,7 @@ if (empty($fieldGroups)) {
 
             <?php foreach ($group['fields'] ?? [] as $field): ?>
                 <?php
-                stridence_template_part('templates/forms/fields/dynamic-field', null, [
+                stridence_template_part('forms/fields/dynamic-field', null, [
                     'field'  => $field,
                     'prefix' => 'questionnaire',
                     'value'  => '',

@@ -23,13 +23,13 @@ final class QuestionnaireRenderer
             return '';
         }
 
-        ob_start();
+        $html = '';
         foreach ($groups as $group) {
-            stridence_template_part('templates/forms/fields/field-group', null, [
-                'group' => $group,
-                'model_prefix' => $modelPrefix,
-            ]);
+            $args = ['group' => $group, 'model_prefix' => $modelPrefix];
+            $html .= ntdst_response()
+                ->withData(['args' => $args] + $args)
+                ->html('forms/fields/field-group');
         }
-        return ob_get_clean() ?: '';
+        return $html;
     }
 }
