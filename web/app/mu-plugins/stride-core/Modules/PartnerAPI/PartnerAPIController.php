@@ -230,20 +230,9 @@ final class PartnerAPIController
                 $editions[$ep->ID] = $ep;
             }
 
-            // Batch-fetch course IDs from meta
-            global $wpdb;
-            $editionIdList = implode(',', array_map('intval', $editionIds));
-            $metaRows = $wpdb->get_results(
-                "SELECT post_id, meta_value FROM {$wpdb->postmeta}
-                 WHERE post_id IN ({$editionIdList}) AND meta_key = '_ntdst_course_id'"
-            );
-            foreach ($metaRows as $mr) {
-                $cid = (int) $mr->meta_value;
-                $editionCourseMap[(int) $mr->post_id] = $cid;
-                if ($cid) {
-                    $courseIds[] = $cid;
-                }
-            }
+            // Batch-fetch course IDs via the repository (no hardcoded meta prefix)
+            $editionCourseMap = $this->editionRepository->findCourseIdsForEditions($editionIds);
+            $courseIds = array_values($editionCourseMap);
         }
 
         // Batch-fetch courses

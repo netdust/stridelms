@@ -122,6 +122,43 @@ final class EditionRepository extends AbstractRepository
     }
 
     /**
+     * Batch-resolve edition_id → course_id for a list of edition IDs.
+     *
+     * Returns a map of edition_id => course_id, only for editions that
+     * actually have a course_id assigned. IDs with no course are omitted
+     * (use `array_key_exists()` rather than `??`-coalesce if you need to
+     * distinguish "no course" from "unknown id").
+     *
+     * @param int[] $editionIds
+     * @return array<int, int>
+     */
+    public function findCourseIdsForEditions(array $editionIds): array
+    {
+        if (empty($editionIds)) {
+            return [];
+        }
+
+        $rows = $this->model()
+            ->whereIn('ID', array_map('intval', $editionIds))
+            ->where('post_status', 'publish')
+            ->withMeta()
+            ->get();
+
+        $prefixedKey = $this->getMetaPrefix() . 'course_id';
+
+        $map = [];
+        foreach ($rows as $row) {
+            $editionId = (int) ($row['id'] ?? $row['ID'] ?? 0);
+            $courseId = (int) ($row['meta'][$prefixedKey] ?? 0);
+            if ($editionId > 0 && $courseId > 0) {
+                $map[$editionId] = $courseId;
+            }
+        }
+
+        return $map;
+    }
+
+    /**
      * Update edition status.
      */
     public function updateStatus(int $editionId, OfferingStatus $status): void
