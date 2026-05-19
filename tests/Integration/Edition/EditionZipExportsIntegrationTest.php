@@ -82,7 +82,6 @@ class EditionZipExportsIntegrationTest extends IntegrationTestCase
     public function testFilesEnumerateReturnsSeededAttachment(): void
     {
         $exporter = new EditionFilesZipExporter(
-            ntdst_get(EditionService::class),
             ntdst_get(EditionRepository::class),
             ntdst_get(RegistrationRepository::class),
         );
@@ -97,7 +96,6 @@ class EditionZipExportsIntegrationTest extends IntegrationTestCase
     public function testBundleProducesZipWithAllArtefacts(): void
     {
         $filesExporter = new EditionFilesZipExporter(
-            ntdst_get(EditionService::class),
             ntdst_get(EditionRepository::class),
             ntdst_get(RegistrationRepository::class),
         );

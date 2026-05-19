@@ -6,7 +6,6 @@ namespace Stride\Modules\Edition\Admin;
 
 use Stride\Infrastructure\BatchQueryHelper;
 use Stride\Modules\Edition\EditionRepository;
-use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use WP_User;
 use ZipArchive;
@@ -25,7 +24,6 @@ use ZipArchive;
 class EditionFilesZipExporter
 {
     public function __construct(
-        private readonly EditionService $editionService,
         private readonly EditionRepository $editionRepository,
         private readonly RegistrationRepository $registrations,
     ) {}
@@ -146,7 +144,7 @@ class EditionFilesZipExporter
      */
     public function editionSlug(int $editionId): string
     {
-        $edition = $this->editionService->getEdition($editionId);
+        $edition = $this->editionRepository->find($editionId);
         if ($edition instanceof \WP_Post) {
             $title = html_entity_decode($edition->post_title, ENT_QUOTES, 'UTF-8');
             $slug = sanitize_title($title);

@@ -54,7 +54,7 @@ if ($reg) {
 
     $courseId = ntdst_get(\Stride\Modules\Edition\EditionService::class)->getCourseId(13257);
     echo "  course_id=$courseId\n";
-    $editions = ntdst_get(\Stride\Modules\Edition\EditionService::class)->getEditionsForCourse($courseId);
+    $editions = ntdst_get(\Stride\Modules\Edition\EditionRepository::class)->findByCourse($courseId);
     foreach ($editions as $ed) {
         $edId = is_object($ed) ? (int)($ed->ID ?? 0) : (int)($ed['id'] ?? $ed['ID'] ?? 0);
         if (!$edId) continue;

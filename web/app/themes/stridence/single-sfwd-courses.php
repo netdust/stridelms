@@ -17,14 +17,14 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
-use Stride\Modules\Edition\EditionService;
+use Stride\Modules\Edition\EditionRepository;
 
 $course_id = get_the_ID();
 $is_online = stridence_is_online_course($course_id);
 
 // Fetch editions for the inline list. Status filtering happens in
 // templates/course/editions-list.php.
-$editions = ntdst_get(EditionService::class)->getEditionsForCourse($course_id);
+$editions = ntdst_get(EditionRepository::class)->findByCourse($course_id);
 
 $breadcrumbs = [
     ['label' => __('Opleidingen', 'stridence'), 'url' => get_post_type_archive_link('sfwd-courses')],

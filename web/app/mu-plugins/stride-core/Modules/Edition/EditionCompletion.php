@@ -23,6 +23,7 @@ final class EditionCompletion
 {
     public function __construct(
         private readonly EditionService $editionService,
+        private readonly EditionRepository $editions,
         private readonly SessionService $sessionService,
     ) {}
 
@@ -83,7 +84,7 @@ final class EditionCompletion
      */
     public function getCompletionMode(int $editionId): CompletionMode
     {
-        $modeValue = ntdst_data()->get('vad_edition')->getMeta($editionId, 'completion_mode');
+        $modeValue = $this->editions->getField($editionId, 'completion_mode');
 
         if ($modeValue === null || $modeValue === '') {
             return CompletionMode::AttendAll;
@@ -101,7 +102,7 @@ final class EditionCompletion
      */
     public function getCompletionThreshold(int $editionId): int
     {
-        $threshold = ntdst_data()->get('vad_edition')->getMeta($editionId, 'completion_threshold');
+        $threshold = $this->editions->getField($editionId, 'completion_threshold');
 
         return $threshold ? (int) $threshold : 100;
     }
@@ -234,7 +235,7 @@ final class EditionCompletion
 
         // Find editions linked to this course. EditionRepository returns
         // associative arrays with 'id' (lowercase), not WP_Post objects.
-        $editions = $this->editionService->getEditionsForCourse($courseId);
+        $editions = $this->editions->findByCourse($courseId);
 
         if (empty($editions)) {
             return;
@@ -259,7 +260,7 @@ final class EditionCompletion
      */
     public function setCompletionMode(int $editionId, CompletionMode $mode): void
     {
-        ntdst_data()->get('vad_edition')->updateMetaBatch($editionId, ['completion_mode' => $mode->value]);
+        $this->editions->updateMeta($editionId, ['completion_mode' => $mode->value]);
     }
 
     /**
@@ -267,6 +268,6 @@ final class EditionCompletion
      */
     public function setCompletionThreshold(int $editionId, int $threshold): void
     {
-        ntdst_data()->get('vad_edition')->updateMetaBatch($editionId, ['completion_threshold' => $threshold]);
+        $this->editions->updateMeta($editionId, ['completion_threshold' => $threshold]);
     }
 }

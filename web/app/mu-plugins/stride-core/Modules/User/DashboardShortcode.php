@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Stride\Modules\User;
 
 use Stride\Modules\Edition\EditionRepository;
-use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Enrollment\EnrollmentService;
 
 /**
@@ -15,7 +14,6 @@ final class DashboardShortcode
 {
     public function __construct(
         private readonly EnrollmentService $enrollment,
-        private readonly EditionService $editions,
         private readonly EditionRepository $editionRepository,
     ) {
         add_shortcode('stride_my_courses', [$this, 'renderMyCourses']);
@@ -40,7 +38,7 @@ final class DashboardShortcode
         $output = '<div class="uk-grid uk-grid-small uk-child-width-1-1" uk-grid>';
 
         foreach ($enrollments as $registration) {
-            $edition = $this->editions->getEdition((int) $registration->edition_id);
+            $edition = $this->editionRepository->find((int) $registration->edition_id);
 
             if (is_wp_error($edition)) {
                 continue;

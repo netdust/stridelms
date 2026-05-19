@@ -7,7 +7,6 @@ namespace Stride\Modules\Trajectory\Admin;
 use Stride\Domain\TrajectoryMode;
 use Stride\Domain\OfferingStatus;
 use Stride\Modules\Edition\EditionRepository;
-use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Trajectory\TrajectoryCPT;
 use Stride\Modules\Trajectory\TrajectoryRepository;
@@ -35,7 +34,6 @@ final class TrajectoryAdminController
         private readonly TrajectoryService $trajectoryService,
         private readonly TrajectoryRepository $repository,
         private readonly RegistrationRepository $registrations,
-        private readonly EditionService $editionService,
         private readonly EditionRepository $editionRepository,
     ) {
         $this->init();
@@ -495,7 +493,7 @@ final class TrajectoryAdminController
 
         // For editions, add date and venue info
         if ($type === 'edition' && $editionId) {
-            $editionPost = $this->editionService->getEdition($editionId);
+            $editionPost = $this->editionRepository->find($editionId);
             if (!is_wp_error($editionPost)) {
                 $startDate = $this->editionRepository->getField($editionId, 'start_date', '');
                 $venue = $this->editionRepository->getField($editionId, 'venue', '');
@@ -1260,7 +1258,7 @@ final class TrajectoryAdminController
         $results = [];
 
         // Group 1: Editions
-        $editions = $this->editionService->getUpcomingEditions(50);
+        $editions = $this->editionRepository->findUpcoming(50);
 
         $editionResults = [];
         foreach ($editions as $edition) {

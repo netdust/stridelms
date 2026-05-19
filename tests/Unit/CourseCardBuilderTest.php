@@ -274,14 +274,14 @@ final class CourseCardBuilderTest extends TestCase
     }
 
     /**
-     * Register an EditionService stub in the DI container that returns the given
-     * edition rows from getEditionsForCourse() and treats can_enroll/canEnroll as truthy.
+     * Register Edition service + repository stubs in the DI container so the
+     * card builder can resolve them. Service exposes canEnroll() (business logic);
+     * repository exposes findByCourse() / getField() (data access).
      */
     private function _registerEditionServiceStub(array $editions): void
     {
-        $stub = new class($editions) {
+        $serviceStub = new class($editions) {
             public function __construct(private array $editions) {}
-            public function getEditionsForCourse(int $courseId): array { return $this->editions; }
             public function canEnroll(int $editionId): bool
             {
                 foreach ($this->editions as $ed) {
@@ -292,6 +292,22 @@ final class CourseCardBuilderTest extends TestCase
                 return false;
             }
         };
-        $this->registerService(\Stride\Modules\Edition\EditionService::class, $stub);
+
+        $repoStub = new class($editions) {
+            public function __construct(private array $editions) {}
+            public function findByCourse(int $courseId): array { return $this->editions; }
+            public function getField(int $editionId, string $field, mixed $default = null): mixed
+            {
+                foreach ($this->editions as $ed) {
+                    if ((int) ($ed['id'] ?? 0) === $editionId) {
+                        return $ed[$field] ?? $default;
+                    }
+                }
+                return $default;
+            }
+        };
+
+        $this->registerService(\Stride\Modules\Edition\EditionService::class, $serviceStub);
+        $this->registerService(\Stride\Modules\Edition\EditionRepository::class, $repoStub);
     }
 }

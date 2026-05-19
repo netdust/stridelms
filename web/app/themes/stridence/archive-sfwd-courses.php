@@ -12,9 +12,9 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
-use Stride\Modules\Edition\EditionService;
+use Stride\Modules\Edition\EditionRepository;
 
-$editionService = ntdst_get(EditionService::class);
+$editionRepository = ntdst_get(EditionRepository::class);
 
 // --- Classroom editions ---
 // Get online course IDs to exclude their editions
@@ -67,7 +67,7 @@ $edition_query = new WP_Query([
 
 $classroom_editions = [];
 foreach ($edition_query->posts as $edition_post) {
-    $edition_obj = $editionService->getEdition($edition_post->ID);
+    $edition_obj = $editionRepository->find($edition_post->ID);
     if (!$edition_obj || is_wp_error($edition_obj)) {
         continue;
     }

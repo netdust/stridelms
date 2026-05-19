@@ -65,6 +65,7 @@ final class ICalHandler
 
         $sessionService = ntdst_get(SessionService::class);
         $editionService = ntdst_get(EditionService::class);
+        $editionRepository = ntdst_get(EditionRepository::class);
         $registrationRepo = ntdst_get(RegistrationRepository::class);
 
         if ($sessionId) {
@@ -76,7 +77,7 @@ final class ICalHandler
                 if (!$registration) {
                     return $this->buildIcal([]); // Return empty calendar if not enrolled
                 }
-                $events[] = $this->sessionToEvent($session, $editionService);
+                $events[] = $this->sessionToEvent($session, $editionService, $editionRepository);
             }
         } elseif ($editionId) {
             // Security: Verify user is enrolled in this edition
@@ -94,7 +95,7 @@ final class ICalHandler
                 if (!empty($selectedIds) && !empty($session['slot']) && !in_array((int) $session['id'], $selectedIds, true)) {
                     continue;
                 }
-                $events[] = $this->sessionToEvent($session, $editionService);
+                $events[] = $this->sessionToEvent($session, $editionService, $editionRepository);
             }
         } else {
             // All user's upcoming scheduled sessions (pending + confirmed)
@@ -118,7 +119,7 @@ final class ICalHandler
                     if (!empty($selectedIds) && !empty($session['slot']) && !in_array((int) $session['id'], $selectedIds, true)) {
                         continue;
                     }
-                    $events[] = $this->sessionToEvent($session, $editionService);
+                    $events[] = $this->sessionToEvent($session, $editionService, $editionRepository);
                 }
             }
         }
@@ -132,15 +133,14 @@ final class ICalHandler
      * @param array<string, mixed> $session
      * @return array<string, mixed>
      */
-    private function sessionToEvent(array $session, EditionService $editionService): array
+    private function sessionToEvent(array $session, EditionService $editionService, EditionRepository $editionRepository): array
     {
         $editionId = (int) $session['edition_id'];
 
         if (!isset($this->editionCache[$editionId])) {
-            $edition = $editionService->getEdition($editionId);
+            $edition = $editionRepository->find($editionId);
             $courseId = is_wp_error($edition) ? 0 : $editionService->getCourseId($editionId);
             $course = $courseId ? get_post($courseId) : null;
-            $editionRepository = ntdst_get(EditionRepository::class);
             $venue = !is_wp_error($edition)
                 ? $editionRepository->getField($edition->ID, 'venue', '')
                 : '';

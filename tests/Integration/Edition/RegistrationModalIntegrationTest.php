@@ -6,6 +6,7 @@ namespace Stride\Tests\Integration\Edition;
 
 use IntegrationTestCase;
 use Stride\Modules\Edition\Admin\RegistrationModalController;
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionSelection;
 use Stride\Modules\Edition\SessionService;
@@ -88,6 +89,7 @@ class RegistrationModalIntegrationTest extends IntegrationTestCase
 
         $controller = new RegistrationModalController(
             ntdst_get(EditionService::class),
+            ntdst_get(EditionRepository::class),
             ntdst_get(SessionService::class),
             ntdst_get(SessionSelection::class),
             ntdst_get(RegistrationRepository::class),
@@ -124,6 +126,7 @@ class RegistrationModalIntegrationTest extends IntegrationTestCase
 
         $controller = new RegistrationModalController(
             ntdst_get(EditionService::class),
+            ntdst_get(EditionRepository::class),
             ntdst_get(SessionService::class),
             ntdst_get(SessionSelection::class),
             ntdst_get(RegistrationRepository::class),

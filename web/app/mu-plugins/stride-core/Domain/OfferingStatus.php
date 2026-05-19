@@ -52,12 +52,33 @@ enum OfferingStatus: string
      */
     public function isActive(): bool
     {
-        return in_array($this, [
+        return in_array($this, self::activeCases(), true);
+    }
+
+    /**
+     * Status cases that count as "active" (publicly visible, listed in
+     * catalogs, reachable via slug routing).
+     *
+     * @return list<self>
+     */
+    public static function activeCases(): array
+    {
+        return [
             self::Announcement,
             self::Open,
             self::Full,
             self::InProgress,
-        ], true);
+        ];
+    }
+
+    /**
+     * Active status values as strings — for meta_query / WHERE IN clauses.
+     *
+     * @return list<string>
+     */
+    public static function activeValues(): array
+    {
+        return array_map(fn(self $s) => $s->value, self::activeCases());
     }
 
     /**

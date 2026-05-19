@@ -17,6 +17,7 @@ defined('ABSPATH') || exit;
 
 use Stride\Domain\RegistrationStatus;
 use Stride\Integrations\LearnDash\LearnDashHelper;
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\User\UserDashboardService;
@@ -27,6 +28,7 @@ $user_id = $user->ID;
 // ── Certificates ────────────────────────────────────────────
 $registrationRepo  = ntdst_get(RegistrationRepository::class);
 $editionService    = ntdst_get(EditionService::class);
+$editionRepository = ntdst_get(EditionRepository::class);
 
 $registrations = $registrationRepo->findByUser($user_id);
 
@@ -43,7 +45,7 @@ foreach ($registrations as $reg) {
     }
 
     $edition_id = (int) $reg->edition_id;
-    $edition    = $editionService->getEdition($edition_id);
+    $edition    = $editionRepository->find($edition_id);
 
     if (is_wp_error($edition)) {
         continue;

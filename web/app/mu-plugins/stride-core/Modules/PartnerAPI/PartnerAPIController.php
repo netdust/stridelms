@@ -6,6 +6,7 @@ namespace Stride\Modules\PartnerAPI;
 
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Attendance\AttendanceRepository;
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use WP_Error;
 use WP_REST_Request;
@@ -31,6 +32,7 @@ final class PartnerAPIController
         private readonly RegistrationRepository $registrationRepository,
         private readonly AttendanceRepository $attendanceRepository,
         private readonly EditionService $editionService,
+        private readonly EditionRepository $editionRepository,
     ) {
         $this->init();
     }
@@ -319,7 +321,7 @@ final class PartnerAPIController
 
         $user = get_userdata($registration->user_id);
         $editionId = $registration->edition_id ? (int) $registration->edition_id : 0;
-        $edition = $editionId ? $this->editionService->getEdition($editionId) : null;
+        $edition = $editionId ? $this->editionRepository->find($editionId) : null;
         $editionIsValid = $edition instanceof \WP_Post;
         $courseId = $editionIsValid ? $this->editionService->getCourseId($editionId) : 0;
         $course = $courseId ? get_post($courseId) : null;
@@ -557,7 +559,7 @@ final class PartnerAPIController
 
         // Validate edition exists
         if ($editionId) {
-            $edition = $this->editionService->getEdition($editionId);
+            $edition = $this->editionRepository->find($editionId);
             if (is_wp_error($edition)) {
                 return new WP_Error('not_found', __('Edition not found.', 'stride'), ['status' => 404]);
             }

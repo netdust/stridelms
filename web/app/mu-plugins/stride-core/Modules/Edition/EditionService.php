@@ -49,7 +49,7 @@ class EditionService extends AbstractService implements EditionQueryInterface
         $sessionService = new SessionService($sessionRepo);
         ntdst_set(SessionService::class, fn() => $sessionService);
 
-        $completion = new EditionCompletion($this, $sessionService);
+        $completion = new EditionCompletion($this, $this->repository, $sessionService);
         ntdst_set(EditionCompletion::class, fn() => $completion);
         add_action('stride/attendance/marked', [$completion, 'onAttendanceMarked']);
         add_action('learndash_course_completed', [$completion, 'onLearnDashCourseCompleted']);
@@ -66,6 +66,7 @@ class EditionService extends AbstractService implements EditionQueryInterface
 
         new Admin\RegistrationModalController(
             $this,
+            $this->repository,
             $sessionService,
             ntdst_get(\Stride\Modules\Edition\SessionSelection::class),
             ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class),
@@ -80,7 +81,7 @@ class EditionService extends AbstractService implements EditionQueryInterface
         add_action('wp_trash_post', [$this, 'onEditionTrashed']);
 
         // Route /vormingen/<slug>/ → pure-LD course fallback when slug isn't an edition
-        (new EditionRouter())->register();
+        ntdst_get(EditionRouter::class)->register();
     }
 
     // === EditionQueryInterface Implementation ===
@@ -201,34 +202,6 @@ class EditionService extends AbstractService implements EditionQueryInterface
     }
 
     // === Public API ===
-
-    /**
-     * Get edition by ID.
-     */
-    public function getEdition(int $editionId): WP_Post|WP_Error
-    {
-        return $this->repository->find($editionId);
-    }
-
-    /**
-     * Get editions for a course.
-     *
-     * @return array<array<string, mixed>>
-     */
-    public function getEditionsForCourse(int $courseId): array
-    {
-        return $this->repository->findByCourse($courseId);
-    }
-
-    /**
-     * Get upcoming editions.
-     *
-     * @return array<array<string, mixed>>
-     */
-    public function getUpcomingEditions(int $limit = 10): array
-    {
-        return $this->repository->findUpcoming($limit);
-    }
 
     /**
      * Check if a user is a member.

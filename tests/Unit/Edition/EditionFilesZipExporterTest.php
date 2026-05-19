@@ -6,7 +6,6 @@ namespace Stride\Tests\Unit\Edition;
 
 use Stride\Modules\Edition\Admin\EditionFilesZipExporter;
 use Stride\Modules\Edition\EditionRepository;
-use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Tests\TestCase;
 use WP_User;
@@ -19,7 +18,6 @@ class EditionFilesZipExporterTest extends TestCase
     {
         parent::setUp();
         $this->exporter = new EditionFilesZipExporter(
-            $this->createMock(EditionService::class),
             $this->createMock(EditionRepository::class),
             $this->createMock(RegistrationRepository::class),
         );
@@ -199,7 +197,6 @@ class EditionFilesZipExporterTest extends TestCase
     {
         $exporter = $this->getMockBuilder(EditionFilesZipExporter::class)
             ->setConstructorArgs([
-                $this->createMock(EditionService::class),
                 $this->createMock(EditionRepository::class),
                 $this->createMock(RegistrationRepository::class),
             ])

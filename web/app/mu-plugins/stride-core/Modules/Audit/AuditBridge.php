@@ -30,7 +30,7 @@ final class AuditBridge extends AbstractService
     {
         // Activity shortcode (deferred to ensure dependencies are available)
         add_action('init', function () {
-            new ActivityShortcode($this->audit(), ntdst_get(\Stride\Modules\Edition\EditionService::class));
+            new ActivityShortcode($this->audit(), ntdst_get(\Stride\Modules\Edition\EditionRepository::class));
         });
 
         // Registration events

@@ -15,7 +15,7 @@ final class EditionRepository extends AbstractRepository
     protected string $postType = EditionCPT::POST_TYPE;
 
     /**
-     * Get editions for a specific course.
+     * Get editions for a specific course (all post-status=publish, any status).
      *
      * @return array<array<string, mixed>>
      */
@@ -27,6 +27,26 @@ final class EditionRepository extends AbstractRepository
             ->orderBy('start_date', 'ASC')
             ->withMeta()
             ->get();
+    }
+
+    /**
+     * Get IDs of editions for a course that are "active" — i.e. publicly
+     * visible, listed in catalogs, reachable via slug routing. Excludes
+     * terminal statuses (cancelled, completed, archived) and drafts.
+     *
+     * Status set lives on OfferingStatus::activeCases().
+     *
+     * @return list<int>
+     */
+    public function findActiveIdsByCourse(int $courseId): array
+    {
+        $rows = $this->model()
+            ->where('course_id', $courseId)
+            ->where('post_status', 'publish')
+            ->whereIn('status', OfferingStatus::activeValues())
+            ->get();
+
+        return array_map(static fn(array $row): int => (int) ($row['id'] ?? $row['ID'] ?? 0), $rows);
     }
 
     /**
@@ -99,14 +119,6 @@ final class EditionRepository extends AbstractRepository
         }
 
         return $query->limit($limit)->get();
-    }
-
-    /**
-     * Get field value from edition.
-     */
-    public function getField(int $editionId, string $field, mixed $default = null): mixed
-    {
-        return $this->model()->getMeta($editionId, $field, $default);
     }
 
     /**

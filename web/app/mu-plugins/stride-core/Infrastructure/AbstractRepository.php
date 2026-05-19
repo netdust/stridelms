@@ -77,6 +77,24 @@ abstract class AbstractRepository implements RepositoryInterface
     }
 
     /**
+     * Read a single registered field value (typed per schema).
+     */
+    public function getField(int $id, string $field, mixed $default = null): mixed
+    {
+        return $this->model()->getMeta($id, $field, $default);
+    }
+
+    /**
+     * Read all registered field values for a post (typed per schema).
+     *
+     * @return array<string, mixed>
+     */
+    public function findFields(int $id): array
+    {
+        return $this->model()->getMeta($id);
+    }
+
+    /**
      * Get all records with optional filters.
      *
      * @param array<string, mixed> $filters

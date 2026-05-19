@@ -9,6 +9,7 @@
  * @var array  $item_data Pre-fetched item data (title, price, etc.)
  */
 
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Questionnaire\QuestionnaireRepository;
 
@@ -52,18 +53,18 @@ $edition_data = [];
 $course_data  = [];
 
 if ($item_type === 'edition' && $item_id) {
-    $editionService = ntdst_get(EditionService::class);
-    $edition        = $editionService->getEdition($item_id);
+    $editionService    = ntdst_get(EditionService::class);
+    $editionRepository = ntdst_get(EditionRepository::class);
+    $edition           = $editionRepository->find($item_id);
 
     if (!is_wp_error($edition)) {
-        $editionModel = ntdst_data()->get('vad_edition');
-        $course_id    = $editionService->getCourseId($item_id);
-        $price        = $editionService->getPrice($item_id, $current_user->ID);
+        $course_id = $editionService->getCourseId($item_id);
+        $price     = $editionService->getPrice($item_id, $current_user->ID);
 
         $edition_data = [
             'title'      => ($course_id ? get_the_title($course_id) : '') ?: get_the_title($item_id),
-            'start_date' => $editionModel->getMeta($item_id, 'start_date', ''),
-            'venue'      => $editionModel->getMeta($item_id, 'venue', ''),
+            'start_date' => $editionRepository->getField($item_id, 'start_date', ''),
+            'venue'      => $editionRepository->getField($item_id, 'venue', ''),
             'price'      => $price ? $price->format() : '',
             'sessions'   => [],
         ];

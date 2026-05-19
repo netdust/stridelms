@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Edition\SessionSelection;
@@ -19,12 +20,11 @@ use Stride\Integrations\LearnDash\LearnDashHelper;
 
 $edition_id = get_the_ID();
 
-// Get services
-$editionService = ntdst_get(EditionService::class);
-$sessionService = ntdst_get(SessionService::class);
+$editionService    = ntdst_get(EditionService::class);
+$editionRepository = ntdst_get(EditionRepository::class);
+$sessionService    = ntdst_get(SessionService::class);
 
-// Get edition data via service
-$edition = $editionService->getEdition($edition_id);
+$edition = $editionRepository->find($edition_id);
 if (is_wp_error($edition)) {
     stridence_template_part('partials/empty-state', null, [
         'icon'    => 'alert-circle',

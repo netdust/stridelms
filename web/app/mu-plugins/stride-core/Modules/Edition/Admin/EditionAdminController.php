@@ -850,7 +850,6 @@ final class EditionAdminController
 
             case 'files':
                 $filesExporter = new EditionFilesZipExporter(
-                    $this->editionService,
                     $this->editionRepository,
                     ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class),
                 );
@@ -859,7 +858,6 @@ final class EditionAdminController
 
             case 'bundle':
                 $filesExporter = new EditionFilesZipExporter(
-                    $this->editionService,
                     $this->editionRepository,
                     ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class),
                 );
@@ -1083,13 +1081,13 @@ final class EditionAdminController
 
         switch ($type) {
             case SessionType::InPerson:
-                $data['post_title'] = sanitize_text_field($input['title'] ?? '');
+                $data['title'] = sanitize_text_field($input['title'] ?? '');
                 $data['location'] = sanitize_text_field($input['location'] ?? '');
                 $data['description'] = sanitize_textarea_field($input['description'] ?? '');
                 break;
 
             case SessionType::Webinar:
-                $data['post_title'] = sanitize_text_field($input['title'] ?? '');
+                $data['title'] = sanitize_text_field($input['title'] ?? '');
                 $data['webinar_link'] = esc_url_raw($input['webinar_link'] ?? '');
                 $data['description'] = sanitize_textarea_field($input['description'] ?? '');
                 $data['location'] = 'Online';
@@ -1100,7 +1098,7 @@ final class EditionAdminController
                 $lessonId = absint($input['lesson_id'] ?? 0);
                 if ($lessonId) {
                     $lesson = get_post($lessonId);
-                    $data['post_title'] = $lesson ? $lesson->post_title : '';
+                    $data['title'] = $lesson ? $lesson->post_title : '';
                     $data['lesson_ids'] = [$lessonId];
                 }
                 $data['location'] = 'Online';

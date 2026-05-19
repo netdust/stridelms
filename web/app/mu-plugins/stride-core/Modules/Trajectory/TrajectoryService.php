@@ -54,7 +54,6 @@ final class TrajectoryService extends AbstractService
             $this,
             $this->repository,
             $this->registrations,
-            ntdst_get(\Stride\Modules\Edition\EditionService::class),
             ntdst_get(\Stride\Modules\Edition\EditionRepository::class),
         );
     }

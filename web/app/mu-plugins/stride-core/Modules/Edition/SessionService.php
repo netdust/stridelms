@@ -275,7 +275,7 @@ final class SessionService
             'type_enum' => $type,
             'capacity' => (int) ($meta['_ntdst_capacity'] ?? $meta['capacity'] ?? 0),
             'optional' => (bool) ($meta['_ntdst_optional'] ?? $meta['optional'] ?? false),
-            'title' => $meta['_ntdst_post_title'] ?? $data['title'] ?? '',
+            'title' => $data['title'] ?? '',
             'description' => $meta['_ntdst_description'] ?? $meta['description'] ?? '',
             'webinar_link' => $meta['_ntdst_webinar_link'] ?? $meta['webinar_link'] ?? '',
             'lesson_ids' => array_map('intval', $lessonIds),

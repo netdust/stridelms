@@ -8,6 +8,7 @@ use Stride\Modules\PartnerAPI\PartnerAPIController;
 use Stride\Modules\Enrollment\EnrollmentService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Attendance\AttendanceRepository;
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Tests\TestCase;
 use WP_REST_Request;
@@ -26,6 +27,7 @@ class PartnerAPIControllerTest extends TestCase
     private RegistrationRepository $mockRegRepo;
     private AttendanceRepository $mockAttendanceRepo;
     private EditionService $mockEditionService;
+    private EditionRepository $mockEditionRepo;
     private EnrollmentService $mockEnrollmentService;
 
     protected function setUp(): void
@@ -42,6 +44,7 @@ class PartnerAPIControllerTest extends TestCase
         $this->mockRegRepo = $this->createMock(RegistrationRepository::class);
         $this->mockAttendanceRepo = $this->createMock(AttendanceRepository::class);
         $this->mockEditionService = $this->createMock(EditionService::class);
+        $this->mockEditionRepo = $this->createMock(EditionRepository::class);
         $this->mockEnrollmentService = $this->createMock(EnrollmentService::class);
 
         // Register EnrollmentService mock in the DI container
@@ -52,7 +55,8 @@ class PartnerAPIControllerTest extends TestCase
         $this->controller = new PartnerAPIController(
             $this->mockRegRepo,
             $this->mockAttendanceRepo,
-            $this->mockEditionService
+            $this->mockEditionService,
+            $this->mockEditionRepo
         );
     }
 
@@ -338,8 +342,8 @@ class PartnerAPIControllerTest extends TestCase
         $editionPost->ID = 789;
         $editionPost->post_title = 'Test Edition';
 
-        $this->mockEditionService
-            ->method('getEdition')
+        $this->mockEditionRepo
+            ->method('find')
             ->with(789)
             ->willReturn($editionPost);
 
@@ -408,8 +412,8 @@ class PartnerAPIControllerTest extends TestCase
         $this->setupValidPartner(1, 100);
 
         // getEdition returns WP_Error when edition not found
-        $this->mockEditionService
-            ->method('getEdition')
+        $this->mockEditionRepo
+            ->method('find')
             ->with(999)
             ->willReturn(new WP_Error('not_found', 'Edition not found'));
 
@@ -443,8 +447,8 @@ class PartnerAPIControllerTest extends TestCase
         $editionPost->ID = 789;
         $editionPost->post_title = 'Test Edition';
 
-        $this->mockEditionService
-            ->method('getEdition')
+        $this->mockEditionRepo
+            ->method('find')
             ->with(789)
             ->willReturn($editionPost);
 
@@ -469,8 +473,8 @@ class PartnerAPIControllerTest extends TestCase
         $editionPost->ID = 789;
         $editionPost->post_title = 'Test Edition';
 
-        $this->mockEditionService
-            ->method('getEdition')
+        $this->mockEditionRepo
+            ->method('find')
             ->with(789)
             ->willReturn($editionPost);
 
@@ -513,8 +517,8 @@ class PartnerAPIControllerTest extends TestCase
         $editionPost->ID = 789;
         $editionPost->post_title = 'Test Edition';
 
-        $this->mockEditionService
-            ->method('getEdition')
+        $this->mockEditionRepo
+            ->method('find')
             ->with(789)
             ->willReturn($editionPost);
 
@@ -549,8 +553,8 @@ class PartnerAPIControllerTest extends TestCase
         $editionPost->ID = 789;
         $editionPost->post_title = 'Test Edition';
 
-        $this->mockEditionService
-            ->method('getEdition')
+        $this->mockEditionRepo
+            ->method('find')
             ->with(789)
             ->willReturn($editionPost);
 

@@ -261,21 +261,21 @@ function stridence_build_course_card_args_from_trajectory_course(\WP_Post $cours
         ? get_the_excerpt($courseId)
         : wp_trim_words(get_post_field('post_content', $courseId), 25);
 
-    // Upcoming editions via EditionService (DI)
+    // Upcoming editions via repository; canEnroll() stays on the service
     $editionService    = ntdst_get(\Stride\Modules\Edition\EditionService::class);
-    $allEditions       = $editionService->getEditionsForCourse($courseId);
+    $editionRepository = ntdst_get(\Stride\Modules\Edition\EditionRepository::class);
+    $allEditions       = $editionRepository->findByCourse($courseId);
     $upcomingEditions  = [];
     $nextStartDate     = null;
 
     if (is_array($allEditions)) {
-        $editionModel = ntdst_data()->get('vad_edition');
         foreach ($allEditions as $ed) {
             $editionId = (int) ($ed['id'] ?? $ed['ID'] ?? 0);
             if (!$editionId || !$editionService->canEnroll($editionId)) {
                 continue;
             }
-            $startDate = (string) ($ed['start_date'] ?? $editionModel->getMeta($editionId, 'start_date', ''));
-            $venue     = (string) ($ed['venue'] ?? $editionModel->getMeta($editionId, 'venue', ''));
+            $startDate = (string) ($ed['start_date'] ?? $editionRepository->getField($editionId, 'start_date', ''));
+            $venue     = (string) ($ed['venue'] ?? $editionRepository->getField($editionId, 'venue', ''));
             $upcomingEditions[] = [
                 'id'         => $editionId,
                 'start_date' => $startDate ?: null,

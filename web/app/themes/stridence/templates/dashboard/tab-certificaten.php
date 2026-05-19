@@ -18,15 +18,16 @@ defined('ABSPATH') || exit;
 use Stride\Domain\RegistrationStatus;
 use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Edition\EditionCompletion;
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 
 $user    = $args['user'] ?? wp_get_current_user();
 $user_id = $user->ID;
 
-// Get services
 $registrationRepo  = ntdst_get(RegistrationRepository::class);
 $editionService    = ntdst_get(EditionService::class);
+$editionRepository = ntdst_get(EditionRepository::class);
 $completionService = ntdst_get(EditionCompletion::class);
 
 // Get completed registrations
@@ -47,7 +48,7 @@ foreach ($registrations as $reg) {
     }
 
     $edition_id = (int) $reg->edition_id;
-    $edition    = $editionService->getEdition($edition_id);
+    $edition    = $editionRepository->find($edition_id);
 
     if (is_wp_error($edition)) {
         continue;

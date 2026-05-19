@@ -17,16 +17,6 @@ final class SessionRepository extends AbstractRepository
     protected string $postType = SessionCPT::POST_TYPE;
 
     /**
-     * Get a single field value.
-     */
-    public function getField(int $id, string $field, mixed $default = null): mixed
-    {
-        $value = $this->model()->getMeta($id, $field);
-
-        return $value !== null ? $value : $default;
-    }
-
-    /**
      * Find sessions for an edition.
      *
      * @return array<array<string, mixed>>
@@ -152,15 +142,13 @@ final class SessionRepository extends AbstractRepository
             return $validation;
         }
 
-        // Use explicit title if provided, otherwise auto-generate from date + time
-        if (!empty($data['title']) && empty($data['post_title'])) {
-            $data['post_title'] = $data['title'];
-        } elseif (empty($data['post_title'])) {
-            $title = $data['date'];
+        // Auto-generate title from date + time when none provided.
+        if (empty($data['title'])) {
+            $title = (string) ($data['date'] ?? '');
             if (!empty($data['start_time'])) {
                 $title .= ' ' . $data['start_time'];
             }
-            $data['post_title'] = $title;
+            $data['title'] = $title;
         }
 
         return parent::create($data);
@@ -187,12 +175,12 @@ final class SessionRepository extends AbstractRepository
             return $validation;
         }
 
-        // Auto-generate title from date + time only if not set by caller
-        if (!isset($data['post_title'])) {
+        // Auto-generate title from date + time only if not set by caller.
+        if (!isset($data['title'])) {
             if (isset($data['date']) || isset($data['start_time'])) {
                 $date = $data['date'] ?? $this->getField($id, 'date', '');
                 $startTime = $data['start_time'] ?? $this->getField($id, 'start_time', '');
-                $data['post_title'] = $date . ($startTime ? ' ' . $startTime : '');
+                $data['title'] = $date . ($startTime ? ' ' . $startTime : '');
             }
         }
 

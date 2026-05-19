@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stride\Modules\Edition\Admin;
 
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionSelection;
 use Stride\Modules\Edition\SessionService;
@@ -20,6 +21,7 @@ final class RegistrationModalController
 
     public function __construct(
         private readonly EditionService $editionService,
+        private readonly EditionRepository $editionRepository,
         private readonly SessionService $sessionService,
         private readonly SessionSelection $sessionSelection,
         private readonly RegistrationRepository $registrations,
@@ -103,7 +105,7 @@ final class RegistrationModalController
         }
 
         $editionId = (int) $registration->edition_id;
-        $edition = $this->editionService->getEdition($editionId);
+        $edition = $this->editionRepository->find($editionId);
         if (!$edition instanceof \WP_Post) {
             return new \WP_Error(
                 'edition_not_found',

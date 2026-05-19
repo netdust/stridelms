@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Stride\Tests\Unit\Edition;
 
 use Stride\Modules\Edition\Admin\RegistrationModalController;
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Edition\SessionSelection;
@@ -20,6 +21,7 @@ class RegistrationModalControllerTest extends TestCase
         parent::setUp();
 
         $editionService = $this->createMock(EditionService::class);
+        $editionRepository = $this->createMock(EditionRepository::class);
         $sessionService = $this->createMock(SessionService::class);
         $sessionSelection = $this->createMock(SessionSelection::class);
         $registrations = $this->createMock(RegistrationRepository::class);
@@ -27,6 +29,7 @@ class RegistrationModalControllerTest extends TestCase
         $this->controller = $this->getMockBuilder(RegistrationModalController::class)
             ->setConstructorArgs([
                 $editionService,
+                $editionRepository,
                 $sessionService,
                 $sessionSelection,
                 $registrations,
@@ -50,6 +53,7 @@ class RegistrationModalControllerTest extends TestCase
 
         $controller = new RegistrationModalController(
             $this->createMock(EditionService::class),
+            $this->createMock(EditionRepository::class),
             $this->createMock(SessionService::class),
             $this->createMock(SessionSelection::class),
             $registrations,
@@ -73,6 +77,7 @@ class RegistrationModalControllerTest extends TestCase
 
         $controller = new RegistrationModalController(
             $this->createMock(EditionService::class),
+            $this->createMock(EditionRepository::class),
             $this->createMock(SessionService::class),
             $this->createMock(SessionSelection::class),
             $registrations,
@@ -100,7 +105,8 @@ class RegistrationModalControllerTest extends TestCase
         $registrations->method('find')->willReturn($reg);
 
         $editionService = $this->createMock(EditionService::class);
-        $editionService->method('getEdition')->willReturn(new \WP_Post(['post_title' => 'My Edition']));
+        $editionRepository = $this->createMock(EditionRepository::class);
+        $editionRepository->method('find')->willReturn(new \WP_Post(['post_title' => 'My Edition']));
 
         // Seed user 42 so get_userdata() resolves (the stub reads $_test_users[$id]).
         global $_test_users;
@@ -111,6 +117,7 @@ class RegistrationModalControllerTest extends TestCase
 
         $controller = new RegistrationModalController(
             $editionService,
+            $editionRepository,
             $this->createMock(SessionService::class),
             $this->createMock(SessionSelection::class),
             $registrations,
@@ -139,7 +146,8 @@ class RegistrationModalControllerTest extends TestCase
         $registrations->method('find')->willReturn($reg);
 
         $editionService = $this->createMock(EditionService::class);
-        $editionService->method('getEdition')->willReturn(new \WP_Post(['post_title' => 'E']));
+        $editionRepository = $this->createMock(EditionRepository::class);
+        $editionRepository->method('find')->willReturn(new \WP_Post(['post_title' => 'E']));
 
         $sessionSelection = $this->createMock(SessionSelection::class);
         $sessionSelection->method('getSelections')->with(1)->willReturn([501]);
@@ -157,7 +165,7 @@ class RegistrationModalControllerTest extends TestCase
         global $_test_users;
         $_test_users[42] = new \WP_User((object) ['ID' => 42, 'display_name' => 'Test User']);
 
-        $controller = new RegistrationModalController($editionService, $sessionService, $sessionSelection, $registrations);
+        $controller = new RegistrationModalController($editionService, $editionRepository, $sessionService, $sessionSelection, $registrations);
         $result = $controller->buildPayload(1, 'enrollment');
 
         unset($_test_users[42]);
@@ -183,13 +191,15 @@ class RegistrationModalControllerTest extends TestCase
         $registrations->method('find')->willReturn($reg);
 
         $editionService = $this->createMock(EditionService::class);
-        $editionService->method('getEdition')->willReturn(new \WP_Post(['post_title' => 'E']));
+        $editionRepository = $this->createMock(EditionRepository::class);
+        $editionRepository->method('find')->willReturn(new \WP_Post(['post_title' => 'E']));
 
         global $_test_users;
         $_test_users[42] = new \WP_User((object) ['ID' => 42, 'display_name' => 'Test User']);
 
         $controller = new RegistrationModalController(
             $editionService,
+            $editionRepository,
             $this->createMock(SessionService::class),
             $this->createMock(SessionSelection::class),
             $registrations,
@@ -216,13 +226,15 @@ class RegistrationModalControllerTest extends TestCase
         $registrations->method('find')->willReturn($reg);
 
         $editionService = $this->createMock(EditionService::class);
-        $editionService->method('getEdition')->willReturn(new \WP_Post(['post_title' => 'E']));
+        $editionRepository = $this->createMock(EditionRepository::class);
+        $editionRepository->method('find')->willReturn(new \WP_Post(['post_title' => 'E']));
 
         global $_test_users;
         $_test_users[42] = new \WP_User((object) ['ID' => 42, 'display_name' => 'Test User']);
 
         $controller = new RegistrationModalController(
             $editionService,
+            $editionRepository,
             $this->createMock(SessionService::class),
             $this->createMock(SessionSelection::class),
             $registrations,
@@ -254,7 +266,8 @@ class RegistrationModalControllerTest extends TestCase
         $registrations->method('find')->willReturn($reg);
 
         $editionService = $this->createMock(EditionService::class);
-        $editionService->method('getEdition')->willReturn(new \WP_Post(['post_title' => 'E']));
+        $editionRepository = $this->createMock(EditionRepository::class);
+        $editionRepository->method('find')->willReturn(new \WP_Post(['post_title' => 'E']));
         $editionService->method('getCourseId')->willReturn(777);
 
         global $_test_users;
@@ -262,6 +275,7 @@ class RegistrationModalControllerTest extends TestCase
 
         $controller = new RegistrationModalController(
             $editionService,
+            $editionRepository,
             $this->createMock(SessionService::class),
             $this->createMock(SessionSelection::class),
             $registrations,

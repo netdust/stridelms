@@ -356,13 +356,12 @@ final class ReadAbilityRegistrar extends AbstractService
         }
 
         $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
-        $edition = $editionService->getEdition($editionId);
+        $repository = ntdst_get(\Stride\Modules\Edition\EditionRepository::class);
+        $edition = $repository->find($editionId);
 
         if (is_wp_error($edition)) {
             return $edition;
         }
-
-        $repository = ntdst_get(\Stride\Modules\Edition\EditionRepository::class);
 
         return [
             'id' => $edition->ID,
@@ -911,10 +910,11 @@ final class ReadAbilityRegistrar extends AbstractService
     private function getEditionStats(int $editionId): array
     {
         $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
+        $editionRepo = ntdst_get(\Stride\Modules\Edition\EditionRepository::class);
         $regRepo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
         $attendance = ntdst_get(\Stride\Modules\Attendance\AttendanceService::class);
 
-        $edition = $editionService->getEdition($editionId);
+        $edition = $editionRepo->find($editionId);
         if (is_wp_error($edition)) {
             return [
                 'scope' => 'edition',
@@ -989,8 +989,8 @@ final class ReadAbilityRegistrar extends AbstractService
      */
     private function getCourseStats(int $courseId): array
     {
-        $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
-        $editions = $editionService->getEditionsForCourse($courseId);
+        $editionRepo = ntdst_get(\Stride\Modules\Edition\EditionRepository::class);
+        $editions = $editionRepo->findByCourse($courseId);
 
         if (empty($editions)) {
             return [

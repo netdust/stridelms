@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
-use Stride\Modules\Edition\EditionService;
+use Stride\Modules\Edition\EditionRepository;
 
 // Get theme terms for tabs
 $themes = get_terms([
@@ -24,7 +24,7 @@ if (is_wp_error($themes)) {
 }
 
 // Query all open editions
-$editionService = ntdst_get(EditionService::class);
+$editionRepository = ntdst_get(EditionRepository::class);
 
 // Hide editions whose end_date is more than 2 days in the past. The 2-day
 // grace keeps just-finished cohorts findable for visitors who got the link
@@ -75,7 +75,7 @@ $edition_query = new WP_Query($edition_args);
 $all_editions = [];
 
 foreach ($edition_query->posts as $edition_post) {
-    $edition_obj = $editionService->getEdition($edition_post->ID);
+    $edition_obj = $editionRepository->find($edition_post->ID);
     if ($edition_obj && !is_wp_error($edition_obj)) {
         $edition_data = [
             'id'              => $edition_obj->ID,

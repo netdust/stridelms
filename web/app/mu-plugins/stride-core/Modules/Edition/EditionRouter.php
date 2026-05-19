@@ -20,9 +20,23 @@ namespace Stride\Modules\Edition;
  */
 final class EditionRouter
 {
+    public function __construct(
+        private readonly EditionRepository $editions,
+    ) {}
+
     public function register(): void
     {
+        // Pre-query rewrite: detect /vormingen/<slug>/ URLs that map to a
+        // course (not an edition) and either 302 elsewhere or set query vars
+        // so WP loads sfwd-courses as the singular post. parse_request is
+        // the right WP hook — it runs BEFORE the query, which lets us swap
+        // post types cleanly. ntdst_router() runs on template_include, too
+        // late for this kind of interception.
         add_action('parse_request', [$this, 'maybeRouteCourse']);
+
+        // Single-template override for the pure-LD course pages we routed
+        // above. Framework-aligned with the EnrollmentRouter pattern.
+        ntdst_router()->template('single', [$this, 'singleCourseTemplate'], 'sfwd-courses');
     }
 
     /**
@@ -59,7 +73,7 @@ final class EditionRouter
         //  - 0 editions → render the course as its own enrollable instance (pure-LD)
         //  - 1 edition  → 302 straight to that edition
         //  - 2+         → 302 back to /opleidingen/<course>/ so the user can pick
-        $visibleEditions = $this->findVisibleEditionIds($course->ID);
+        $visibleEditions = $this->editions->findActiveIdsByCourse((int) $course->ID);
 
         if (count($visibleEditions) === 1) {
             wp_safe_redirect(get_permalink($visibleEditions[0]), 302);
@@ -71,59 +85,30 @@ final class EditionRouter
             exit;
         }
 
-        // Pure-LD course: rewrite the query to load it as singular and render
-        // the edition-shaped enrollment template.
+        // Pure-LD course: rewrite the query to load it as singular. The
+        // template override is wired in register() via ntdst_router(); it
+        // gates on the same /vormingen/ URL prefix.
         $wp->query_vars = [
             'sfwd-courses' => $slug,
             'name'         => $slug,
             'post_type'    => 'sfwd-courses',
         ];
-        add_filter('template_include', [$this, 'forceEditionTemplate'], 1000);
     }
 
     /**
-     * Edition IDs for this course that are visible on the public discovery
-     * surface. Same set the catalog uses: only active statuses (announcement,
-     * open, full, in_progress).
+     * Override the single-course template for /vormingen/<slug>/ URLs that
+     * resolved to a pure-LD course (no scheduled editions). Used as the
+     * `single` callback on ntdst_router()->template().
      *
-     * Past terminal states (cancelled, completed, archived) and drafts are
-     * excluded — sending visitors there is misleading.
-     *
-     * @return list<int>
+     * Returning a string path → WP uses it. Returning null → original template.
      */
-    private function findVisibleEditionIds(int $courseId): array
+    public function singleCourseTemplate(?\WP_Post $post, string $template): ?string
     {
-        $ids = get_posts([
-            'post_type'      => 'vad_edition',
-            'post_status'    => 'publish',
-            'posts_per_page' => -1,
-            'fields'         => 'ids',
-            'meta_query'     => [
-                [
-                    'key'   => '_ntdst_course_id',
-                    'value' => $courseId,
-                ],
-                [
-                    'key'     => '_ntdst_status',
-                    'value'   => ['announcement', 'open', 'full', 'in_progress'],
-                    'compare' => 'IN',
-                ],
-            ],
-        ]);
-
-        return array_map('intval', $ids);
-    }
-
-    public function forceEditionTemplate(string $template): string
-    {
-        if (!is_singular('sfwd-courses')) {
-            return $template;
-        }
         $path = trim((string) ($_SERVER['REQUEST_URI'] ?? ''), '/');
         if (!str_starts_with($path, 'vormingen/')) {
-            return $template;
+            return null;
         }
         $candidate = get_stylesheet_directory() . '/templates/course/single-course-enrollable.php';
-        return file_exists($candidate) ? $candidate : $template;
+        return file_exists($candidate) ? $candidate : null;
     }
 }
