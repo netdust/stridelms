@@ -256,14 +256,56 @@ VAD has a custom LearnDash price type `'vad'` registered by `vad-vormingen-v3.0`
 
 This is **not a Stride bug** — it's the consequence of leaving VAD's custom price-type value in the DB without VAD's plugin to handle it.
 
-**Migration step:**
-- [ ] Audit how many courses have `_ld_price_type='vad'`: `SELECT COUNT(*) FROM ckqp_postmeta WHERE meta_key='_ld_price_type' AND meta_value='vad';`
-- [ ] Decide target price type per group:
-  - E-learnings (`stride_format=online`): probably `'open'` — student enrolls directly, pays via Stride's quote flow if applicable
-  - Classroom courses (`stride_format=klassikaal`): same — enrollment goes through Stride's edition + registration flow, not LD payments
-- [ ] Bulk-update: `UPDATE ckqp_postmeta SET meta_value='open' WHERE meta_key='_ld_price_type' AND meta_value='vad';` (after confirming target)
-- [ ] Verify single course pages: only Stride's CTA should remain, no duplicate LD button
-- [ ] Same audit needed for `ckqp_postmeta` on LD groups (`post_type='groups'`) — `_ld_price_type` lives there too
+### The rule (Stefan, 2026-05-19)
+
+> "_ld_price_type for online courses need to be set to `open`, unless they actually have a form behind them. There are a few. The latter will be the online courses with edition so users have to fill in form before enrollment."
+
+Translation:
+- **Most e-learnings** → `_ld_price_type = 'open'` (direct LD enrollment, no Stride form, no edition)
+- **A few e-learnings with a registration form** → keep gated, route through a Stride edition + intake form (these are the ones that should still hit `/vormingen/<slug>/inschrijving/`)
+
+### State of the data (dry-run snapshot 2026-05-19)
+
+Across the 36 published courses tagged `ld_course_category/online-aanbod`:
+- **33 at `_ld_price_type=free`** — already correct shape (LD-only enrollment); will need to flip to `open` if Stride treats `free` as different (verify)
+- **3 at `_ld_price_type='vad'`** — these are the form-gated ones:
+  - 2669 `Quality Nights - Festivals`
+  - 2758 `Sportivos - Verantwoord alcohol schenken in de sportclub`
+  - 3540 `Quality Nights - Clubs`
+
+Across all 390 published `sfwd-courses` site-wide:
+- 357 at `'vad'`, 33 at `'free'` — the 357 are mostly classroom courses (354 are tagged `vad-vormingen`).
+
+### Migration steps
+
+- [ ] Decide whether Stride treats `free` and `open` interchangeably. If not, normalise e-learnings to one or the other. (Read `templates/course/sidebar-online.php` price_type branches to confirm.)
+- [ ] Build a per-course mapping of e-learnings:
+  - Bulk-flip the 33 e-learnings currently at `free` or `vad` to `open`, **EXCEPT** the 3 listed above
+  - Those 3 keep `'vad'` (or get a different marker Stride understands as "form-gated") AND get a Stride edition + intake form configured
+- [ ] For classroom courses (`stride_format=klassikaal`): bulk-flip `'vad'` → `'open'`. Stride's edition + registration flow handles gating per-edition, not via LD price type.
+- [ ] Same audit on `post_type='groups'` (LD groups have their own `_ld_price_type` row in postmeta)
+- [ ] Spot-check the 3 form-gated e-learnings: confirm they have an existing edition + intake form in VAD's data, or schedule one for migration
+- [ ] After flipping: verify single course pages show only Stride's CTA, no duplicate LD button; for the 3 form-gated, confirm the LD button stays hidden and the Stride form is reachable
+
+### Idempotent SQL snippet (template — do not run blind)
+
+```sql
+-- Flip e-learnings (excluding the 3 form-gated)
+UPDATE ckqp_postmeta pm
+JOIN ckqp_posts p ON pm.post_id = p.ID
+JOIN ckqp_term_relationships tr ON p.ID = tr.object_id
+JOIN ckqp_term_taxonomy tt ON tr.term_taxonomy_id = tt.term_taxonomy_id
+JOIN ckqp_terms t ON tt.term_id = t.term_id
+SET pm.meta_value = 'open'
+WHERE pm.meta_key = '_ld_price_type'
+  AND p.post_type = 'sfwd-courses'
+  AND p.post_status = 'publish'
+  AND tt.taxonomy = 'ld_course_category'
+  AND t.slug = 'online-aanbod'
+  AND p.ID NOT IN (2669, 2758, 3540);  -- form-gated keep their current type
+```
+
+Verify count match before running. List of form-gated IDs is dry-run-snapshot — re-audit at real-migration time, the set may have grown.
 
 ---
 
