@@ -73,66 +73,58 @@ final class QuestionnaireSettingsPage
             return;
         }
 
-        wp_enqueue_style(
-            'select2',
-            'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css',
-            [],
-            '4.1.0'
-        );
-        wp_enqueue_script(
-            'select2',
-            'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js',
-            ['jquery'],
-            '4.1.0',
-            true
-        );
+        // Matches the existing enqueue pattern in this file: from
+        // Modules/Questionnaire/Admin, go up 3 levels to stride-core root.
+        $basePath = dirname(__DIR__, 3);
+        $cssFile  = $basePath . '/assets/css/admin/questionnaire-builder-v2.css';
+        $jsFile   = $basePath . '/assets/js/admin/questionnaire-builder-v2.js';
 
-        // jQuery UI sortable (bundled with WP)
+        // The admin-dashboard.css stylesheet defines all --sd-* tokens.
+        // AdminDashboardService registers it at handle `stride-admin-dashboard`.
+        if (wp_style_is('stride-admin-dashboard', 'registered')) {
+            wp_enqueue_style('stride-admin-dashboard');
+        }
+
+        // Alpine.js — AdminDashboardService registers it at handle `alpinejs`
+        // (3.14.9, CDN, defer). Register here if we're outside its scope so the
+        // call is idempotent.
+        if (!wp_script_is('alpinejs', 'registered')) {
+            wp_register_script(
+                'alpinejs',
+                'https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js',
+                [],
+                '3.14.9',
+                true
+            );
+            wp_script_add_data('alpinejs', 'defer', true);
+        }
+        wp_enqueue_script('alpinejs');
+
         wp_enqueue_script('jquery-ui-sortable');
-
-        $basePath = dirname(__DIR__, 3); // stride-core root (Questionnaire/Admin -> Modules -> stride-core)
-        $cssFile  = $basePath . '/assets/css/admin/questionnaire-builder.css';
-        $jsFile   = $basePath . '/assets/js/admin/questionnaire-builder.js';
 
         if (file_exists($cssFile)) {
             wp_enqueue_style(
-                'stride-questionnaire-builder',
-                plugins_url('assets/css/admin/questionnaire-builder.css', $basePath . '/stride-core.php'),
-                ['select2'],
+                'stride-questionnaire-builder-v2',
+                plugins_url('assets/css/admin/questionnaire-builder-v2.css', $basePath . '/stride-core.php'),
+                [],
                 (string) filemtime($cssFile)
             );
         }
 
         if (file_exists($jsFile)) {
             wp_enqueue_script(
-                'stride-questionnaire-builder',
-                plugins_url('assets/js/admin/questionnaire-builder.js', $basePath . '/stride-core.php'),
-                ['jquery', 'select2', 'jquery-ui-sortable'],
+                'stride-questionnaire-builder-v2',
+                plugins_url('assets/js/admin/questionnaire-builder-v2.js', $basePath . '/stride-core.php'),
+                ['jquery', 'jquery-ui-sortable'],
                 (string) filemtime($jsFile),
                 true
             );
 
-            $fieldTypes = $this->getFieldTypes();
-            $stages     = $this->getStages();
-
-            wp_localize_script('stride-questionnaire-builder', 'strideQuestionnaire', [
-                'assignments'    => $this->getAssignmentOptions(),
-                'userMetaFields' => array_keys($this->getUserMetaFieldNames()),
-                'fieldTypes'     => array_map(
-                    static fn(array $t) => ['label' => $t['label'], 'color' => $t['color']],
-                    $fieldTypes
-                ),
-                'stages'         => $stages,
-                'i18n'           => [
-                    'confirmDeleteGroup' => __('Groep en alle velden verwijderen?', 'stride'),
-                    'confirmDeleteField' => __('Veld verwijderen?', 'stride'),
-                    'searchPlaceholder'  => __('Zoek editie of traject...', 'stride'),
-                    'noResults'          => __('Geen resultaten', 'stride'),
-                    'userMetaWarning'    => __('Let op: dit veld overschrijft gebruikersgegevens bij inschrijving.', 'stride'),
-                    'addField'           => __('+ Veld toevoegen', 'stride'),
-                    'addGroup'           => __('+ Groep toevoegen', 'stride'),
-                ],
-            ]);
+            wp_localize_script(
+                'stride-questionnaire-builder-v2',
+                'strideQuestionnaireState',
+                $this->getStateJson()
+            );
         }
     }
 
@@ -166,58 +158,17 @@ final class QuestionnaireSettingsPage
 
     public function renderPage(): void
     {
-        if (!current_user_can(self::CAPABILITY)) {
-            return;
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Geen toegang.', 'stride'));
         }
 
-        $repo        = ntdst_get(QuestionnaireRepository::class);
-        $groups      = $repo->getAllGroups();
-        $assignments = $this->getAssignmentOptions();
-        $fieldTypes  = $this->getFieldTypes();
-        $stages      = $this->getStages();
-
         ?>
-        <div class="wrap stride-questionnaire-wrap">
-            <h1><?= esc_html__('Formuliervelden', 'stride') ?></h1>
-            <p class="description">
-                <?= esc_html__('Beheer vragenlijsten en extra velden voor inschrijf-, intake- en evaluatieformulieren. Maak groepen aan en wijs ze toe aan edities of trajecten.', 'stride') ?>
-            </p>
-
-            <?php $this->renderSystemFieldsHelp(); ?>
-
-            <?php settings_errors('stride_questionnaire'); ?>
-
-            <form method="post" id="stride-questionnaire-form">
-                <?php wp_nonce_field(self::NONCE_ACTION, self::NONCE_FIELD); ?>
-
-                <div id="stride-questionnaire-container">
-                    <?php
-                    if (!empty($groups)) {
-                        foreach ($groups as $gi => $group) {
-                            $this->renderGroup($gi, $group, $fieldTypes, $stages, $assignments);
-                        }
-                    }
-                    ?>
-                </div>
-
-                <p class="stride-add-group-wrap">
-                    <button type="button" class="button button-primary" id="stride-add-group">
-                        <?= esc_html__('+ Groep toevoegen', 'stride') ?>
-                    </button>
-                </p>
-
-                <?php submit_button(__('Wijzigingen opslaan', 'stride')); ?>
-            </form>
-
-            <!-- Group template for JS -->
-            <script type="text/template" id="stride-group-template">
-                <?php $this->renderGroup('__GI__', [], $fieldTypes, $stages, $assignments); ?>
-            </script>
-
-            <!-- Field card template for JS -->
-            <script type="text/template" id="stride-field-card-template">
-                <?php $this->renderFieldCard('__GI__', '__FI__', [], $fieldTypes); ?>
-            </script>
+        <div class="wrap">
+            <h1 style="margin-bottom:16px"><?php esc_html_e('Vragenlijst', 'stride'); ?></h1>
+            <?php
+            settings_errors('stride_questionnaire');
+            include __DIR__ . '/templates/builder.php';
+            ?>
         </div>
         <?php
     }
