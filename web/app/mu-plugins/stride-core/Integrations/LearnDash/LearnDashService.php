@@ -76,4 +76,18 @@ final class LearnDashService extends AbstractService implements LMSAdapterInterf
 
         return learndash_course_completed($userId, $courseId);
     }
+
+    public function markComplete(int $userId, int $courseId): bool
+    {
+        if (!function_exists('learndash_process_mark_complete')) {
+            return false;
+        }
+        if (get_post_type($courseId) !== 'sfwd-courses') {
+            return false;
+        }
+
+        learndash_process_mark_complete($userId, $courseId);
+
+        return true;
+    }
 }

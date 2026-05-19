@@ -145,22 +145,19 @@ final class EditionCompletion
 
         $lmsAdapter = ntdst_get(LMSAdapterInterface::class);
 
-        // Check if already complete in LearnDash
         if ($lmsAdapter->isComplete($userId, $courseId)) {
             return true;
         }
 
-        // Mark complete in LearnDash. This enforces LD's own completion rules
-        // (lessons, quizzes, etc.) — if the user has unfinished LD content,
-        // this is a no-op and LD's `learndash_course_completed` action never
-        // fires, so the Stride registration stays at `confirmed`.
+        // LMS enforces its own completion rules (lessons, quizzes, etc.) —
+        // if the user has unfinished content, markComplete is a no-op and
+        // the LMS's completion action never fires, so the Stride
+        // registration stays at `confirmed`.
         //
-        // Implication for in-person courses: their linked LD course MUST be
-        // content-free (no required lessons/quizzes), otherwise attendance alone
-        // won't transition the registration to `completed`. See manifest.
-        if (function_exists('learndash_process_mark_complete')) {
-            learndash_process_mark_complete($userId, $courseId);
-        }
+        // Implication for in-person courses: their linked LMS course MUST
+        // be content-free (no required lessons/quizzes), otherwise
+        // attendance alone won't transition the registration to `completed`.
+        $lmsAdapter->markComplete($userId, $courseId);
 
         do_action('stride/completion/completed', [
             'edition_id' => $editionId,
@@ -172,7 +169,7 @@ final class EditionCompletion
     }
 
     /**
-     * Mark course complete in LearnDash (final step, no task check).
+     * Mark course complete in the LMS (final step, no task check).
      *
      * Called after all post-course tasks are done.
      */
@@ -188,9 +185,7 @@ final class EditionCompletion
             return true;
         }
 
-        if (function_exists('learndash_process_mark_complete')) {
-            learndash_process_mark_complete($userId, $courseId);
-        }
+        $lmsAdapter->markComplete($userId, $courseId);
 
         do_action('stride/completion/completed', [
             'edition_id' => $editionId,
@@ -212,7 +207,14 @@ final class EditionCompletion
         $userId = $data['user_id'] ?? 0;
 
         if ($editionId && $userId && $this->isComplete($editionId, $userId)) {
-            $this->processCompletion($editionId, $userId);
+            $result = $this->processCompletion($editionId, $userId);
+            if ($result instanceof WP_Error) {
+                ntdst_log('enrollment')->error('Auto-completion after attendance failed', [
+                    'edition_id' => $editionId,
+                    'user_id'    => $userId,
+                    'error'      => $result->get_error_code() . ': ' . $result->get_error_message(),
+                ]);
+            }
         }
     }
 

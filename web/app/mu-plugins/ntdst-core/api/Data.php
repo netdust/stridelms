@@ -14,6 +14,32 @@ require_once __DIR__ . '/QueryCache.php';
 
 class NTDST_Data_Model
 {
+    /**
+     * Friendly Data-API keys → wp_posts column they write to.
+     *
+     * The first four map to a `post_` prefix; everything else passes through.
+     * Keys outside this list AND outside the schema are treated as unregistered
+     * (logged via ntdst_log('data')->warning() and dropped).
+     */
+    public const WP_COLUMNS = [
+        'title'                 => 'post_title',
+        'content'               => 'post_content',
+        'excerpt'               => 'post_excerpt',
+        'post_status'           => 'post_status',
+        'post_author'           => 'post_author',
+        'post_parent'           => 'post_parent',
+        'post_date'             => 'post_date',
+        'post_date_gmt'         => 'post_date_gmt',
+        'post_name'             => 'post_name',
+        'menu_order'            => 'menu_order',
+        'comment_status'        => 'comment_status',
+        'ping_status'           => 'ping_status',
+        'post_password'         => 'post_password',
+        'post_content_filtered' => 'post_content_filtered',
+        'to_ping'               => 'to_ping',
+        'pinged'                => 'pinged',
+    ];
+
     protected string $post_type;
     protected array $schema;
     protected array $query_args = [];
@@ -274,16 +300,8 @@ class NTDST_Data_Model
         $sanitized = [];
 
         foreach ($data as $key => $value) {
-            // Handle core WordPress fields
-            // Note: Use 'post_status' not 'status' to avoid conflict with custom meta fields named 'status'
-            if (in_array($key, ['title', 'content', 'excerpt', 'post_status'])) {
-                $sanitized[$key] = match ($key) {
-                    'title' => sanitize_text_field($value),
-                    'content' => wp_kses_post($value),
-                    'excerpt' => sanitize_textarea_field($value),
-                    'post_status' => in_array($value, ['publish', 'draft', 'pending', 'private', 'trash', 'auto-draft', 'future']) ? $value : 'draft',
-                    default => sanitize_text_field($value),
-                };
+            if (isset(self::WP_COLUMNS[$key])) {
+                $sanitized[$key] = $this->sanitizeWpColumn($key, $value);
             } else {
                 // Custom field - use schema sanitizer
                 $sanitized[$key] = $this->sanitizeField($key, $value);
@@ -291,6 +309,59 @@ class NTDST_Data_Model
         }
 
         return $sanitized;
+    }
+
+    /**
+     * Sanitize a wp_posts column value. wp_insert_post calls sanitize_post()
+     * itself, so this only needs to cover keys that benefit from typed coercion
+     * or stricter cleaning than WP's catch-all sanitizer.
+     */
+    protected function sanitizeWpColumn(string $key, $value)
+    {
+        return match ($key) {
+            'title'                 => sanitize_text_field($value),
+            'content'               => wp_kses_post($value),
+            'excerpt'               => sanitize_textarea_field($value),
+            'post_content_filtered' => wp_kses_post($value),
+            'post_status'           => in_array($value, ['publish', 'draft', 'pending', 'private', 'trash', 'auto-draft', 'future'], true)
+                ? $value
+                : 'draft',
+            'post_author', 'post_parent', 'menu_order' => (int) $value,
+            'post_name'             => sanitize_title($value),
+            'comment_status', 'ping_status' => in_array($value, ['open', 'closed', ''], true) ? $value : '',
+            default                 => $value,
+        };
+    }
+
+    /**
+     * Log a warning when a caller passes keys that are neither WordPress
+     * columns nor registered schema fields. Drops the keys silently from
+     * the returned array — the warning is the contract signal.
+     *
+     * Called from create()/update() before sanitization, so typos surface
+     * as a clear "unregistered key" warning rather than a confusing
+     * "required field missing" validation error.
+     */
+    protected function warnUnregisteredKeys(array $data, string $operation): array
+    {
+        $allowed = array_flip(array_keys($this->schema)) + self::WP_COLUMNS;
+        $unknown = array_diff_key($data, $allowed);
+
+        if (empty($unknown)) {
+            return $data;
+        }
+
+        if (function_exists('ntdst_log')) {
+            ntdst_log('data')->warning(
+                sprintf('Unregistered key(s) passed to %s on %s', $operation, $this->post_type),
+                [
+                    'post_type' => $this->post_type,
+                    'keys'      => array_keys($unknown),
+                ],
+            );
+        }
+
+        return array_diff_key($data, $unknown);
     }
 
     /**
@@ -375,6 +446,8 @@ class NTDST_Data_Model
      */
     public function create(array $data)
     {
+        $data = $this->warnUnregisteredKeys($data, 'create');
+
         // Validate input
         $validation = $this->validateData($data);
         if (is_wp_error($validation)) {
@@ -428,6 +501,8 @@ class NTDST_Data_Model
         if (!$existing || $existing->post_type !== $this->post_type) {
             return new WP_Error('not_found', 'Post not found', ['status' => 404]);
         }
+
+        $data = $this->warnUnregisteredKeys($data, 'update');
 
         // Validate input - isUpdate=true skips required field validation for missing fields
         $validation = $this->validateData($data, true);
@@ -1296,33 +1371,29 @@ class NTDST_Data_Model
     }
 
     /**
-     * Extract WordPress post data from input
+     * Extract WordPress post-table data from input, keyed for wp_insert_post /
+     * wp_update_post (i.e. mapped to their `post_*` column names where needed).
      */
     protected function extractPostData(array $data): array
     {
         $post = [];
-        // Note: Use 'post_status' not 'status' - 'status' is commonly used as meta field name
-        foreach (['title', 'content', 'excerpt', 'post_status'] as $field) {
-            if (isset($data[$field])) {
-                // post_status already has prefix, others need it
-                $key = ($field === 'post_status') ? $field : 'post_' . $field;
-                $post[$key] = $data[$field];
+        foreach (self::WP_COLUMNS as $inputKey => $columnName) {
+            if (array_key_exists($inputKey, $data)) {
+                $post[$columnName] = $data[$inputKey];
             }
         }
         return $post;
     }
 
     /**
-     * Extract custom meta data from input
+     * Extract custom meta data from input.
      *
-     * Filters out WordPress post fields, keeping only meta fields.
+     * Filters out WordPress post-table fields, keeping only meta fields.
      * Applies meta_prefix if configured.
-     * Note: Uses 'post_status' not 'status' since 'status' is commonly
-     * used as a meta field name (e.g., order fulfillment status).
      */
     protected function extractMetaData(array $data): array
     {
-        $meta = array_diff_key($data, array_flip(['title', 'content', 'excerpt', 'post_status']));
+        $meta = array_diff_key($data, self::WP_COLUMNS);
 
         // Apply prefix if configured
         if ($this->meta_prefix !== '') {

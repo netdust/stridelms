@@ -10,12 +10,11 @@ use Stride\Modules\Edition\EditionDuplicator;
 /**
  * Integration: full WP cycle.
  *
- * Rule A: copy-all-meta. We seed an arbitrary, made-up meta key on the
- * source and assert it lands on the copy. This is the regression guard
- * against future form fields being silently dropped.
- *
- * Rule B: reset list. We seed `notes` on the source and assert the copy
- * has empty notes.
+ * Contract: the duplicator copies registered fields (via ntdst_data) and
+ * applies the explicit reset list. Unregistered meta is intentionally NOT
+ * copied — it's either WP internal (`_edit_lock`), external plugin bleed
+ * (LearnDash course grid), seed markers, or v3 orphans. If a Stride field
+ * needs to survive duplication, register it on EditionCPT / SessionCPT.
  */
 class EditionDuplicatorIntegrationTest extends IntegrationTestCase
 {
@@ -34,13 +33,17 @@ class EditionDuplicatorIntegrationTest extends IntegrationTestCase
             'post_status' => 'publish',
         ]);
 
-        // Standard form fields (preserved by Rule A).
+        // Required registered fields — without these, create() rejects the duplicate.
+        update_post_meta($this->sourceEditionId, '_ntdst_course_id', 123);
+        update_post_meta($this->sourceEditionId, '_ntdst_start_date', '2026-06-01');
+        update_post_meta($this->sourceEditionId, '_ntdst_capacity', 20);
+
+        // Other registered fields that should carry over.
         update_post_meta($this->sourceEditionId, '_ntdst_enrollment_form', 'with_rrn');
         update_post_meta($this->sourceEditionId, '_ntdst_requires_questionnaire', true);
         update_post_meta($this->sourceEditionId, '_ntdst_price', 4500);
-        update_post_meta($this->sourceEditionId, '_ntdst_course_id', 123);
 
-        // Hypothetical future form field — proves Rule A.
+        // Unregistered key — should NOT land on the copy under the new contract.
         update_post_meta($this->sourceEditionId, '_ntdst_arbitrary_pilot_field', 'pilot-value');
 
         // Reset-list keys.
@@ -101,15 +104,29 @@ class EditionDuplicatorIntegrationTest extends IntegrationTestCase
         self::assertSame('Source Edition (kopie)', $newPost->post_title);
     }
 
-    public function testDuplicatePreservesArbitraryMetaKey(): void
+    public function testDuplicateCopiesRegisteredFields(): void
     {
         $duplicator = ntdst_get(EditionDuplicator::class);
         $newId = $duplicator->duplicate($this->sourceEditionId);
         $this->newEditionId = $newId;
 
-        self::assertSame('pilot-value', get_post_meta($newId, '_ntdst_arbitrary_pilot_field', true));
         self::assertSame('with_rrn', get_post_meta($newId, '_ntdst_enrollment_form', true));
         self::assertSame('123', (string) get_post_meta($newId, '_ntdst_course_id', true));
+        self::assertSame('2026-06-01', get_post_meta($newId, '_ntdst_start_date', true));
+        self::assertSame('20', (string) get_post_meta($newId, '_ntdst_capacity', true));
+    }
+
+    public function testDuplicateDropsUnregisteredMeta(): void
+    {
+        $duplicator = ntdst_get(EditionDuplicator::class);
+        $newId = $duplicator->duplicate($this->sourceEditionId);
+        $this->newEditionId = $newId;
+
+        self::assertSame(
+            '',
+            (string) get_post_meta($newId, '_ntdst_arbitrary_pilot_field', true),
+            'unregistered meta keys should NOT be copied to the duplicate',
+        );
     }
 
     public function testDuplicateAppliesResetList(): void

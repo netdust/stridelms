@@ -232,7 +232,15 @@ final class CompletionTaskHandler
             $reg = $repo->find($registrationId);
             if ($reg) {
                 $editionCompletion = ntdst_get(\Stride\Modules\Edition\EditionCompletion::class);
-                $editionCompletion->processCompletionFinal((int) $reg->edition_id, (int) $reg->user_id);
+                $result = $editionCompletion->processCompletionFinal((int) $reg->edition_id, (int) $reg->user_id);
+                if (is_wp_error($result)) {
+                    ntdst_log('enrollment')->error('Final completion failed after post-course tasks', [
+                        'registration_id' => $registrationId,
+                        'edition_id'      => (int) $reg->edition_id,
+                        'user_id'         => (int) $reg->user_id,
+                        'error'           => $result->get_error_code() . ': ' . $result->get_error_message(),
+                    ]);
+                }
                 $repo->updateStatus($registrationId, \Stride\Domain\RegistrationStatus::Completed);
                 ntdst_log('enrollment')->info('Registration completed after post-course tasks', [
                     'registration_id' => $registrationId,

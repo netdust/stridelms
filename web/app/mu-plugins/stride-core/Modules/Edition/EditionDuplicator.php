@@ -9,31 +9,29 @@ use WP_Error;
 use WP_Post;
 
 /**
- * Duplicates a vad_edition: copies all meta (Rule A) with a small explicit
- * reset list (Rule B), then clones child sessions with dates reset to today.
+ * Duplicates a vad_edition: copies registered fields via ntdst_data, applies
+ * an explicit reset list for fields that shouldn't carry over, then clones
+ * child sessions with dates reset to today.
  *
  * Registrations, attendance, notifications, audit-log entries are never
- * touched. Edition-level `documents` meta is dropped (course-level documents
- * survive via the preserved course link).
+ * touched. Edition-level `documents` are dropped (course-level documents
+ * survive via the preserved course_id).
+ *
+ * Only registered fields are copied — unregistered meta (LearnDash course-grid
+ * bleed, WP `_edit_lock`, seed markers, v3 orphans) is intentionally NOT
+ * carried over. If a new field needs to survive duplication, register it on
+ * EditionCPT / SessionCPT.
  */
 final class EditionDuplicator implements NTDST_Service_Meta
 {
     /**
-     * Meta keys overwritten on the copy. Keep this list short and explicit.
-     * Any meta key NOT in this list is preserved verbatim — this is what
-     * protects future enrollment-form fields from being silently lost.
+     * Registered fields whose values are reset on the duplicate.
+     * All other registered fields carry over verbatim.
      */
-    private const META_RESET = [
+    private const FIELD_RESETS = [
         'notes'          => [],
         'documents'      => [],
         'selection_open' => false,
-    ];
-
-    /**
-     * Meta keys removed from the copy entirely (stale caches, etc.).
-     */
-    private const META_UNSET = [
-        '_enrollment_count',
     ];
 
     public static function metadata(): array
@@ -171,88 +169,67 @@ final class EditionDuplicator implements NTDST_Service_Meta
             );
         }
 
-        // Insert the copy as a draft. WP auto-generates a unique slug.
-        $newId = wp_insert_post([
-            'post_type'    => EditionCPT::POST_TYPE,
-            'post_status'  => 'draft',
-            'post_title'   => $source->post_title . ' (kopie)',
-            'post_content' => $source->post_content,
-            'post_excerpt' => $source->post_excerpt,
-            'post_author'  => get_current_user_id() ?: $source->post_author,
-        ], true);
+        $model  = ntdst_data()->get(EditionCPT::POST_TYPE);
+        $fields = $model->getMeta($sourceEditionId);
+        $fields = array_merge($fields, self::FIELD_RESETS);
 
-        if (is_wp_error($newId)) {
-            return $newId;
+        $newPost = $model->create($fields + [
+            'title'       => $source->post_title . ' (kopie)',
+            'content'     => $source->post_content,
+            'excerpt'     => $source->post_excerpt,
+            'post_status' => 'draft',
+            'post_author' => get_current_user_id() ?: (int) $source->post_author,
+        ]);
+
+        if (is_wp_error($newPost)) {
+            return $newPost;
         }
 
-        // Rule A — copy ALL meta from source verbatim.
-        $allMeta = get_post_meta($sourceEditionId);
-        foreach ($allMeta as $key => $values) {
-            foreach ($values as $value) {
-                add_post_meta($newId, $key, $value);
-            }
-        }
+        $newId = (int) $newPost->ID;
 
-        // Rule B — overwrite reset keys with their reset value (_ntdst_ prefixed).
-        foreach (self::META_RESET as $field => $resetValue) {
-            update_post_meta($newId, '_ntdst_' . $field, $resetValue);
-        }
-
-        // Rule B — remove unset keys entirely (already prefixed in the const).
-        foreach (self::META_UNSET as $key) {
-            delete_post_meta($newId, $key);
-        }
-
-        // Copy taxonomies (stride_format etc.) so the copy keeps its category facets.
-        $taxonomies = get_object_taxonomies($source->post_type);
-        foreach ($taxonomies as $taxonomy) {
+        foreach (get_object_taxonomies($source->post_type) as $taxonomy) {
             $terms = wp_get_object_terms($sourceEditionId, $taxonomy, ['fields' => 'ids']);
             if (!is_wp_error($terms) && !empty($terms)) {
                 wp_set_object_terms($newId, $terms, $taxonomy);
             }
         }
 
-        // Sessions — one copy per source session, date reset to today.
         $this->copySessions($sourceEditionId, $newId);
 
-        return (int) $newId;
+        return $newId;
     }
 
     private function copySessions(int $sourceEditionId, int $newEditionId): void
     {
         $today = date('Y-m-d');
+        $sessionModel = ntdst_data()->get(SessionCPT::POST_TYPE);
 
-        $sourceSessions = get_posts([
-            'post_type'   => SessionCPT::POST_TYPE,
-            'post_status' => 'any',
-            'meta_key'    => '_ntdst_edition_id',
-            'meta_value'  => $sourceEditionId,
-            'numberposts' => -1,
-        ]);
+        $sourceSessions = $sessionModel
+            ->where('edition_id', $sourceEditionId)
+            ->limit(-1)
+            ->get();
 
         foreach ($sourceSessions as $session) {
-            $newSessionId = wp_insert_post([
-                'post_type'    => SessionCPT::POST_TYPE,
-                'post_status'  => $session->post_status,
-                'post_title'   => $session->post_title,
-                'post_content' => $session->post_content,
-                'post_excerpt' => $session->post_excerpt,
-                'post_parent'  => $newEditionId,
-            ], true);
-
-            if (is_wp_error($newSessionId)) {
+            $sessionId = (int) ($session['ID'] ?? $session['id'] ?? 0);
+            if ($sessionId <= 0) {
                 continue;
             }
 
-            // Copy every meta key from the source session, then override edition link + date.
-            $sessionMeta = get_post_meta($session->ID);
-            foreach ($sessionMeta as $key => $values) {
-                foreach ($values as $value) {
-                    add_post_meta($newSessionId, $key, $value);
-                }
+            $sessionPost = get_post($sessionId);
+            if (!$sessionPost instanceof WP_Post) {
+                continue;
             }
-            update_post_meta($newSessionId, '_ntdst_edition_id', $newEditionId);
-            update_post_meta($newSessionId, '_ntdst_date', $today);
+
+            $sessionFields = $sessionModel->getMeta($sessionId);
+            $sessionFields['edition_id'] = $newEditionId;
+            $sessionFields['date']       = $today;
+
+            $sessionModel->create($sessionFields + [
+                'title'       => $sessionPost->post_title,
+                'content'     => $sessionPost->post_content,
+                'excerpt'     => $sessionPost->post_excerpt,
+                'post_status' => $sessionPost->post_status,
+            ]);
         }
     }
 }
