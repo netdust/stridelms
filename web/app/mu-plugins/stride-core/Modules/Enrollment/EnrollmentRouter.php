@@ -32,31 +32,30 @@ final class EnrollmentRouter
     public function register(): void
     {
         ntdst_router()->get('trajecten/:slug/inschrijving', function (array $params) {
-            $this->handleTrajectoryEnrollment($params['slug']);
+            return $this->handleTrajectoryEnrollment($params['slug']);
         });
 
         ntdst_router()->get('vormingen/:slug/inschrijving', function (array $params) {
-            $this->handleCourseEnrollment($params['slug']);
+            return $this->handleCourseEnrollment($params['slug']);
         });
 
         ntdst_router()->get('vormingen/:slug/voltooien', function (array $params) {
-            $this->handleCompletionRoute('edition', $params['slug']);
+            return $this->handleCompletionRoute('edition', $params['slug']);
         });
 
         ntdst_router()->get('trajecten/:slug/voltooien', function (array $params) {
-            $this->handleCompletionRoute('trajectory', $params['slug']);
+            return $this->handleCompletionRoute('trajectory', $params['slug']);
         });
     }
 
     // === Route Handlers ===
 
-    private function handleTrajectoryEnrollment(string $slug): void
+    private function handleTrajectoryEnrollment(string $slug): ?string
     {
         $trajectory = get_page_by_path($slug, OBJECT, 'vad_trajectory');
 
         if (!$trajectory) {
-            $this->trigger404();
-            return;
+            return $this->notFoundTemplate();
         }
 
         if (!is_user_logged_in()) {
@@ -77,9 +76,11 @@ final class EnrollmentRouter
             ->with('enrollment_open', $mode !== 'closed')
             ->with('enrollment_mode', $mode)
             ->render('enrollment/form');
+
+        return null;
     }
 
-    private function handleCourseEnrollment(string $slug): void
+    private function handleCourseEnrollment(string $slug): ?string
     {
         $edition = get_page_by_path($slug, OBJECT, 'vad_edition');
 
@@ -91,8 +92,7 @@ final class EnrollmentRouter
         }
 
         if (!$edition) {
-            $this->trigger404();
-            return;
+            return $this->notFoundTemplate();
         }
 
         if (!is_user_logged_in()) {
@@ -108,7 +108,7 @@ final class EnrollmentRouter
                 ->with('type', 'edition')
                 ->with('already_enrolled', true)
                 ->render('enrollment/form');
-            return;
+            return null;
         }
 
         $editionService = ntdst_get(EditionService::class);
@@ -135,7 +135,7 @@ final class EnrollmentRouter
         // Direct enrollment: skip form, enroll immediately
         if ($formType === 'direct') {
             $this->handleDirectEnrollment($edition, $mode);
-            return;
+            return null;
         }
 
         ntdst_response()
@@ -146,9 +146,11 @@ final class EnrollmentRouter
             ->with('is_online', $isOnline)
             ->with('form_type', $formType)
             ->render('enrollment/form');
+
+        return null;
     }
 
-    private function handleCompletionRoute(string $type, string $slug): void
+    private function handleCompletionRoute(string $type, string $slug): ?string
     {
         if (!is_user_logged_in()) {
             $base = $type === 'trajectory' ? 'trajecten' : 'vormingen';
@@ -167,8 +169,7 @@ final class EnrollmentRouter
         }
 
         if (!$post) {
-            $this->trigger404();
-            return;
+            return $this->notFoundTemplate();
         }
 
         $userId = get_current_user_id();
@@ -230,6 +231,8 @@ final class EnrollmentRouter
             ->with('task_summary', $taskSummary)
             ->with('phase', $phase)
             ->render('forms/completion');
+
+        return null;
     }
 
     // === Helpers ===
@@ -283,17 +286,19 @@ final class EnrollmentRouter
         return 'closed';
     }
 
-    private function trigger404(): void
+    /**
+     * Restore 404 state (the router cleared it on route match) and hand the
+     * 404 template back to template_include so WP renders it the normal way.
+     * Returning the template path keeps theme hooks and the_post() machinery
+     * intact, instead of include-and-exit'ing past them.
+     */
+    private function notFoundTemplate(): string
     {
         global $wp_query;
         $wp_query->set_404();
         status_header(404);
         nocache_headers();
 
-        $template = get_404_template();
-        if ($template) {
-            include $template;
-        }
-        exit;
+        return get_404_template();
     }
 }
