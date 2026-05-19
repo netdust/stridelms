@@ -69,14 +69,13 @@ Stride hard-codes `stride_format` taxonomy with slugs `online`, `klassikaal`, `e
 
 VAD's equivalent is `course_locatie` with terms `vad` (206), `op-locatie` (70), `online` (35).
 
-- [ ] **Rename taxonomy**: `UPDATE ckqp_term_taxonomy SET taxonomy='stride_format' WHERE taxonomy='course_locatie'`
-- [ ] **Reconcile term slugs**:
-  - `online` → keep
-  - `op-locatie` → rename to `klassikaal` (`UPDATE ckqp_terms SET slug='klassikaal', name='Klassikaal' WHERE slug='op-locatie'`)
-  - `vad` → decide: drop, fold into `klassikaal`, or leave as-is (visible nowhere if Stride only filters `[online, klassikaal, e-learning, webinar]`)
-- [ ] Add `e-learning` and `webinar` terms if any VAD courses need them (probably not — VAD folded everything into `online`)
-- [ ] Clear LD object cache (`wp cache flush`)
-- [ ] Verify `/online/` shows the 35 online courses, `/klassikaal/` shows the 70 classroom ones
+- [x] **Rename taxonomy**: `UPDATE ckqp_term_taxonomy SET taxonomy='stride_format' WHERE taxonomy='course_locatie'`
+- [x] **Reconcile term slugs**: `op-locatie` → `klassikaal` (SQL UPDATE on ckqp_terms)
+- [x] Clear cache, recount term taxonomy counts
+- [x] `/online/` shows 35 e-learnings ✓
+- [ ] Open question: `vad` term (206 courses) — currently orphaned (Stride filters only `[online, klassikaal, e-learning, webinar]`). Decide later: drop, fold, or leave.
+- [ ] Optional: add `e-learning` / `webinar` terms if VAD has any. Probably not — all online folded into `online`.
+- [ ] Verify `/klassikaal/` shows the 70 classroom courses
 
 ---
 
