@@ -2,14 +2,14 @@
 # This file is distributed under the same license as the LearnDash LMS plugin.
 msgid ""
 msgstr ""
-"Project-Id-Version: LearnDash LMS 5.0.4\n"
+"Project-Id-Version: LearnDash LMS 5.1.2\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/learndash-core\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-03-24T13:26:46+00:00\n"
+"POT-Creation-Date: 2026-05-14T15:46:17+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: learndash\n"
@@ -371,7 +371,7 @@ msgstr ""
 #: includes/admin/class-learndash-admin-data-upgrades.php:654
 #: includes/admin/class-learndash-admin-settings-data-reports.php:390
 #: includes/admin/class-learndash-admin-settings-data-reports.php:450
-#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:502
+#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:510
 #: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-quizzes.php:505
 msgid "ERROR: Cannot create working folder. Check that the parent folder is writable"
 msgstr ""
@@ -534,7 +534,6 @@ msgstr ""
 #: src/admin_views/modules/payments/gateways/paypal-standard/current-subscriptions/table-header.php:20
 #: themes/ld30/templates/modules/login-modal.php:400
 #: themes/legacy/templates/profile.php:70
-#: assets/js/setup-wizard/src/screen/step-1.jsx:104
 #: includes/licensing/assets/scripts/licensing.js:2291
 #: includes/licensing/frontend/src/Licensing/License.jsx:107
 #: includes/licensing/frontend/src/Settings/License.jsx:107
@@ -714,7 +713,6 @@ msgstr ""
 #: themes/legacy/templates/profile.php:87
 #: themes/legacy/templates/profile.php:175
 #: themes/legacy/templates/quiz_progress_rows.php:85
-#: assets/js/setup-wizard/src/screen/step-2.jsx:197
 msgid "Certificate"
 msgstr ""
 
@@ -1425,10 +1423,9 @@ msgstr ""
 #: themes/ld30/templates/quiz/partials/show_quiz_questions_box.php:927
 #: themes/legacy/templates/quiz/partials/show_quiz_questions_box.php:680
 #: themes/legacy/templates/quiz/partials/show_quiz_questions_box.php:736
-#: assets/js/setup-wizard/src/screen/step-1.jsx:249
-#: assets/js/setup-wizard/src/screen/step-2.jsx:292
-#: assets/js/setup-wizard/src/screen/step-3.jsx:246
-#: assets/js/setup-wizard/src/screen/step-4.jsx:457
+#: assets/js/setup-wizard/src/screen/step-1.jsx:262
+#: assets/js/setup-wizard/src/screen/step-2.jsx:218
+#: assets/js/setup-wizard/src/screen/step-3.jsx:362
 #: src/assets/dist/js/admin/modules/ai/virtual-instructor/setup-wizard.js:49
 #: src/assets/js/admin/modules/ai/virtual-instructor/components/react/Step.js:229
 msgid "Back"
@@ -2258,7 +2255,7 @@ msgid "Clone"
 msgstr ""
 
 #: includes/admin/classes-cloning/class-learndash-admin-cloning.php:171
-#: includes/class-ld-course-wizard.php:371
+#: includes/class-ld-course-wizard.php:454
 msgid "Request expired. Please try it again."
 msgstr ""
 
@@ -2333,54 +2330,54 @@ msgctxt "placeholders: result count, total count"
 msgid "%1$d of %2$s results"
 msgstr ""
 
-#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:401
+#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:409
 #: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-quizzes.php:381
 msgid "user_id"
 msgstr ""
 
-#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:406
+#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:414
 #: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-quizzes.php:386
 msgid "name"
 msgstr ""
 
-#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:412
+#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:420
 #: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-quizzes.php:392
 msgid "email"
 msgstr ""
 
-#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:418
+#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:426
 #: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-quizzes.php:455
 msgid "course_id"
 msgstr ""
 
-#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:423
+#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:431
 #: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-quizzes.php:461
 msgid "course_title"
 msgstr ""
 
-#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:429
+#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:437
 msgid "steps_completed"
 msgstr ""
 
-#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:434
+#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:442
 msgid "steps_total"
 msgstr ""
 
-#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:439
+#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:447
 msgid "course_completed"
 msgstr ""
 
-#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:444
+#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:452
 msgid "course_completed_on"
 msgstr ""
 
-#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:709
+#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:717
 msgctxt "Course Complete Report label: NO"
 msgid "NO"
 msgstr ""
 
-#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:714
-#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:719
+#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:722
+#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:727
 msgctxt "Course Complete Report label: YES"
 msgid "YES"
 msgstr ""
@@ -2774,7 +2771,7 @@ msgstr ""
 #. translators: placeholder: Status label, Status value.
 #: includes/admin/classes-filters/class-learndash-admin-filter-post-status.php:32
 #: includes/admin/classes-posts-edits/class-learndash-admin-assignment-edit.php:185
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:470
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:625
 #: includes/class-ld-gdpr.php:1269
 #: src/admin_views/modules/payments/orders/edit/subscription/details/table-head.php:23
 #: themes/ld30/templates/modern/course/enrollment/status/pre-ordered.php:14
@@ -3033,20 +3030,20 @@ msgid "Associate with a %s."
 msgstr ""
 
 #: includes/admin/classes-posts-edits/class-learndash-admin-assignment-edit.php:190
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:58
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:62
 #: themes/ld30/templates/assignment/partials/row.php:220
 #: themes/ld30/templates/shortcodes/profile/assignment-row.php:144
 msgid "Approved"
 msgstr ""
 
 #: includes/admin/classes-posts-edits/class-learndash-admin-assignment-edit.php:194
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:59
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:63
 msgid "Not Approved"
 msgstr ""
 
 #: includes/admin/classes-posts-edits/class-learndash-admin-assignment-edit.php:197
 #: includes/admin/classes-posts-edits/class-learndash-admin-assignment-edit.php:314
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:535
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:690
 #: includes/admin/classes-posts-listings/class-learndash-admin-essays-listing.php:494
 msgid "Approve"
 msgstr ""
@@ -3059,9 +3056,9 @@ msgstr ""
 #: includes/admin/classes-posts-edits/class-learndash-admin-assignment-edit.php:211
 #: includes/admin/classes-posts-edits/class-learndash-admin-question-edit.php:270
 #: includes/admin/classes-posts-edits/class-learndash-admin-question-edit.php:500
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:481
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:491
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:504
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:636
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:646
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:659
 #: includes/admin/classes-posts-listings/class-learndash-admin-essays-listing.php:768
 #: includes/admin/classes-posts-listings/class-learndash-admin-essays-listing.php:780
 #: includes/admin/classes-posts-listings/class-learndash-admin-questions-listing.php:118
@@ -3126,7 +3123,7 @@ msgid "Assignment Points."
 msgstr ""
 
 #: includes/admin/classes-posts-edits/class-learndash-admin-assignment-edit.php:247
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:720
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:875
 #: includes/admin/classes-posts-listings/class-learndash-admin-essays-listing.php:529
 #: includes/admin/classes-posts-listings/class-learndash-admin-essays-listing.php:586
 #: includes/class-ld-translations.php:597
@@ -3807,17 +3804,17 @@ msgctxt "placeholder: Quiz Title"
 msgid "Revert: %s"
 msgstr ""
 
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:48
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:52
 #: includes/admin/classes-posts-listings/class-learndash-admin-essays-listing.php:49
 msgid "All Authors"
 msgstr ""
 
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:56
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:60
 msgid "Approval Status"
 msgstr ""
 
 #. translators: placeholder: Groups.
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:71
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:75
 #: includes/admin/classes-posts-listings/class-learndash-admin-courses-listing.php:60
 #: includes/admin/classes-posts-listings/class-learndash-admin-essays-listing.php:60
 #: includes/admin/classes-posts-listings/class-learndash-admin-transactions-listing.php:112
@@ -3829,7 +3826,7 @@ msgid "All %s"
 msgstr ""
 
 #. translators: placeholder: Courses.
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:84
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:88
 #: includes/admin/classes-posts-listings/class-learndash-admin-essays-listing.php:73
 #: includes/admin/classes-posts-listings/class-learndash-admin-groups-listing.php:72
 #: includes/admin/classes-posts-listings/class-learndash-admin-lessons-listing.php:51
@@ -3843,7 +3840,7 @@ msgid "All %s"
 msgstr ""
 
 #. translators: placeholder: Lessons.
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:98
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:102
 #: includes/admin/classes-posts-listings/class-learndash-admin-essays-listing.php:87
 #: includes/admin/classes-posts-listings/class-learndash-admin-quizzes-listing.php:70
 #: includes/admin/classes-posts-listings/class-learndash-admin-topics-listing.php:70
@@ -3853,7 +3850,7 @@ msgid "All %s"
 msgstr ""
 
 #. translators: placeholder: Topics.
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:112
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:116
 #: includes/admin/classes-posts-listings/class-learndash-admin-essays-listing.php:101
 #: includes/admin/classes-posts-listings/class-learndash-admin-quizzes-listing.php:90
 #, php-format
@@ -3861,13 +3858,13 @@ msgctxt "placeholder: Topics"
 msgid "All %s"
 msgstr ""
 
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:124
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:128
 #: includes/admin/classes-posts-listings/class-learndash-admin-essays-listing.php:152
 msgid "Status / Points"
 msgstr ""
 
 #. translators: Assigned Course Label.
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:131
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:135
 #: includes/admin/classes-posts-listings/class-learndash-admin-essays-listing.php:177
 #, php-format
 msgctxt "Assigned Course Label"
@@ -3875,7 +3872,7 @@ msgid "Assigned %s"
 msgstr ""
 
 #. translators: Placeholders: Lesson, Topic.
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:141
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:145
 #: includes/admin/classes-posts-listings/class-learndash-admin-essays-listing.php:187
 #: includes/admin/classes-posts-listings/class-learndash-admin-quizzes-listing.php:129
 #, php-format
@@ -3883,50 +3880,50 @@ msgctxt "Placeholders: Lesson, Topic"
 msgid "Assigned %1$s / %2$s"
 msgstr ""
 
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:461
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:616
 msgctxt "Assignment approval status"
 msgid "Approved"
 msgstr ""
 
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:464
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:619
 msgctxt "Assignment approval status"
 msgid "Not Approved"
 msgstr ""
 
 #. translators: placeholder: Status label, Status value.
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:469
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:624
 #, php-format
 msgctxt "placeholder: Status label, Status value"
 msgid "%1$s: %2$s"
 msgstr ""
 
 #. translators: placeholders: Points label, points input, maximum points.
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:485
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:640
 #, php-format
 msgctxt "placeholders: Points label, points input, maximum points"
 msgid "%1$s: %2$s / %3$d"
 msgstr ""
 
 #. translators: placeholders: Points label, current points, maximum points.
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:494
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:649
 #, php-format
 msgctxt "placeholders: Points label, points input, maximum points"
 msgid "%1$s: %2$d / %3$d"
 msgstr ""
 
 #. translators: placeholder: Points label.
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:503
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:658
 #, php-format
 msgctxt "placeholder: Points label"
 msgid "%s: Not Enabled"
 msgstr ""
 
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:512
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:667
 #: includes/admin/classes-posts-listings/class-learndash-admin-essays-listing.php:796
 msgid "approve"
 msgstr ""
 
-#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:703
+#: includes/admin/classes-posts-listings/class-learndash-admin-assignments-listing.php:858
 #: includes/admin/classes-posts-listings/class-learndash-admin-essays-listing.php:560
 msgid "Quick View"
 msgstr ""
@@ -4155,7 +4152,7 @@ msgid "All Price Types"
 msgstr ""
 
 #: includes/admin/classes-posts-listings/class-learndash-admin-courses-listing.php:87
-#: includes/class-ld-course-wizard.php:564
+#: includes/class-ld-course-wizard.php:653
 #: includes/class-ld-lms.php:1764
 #: includes/rest-api/v2/class-ld-rest-price-types-controller.php:105
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-course-enrollment.php:443
@@ -4168,7 +4165,7 @@ msgstr ""
 
 #: includes/admin/classes-posts-listings/class-learndash-admin-courses-listing.php:88
 #: includes/admin/classes-posts-listings/class-learndash-admin-groups-listing.php:57
-#: includes/class-ld-course-wizard.php:572
+#: includes/class-ld-course-wizard.php:661
 #: includes/class-ld-lms.php:1766
 #: includes/course-grid/includes/functions.php:331
 #: includes/course-grid/includes/functions.php:350
@@ -4191,7 +4188,7 @@ msgstr ""
 
 #: includes/admin/classes-posts-listings/class-learndash-admin-courses-listing.php:89
 #: includes/admin/classes-posts-listings/class-learndash-admin-groups-listing.php:58
-#: includes/class-ld-course-wizard.php:580
+#: includes/class-ld-course-wizard.php:669
 #: includes/rest-api/v2/class-ld-rest-price-types-controller.php:123
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-course-enrollment.php:459
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-group-access-settings.php:525
@@ -4200,7 +4197,7 @@ msgstr ""
 
 #: includes/admin/classes-posts-listings/class-learndash-admin-courses-listing.php:90
 #: includes/admin/classes-posts-listings/class-learndash-admin-groups-listing.php:59
-#: includes/class-ld-course-wizard.php:596
+#: includes/class-ld-course-wizard.php:685
 #: includes/class-ld-lms.php:1768
 #: includes/rest-api/v2/class-ld-rest-price-types-controller.php:133
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-course-enrollment.php:472
@@ -4214,7 +4211,7 @@ msgstr ""
 
 #: includes/admin/classes-posts-listings/class-learndash-admin-courses-listing.php:91
 #: includes/admin/classes-posts-listings/class-learndash-admin-groups-listing.php:60
-#: includes/class-ld-course-wizard.php:625
+#: includes/class-ld-course-wizard.php:714
 #: includes/class-ld-lms.php:1765
 #: includes/rest-api/v2/class-ld-rest-price-types-controller.php:143
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-course-enrollment.php:485
@@ -4757,9 +4754,8 @@ msgstr ""
 #: includes/widgets/ld_course_info.php:196
 #: includes/widgets/ld_user_status.php:186
 #: themes/legacy/templates/quiz/partials/show_quiz_form_box.php:119
-#: assets/js/setup-wizard/src/screen/step-1.jsx:203
-#: assets/js/setup-wizard/src/screen/step-2.jsx:105
-#: assets/js/setup-wizard/src/screen/step-3.jsx:74
+#: assets/js/setup-wizard/src/screen/step-1.jsx:105
+#: assets/js/setup-wizard/src/screen/step-2.jsx:74
 #: includes/gutenberg/blocks/ld-course-resume/index.js:147
 msgid "No"
 msgstr ""
@@ -4843,9 +4839,8 @@ msgstr ""
 #: includes/shortcodes/ld_quizinfo.php:165
 #: includes/site-health/class-site-health.php:660
 #: themes/legacy/templates/quiz/partials/show_quiz_form_box.php:113
-#: assets/js/setup-wizard/src/screen/step-1.jsx:188
-#: assets/js/setup-wizard/src/screen/step-2.jsx:88
-#: assets/js/setup-wizard/src/screen/step-3.jsx:66
+#: assets/js/setup-wizard/src/screen/step-1.jsx:88
+#: assets/js/setup-wizard/src/screen/step-2.jsx:66
 #: includes/gutenberg/blocks/ld-course-resume/index.js:143
 msgid "Yes"
 msgstr ""
@@ -5309,129 +5304,129 @@ msgctxt "placeholder: plugin title"
 msgid "%s: Translations"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:63
+#: includes/class-ld-course-wizard.php:128
 #: src/Core/Modules/Admin/Header/Course_Wizard.php:35
 msgid "Create from Video Playlist"
 msgstr ""
 
 #. translators: %s: Course label.
-#: includes/class-ld-course-wizard.php:84
-#: includes/class-ld-course-wizard.php:89
-#: includes/class-ld-course-wizard.php:124
+#: includes/class-ld-course-wizard.php:149
+#: includes/class-ld-course-wizard.php:154
+#: includes/class-ld-course-wizard.php:189
 #, php-format
 msgid "%s Creation Wizard"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:156
+#: includes/class-ld-course-wizard.php:224
 msgid "Load data from YouTube"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:160
+#: includes/class-ld-course-wizard.php:228
 msgid "YouTube icon"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:164
+#: includes/class-ld-course-wizard.php:232
 msgid "Load data from Vimeo"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:168
+#: includes/class-ld-course-wizard.php:236
 msgid "Vimeo icon"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:172
+#: includes/class-ld-course-wizard.php:240
 msgid "Load data from Wistia"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:176
+#: includes/class-ld-course-wizard.php:244
 msgid "Wistia icon"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:180
-#: includes/class-ld-course-wizard.php:530
+#: includes/class-ld-course-wizard.php:248
+#: includes/class-ld-course-wizard.php:619
 msgid "Load"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:279
-#: includes/class-ld-course-wizard.php:428
+#: includes/class-ld-course-wizard.php:356
+#: includes/class-ld-course-wizard.php:517
 msgid "Error on access LearnDash service. Please try it again in a few minutes."
 msgstr ""
 
 #. translators: course.
-#: includes/class-ld-course-wizard.php:447
+#: includes/class-ld-course-wizard.php:536
 #, php-format
 msgctxt "placeholder: course"
 msgid "Create a %s from a video playlist."
 msgstr ""
 
 #. translators: course.
-#: includes/class-ld-course-wizard.php:462
+#: includes/class-ld-course-wizard.php:551
 #, php-format
 msgctxt "placeholder: course"
 msgid "You can use a YouTube Playlist, a Vimeo Showcase or a Wistia Project URL to create a LearnDash %s in a few minutes."
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:478
+#: includes/class-ld-course-wizard.php:567
 msgid "Please activate your license to use this feature."
 msgstr ""
 
 #. translators: course.
-#: includes/class-ld-course-wizard.php:493
+#: includes/class-ld-course-wizard.php:582
 #, php-format
 msgctxt "placeholder: course"
 msgid "Back to %s list"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:508
+#: includes/class-ld-course-wizard.php:597
 msgid "Create the course"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:528
+#: includes/class-ld-course-wizard.php:617
 msgid "Enter playlist URL"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:549
+#: includes/class-ld-course-wizard.php:638
 msgid "Try it again"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:557
+#: includes/class-ld-course-wizard.php:646
 msgid "How users will gain access to the course?"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:566
+#: includes/class-ld-course-wizard.php:655
 msgid "The course is not protected. Any user can access its content without the need to be logged-in or enrolled."
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:574
+#: includes/class-ld-course-wizard.php:663
 msgid "The course is protected. Registration and enrollment are required in order to access the content."
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:582
+#: includes/class-ld-course-wizard.php:671
 msgid "The course is protected via the LearnDash built-in PayPal and/or Stripe. Users need to purchase the course (one-time fee) in order to gain access."
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:586
-#: includes/class-ld-course-wizard.php:602
+#: includes/class-ld-course-wizard.php:675
+#: includes/class-ld-course-wizard.php:691
 msgid "Course Price"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:598
+#: includes/class-ld-course-wizard.php:687
 msgid "The course is protected via the LearnDash built-in PayPal and/or Stripe. Users need to purchase the course (recurring fee) in order to gain access."
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:608
+#: includes/class-ld-course-wizard.php:697
 #: includes/class-ld-lms.php:1810
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-course-enrollment.php:289
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-group-access-settings.php:364
 msgid "Billing Cycle"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:612
+#: includes/class-ld-course-wizard.php:701
 #: includes/settings/settings-billing-functions.php:59
 #: includes/settings/settings-billing-functions.php:124
 msgid "select interval"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:613
+#: includes/class-ld-course-wizard.php:702
 #: includes/settings/settings-billing-functions.php:60
 #: includes/settings/settings-billing-functions.php:125
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-lesson-access-settings.php:182
@@ -5440,58 +5435,58 @@ msgstr ""
 msgid "day(s)"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:614
+#: includes/class-ld-course-wizard.php:703
 #: includes/settings/settings-billing-functions.php:61
 #: includes/settings/settings-billing-functions.php:126
 msgid "week(s)"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:615
+#: includes/class-ld-course-wizard.php:704
 #: includes/settings/settings-billing-functions.php:62
 #: includes/settings/settings-billing-functions.php:127
 msgid "month(s)"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:616
+#: includes/class-ld-course-wizard.php:705
 #: includes/settings/settings-billing-functions.php:63
 #: includes/settings/settings-billing-functions.php:128
 msgid "year(s)"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:627
+#: includes/class-ld-course-wizard.php:716
 msgid "The course can only be accessed through admin enrollment (manual), group enrollment, or integration (shopping cart or membership) enrollment."
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:635
+#: includes/class-ld-course-wizard.php:724
 msgid "How users will interact with the content?"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:642
+#: includes/class-ld-course-wizard.php:731
 msgid "Linear form"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:644
+#: includes/class-ld-course-wizard.php:733
 msgid "Requires the user to progress through the course in the designated step sequence."
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:649
+#: includes/class-ld-course-wizard.php:738
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-course-navigation-settings.php:97
 msgid "Free form"
 msgstr ""
 
-#: includes/class-ld-course-wizard.php:651
+#: includes/class-ld-course-wizard.php:740
 msgid "Allows the user to move freely through the course without following the designated step sequence."
 msgstr ""
 
 #. translators: placeholders: course name, lessons qty description.
-#: includes/class-ld-course-wizard.php:677
+#: includes/class-ld-course-wizard.php:766
 #, php-format
 msgctxt "placeholders: course name, lessons qty description"
 msgid "The course \"%1$s\" will be created with %2$s."
 msgstr ""
 
 #. translators: placeholders: number of lessons.
-#: includes/class-ld-course-wizard.php:680
+#: includes/class-ld-course-wizard.php:769
 #, php-format
 msgid "%s lesson"
 msgid_plural "%s lessons"
@@ -5680,7 +5675,7 @@ msgid "Course"
 msgstr ""
 
 #: includes/class-ld-custom-label.php:79
-#: includes/class-ld-setup-wizard.php:434
+#: includes/class-ld-setup-wizard.php:460
 #: includes/settings/settings-sections/class-ld-settings-section-custom-labels.php:98
 msgid "Courses"
 msgstr ""
@@ -6435,7 +6430,7 @@ msgid "%s Type"
 msgstr ""
 
 #: includes/class-ld-gdpr.php:240
-#: assets/js/setup-wizard/src/screen/step-3.jsx:102
+#: assets/js/setup-wizard/src/screen/step-2.jsx:102
 msgid "Stripe"
 msgstr ""
 
@@ -6462,7 +6457,7 @@ msgstr ""
 #: includes/settings/settings-sections/settings-sections-payments/class-ld-settings-section-paypal-checkout.php:315
 #: src/Core/Modules/Payments/Gateways/Paypal/Assets.php:535
 #: src/Core/Modules/Payments/Gateways/Paypal/Profile_Handler.php:145
-#: assets/js/setup-wizard/src/screen/step-3.jsx:147
+#: assets/js/setup-wizard/src/screen/step-2.jsx:147
 msgid "PayPal"
 msgstr ""
 
@@ -9314,8 +9309,6 @@ msgid "The LearnDash licensing system has changed locations! You'll now find you
 msgstr ""
 
 #: includes/class-ld-lms.php:5458
-#: includes/licensing/src/controller/class-licensing-settings-page.php:46
-#: includes/licensing/src/controller/class-licensing-settings-page.php:47
 msgid "LMS License"
 msgstr ""
 
@@ -9323,10 +9316,8 @@ msgstr ""
 msgid "We hope you love LearnDash."
 msgstr ""
 
-#. translators: placeholder: username.
-#: includes/class-ld-lms.php:5520
-#, php-format
-msgid "Hi, %1$s! This is an invitation to help us improve LearnDash products by sharing product usage data with StellarWP. LearnDash is part of the StellarWP family of brands. If you opt-in we'll share some helpful WordPress and StellarWP product info with you from time to time. And if you skip this, that's okay! Our products will continue to work."
+#: includes/class-ld-lms.php:5518
+msgid "Want to help shape the future of LearnDash LMS? Opting in shares anonymous usage data with our team at Liquid Web, the company behind LearnDash LMS, so we can keep building tools that work better for you. You'll also receive product updates and important announcements via email—unsubscribe any time. Click 'Allow & Continue' below to join us."
 msgstr ""
 
 #. translators: placeholder: method name.
@@ -9466,38 +9457,34 @@ msgstr ""
 msgid "Options Updated."
 msgstr ""
 
-#: includes/class-ld-setup-wizard.php:452
+#: includes/class-ld-setup-wizard.php:478
 #: includes/settings/shortcodes-sections/ld_profile.php:32
 #: themes/legacy/templates/profile.php:47
 msgid "Profile"
 msgstr ""
 
-#: includes/class-ld-setup-wizard.php:474
-#: includes/class-ld-setup-wizard.php:587
-#: includes/class-ld-setup-wizard.php:605
+#: includes/class-ld-setup-wizard.php:500
+#: includes/class-ld-setup-wizard.php:629
+#: includes/class-ld-setup-wizard.php:646
 msgid "Welcome"
 msgstr ""
 
-#: includes/class-ld-setup-wizard.php:588
-msgid "Your Info"
-msgstr ""
-
-#: includes/class-ld-setup-wizard.php:589
+#: includes/class-ld-setup-wizard.php:630
 msgid "Your Courses"
 msgstr ""
 
-#: includes/class-ld-setup-wizard.php:590
+#: includes/class-ld-setup-wizard.php:631
 #: includes/settings/settings-sections/settings-sections-payments/class-ld-settings-section-paypal-checkout.php:177
 #: src/admin_views/modules/payments/orders/edit/details/payment/table-head.php:22
 msgid "Payment"
 msgstr ""
 
-#: includes/class-ld-setup-wizard.php:591
+#: includes/class-ld-setup-wizard.php:632
 msgid "Summary"
 msgstr ""
 
-#: includes/class-ld-setup-wizard.php:746
-#: includes/class-ld-setup-wizard.php:747
+#: includes/class-ld-setup-wizard.php:780
+#: includes/class-ld-setup-wizard.php:781
 msgid "Setup Wizard"
 msgstr ""
 
@@ -10628,18 +10615,18 @@ msgctxt "placeholders: Groups, link to Group settings page"
 msgid "%1$s are not public, please visit the %2$s page and set them to Public to enable access on the front end."
 msgstr ""
 
-#: includes/ld-license.php:259
+#: includes/ld-license.php:301
 msgid "License Activation Failed"
 msgstr ""
 
 #. Translators: %1$s: Opening anchor tag, %2$s: Closing anchor tag, %3$s: Opening anchor tag, %4$s: Closing anchor tag.
-#: includes/ld-license.php:267
+#: includes/ld-license.php:309
 #, php-format
 msgid "We couldn't validate your LearnDash license. If you already have a valid license, please make sure you're using the latest version of LearnDash. %1$sCheck for updates%2$s or download the latest version from %3$syour account%4$s."
 msgstr ""
 
 #. Translators: %1$s: Opening anchor tag, %2$s: Closing anchor tag, %3$s: Opening anchor tag, %4$s: Closing anchor tag.
-#: includes/ld-license.php:284
+#: includes/ld-license.php:326
 #, php-format
 msgid "If you're new to LearnDash, get %1$sa license here%2$s. Still need assistance? %3$sContact Support%4$s"
 msgstr ""
@@ -13357,11 +13344,17 @@ msgstr ""
 msgid "Plugin install failed"
 msgstr ""
 
+#: includes/licensing/src/controller/class-licensing-settings-page.php:46
+#: includes/licensing/src/controller/class-licensing-settings-page.php:47
+msgid "Legacy License"
+msgstr ""
+
 #: includes/licensing/src/controller/class-licensing-settings-section.php:48
 msgid "License Visibility"
 msgstr ""
 
-#: includes/licensing/src/controller/class-main-controller.php:29
+#: includes/licensing/src/controller/class-main-controller.php:40
+#: includes/licensing/src/controller/class-main-controller.php:41
 #: includes/settings/settings-pages/class-ld-settings-page-addons.php:32
 #: includes/settings/settings-pages/class-ld-settings-page-overview.php:975
 #: includes/licensing/assets/scripts/projects.js:2378
@@ -15128,6 +15121,16 @@ msgstr ""
 #: includes/rest-api/v2/class-ld-rest-groups-users-controller.php:259
 #: includes/rest-api/v2/class-ld-rest-groups-users-controller.php:375
 msgid "Missing User IDs."
+msgstr ""
+
+#: includes/rest-api/v1/class-ld-rest-echo-controller.php:95
+#: includes/rest-api/v2/class-ld-rest-echo-controller.php:100
+msgid "Sorry, you are not allowed to access this endpoint."
+msgstr ""
+
+#: includes/rest-api/v1/class-ld-rest-echo-controller.php:118
+#: includes/rest-api/v2/class-ld-rest-echo-controller.php:123
+msgid "Request body exceeds the maximum allowed size."
 msgstr ""
 
 #. translators: group.
@@ -20849,7 +20852,7 @@ msgid "A Brief Overview of LearnDash"
 msgstr ""
 
 #: includes/settings/settings-pages/class-ld-settings-page-help.php:333
-#: assets/js/setup-wizard/src/screen/step-4.jsx:124
+#: assets/js/setup-wizard/src/screen/step-3.jsx:117
 msgid "LearnDash 101"
 msgstr ""
 
@@ -20959,7 +20962,6 @@ msgstr ""
 
 #: includes/settings/settings-pages/class-ld-settings-page-overview.php:313
 #: src/deprecated/nss_plugin_updater_sfwd_lms.php:998
-#: assets/js/setup-wizard/src/screen/step-1.jsx:147
 msgid "Your license is valid."
 msgstr ""
 
@@ -21495,7 +21497,7 @@ msgstr ""
 
 #: includes/settings/settings-sections/class-ld-settings-section-assignments-cpt.php:97
 #: includes/settings/settings-sections/class-ld-settings-section-groups-cpt.php:123
-#: assets/js/setup-wizard/src/App.js:34
+#: assets/js/setup-wizard/src/App.js:31
 msgid "Public"
 msgstr ""
 
@@ -23108,7 +23110,7 @@ msgstr ""
 
 #: includes/settings/settings-sections/class-ld-settings-section-payments-defaults.php:147
 #: includes/settings/settings-sections/settings-sections-payments/class-ld-settings-section-paypal-checkout.php:326
-#: assets/js/setup-wizard/src/screen/step-3.jsx:226
+#: assets/js/setup-wizard/src/screen/step-2.jsx:198
 msgid "Select your country"
 msgstr ""
 
@@ -24210,11 +24212,11 @@ msgid "Data Sharing"
 msgstr ""
 
 #: includes/settings/settings-sections/class-ld-settings-section-telemetry.php:105
-msgid "Yes, share plugin usage data with LearnDash, part of the StellarWP family of brands"
+msgid "Yes, share plugin usage data with LearnDash, part of Liquid Web's software suite"
 msgstr ""
 
 #: includes/settings/settings-sections/class-ld-settings-section-telemetry.php:110
-msgid "No, do not share plugin usage data with LearnDash, part of the StellarWP family of brands"
+msgid "No, do not share plugin usage data with LearnDash, part of Liquid Web's software suite"
 msgstr ""
 
 #: includes/settings/settings-sections/class-ld-settings-section-terms-pages.php:38
@@ -27985,9 +27987,8 @@ msgstr ""
 #: themes/ld30/templates/quiz/partials/show_quiz_questions_box.php:916
 #: themes/legacy/templates/quiz/partials/show_quiz_questions_box.php:691
 #: themes/legacy/templates/quiz/partials/show_quiz_questions_box.php:725
-#: assets/js/setup-wizard/src/screen/step-1.jsx:277
-#: assets/js/setup-wizard/src/screen/step-2.jsx:319
-#: assets/js/setup-wizard/src/screen/step-3.jsx:272
+#: assets/js/setup-wizard/src/screen/step-1.jsx:289
+#: assets/js/setup-wizard/src/screen/step-2.jsx:244
 #: src/assets/dist/js/admin/modules/ai/virtual-instructor/setup-wizard.js:49
 #: src/assets/js/admin/modules/ai/virtual-instructor/components/react/Step.js:209
 msgid "Next"
@@ -38718,15 +38719,15 @@ msgid_plural "seconds"
 msgstr[0] ""
 msgstr[1] ""
 
-#: assets/js/setup-wizard/src/App.js:38
+#: assets/js/setup-wizard/src/App.js:35
 msgid "Private"
 msgstr ""
 
-#: assets/js/setup-wizard/src/App.js:45
+#: assets/js/setup-wizard/src/App.js:42
 msgid "Someone Else"
 msgstr ""
 
-#: assets/js/setup-wizard/src/App.js:49
+#: assets/js/setup-wizard/src/App.js:46
 msgid "Me"
 msgstr ""
 
@@ -38738,300 +38739,211 @@ msgstr ""
 msgid "Dismiss Setup Wizard"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-1.jsx:35
-msgid "Please enter the email address."
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-1.jsx:40
-msgid "Please enter the license key."
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-1.jsx:56
-msgid "The email and the license key do not match."
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-1.jsx:86
-msgid "Let's start by getting your info"
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-1.jsx:91
-msgid "Enter your License"
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-1.jsx:95
-msgid "Your license details were emailed to you after purchase. You can also find them listed on"
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-1.jsx:97
-msgid "your account"
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-1.jsx:114
-msgid "Your purchase email"
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-1.jsx:126
-msgid "License:"
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-1.jsx:136
-msgid "Your license key"
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-1.jsx:159
-msgid "Validate"
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-1.jsx:169
-msgid "Communication Preferences"
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-1.jsx:172
-msgid "Would you like to use the email above for all LearnDash emails and course notifications?"
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-1.jsx:211
-msgid "What \"From:\" email address would you like to use?"
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-2.jsx:61
+#: assets/js/setup-wizard/src/screen/step-1.jsx:61
 msgid "Tell us about your courses"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-2.jsx:66
+#: assets/js/setup-wizard/src/screen/step-1.jsx:66
 msgid "Do you want to import a demo course?"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-2.jsx:69
+#: assets/js/setup-wizard/src/screen/step-1.jsx:69
 msgid "A fully built course that helps you to understand LearnDash."
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-2.jsx:112
+#: assets/js/setup-wizard/src/screen/step-1.jsx:112
 msgid "How many courses are you planning to create?"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-2.jsx:120
+#: assets/js/setup-wizard/src/screen/step-1.jsx:120
 msgid "Just One"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-2.jsx:127
+#: assets/js/setup-wizard/src/screen/step-1.jsx:127
 #: includes/gutenberg/blocks/ld-exam/ld-exam-question/edit.js:23
 msgid "Multiple"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-2.jsx:133
+#: assets/js/setup-wizard/src/screen/step-1.jsx:133
 msgid "What types of courses will you have?"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-2.jsx:135
+#: assets/js/setup-wizard/src/screen/step-1.jsx:135
 msgid "Check all the apply."
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-2.jsx:167
+#: assets/js/setup-wizard/src/screen/step-1.jsx:167
 msgid "Simple"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-2.jsx:170
+#: assets/js/setup-wizard/src/screen/step-1.jsx:170
 msgid "A video or text based course without certificates or quizzes."
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-2.jsx:200
-#: assets/js/setup-wizard/src/screen/step-2.jsx:230
-msgid "A video or text based course including quizzes and certificates."
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-2.jsx:227
+#: assets/js/setup-wizard/src/screen/step-1.jsx:197
 msgid "Timed"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-2.jsx:257
+#: assets/js/setup-wizard/src/screen/step-1.jsx:200
+msgid "A video or text based course including quizzes and certificates."
+msgstr ""
+
+#: assets/js/setup-wizard/src/screen/step-1.jsx:227
 msgid "Group Courses"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-2.jsx:260
+#: assets/js/setup-wizard/src/screen/step-1.jsx:230
 msgid "A course led by group leaders, perfect for cohorts, corporate training and classrooms."
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-2.jsx:264
+#: assets/js/setup-wizard/src/screen/step-1.jsx:234
 msgid "Are your groups public or private?"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-2.jsx:272
+#: assets/js/setup-wizard/src/screen/step-1.jsx:242
 msgid "Who will be leading your group courses?"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-3.jsx:58
+#: assets/js/setup-wizard/src/screen/step-2.jsx:58
 msgid "Do you want to charge for your courses?"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-3.jsx:81
+#: assets/js/setup-wizard/src/screen/step-2.jsx:81
 msgid "How would you like to accept payments?"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-3.jsx:83
+#: assets/js/setup-wizard/src/screen/step-2.jsx:83
 msgid "Choose one."
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-3.jsx:106
+#: assets/js/setup-wizard/src/screen/step-2.jsx:106
 msgid "With Stripe charge credit cards and pay low merchant fees."
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-3.jsx:113
-#: assets/js/setup-wizard/src/screen/step-3.jsx:177
+#: assets/js/setup-wizard/src/screen/step-2.jsx:113
+#: assets/js/setup-wizard/src/screen/step-2.jsx:177
 msgid "Connect"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-3.jsx:119
-#: assets/js/setup-wizard/src/screen/step-3.jsx:183
+#: assets/js/setup-wizard/src/screen/step-2.jsx:119
+#: assets/js/setup-wizard/src/screen/step-2.jsx:183
 msgid "Connected"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-3.jsx:151
+#: assets/js/setup-wizard/src/screen/step-2.jsx:151
 msgid "Let customers pay using their PayPal account or credit card — no account required."
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-3.jsx:210
-#: assets/js/setup-wizard/src/screen/step-4.jsx:411
-msgid "WooCommerce"
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-3.jsx:214
-msgid "Use WooCommerce to manage payments, invoices and more. We'll install the plugins you need."
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-3.jsx:221
+#: assets/js/setup-wizard/src/screen/step-2.jsx:193
 msgid "Which currency would you like to accept?"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:72
+#: assets/js/setup-wizard/src/screen/step-3.jsx:65
 msgid "Here's what we'll setup for you"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:76
+#: assets/js/setup-wizard/src/screen/step-3.jsx:69
 msgid "We will create the following pages for you:"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:86
+#: assets/js/setup-wizard/src/screen/step-3.jsx:79
 msgid "Registration, Registration Success, Reset Password & Profile"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:89
+#: assets/js/setup-wizard/src/screen/step-3.jsx:82
 msgid "Allow students to register for your courses, confirm successful registrations, reset their account passwords and view their progress in their own profile page."
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:102
+#: assets/js/setup-wizard/src/screen/step-3.jsx:95
 msgid "Courses Listing"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:105
+#: assets/js/setup-wizard/src/screen/step-3.jsx:98
 msgid "Display all available courses."
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:114
+#: assets/js/setup-wizard/src/screen/step-3.jsx:107
 msgid "We will create the following courses for you:"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:127
+#: assets/js/setup-wizard/src/screen/step-3.jsx:120
 msgid "A demo course to help you understand how to use LearnDash."
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:137
+#: assets/js/setup-wizard/src/screen/step-3.jsx:130
 msgid "We will enable the following group settings:"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:141
+#: assets/js/setup-wizard/src/screen/step-3.jsx:134
 msgid "These settings can be changed at any time in learnDash LMS > Groups > Settings"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:152
+#: assets/js/setup-wizard/src/screen/step-3.jsx:145
 msgid "Groups will be made public on your site"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:155
+#: assets/js/setup-wizard/src/screen/step-3.jsx:148
 msgid "You can always change this later if you decide."
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:169
+#: assets/js/setup-wizard/src/screen/step-3.jsx:162
 msgid "Group leaders will be enabled on your site"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:172
+#: assets/js/setup-wizard/src/screen/step-3.jsx:165
 msgid "They'll be able to create and manage users, enroll in managed groups, and have access to all content in any order."
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:184
+#: assets/js/setup-wizard/src/screen/step-3.jsx:177
 msgid "+ Show all settings being updated"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:195
+#: assets/js/setup-wizard/src/screen/step-3.jsx:188
 msgid "Public Group"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:198
+#: assets/js/setup-wizard/src/screen/step-3.jsx:191
 msgid "Groups will be made public on your site."
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:223
+#: assets/js/setup-wizard/src/screen/step-3.jsx:216
 msgid "Group Archive Page"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:226
+#: assets/js/setup-wizard/src/screen/step-3.jsx:219
 msgid "Enables the front end archive page where all groups are listed."
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:251
+#: assets/js/setup-wizard/src/screen/step-3.jsx:244
 msgid "Manage Users: Basic"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:254
+#: assets/js/setup-wizard/src/screen/step-3.jsx:247
 msgid "Allow group leader to create and manage users."
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:277
+#: assets/js/setup-wizard/src/screen/step-3.jsx:270
 msgid "Managed groups auto-enrollment"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:280
+#: assets/js/setup-wizard/src/screen/step-3.jsx:273
 msgid "Group Leader will be enrolled in managed groups."
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:303
+#: assets/js/setup-wizard/src/screen/step-3.jsx:296
 msgid "Course Auto-enrollment"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:306
+#: assets/js/setup-wizard/src/screen/step-3.jsx:299
 msgid "Group Leader has access to all courses automatically."
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:329
+#: assets/js/setup-wizard/src/screen/step-3.jsx:322
 msgid "Bypass Course Limits"
 msgstr ""
 
-#: assets/js/setup-wizard/src/screen/step-4.jsx:332
+#: assets/js/setup-wizard/src/screen/step-3.jsx:325
 msgid "Group Leader can access course content in any order."
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-4.jsx:357
-msgid "We'll install the following add-ons for you:"
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-4.jsx:368
-msgid "Certificate Builder"
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-4.jsx:371
-msgid "The easiest way to build certificates for your courses."
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-4.jsx:384
-#: assets/js/setup-wizard/src/screen/step-4.jsx:426
-#: includes/licensing/assets/scripts/projects.js:2634
-#: includes/licensing/frontend/src/Plugins/Projects.jsx:88
-msgid "Installed"
-msgstr ""
-
-#: assets/js/setup-wizard/src/screen/step-4.jsx:414
-msgid "Handle payments, coupons, invoices and more."
 msgstr ""
 
 #: includes/course-grid/includes/gutenberg/blocks/components/filter-panel-body.js:79
@@ -40926,6 +40838,11 @@ msgstr ""
 #: includes/licensing/assets/scripts/projects.js:2437
 #: includes/licensing/frontend/src/Plugins/Main.jsx:159
 msgid "Refresh Now."
+msgstr ""
+
+#: includes/licensing/assets/scripts/projects.js:2634
+#: includes/licensing/frontend/src/Plugins/Projects.jsx:88
+msgid "Installed"
 msgstr ""
 
 #: includes/licensing/assets/scripts/projects.js:2692

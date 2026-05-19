@@ -4,7 +4,7 @@
     'name' => 'learndash/core',
     'pretty_version' => 'dev-main',
     'version' => 'dev-main',
-    'reference' => '5a2ff940ff7a575d9cb46ee7baf59e1360f37b00',
+    'reference' => '0c8e001a0e55db22ad2d629d4d02393c06a69c3c',
     'type' => 'wordpress-plugin',
     'install_path' => __DIR__ . '/../',
     'aliases' => 
@@ -38,6 +38,18 @@
       ),
       'dev_requirement' => false,
     ),
+    'nyholm/psr7' => 
+    array (
+      'pretty_version' => '1.8.2',
+      'version' => '1.8.2.0',
+      'reference' => 'a71f2b11690f4b24d099d6b16690a90ae14fc6f3',
+      'type' => 'library',
+      'install_path' => __DIR__ . '/../nyholm/psr7',
+      'aliases' => 
+      array (
+      ),
+      'dev_requirement' => false,
+    ),
     'psr/container' => 
     array (
       'pretty_version' => '1.1.1',
@@ -45,6 +57,42 @@
       'reference' => '8622567409010282b7aeebe4bb841fe98b58dcaf',
       'type' => 'library',
       'install_path' => __DIR__ . '/../psr/container',
+      'aliases' => 
+      array (
+      ),
+      'dev_requirement' => false,
+    ),
+    'psr/http-client' => 
+    array (
+      'pretty_version' => '1.0.3',
+      'version' => '1.0.3.0',
+      'reference' => 'bb5906edc1c324c9a05aa0873d40117941e5fa90',
+      'type' => 'library',
+      'install_path' => __DIR__ . '/../psr/http-client',
+      'aliases' => 
+      array (
+      ),
+      'dev_requirement' => false,
+    ),
+    'psr/http-factory' => 
+    array (
+      'pretty_version' => '1.1.0',
+      'version' => '1.1.0.0',
+      'reference' => '2b4765fddfe3b508ac62f829e852b1501d3f6e8a',
+      'type' => 'library',
+      'install_path' => __DIR__ . '/../psr/http-factory',
+      'aliases' => 
+      array (
+      ),
+      'dev_requirement' => false,
+    ),
+    'psr/http-message' => 
+    array (
+      'pretty_version' => '1.1',
+      'version' => '1.1.0.0',
+      'reference' => 'cb6ce4845ce34a8ad9e68117c10ee90a29919eba',
+      'type' => 'library',
+      'install_path' => __DIR__ . '/../psr/http-message',
       'aliases' => 
       array (
       ),
@@ -64,9 +112,9 @@
     ),
     'rmccue/requests' => 
     array (
-      'pretty_version' => 'v2.0.17',
-      'version' => '2.0.17.0',
-      'reference' => '74d1648cc34e16a42ea25d548fc73ec107a90421',
+      'pretty_version' => 'v2.0.18',
+      'version' => '2.0.18.0',
+      'reference' => '2e5b8434e0dd54b35bcf1e9a5b52ba2ad84cf773',
       'type' => 'library',
       'install_path' => __DIR__ . '/../rmccue/requests',
       'aliases' => 
@@ -158,6 +206,42 @@
       ),
       'dev_requirement' => false,
     ),
+    'stellarwp/harbor' => 
+    array (
+      'pretty_version' => 'v1.2.0',
+      'version' => '1.2.0.0',
+      'reference' => 'f22783d0d79597d5b1acf6cce73e6f3ddb701334',
+      'type' => 'library',
+      'install_path' => __DIR__ . '/../stellarwp/harbor',
+      'aliases' => 
+      array (
+      ),
+      'dev_requirement' => false,
+    ),
+    'stellarwp/licensing-api-client' => 
+    array (
+      'pretty_version' => '2.0.0',
+      'version' => '2.0.0.0',
+      'reference' => '6f9e0b3e49831f49b735a9544c5fb2fea4eeedeb',
+      'type' => 'library',
+      'install_path' => __DIR__ . '/../stellarwp/licensing-api-client',
+      'aliases' => 
+      array (
+      ),
+      'dev_requirement' => false,
+    ),
+    'stellarwp/licensing-api-client-wordpress' => 
+    array (
+      'pretty_version' => '2.0.0',
+      'version' => '2.0.0.0',
+      'reference' => 'f4ece66587cd6de175ffd35d0fbc3dc06c76a1f8',
+      'type' => 'library',
+      'install_path' => __DIR__ . '/../stellarwp/licensing-api-client-wordpress',
+      'aliases' => 
+      array (
+      ),
+      'dev_requirement' => false,
+    ),
     'stellarwp/models' => 
     array (
       'pretty_version' => '1.2.3',
@@ -184,9 +268,9 @@
     ),
     'stellarwp/telemetry' => 
     array (
-      'pretty_version' => '2.3.4',
-      'version' => '2.3.4.0',
-      'reference' => '74c7b819d574aa5fc1392f982fb32cedc18d4c6f',
+      'pretty_version' => '2.4.1',
+      'version' => '2.4.1.0',
+      'reference' => 'c1b3a43359475460a17589dd0442310a81f51b24',
       'type' => 'library',
       'install_path' => __DIR__ . '/../stellarwp/telemetry',
       'aliases' => 

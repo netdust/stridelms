@@ -3,7 +3,7 @@
         'name' => 'learndash/licensing-hub',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => '5a2ff940ff7a575d9cb46ee7baf59e1360f37b00',
+        'reference' => '0c8e001a0e55db22ad2d629d4d02393c06a69c3c',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -13,7 +13,7 @@
         'learndash/licensing-hub' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => '5a2ff940ff7a575d9cb46ee7baf59e1360f37b00',
+            'reference' => '0c8e001a0e55db22ad2d629d4d02393c06a69c3c',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

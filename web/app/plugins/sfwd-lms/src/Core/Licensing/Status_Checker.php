@@ -21,7 +21,8 @@ use LearnDash\Core\Utilities\Str;
  *
  * @phpstan-type LicenseStatus array{
  *  type: 'current'|'legacy',
- *  status: SubscriptionStatus
+ *  status: SubscriptionStatus,
+ *  expiry: string
  * }
  *
  * @phpstan-type LicenseData array{
@@ -32,7 +33,8 @@ use LearnDash\Core\Utilities\Str;
  */
 class Status_Checker {
 	/**
-	 * Transient key for storing the raw result of the licensing request.
+	 * Transient key prefix for storing the raw result of the licensing request.
+	 * The full key is suffixed with a hash of the license key.
 	 *
 	 * @since 4.17.0
 	 *
@@ -77,16 +79,89 @@ class Status_Checker {
 	public static string $licensing_slug_reports_for_learndash = 'report-pro';
 
 	/**
+	 * Licensing slug for Instructor Role.
+	 *
+	 * @since 5.1.0
+	 *
+	 * @var string
+	 */
+	public static string $licensing_slug_instructor_role = 'instructor-role';
+
+	/**
+	 * Licensing slug for LearnDash Gradebook.
+	 *
+	 * @since 5.1.0
+	 *
+	 * @var string
+	 */
+	public static string $licensing_slug_gradebook = 'gradebook';
+
+	/**
+	 * Licensing slug for LearnDash Groups Plus.
+	 *
+	 * @since 5.1.0
+	 *
+	 * @var string
+	 */
+	public static string $licensing_slug_groups_plus = 'learndash-group-plus';
+
+	/**
+	 * Licensing slug for LearnDash Notes.
+	 *
+	 * @since 5.1.0
+	 *
+	 * @var string
+	 */
+	public static string $licensing_slug_notes = 'learndash-notes';
+
+	/**
+	 * Licensing slug for LearnDash Reviews Plus.
+	 *
+	 * @since 5.1.0
+	 *
+	 * @var string
+	 */
+	public static string $licensing_slug_reviews_plus = 'ratings-reviews-feedbacks';
+
+	/**
+	 * Licensing slug for LearnDash Group Registration (Seats Plus).
+	 *
+	 * @since 5.1.0
+	 *
+	 * @var string
+	 */
+	public static string $licensing_slug_group_registration = 'learndash-group-plus';
+
+	/**
+	 * Licensing slug for MemberDash.
+	 *
+	 * @since 5.1.0
+	 *
+	 * @var string
+	 */
+	public static string $licensing_slug_memberdash = 'memberdash';
+
+	/**
+	 * Licensing slug for LearnDash ProPanel Addon.
+	 *
+	 * @since 5.1.0
+	 *
+	 * @var string
+	 */
+	public static string $licensing_slug_learndash_propanel_addon = 'propanel';
+
+	/**
 	 * Returns the license status for a specific plugin licensing slug.
 	 *
 	 * @since 4.17.0
 	 *
-	 * @param string $plugin_licensing_slug The plugin licensing slug. Use one of the class properties $licensing_slug_*.
+	 * @param string      $plugin_licensing_slug The plugin licensing slug. Use one of the class properties $licensing_slug_*.
+	 * @param string|null $license_key           The license key to use. If not set, the license key will be fetched from the WP options.
 	 *
 	 * @return LicenseStatus|array{} The license status. If the license key is invalid or not set, an empty array is returned.
 	 */
-	public static function get_status( string $plugin_licensing_slug ): array {
-		$licensing_data = self::get_licensing_data();
+	public static function get_status( string $plugin_licensing_slug, ?string $license_key = null ): array {
+		$licensing_data = self::get_licensing_data( $license_key );
 
 		// If the licensing data is not available, return an empty array.
 
@@ -103,14 +178,22 @@ class Status_Checker {
 			$current_license_status = [
 				'type'   => 'current',
 				'status' => self::get_final_license_status( $licensing_data[ $plugin_licensing_slug ] ),
+				'expiry' => self::get_max_expiry_as_iso( $licensing_data[ $plugin_licensing_slug ] ),
 			];
 		}
 
 		// Special cases: LearnDash Core and ProPanel legacy licenses.
 
 		if (
-			empty( $current_license_status )
-			|| ! self::does_status_allow_access( $current_license_status['status'] ) // If the current license does not allow access, check for legacy licenses.
+			in_array(
+				$plugin_licensing_slug,
+				[ self::$licensing_slug_learndash_core, self::$licensing_slug_learndash_propanel, self::$licensing_slug_reports_for_learndash ],
+				true
+			)
+			&& (
+				empty( $current_license_status )
+				|| ! self::does_status_allow_access( $current_license_status['status'] ) // If the current license does not allow access, check for legacy licenses.
+			)
 		) {
 			// LearnDash Legacy.
 
@@ -181,6 +264,7 @@ class Status_Checker {
 			return [
 				'type'   => 'legacy',
 				'status' => self::get_final_license_status( $legacy_licenses ),
+				'expiry' => self::get_max_expiry_as_iso( $legacy_licenses ),
 			];
 		}
 
@@ -205,6 +289,7 @@ class Status_Checker {
 			return [
 				'type'   => 'legacy',
 				'status' => self::get_final_license_status( $legacy_licenses ),
+				'expiry' => self::get_max_expiry_as_iso( $legacy_licenses ),
 			];
 		}
 
@@ -252,16 +337,41 @@ class Status_Checker {
 	}
 
 	/**
+	 * Returns the latest expiry date from a list of licenses as an ISO 8601 date string (Y-m-d).
+	 *
+	 * @since 5.1.0
+	 *
+	 * @param array<LicenseData> $licenses The licenses to check.
+	 *
+	 * @return string The latest expiry date as "Y-m-d", or an empty string if no expiry is found.
+	 */
+	private static function get_max_expiry_as_iso( array $licenses ): string {
+		$max = 0;
+
+		foreach ( $licenses as $license ) {
+			if ( $license['expiry'] > $max ) {
+				$max = $license['expiry'];
+			}
+		}
+
+		return $max > 0 ? gmdate( 'Y-m-d', $max ) : '';
+	}
+
+	/**
 	 * Returns the licensing data fetched from the licensing server or cache, if available.
 	 *
 	 * @since 4.17.0
 	 *
+	 * @param string|null $license_key The license key to use. If not set, the license key will be fetched from the WP options.
+	 *
 	 * @return array<string, array<LicenseData>>|array{} The licensing data or an empty array if the data is not available. The key is the plugin licensing slug returned by the licensing server.
 	 */
-	private static function get_licensing_data(): array {
-		$license_key = sanitize_text_field(
-			Cast::to_string( get_option( LEARNDASH_LICENSE_KEY ) )
-		);
+	private static function get_licensing_data( ?string $license_key = null ): array {
+		if ( empty( $license_key ) ) {
+			$license_key = sanitize_text_field(
+				Cast::to_string( get_option( LEARNDASH_LICENSE_KEY ) )
+			);
+		}
 
 		// If the license key is not set, return an empty array.
 
@@ -269,9 +379,17 @@ class Status_Checker {
 			return [];
 		}
 
-		$licensing_data = self::sanitize_license_data(
-			get_transient( self::LEARNDASH_LICENSE_CHECKER_RAW_RESULT_TRANSIENT_KEY )
-		);
+		$transient_key = self::LEARNDASH_LICENSE_CHECKER_RAW_RESULT_TRANSIENT_KEY . '_' . md5( $license_key );
+
+		$cached = get_transient( $transient_key );
+
+		// If the cached value indicates an invalid license key, return early without hitting the server.
+
+		if ( $cached === 'invalid' ) {
+			return [];
+		}
+
+		$licensing_data = self::sanitize_license_data( $cached );
 
 		// If the licensing data is not in the cache, fetch it from the licensing server.
 
@@ -296,13 +414,24 @@ class Status_Checker {
 				return [];
 			}
 
+			// Cache invalid license key responses to avoid repeated server calls.
+
+			if (
+				isset( $licensing_data['code'] )
+				&& $licensing_data['code'] === 'rest_invalid_license_key'
+			) {
+				set_transient( $transient_key, 'invalid', self::LEARNDASH_LICENSING_TRANSIENT_TIMEOUT );
+
+				return [];
+			}
+
 			$licensing_data = self::sanitize_license_data( $licensing_data );
 
 			// Cache the licensing data.
 
 			if ( ! empty( $licensing_data ) ) {
 				set_transient(
-					self::LEARNDASH_LICENSE_CHECKER_RAW_RESULT_TRANSIENT_KEY,
+					$transient_key,
 					$licensing_data,
 					self::LEARNDASH_LICENSING_TRANSIENT_TIMEOUT
 				);

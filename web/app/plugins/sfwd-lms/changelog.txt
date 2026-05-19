@@ -1,3 +1,29 @@
+= [5.1.2] 2026-05-14 =
+
+* Tweak - The Settings -> Liquid Web Products page no longer requires an opt-in to communicate with external servers.
+
+= [5.1.1] 2026-05-13 =
+
+* Tweak - Moved the Liquid Web menu item to Settings -> Liquid Web Products.
+* Tweak - The Settings -> Liquid Web Products page now requires a opt-in to communicate with external servers.
+
+= [5.1.0] 2026-05-11 =
+
+* Feature - Integrate with Nexcess Licensing and Portal.
+* Tweak - Removed the license fields from the LearnDash setup wizard.
+* Tweak - Updated branding references from StellarWP to Nexcess.
+* Tweak - Added constants: `LEARNDASH_PLAYLIST_PARSER_SERVICE_ENDPOINT`, `LEARNDASH_PLAYLIST_PARSER_SERVICE_SSL_VERIFY`.
+* Tweak - Added functions: `learndash_get_license_email`, `learndash_get_license_key`.
+
+= [5.0.5.1] 2026-05-07 =
+
+* Security - Tightened security around REST API endpoints.
+
+= [5.0.5] 2026-04-08 =
+
+* Fix - Resolved an issue where group leaders with basic settings could not view or grade assignments submitted by users in their groups. Admins and advanced group leaders are unchanged and still see all assignments; author and group filters respect the same visibility rules.
+* Fix - Resolved an issue where, for group leaders assigned to more than one group, exporting group progress could include users beyond those in the exported group.
+
 = [5.0.4] 2026-03-25 =
 
 * Fix - Added delay between scheduled payment actions to prevent overwhelming the payment gateway when many subscriptions are due at once (e.g. on first run after upgrade).

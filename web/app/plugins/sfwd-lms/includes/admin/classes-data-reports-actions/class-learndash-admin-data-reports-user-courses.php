@@ -250,6 +250,14 @@ class Learndash_Admin_Data_Reports_Courses extends Learndash_Admin_Settings_Data
 			'nonce' => $data['nonce'] ?? '',
 		];
 
+		// When exporting from a group context, restrict to that group's users and courses.
+		if ( ! empty( $data['group_id'] ) ) {
+			$group_id = Cast::to_int( $data['group_id'] );
+
+			$this->transient_data['user_ids']   = learndash_get_groups_user_ids( $group_id );
+			$this->transient_data['course_ids'] = learndash_group_enrolled_courses( $group_id );
+		}
+
 		// Use custom filters when they are provided in the request.
 		$this->transient_data = wp_parse_args(
 			$this->transient_data,

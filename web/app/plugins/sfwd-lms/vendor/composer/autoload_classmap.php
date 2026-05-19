@@ -33,6 +33,8 @@ return array(
     'LearnDash\\Core\\Infrastructure\\File_Protection\\Provider' => $baseDir . '/src/Core/Infrastructure/File_Protection/Provider.php',
     'LearnDash\\Core\\Infrastructure\\Provider' => $baseDir . '/src/Core/Infrastructure/Provider.php',
     'LearnDash\\Core\\Libraries\\Assets\\Provider' => $baseDir . '/src/Core/Libraries/Assets/Provider.php',
+    'LearnDash\\Core\\Libraries\\Harbor\\Addon_Legacy_Licenses' => $baseDir . '/src/Core/Libraries/Harbor/Addon_Legacy_Licenses.php',
+    'LearnDash\\Core\\Libraries\\Harbor\\Provider' => $baseDir . '/src/Core/Libraries/Harbor/Provider.php',
     'LearnDash\\Core\\Libraries\\Provider' => $baseDir . '/src/Core/Libraries/Provider.php',
     'LearnDash\\Core\\Licensing\\Provider' => $baseDir . '/src/Core/Licensing/Provider.php',
     'LearnDash\\Core\\Licensing\\Status_Checker' => $baseDir . '/src/Core/Licensing/Status_Checker.php',
