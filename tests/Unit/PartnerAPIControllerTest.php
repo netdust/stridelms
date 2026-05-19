@@ -9,7 +9,6 @@ use Stride\Modules\Enrollment\EnrollmentService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Attendance\AttendanceRepository;
 use Stride\Modules\Edition\EditionRepository;
-use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionRepository;
 use Stride\Tests\TestCase;
 use WP_REST_Request;
@@ -27,7 +26,6 @@ class PartnerAPIControllerTest extends TestCase
     private PartnerAPIController $controller;
     private RegistrationRepository $mockRegRepo;
     private AttendanceRepository $mockAttendanceRepo;
-    private EditionService $mockEditionService;
     private EditionRepository $mockEditionRepo;
     private SessionRepository $mockSessionRepo;
     private EnrollmentService $mockEnrollmentService;
@@ -45,7 +43,6 @@ class PartnerAPIControllerTest extends TestCase
         // Create mock dependencies
         $this->mockRegRepo = $this->createMock(RegistrationRepository::class);
         $this->mockAttendanceRepo = $this->createMock(AttendanceRepository::class);
-        $this->mockEditionService = $this->createMock(EditionService::class);
         $this->mockEditionRepo = $this->createMock(EditionRepository::class);
         $this->mockSessionRepo = $this->createMock(SessionRepository::class);
         $this->mockEnrollmentService = $this->createMock(EnrollmentService::class);
@@ -58,7 +55,6 @@ class PartnerAPIControllerTest extends TestCase
         $this->controller = new PartnerAPIController(
             $this->mockRegRepo,
             $this->mockAttendanceRepo,
-            $this->mockEditionService,
             $this->mockEditionRepo,
             $this->mockSessionRepo
         );
@@ -351,9 +347,9 @@ class PartnerAPIControllerTest extends TestCase
             ->with(789)
             ->willReturn($editionPost);
 
-        $this->mockEditionService
-            ->method('getCourseId')
-            ->with(789)
+        $this->mockEditionRepo
+            ->method('getField')
+            ->with(789, 'course_id')
             ->willReturn(1001);
 
         $request = new WP_REST_Request('GET', '/stride/v1/partner/enrollments/456');

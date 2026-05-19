@@ -7,7 +7,6 @@ namespace Stride\Modules\PartnerAPI;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Attendance\AttendanceRepository;
 use Stride\Modules\Edition\EditionRepository;
-use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionRepository;
 use Stride\Modules\User\CompanyAffiliation;
 use WP_Error;
@@ -33,7 +32,6 @@ final class PartnerAPIController
     public function __construct(
         private readonly RegistrationRepository $registrationRepository,
         private readonly AttendanceRepository $attendanceRepository,
-        private readonly EditionService $editionService,
         private readonly EditionRepository $editionRepository,
         private readonly SessionRepository $sessionRepository,
     ) {
@@ -305,7 +303,9 @@ final class PartnerAPIController
         $editionId = $registration->edition_id ? (int) $registration->edition_id : 0;
         $edition = $editionId ? $this->editionRepository->find($editionId) : null;
         $editionIsValid = $edition instanceof \WP_Post;
-        $courseId = $editionIsValid ? $this->editionService->getCourseId($editionId) : 0;
+        $courseId = $editionIsValid
+            ? (int) ($this->editionRepository->getField($editionId, 'course_id') ?: 0)
+            : 0;
         $course = $courseId ? get_post($courseId) : null;
 
         return new WP_REST_Response([
