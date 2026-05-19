@@ -9,6 +9,7 @@ use Stride\Domain\QuoteStatus;
 use Stride\Domain\RegistrationStatus;
 use Stride\Infrastructure\AbstractService;
 use Stride\Integrations\LearnDash\LearnDashHelper;
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Invoicing\QuoteService;
@@ -22,6 +23,7 @@ final class StrideMailBridge extends AbstractService
 {
     public function __construct(
         private readonly EditionService $editionService,
+        private readonly EditionRepository $editionRepo,
         private readonly RegistrationRepository $registrationRepo,
     ) {
         parent::__construct();
@@ -717,13 +719,11 @@ final class StrideMailBridge extends AbstractService
         $editionId = $this->resolveEditionId($ctx);
         if (!$editionId) return null;
 
-        $model = ntdst_data()->get('vad_edition');
-
         return match ($field) {
             'title' => get_the_title($editionId) ?: null,
-            'start_date' => ($v = $model->getMeta($editionId, 'start_date')) ? stride_format_date($v) : null,
-            'end_date' => ($v = $model->getMeta($editionId, 'end_date')) ? stride_format_date($v) : null,
-            'venue' => $model->getMeta($editionId, 'venue') ?: null,
+            'start_date' => ($v = $this->editionRepo->getField($editionId, 'start_date')) ? stride_format_date($v) : null,
+            'end_date' => ($v = $this->editionRepo->getField($editionId, 'end_date')) ? stride_format_date($v) : null,
+            'venue' => $this->editionRepo->getField($editionId, 'venue') ?: null,
             'price' => ($p = $this->editionService->getPrice($editionId)) ? stride_format_money($p) : null,
             default => null,
         };
