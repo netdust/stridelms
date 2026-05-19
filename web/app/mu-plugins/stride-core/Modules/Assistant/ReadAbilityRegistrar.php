@@ -420,7 +420,8 @@ final class ReadAbilityRegistrar extends AbstractService
         update_postmeta_cache($editionIds);
 
         // Batch registration counts in a single grouped query
-        $registeredCounts = $this->batchRegisteredCounts($editionIds);
+        $registeredCounts = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class)
+            ->countByEditions($editionIds);
 
         $editions = [];
         foreach ($items as $item) {
@@ -456,39 +457,6 @@ final class ReadAbilityRegistrar extends AbstractService
         }
 
         return ['editions' => $editions];
-    }
-
-    /**
-     * Batch count registrations for multiple editions in a single query.
-     *
-     * @param array<int> $editionIds
-     * @return array<int, int> Map of edition_id => count
-     */
-    private function batchRegisteredCounts(array $editionIds): array
-    {
-        if (empty($editionIds)) {
-            return [];
-        }
-
-        global $wpdb;
-        $table = $wpdb->prefix . 'vad_registrations';
-        $ids = implode(',', array_map('intval', $editionIds));
-
-        $results = $wpdb->get_results(
-            "SELECT edition_id, COUNT(*) as cnt
-             FROM {$table}
-             WHERE edition_id IN ({$ids})
-             AND status IN ('confirmed', 'completed', 'pending')
-             GROUP BY edition_id",
-            ARRAY_A
-        );
-
-        $counts = [];
-        foreach ($results as $row) {
-            $counts[(int) $row['edition_id']] = (int) $row['cnt'];
-        }
-
-        return $counts;
     }
 
     /**
@@ -1078,11 +1046,13 @@ final class ReadAbilityRegistrar extends AbstractService
         update_postmeta_cache($editionIds);
 
         // Batch registration counts
-        $registeredCounts = $this->batchRegisteredCounts($editionIds);
+        $registeredCounts = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class)
+            ->countByEditions($editionIds);
         $totalEnrolled = array_sum($registeredCounts);
 
         // Status breakdown across all editions — single batch query
-        $statusBreakdown = $this->batchStatusBreakdown($editionIds);
+        $statusBreakdown = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class)
+            ->statusBreakdownByEditions($editionIds);
 
         // Fill rate
         $fillRate = ($hasCapacity && $totalCapacity > 0)
@@ -1124,38 +1094,6 @@ final class ReadAbilityRegistrar extends AbstractService
             'status_breakdown' => $statusBreakdown,
             'average_attendance_rate' => $averageAttendanceRate,
         ];
-    }
-
-    /**
-     * Batch count registrations by status for multiple editions in a single query.
-     *
-     * @param array<int> $editionIds
-     * @return array<string, int> Map of status => count
-     */
-    private function batchStatusBreakdown(array $editionIds): array
-    {
-        if (empty($editionIds)) {
-            return [];
-        }
-
-        global $wpdb;
-        $table = $wpdb->prefix . 'vad_registrations';
-        $ids = implode(',', array_map('intval', $editionIds));
-
-        $results = $wpdb->get_results(
-            "SELECT status, COUNT(*) as cnt
-             FROM {$table}
-             WHERE edition_id IN ({$ids})
-             GROUP BY status",
-            ARRAY_A
-        );
-
-        $breakdown = [];
-        foreach ($results as $row) {
-            $breakdown[$row['status']] = (int) $row['cnt'];
-        }
-
-        return $breakdown;
     }
 
     // ---------------------------------------------------------------
@@ -1235,7 +1173,8 @@ final class ReadAbilityRegistrar extends AbstractService
             update_postmeta_cache($editionIds);
         }
 
-        $registeredCounts = $this->batchRegisteredCounts($editionIds);
+        $registeredCounts = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class)
+            ->countByEditions($editionIds);
 
         $rows = [];
         foreach ($raw as $item) {

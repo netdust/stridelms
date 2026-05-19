@@ -491,6 +491,78 @@ final class RegistrationRepository
     }
 
     /**
+     * Batch-count registrations for multiple editions, filtered by status.
+     *
+     * @param array<int>    $editionIds
+     * @param array<string> $statuses   Status values to include (default: live statuses)
+     * @return array<int, int> Map of edition_id => count (all input ids present, defaulting to 0)
+     */
+    public function countByEditions(
+        array $editionIds,
+        array $statuses = [
+            RegistrationStatus::Confirmed->value,
+            RegistrationStatus::Completed->value,
+            RegistrationStatus::Pending->value,
+        ]
+    ): array {
+        if (empty($editionIds) || empty($statuses)) {
+            return array_fill_keys(array_map('intval', $editionIds), 0);
+        }
+
+        global $wpdb;
+        $ids = array_map('intval', $editionIds);
+        $idPlaceholders = implode(',', array_fill(0, count($ids), '%d'));
+        $statusPlaceholders = implode(',', array_fill(0, count($statuses), '%s'));
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT edition_id, COUNT(*) AS c FROM {$this->table()}
+             WHERE edition_id IN ({$idPlaceholders})
+               AND status IN ({$statusPlaceholders})
+             GROUP BY edition_id",
+            ...array_merge($ids, $statuses)
+        ));
+
+        $out = array_fill_keys($ids, 0);
+        foreach ($rows as $row) {
+            $out[(int) $row->edition_id] = (int) $row->c;
+        }
+        return $out;
+    }
+
+    /**
+     * Batch-count registrations grouped by status across multiple editions.
+     *
+     * Returns one entry per status that actually occurs in the set; statuses
+     * with zero rows are absent (callers can zero-fill as needed).
+     *
+     * @param array<int> $editionIds
+     * @return array<string, int> Map of status => count
+     */
+    public function statusBreakdownByEditions(array $editionIds): array
+    {
+        if (empty($editionIds)) {
+            return [];
+        }
+
+        global $wpdb;
+        $ids = array_map('intval', $editionIds);
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT status, COUNT(*) AS c FROM {$this->table()}
+             WHERE edition_id IN ({$placeholders})
+             GROUP BY status",
+            ...$ids
+        ));
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(string) $row->status] = (int) $row->c;
+        }
+        return $out;
+    }
+
+    /**
      * Batch-find trajectory enrollments grouped by trajectory_id.
      *
      * Returns up to $limitPerTrajectory rows per trajectory, newest first.
