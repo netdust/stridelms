@@ -152,8 +152,8 @@ final class EnrollmentFormHandler
         $isPending = false;
         $hasTasks = false;
         if ($registrationId) {
-            $reg = $enrollment->getRegistration($registrationId);
-            if (!is_wp_error($reg) && $reg->status === 'pending') {
+            $reg = ntdst_get(RegistrationRepository::class)->find((int) $registrationId);
+            if ($reg !== null && $reg->status === 'pending') {
                 $isPending = true;
                 $hasTasks = !empty($reg->completion_tasks);
             }

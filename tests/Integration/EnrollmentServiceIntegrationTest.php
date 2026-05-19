@@ -17,12 +17,14 @@ use Stride\Modules\Enrollment\RegistrationRepository;
 class EnrollmentServiceIntegrationTest extends IntegrationTestCase
 {
     private EnrollmentService $enrollmentService;
+    private RegistrationRepository $registrations;
     private array $testRegistrationIds = [];
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->enrollmentService = ntdst_get(EnrollmentService::class);
+        $this->registrations = ntdst_get(RegistrationRepository::class);
         $this->actingAs(self::$testUserId);
     }
 
@@ -166,7 +168,7 @@ class EnrollmentServiceIntegrationTest extends IntegrationTestCase
         $this->testRegistrationIds[] = $regId1;
         $this->testRegistrationIds[] = $regId2;
 
-        $enrollments = $this->enrollmentService->getUserEnrollments(self::$testUserId);
+        $enrollments = $this->registrations->findByUser(self::$testUserId, 'confirmed');
 
         $this->assertIsArray($enrollments);
         $this->assertGreaterThanOrEqual(2, count($enrollments));
@@ -186,7 +188,7 @@ class EnrollmentServiceIntegrationTest extends IntegrationTestCase
         $regId = $this->enrollmentService->enroll(self::$testUserId, $editionId);
         $this->testRegistrationIds[] = $regId;
 
-        $registration = $this->enrollmentService->getRegistration($regId);
+        $registration = $this->registrations->find($regId);
 
         $this->assertIsObject($registration);
         $this->assertEquals(self::$testUserId, (int) $registration->user_id);
@@ -214,7 +216,7 @@ class EnrollmentServiceIntegrationTest extends IntegrationTestCase
         $this->assertGreaterThan(0, $regId);
 
         // The voucher_code may or may not be stored - just verify enrollment succeeded
-        $registration = $this->enrollmentService->getRegistration($regId);
+        $registration = $this->registrations->find($regId);
         $this->assertIsObject($registration);
     }
 
@@ -231,7 +233,7 @@ class EnrollmentServiceIntegrationTest extends IntegrationTestCase
         ]);
         $this->testRegistrationIds[] = $regId;
 
-        $registration = $this->enrollmentService->getRegistration($regId);
+        $registration = $this->registrations->find($regId);
 
         $this->assertEquals(RegistrationRepository::PATH_COLLEAGUE, $registration->enrollment_path);
         $this->assertEquals(999, (int) $registration->enrolled_by);
@@ -295,7 +297,7 @@ class EnrollmentServiceIntegrationTest extends IntegrationTestCase
         $this->assertEquals('Real', $victimFresh->last_name);
 
         // The form data is still captured per-registration (enrollment_data JSON).
-        $registration = $this->enrollmentService->getRegistration($result['registration_id']);
+        $registration = $this->registrations->find((int) $result['registration_id']);
         $enrollmentData = is_string($registration->enrollment_data ?? null)
             ? json_decode($registration->enrollment_data, true)
             : (array) ($registration->enrollment_data ?? []);

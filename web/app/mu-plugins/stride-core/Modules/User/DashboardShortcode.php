@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Stride\Modules\User;
 
+use Stride\Domain\RegistrationStatus;
 use Stride\Modules\Edition\EditionRepository;
-use Stride\Modules\Enrollment\EnrollmentService;
+use Stride\Modules\Enrollment\RegistrationRepository;
 
 /**
  * Dashboard shortcode for displaying user enrollments.
@@ -13,7 +14,7 @@ use Stride\Modules\Enrollment\EnrollmentService;
 final class DashboardShortcode
 {
     public function __construct(
-        private readonly EnrollmentService $enrollment,
+        private readonly RegistrationRepository $registrations,
         private readonly EditionRepository $editionRepository,
     ) {
         add_shortcode('stride_my_courses', [$this, 'renderMyCourses']);
@@ -29,7 +30,7 @@ final class DashboardShortcode
         }
 
         $userId = get_current_user_id();
-        $enrollments = $this->enrollment->getUserEnrollments($userId);
+        $enrollments = $this->registrations->findByUser($userId, RegistrationStatus::Confirmed->value);
 
         if (empty($enrollments)) {
             return '<div class="uk-alert uk-alert-primary">Je hebt nog geen inschrijvingen.</div>';

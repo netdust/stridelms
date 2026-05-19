@@ -684,23 +684,6 @@ final class EnrollmentService extends AbstractService
         return $status && $status->blocksDuplicate();
     }
 
-    /**
-     * Get user's enrollments.
-     *
-     * @return array<object>
-     */
-    public function getUserEnrollments(int $userId): array
-    {
-        return $this->registrations->findByUser($userId, RegistrationStatus::Confirmed->value);
-    }
-
-    /**
-     * Get registration by ID.
-     */
-    public function getRegistration(int $registrationId): \stdClass|WP_Error
-    {
-        return $this->registrations->find($registrationId);
-    }
 
     /**
      * Process enrollment from frontend form.
