@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Stride\Modules\Enrollment;
 
 use Stride\Domain\RegistrationStatus;
+use Stride\Infrastructure\AbstractRepository;
+use Stride\Modules\Edition\EditionRepository;
+use Stride\Modules\Trajectory\TrajectoryRepository;
 use WP_Error;
 
 /**
@@ -19,7 +22,22 @@ final class EnrollmentCompletion
 {
     public function __construct(
         private readonly RegistrationRepository $registrations,
+        private readonly EditionRepository $editions,
+        private readonly TrajectoryRepository $trajectories,
     ) {}
+
+    /**
+     * Resolve the repository for a given CPT slug.
+     * Used by getRequirements/getPostCourseRequirements where the type is
+     * decided by the caller (edition OR trajectory).
+     */
+    private function repoFor(string $postType): AbstractRepository
+    {
+        return match ($postType) {
+            'vad_trajectory' => $this->trajectories,
+            default          => $this->editions, // vad_edition
+        };
+    }
 
     private const TASK_TYPES = [
         'session_selection', 'questionnaire', 'documents', 'approval',
@@ -48,11 +66,11 @@ final class EnrollmentCompletion
      */
     public function getRequirements(int $postId, string $postType): array
     {
-        $model = ntdst_data()->get($postType);
+        $repo = $this->repoFor($postType);
         $result = [];
 
         foreach (self::META_KEYS as $task => $metaKey) {
-            $result[$task] = (bool) $model->getMeta($postId, $metaKey);
+            $result[$task] = (bool) $repo->getField($postId, $metaKey);
         }
 
         return $result;
@@ -117,10 +135,10 @@ final class EnrollmentCompletion
         // Selection window from edition meta
         $selectionOpen = false;
         $selectionReason = '';
+        $deadline = null;
         if ($editionId && isset($tasks['session_selection'])) {
-            $model = ntdst_data()->get('vad_edition');
-            $isOpen = (bool) $model->getMeta($editionId, 'selection_open');
-            $deadline = $model->getMeta($editionId, 'selection_deadline');
+            $isOpen = (bool) $this->editions->getField($editionId, 'selection_open');
+            $deadline = $this->editions->getField($editionId, 'selection_deadline');
             $pastDeadline = $deadline && strtotime($deadline) < time();
 
             if (!$isOpen) {
@@ -137,7 +155,7 @@ final class EnrollmentCompletion
 
             // Session selection: allow re-editing even when completed
             if ($status === 'completed' && $type === 'session_selection' && $selectionOpen) {
-                $startDate = $editionId ? ntdst_data()->get('vad_edition')->getMeta($editionId, 'start_date') : null;
+                $startDate = $editionId ? $this->editions->getField($editionId, 'start_date') : null;
                 $courseStarted = $startDate && strtotime($startDate) < time();
 
                 if (!$courseStarted) {
@@ -172,7 +190,7 @@ final class EnrollmentCompletion
                         $availability[$type] = ['state' => 'locked', 'reason' => $selectionReason];
                     } else {
                         $availability[$type] = ['state' => 'available', 'reason' => ''];
-                        if ($deadline = ntdst_data()->get('vad_edition')->getMeta($editionId, 'selection_deadline')) {
+                        if ($deadline) {
                             $availability[$type]['reason'] = sprintf(
                                 __('Kies voor %s', 'stride'),
                                 date_i18n('d M Y', strtotime($deadline))
@@ -227,11 +245,11 @@ final class EnrollmentCompletion
      */
     public function getPostCourseRequirements(int $postId, string $postType): array
     {
-        $model = ntdst_data()->get($postType);
+        $repo = $this->repoFor($postType);
         $result = [];
 
         foreach (self::POST_COURSE_META_KEYS as $task => $metaKey) {
-            $result[$task] = (bool) $model->getMeta($postId, $metaKey);
+            $result[$task] = (bool) $repo->getField($postId, $metaKey);
         }
 
         return $result;

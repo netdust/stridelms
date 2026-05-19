@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Stride\Tests\Unit;
 
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Enrollment\EnrollmentCompletion;
+use Stride\Modules\Trajectory\TrajectoryRepository;
 use Stride\Tests\TestCase;
 
 class EnrollmentCompletionTest extends TestCase
@@ -16,7 +18,11 @@ class EnrollmentCompletionTest extends TestCase
     {
         parent::setUp();
         $this->mockRepo = $this->createMock(\Stride\Modules\Enrollment\RegistrationRepository::class);
-        $this->service = new EnrollmentCompletion($this->mockRepo);
+        $this->service = new EnrollmentCompletion(
+            $this->mockRepo,
+            new EditionRepository(),
+            new TrajectoryRepository(),
+        );
     }
 
     /** @test */
@@ -436,7 +442,11 @@ class EnrollmentCompletionTest extends TestCase
             }
         );
 
-        $service = new EnrollmentCompletion($mockRepo);
+        $service = new EnrollmentCompletion(
+            $mockRepo,
+            new EditionRepository(),
+            new TrajectoryRepository(),
+        );
 
         $result = $service->completeTask(1, 'post_evaluation');
 

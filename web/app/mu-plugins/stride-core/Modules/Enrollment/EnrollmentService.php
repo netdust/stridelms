@@ -50,7 +50,11 @@ final class EnrollmentService extends AbstractService
         }, 20);
 
         // Register plain classes as singletons (no service lifecycle)
-        ntdst_set(EnrollmentCompletion::class, fn() => new EnrollmentCompletion($this->registrations));
+        ntdst_set(EnrollmentCompletion::class, fn() => new EnrollmentCompletion(
+            $this->registrations,
+            ntdst_get(\Stride\Modules\Edition\EditionRepository::class),
+            ntdst_get(\Stride\Modules\Trajectory\TrajectoryRepository::class),
+        ));
 
         // Register completion task handler (AJAX + auto-confirm hook)
         new \Stride\Handlers\CompletionTaskHandler();
