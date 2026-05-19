@@ -31,6 +31,8 @@
                 if (this.groups.length > 0) {
                     this.selectedGroupId = this.groups[0].id;
                 }
+
+                this.$nextTick(() => this.initSortable());
             },
 
             // ── Computed ──────────────────────────────────────────
@@ -47,6 +49,7 @@
             selectGroup(id) {
                 this.selectedGroupId = id;
                 this.selectedFieldId = null;
+                this.$nextTick(() => this.initSortable());
             },
 
             selectField(id) {
@@ -141,6 +144,38 @@
                     return typeLabel;
                 }
                 return typeLabel + ' · ' + reqLabel;
+            },
+
+            // ── Drag-drop ─────────────────────────────────────────
+            initSortable() {
+                if (typeof jQuery === 'undefined' || !jQuery.ui || !jQuery.ui.sortable) {
+                    return; // graceful fallback — drag disabled, no JS error
+                }
+                const $list = jQuery(this.$refs.fieldList);
+                if (!$list.length) return;
+                if ($list.data('uiSortable')) {
+                    $list.sortable('destroy');
+                }
+                const self = this;
+                $list.sortable({
+                    items: '> li',
+                    handle: '.qb-field-row__grab',
+                    cursor: 'grabbing',
+                    placeholder: 'qb-field-row qb-field-row--placeholder ui-sortable-placeholder',
+                    forcePlaceholderSize: true,
+                    update: function () {
+                        // Read new order from DOM, reassign this.selectedGroup.fields
+                        if (!self.selectedGroup) return;
+                        const newOrder = [];
+                        $list.find('> li').each(function () {
+                            const id = jQuery(this).data('fieldId');
+                            const field = self.selectedGroup.fields.find(f => f.id === id);
+                            if (field) newOrder.push(field);
+                        });
+                        self.selectedGroup.fields = newOrder;
+                        self.isDirty = true;
+                    },
+                });
             },
         };
     }
