@@ -22,16 +22,12 @@ final class AttendanceRepository
      *
      * @return int|WP_Error Attendance record ID or error
      */
-    public function record(int $sessionId, int $userId, AttendanceStatus $status, ?int $editionId = null, ?int $markedBy = null): int|WP_Error
+    public function record(int $sessionId, int $userId, AttendanceStatus $status, int $editionId, ?int $markedBy = null): int|WP_Error
     {
         global $wpdb;
 
-        // If edition_id not provided, look it up from session via Data Manager
-        if ($editionId === null) {
-            $editionId = (int) ntdst_data()->get('vad_session')->getMeta($sessionId, 'edition_id');
-            if ($editionId === 0) {
-                return new WP_Error('missing_edition', 'Could not determine edition for session');
-            }
+        if ($editionId === 0) {
+            return new WP_Error('missing_edition', 'Could not determine edition for session');
         }
 
         // Check for existing record

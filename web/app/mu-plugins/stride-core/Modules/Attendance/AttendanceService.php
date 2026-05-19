@@ -7,7 +7,6 @@ namespace Stride\Modules\Attendance;
 use Stride\Domain\AttendanceStatus;
 use Stride\Infrastructure\AbstractService;
 use Stride\Modules\Edition\SessionRepository;
-use Stride\Modules\Edition\SessionService;
 use WP_Error;
 
 /**
@@ -17,7 +16,6 @@ final class AttendanceService extends AbstractService
 {
     public function __construct(
         private readonly AttendanceRepository $repository,
-        private readonly SessionService $sessionService,
         private readonly SessionRepository $sessions,
     ) {
         parent::__construct();
@@ -82,10 +80,10 @@ final class AttendanceService extends AbstractService
      */
     private function mark(int $sessionId, int $userId, AttendanceStatus $status, ?int $markedBy = null): int|WP_Error
     {
-        $session = $this->sessionService->getSession($sessionId);
+        $editionId = (int) $this->sessions->getField($sessionId, 'edition_id', 0);
 
-        if (!$session) {
-            return new WP_Error('invalid_session', 'Session not found');
+        if ($editionId === 0) {
+            return new WP_Error('invalid_session', 'Session not found or has no edition');
         }
 
         $actor = $markedBy ?? get_current_user_id();
@@ -94,7 +92,7 @@ final class AttendanceService extends AbstractService
             $sessionId,
             $userId,
             $status,
-            $session['edition_id'],
+            $editionId,
             $actor
         );
 
@@ -104,7 +102,7 @@ final class AttendanceService extends AbstractService
                 'session_id' => $sessionId,
                 'user_id' => $userId,
                 'status' => $status->value,
-                'edition_id' => $session['edition_id'],
+                'edition_id' => $editionId,
                 'marked_by' => $actor,
             ]);
         }
