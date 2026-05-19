@@ -350,6 +350,23 @@ final class StrideMailBridge extends AbstractService
             ],
         ];
 
+        $codes['gdpr'] = [
+            'label' => __('GDPR', 'stride'),
+            'codes' => [
+                'reason' => [
+                    'label' => __('Toelichting gebruiker', 'stride'),
+                    'callback' => fn($ctx) => $ctx['reason'] ?? null,
+                ],
+                'edit_user_url' => [
+                    'label' => __('Bewerk-gebruiker URL', 'stride'),
+                    'callback' => function ($ctx) {
+                        $userId = (int) ($ctx['user_id'] ?? 0);
+                        return $userId ? get_edit_user_link($userId) : null;
+                    },
+                ],
+            ],
+        ];
+
         return $codes;
     }
 
@@ -485,7 +502,7 @@ final class StrideMailBridge extends AbstractService
      */
     public function maybeSeedTemplates(): void
     {
-        $currentVersion = '3';
+        $currentVersion = '4';
         if (get_option('stride_mail_templates_seeded') === $currentVersion) {
             return;
         }
@@ -699,6 +716,20 @@ final class StrideMailBridge extends AbstractService
                     . '<p>Je inschrijving voor het traject <strong>{{trajectory.title}}</strong> is ontvangen.</p>'
                     . '<p>Je kunt je voortgang volgen in je dashboard.</p>'
                     . '<p>Met vriendelijke groet,<br>{{site.name}}</p>',
+            ],
+            'stride-gdpr-erasure-admin' => [
+                'title' => 'GDPR — account-verwijdering aangevraagd (beheerder)',
+                'subject' => '[Stride] Account-verwijdering aangevraagd door {{user.display_name}}',
+                'trigger' => 'stride/gdpr/erasure_requested',
+                'category' => 'notification',
+                'body' => '<p>Gebruiker <strong>{{user.display_name}}</strong> ({{user.email}}) heeft via <code>/mijn-account/?tab=profiel</code> om verwijdering van het account verzocht.</p>'
+                    . '<p><strong>Toelichting van de gebruiker:</strong><br>{{gdpr.reason|geen toelichting opgegeven}}</p>'
+                    . '<p><strong>Volgende stappen voor de beheerder:</strong></p>'
+                    . '<ol>'
+                    . '<li>Neem contact op met de gebruiker om de aanvraag te bevestigen.</li>'
+                    . '<li>Anonimiseer het account via <a href="{{gdpr.edit_user_url}}">Gebruikers → bewerken</a> (of kies hard delete als geen historie bewaard moet blijven).</li>'
+                    . '</ol>'
+                    . '<p>Deze aanvraag is automatisch gelogd in de audit trail.</p>',
             ],
         ];
     }

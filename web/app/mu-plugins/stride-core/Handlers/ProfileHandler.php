@@ -218,36 +218,17 @@ final class ProfileHandler
 
         $reason = sanitize_textarea_field((string) ($params['reason'] ?? ''));
 
-        $userLine = sprintf(
-            '%s <%s> (ID %d)',
-            $user->display_name ?: $user->user_login,
-            $user->user_email,
-            $userId
-        );
-
-        $body = sprintf(
-            "Gebruiker %s heeft via /mijn-account/?tab=profiel om verwijdering van het account verzocht.\n\n",
-            $userLine
-        );
-        if ($reason !== '') {
-            $body .= "Toelichting van de gebruiker:\n" . $reason . "\n\n";
-        }
-        $body .= "Volgende stappen voor de beheerder:\n"
-            . "1. Neem contact op met de gebruiker om de aanvraag te bevestigen.\n"
-            . "2. Anonimiseer het account via Gebruikers → " . get_edit_user_link($userId) . "\n"
-            . "   (of kies hard delete als geen historie bewaard moet blijven).\n\n"
-            . "Deze aanvraag is automatisch gelogd in de audit trail.";
-
-        $sent = wp_mail(
-            $adminEmail,
-            sprintf(__('[Stride] Account-verwijdering aangevraagd door %s', 'stride'), $user->display_name ?: $user->user_email),
-            $body
-        );
+        $sent = function_exists('ndmail_send')
+            ? ndmail_send('stride-gdpr-erasure-admin', [
+                'user_id' => $userId,
+                'reason' => $reason,
+            ], ['to' => $adminEmail])
+            : false;
 
         ntdst_log('profile')->info('GDPR erasure request forwarded to admin', [
             'user_id' => $userId,
             'admin_email' => $adminEmail,
-            'mail_sent' => $sent,
+            'mail_sent' => (bool) $sent,
             'reason_provided' => $reason !== '',
         ]);
 

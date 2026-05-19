@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Stride\Handlers;
 
 use Stride\Domain\Money;
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionSelection;
 use Stride\Modules\Enrollment\EnrollmentService;
@@ -161,7 +162,9 @@ final class EnrollmentFormHandler
 
         if ($hasTasks) {
             $message = __('Je inschrijving is ontvangen. Er zijn nog een aantal stappen nodig om je inschrijving te voltooien.', 'stride');
-            $redirectUrl = home_url('/vormingen/' . get_post_field('post_name', $editionId) . '/voltooien/');
+            $edition = ntdst_get(EditionRepository::class)->find($editionId);
+            $slug = is_wp_error($edition) ? '' : ($edition->post_name ?? '');
+            $redirectUrl = home_url('/vormingen/' . $slug . '/voltooien/');
         } elseif ($isPending) {
             $message = __('Je inschrijving is ontvangen en wacht op goedkeuring.', 'stride');
             $redirectUrl = home_url('/mijn-account/?tab=inschrijvingen');
