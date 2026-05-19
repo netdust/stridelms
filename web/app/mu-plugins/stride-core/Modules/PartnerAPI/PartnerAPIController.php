@@ -8,6 +8,7 @@ use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Attendance\AttendanceRepository;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
+use Stride\Modules\Edition\SessionRepository;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -33,6 +34,7 @@ final class PartnerAPIController
         private readonly AttendanceRepository $attendanceRepository,
         private readonly EditionService $editionService,
         private readonly EditionRepository $editionRepository,
+        private readonly SessionRepository $sessionRepository,
     ) {
         $this->init();
     }
@@ -477,12 +479,12 @@ final class PartnerAPIController
         // Batch-fetch attendance records
         $records = $this->attendanceRepository->getByUsers($companyUserIds, $editionId ? (int) $editionId : null);
 
-        // Batch-fetch sessions
+        // Batch-fetch sessions via the repository
         $sessionIds = array_unique(array_column($records, 'session_id'));
         $sessionsMap = [];
         foreach ($sessionIds as $sid) {
-            $session = ntdst_data()->get('vad_session')->find((int) $sid);
-            if ($session) {
+            $session = $this->sessionRepository->find((int) $sid);
+            if (!is_wp_error($session)) {
                 $sessionsMap[(int) $sid] = $session;
             }
         }

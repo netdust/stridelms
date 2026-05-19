@@ -10,6 +10,7 @@ use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Attendance\AttendanceRepository;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
+use Stride\Modules\Edition\SessionRepository;
 use Stride\Tests\TestCase;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -28,6 +29,7 @@ class PartnerAPIControllerTest extends TestCase
     private AttendanceRepository $mockAttendanceRepo;
     private EditionService $mockEditionService;
     private EditionRepository $mockEditionRepo;
+    private SessionRepository $mockSessionRepo;
     private EnrollmentService $mockEnrollmentService;
 
     protected function setUp(): void
@@ -45,6 +47,7 @@ class PartnerAPIControllerTest extends TestCase
         $this->mockAttendanceRepo = $this->createMock(AttendanceRepository::class);
         $this->mockEditionService = $this->createMock(EditionService::class);
         $this->mockEditionRepo = $this->createMock(EditionRepository::class);
+        $this->mockSessionRepo = $this->createMock(SessionRepository::class);
         $this->mockEnrollmentService = $this->createMock(EnrollmentService::class);
 
         // Register EnrollmentService mock in the DI container
@@ -56,7 +59,8 @@ class PartnerAPIControllerTest extends TestCase
             $this->mockRegRepo,
             $this->mockAttendanceRepo,
             $this->mockEditionService,
-            $this->mockEditionRepo
+            $this->mockEditionRepo,
+            $this->mockSessionRepo
         );
     }
 
