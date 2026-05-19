@@ -248,21 +248,22 @@ final class QuotePDFGenerator
      */
     private function renderTemplate(array $quote): string|false
     {
-        $templatePath = dirname(__DIR__, 2) . '/templates/pdf/quote.php';
+        $templatesDir = dirname(__DIR__, 2) . '/templates';
 
-        if (!file_exists($templatePath)) {
+        if (!file_exists($templatesDir . '/pdf/quote.php')) {
             ntdst_log('invoicing')->error('PDF template not found', [
-                'path' => $templatePath,
+                'path' => $templatesDir . '/pdf/quote.php',
             ]);
             return false;
         }
 
-        // Provide formatCurrency closure for the template
-        $formatCurrency = fn(int $cents): string => Money::cents(abs($cents))->format();
-
-        ob_start();
-        include $templatePath;
-        return ob_get_clean();
+        return ntdst_response()
+            ->addPath($templatesDir)
+            ->withData([
+                'quote' => $quote,
+                'formatCurrency' => fn(int $cents): string => Money::cents(abs($cents))->format(),
+            ])
+            ->html('pdf/quote');
     }
 
     /**
