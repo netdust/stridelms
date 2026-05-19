@@ -35,6 +35,7 @@ return [
         \Stride\Modules\Membership\MembershipService::class,
         \Stride\Modules\Edition\EditionService::class,
         \Stride\Modules\Edition\EditionDuplicator::class,
+        \Stride\Modules\Edition\CourseEnrollHandler::class,
         \Stride\Modules\Enrollment\EnrollmentService::class,
         \Stride\Modules\Questionnaire\QuestionnaireService::class,
         \Stride\Modules\Trajectory\TrajectoryService::class,
