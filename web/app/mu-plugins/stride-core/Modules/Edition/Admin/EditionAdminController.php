@@ -530,7 +530,7 @@ final class EditionAdminController
         ntdst_invalidate_post_type('vad_session');
 
         wp_send_json_success([
-            'session_id' => $result,
+            'session_id' => $result->ID,
             'html' => $this->renderSessionsTableBody($editionId),
         ]);
     }

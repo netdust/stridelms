@@ -25,7 +25,7 @@ final class SessionService
     /**
      * Create a new session.
      */
-    public function createSession(array $data): int|WP_Error
+    public function createSession(array $data): WP_Post|WP_Error
     {
         $result = $this->repository->create($data);
 
@@ -38,7 +38,7 @@ final class SessionService
             'edition_id' => $data['edition_id'] ?? 0,
         ]);
 
-        return $result->ID;
+        return $result;
     }
 
     /**
@@ -60,7 +60,7 @@ final class SessionService
     /**
      * Update session.
      */
-    public function updateSession(int $sessionId, array $data): true|WP_Error
+    public function updateSession(int $sessionId, array $data): WP_Post|WP_Error
     {
         // Check if description changed (for audit notification)
         $descriptionChanged = false;
@@ -84,7 +84,7 @@ final class SessionService
             ]);
         }
 
-        return true;
+        return $result;
     }
 
     // === Queries ===
@@ -115,18 +115,15 @@ final class SessionService
 
     /**
      * Get session count for edition.
+     *
+     * Pass-through — kept temporarily for theme + assistant callers that
+     * inject SessionService but not SessionRepository. Remove once those
+     * callers (editions-list.php, ReadAbilityRegistrar) are refactored to
+     * use the repository directly. See memory/project_framework_alignment.
      */
     public function getSessionCount(int $editionId): int
     {
         return $this->repository->countByEdition($editionId);
-    }
-
-    /**
-     * Get unique day count for edition.
-     */
-    public function getDayCount(int $editionId): int
-    {
-        return count($this->repository->getUniqueDates($editionId));
     }
 
     // === Duration Calculations ===
@@ -170,54 +167,38 @@ final class SessionService
     /**
      * Get total duration for multiple sessions in hours.
      *
+     * Pass-through — kept temporarily so integration tests
+     * (SessionServiceDurationTest) keep covering the batch-query path.
+     * Once the open-drift sweep refactors the remaining callers to use
+     * the repository, remove this wrapper and migrate the test to
+     * SessionRepository::sumDurationHours.
+     *
      * @param array<int> $sessionIds
      */
     public function getTotalDurationForSessions(array $sessionIds): float
     {
-        if (empty($sessionIds)) {
-            return 0.0;
-        }
-
-        global $wpdb;
-
-        $placeholders = implode(',', array_fill(0, count($sessionIds), '%d'));
-
-        // Fetch start_time and end_time for all sessions in single query.
-        // Session meta is `_ntdst_` prefixed (SessionCPT::meta_prefix). The
-        // single-record path goes through SessionRepository::getField which
-        // adds the prefix automatically; this raw query must do it itself.
-        $results = $wpdb->get_results($wpdb->prepare(
-            "SELECT pm_start.post_id, pm_start.meta_value as start_time, pm_end.meta_value as end_time
-             FROM {$wpdb->postmeta} pm_start
-             LEFT JOIN {$wpdb->postmeta} pm_end ON pm_start.post_id = pm_end.post_id AND pm_end.meta_key = '_ntdst_end_time'
-             WHERE pm_start.post_id IN ({$placeholders})
-             AND pm_start.meta_key = '_ntdst_start_time'",
-            ...$sessionIds
-        ));
-
-        $totalHours = 0.0;
-        foreach ($results as $row) {
-            if (!empty($row->start_time) && !empty($row->end_time)) {
-                $start = strtotime($row->start_time);
-                $end = strtotime($row->end_time);
-                if ($end > $start) {
-                    $totalHours += ($end - $start) / 3600;
-                }
-            }
-        }
-
-        return $totalHours;
+        return $this->repository->sumDurationHours($sessionIds);
     }
 
     // === Helpers ===
 
     /**
-     * Format WP_Post to session array.
+     * Format WP_Post to session array. Must produce the same shape as
+     * formatSessionArray() so getSession() and getSessionsForEdition()
+     * are interchangeable for consumers.
      */
     private function formatSession(WP_Post $post): array
     {
         $typeValue = $this->repository->getField($post->ID, 'type', 'in_person');
         $type = SessionType::tryFrom($typeValue) ?? SessionType::InPerson;
+
+        $lessonIds = $this->repository->getField($post->ID, 'lesson_ids', []);
+        if (is_string($lessonIds)) {
+            $lessonIds = maybe_unserialize($lessonIds);
+        }
+        if (!is_array($lessonIds)) {
+            $lessonIds = $lessonIds ? [$lessonIds] : [];
+        }
 
         return [
             'id' => $post->ID,
@@ -231,31 +212,40 @@ final class SessionService
             'type_enum' => $type,
             'capacity' => (int) $this->repository->getField($post->ID, 'capacity', 0),
             'optional' => (bool) $this->repository->getField($post->ID, 'optional', false),
+            'title' => $post->post_title,
+            'description' => $this->repository->getField($post->ID, 'description', ''),
+            'webinar_link' => $this->repository->getField($post->ID, 'webinar_link', ''),
+            'lesson_ids' => array_map('intval', $lessonIds),
             'price_modifier' => (int) $this->repository->getField($post->ID, 'price_modifier', 0),
         ];
     }
 
     /**
-     * Format array result to session array.
+     * Format a getPostsFast() row into the session array shape.
      *
-     * NTDST_Data_Manager::getPostsFast returns data with:
+     * Shape MUST match formatSession() so consumers can switch between
+     * getSession() and getSessionsForEdition() freely.
+     *
+     * getPostsFast returns:
      * - 'id' (lowercase) at top level
-     * - meta fields nested under 'meta' key
+     * - 'title' at top level (mapped from post_title)
+     * - meta fields nested under 'meta' key, prefixed by the model's meta_prefix
+     *
+     * The prefix awareness here is the trade-off for batch loading meta in a
+     * single query — getMeta-per-field would multiply queries. We pull the
+     * prefix from the repository so a future prefix change doesn't break this.
      */
     private function formatSessionArray(array $data): array
     {
-        // Meta fields are nested under 'meta' key from getPostsFast
-        // Keys have _ntdst_ prefix
-        $meta = $data['meta'] ?? [];
+        $prefix = $this->repository->getMetaPrefix();
+        $meta   = $data['meta'] ?? [];
 
-        $typeValue = $meta['_ntdst_type'] ?? $meta['type'] ?? 'in_person';
-        $type = SessionType::tryFrom($typeValue) ?? SessionType::InPerson;
+        $typeValue = $meta[$prefix . 'type'] ?? 'in_person';
+        $type      = SessionType::tryFrom($typeValue) ?? SessionType::InPerson;
 
-        // NTDST_Data_Manager::getPostsFast returns 'id' (lowercase)
         $id = (int) ($data['id'] ?? $data['ID'] ?? 0);
 
-        // lesson_ids may be serialized array or raw array
-        $lessonIds = $meta['_ntdst_lesson_ids'] ?? $meta['lesson_ids'] ?? [];
+        $lessonIds = $meta[$prefix . 'lesson_ids'] ?? [];
         if (is_string($lessonIds)) {
             $lessonIds = maybe_unserialize($lessonIds);
         }
@@ -265,21 +255,21 @@ final class SessionService
 
         return [
             'id' => $id,
-            'edition_id' => (int) ($meta['_ntdst_edition_id'] ?? $meta['edition_id'] ?? 0),
-            'slot' => $meta['_ntdst_slot'] ?? $meta['slot'] ?? '',
-            'date' => $meta['_ntdst_date'] ?? $meta['date'] ?? '',
-            'start_time' => $meta['_ntdst_start_time'] ?? $meta['start_time'] ?? '',
-            'end_time' => $meta['_ntdst_end_time'] ?? $meta['end_time'] ?? '',
-            'location' => $meta['_ntdst_location'] ?? $meta['location'] ?? '',
+            'edition_id' => (int) ($meta[$prefix . 'edition_id'] ?? 0),
+            'slot' => $meta[$prefix . 'slot'] ?? '',
+            'date' => $meta[$prefix . 'date'] ?? '',
+            'start_time' => $meta[$prefix . 'start_time'] ?? '',
+            'end_time' => $meta[$prefix . 'end_time'] ?? '',
+            'location' => $meta[$prefix . 'location'] ?? '',
             'type' => $type->value,
             'type_enum' => $type,
-            'capacity' => (int) ($meta['_ntdst_capacity'] ?? $meta['capacity'] ?? 0),
-            'optional' => (bool) ($meta['_ntdst_optional'] ?? $meta['optional'] ?? false),
+            'capacity' => (int) ($meta[$prefix . 'capacity'] ?? 0),
+            'optional' => (bool) ($meta[$prefix . 'optional'] ?? false),
             'title' => $data['title'] ?? '',
-            'description' => $meta['_ntdst_description'] ?? $meta['description'] ?? '',
-            'webinar_link' => $meta['_ntdst_webinar_link'] ?? $meta['webinar_link'] ?? '',
+            'description' => $meta[$prefix . 'description'] ?? '',
+            'webinar_link' => $meta[$prefix . 'webinar_link'] ?? '',
             'lesson_ids' => array_map('intval', $lessonIds),
-            'price_modifier' => (int) ($meta['_ntdst_price_modifier'] ?? $meta['price_modifier'] ?? 0),
+            'price_modifier' => (int) ($meta[$prefix . 'price_modifier'] ?? 0),
         ];
     }
 }

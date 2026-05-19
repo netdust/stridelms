@@ -6,6 +6,7 @@ namespace Stride\Modules\Attendance;
 
 use Stride\Domain\AttendanceStatus;
 use Stride\Infrastructure\AbstractService;
+use Stride\Modules\Edition\SessionRepository;
 use Stride\Modules\Edition\SessionService;
 use WP_Error;
 
@@ -17,6 +18,7 @@ final class AttendanceService extends AbstractService
     public function __construct(
         private readonly AttendanceRepository $repository,
         private readonly SessionService $sessionService,
+        private readonly SessionRepository $sessions,
     ) {
         parent::__construct();
     }
@@ -221,7 +223,7 @@ final class AttendanceService extends AbstractService
         }
 
         // Batch fetch session durations using a single query
-        return $this->sessionService->getTotalDurationForSessions($sessionIds);
+        return $this->sessions->sumDurationHours($sessionIds);
     }
 
     /**
@@ -231,7 +233,7 @@ final class AttendanceService extends AbstractService
      */
     public function getAttendanceRate(int $userId, int $editionId): float
     {
-        $totalSessions = $this->sessionService->getSessionCount($editionId);
+        $totalSessions = $this->sessions->countByEdition($editionId);
 
         if ($totalSessions === 0) {
             return 0.0;

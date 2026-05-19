@@ -25,6 +25,7 @@ final class EditionCompletion
         private readonly EditionService $editionService,
         private readonly EditionRepository $editions,
         private readonly SessionService $sessionService,
+        private readonly SessionRepository $sessions,
     ) {}
 
     /**
@@ -38,7 +39,7 @@ final class EditionCompletion
 
         $mode = $this->getCompletionMode($editionId);
         $threshold = $this->getCompletionThreshold($editionId);
-        $totalSessions = $this->sessionService->getSessionCount($editionId);
+        $totalSessions = $this->sessions->countByEdition($editionId);
         $attended = ntdst_get(AttendanceService::class)->countAttended($userId, $editionId);
 
         return match ($mode) {
@@ -55,7 +56,7 @@ final class EditionCompletion
      */
     public function getProgress(int $editionId, int $userId): array
     {
-        $totalSessions = $this->sessionService->getSessionCount($editionId);
+        $totalSessions = $this->sessions->countByEdition($editionId);
         $attended = ntdst_get(AttendanceService::class)->countAttended($userId, $editionId);
         $mode = $this->getCompletionMode($editionId);
         $threshold = $this->getCompletionThreshold($editionId);

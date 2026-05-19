@@ -49,7 +49,7 @@ class EditionService extends AbstractService implements EditionQueryInterface
         $sessionService = new SessionService($sessionRepo);
         ntdst_set(SessionService::class, fn() => $sessionService);
 
-        $completion = new EditionCompletion($this, $this->repository, $sessionService);
+        $completion = new EditionCompletion($this, $this->repository, $sessionService, $sessionRepo);
         ntdst_set(EditionCompletion::class, fn() => $completion);
         add_action('stride/attendance/marked', [$completion, 'onAttendanceMarked']);
         add_action('learndash_course_completed', [$completion, 'onLearnDashCourseCompleted']);

@@ -28,22 +28,7 @@ final class SessionRepository extends AbstractRepository
             ->withMeta()
             ->get();
 
-        // Sort by date ASC, then start_time ASC
-        // Note: orderBy() doesn't work for meta fields, so we sort in PHP
-        // Meta keys use _ntdst_ prefix from Data Manager
-        usort($sessions, function ($a, $b) {
-            $dateA = $a['meta']['_ntdst_date'] ?? '';
-            $dateB = $b['meta']['_ntdst_date'] ?? '';
-            $dateCmp = strcmp($dateA, $dateB);
-            if ($dateCmp !== 0) {
-                return $dateCmp;
-            }
-            $timeA = $a['meta']['_ntdst_start_time'] ?? '';
-            $timeB = $b['meta']['_ntdst_start_time'] ?? '';
-            return strcmp($timeA, $timeB);
-        });
-
-        return $sessions;
+        return $this->sortByDateThenStartTime($sessions);
     }
 
     /**
@@ -59,18 +44,32 @@ final class SessionRepository extends AbstractRepository
             ->withMeta()
             ->get();
 
-        // Sort by date ASC, then start_time ASC
-        // Meta keys use _ntdst_ prefix from Data Manager
-        usort($sessions, function ($a, $b) {
-            $dateA = $a['meta']['_ntdst_date'] ?? '';
-            $dateB = $b['meta']['_ntdst_date'] ?? '';
-            $dateCmp = strcmp($dateA, $dateB);
+        return $this->sortByDateThenStartTime($sessions);
+    }
+
+    /**
+     * Sort getPostsFast() rows by date ASC, then start_time ASC.
+     *
+     * The query builder's orderBy() doesn't work for meta fields, so this sort
+     * happens in PHP. Reads prefixed meta keys (e.g. `_ntdst_date`) from the
+     * batch query's `meta` envelope; the prefix comes from the model so a
+     * config change can't silently break ordering.
+     *
+     * @param array<array<string, mixed>> $sessions
+     * @return array<array<string, mixed>>
+     */
+    private function sortByDateThenStartTime(array $sessions): array
+    {
+        $prefix    = $this->getMetaPrefix();
+        $dateKey   = $prefix . 'date';
+        $startKey  = $prefix . 'start_time';
+
+        usort($sessions, function ($a, $b) use ($dateKey, $startKey) {
+            $dateCmp = strcmp($a['meta'][$dateKey] ?? '', $b['meta'][$dateKey] ?? '');
             if ($dateCmp !== 0) {
                 return $dateCmp;
             }
-            $timeA = $a['meta']['_ntdst_start_time'] ?? '';
-            $timeB = $b['meta']['_ntdst_start_time'] ?? '';
-            return strcmp($timeA, $timeB);
+            return strcmp($a['meta'][$startKey] ?? '', $b['meta'][$startKey] ?? '');
         });
 
         return $sessions;
@@ -87,17 +86,52 @@ final class SessionRepository extends AbstractRepository
     }
 
     /**
-     * Get unique dates for an edition.
+     * Sum total duration (hours) across a batch of sessions in a single query.
      *
-     * @return array<string>
+     * Performance-driven: the alternative would be N find() round-trips through
+     * the cache for callers that already know the IDs (e.g. selected slot sessions).
+     * The model's `meta_prefix` is honored so a future prefix change here can't
+     * silently break.
+     *
+     * @param list<int> $sessionIds
      */
-    public function getUniqueDates(int $editionId): array
+    public function sumDurationHours(array $sessionIds): float
     {
-        $sessions = $this->findByEdition($editionId);
-        $dates = array_unique(array_column($sessions, 'date'));
-        sort($dates);
+        if (empty($sessionIds)) {
+            return 0.0;
+        }
 
-        return array_values($dates);
+        global $wpdb;
+
+        $prefix       = $this->model()->getMetaPrefix();
+        $startKey     = $prefix . 'start_time';
+        $endKey       = $prefix . 'end_time';
+        $placeholders = implode(',', array_fill(0, count($sessionIds), '%d'));
+
+        $args = array_merge([$endKey], $sessionIds, [$startKey]);
+
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT pm_start.post_id, pm_start.meta_value AS start_time, pm_end.meta_value AS end_time
+             FROM {$wpdb->postmeta} pm_start
+             LEFT JOIN {$wpdb->postmeta} pm_end
+                ON pm_start.post_id = pm_end.post_id AND pm_end.meta_key = %s
+             WHERE pm_start.post_id IN ({$placeholders})
+               AND pm_start.meta_key = %s",
+            $args
+        ));
+
+        $totalHours = 0.0;
+        foreach ($results as $row) {
+            if (!empty($row->start_time) && !empty($row->end_time)) {
+                $start = strtotime((string) $row->start_time);
+                $end   = strtotime((string) $row->end_time);
+                if ($end > $start) {
+                    $totalHours += ($end - $start) / 3600;
+                }
+            }
+        }
+
+        return $totalHours;
     }
 
     /**

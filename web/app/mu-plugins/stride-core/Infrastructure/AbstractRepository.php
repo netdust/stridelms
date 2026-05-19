@@ -95,6 +95,18 @@ abstract class AbstractRepository implements RepositoryInterface
     }
 
     /**
+     * The model's meta prefix (e.g. '_ntdst_').
+     *
+     * Needed when callers read batch query results from getPostsFast() / withMeta()
+     * — those return meta nested under a 'meta' key, with raw prefixed keys.
+     * Pull the prefix from here rather than hardcoding the string at the call site.
+     */
+    public function getMetaPrefix(): string
+    {
+        return $this->model()->getMetaPrefix();
+    }
+
+    /**
      * Get all records with optional filters.
      *
      * @param array<string, mixed> $filters
