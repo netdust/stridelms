@@ -151,7 +151,7 @@ final class RegistrationModalController
      */
     private function buildSessionSelections(int $registrationId, int $editionId): array
     {
-        $selectedIds = $this->sessionSelection->getSelections($registrationId);
+        $selectedIds = $this->registrations->getSelections($registrationId);
         if (empty($selectedIds)) {
             return [];
         }

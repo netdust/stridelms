@@ -144,13 +144,13 @@ class RegistrationModalControllerTest extends TestCase
 
         $registrations = $this->createMock(RegistrationRepository::class);
         $registrations->method('find')->willReturn($reg);
+        $registrations->method('getSelections')->with(1)->willReturn([501]);
 
         $editionService = $this->createMock(EditionService::class);
         $editionRepository = $this->createMock(EditionRepository::class);
         $editionRepository->method('find')->willReturn(new \WP_Post(['post_title' => 'E']));
 
         $sessionSelection = $this->createMock(SessionSelection::class);
-        $sessionSelection->method('getSelections')->with(1)->willReturn([501]);
         $sessionSelection->method('getSlotConfig')->with(99)->willReturn([
             ['slot' => 'a', 'label' => 'Module 1 — Kies 1 uit 2'],
         ]);
