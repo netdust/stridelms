@@ -814,12 +814,15 @@ final class EnrollmentService extends AbstractService
         // Handle session selection if provided
         $selectedSessions = $data['selected_sessions'] ?? [];
         if (!empty($selectedSessions) && $this->sessionSelection) {
-            foreach ($selectedSessions as $sessionId) {
-                $this->sessionSelection->registerForSession(
-                    $registrationId,
-                    (int) $sessionId,
-                    $participantId
-                );
+            $sessionIds = array_map('intval', $selectedSessions);
+            $result = $this->sessionSelection->setSelections($registrationId, $sessionIds);
+            if (is_wp_error($result)) {
+                ntdst_log('enrollment')->warning('Session selection persistence failed', [
+                    'registration_id' => $registrationId,
+                    'session_ids' => $sessionIds,
+                    'code' => $result->get_error_code(),
+                    'message' => $result->get_error_message(),
+                ]);
             }
         }
 
