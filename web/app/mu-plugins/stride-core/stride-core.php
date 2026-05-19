@@ -125,6 +125,9 @@ add_action('ntdst/features_ready', function () use ($config): void {
     ntdst_set(\Stride\Modules\User\QuotesShortcode::class);
     ntdst_get(\Stride\Modules\User\QuotesShortcode::class);
 
+    ntdst_set(\Stride\Modules\Audit\ActivityShortcode::class);
+    ntdst_get(\Stride\Modules\Audit\ActivityShortcode::class);
+
     // Register handlers (all handlers in one place for explicit configuration)
     $handlers = [
         \Stride\Handlers\EnrollmentQuoteHandler::class,
