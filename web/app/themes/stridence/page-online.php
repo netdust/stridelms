@@ -12,6 +12,8 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
+use Stride\Modules\Edition\EditionRepository;
+
 // Get theme terms for tabs
 $themes = get_terms([
     'taxonomy'   => 'stride_theme',
@@ -21,49 +23,178 @@ if (is_wp_error($themes)) {
     $themes = [];
 }
 
-// Query all online courses
-$course_args = [
+// One card per enrollable. For online courses an enrollable is either:
+//   (a) an active edition of an online-format course, OR
+//   (b) a pure-LD online-format course with zero active editions.
+// Two active editions of the same course → two cards. Matches the rule
+// described in [[lesson_url_role_split]]: /edities/* is transactional,
+// so the catalog list = the set of things a visitor can enroll in.
+
+$online_format_slugs = ['online', 'e-learning', 'webinar'];
+
+// All online-format course IDs (used to scope the edition query AND to find
+// pure-LD courses for the second pass).
+$online_course_ids = get_posts([
     'post_type'      => 'sfwd-courses',
-    'posts_per_page' => 200,
+    'posts_per_page' => 500,
     'post_status'    => 'publish',
+    'fields'         => 'ids',
     'tax_query'      => [
-        'relation' => 'AND',
         [
             'taxonomy' => 'stride_format',
             'field'    => 'slug',
-            'terms'    => ['online', 'e-learning', 'webinar'],
-            'operator' => 'IN',
-        ],
-        [
-            'taxonomy' => 'stride_format',
-            'field'    => 'slug',
-            'terms'    => ['klassikaal', 'classroom'],
-            'operator' => 'NOT IN',
+            'terms'    => $online_format_slugs,
         ],
     ],
-    'orderby'        => 'title',
-    'order'          => 'ASC',
-];
+]);
 
-$course_query = new WP_Query($course_args);
-$all_courses = $course_query->posts;
+$enrollables = []; // mixed list of ['kind' => 'edition'|'course', ..., 'themes' => [slugs]]
 
-// Build theme slugs per course and count per theme
-$course_themes_map = [];
-$theme_counts = [];
-foreach ($all_courses as $course) {
-    $course_themes = get_the_terms($course->ID, 'stride_theme');
-    $slugs = [];
-    if ($course_themes && !is_wp_error($course_themes)) {
-        foreach ($course_themes as $theme) {
-            $slugs[] = $theme->slug;
-            $theme_counts[$theme->slug] = ($theme_counts[$theme->slug] ?? 0) + 1;
+// --- (a) Active editions of online courses ---
+// Scheduled online editions are rare (most online courses are pure-LD), but when
+// they exist their dates matter. Apply the same 2-day past-cutoff used by
+// klassikaal so just-finished cohorts stay findable for a day, then drop off.
+if (!empty($online_course_ids)) {
+    $editionRepository = ntdst_get(EditionRepository::class);
+    $past_cutoff = date('Y-m-d', strtotime('-2 days'));
+
+    $edition_query = new WP_Query([
+        'post_type'      => 'vad_edition',
+        'posts_per_page' => 200,
+        'post_status'    => 'publish',
+        'meta_query'     => [
+            [
+                'key'     => '_ntdst_status',
+                'value'   => ['announcement', 'open', 'full', 'in_progress'],
+                'compare' => 'IN',
+            ],
+            [
+                'key'     => '_ntdst_course_id',
+                'value'   => $online_course_ids,
+                'compare' => 'IN',
+            ],
+            [
+                'relation' => 'OR',
+                [
+                    'key'     => '_ntdst_end_date',
+                    'value'   => $past_cutoff,
+                    'compare' => '>=',
+                    'type'    => 'DATE',
+                ],
+                [
+                    // Fallback when end_date is missing: use start_date
+                    'relation' => 'AND',
+                    [
+                        'key'     => '_ntdst_end_date',
+                        'compare' => 'NOT EXISTS',
+                    ],
+                    [
+                        'key'     => '_ntdst_start_date',
+                        'value'   => $past_cutoff,
+                        'compare' => '>=',
+                        'type'    => 'DATE',
+                    ],
+                ],
+                [
+                    // Self-paced online edition (no dates at all) — always show
+                    'relation' => 'AND',
+                    [
+                        'key'     => '_ntdst_end_date',
+                        'compare' => 'NOT EXISTS',
+                    ],
+                    [
+                        'key'     => '_ntdst_start_date',
+                        'compare' => 'NOT EXISTS',
+                    ],
+                ],
+            ],
+        ],
+        'orderby'        => 'meta_value',
+        'meta_key'       => '_ntdst_start_date',
+        'order'          => 'ASC',
+    ]);
+
+    foreach ($edition_query->posts as $edition_post) {
+        $edition_obj = $editionRepository->find($edition_post->ID);
+        if (!$edition_obj || is_wp_error($edition_obj)) {
+            continue;
         }
+        $course_id = (int) ($edition_obj->fields['course_id'] ?? 0);
+
+        $theme_slugs = [];
+        if ($course_id) {
+            $course_themes = get_the_terms($course_id, 'stride_theme');
+            if ($course_themes && !is_wp_error($course_themes)) {
+                $theme_slugs = wp_list_pluck($course_themes, 'slug');
+            }
+        }
+
+        $enrollables[] = [
+            'kind'    => 'edition',
+            'edition' => [
+                'id'              => $edition_obj->ID,
+                'title'           => $edition_obj->post_title,
+                'course_id'       => $course_id,
+                'start_date'      => $edition_obj->fields['start_date'] ?? null,
+                'end_date'        => $edition_obj->fields['end_date'] ?? null,
+                'venue'           => $edition_obj->fields['venue'] ?? null,
+                'price'           => $edition_obj->fields['price'] ?? null,
+                'capacity'        => $edition_obj->fields['capacity'] ?? null,
+                'status'          => $edition_obj->fields['status'] ?? 'open',
+                'spots_remaining' => $edition_obj->fields['spots_remaining'] ?? null,
+            ],
+            'themes'  => $theme_slugs,
+        ];
     }
-    $course_themes_map[$course->ID] = $slugs;
 }
 
-$total = count($all_courses);
+// --- (b) Pure-LD online courses ---
+// A "pure-LD" course is one that has NEVER had an edition (or has all editions
+// deleted). A course whose editions are all expired is NOT pure-LD — it goes
+// off-catalog until the editor schedules a new edition. So scope by "course
+// has any edition at all", not by "course has a currently-visible edition."
+$any_edition_course_ids = [];
+if (!empty($online_course_ids)) {
+    global $wpdb;
+    $in_placeholders = implode(',', array_fill(0, count($online_course_ids), '%d'));
+    $any_edition_course_ids = $wpdb->get_col($wpdb->prepare(
+        "SELECT DISTINCT pm.meta_value + 0
+         FROM {$wpdb->postmeta} pm
+         INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+         WHERE pm.meta_key = '_ntdst_course_id'
+           AND p.post_type = 'vad_edition'
+           AND pm.meta_value IN ($in_placeholders)",
+        ...$online_course_ids
+    ));
+    $any_edition_course_ids = array_map('intval', $any_edition_course_ids);
+}
+$pure_ld_course_ids = array_diff($online_course_ids, $any_edition_course_ids);
+foreach ($pure_ld_course_ids as $course_id) {
+    $course = get_post($course_id);
+    if (!$course) {
+        continue;
+    }
+    $theme_slugs = [];
+    $course_themes = get_the_terms($course_id, 'stride_theme');
+    if ($course_themes && !is_wp_error($course_themes)) {
+        $theme_slugs = wp_list_pluck($course_themes, 'slug');
+    }
+    $enrollables[] = [
+        'kind'   => 'course',
+        'course' => $course,
+        'themes' => $theme_slugs,
+    ];
+}
+
+// Theme counts for filter tabs
+$theme_counts = [];
+foreach ($enrollables as $item) {
+    foreach ($item['themes'] as $slug) {
+        $theme_counts[$slug] = ($theme_counts[$slug] ?? 0) + 1;
+    }
+}
+
+$total = count($enrollables);
 
 get_header();
 ?>
@@ -125,19 +256,21 @@ get_header();
     </div>
     <?php endif; ?>
 
-    <!-- Course Grid -->
+    <!-- Enrollable Grid (one card per active edition + one per pure-LD course) -->
     <div class="container py-8 lg:py-12">
-        <?php if (!empty($all_courses)) : ?>
+        <?php if (!empty($enrollables)) : ?>
             <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3" x-ref="grid">
-                <?php foreach ($all_courses as $course) :
-                    $slugs = $course_themes_map[$course->ID] ?? [];
-                ?>
-                    <div data-themes="<?php echo esc_attr(implode(',', $slugs)); ?>">
-                        <?php
-                        stridence_template_part('partials/card-course', null, [
-                            'course' => $course,
-                        ]);
-                        ?>
+                <?php foreach ($enrollables as $item) : ?>
+                    <div data-themes="<?php echo esc_attr(implode(',', $item['themes'])); ?>">
+                        <?php if ($item['kind'] === 'edition') : ?>
+                            <?php stridence_template_part('partials/card-edition', null, [
+                                'edition' => $item['edition'],
+                            ]); ?>
+                        <?php else : ?>
+                            <?php stridence_template_part('partials/card-course', null, [
+                                'course' => $item['course'],
+                            ]); ?>
+                        <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
             </div>

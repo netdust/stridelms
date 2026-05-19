@@ -266,7 +266,7 @@ final class StrideMailBridge extends AbstractService
                         $editionId = $this->resolveEditionId($ctx);
                         if (!$editionId) return null;
                         $slug = get_post_field('post_name', $editionId);
-                        return $slug ? home_url('/vormingen/' . $slug . '/voltooien/') : null;
+                        return $slug ? home_url('/edities/' . $slug . '/voltooien/') : null;
                     },
                 ],
                 'summary' => [

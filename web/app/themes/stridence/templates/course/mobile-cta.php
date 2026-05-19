@@ -89,26 +89,19 @@ $is_open     = $is_online && LearnDashHelper::getAccessMode($course_id) === Lear
             </button>
 
         <?php elseif ($is_online) : ?>
-            <!-- Online not enrolled, no edition: LD payment or fallback CTA -->
+            <!-- Online not enrolled, no edition: pure-LD enroll URL -->
             <?php
-            $ld_mobile_buttons = function_exists('learndash_payment_buttons') ? learndash_payment_buttons($course_id) : '';
             $mobile_price_type = LearnDashHelper::getAccessMode($course_id);
-            if (!empty(trim($ld_mobile_buttons))) :
+            $mobile_cta_label = match ($mobile_price_type) {
+                LearnDashHelper::MODE_PAYNOW, LearnDashHelper::MODE_SUBSCRIBE => __('Cursus kopen', 'stridence'),
+                LearnDashHelper::MODE_FREE => __('Gratis inschrijven', 'stridence'),
+                default => __('Inschrijven', 'stridence'),
+            };
+            $mobile_enroll_url = add_query_arg('enroll', '1', get_permalink($course_id));
             ?>
-                <div class="ld-course-buttons">
-                    <?php echo $ld_mobile_buttons; ?>
-                </div>
-            <?php else :
-                $mobile_cta_label = match ($mobile_price_type) {
-                    LearnDashHelper::MODE_PAYNOW, LearnDashHelper::MODE_SUBSCRIBE => __('Cursus kopen', 'stridence'),
-                    LearnDashHelper::MODE_FREE => __('Gratis inschrijven', 'stridence'),
-                    default => __('Inschrijven', 'stridence'),
-                };
-            ?>
-                <a href="<?php echo esc_url(is_user_logged_in() ? get_permalink($course_id) : wp_login_url(get_permalink($course_id))); ?>" class="btn btn-primary w-full text-center">
+                <a href="<?php echo esc_url($mobile_enroll_url); ?>" class="btn btn-primary w-full text-center">
                     <?php echo esc_html($mobile_cta_label); ?>
                 </a>
-            <?php endif; ?>
 
         <?php elseif ($user_enrolled) : ?>
             <!-- Klassikaal enrolled: dashboard link -->

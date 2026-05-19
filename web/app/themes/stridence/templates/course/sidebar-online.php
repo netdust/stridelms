@@ -240,6 +240,14 @@ $expiration_ts = ($days_remaining !== null)
                 </li>
             </ul>
 
+            <?php
+            // Pure-LD online courses live at /opleidingen/<course-slug>/.
+            // Self-enroll CTA targets the same page with ?enroll=1; a
+            // template_redirect handler in stride-core grants LD access
+            // (when needed) and bounces to the first lesson. Guests get
+            // login-then-return.
+            $pureLdEnrollUrl = add_query_arg('enroll', '1', get_permalink($course_id));
+            ?>
             <?php if ($is_open && $has_access) : ?>
                 <a href="<?php echo esc_url(LearnDashHelper::getFirstLessonUrl($course_id)); ?>" class="btn btn-primary w-full text-center">
                     <?php esc_html_e('Direct starten', 'stridence'); ?>
@@ -266,12 +274,16 @@ $expiration_ts = ($days_remaining !== null)
                 <button type="button" class="btn btn-secondary w-full text-center opacity-50 cursor-not-allowed" disabled>
                     <?php esc_html_e('Niet beschikbaar', 'stridence'); ?>
                 </button>
+            <?php elseif ($price_type === 'open' || $price_type === 'free') : ?>
+                <a href="<?php echo esc_url($pureLdEnrollUrl); ?>" class="btn btn-primary w-full text-center">
+                    <?php echo esc_html($cta_label); ?>
+                </a>
             <?php elseif ($ld_buttons) : ?>
                 <div class="ld-course-buttons">
                     <?php echo $ld_buttons; ?>
                 </div>
             <?php else : ?>
-                <a href="<?php echo esc_url(is_user_logged_in() ? get_permalink($course_id) : wp_login_url(get_permalink($course_id))); ?>" class="btn btn-primary w-full text-center">
+                <a href="<?php echo esc_url($pureLdEnrollUrl); ?>" class="btn btn-primary w-full text-center">
                     <?php echo esc_html($cta_label); ?>
                 </a>
             <?php endif; ?>

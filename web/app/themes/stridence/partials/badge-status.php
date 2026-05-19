@@ -23,6 +23,8 @@ defined('ABSPATH') || exit;
 
 use Stride\Domain\OfferingStatus;
 
+/** @var array $args */
+$args   = $args ?? [];
 $status = $args['status'] ?? 'open';
 $spots  = isset($args['spots']) ? (int) $args['spots'] : null;
 

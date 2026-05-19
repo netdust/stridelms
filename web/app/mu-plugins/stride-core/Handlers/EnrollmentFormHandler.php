@@ -164,7 +164,7 @@ final class EnrollmentFormHandler
             $message = __('Je inschrijving is ontvangen. Er zijn nog een aantal stappen nodig om je inschrijving te voltooien.', 'stride');
             $edition = ntdst_get(EditionRepository::class)->find($editionId);
             $slug = is_wp_error($edition) ? '' : ($edition->post_name ?? '');
-            $redirectUrl = home_url('/vormingen/' . $slug . '/voltooien/');
+            $redirectUrl = home_url('/edities/' . $slug . '/voltooien/');
         } elseif ($isPending) {
             $message = __('Je inschrijving is ontvangen en wacht op goedkeuring.', 'stride');
             $redirectUrl = home_url('/mijn-account/?tab=inschrijvingen');

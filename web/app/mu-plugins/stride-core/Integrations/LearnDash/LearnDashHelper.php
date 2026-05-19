@@ -81,13 +81,16 @@ final class LearnDashHelper
             return false;
         }
 
-        // Open courses: check for enrollment record OR existing progress
-        if (self::getAccessMode($courseId) === self::MODE_OPEN) {
-            if (!empty(get_user_meta($userId, 'course_' . $courseId . '_access_from', true))) {
-                return true;
-            }
-            // User started the course (has progress) but no explicit enrollment
-            return self::getProgress($courseId, $userId) > 0;
+        // course_X_access_from is LD's universal enrollment marker — applies to
+        // every access mode (open, free, paynow, subscribe). Access-window
+        // expiry is a separate question from enrollment state, so don't defer
+        // to sfwd_lms_has_access() here: a user who enrolled and then let their
+        // access lapse is still enrolled.
+        if (!empty(get_user_meta($userId, 'course_' . $courseId . '_access_from', true))) {
+            return true;
+        }
+        if (self::getProgress($courseId, $userId) > 0) {
+            return true;
         }
 
         return sfwd_lms_has_access($courseId, $userId);

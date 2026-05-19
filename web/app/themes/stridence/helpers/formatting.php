@@ -57,7 +57,7 @@ function stride_format_money(int $cents): string
  * Get enrollment URL for an edition or trajectory.
  *
  * Uses the router clean URLs:
- * - Edition: /vormingen/{slug}/inschrijving/
+ * - Edition: /edities/{slug}/inschrijving/
  * - Trajectory: /trajecten/{slug}/inschrijving/
  *
  * Works for all modes (enrollment, interest, pending approval) since
@@ -80,6 +80,6 @@ function stride_enrollment_url(int $id, string $type = 'edition'): string
         return home_url('/trajecten/' . $slug . '/inschrijving/');
     }
 
-    return home_url('/vormingen/' . $slug . '/inschrijving/');
+    return home_url('/edities/' . $slug . '/inschrijving/');
 }
 

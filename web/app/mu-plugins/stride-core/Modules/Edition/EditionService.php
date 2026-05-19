@@ -81,7 +81,7 @@ class EditionService extends AbstractService implements EditionQueryInterface
         add_action('before_delete_post', [$this, 'onEditionDeleted']);
         add_action('wp_trash_post', [$this, 'onEditionTrashed']);
 
-        // Route /vormingen/<slug>/ → pure-LD course fallback when slug isn't an edition
+        // Route /edities/<slug>/ → pure-LD course fallback when slug isn't an edition
         ntdst_get(EditionRouter::class)->register();
     }
 

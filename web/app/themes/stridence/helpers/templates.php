@@ -148,14 +148,14 @@ function stridence_build_course_card_args_from_enrollment(array $enrollment, boo
 
         if (!$completed) {
             // Primary path: LearnDash resume URL (deep-link to next incomplete
-            // lesson). Fallback when resume URL is empty: the /vormingen/<slug>/
+            // lesson). Fallback when resume URL is empty: the /edities/<slug>/
             // catalog page, NOT get_permalink($courseId) — that returns the raw
             // /opleidingen/<slug>/ LD permalink, which violates the catalog
             // URL rule. See [[lesson_url_role_split]].
             $ctaUrl = $enrollment['course_url'] ?? '';
             if (!$ctaUrl && $courseId) {
                 $courseSlug = get_post_field('post_name', $courseId);
-                $ctaUrl = $courseSlug ? home_url('/vormingen/' . $courseSlug . '/') : '';
+                $ctaUrl = $courseSlug ? home_url('/edities/' . $courseSlug . '/') : '';
             }
             if ($ctaUrl) {
                 $body['primary_cta'] = [
@@ -213,11 +213,11 @@ function stridence_build_course_card_args_from_enrollment(array $enrollment, boo
         }
     }
 
-    // Secondary CTA: always link to /vormingen/<slug>/ — the canonical
+    // Secondary CTA: always link to /edities/<slug>/ — the canonical
     // transactional surface. Slug is the edition slug for edition enrollments,
     // and the course slug for pure-LD online enrollments. EditionRouter resolves
     // either shape. Never link to /opleidingen/<slug>/ (the raw LD permalink) —
-    // catalog cards link to /vormingen/, the dashboard must round-trip to the
+    // catalog cards link to /edities/, the dashboard must round-trip to the
     // same surface. See [[lesson_url_role_split]] and partials/card-course.php.
     $secondaryUrl = null;
     if (!$isOnline) {
@@ -228,7 +228,7 @@ function stridence_build_course_card_args_from_enrollment(array $enrollment, boo
     } elseif ($courseId) {
         $courseSlug = get_post_field('post_name', $courseId);
         if ($courseSlug) {
-            $secondaryUrl = home_url('/vormingen/' . $courseSlug . '/');
+            $secondaryUrl = home_url('/edities/' . $courseSlug . '/');
         }
     }
 
@@ -334,10 +334,10 @@ function stridence_build_course_card_args_from_trajectory_course(\WP_Post $cours
             'upcoming_editions' => $upcomingEditions,
             'task_summary'      => null,
             'primary_cta'       => null,
-            // Always /vormingen/<course-slug>/ — never the raw LD permalink.
+            // Always /edities/<course-slug>/ — never the raw LD permalink.
             // EditionRouter renders the course in place when no edition exists.
             'secondary_cta'     => [
-                'url'   => home_url('/vormingen/' . $course->post_name . '/'),
+                'url'   => home_url('/edities/' . $course->post_name . '/'),
                 'label' => __('Bekijk cursus', 'stridence'),
             ],
         ],

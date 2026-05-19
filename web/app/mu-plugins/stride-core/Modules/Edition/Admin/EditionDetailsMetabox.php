@@ -112,7 +112,7 @@ final class EditionDetailsMetabox
                     </div>
                 </div>
 
-                <div class="stride-classroom-only">
+                <div>
                     <h4><?php esc_html_e('Datum & Tijd', 'stride'); ?></h4>
                     <div class="stride-field-row two-col">
                         <div class="stride-field">
@@ -126,6 +126,9 @@ final class EditionDetailsMetabox
                                    value="<?php echo esc_attr($endDate); ?>">
                         </div>
                     </div>
+                    <p class="description" style="margin-top: 6px; font-size: 11px;">
+                        <?php esc_html_e('Optioneel. Laat leeg voor zelfgestuurde edities zonder vaste planning.', 'stride'); ?>
+                    </p>
                     <?php if (!empty($drift)) : ?>
                         <div class="notice notice-warning inline" style="margin: 8px 0; padding: 8px 12px;">
                             <p style="margin: 0;">
@@ -138,7 +141,7 @@ final class EditionDetailsMetabox
             </div>
 
             <div class="stride-edition-side">
-                <div class="stride-classroom-only">
+                <div>
                     <h4><?php esc_html_e('Locatie', 'stride'); ?></h4>
                     <div class="stride-field-row">
                         <div class="stride-field">

@@ -364,7 +364,7 @@ final class UserDashboardService
                     : ($phase === 'post_course'
                         ? __('Afronding', 'stride')
                         : __('Inschrijving', 'stride')),
-                'url'        => home_url('/vormingen/' . $slug . '/voltooien/'),
+                'url'        => home_url('/edities/' . $slug . '/voltooien/'),
                 'type'       => $isSessionSelection ? 'session_selection' : $phase,
                 'total_tasks' => $total,
                 'done_tasks'  => $done,
@@ -631,7 +631,7 @@ final class UserDashboardService
             // Populate task summary for pending (enrollment) and confirmed (post-course) registrations
             if (!empty($reg->completion_tasks) && in_array($reg->status, ['pending', 'confirmed'], true)) {
                 $regData['task_summary'] = $this->buildTaskSummaryFromData($reg->completion_tasks, $editionId);
-                $regData['complete_url'] = home_url('/vormingen/' . get_post_field('post_name', $editionId) . '/voltooien/');
+                $regData['complete_url'] = home_url('/edities/' . get_post_field('post_name', $editionId) . '/voltooien/');
                 $regData['cta'] = $this->calculateEditionCTA($regData['task_summary'], $regData['complete_url'], $editionId);
             }
 

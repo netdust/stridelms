@@ -148,7 +148,7 @@ foreach ($enrollments as $enrollment) {
                         $isToday    = ($session['date'] ?? '') === date('Y-m-d');
                         $isTomorrow = ($session['date'] ?? '') === date('Y-m-d', strtotime('+1 day'));
                         $editionSlug = get_post_field('post_name', (int) ($session['edition_id'] ?? 0));
-                        $detailUrl   = $editionSlug ? home_url('/vormingen/' . $editionSlug . '/') : '';
+                        $detailUrl   = $editionSlug ? home_url('/edities/' . $editionSlug . '/') : '';
                     ?>
                         <a href="<?php echo esc_url($detailUrl); ?>"
                            class="flex items-center gap-3 rounded-lg border border-border/60 bg-surface-card pl-1.5 pr-3 py-2 hover:border-border transition-colors">

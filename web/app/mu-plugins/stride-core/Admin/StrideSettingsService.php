@@ -30,7 +30,7 @@ class StrideSettingsService
     /** Default URL slugs */
     private const DEFAULT_SLUGS = [
         'trajectory' => 'trajecten',
-        'edition' => 'vormingen',
+        'edition' => 'edities',
     ];
 
     /** Option name for notification rules */

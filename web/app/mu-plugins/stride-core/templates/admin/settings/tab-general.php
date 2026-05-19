@@ -44,7 +44,7 @@ defined('ABSPATH') || exit;
                        x-model="general.edition_slug"
                        @input="general.edition_slug = slugify($event.target.value)" />
                 <p class="description">
-                    URL: <span x-text="general.siteUrl"></span>/<strong x-text="general.edition_slug || 'vormingen'"></strong>/editie-naam/
+                    URL: <span x-text="general.siteUrl"></span>/<strong x-text="general.edition_slug || 'edities'"></strong>/editie-naam/
                 </p>
             </td>
         </tr>

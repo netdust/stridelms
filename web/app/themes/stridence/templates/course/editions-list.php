@@ -203,10 +203,10 @@ $render_edition_row = function (array $row, bool $faded = false) {
     <?php elseif ($is_online && $course_id) : ?>
         <?php
         // Pure-LD online course: no scheduled editions exist. Treat the course
-        // itself as the single enrollable instance — link to /vormingen/<course-slug>/
+        // itself as the single enrollable instance — link to /edities/<course-slug>/
         // where the CTA chain lives.
         $course_post = get_post($course_id);
-        $course_url  = $course_post ? home_url('/vormingen/' . $course_post->post_name . '/') : '';
+        $course_url  = $course_post ? home_url('/edities/' . $course_post->post_name . '/') : '';
         ?>
         <a href="<?php echo esc_url($course_url); ?>"
            class="flex items-center gap-4 p-4 border border-border bg-surface-card rounded-lg hover:border-primary/40 hover:shadow-sm transition">

@@ -14,9 +14,9 @@ use Stride\Modules\Trajectory\TrajectoryService;
  * Plain class — created by EnrollmentService during init.
  * Uses ntdst_router() for clean URL pattern matching:
  * - /trajecten/{slug}/inschrijving/  → Trajectory enrollment
- * - /vormingen/{slug}/inschrijving/  → Edition enrollment
+ * - /edities/{slug}/inschrijving/  → Edition enrollment
  * - /trajecten/{slug}/voltooien/     → Trajectory completion
- * - /vormingen/{slug}/voltooien/     → Edition completion
+ * - /edities/{slug}/voltooien/     → Edition completion
  */
 final class EnrollmentRouter
 {
@@ -35,11 +35,11 @@ final class EnrollmentRouter
             return $this->handleTrajectoryEnrollment($params['slug']);
         });
 
-        ntdst_router()->get('vormingen/:slug/inschrijving', function (array $params) {
+        ntdst_router()->get('edities/:slug/inschrijving', function (array $params) {
             return $this->handleCourseEnrollment($params['slug']);
         });
 
-        ntdst_router()->get('vormingen/:slug/voltooien', function (array $params) {
+        ntdst_router()->get('edities/:slug/voltooien', function (array $params) {
             return $this->handleCompletionRoute('edition', $params['slug']);
         });
 
@@ -96,7 +96,7 @@ final class EnrollmentRouter
         }
 
         if (!is_user_logged_in()) {
-            wp_safe_redirect(wp_login_url(home_url('/vormingen/' . $slug . '/inschrijving/')));
+            wp_safe_redirect(wp_login_url(home_url('/edities/' . $slug . '/inschrijving/')));
             exit;
         }
 
@@ -153,7 +153,7 @@ final class EnrollmentRouter
     private function handleCompletionRoute(string $type, string $slug): ?string
     {
         if (!is_user_logged_in()) {
-            $base = $type === 'trajectory' ? 'trajecten' : 'vormingen';
+            $base = $type === 'trajectory' ? 'trajecten' : 'edities';
             wp_safe_redirect(wp_login_url(home_url("/{$base}/{$slug}/voltooien/")));
             exit;
         }

@@ -50,18 +50,22 @@ $greeting = match (true) {
     default     => __('Goedenavond', 'stridence'),
 };
 
-// Build sidebar navigation
+// Build sidebar navigation.
+// All items are always visible — each tab template has its own empty-state
+// when the user has no data yet. Keeps the sidebar consistent across tabs
+// (per bug_dashboard_nav_inconsistent: Home and other tabs were computing
+// visibility from different data sources, causing items to appear/disappear).
 $primary_nav = [
     'home'            => ['label' => __('Home', 'stridence'), 'icon' => 'home', 'visible' => true],
-    'inschrijvingen'  => ['label' => __('Opleidingen', 'stridence'), 'icon' => 'book-open', 'visible' => !empty($nav_items['opleidingen'])],
-    'trajecten'       => ['label' => __('Trajecten', 'stridence'), 'icon' => 'layers', 'visible' => !empty($nav_items['trajecten'])],
-    'offertes'        => ['label' => __('Offertes', 'stridence'), 'icon' => 'file-text', 'visible' => !empty($nav_items['offertes'])],
+    'inschrijvingen'  => ['label' => __('Opleidingen', 'stridence'), 'icon' => 'book-open', 'visible' => true],
+    'trajecten'       => ['label' => __('Trajecten', 'stridence'), 'icon' => 'layers', 'visible' => true],
+    'offertes'        => ['label' => __('Offertes', 'stridence'), 'icon' => 'file-text', 'visible' => true],
 ];
 
 $utility_nav = [
     'meldingen'       => ['label' => __('Meldingen', 'stridence'), 'icon' => 'bell', 'visible' => true],
     'downloads'       => ['label' => __('Downloads', 'stridence'), 'icon' => 'download', 'visible' => true],
-    'certificaten'    => ['label' => __('Certificaten', 'stridence'), 'icon' => 'award', 'visible' => !empty($nav_items['certificaten'])],
+    'certificaten'    => ['label' => __('Certificaten', 'stridence'), 'icon' => 'award', 'visible' => true],
 ];
 
 // Notification count

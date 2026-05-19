@@ -26,7 +26,7 @@ if (!$course instanceof WP_Post) {
 
 /**
  * Find the course's primary visible edition (if any). Same shape as the
- * /vormingen/<course>/ router's resolver: enrollable > active > nothing.
+ * /edities/<course>/ router's resolver: enrollable > active > nothing.
  * Returns ['id' => int, 'status' => OfferingStatus, 'spots' => ?int]
  * or null when no visible edition exists (pure-LD course).
  */
@@ -75,7 +75,9 @@ if (!empty($edition_ids)) {
     }
 }
 
-// Get course data
+// Pure-LD course card. Link to the canonical course URL — LD owns
+// /opleidingen/<slug>/, Stride decorates it via single-sfwd-courses.php.
+// See tasks/url-structure-rework.md.
 $permalink = get_permalink($course);
 $title     = get_the_title($course);
 

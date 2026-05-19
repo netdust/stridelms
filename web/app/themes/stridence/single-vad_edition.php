@@ -58,7 +58,7 @@ if (is_user_logged_in()) {
         ->findByUserAndEdition(get_current_user_id(), $edition_id);
     if ($reg) {
         $selected_session_ids = array_map('intval', $reg->selections ?? []);
-        $complete_url = home_url('/vormingen/' . get_post_field('post_name', $edition_id) . '/voltooien/');
+        $complete_url = home_url('/edities/' . get_post_field('post_name', $edition_id) . '/voltooien/');
         if (!$is_enrolled && $reg->status === 'pending' && !empty($reg->completion_tasks)) {
             $has_pending_tasks = true;
         }
