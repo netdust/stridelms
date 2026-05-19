@@ -19,8 +19,8 @@ final class QuestionnaireSettingsPage
 {
     private const PAGE_SLUG    = 'stride-questionnaire';
     private const CAPABILITY   = 'manage_options';
-    private const NONCE_ACTION = 'stride_save_questionnaire';
-    private const NONCE_FIELD  = 'stride_questionnaire_nonce';
+    public const NONCE_ACTION = 'stride_save_questionnaire';
+    public const NONCE_FIELD  = 'stride_questionnaire_nonce';
 
     /**
      * Field names that must never reach the form-builder: writing to them
@@ -617,20 +617,20 @@ final class QuestionnaireSettingsPage
     }
 
     /**
-     * Returns the 7 supported field types with label and badge color.
+     * Returns the 7 supported field types with label.
      *
-     * @return array<string, array{label: string, color: string}>
+     * @return array<string, array{label: string}>
      */
     private function getFieldTypes(): array
     {
         return [
-            'text'        => ['label' => __('Tekst', 'stride'),        'color' => '#2271b1'],
-            'textarea'    => ['label' => __('Tekstveld', 'stride'),     'color' => '#135e96'],
-            'select'      => ['label' => __('Selectie', 'stride'),      'color' => '#8c5e10'],
-            'radio'       => ['label' => __('Keuze', 'stride'),         'color' => '#6c3483'],
-            'scale'       => ['label' => __('Schaal', 'stride'),        'color' => '#0d7a3e'],
-            'checkbox'    => ['label' => __('Vinkje', 'stride'),        'color' => '#b26200'],
-            'description' => ['label' => __('Beschrijving', 'stride'),  'color' => '#666666'],
+            'text'        => ['label' => __('Tekst', 'stride')],
+            'textarea'    => ['label' => __('Tekstveld', 'stride')],
+            'select'      => ['label' => __('Selectie', 'stride')],
+            'radio'       => ['label' => __('Keuze', 'stride')],
+            'scale'       => ['label' => __('Schaal', 'stride')],
+            'checkbox'    => ['label' => __('Vinkje', 'stride')],
+            'description' => ['label' => __('Beschrijving', 'stride')],
         ];
     }
 
