@@ -24,6 +24,11 @@ use WP_User;
  * Templates receive pre-assembled arrays and only handle rendering.
  *
  * Plain class — registered in stride-core.php.
+ *
+ * Constructor sits at the soft 5-param cap. Additional dependencies
+ * (QuoteService, EnrollmentCompletion) are resolved via ntdst_get()
+ * inside their call sites rather than constructor-injected. Splitting
+ * this aggregator into per-tab services is a separate refactor.
  */
 final class UserDashboardService
 {
