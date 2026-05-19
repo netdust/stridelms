@@ -29,9 +29,24 @@ interface EditionQueryInterface
     public function getCapacity(int $editionId): int;
 
     /**
-     * Get edition status.
+     * Get stored edition status (admin intent).
      */
     public function getStatus(int $editionId): OfferingStatus;
+
+    /**
+     * Get display status for the public frontend.
+     *
+     * Stored status reflects admin intent, but past end_date and a few other
+     * conditions can override what we actually show — use this anywhere a
+     * status is shown to a visitor.
+     */
+    public function getEffectiveStatus(int $editionId): OfferingStatus;
+
+    /**
+     * True when the edition's end_date (or start_date as fallback) is in
+     * the past. Pure calendar check — independent of OfferingStatus.
+     */
+    public function isPast(int $editionId): bool;
 
     /**
      * Get linked LearnDash course ID.
