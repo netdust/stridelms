@@ -132,11 +132,8 @@ final class EnrollmentService extends AbstractService
         }
 
         // Check if this is an open course (grant access without enrollment)
-        // LearnDash stores settings in serialized array under _sfwd-courses meta
-        $courseMeta = get_post_meta($courseId, '_sfwd-courses', true);
-        $priceType = is_array($courseMeta) ? ($courseMeta['course_price_type'] ?? '') : '';
-        if ($priceType !== 'open') {
-            return; // Not an open course
+        if (!$this->lms->isOpenCourse($courseId)) {
+            return;
         }
 
         // Enroll the user via LearnDash

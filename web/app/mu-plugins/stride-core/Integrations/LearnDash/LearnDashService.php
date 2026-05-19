@@ -90,4 +90,19 @@ final class LearnDashService extends AbstractService implements LMSAdapterInterf
 
         return true;
     }
+
+    public function isOpenCourse(int $courseId): bool
+    {
+        if (get_post_type($courseId) !== 'sfwd-courses') {
+            return false;
+        }
+
+        // LearnDash stores course settings in a serialized array under
+        // _sfwd-courses meta. Other code outside this adapter shouldn't
+        // know about that shape.
+        $courseMeta = get_post_meta($courseId, '_sfwd-courses', true);
+        $priceType = is_array($courseMeta) ? ($courseMeta['course_price_type'] ?? '') : '';
+
+        return $priceType === 'open';
+    }
 }

@@ -239,4 +239,67 @@ class LearnDashServiceTest extends TestCase
 
         $this->assertTrue($result);
     }
+
+    /**
+     * @test
+     */
+    public function testIsOpenCourseReturnsFalseForNonExistentCourse(): void
+    {
+        $GLOBALS['_test_posts'] = [];
+
+        $result = $this->service->isOpenCourse(99999);
+
+        $this->assertFalse($result);
+    }
+
+    /**
+     * @test
+     */
+    public function testIsOpenCourseReturnsTrueWhenPriceTypeIsOpen(): void
+    {
+        $post = new \stdClass();
+        $post->post_type = 'sfwd-courses';
+        $GLOBALS['_test_posts'] = [100 => $post];
+
+        global $_test_post_meta;
+        $_test_post_meta[100] = ['_sfwd-courses' => [['course_price_type' => 'open']]];
+
+        $result = $this->service->isOpenCourse(100);
+
+        $this->assertTrue($result);
+    }
+
+    /**
+     * @test
+     */
+    public function testIsOpenCourseReturnsFalseWhenPriceTypeIsClosed(): void
+    {
+        $post = new \stdClass();
+        $post->post_type = 'sfwd-courses';
+        $GLOBALS['_test_posts'] = [100 => $post];
+
+        global $_test_post_meta;
+        $_test_post_meta[100] = ['_sfwd-courses' => [['course_price_type' => 'closed']]];
+
+        $result = $this->service->isOpenCourse(100);
+
+        $this->assertFalse($result);
+    }
+
+    /**
+     * @test
+     */
+    public function testIsOpenCourseReturnsFalseWhenMetaMissing(): void
+    {
+        $post = new \stdClass();
+        $post->post_type = 'sfwd-courses';
+        $GLOBALS['_test_posts'] = [100 => $post];
+
+        global $_test_post_meta;
+        $_test_post_meta[100] = [];
+
+        $result = $this->service->isOpenCourse(100);
+
+        $this->assertFalse($result);
+    }
 }

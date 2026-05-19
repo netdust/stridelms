@@ -38,4 +38,13 @@ interface LMSAdapterInterface
      * the user is now marked complete.
      */
     public function markComplete(int $userId, int $courseId): bool;
+
+    /**
+     * Is the course configured as "open" (auto-enroll on lesson access,
+     * no enrollment record required)?
+     *
+     * Encapsulates the LMS's course-pricing-type concept so callers don't
+     * have to reach into the LMS's internal meta shape.
+     */
+    public function isOpenCourse(int $courseId): bool;
 }
