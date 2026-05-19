@@ -113,6 +113,29 @@ final class AuditService implements \NTDST_Service_Meta
     }
 
     /**
+     * Get milestone events (registration + completion + certificate) for a user.
+     *
+     * The default action set covers the canonical "positive progress" moments;
+     * callers can pass their own slugs to widen or narrow.
+     *
+     * @param string[]|null $actions
+     */
+    public function getMilestonesForUser(
+        int $userId,
+        ?array $actions = null,
+        int $limit = 20,
+        int $daysBack = 365
+    ): array {
+        $actions ??= [
+            'registration.created',
+            'completion.course_completed',
+            'completion.certificate_issued',
+        ];
+
+        return $this->repository->findMilestonesForUser($userId, $actions, $limit, $daysBack);
+    }
+
+    /**
      * Get session note updates for editions.
      *
      * @param int[] $editionIds

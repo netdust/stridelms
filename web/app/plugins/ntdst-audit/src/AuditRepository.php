@@ -199,6 +199,44 @@ class AuditRepository
     }
 
     /**
+     * Find milestone audit entries for a user (registration + completion +
+     * certificate-issued events where the user is the subject).
+     *
+     * Used by activity feeds where only positive-progress moments matter.
+     *
+     * @param string[] $actions Milestone action slugs to include.
+     */
+    public function findMilestonesForUser(
+        int $userId,
+        array $actions,
+        int $limit = 20,
+        int $daysBack = 365
+    ): array {
+        if (empty($actions)) {
+            return [];
+        }
+
+        global $wpdb;
+
+        $since = (new \DateTime("-{$daysBack} days"))->format('Y-m-d H:i:s');
+        $placeholders = implode(',', array_fill(0, count($actions), '%s'));
+
+        $sql = "SELECT * FROM {$this->table()}
+             WHERE created_at >= %s
+               AND action IN ({$placeholders})
+               AND (
+                   JSON_EXTRACT(context, '$.user_id') = %d
+                   OR actor_id = %d
+               )
+             ORDER BY created_at DESC
+             LIMIT %d";
+
+        $args = array_merge([$since], $actions, [$userId, $userId, $limit]);
+
+        return $wpdb->get_results($wpdb->prepare($sql, ...$args));
+    }
+
+    /**
      * Find session note update entries for a set of edition IDs.
      * Used to notify enrolled users about session changes.
      *
