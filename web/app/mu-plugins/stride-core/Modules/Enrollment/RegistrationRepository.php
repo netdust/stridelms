@@ -857,10 +857,36 @@ final class RegistrationRepository
             return true;
         }
 
+        // Snapshot before the write so the audit hook can record a field-level diff.
+        // Compares against $data (not $update) for JSON fields so the diff captures
+        // structural changes, not just "different encoded string."
+        $before = $this->find($id);
+
         $result = $wpdb->update($this->table(), $update, ['id' => $id]) !== false;
 
         if ($result) {
             $this->clearCache();
+
+            if ($before) {
+                $diff = [];
+                foreach ($update as $field => $newValue) {
+                    $oldValue = $before->$field ?? null;
+                    $compareNew = in_array($field, ['selections', 'completion_tasks', 'enrollment_data'], true)
+                        ? ($data[$field] ?? null)
+                        : $newValue;
+                    if ($oldValue != $compareNew) {
+                        $diff[$field] = ['old' => $oldValue, 'new' => $compareNew];
+                    }
+                }
+
+                if ($diff) {
+                    do_action('stride/registration/updated', [
+                        'registration_id' => $id,
+                        'diff' => $diff,
+                        'actor_id' => get_current_user_id() ?: null,
+                    ]);
+                }
+            }
         }
 
         return $result;

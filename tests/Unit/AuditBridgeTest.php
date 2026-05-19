@@ -370,4 +370,261 @@ class AuditBridgeTest extends TestCase
             'edition_id' => 200,
         ], $call['context']);
     }
+
+    // =========================================================================
+    // New handlers added 2026-05-19 (full audit coverage sweep)
+    // =========================================================================
+
+    /** @test */
+    public function testOnRegistrationConfirmedRecords(): void
+    {
+        $this->bridge->onRegistrationConfirmed(['registration_id' => 1, 'user_id' => 7, 'edition_id' => 9]);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('registration', $call['entity_type']);
+        $this->assertEquals(1, $call['entity_id']);
+        $this->assertEquals('registration.confirmed', $call['action']);
+    }
+
+    /** @test */
+    public function testOnInterestRegisteredRecords(): void
+    {
+        $this->bridge->onInterestRegistered(['registration_id' => 2, 'user_id' => 8, 'edition_id' => 9]);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('registration.interest_registered', $call['action']);
+        $this->assertEquals(8, $call['actor_id']);
+    }
+
+    /** @test */
+    public function testOnWaitlistedRecords(): void
+    {
+        $this->bridge->onWaitlisted(['registration_id' => 3, 'user_id' => 8]);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('registration.waitlisted', $call['action']);
+    }
+
+    /** @test */
+    public function testOnRegistrationUpdatedRecordsDiff(): void
+    {
+        $this->bridge->onRegistrationUpdated([
+            'registration_id' => 4,
+            'actor_id' => 99,
+            'diff' => ['status' => ['old' => 'confirmed', 'new' => 'cancelled']],
+        ]);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('registration.updated', $call['action']);
+        $this->assertEquals(99, $call['actor_id']);
+        $this->assertEquals(['status' => ['old' => 'confirmed', 'new' => 'cancelled']], $call['context']['diff']);
+    }
+
+    /** @test */
+    public function testOnTaskCompletedRecords(): void
+    {
+        $this->bridge->onTaskCompleted(['registration_id' => 5, 'task_type' => 'questionnaire']);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('enrollment.task_completed', $call['action']);
+        $this->assertEquals('questionnaire', $call['context']['task_type']);
+    }
+
+    /** @test */
+    public function testOnVoucherCreatedRecords(): void
+    {
+        $this->bridge->onVoucherCreated(['voucher_id' => 10, 'code' => 'ABC123']);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('voucher', $call['entity_type']);
+        $this->assertEquals(10, $call['entity_id']);
+        $this->assertEquals('voucher.created', $call['action']);
+        $this->assertEquals('ABC123', $call['context']['code']);
+    }
+
+    /** @test */
+    public function testOnVoucherRedeemedRecords(): void
+    {
+        $this->bridge->onVoucherRedeemed(['voucher_id' => 10, 'user_id' => 50, 'quote_id' => 200]);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('voucher.redeemed', $call['action']);
+        $this->assertEquals(50, $call['actor_id']);
+    }
+
+    /** @test */
+    public function testOnVoucherReleasedRecords(): void
+    {
+        $this->bridge->onVoucherReleased(['voucher_id' => 10, 'user_id' => 50, 'quote_id' => 200]);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('voucher.released', $call['action']);
+    }
+
+    /** @test */
+    public function testOnQuoteCancelledRecords(): void
+    {
+        $this->bridge->onQuoteCancelled(['quote_id' => 300]);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('quote', $call['entity_type']);
+        $this->assertEquals(300, $call['entity_id']);
+        $this->assertEquals('quote.cancelled', $call['action']);
+    }
+
+    /** @test */
+    public function testOnQuoteEmailSentRecords(): void
+    {
+        $this->bridge->onQuoteEmailSent(300, 'a@b.com', 'cc@b.com');
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('quote.email_sent', $call['action']);
+        $this->assertEquals('a@b.com', $call['context']['to']);
+        $this->assertEquals('cc@b.com', $call['context']['cc']);
+    }
+
+    /** @test */
+    public function testOnQuotePdfRegeneratedRecords(): void
+    {
+        $this->bridge->onQuotePdfRegenerated(300);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('quote.pdf_regenerated', $call['action']);
+    }
+
+    /** @test */
+    public function testOnQuoteModifierBlockedRecords(): void
+    {
+        $this->bridge->onQuoteModifierBlocked(['quote_id' => 300, 'registration_id' => 4, 'user_id' => 50]);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('quote.modifier_blocked', $call['action']);
+        $this->assertEquals(4, $call['context']['registration_id']);
+    }
+
+    /** @test */
+    public function testOnTrajectoryCreatedRecords(): void
+    {
+        $this->bridge->onTrajectoryCreated(['trajectory_id' => 700]);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('trajectory', $call['entity_type']);
+        $this->assertEquals('trajectory.created', $call['action']);
+    }
+
+    /** @test */
+    public function testOnTrajectoryUpdatedRecords(): void
+    {
+        $this->bridge->onTrajectoryUpdated(['trajectory_id' => 700]);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('trajectory.updated', $call['action']);
+    }
+
+    /** @test */
+    public function testOnTrajectoryEnrolledRecords(): void
+    {
+        $this->bridge->onTrajectoryEnrolled([
+            'trajectory_id' => 700,
+            'registration_id' => 4,
+            'user_id' => 50,
+        ]);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('trajectory.enrolled', $call['action']);
+        $this->assertEquals(50, $call['actor_id']);
+    }
+
+    /** @test */
+    public function testOnTrajectoryChoicesUpdatedRecords(): void
+    {
+        $this->bridge->onTrajectoryChoicesUpdated([
+            'trajectory_id' => 700,
+            'registration_id' => 4,
+            'edition_ids' => [1, 2, 3],
+        ]);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('trajectory.choices_updated', $call['action']);
+        $this->assertEquals([1, 2, 3], $call['context']['edition_ids']);
+    }
+
+    /** @test */
+    public function testOnSessionCreatedRecords(): void
+    {
+        $this->bridge->onSessionCreated(['session_id' => 100, 'edition_id' => 200]);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('session.created', $call['action']);
+    }
+
+    /** @test */
+    public function testOnSessionSelectionsUpdatedRecords(): void
+    {
+        $this->bridge->onSessionSelectionsUpdated([
+            'registration_id' => 4,
+            'edition_id' => 200,
+            'session_ids' => [10, 11],
+        ]);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('session.selections_updated', $call['action']);
+        $this->assertEquals([10, 11], $call['context']['session_ids']);
+    }
+
+    /** @test */
+    public function testOnAttendanceCompleteRecords(): void
+    {
+        $this->bridge->onAttendanceComplete([
+            'registration_id' => 4,
+            'user_id' => 50,
+            'edition_id' => 200,
+        ]);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('completion.attendance_complete', $call['action']);
+    }
+
+    /** @test */
+    public function testOnCompletionCompletedRecords(): void
+    {
+        $this->bridge->onCompletionCompleted([
+            'edition_id' => 200,
+            'user_id' => 50,
+            'course_id' => 800,
+        ]);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('completion', $call['entity_type']);
+        $this->assertEquals(800, $call['entity_id']);
+        $this->assertEquals('completion.completed', $call['action']);
+    }
+
+    /** @test */
+    public function testOnUserAnonymisedRecords(): void
+    {
+        $this->bridge->onUserAnonymised(50);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('user', $call['entity_type']);
+        $this->assertEquals(50, $call['entity_id']);
+        $this->assertEquals('user.anonymised', $call['action']);
+    }
+
+    /** @test */
+    public function testOnGdprErasureRequestedRecords(): void
+    {
+        $this->bridge->onGdprErasureRequested([
+            'user_id' => 50,
+            'email' => 'a@b.com',
+            'reason' => 'GDPR right to be forgotten',
+        ]);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('gdpr.erasure_requested', $call['action']);
+        $this->assertEquals('a@b.com', $call['context']['email']);
+    }
+
+    /** @test */
+    public function testOnMailSentRecords(): void
+    {
+        $this->bridge->onMailSent(
+            'stride-enrollment-created-user',
+            ['user_id' => 50, 'edition_id' => 200, 'registration_id' => 4],
+            'a@b.com'
+        );
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('mail', $call['entity_type']);
+        $this->assertEquals(50, $call['entity_id']);
+        $this->assertEquals('mail.sent', $call['action']);
+        $this->assertEquals('stride-enrollment-created-user', $call['context']['template']);
+        $this->assertEquals('a@b.com', $call['context']['to']);
+        $this->assertEquals(4, $call['context']['registration_id']);
+    }
+
+    /** @test */
+    public function testOnMailSentHandlesArrayRecipient(): void
+    {
+        $this->bridge->onMailSent('stride-x', [], ['a@b.com', 'c@d.com']);
+        $call = $this->mockAuditService->getLastCall();
+        $this->assertEquals('a@b.com,c@d.com', $call['context']['to']);
+    }
 }
