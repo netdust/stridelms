@@ -52,25 +52,64 @@ User scale: **1,130 users** hold a `course_X_access_from` meta for courses in sc
 - ~94 new `vad_edition` posts
 - ~200 new `vad_session` posts (avg ~2 meeting days per course via `sfwd-courses_course_days`)
 
-### Field mapping (already audited in `vad-to-stride-migration.md` Phase 10)
+### Field mapping (audited 2026-05-19)
 
-| Stride edition meta | Source | Notes |
+| Stride edition meta | VAD source | Notes |
 |---|---|---|
 | `course_id` | the course post ID | direct |
 | `start_date` | `_next_course_date` OR `course_days[0]` | timestamp → `Y-m-d` |
 | `end_date` | `_last_course_date` OR `course_days[last]` | timestamp → `Y-m-d` |
 | `capacity` | `sfwd-courses_course_max_participants` | int; empty → 0 (unlimited) |
-| `price` | `sfwd-courses_course_pricing` numeric extract OR `sfwd-courses_course_price` | freeform text → parse digits, fallback null |
+| `price` | `sfwd-courses_course_pricing` (freeform) → parse digits OR `sfwd-courses_course_price` | fallback null |
 | `venue` | `sfwd-courses_course_address` | direct |
-| `speakers` | `sfwd-courses_course_supervisors` (freeform text) | string preferred over user-ID array |
+| `speakers` | `sfwd-courses_course_supervisors` (freeform text) | preferred over `course_speakers` user-ID array |
 | `selection_deadline` | `sfwd-courses_course_max_subscription_date` | direct, may be empty |
-| `status` | derived from `sfwd-courses_course_status_*` flags | see status mapping below |
-| `enrollment_form` | from `_ld_price_type` after Phase X: `'open'` courses → `'direct'`, `'closed'` courses → `'default'` | derived |
-| `requires_questionnaire` | true if VAD attached a FluentForm to the course | needs audit during run |
-| `session_slots` | parse `sfwd-courses_course_program` when `course_program_enabled='on'` | rare — keuzecursussen only |
+| `status` | derived from `course_status_*` flags | see status mapping |
+| `enrollment_form` | from `_ld_price_type` after Phase X: `'open'` → `'direct'`, `'closed'` → `'default'` | derived |
+| `requires_questionnaire` | true if `LearnDashCourseService::getCustomForm($courseId)` returns non-null | port VAD's lookup |
 | `requires_approval` | false | sensible default |
 | `requires_documents` | false | sensible default |
 | `completion_mode` | `'automatic'` | sensible default |
+| `session_slots` | empty | Mode 3 only, set by editor post-migration |
+| `documents` | parse `sfwd-courses_course_materials` when `course_materials_enabled='on'` | attachment IDs — best effort |
+
+### VAD course meta → Stride: gap audit
+
+Fields VAD stores that Stride has no edition column for. Strategy per field:
+
+| VAD field | Strategy | Reason |
+|---|---|---|
+| `course_target_audience` | **dump into edition `notes` JSON** under key `vad_target_audience` | Useful info, no Stride field, editor can promote to course description later |
+| `course_desired_experience` | **dump into edition `notes`** under key `vad_desired_experience` | Same — prerequisite-level info |
+| `course_accreditering` | **dump into edition `notes`** under key `vad_accreditering` | Important for medical/care professionals |
+| `course_contact` | **dump into edition `notes`** under key `vad_contact_email` | Per-course contact person — Stride has no equivalent |
+| `course_admins` | **dump into edition `notes`** under key `vad_admin_emails` | Internal admin list — Stride uses user roles |
+| `course_when` | drop | Display-only "21 mei en 12 juni 2026" — already captured by start_date/end_date + sessions |
+| `course_duration` | drop after time parse | Already extracted into session start_time/end_time |
+| `course_points` / `course_points_enabled` | drop | LD-internal gamification, not used by Stride |
+| `course_prerequisite_*` | drop | LD enforces these; Stride doesn't need to mirror |
+| `course_disable_lesson_progression`, `course_lesson_*` | drop | LD content config, lives on the course, not the edition |
+| `course_invoice_enabled` | drop | Stride decides via `_ld_price_type` + edition price |
+| `course_status_certificate` | drop | LD-managed; certificate generation flows via LD |
+| `course_subscriptions` | drop | Legacy WC integration field |
+
+**`notes` field shape** (`vad_edition.notes` is a JSON array per the CPT spec):
+
+```json
+[
+  {"type": "migration", "key": "vad_target_audience", "value": "Hulpverleners in de verslavingszorg...", "added": "2026-05-XX"},
+  {"type": "migration", "key": "vad_accreditering", "value": "...", "added": "2026-05-XX"}
+]
+```
+
+This way the data is visible in admin (the notes panel renders them), exportable, and clearly tagged as migration-sourced.
+
+### Edition fields Stride has that VAD doesn't fill
+
+These default to sensible empties; not blockers:
+- `price_non_member` — VAD has only one price tier. Always null.
+- `completion_threshold` — Stride concept, not VAD's. Defaults to whatever Stride's default is.
+- `post_requires_evaluation`, `post_requires_documents`, `post_requires_approval` — all false by default; editor enables per edition as needed.
 
 ### Status mapping
 
@@ -85,18 +124,38 @@ VAD has 4 status flags on `_sfwd-courses`. Stride uses `OfferingStatus` enum. Ma
 | No flag set, future date | `open` |
 | No flag set, past date | `completed` |
 
-### Session mapping
+### Session mapping (three modes)
 
-For each timestamp in `sfwd-courses_course_days`, create one `vad_session`:
+VAD encodes sessions two-and-a-half ways. The script must detect which mode applies per course and route accordingly.
+
+**Mode 1: simple multi-day** (most common)
+- Signal: `course_days` populated, `course_program_enabled !== 'on'` OR `course_program` is empty
+- Action: one `vad_session` per timestamp in `course_days`
+- Times from `course_duration` regex
+
+**Mode 2: programmed course** (rich per-day descriptions, but not a keuzecursus)
+- Signal: `course_program_enabled === 'on'` AND `course_program` is non-empty
+- Action: one `vad_session` per entry in `course_program`. Use the program entry's index to look up the corresponding `course_days` timestamp (often more program entries than days — extras are self-paced/online with no fixed date)
+- Times/locations/speakers: parse from the `program_description` freeform text — best-effort extraction (date regex, "Locatie: X", "Sprekers: X"). What can't be parsed → dump the full description into the session's `description` field so editors see it
+- Session `description` field: keep the full `program_description` text regardless of what was parsed out
+
+**Mode 3: true keuzecursus** (kies N uit M)
+- Signal: needs **editor confirmation per course** — can't reliably distinguish from Mode 2 in code. The presence of words like "kies", "keuze", "minimaal" in program_description is a hint, not a rule
+- Action: same as Mode 2 + populate `_ntdst_session_slots` per [[pattern_keuzecursus_session_slots]] (`{slot_id: {label, min, max, session_ids}}`)
+- **Migration decision**: script defaults to Mode 2 for all program-enabled courses. Editor manually upgrades the 1-2 known keuzecursussen to Mode 3 post-migration. Otherwise we'd need a per-course mapping table.
+
+**Common session fields (all modes):**
 
 | Stride session meta | Source |
 |---|---|
 | `edition_id` | the edition we just created |
-| `date` | `course_days[i]` timestamp → `Y-m-d` |
-| `start_time` / `end_time` | parsed from `sfwd-courses_course_duration` freeform string. Regex: `\d{1,2}[:hu]\d{0,2}u?\s*tot\s*\d{1,2}[:hu]\d{0,2}u?`. Fallback: empty. |
-| `location` | inherited from edition's `venue` |
-| `type` | `'in_person'` for klassikaal, `'webinar'` for online — derived from course's `stride_format` term |
-| `capacity` | inherited from edition (empty) |
+| `date` | Mode 1: `course_days[i]` timestamp. Mode 2/3: parsed from `program_description` regex `(\d{1,2}\/\d{1,2}\/\d{2,4})`, fallback to `course_days[i]` if positions align, fallback empty |
+| `start_time` / `end_time` | Mode 1: parsed from `course_duration`. Mode 2/3: parsed from `program_description` regex `(\d{1,2}\.?\d{0,2})u?\s*tot\s*(\d{1,2}\.?\d{0,2})u?`, fallback to course-level `course_duration` |
+| `location` | Mode 1: edition's `venue`. Mode 2/3: parsed `Locatie: ...` line, fallback to edition `venue` |
+| `description` | empty for Mode 1, full `program_description` text for Mode 2/3 |
+| `type` | `'in_person'` for klassikaal `stride_format`, `'webinar'` for online — note: Mode 2/3 may have mixed (some entries are "Online zelfstudie") — detect via "Locatie: https://" or "MS Teams" in description |
+| `capacity` | inherit edition |
+| `slot` | empty for Mode 1/2; set for Mode 3 (manual editor step) |
 
 ### Idempotency
 
@@ -275,11 +334,18 @@ All three scripts are idempotent — safe to re-run. Snapshot the DB before runn
 
 ## What we still need to investigate during script-writing
 
-1. **Time-string parsing**: VAD's `sfwd-courses_course_duration` is freeform Dutch ("van 9:30u tot 16:00u, onthaal met koffie vanaf 9:00u"). Build + test regex on the 94 in-scope courses; manually fix outliers.
-2. **Status flag → enum mapping**: which combinations are valid? Sample all 94 and see which flags are set.
-3. **Price-string parsing**: `sfwd-courses_course_pricing` is often a descriptive string ("Deel van aanbod tweejarige opleiding") not a number. Strategy: extract first `€?\d+(?:,\d{2})?` if present, else null.
-4. **wpi_item → course link**: confirm `sfwd-courses_course_invoice_item` is the canonical bridge before relying on it.
-5. ~~**Course → FluentForm form_id link**~~ — RESOLVED: port VAD's `LearnDashCourseService::getCustomForm()` (see Script 2 form-data approach).
+1. **Time-string parsing**: VAD's `course_duration` ("van 9:30u tot 16:00u, onthaal met koffie vanaf 9:00u") + per-session times in `program_description`. Build + test regex on the 94 in-scope courses; manually fix outliers.
+2. **Status flag → enum mapping**: sample all 94 in-scope courses, see which `course_status_*` flag combinations actually occur. Most are likely "no flag = open"; the script logs anything ambiguous.
+3. **Price-string parsing**: `course_pricing` is often descriptive ("Deel van aanbod tweejarige opleiding"). Strategy: extract first `€?\s*\d+(?:[,.]\d{2})?` if present, else null. Outliers get logged and editor sets manually.
+4. **wpi_item → course link**: confirm `sfwd-courses_course_invoice_item` is the canonical bridge (we saw `"14608"` in one sample — a wpi_item ID). Walk a real wpi_quote: read its `_wpinv_items`, look up each line item's `wpi_item` post, check what links back to a `sfwd-courses`.
+5. ~~**Course → FluentForm form_id link**~~ — RESOLVED: port VAD's `LearnDashCourseService::getCustomForm()`.
+6. **Keuzecursus detection**: false signal everywhere — `course_program_enabled='on'` doesn't mean keuzecursus, it just means "show rich program". Real keuzecursussen need editor confirmation post-migration. Mitigation: default to Mode 2 (programmed but not session-pick); editor upgrades the few real keuzecursussen by hand via the existing `_ntdst_session_slots` admin UI.
+7. **Multi-line `program_description` parsing**: each program entry has freeform Dutch text mixing date, time, location, speakers. Regex per line:
+   - Date: `(\d{1,2})\/(\d{1,2})\/(\d{2,4})` → ISO date
+   - Time: `(\d{1,2})[\.:]?(\d{0,2})u?\s*tot\s*(\d{1,2})[\.:]?(\d{0,2})u?`
+   - Location: line starting `Locatie:` → trim
+   - Speakers: line starting `Sprekers:` → trim
+   Whatever can't be parsed → still preserved in `description` field. Zero data loss.
 
 ## Anti-goals
 
