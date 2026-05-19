@@ -272,9 +272,14 @@ This is **not a Stride bug** — it's the consequence of leaving VAD's custom pr
 
 > "_ld_price_type for online courses need to be set to `open`, unless they actually have a form behind them. There are a few. The latter will be the online courses with edition so users have to fill in form before enrollment."
 
-Translation:
-- **Most e-learnings** → `_ld_price_type = 'open'` (direct LD enrollment, no Stride form, no edition)
-- **A few e-learnings with a registration form** → keep gated, route through a Stride edition + intake form (these are the ones that should still hit `/vormingen/<slug>/inschrijving/`)
+Refined to LD's binary (after looking at `LearnDashHelper::getAccessMode`):
+
+- **`open`** = no account needed, self-enroll on click. Used for **pure-LD e-learnings** without an edition (33 courses in this DB).
+- **`closed`** = LD won't enroll anyone itself; access is granted server-side after Stride's enrollment flow (`EnrollmentService::enroll()` → `LearnDashService::grantAccess()`). Used for:
+  - **Form-gated online courses** (the 3 `Quality Nights`/`Sportivos` cases)
+  - **All klassikaal courses** (354 in this DB) — always edition-driven
+
+`free` mode is **not used** in Stride's model; it sits between open and closed and offers no value here. The 33 currently at `free` should flip to `open`.
 
 ### State of the data (dry-run snapshot 2026-05-19)
 
@@ -290,19 +295,16 @@ Across all 390 published `sfwd-courses` site-wide:
 
 ### Migration steps
 
-- [ ] Decide whether Stride treats `free` and `open` interchangeably. If not, normalise e-learnings to one or the other. (Read `templates/course/sidebar-online.php` price_type branches to confirm.)
-- [ ] Build a per-course mapping of e-learnings:
-  - Bulk-flip the 33 e-learnings currently at `free` or `vad` to `open`, **EXCEPT** the 3 listed above
-  - Those 3 keep `'vad'` (or get a different marker Stride understands as "form-gated") AND get a Stride edition + intake form configured
-- [ ] For classroom courses (`stride_format=klassikaal`): bulk-flip `'vad'` → `'open'`. Stride's edition + registration flow handles gating per-edition, not via LD price type.
-- [ ] Same audit on `post_type='groups'` (LD groups have their own `_ld_price_type` row in postmeta)
-- [ ] Spot-check the 3 form-gated e-learnings: confirm they have an existing edition + intake form in VAD's data, or schedule one for migration
-- [ ] After flipping: verify single course pages show only Stride's CTA, no duplicate LD button; for the 3 form-gated, confirm the LD button stays hidden and the Stride form is reachable
+- [ ] **Pure-LD e-learnings** (under `online-aanbod`, no edition planned): flip `_ld_price_type` → `open`
+- [ ] **Form-gated e-learnings** (3 known IDs: 2669, 2758, 3540 — re-audit at migration time): flip `_ld_price_type` → `closed`. They need a Stride edition + intake form attached.
+- [ ] **Klassikaal courses** (under `vad-vormingen`): flip `_ld_price_type` → `closed`. Stride's edition + registration flow handles gating per edition.
+- [ ] LD groups (`post_type='groups'`) have their own `_ld_price_type` postmeta — apply the same rule to any group used to deliver courses.
+- [ ] Verify after flipping: single course pages show only Stride's CTA, no duplicate LD button; for `closed` courses, confirm the LD "Take this course" button is suppressed and access requires Stride enrollment.
 
-### Idempotent SQL snippet (template — do not run blind)
+### SQL (template — verify counts before running)
 
 ```sql
--- Flip e-learnings (excluding the 3 form-gated)
+-- Open: pure-LD e-learnings (online-aanbod, NOT in the form-gated list)
 UPDATE ckqp_postmeta pm
 JOIN ckqp_posts p ON pm.post_id = p.ID
 JOIN ckqp_term_relationships tr ON p.ID = tr.object_id
@@ -314,10 +316,27 @@ WHERE pm.meta_key = '_ld_price_type'
   AND p.post_status = 'publish'
   AND tt.taxonomy = 'ld_course_category'
   AND t.slug = 'online-aanbod'
-  AND p.ID NOT IN (2669, 2758, 3540);  -- form-gated keep their current type
+  AND p.ID NOT IN (2669, 2758, 3540);
+
+-- Closed: form-gated e-learnings
+UPDATE ckqp_postmeta SET meta_value = 'closed'
+WHERE meta_key = '_ld_price_type' AND post_id IN (2669, 2758, 3540);
+
+-- Closed: all klassikaal (vad-vormingen) courses
+UPDATE ckqp_postmeta pm
+JOIN ckqp_posts p ON pm.post_id = p.ID
+JOIN ckqp_term_relationships tr ON p.ID = tr.object_id
+JOIN ckqp_term_taxonomy tt ON tr.term_taxonomy_id = tt.term_taxonomy_id
+JOIN ckqp_terms t ON tt.term_id = t.term_id
+SET pm.meta_value = 'closed'
+WHERE pm.meta_key = '_ld_price_type'
+  AND p.post_type = 'sfwd-courses'
+  AND p.post_status = 'publish'
+  AND tt.taxonomy = 'ld_course_category'
+  AND t.slug = 'vad-vormingen';
 ```
 
-Verify count match before running. List of form-gated IDs is dry-run-snapshot — re-audit at real-migration time, the set may have grown.
+List of form-gated IDs is dry-run snapshot — re-audit at real-migration time, the set may have grown.
 
 ---
 
