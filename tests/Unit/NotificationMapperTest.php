@@ -4,11 +4,21 @@ declare(strict_types=1);
 
 namespace Stride\Tests\Unit;
 
+use Stride\Modules\Edition\EditionRepository;
+use Stride\Modules\Edition\SessionRepository;
 use Stride\Modules\Notification\NotificationMapper;
 use Stride\Tests\TestCase;
 
 class NotificationMapperTest extends TestCase
 {
+    private NotificationMapper $mapper;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->mapper = new NotificationMapper(new EditionRepository(), new SessionRepository());
+    }
+
     /** @test */
     public function testMapsRegistrationCreatedToNotification(): void
     {
@@ -24,7 +34,7 @@ class NotificationMapperTest extends TestCase
             'created_at' => '2026-03-10 14:30:00',
         ];
 
-        $notification = NotificationMapper::fromAuditEntry($entry);
+        $notification = $this->mapper->fromAuditEntry($entry);
 
         $this->assertEquals('enrollment', $notification['type']);
         $this->assertStringContainsString('inschrijving', strtolower($notification['title']));
@@ -52,7 +62,7 @@ class NotificationMapperTest extends TestCase
             'created_at' => '2026-03-10 14:30:00',
         ];
 
-        $notification = NotificationMapper::fromAuditEntry($entry);
+        $notification = $this->mapper->fromAuditEntry($entry);
 
         $this->assertEquals('attendance', $notification['type']);
         $this->assertStringContainsString('aanwezigheid', strtolower($notification['title']));
@@ -71,7 +81,7 @@ class NotificationMapperTest extends TestCase
             'created_at' => '2026-03-10 14:30:00',
         ];
 
-        $notification = NotificationMapper::fromAuditEntry($entry);
+        $notification = $this->mapper->fromAuditEntry($entry);
 
         $this->assertEquals('completion', $notification['type']);
         $this->assertStringContainsString('Test Cursus', $notification['title']);
@@ -94,7 +104,7 @@ class NotificationMapperTest extends TestCase
             'created_at' => '2026-03-10 14:30:00',
         ];
 
-        $notification = NotificationMapper::fromAuditEntry($entry);
+        $notification = $this->mapper->fromAuditEntry($entry);
 
         $this->assertEquals('certificate', $notification['type']);
         $this->assertStringContainsString('certificaat', strtolower($notification['title']));
@@ -120,7 +130,7 @@ class NotificationMapperTest extends TestCase
             'created_at' => '2026-03-10 14:30:00',
         ];
 
-        $notification = NotificationMapper::fromAuditEntry($entry);
+        $notification = $this->mapper->fromAuditEntry($entry);
 
         $this->assertEquals('session', $notification['type']);
         $this->assertStringContainsString('bijgewerkt', strtolower($notification['title']));
@@ -141,7 +151,7 @@ class NotificationMapperTest extends TestCase
             'created_at' => '2026-03-10 14:30:00',
         ];
 
-        $notification = NotificationMapper::fromAuditEntry($entry);
+        $notification = $this->mapper->fromAuditEntry($entry);
 
         $required = ['id', 'type', 'title', 'body', 'url', 'timestamp'];
         foreach ($required as $key) {
@@ -164,7 +174,7 @@ class NotificationMapperTest extends TestCase
             'created_at' => '2026-03-10 14:30:00',
         ];
 
-        $notification = NotificationMapper::fromAuditEntry($entry);
+        $notification = $this->mapper->fromAuditEntry($entry);
 
         $this->assertEquals('enrollment', $notification['type']);
         $this->assertStringContainsString('geannuleerd', strtolower($notification['title']));

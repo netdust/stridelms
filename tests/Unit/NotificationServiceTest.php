@@ -5,6 +5,7 @@ namespace Stride\Tests\Unit;
 
 use NTDST\Audit\AuditService;
 use Stride\Modules\Enrollment\RegistrationRepository;
+use Stride\Modules\Notification\NotificationMapper;
 use Stride\Modules\Notification\NotificationService;
 use Stride\Tests\TestCase;
 
@@ -20,7 +21,7 @@ class NotificationServiceTest extends TestCase
         $this->registerService(AuditService::class, $mockAudit);
         $this->registerService(RegistrationRepository::class, $mockRegRepo);
 
-        $service = new NotificationService($mockAudit, $mockRegRepo);
+        $service = new NotificationService($mockAudit, $mockRegRepo, $this->createMock(NotificationMapper::class));
         $notifications = $service->getNotifications(456);
 
         $this->assertIsArray($notifications);
@@ -33,7 +34,7 @@ class NotificationServiceTest extends TestCase
         $mockRegRepo = $this->createMock(RegistrationRepository::class);
         $mockRegRepo->method('findByUser')->willReturn([]);
 
-        $service = new NotificationService($mockAudit, $mockRegRepo);
+        $service = new NotificationService($mockAudit, $mockRegRepo, $this->createMock(NotificationMapper::class));
         $count = $service->getUnreadCount(456);
 
         $this->assertIsInt($count);
@@ -46,7 +47,7 @@ class NotificationServiceTest extends TestCase
         $mockAudit = new AuditService();
         $mockRegRepo = $this->createMock(RegistrationRepository::class);
 
-        $service = new NotificationService($mockAudit, $mockRegRepo);
+        $service = new NotificationService($mockAudit, $mockRegRepo, $this->createMock(NotificationMapper::class));
         $this->assertInstanceOf(NotificationService::class, $service);
     }
 }

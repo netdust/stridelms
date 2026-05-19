@@ -35,6 +35,7 @@ final class NotificationService implements \NTDST_Service_Meta
     public function __construct(
         private readonly AuditService $auditService,
         private readonly RegistrationRepository $registrationRepo,
+        private readonly NotificationMapper $mapper,
     ) {
         $this->init();
     }
@@ -72,7 +73,7 @@ final class NotificationService implements \NTDST_Service_Meta
         $seenIds = [];
 
         foreach ($allEntries as $entry) {
-            $notification = NotificationMapper::fromAuditEntry($entry);
+            $notification = $this->mapper->fromAuditEntry($entry);
             $id = $notification['id'];
 
             // Deduplicate
