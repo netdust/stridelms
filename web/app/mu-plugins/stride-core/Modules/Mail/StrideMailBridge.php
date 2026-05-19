@@ -728,7 +728,7 @@ final class StrideMailBridge extends AbstractService
             'start_date' => ($v = $this->editionRepo->getField($editionId, 'start_date')) ? stride_format_date($v) : null,
             'end_date' => ($v = $this->editionRepo->getField($editionId, 'end_date')) ? stride_format_date($v) : null,
             'venue' => $this->editionRepo->getField($editionId, 'venue') ?: null,
-            'price' => ($p = $this->editionService->getPrice($editionId)) ? stride_format_money($p) : null,
+            'price' => ($p = $this->editionService->getPrice($editionId))->inCents() > 0 ? $p->format() : null,
             default => null,
         };
     }
