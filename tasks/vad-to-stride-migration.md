@@ -219,26 +219,24 @@ Estimated: ~30 min SQL + editorial review.
 
 ---
 
-## Phase 9 — Integrations (FluentCRM, Exact Online, FluentForm)
+## Phase 9 — Integrations: nothing to migrate
 
-**Decisions made 2026-05-19 (Stefan):**
-- **FluentCRM** — VAD stops using FluentCRM post-migration. Stride's notification stack (StrideMailBridge, FluentSMTP) replaces it. No data migration needed; existing tags/lists/automations are retired.
-- **Exact Online** — out of scope. Bookkeepers continue using Exact's UI directly (per CLAUDE.md #3). Stride creates quotes; it does not export to Exact.
-- **FluentForm** — kept, but only for VAD's specific use cases (e.g. ad-hoc surveys outside Stride's enrollment/intake flow). A future bridge plugin will sit between VAD's existing FluentForm forms and Stride's data model. **Not built now.**
+**Final scope (Stefan, 2026-05-19): a clean break.** None of VAD's integrations carry forward.
 
-### Stride state for the dry-run
-
-| Integration | VAD data | Stride references | Action |
-|---|---|---|---|
-| FluentCRM | 25,952 subscribers, 26 tags, 6 lists | zero code references | None. Plugin stays active during dry-run (Stride boots cleaner with it), retired post-migration. |
-| FluentForm | 40 forms, 12,723 submissions | Stride's intake/evaluation are separate (own questionnaire system) | None. Forms carry over as historical data; bridge plugin to be written later. |
-| Exact Online | VAD's vad-vormingen-v3.0 plugin handled it | Stride only mentions Exact in admin help text | None. |
+| What | Decision |
+|---|---|
+| FluentCRM | **Retired.** Stride's notification stack (StrideMailBridge + FluentSMTP) replaces it. Tags, lists, automations all dropped. |
+| FluentForm | **Retired.** Stride uses its own questionnaire system for intake/evaluation. VAD's 40 forms + 12,723 submissions are historical only — kept in DB for reference, not surfaced anywhere. |
+| Exact Online | **Out of scope.** Bookkeepers continue using Exact directly per CLAUDE.md #3. |
+| GetPaid / Invoicing | **Retired.** Stride creates quotes, not invoices. `_wpinv_*` data was used during user-meta migration (Phase 6) and then ignored. |
+| BuddyBoss | **Retired.** XProfile data was used during user-meta migration (Phase 6) and then ignored. No social/profile features carry forward. |
 
 ### Cleanup at real-migration time
 
-- [ ] Decide whether to deactivate FluentCRM on production cutover or keep it running until the bridge plugin replaces select use cases.
-- [ ] Audit FluentForm forms: which are still actively linked from theme pages? Disable/archive the rest.
-- [ ] Document that Stride does NOT export to Exact — bookkeepers' workflow stays in Exact's UI.
+- [ ] Deactivate plugins on cutover: `fluent-crm`, `fluentform`, `buddyboss-platform`, `buddyboss-platform-pro`, `invoicing`, `invoicing-quotes`, `tin-canny-learndash-reporting`, `wpi_*` related.
+- [ ] Decide whether to drop their tables to reduce DB size, or keep for audit/recovery during the first months.
+- [ ] Remove `fluent-crm/fluentform/buddyboss/etc.` from composer.json so they don't re-install on deploy.
+- [ ] Verify no shortcodes from retired plugins are still embedded in seeded pages (Phase 8 content review).
 
 ---
 
