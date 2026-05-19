@@ -635,6 +635,30 @@ final class QuestionnaireSettingsPage
     }
 
     /**
+     * Serialize all admin state for Alpine.js hydration.
+     *
+     * Returned as plain array; caller wraps in wp_localize_script() for the
+     * JSON-only path.
+     *
+     * @return array{
+     *     groups: array,
+     *     fieldTypes: array<string, array{label: string}>,
+     *     stages: array<string, string>,
+     *     assignments: array,
+     * }
+     */
+    private function getStateJson(): array
+    {
+        $repo = ntdst_get(QuestionnaireRepository::class);
+        return [
+            'groups'      => $repo->getAllGroups(),
+            'fieldTypes'  => $this->getFieldTypes(),
+            'stages'      => $this->getStages(),
+            'assignments' => $this->getAssignmentOptions(),
+        ];
+    }
+
+    /**
      * Returns the 5 stage options.
      *
      * @return array<string, string>
