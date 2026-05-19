@@ -115,8 +115,39 @@ Implement as a single early-priority hook in stride-core that pattern-matches `/
    - Catalog → klassikaal card → `/edities/<slug>/` → see CTA → click → `/edities/<slug>/inschrijving/`
    - Old `/vormingen/<slug>/` URL → 301 to new URL
 
+## Decision rules on /opleidingen/<slug>/ (resolved 2026-05-19)
+
+The page branches on **active-edition presence first**, then on **format**:
+
+```
+if (course has any active edition):
+    → "edition surface wins" — show the editions list, NO self-enroll CTA
+    → if exactly 1 active edition, the card/CTA links directly to /edities/<slug>/
+    → if multiple, render the list and let the user pick
+
+elif (course has format=online):
+    → render self-enroll CTA (the only place /opleidingen/<slug>/ shows a CTA)
+    → behaviour as specified earlier:
+        - has_access → first lesson
+        - logged in, not enrolled → grant access + first lesson
+        - guest → login with return-to first lesson
+
+elif (course has format=klassikaal, 0 active editions):
+    → show course info + small "Geen actieve edities" notice
+    → NO CTA, NO interest form
+```
+
+This means:
+- **Online courses without editions** are the only courses with a self-enroll CTA on `/opleidingen/<slug>/`.
+- **Mixed-format courses** (online + 1+ active edition) hide the self-enroll CTA. The active edition wins. To enroll online, the editor must end the edition first.
+- **Klassikaal courses without active editions** are info-only. Visitors who want to enroll wait.
+
+## Sidebar logic consolidation
+
+The `sidebar-online.php` template name becomes a misnomer once it also serves klassikaal courses. Rename or split:
+
+- [ ] Decide: rename `sidebar-online.php` to `sidebar-course.php` (generic), or split into `sidebar-course-online.php` / `sidebar-course-klassikaal.php`. Probably one generic file with internal branching — fewer files, the branching logic is small.
+
 ## Open questions
 
-- **Klassikaal users on `/opleidingen/<slug>/`**: they should see the editions list. But what if there are 0 active editions? Fall back to course info only, no CTA? Or hide the page?
-- **Mixed-format courses**: a course that has both an online format AND klassikaal editions. The format check on `single-sfwd-courses.php` needs to handle both — probably "if any active edition, show editions list; else show online self-enroll CTA if format includes online". Verify against your data: do any courses currently span both formats?
-- **`/online/` vs `/klassikaal/` for a klassikaal course with no active editions**: it disappears from `/klassikaal/` (good, matches existing rule). Should `/opleidingen/<slug>/` still render? Yes — it's the course info page, even if not currently enrollable.
+(none — decisions all locked above)
