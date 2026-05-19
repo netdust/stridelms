@@ -227,13 +227,16 @@ final class CompletionTaskHandler
         $hasPostCourse = !empty(array_filter($tasks, fn($t) => ($t['phase'] ?? 'enrollment') === 'post_course'));
 
         if ($hasPostCourse) {
-            // All tasks done including post-course — mark LD complete + status completed
+            // All tasks done including post-course — mark LD complete + status completed.
+            // processCompletionFinal returns WP_Error('no_course') for in-person-only
+            // editions (no LearnDash course linked). That's expected, not a failure —
+            // the registration still completes on the task-completion criterion.
             $repo = ntdst_get(RegistrationRepository::class);
             $reg = $repo->find($registrationId);
             if ($reg) {
                 $editionCompletion = ntdst_get(\Stride\Modules\Edition\EditionCompletion::class);
                 $result = $editionCompletion->processCompletionFinal((int) $reg->edition_id, (int) $reg->user_id);
-                if (is_wp_error($result)) {
+                if (is_wp_error($result) && $result->get_error_code() !== 'no_course') {
                     ntdst_log('enrollment')->error('Final completion failed after post-course tasks', [
                         'registration_id' => $registrationId,
                         'edition_id'      => (int) $reg->edition_id,
