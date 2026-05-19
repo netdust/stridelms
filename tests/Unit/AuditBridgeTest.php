@@ -30,9 +30,12 @@ class AuditBridgeTest extends TestCase
         $this->registerService(AuditService::class, $this->mockAuditService);
 
         // Create AuditBridge instance without calling constructor
-        // This avoids init() registering WordPress hooks
+        // This avoids init() registering WordPress hooks; we set the
+        // injected AuditService manually via reflection.
         $reflection = new \ReflectionClass(AuditBridge::class);
         $this->bridge = $reflection->newInstanceWithoutConstructor();
+        $auditProp = $reflection->getProperty('auditService');
+        $auditProp->setValue($this->bridge, $this->mockAuditService);
     }
 
     /**
@@ -303,6 +306,8 @@ class AuditBridgeTest extends TestCase
 
         $reflection = new \ReflectionClass(AuditBridge::class);
         $this->bridge = $reflection->newInstanceWithoutConstructor();
+        $auditProp = $reflection->getProperty('auditService');
+        $auditProp->setValue($this->bridge, $this->mockAuditService);
 
         // Define the LearnDash function for this test (only works in separate process)
         if (!function_exists('learndash_get_course_certificate_link')) {

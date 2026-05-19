@@ -12,6 +12,12 @@ use Stride\Infrastructure\AbstractService;
  */
 final class AuditBridge extends AbstractService
 {
+    public function __construct(
+        private readonly AuditService $auditService,
+    ) {
+        parent::__construct();
+    }
+
     public static function metadata(): array
     {
         return [
@@ -45,16 +51,11 @@ final class AuditBridge extends AbstractService
         add_action('ntdst_assistant/after_execute', [$this, 'onAssistantExecute'], 10, 4);
     }
 
-    private function audit(): AuditService
-    {
-        return ntdst_get(AuditService::class);
-    }
-
     public function onRegistrationCreated(array $data): void
     {
         $actorId = $data['enrolled_by'] ?? $data['user_id'] ?? null;
 
-        $this->audit()->record(
+        $this->auditService->record(
             'registration',
             (int) $data['registration_id'],
             'registration.created',
@@ -69,7 +70,7 @@ final class AuditBridge extends AbstractService
 
     public function onRegistrationCancelled(array $data): void
     {
-        $this->audit()->record(
+        $this->auditService->record(
             'registration',
             (int) $data['registration_id'],
             'registration.cancelled',
@@ -90,7 +91,7 @@ final class AuditBridge extends AbstractService
             default => 'attendance.marked',
         };
 
-        $this->audit()->record(
+        $this->auditService->record(
             'attendance',
             (int) $data['attendance_id'],
             $action,
@@ -106,7 +107,7 @@ final class AuditBridge extends AbstractService
 
     public function onSessionNoteUpdated(array $data): void
     {
-        $this->audit()->record(
+        $this->auditService->record(
             'session',
             (int) $data['session_id'],
             'session.note_updated',
@@ -120,7 +121,7 @@ final class AuditBridge extends AbstractService
 
     public function onAssistantExecute(string $ability, array $input, mixed $result, array $meta): void
     {
-        $this->audit()->record(
+        $this->auditService->record(
             'assistant',
             get_current_user_id() ?: 0,
             "assistant.{$ability}",
@@ -141,7 +142,7 @@ final class AuditBridge extends AbstractService
         $courseTitle = $data['course']->post_title ?? '';
         $userId = $user instanceof \WP_User ? $user->ID : ($data['user_id'] ?? 0);
 
-        $this->audit()->record(
+        $this->auditService->record(
             'completion',
             $courseId,
             'completion.course_completed',
@@ -156,7 +157,7 @@ final class AuditBridge extends AbstractService
         if ($userId && function_exists('learndash_get_course_certificate_link')) {
             $certificateLink = learndash_get_course_certificate_link($courseId, $userId);
             if (!empty($certificateLink)) {
-                $this->audit()->record(
+                $this->auditService->record(
                     'completion',
                     $courseId,
                     'completion.certificate_issued',
