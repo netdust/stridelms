@@ -174,9 +174,12 @@ VAD's FluentForm submissions are already structured JSON. We don't need to map V
 New Stride enrollments continue to use the existing stage-keyed shape (`enrollment_personal`, `intake`, `evaluation`). The two coexist — a migrated row has only `migrated_from_vad`; a Stride-native row has only the stages; a migrated row that later collects post-enrollment intake/evaluation has both.
 
 **Migration step**:
-1. Build a lookup `course_id → FluentForm form_id` (VAD attached one form per course; the link is in VAD's plugin config or course meta — investigation point during script-writing).
-2. Pull submissions from `ckqp_fluentform_submissions` filtered by form_id + user_id (or email).
-3. Decode the response JSON (FluentForm stores serialized PHP or JSON depending on version), normalise to the shape above.
+1. Build a lookup `course_id → FluentForm form_id`. **VAD code already does this** in `services/Learndash/LearnDashCourseService::getCustomForm($courseId)` (port the logic verbatim, no need to invent):
+   - Read LD setting `course_price_type_vad_custom_form` (new location) or `course_extraform_item` (legacy fallback) on the course
+   - The stored value is the **form title**, not the ID
+   - Lookup `ckqp_fluentform_forms` by title → get the form_id
+2. Pull submissions from `ckqp_fluentform_submissions WHERE form_id = ? AND (user_id = ? OR JSON_EXTRACT(response, '$.email') = user's email)` — VAD matches on user_id OR email-in-response since FluentForm sometimes stores guest submissions before account creation.
+3. Decode `response` column (FluentForm stores serialized PHP). Normalise to the shape above — strip nothing, preserve all field labels.
 4. If no submission found for a given user × course → leave `enrollment_data = null` (user enrolled without filling the form, or form-less course).
 
 **Exporter integration** (separate code change, post-migration):
@@ -276,7 +279,7 @@ All three scripts are idempotent — safe to re-run. Snapshot the DB before runn
 2. **Status flag → enum mapping**: which combinations are valid? Sample all 94 and see which flags are set.
 3. **Price-string parsing**: `sfwd-courses_course_pricing` is often a descriptive string ("Deel van aanbod tweejarige opleiding") not a number. Strategy: extract first `€?\d+(?:,\d{2})?` if present, else null.
 4. **wpi_item → course link**: confirm `sfwd-courses_course_invoice_item` is the canonical bridge before relying on it.
-5. **Course → FluentForm form_id link**: how does VAD attach an enrollment form to a course? Candidates: VAD plugin meta on the course, FluentForm setting referencing the course, or a translation table inside `vad-vormingen-v3.0`. Required to fetch the right submissions per user×course in Script 2.
+5. ~~**Course → FluentForm form_id link**~~ — RESOLVED: port VAD's `LearnDashCourseService::getCustomForm()` (see Script 2 form-data approach).
 
 ## Anti-goals
 
