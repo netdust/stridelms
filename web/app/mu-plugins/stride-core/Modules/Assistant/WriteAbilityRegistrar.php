@@ -13,6 +13,12 @@ use Stride\Infrastructure\AbstractService;
  * - 3 write abilities: enroll-user, unenroll-user, mark-attendance
  *
  * ReadAbilityRegistrar owns category registration and system prompt injection.
+ *
+ * Domain dependencies (EnrollmentService, RegistrationRepository, SessionService,
+ * AttendanceService) are resolved lazily via ntdst_get() inside execute callbacks
+ * rather than constructor-injected. Ability callbacks fire only when the LLM
+ * invokes a tool, so eager DI would resolve all four on every WP boot for a
+ * code path that is inactive on most requests.
  */
 final class WriteAbilityRegistrar extends AbstractService
 {

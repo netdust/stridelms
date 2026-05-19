@@ -14,6 +14,13 @@ use Stride\Infrastructure\AbstractService;
  *   export-editions, export-enrollments, export-attendance
  * - Category registration (stride)
  * - System prompt injection (domain + formatting prompts)
+ *
+ * Domain dependencies (EditionService, EditionRepository, SessionService,
+ * RegistrationRepository, AttendanceService, ExportService) are resolved
+ * lazily via ntdst_get() inside execute callbacks rather than constructor-
+ * injected. Ability callbacks fire only when the LLM invokes a tool, so
+ * eager DI would resolve all six on every WP boot for a code path that is
+ * inactive on most requests.
  */
 final class ReadAbilityRegistrar extends AbstractService
 {
