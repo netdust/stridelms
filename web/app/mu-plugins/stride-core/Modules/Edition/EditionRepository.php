@@ -122,6 +122,37 @@ final class EditionRepository extends AbstractRepository
     }
 
     /**
+     * Batch-fetch editions by ID, keyed by edition_id.
+     *
+     * Returns only editions that exist; missing IDs are silently dropped.
+     * Includes all post statuses (publish, draft, trash) so callers that
+     * need to render historical references don't lose data.
+     *
+     * @param int[] $editionIds
+     * @return array<int, \WP_Post>
+     */
+    public function findManyById(array $editionIds): array
+    {
+        if (empty($editionIds)) {
+            return [];
+        }
+
+        $posts = get_posts([
+            'post_type' => $this->postType,
+            'post__in' => array_map('intval', $editionIds),
+            'posts_per_page' => count($editionIds),
+            'post_status' => 'any',
+        ]);
+
+        $map = [];
+        foreach ($posts as $post) {
+            $map[(int) $post->ID] = $post;
+        }
+
+        return $map;
+    }
+
+    /**
      * Batch-resolve edition_id → course_id for a list of edition IDs.
      *
      * Returns a map of edition_id => course_id, only for editions that

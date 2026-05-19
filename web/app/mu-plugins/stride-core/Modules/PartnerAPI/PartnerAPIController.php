@@ -217,22 +217,12 @@ final class PartnerAPIController
             }
         }
 
-        // Batch-fetch editions + their course IDs
+        // Batch-fetch editions + their course IDs via the repository
         $editions = [];
         $editionCourseMap = [];
         $courseIds = [];
         if (!empty($editionIds)) {
-            $editionPosts = get_posts([
-                'post_type' => 'vad_edition',
-                'post__in' => $editionIds,
-                'posts_per_page' => count($editionIds),
-                'post_status' => 'any',
-            ]);
-            foreach ($editionPosts as $ep) {
-                $editions[$ep->ID] = $ep;
-            }
-
-            // Batch-fetch course IDs via the repository (no hardcoded meta prefix)
+            $editions = $this->editionRepository->findManyById($editionIds);
             $editionCourseMap = $this->editionRepository->findCourseIdsForEditions($editionIds);
             $courseIds = array_values($editionCourseMap);
         }
