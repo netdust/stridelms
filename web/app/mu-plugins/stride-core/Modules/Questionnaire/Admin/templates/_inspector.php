@@ -26,6 +26,20 @@
                        @input="isDirty = true">
             </div>
 
+            <div class="qb-inspector__field" x-show="selectedField.type !== 'description'">
+                <label class="qb-inspector__label">
+                    <?php esc_html_e('Veldnaam (technisch)', 'stride'); ?>
+                    <span style="font-weight:400;color:var(--sd-text-muted)">
+                        (<?php esc_html_e('optioneel — koppelt veld aan systeemveld', 'stride'); ?>)
+                    </span>
+                </label>
+                <input type="text"
+                       class="qb-inspector__input"
+                       x-model="selectedField.name"
+                       @input="isDirty = true"
+                       placeholder="bv. rijksregisternummer">
+            </div>
+
             <div class="qb-inspector__field" x-show="selectedField.type === 'description'">
                 <label class="qb-inspector__label"><?php esc_html_e('Tekst', 'stride'); ?></label>
                 <textarea class="qb-inspector__input"

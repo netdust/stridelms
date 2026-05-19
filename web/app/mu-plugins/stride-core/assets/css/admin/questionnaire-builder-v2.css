@@ -90,6 +90,31 @@
     border-bottom: 1px solid var(--sd-border);
 }
 
+/* Group meta (assignments picker) */
+.qb-group-meta {
+    margin-bottom: 16px;
+    padding: 10px 12px;
+    background: var(--sd-surface);
+    border: 1px solid var(--sd-border);
+    border-radius: var(--sd-radius);
+}
+.qb-group-meta__label {
+    display: block;
+    font-size: var(--sd-font-size-sm);
+    font-weight: 600;
+    color: var(--sd-text-primary);
+    margin-bottom: 6px;
+}
+.qb-group-meta__select {
+    width: 100%;
+    font-size: var(--sd-font-size-sm);
+    padding: 6px 8px;
+    border: 1px solid var(--sd-border);
+    border-radius: var(--sd-radius-sm);
+    background: var(--sd-surface);
+    color: var(--sd-text-primary);
+}
+
 /* Field rows */
 .qb-field-list { list-style: none; margin: 0; padding: 0; }
 .qb-field-row {

@@ -23,7 +23,15 @@
             // ── Lifecycle ─────────────────────────────────────────
             init() {
                 const seed = window.strideQuestionnaireState || {};
-                this.groups = seed.groups || [];
+                this.groups = (seed.groups || []).map(g => ({
+                    ...g,
+                    // Server stores post IDs as ints; <select multiple> binds
+                    // string DOM values via x-model. Normalize on hydrate so
+                    // existing selections render as selected. Sanitizer absint's
+                    // on save, so round-tripping is safe.
+                    assignments: (g.assignments || []).map(v => String(v)),
+                    fields: (g.fields || []).map(f => ({ help: '', ...f })),
+                }));
                 this.fieldTypes = seed.fieldTypes || {};
                 this.stages = seed.stages || {};
                 this.assignments = seed.assignments || [];
@@ -72,7 +80,7 @@
                     id,
                     label: '',
                     stage: stageKeys[0] || '',
-                    assigned: [],
+                    assignments: [],
                     fields: [],
                 });
                 this.selectedGroupId = id;

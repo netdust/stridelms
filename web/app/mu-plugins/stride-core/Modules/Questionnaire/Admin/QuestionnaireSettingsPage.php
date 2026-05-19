@@ -288,6 +288,10 @@ final class QuestionnaireSettingsPage
                         'required' => !empty($field['required']),
                     ];
 
+                    if (!empty($field['help'])) {
+                        $sanitizedField['help'] = sanitize_text_field($field['help']);
+                    }
+
                     // Options (select/radio)
                     if (in_array($fieldType, ['select', 'radio'], true)) {
                         $sanitizedField['options'] = sanitize_text_field($field['options'] ?? '');
