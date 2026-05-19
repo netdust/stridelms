@@ -10,6 +10,7 @@ use Stride\Domain\RegistrationStatus;
 use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Attendance\AttendanceService;
 use Stride\Modules\Edition\EditionCompletion;
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Enrollment\EnrollmentCompletion;
@@ -29,6 +30,7 @@ final class UserDashboardService
     public function __construct(
         private readonly RegistrationRepository $registrationRepo,
         private readonly EditionService $editionService,
+        private readonly EditionRepository $editionRepository,
         private readonly SessionService $sessionService,
         private readonly AttendanceService $attendanceService,
         private readonly EditionCompletion $completionService,
@@ -460,7 +462,6 @@ final class UserDashboardService
      */
     private function buildEditionRegistrations(int $userId, array $registrations): array
     {
-        $editionModel  = ntdst_data()->get('vad_edition');
         $active = $completed = $cancelled = [];
 
         // Collect all edition IDs for batch fetching
@@ -481,12 +482,18 @@ final class UserDashboardService
             $editionMap[$ep->ID] = $ep;
         }
 
-        // Batch-fetch courseId meta
+        // Batch-fetch courseId meta. AbstractRepository has no batch-meta helper,
+        // so we keep the raw SQL but pull the prefix from the repo rather than
+        // hardcoding '_ntdst_course_id'.
         global $wpdb;
         $idList = implode(',', array_map('intval', array_unique($editionIds)));
+        $courseIdKey = $this->editionRepository->getMetaPrefix() . 'course_id';
         $metaRows = $wpdb->get_results(
-            "SELECT post_id, meta_value FROM {$wpdb->postmeta}
-             WHERE post_id IN ({$idList}) AND meta_key = '_ntdst_course_id'"
+            $wpdb->prepare(
+                "SELECT post_id, meta_value FROM {$wpdb->postmeta}
+                 WHERE post_id IN ({$idList}) AND meta_key = %s",
+                $courseIdKey
+            )
         );
         $courseIdMap = [];
         $courseIds = [];
@@ -602,8 +609,8 @@ final class UserDashboardService
                 'edition_id'       => $editionId,
                 'course_id'        => $courseId,
                 'course_title'     => $course ? $course->post_title : $edition->post_title,
-                'start_date'       => $editionModel->getMeta($editionId, 'start_date', ''),
-                'venue'            => $editionModel->getMeta($editionId, 'venue', ''),
+                'start_date'       => $this->editionRepository->getField($editionId, 'start_date', ''),
+                'venue'            => $this->editionRepository->getField($editionId, 'venue', ''),
                 'status'           => $reg->status,
                 'sessions'         => $sessions,
                 'next_session'     => $nextSession,
@@ -721,10 +728,9 @@ final class UserDashboardService
 
         // Session selection done — check if re-editable
         if (!empty($tasks['session_selection'])) {
-            $editionModel  = ntdst_data()->get('vad_edition');
-            $selOpen       = (bool) $editionModel->getMeta($editionId, 'selection_open');
-            $deadline      = $editionModel->getMeta($editionId, 'selection_deadline');
-            $startDate     = $editionModel->getMeta($editionId, 'start_date');
+            $selOpen       = (bool) $this->editionRepository->getField($editionId, 'selection_open');
+            $deadline      = $this->editionRepository->getField($editionId, 'selection_deadline');
+            $startDate     = $this->editionRepository->getField($editionId, 'start_date');
             $pastDeadline  = $deadline && strtotime($deadline) < time();
             $courseStarted = $startDate && strtotime($startDate) < time();
 

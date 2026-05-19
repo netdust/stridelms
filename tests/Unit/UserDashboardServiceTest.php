@@ -7,6 +7,7 @@ namespace Stride\Tests\Unit;
 use Stride\Domain\QuoteStatus;
 use Stride\Modules\Attendance\AttendanceService;
 use Stride\Modules\Edition\EditionCompletion;
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Enrollment\EnrollmentCompletion;
@@ -23,6 +24,7 @@ class UserDashboardServiceTest extends TestCase
     private UserDashboardService $service;
     private RegistrationRepository $regRepo;
     private EditionService $editionService;
+    private EditionRepository $editionRepository;
     private SessionService $sessionService;
     private AttendanceService $attendanceService;
     private EditionCompletion $completionService;
@@ -33,6 +35,7 @@ class UserDashboardServiceTest extends TestCase
 
         $this->regRepo = $this->createMock(RegistrationRepository::class);
         $this->editionService = $this->createMock(EditionService::class);
+        $this->editionRepository = $this->createMock(EditionRepository::class);
         $this->sessionService = $this->createMock(SessionService::class);
         $this->attendanceService = $this->createMock(AttendanceService::class);
         $this->completionService = $this->createMock(EditionCompletion::class);
@@ -40,6 +43,7 @@ class UserDashboardServiceTest extends TestCase
         $this->service = new UserDashboardService(
             $this->regRepo,
             $this->editionService,
+            $this->editionRepository,
             $this->sessionService,
             $this->attendanceService,
             $this->completionService,
@@ -491,6 +495,7 @@ class UserDashboardServiceTest extends TestCase
         $this->service = new UserDashboardService(
             $this->regRepo,
             $this->editionService,
+            $this->editionRepository,
             $this->sessionService,
             $this->attendanceService,
             $this->completionService,
@@ -528,6 +533,7 @@ class UserDashboardServiceTest extends TestCase
         $this->service = new UserDashboardService(
             $this->regRepo,
             $this->editionService,
+            $this->editionRepository,
             $this->sessionService,
             $this->attendanceService,
             $this->completionService,
