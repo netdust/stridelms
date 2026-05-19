@@ -246,6 +246,27 @@ VAD collected enrollment form data via FluentForm. Stride stores form responses 
 
 ---
 
+## Phase X — `_ld_price_type='vad'` cleanup
+
+VAD has a custom LearnDash price type `'vad'` registered by `vad-vormingen-v3.0` plugin (`VAD_Settings_Metabox_Course_Access.php`). Stride doesn't ship that plugin, so the type does nothing here. What's visible during the dry-run:
+
+- LD's default fallback button still renders ("Take this course")
+- Stride's sidebar adds its own enrollment CTA → `/vormingen/<slug>/inschrijving/`
+- Two CTAs side-by-side on the course page, breadcrumb on the enrollment page reads "Inschrijving" (correct for Stride, but reads like a detour after clicking LD's button first)
+
+This is **not a Stride bug** — it's the consequence of leaving VAD's custom price-type value in the DB without VAD's plugin to handle it.
+
+**Migration step:**
+- [ ] Audit how many courses have `_ld_price_type='vad'`: `SELECT COUNT(*) FROM ckqp_postmeta WHERE meta_key='_ld_price_type' AND meta_value='vad';`
+- [ ] Decide target price type per group:
+  - E-learnings (`stride_format=online`): probably `'open'` — student enrolls directly, pays via Stride's quote flow if applicable
+  - Classroom courses (`stride_format=klassikaal`): same — enrollment goes through Stride's edition + registration flow, not LD payments
+- [ ] Bulk-update: `UPDATE ckqp_postmeta SET meta_value='open' WHERE meta_key='_ld_price_type' AND meta_value='vad';` (after confirming target)
+- [ ] Verify single course pages: only Stride's CTA should remain, no duplicate LD button
+- [ ] Same audit needed for `ckqp_postmeta` on LD groups (`post_type='groups'`) — `_ld_price_type` lives there too
+
+---
+
 ## Phase 12 — LearnDash content audit
 
 Per `lesson_ld_owns_completion.md`: LD enforces completion rules. Stride defers.
