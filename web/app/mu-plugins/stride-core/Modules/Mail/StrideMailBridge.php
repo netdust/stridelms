@@ -503,7 +503,11 @@ final class StrideMailBridge extends AbstractService
 
         $templates = $this->getTemplateDefinitions();
 
-        $model = ntdst_data()->get('ndmail_template');
+        // Lazy lookup: MailTemplateRepository lives in netdust-mail. Resolving
+        // via ntdst_get() at seed time (not in the constructor) keeps Stride's
+        // bootstrap independent of whether netdust-mail is loaded — seedTemplates()
+        // is only reached after the ndmail_send() guard in init() passes.
+        $templateRepo = ntdst_get(\Netdust\Mail\MailTemplateRepository::class);
 
         foreach ($templates as $slug => $tpl) {
             // Skip if template already exists
@@ -515,7 +519,7 @@ final class StrideMailBridge extends AbstractService
             // Use Data API friendly vocabulary (title/content, not post_title/post_content)
             // so fields validate, cache invalidates, and we don't leave orphan
             // _ndmail_post_* meta rows if the model later registers those keys.
-            $created = $model->create([
+            $created = $templateRepo->create([
                 'title' => $tpl['title'],
                 'content' => $tpl['body'],
                 'post_name' => $slug,
