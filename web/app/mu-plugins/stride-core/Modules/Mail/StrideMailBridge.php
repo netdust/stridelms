@@ -501,6 +501,8 @@ final class StrideMailBridge extends AbstractService
 
         $templates = $this->getTemplateDefinitions();
 
+        $model = ntdst_data()->get('ndmail_template');
+
         foreach ($templates as $slug => $tpl) {
             // Skip if template already exists
             $existing = get_page_by_path($slug, OBJECT, 'ndmail_template');
@@ -508,25 +510,26 @@ final class StrideMailBridge extends AbstractService
                 continue;
             }
 
-            $postId = wp_insert_post([
-                'post_type' => 'ndmail_template',
+            // Use Data API friendly vocabulary (title/content, not post_title/post_content)
+            // so fields validate, cache invalidates, and we don't leave orphan
+            // _ndmail_post_* meta rows if the model later registers those keys.
+            $created = $model->create([
+                'title' => $tpl['title'],
+                'content' => $tpl['body'],
                 'post_name' => $slug,
-                'post_title' => $tpl['title'],
-                'post_content' => $tpl['body'],
                 'post_status' => 'publish',
-            ]);
-
-            if (!$postId || is_wp_error($postId)) {
-                continue;
-            }
-
-            $model = ntdst_data()->get('ndmail_template');
-            $model->updateMetaBatch($postId, [
                 'subject' => $tpl['subject'],
                 'category' => $tpl['category'] ?? 'notification',
                 'status' => 'active',
                 'trigger' => $tpl['trigger'] ?? '',
             ]);
+
+            if (is_wp_error($created)) {
+                ntdst_log('mail')->warning('Failed to seed Stride mail template', [
+                    'slug' => $slug,
+                    'error' => $created->get_error_message(),
+                ]);
+            }
         }
 
         ntdst_log('mail')->info('Stride email templates seeded', [
