@@ -53,6 +53,7 @@ final class QuestionnaireSettingsPage
         add_action('admin_menu', [$this, 'registerPage'], 20);
         add_action('admin_init', [$this, 'handleSave']);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
+        add_action('admin_head', [$this, 'inlineHeadAssets']);
     }
 
     public function registerPage(): void
@@ -73,21 +74,8 @@ final class QuestionnaireSettingsPage
             return;
         }
 
-        // Matches the existing enqueue pattern in this file: from
-        // Modules/Questionnaire/Admin, go up 3 levels to stride-core root.
-        $basePath = dirname(__DIR__, 3);
-        $cssFile  = $basePath . '/assets/css/admin/questionnaire-builder-v2.css';
-        $jsFile   = $basePath . '/assets/js/admin/questionnaire-builder-v2.js';
-
-        // The admin-dashboard.css stylesheet defines all --sd-* tokens.
-        // AdminDashboardService registers it at handle `stride-admin-dashboard`.
-        if (wp_style_is('stride-admin-dashboard', 'registered')) {
-            wp_enqueue_style('stride-admin-dashboard');
-        }
-
-        // Alpine.js — AdminDashboardService registers it at handle `alpinejs`
-        // (3.14.9, CDN, defer). Register here if we're outside its scope so the
-        // call is idempotent.
+        // Alpine.js — AdminDashboardService registers/enqueues it only on the
+        // dashboard top-level page, so we need to enqueue it ourselves here.
         if (!wp_script_is('alpinejs', 'registered')) {
             wp_register_script(
                 'alpinejs',
@@ -102,29 +90,54 @@ final class QuestionnaireSettingsPage
 
         wp_enqueue_script('jquery-ui-sortable');
 
-        if (file_exists($cssFile)) {
-            wp_enqueue_style(
-                'stride-questionnaire-builder-v2',
-                plugins_url('assets/css/admin/questionnaire-builder-v2.css', $basePath . '/stride-core.php'),
-                [],
-                (string) filemtime($cssFile)
-            );
+        // CSS (tokens + v2 styles) and the component JS are inlined via
+        // admin_head in inlineHeadAssets() — both must run before Alpine's
+        // deferred CDN script does. See [[gotcha_alpine_script_load_order]].
+    }
+
+    /**
+     * Inline CSS tokens, builder CSS, the Alpine component, and the seed
+     * state into <head>. Inlining (vs enqueuing) is required so:
+     *   - The --sd-* token CSS arrives even though AdminDashboardService
+     *     only injects its admin-dashboard.css on the dashboard top-level
+     *     page (isStridePage() returns false here).
+     *   - The component-registration script runs before Alpine's deferred
+     *     CDN script fires `alpine:init`, so `questionnaireBuilder` is
+     *     defined when Alpine looks it up. See
+     *     [[gotcha_alpine_script_load_order]].
+     */
+    public function inlineHeadAssets(): void
+    {
+        $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+        if (!$screen || !str_contains((string) $screen->id, self::PAGE_SLUG)) {
+            return;
+        }
+
+        $basePath      = dirname(__DIR__, 3);
+        $tokensCssFile = $basePath . '/assets/css/admin-dashboard.css';
+        $builderCssFile = $basePath . '/assets/css/admin/questionnaire-builder-v2.css';
+        $jsFile        = $basePath . '/assets/js/admin/questionnaire-builder-v2.js';
+
+        if (file_exists($tokensCssFile)) {
+            echo '<style id="stride-dashboard-tokens">';
+            include $tokensCssFile;
+            echo '</style>';
+        }
+
+        if (file_exists($builderCssFile)) {
+            echo '<style id="stride-questionnaire-builder-v2-css">';
+            include $builderCssFile;
+            echo '</style>';
         }
 
         if (file_exists($jsFile)) {
-            wp_enqueue_script(
-                'stride-questionnaire-builder-v2',
-                plugins_url('assets/js/admin/questionnaire-builder-v2.js', $basePath . '/stride-core.php'),
-                ['jquery', 'jquery-ui-sortable'],
-                (string) filemtime($jsFile),
-                true
-            );
+            echo '<script id="stride-questionnaire-state">';
+            echo 'window.strideQuestionnaireState = ' . wp_json_encode($this->getStateJson()) . ';';
+            echo '</script>';
 
-            wp_localize_script(
-                'stride-questionnaire-builder-v2',
-                'strideQuestionnaireState',
-                $this->getStateJson()
-            );
+            echo '<script id="stride-questionnaire-builder-v2">';
+            include $jsFile;
+            echo '</script>';
         }
     }
 
@@ -370,6 +383,7 @@ final class QuestionnaireSettingsPage
     {
         return [
             'interest'            => __('Interesse', 'stride'),
+            'waitlist'            => __('Wachtlijst', 'stride'),
             'enrollment_personal' => __('Inschrijving — Persoonlijk', 'stride'),
             'enrollment_billing'  => __('Inschrijving — Facturatie', 'stride'),
             'intake'              => __('Intake (voor opleiding)', 'stride'),

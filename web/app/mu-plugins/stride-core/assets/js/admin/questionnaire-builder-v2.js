@@ -2,7 +2,8 @@
  * Questionnaire Builder v2 — Alpine.js controller
  *
  * Single component owning all admin state. Hydrated from
- * window.strideQuestionnaireState seeded by wp_localize_script.
+ * window.strideQuestionnaireState (inlined in admin_head before Alpine
+ * boots — see QuestionnaireSettingsPage::inlineHeadAssets()).
  *
  * Spec: docs/superpowers/specs/2026-05-19-questionnaire-builder-redesign-design.md
  */
@@ -53,8 +54,13 @@
                 return this.selectedGroup.fields.find(f => f.id === this.selectedFieldId) || null;
             },
 
-            // ── Selection ─────────────────────────────────────────
-            selectGroup(id) {
+            // ── Selection / accordion ─────────────────────────────
+            toggleGroup(id) {
+                if (this.selectedGroupId === id) {
+                    this.selectedGroupId = null;
+                    this.selectedFieldId = null;
+                    return;
+                }
                 this.selectedGroupId = id;
                 this.selectedFieldId = null;
                 this.$nextTick(() => this.initSortable());
@@ -64,10 +70,16 @@
                 this.selectedFieldId = id;
             },
 
+            focusName(groupId) {
+                this.$nextTick(() => {
+                    // Tell the card's title island to switch into edit mode
+                    // and focus the input. The island listens on
+                    // `qb-edit-title` and matches against its group.id.
+                    window.dispatchEvent(new CustomEvent('qb-edit-title', { detail: groupId }));
+                });
+            },
+
             // ── ID generation ─────────────────────────────────────
-            // New rows get a client-side `tmp_<random>` id. Server
-            // assigns the real id on save; the existing sanitizeGroups()
-            // accepts any string id, so this is safe.
             _newId(prefix) {
                 return prefix + '_' + Math.random().toString(36).slice(2, 9);
             },
@@ -86,6 +98,8 @@
                 this.selectedGroupId = id;
                 this.selectedFieldId = null;
                 this.isDirty = true;
+                // New group → focus name input so the editor can type
+                this.focusName(id);
             },
 
             deleteGroup(id) {
@@ -140,7 +154,7 @@
                 this.isDirty = true;
             },
 
-            // ── Field-row meta hint ───────────────────────────────
+            // ── Read-only display helpers ─────────────────────────
             fieldMeta(field) {
                 const typeLabel = this.fieldTypes[field.type]?.label || field.type;
                 const reqLabel = field.required ? 'vereist' : 'optioneel';
@@ -152,6 +166,64 @@
                     return typeLabel;
                 }
                 return typeLabel + ' · ' + reqLabel;
+            },
+
+            groupMeta(group) {
+                const fieldCount = (group.fields || []).length;
+                return fieldCount === 1 ? '1 veld' : fieldCount + ' velden';
+            },
+
+            // ── Assignments helpers ───────────────────────────────
+            // group.assignments holds strings (post IDs as strings + wildcard
+            // strings like _all_editions) — matches the hydrate-normalized
+            // shape from init(). isAssigned + toggleAssignment cast the
+            // candidate to string before comparing so int/string mix doesn't
+            // bite us.
+            isAssigned(group, value) {
+                const list = group.assignments || [];
+                return list.indexOf(String(value)) !== -1;
+            },
+
+            toggleAssignment(group, value) {
+                const str = String(value);
+                if (!Array.isArray(group.assignments)) {
+                    group.assignments = [];
+                }
+                const idx = group.assignments.indexOf(str);
+                if (idx === -1) {
+                    group.assignments.push(str);
+                } else {
+                    group.assignments.splice(idx, 1);
+                }
+                this.isDirty = true;
+            },
+
+            assignButtonLabel(group) {
+                const sel = group.assignments || [];
+                if (sel.length === 0) return 'Niet gekoppeld';
+
+                // Resolve each selected value to its option label by walking
+                // the optgroup tree. Server stores wildcards as strings
+                // (_all_editions, _all_trajectories) and post IDs as ints;
+                // hydrate normalized everything to strings, so option.value
+                // string-compares cleanly.
+                const labels = [];
+                for (const value of sel) {
+                    const str = String(value);
+                    let found = null;
+                    for (const grp of this.assignments || []) {
+                        const match = (grp.options || []).find(o => String(o.value) === str);
+                        if (match) { found = match.label; break; }
+                    }
+                    if (found) labels.push(found);
+                }
+
+                // 1 selection → show its label; 2 → "A + B"; 3+ → "A + N";
+                // anything missing → count fallback.
+                if (labels.length === 1) return labels[0];
+                if (labels.length === 2) return labels[0] + ' + ' + labels[1];
+                if (labels.length >= 3) return labels[0] + ' + ' + (labels.length - 1);
+                return sel.length + ' toewijzingen';
             },
 
             // ── Drag-drop ─────────────────────────────────────────
@@ -172,7 +244,6 @@
                     placeholder: 'qb-field-row qb-field-row--placeholder ui-sortable-placeholder',
                     forcePlaceholderSize: true,
                     update: function () {
-                        // Read new order from DOM, reassign this.selectedGroup.fields
                         if (!self.selectedGroup) return;
                         const newOrder = [];
                         $list.find('> li').each(function () {

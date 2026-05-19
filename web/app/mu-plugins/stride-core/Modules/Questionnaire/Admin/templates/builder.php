@@ -2,13 +2,12 @@
 /**
  * Questionnaire Builder v2 — top-level template.
  *
- * Loaded from QuestionnaireSettingsPage::renderPage().
- * State is hydrated by Alpine via window.strideQuestionnaireState
- * (set in enqueueAssets()).
+ * Renders a vertical accordion of formuliergroep cards. One card open at
+ * a time; the inspector lives inside the open card's body (no separate
+ * right-rail panel).
  *
- * Form posts to the same admin URL — handleSave() is wired on
- * admin_init and reads $_POST directly. NONCE_ACTION + NONCE_FIELD
- * are the existing constants on QuestionnaireSettingsPage.
+ * State is hydrated by Alpine via window.strideQuestionnaireState
+ * (inlined in QuestionnaireSettingsPage::inlineHeadAssets()).
  */
 defined('ABSPATH') || exit;
 ?>
@@ -18,21 +17,30 @@ defined('ABSPATH') || exit;
         <input type="hidden" name="stride_questionnaire_groups_json" :value="JSON.stringify(groups)">
 
         <?php include __DIR__ . '/_toolbar.php'; ?>
-        <?php include __DIR__ . '/_group-tabs.php'; ?>
 
         <div class="qb-body">
-            <div class="qb-canvas">
-                <template x-if="selectedGroup">
-                    <div>
-                        <?php include __DIR__ . '/_group-header.php'; ?>
-                        <?php include __DIR__ . '/_field-list.php'; ?>
-                    </div>
+            <p class="qb-help" x-show="groups.length <= 1">
+                <?php esc_html_e('Een formuliergroep is een blok vragen dat samen wordt getoond op je formulier. Geef elke groep een herkenbare naam.', 'stride'); ?>
+            </p>
+
+            <div class="qb-accordion">
+                <template x-for="(group, gi) in groups" :key="group.id">
+                    <?php include __DIR__ . '/_group-card.php'; ?>
                 </template>
-                <template x-if="!selectedGroup">
-                    <?php include __DIR__ . '/_empty-state.php'; ?>
-                </template>
+
+                <button type="button" class="qb-add-group" @click="addGroup()">
+                    + <?php esc_html_e('Nieuwe formuliergroep', 'stride'); ?>
+                </button>
             </div>
-            <?php include __DIR__ . '/_inspector.php'; ?>
+
+            <template x-if="groups.length === 0">
+                <div class="qb-empty">
+                    <p><?php esc_html_e('Nog geen formuliergroepen.', 'stride'); ?></p>
+                    <button type="button" class="qb-btn qb-btn--primary" @click="addGroup()">
+                        + <?php esc_html_e('Eerste formuliergroep toevoegen', 'stride'); ?>
+                    </button>
+                </div>
+            </template>
         </div>
     </form>
 </div>
