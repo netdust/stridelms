@@ -124,38 +124,32 @@ VAD has 4 status flags on `_sfwd-courses`. Stride uses `OfferingStatus` enum. Ma
 | No flag set, future date | `open` |
 | No flag set, past date | `completed` |
 
-### Session mapping (three modes)
+### Session mapping (two modes — Mode 3 keuzecursus deferred to editors)
 
-VAD encodes sessions two-and-a-half ways. The script must detect which mode applies per course and route accordingly.
+VAD encodes sessions two ways. Real keuzecursussen are rare (~1-2 in scope); admins fix those manually post-migration via the existing `_ntdst_session_slots` UI per [[pattern_keuzecursus_session_slots]]. Script doesn't try to detect.
 
 **Mode 1: simple multi-day** (most common)
 - Signal: `course_days` populated, `course_program_enabled !== 'on'` OR `course_program` is empty
 - Action: one `vad_session` per timestamp in `course_days`
-- Times from `course_duration` regex
+- Times parsed from course-level `course_duration` regex
 
-**Mode 2: programmed course** (rich per-day descriptions, but not a keuzecursus)
+**Mode 2: programmed course** (rich per-entry descriptions)
 - Signal: `course_program_enabled === 'on'` AND `course_program` is non-empty
-- Action: one `vad_session` per entry in `course_program`. Use the program entry's index to look up the corresponding `course_days` timestamp (often more program entries than days — extras are self-paced/online with no fixed date)
-- Times/locations/speakers: parse from the `program_description` freeform text — best-effort extraction (date regex, "Locatie: X", "Sprekers: X"). What can't be parsed → dump the full description into the session's `description` field so editors see it
-- Session `description` field: keep the full `program_description` text regardless of what was parsed out
+- Action: one `vad_session` per entry in `course_program`. Often more program entries than `course_days` timestamps (e.g. 5 entries, 4 days — the extra is self-paced/online with no fixed date)
+- Per-session times/locations/speakers parsed from `program_description` freeform text — best-effort extraction. What can't be parsed → full `program_description` lands in session `description` so editors see it. Zero data loss.
 
-**Mode 3: true keuzecursus** (kies N uit M)
-- Signal: needs **editor confirmation per course** — can't reliably distinguish from Mode 2 in code. The presence of words like "kies", "keuze", "minimaal" in program_description is a hint, not a rule
-- Action: same as Mode 2 + populate `_ntdst_session_slots` per [[pattern_keuzecursus_session_slots]] (`{slot_id: {label, min, max, session_ids}}`)
-- **Migration decision**: script defaults to Mode 2 for all program-enabled courses. Editor manually upgrades the 1-2 known keuzecursussen to Mode 3 post-migration. Otherwise we'd need a per-course mapping table.
+**Session field mapping:**
 
-**Common session fields (all modes):**
-
-| Stride session meta | Source |
-|---|---|
-| `edition_id` | the edition we just created |
-| `date` | Mode 1: `course_days[i]` timestamp. Mode 2/3: parsed from `program_description` regex `(\d{1,2}\/\d{1,2}\/\d{2,4})`, fallback to `course_days[i]` if positions align, fallback empty |
-| `start_time` / `end_time` | Mode 1: parsed from `course_duration`. Mode 2/3: parsed from `program_description` regex `(\d{1,2}\.?\d{0,2})u?\s*tot\s*(\d{1,2}\.?\d{0,2})u?`, fallback to course-level `course_duration` |
-| `location` | Mode 1: edition's `venue`. Mode 2/3: parsed `Locatie: ...` line, fallback to edition `venue` |
-| `description` | empty for Mode 1, full `program_description` text for Mode 2/3 |
-| `type` | `'in_person'` for klassikaal `stride_format`, `'webinar'` for online — note: Mode 2/3 may have mixed (some entries are "Online zelfstudie") — detect via "Locatie: https://" or "MS Teams" in description |
-| `capacity` | inherit edition |
-| `slot` | empty for Mode 1/2; set for Mode 3 (manual editor step) |
+| Stride session meta | Mode 1 source | Mode 2 source |
+|---|---|---|
+| `edition_id` | edition we just created | same |
+| `date` | `course_days[i]` timestamp | parsed `(\d{1,2}\/\d{1,2}\/\d{2,4})` from `program_description`, fallback to `course_days[i]` if index aligns, fallback empty |
+| `start_time` / `end_time` | parsed from `course_duration` | parsed from `program_description`, fallback to course-level `course_duration` |
+| `location` | edition's `venue` | parsed `Locatie: ...` line, fallback to edition `venue` |
+| `description` | empty | full `program_description` text |
+| `type` | `'in_person'` (klassikaal) or `'webinar'` (online) from `stride_format` | same default + detect "Online" / "MS Teams" / "https://" in description to override per session |
+| `capacity` | inherit edition | inherit edition |
+| `slot` | empty | empty (editor sets manually for the rare keuzecursus) |
 
 ### Idempotency
 
@@ -339,7 +333,7 @@ All three scripts are idempotent — safe to re-run. Snapshot the DB before runn
 3. **Price-string parsing**: `course_pricing` is often descriptive ("Deel van aanbod tweejarige opleiding"). Strategy: extract first `€?\s*\d+(?:[,.]\d{2})?` if present, else null. Outliers get logged and editor sets manually.
 4. **wpi_item → course link**: confirm `sfwd-courses_course_invoice_item` is the canonical bridge (we saw `"14608"` in one sample — a wpi_item ID). Walk a real wpi_quote: read its `_wpinv_items`, look up each line item's `wpi_item` post, check what links back to a `sfwd-courses`.
 5. ~~**Course → FluentForm form_id link**~~ — RESOLVED: port VAD's `LearnDashCourseService::getCustomForm()`.
-6. **Keuzecursus detection**: false signal everywhere — `course_program_enabled='on'` doesn't mean keuzecursus, it just means "show rich program". Real keuzecursussen need editor confirmation post-migration. Mitigation: default to Mode 2 (programmed but not session-pick); editor upgrades the few real keuzecursussen by hand via the existing `_ntdst_session_slots` admin UI.
+6. ~~**Keuzecursus detection**~~ — RESOLVED: not detected by script. Real keuzecursussen are ~1-2 in scope; admins fix them post-migration via the existing `_ntdst_session_slots` admin UI.
 7. **Multi-line `program_description` parsing**: each program entry has freeform Dutch text mixing date, time, location, speakers. Regex per line:
    - Date: `(\d{1,2})\/(\d{1,2})\/(\d{2,4})` → ISO date
    - Time: `(\d{1,2})[\.:]?(\d{0,2})u?\s*tot\s*(\d{1,2})[\.:]?(\d{0,2})u?`
