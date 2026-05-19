@@ -132,42 +132,54 @@ Once taxonomy is renamed (Phase 3), online courses already appear at `/online/` 
 
 ---
 
-## Phase 6 — Users + user meta
+## Phase 6 — Users + user meta ✅ DONE (dry-run 2026-05-19)
 
-VAD users carry over but they're missing Stride-specific meta. Stride uses some fields VAD doesn't, and reads some fields from different keys.
+VAD stores user data across **three layers** in priority order:
+1. **FluentCRM** — main fields (`first_name`, `last_name`, `email`, `phone`) on `ckqp_fc_subscribers`; custom fields serialized in `ckqp_fc_subscriber_meta.key='custom_values'`
+2. **BuddyBoss xprofile** — `ckqp_bp_xprofile_data` keyed by `field_id`
+3. **WP usermeta** — `ckqp_usermeta`, mostly via GetPaid's `_wpinv_*` prefix
 
-**Activation flag (required for login):**
-- [x] One-off: set for user 1 (`ntdst_auth_activated=1`)
-- [ ] **Bulk set for all VAD users:**
-  ```sql
-  INSERT INTO ckqp_usermeta (user_id, meta_key, meta_value)
-  SELECT ID, 'ntdst_auth_activated', '1' FROM ckqp_users
-  WHERE ID NOT IN (SELECT user_id FROM ckqp_usermeta WHERE meta_key='ntdst_auth_activated');
-  ```
-- [ ] Optional: backfill `ntdst_auth_activated_at` with `user_registered` timestamp for audit trail
+**Precedence rule (verbatim from VAD's `FluentCRM_UsersManager::get_field`):**
+First non-empty value wins down the chain. Mirror VAD's decorator order:
+`FluentCRM → XProfile → GetPaid_Customers → GetPaid_Users → WP`.
 
-**Personal vs billing fields (per CLAUDE.md — never conflate):**
+**Critical gotcha**: `xprofile_get_field_data()` doesn't exist on Stride because BuddyBoss isn't installed. Read directly from `ckqp_bp_xprofile_data` table.
 
-| Stride field | Meta key | VAD has this? |
-|---|---|---|
-| organisation | `organisation` | TBD — investigate |
-| department | `department` | TBD |
-| company (billing) | `billing_company` | likely yes (WC/legacy) |
-| address | `billing_address_1` | likely yes |
-| postal_code | `billing_postcode` | likely yes |
-| city | `billing_city` | likely yes |
-| vat_number | `billing_vat` | TBD |
-| invoice_email | `invoice_email` | TBD |
-| gln_number | `gln_number` | likely no — VAD-specific |
+### What was done
 
-- [ ] Audit `ckqp_usermeta` for what keys VAD actually populated
-- [ ] Map any non-standard VAD keys → Stride's expected keys (SQL `UPDATE`s)
-- [ ] **Critical:** Do NOT fall back `organisation` ← `billing_company`. They're separate concerns.
-- [ ] Identify users with `partner` role and verify `_stride_company_id` is set (for Partner API access)
+- [x] **Activated all 25,156 users**: `INSERT INTO ckqp_usermeta SELECT ID, 'ntdst_auth_activated', '1' FROM ckqp_users` (idempotent via `LEFT JOIN ... IS NULL`)
+- [x] **Migrated user meta** with `scripts/migrate-vad-user-meta.php` (idempotent, batches of 500). Result: 25,690 new meta writes across 13 keys.
+- [x] **Verified** with random 8-user audit — 100% match against expected precedence (88 field checks, zero mismatches)
 
-**Role check:**
-- [ ] Confirm Stride roles exist in VAD's `ckqp_options` `ckqp_user_roles` row (administrator, subscriber, partner, etc.)
-- [ ] Reconcile any custom VAD roles (e.g. `instructor` from `instructor-role` ld-hub plugin)
+### Mapping table (locked, see migrate-vad-user-meta.php `$map`)
+
+| Stride usermeta | FluentCRM | XProfile ID | WP usermeta |
+|---|---|---|---|
+| `first_name` | main | 1 | `first_name` |
+| `last_name` | main | 2 | `last_name` |
+| `phone` | main | 141 | `_wpinv_phone` |
+| `organisation` | custom `organisatie` | 146 | — |
+| `department` | custom `afdeling` | — | — |
+| `gln_number` | custom `gln_nummer` | 157 | — |
+| `billing_company` | custom `facturatie_naam_organisat` | 147 | `_wpinv_company` |
+| `billing_address_1` | custom `facturatie_adres` | 12 | `_wpinv_address` |
+| `billing_postcode` | custom `facturatie_postcode` | 15 | `_wpinv_zip` |
+| `billing_city` | custom `facturatie_stad` | 14 | `_wpinv_city` |
+| `billing_vat` | custom `btw_ondernemingsnummer` | 16 | `_wpinv_vat_number` |
+| `invoice_email` | custom `facturatie_email` | 151 | `_wpinv_email_cc` |
+| `_stride_company_id` | custom `winbooks_id` | 148 | `_wpinv_company_id` |
+
+`_stride_company_id` is the **external Winbooks ID**, copied verbatim. Not a WP post ID, just an opaque identifier used for partner-scoping in `CompanyAffiliation` + Partner API.
+
+`organisation` ≠ `billing_company` — never fall back from one to the other. Per CLAUDE.md.
+
+### Open items (deferred)
+
+- [ ] Backfill `ntdst_auth_activated_at` from `user_registered` timestamp for audit consistency
+- [ ] Verify `partner` role users have `_stride_company_id` set (already migrated, but spot-check on production data — some might have null winbooks_id)
+- [ ] **Role reconciliation** — confirm Stride roles exist in VAD's `ckqp_user_roles` option; investigate VAD-specific roles (`instructor` from old ld-hub addon)
+- [ ] Spot-check the 3 `_wpinv_email_cc` users for `invoice_email` — that column is rare; may not capture all VAD invoice-email cases
+- [ ] Consider migrating `_wpinv_first_name` / `_wpinv_last_name` separately if needed (Stride uses `first_name`/`last_name` from WP core, which is already populated for 25,156 users)
 
 ---
 
@@ -318,25 +330,78 @@ Per `lesson_ld_owns_completion.md`: LD enforces completion rules. Stride defers.
 
 ---
 
-## What's confirmed working as-is
+## Phase 13 — Stride fixes shipped during dry-run (2026-05-19)
 
-After Phases 0-2 + magic-link activation for user 1:
+The dry-run surfaced two real Stride bugs. Both fixed on this branch; both fixes ride forward into the production migration. **Not** VAD-specific.
+
+### Fix 1: `LearnDashHelper::isEnrolled` access-from check applies to all modes
+
+**File:** `web/app/mu-plugins/stride-core/Integrations/LearnDash/LearnDashHelper.php`
+
+Was: only short-circuited on `course_X_access_from` for `MODE_OPEN`. For `MODE_FREE` it fell through to `sfwd_lms_has_access()` which returns FALSE for legacy enrollments with expired access windows. Catalog showed enrolled courses as "Beschikbaar".
+
+Now: the access-from short-circuit runs for every mode. Progress > 0 is also a positive enrollment signal. 894 unit tests pass.
+
+### Fix 2: URL structure rework — `/vormingen/` → `/edities/`, LD owns `/opleidingen/`
+
+**Design:** `tasks/url-structure-rework.md`. **Key insight:** can't out-vote LD on its own permalink. LD hard-codes links to `/opleidingen/<slug>/`; previous role split (`a5f5aea9`) made Stride compete with that and lost.
+
+Final model:
+- `/opleidingen/<course-slug>/` — LD owns it, Stride decorates with sidebar/CTA
+  - Active edition exists → editions list (no inline CTA)
+  - No edition, online format → self-enroll CTA → `?enroll=1` grants LD access + bounces to first lesson
+  - No edition, klassikaal → "Geen actieve edities" notice
+- `/edities/<edition-slug>/` — Stride's transactional edition surface (renamed from `/vormingen/`)
+- `/edities/<edition-slug>/inschrijving/` — form-aware enrollment (already form-aware via `enrollment_form` meta)
+- `/vormingen/<anything>/` → 301 via WP canonical redirect (bonus, no manual rules needed)
+
+**Files touched:**
+- `StrideSettingsService.php` — default slug → `edities`
+- `EditionRouter.php` — rewritten, only routes editions; redirects course-slug requests to `/opleidingen/`
+- `single-sfwd-courses.php` — restored CTAs with format/edition branching
+- `CourseEnrollHandler.php` (new) — `?enroll=1` handler on `/opleidingen/<slug>/`
+- `sidebar-online.php`, `mobile-cta.php` — CTAs retargeted to `add_query_arg('enroll', '1', get_permalink($course_id))`
+- `card-course.php` — links to `get_permalink($course)` (the canonical LD URL)
+- `single-course-enrollable.php` — deleted (workaround template no longer needed)
+- 20-file bulk `/vormingen/` → `/edities/` sed pass + register CourseEnrollHandler in plugin-config.php
+
+**Test status:** 894/894 unit tests pass.
+
+### Bugs documented but NOT fixed in code (recorded in memory for future agents)
+
+- `bug_pureld_open_cta_loop` — superseded by URL rework above; can be closed
+- (none others outstanding — both real bugs are fixed)
+
+---
+
+## What's confirmed working as-is (end of 2026-05-19)
+
+After Phases 0–6 + URL rework:
 
 - ✅ Site boots, homepage renders (Stridence theme)
-- ✅ `/klassikaal/`, `/online/`, `/agenda/`, `/contact/`, `/faq/`, `/opleidingen/`, `/over-ons/`, `/privacy/`, `/trajecten/`, `/voorwaarden/` all 200
-- ✅ `/mijn-account/` 302 → `/aanmelden/` for guests (correct)
-- ✅ `/aanmelden/`, `/registreren/` rendered via `ntdst_router` (no page seed needed)
-- ✅ Magic-link login flow works once `ntdst_auth_activated` is set
-- ✅ `ckqp_vad_registrations` + `ckqp_vad_attendance` tables already exist with Stride-compatible schema
-- ✅ 390 `sfwd-courses` + 13 LD groups + ~all users carry over
+- ✅ All 13 structural pages resolve (catalog, info, legal, auth)
+- ✅ Magic-link login works for any user (all 25,156 activated)
+- ✅ `/online/` shows 36 e-learnings with subject-filter chips
+- ✅ `/klassikaal/` shows classroom courses (354 tagged)
+- ✅ Course page `/opleidingen/<slug>/` decorated with Stride sidebar
+- ✅ Online enroll flow: card → `/opleidingen/<slug>/` → CTA → `?enroll=1` → first lesson
+- ✅ Catalog correctly badges historical enrollments as "Ingeschreven"/"X% voltooid"
+- ✅ User data migrated with FluentCRM → XProfile → WP precedence, 100% audit match on 8 random users
+- ✅ `_stride_company_id` populated for ~2,549 users (every user with a billing profile)
 
 ## What's known broken / empty
 
-- ❌ `/online/` shows 0 courses — taxonomy mismatch (Phase 3, next)
-- ❌ `/vormingen/` 404 — no `vad_edition` posts (Phase 10)
-- ❌ `/mijn-account/` (authed) will show empty dashboard — empty registrations table (Phase 11)
-- ❌ Seeded pages have no content (Phase 8)
-- ❌ Quotes, attendance, certificates surfaces all blank until Phase 10 + 11 done
+- ❌ `/edities/` 404 — no `vad_edition` posts yet (Phase 10)
+- ❌ `/mijn-account/` (authed) shows empty edition-based dashboard — `ckqp_vad_registrations` empty (Phase 11)
+- ❌ Seeded pages have no content (Phase 8 — content migration)
+- ❌ Quotes, attendance, certificates surfaces blank until Phase 10 + 11 done
+- ❌ `_ld_price_type='vad'` still on 357 courses — needs flip to `open` per Phase X (or `free`)
+
+## Recommended next phases
+
+1. **Phase X** — flip `_ld_price_type` for online + classroom courses. Easy SQL, immediate win on catalog UX.
+2. **Phase 10** — generate `vad_edition` posts for upcoming courses.
+3. **Phase 11** — backfill active enrollments from LD activity + FluentForm submissions (the hard one).
 
 ---
 
