@@ -46,9 +46,11 @@ class AnnualReportPdfGenerator implements \NTDST_Service_Meta
 
     private function renderHtml(AnnualReport $report): string
     {
-        $templatePath = dirname(__DIR__, 2) . '/templates/pdf/annual-report.php';
-        ob_start();
-        include $templatePath;
-        return (string) ob_get_clean();
+        $templatesDir = dirname(__DIR__, 2) . '/templates';
+
+        return ntdst_response()
+            ->addPath($templatesDir)
+            ->withData(['report' => $report])
+            ->html('pdf/annual-report');
     }
 }

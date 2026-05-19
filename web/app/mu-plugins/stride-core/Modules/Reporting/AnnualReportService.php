@@ -7,7 +7,9 @@ namespace Stride\Modules\Reporting;
 use Stride\Domain\AttendanceStatus;
 use Stride\Modules\Attendance\AttendanceTable;
 use Stride\Modules\Edition\EditionCPT;
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\SessionCPT;
+use Stride\Modules\Edition\SessionRepository;
 use Stride\Modules\Enrollment\RegistrationTable;
 
 class AnnualReportService implements \NTDST_Service_Meta
@@ -19,6 +21,12 @@ class AnnualReportService implements \NTDST_Service_Meta
             'description' => 'Aggregates yearly platform stats for government reporting',
             'priority' => 50,
         ];
+    }
+
+    public function __construct(
+        private readonly EditionRepository $editions,
+        private readonly SessionRepository $sessions,
+    ) {
     }
 
     public function buildReport(int $year): AnnualReport
@@ -119,7 +127,7 @@ class AnnualReportService implements \NTDST_Service_Meta
              WHERE r.status IN ('confirmed', 'completed')
                AND r.edition_id IN ({$placeholders})
              GROUP BY pm.meta_value",
-            '_ntdst_course_id',
+            $this->editions->getMetaPrefix() . 'course_id',
             ...$editionIds
         ));
 
@@ -148,7 +156,7 @@ class AnnualReportService implements \NTDST_Service_Meta
                  WHERE r.edition_id IN ({$placeholders})
                  GROUP BY pm.meta_value
                  ORDER BY enrolled DESC",
-                '_ntdst_course_id',
+                $this->editions->getMetaPrefix() . 'course_id',
                 ...$editionIds
             ));
             foreach ($raw as $r) {
@@ -189,6 +197,8 @@ class AnnualReportService implements \NTDST_Service_Meta
             $end   = sprintf('%d-12-31', $year);
             $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
 
+            $sessionPrefix = $this->sessions->getMetaPrefix();
+            $editionPrefix = $this->editions->getMetaPrefix();
             $sessions = $wpdb->get_results($wpdb->prepare(
                 "SELECT p.ID AS session_id,
                         pm_ed.meta_value AS edition_id,
@@ -205,11 +215,11 @@ class AnnualReportService implements \NTDST_Service_Meta
                    AND p.post_status = 'publish'
                    AND pm_date.meta_value BETWEEN %s AND %s
                    AND pm_ed.meta_value IN ({$placeholders})",
-                '_ntdst_date',
-                '_ntdst_edition_id',
-                '_ntdst_start_time',
-                '_ntdst_end_time',
-                '_ntdst_course_id',
+                $sessionPrefix . 'date',
+                $sessionPrefix . 'edition_id',
+                $sessionPrefix . 'start_time',
+                $sessionPrefix . 'end_time',
+                $editionPrefix . 'course_id',
                 SessionCPT::POST_TYPE,
                 $start,
                 $end,
@@ -245,7 +255,7 @@ class AnnualReportService implements \NTDST_Service_Meta
                  WHERE r.status IN ('confirmed','completed')
                    AND r.edition_id IN ({$placeholders})
                  GROUP BY pm.meta_value",
-                '_ntdst_course_id',
+                $this->editions->getMetaPrefix() . 'course_id',
                 ...$editionIds
             ));
             foreach ($rowsParticipants as $r) {
@@ -473,7 +483,7 @@ class AnnualReportService implements \NTDST_Service_Meta
                AND p.post_status = 'publish'
                AND pm.meta_value != ''
              ORDER BY y DESC",
-            '_ntdst_start_date',
+            $this->editions->getMetaPrefix() . 'start_date',
             EditionCPT::POST_TYPE
         ));
         return array_map('intval', $rows);
@@ -508,7 +518,7 @@ class AnnualReportService implements \NTDST_Service_Meta
                AND pm.meta_key = %s
                AND pm.meta_value BETWEEN %s AND %s",
             EditionCPT::POST_TYPE,
-            '_ntdst_start_date',
+            $this->editions->getMetaPrefix() . 'start_date',
             $start,
             $end
         ));
@@ -612,6 +622,7 @@ class AnnualReportService implements \NTDST_Service_Meta
         $start = sprintf('%d-01-01', $year);
         $end = sprintf('%d-12-31', $year);
         $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
+        $sessionPrefix = $this->sessions->getMetaPrefix();
         return (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(DISTINCT p.ID)
              FROM {$wpdb->posts} p
@@ -621,8 +632,8 @@ class AnnualReportService implements \NTDST_Service_Meta
                AND p.post_status = 'publish'
                AND pm_date.meta_value BETWEEN %s AND %s
                AND pm_ed.meta_value IN ({$placeholders})",
-            '_ntdst_date',
-            '_ntdst_edition_id',
+            $sessionPrefix . 'date',
+            $sessionPrefix . 'edition_id',
             SessionCPT::POST_TYPE,
             $start,
             $end,
@@ -641,6 +652,7 @@ class AnnualReportService implements \NTDST_Service_Meta
         $end = sprintf('%d-12-31', $year);
         $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
 
+        $sessionPrefix = $this->sessions->getMetaPrefix();
         $sessions = $wpdb->get_results($wpdb->prepare(
             "SELECT p.ID,
                     pm_start.meta_value AS start_time,
@@ -654,10 +666,10 @@ class AnnualReportService implements \NTDST_Service_Meta
                AND p.post_status = 'publish'
                AND pm_date.meta_value BETWEEN %s AND %s
                AND pm_ed.meta_value IN ({$placeholders})",
-            '_ntdst_date',
-            '_ntdst_edition_id',
-            '_ntdst_start_time',
-            '_ntdst_end_time',
+            $sessionPrefix . 'date',
+            $sessionPrefix . 'edition_id',
+            $sessionPrefix . 'start_time',
+            $sessionPrefix . 'end_time',
             SessionCPT::POST_TYPE,
             $start,
             $end,
