@@ -183,32 +183,62 @@ First non-empty value wins down the chain. Mirror VAD's decorator order:
 
 ---
 
-## Phase 7 — Permalink + URL config
+## Phase 7 — Permalink + URL config (small)
 
-VAD's `permalink_structure` is `/%category%/%postname%/`. Stride defaults to `/%postname%/`. Either:
+VAD's `permalink_structure` is `/%category%/%postname%/`. Dry-run confirmed Stride works fine under it because:
+- WP pages resolve by slug regardless of structure
+- CPTs use their own rewrite slug (no category prefix)
+- Stride auth/enrollment routes go via `ntdst_router`, not permalinks
 
-- [ ] Change permalink to `/%postname%/` and flush (cleaner, but breaks any deep links from emails/SEO pointing at the old structure)
-- [ ] Or leave as-is and verify Stride's CPT rewrites still resolve (they probably do — CPTs have their own `slug` config)
+**Recommendation: leave it.** Real production has indexed URLs; changing the structure invalidates SEO equity. Only switch if there's a specific cleanup case.
 
-Also:
-- [ ] Set `stride_url_slugs` option if the defaults (`vormingen`, `trajecten`) don't match VAD's expected slugs.
+- [ ] (Optional) Switch to `/%postname%/` if requested — `wp option update permalink_structure '/%postname%/'` + `wp rewrite flush`. ~5 min.
+- [ ] `stride_url_slugs` option is not set in the dry-run → Stride uses the code defaults (`edities`, `trajecten`). Set the option only if editors want different slugs.
 
 ---
 
-## Phase 8 — Theme + page content
+## Phase 8 — Page content (small + editorial)
 
-Pages seeded in Phase 2 have empty `post_content`. Templates that use `the_content()` (most "about/contact/legal" pages) will look bare.
+Seeded pages (Phase 2) have `post_content=0` bytes. Most render fine because they have `page-*.php` templates (`page-online.php`, `page-klassikaal.php`, `page-mijn-account.php`). The blank-by-default ones rely on `the_content()`:
+`/agenda/`, `/contact/`, `/over-ons/`, `/privacy/`, `/voorwaarden/`, `/faq/`, `/trajecten/`.
 
-- [ ] Decide for each page: hard-coded template, or block content that needs migrating from VAD's existing pages?
-- [ ] If VAD has equivalent pages in its DB (e.g. `about-vad`), search-replace the slug or copy `post_content` over
+### What VAD has to migrate
+
+| Stride page | VAD source | VAD bytes |
+|---|---|---|
+| `over-ons` | post `over-platform` (ID 3412) | 16,289 |
+| `privacy` | post `privacy-verklaring` (ID 3) | 13,580 |
+| `voorwaarden` | — | (empty in VAD too) |
+| `contact`, `faq`, `agenda` | — | (empty in VAD; templates rendered them) |
+
+- [ ] Copy `over-platform` and `privacy-verklaring` content into the new pages (single SQL `UPDATE ckqp_posts SET post_content=(SELECT post_content FROM ...) ...`)
+- [ ] Editor writes `voorwaarden`, `contact`, `faq`, `agenda` content — or copies from VAD's frontend rendering
+- [ ] Verify all 7 pages render with content post-migration
+
+Estimated: ~30 min SQL + editorial review.
 
 ---
 
 ## Phase 9 — Integrations (FluentCRM, Exact Online, FluentForm)
 
-- [ ] Exact Online integration: VAD has it, Stride has a placeholder. Confirm credentials, mapping.
-- [ ] FluentCRM contact data: probably already populated in VAD's DB. Confirm tag/list structure matches Stride's expectations.
-- [ ] FluentForm forms: VAD's forms work; Stride uses different form schemas in some modules (intake, evaluation).
+**Decisions made 2026-05-19 (Stefan):**
+- **FluentCRM** — VAD stops using FluentCRM post-migration. Stride's notification stack (StrideMailBridge, FluentSMTP) replaces it. No data migration needed; existing tags/lists/automations are retired.
+- **Exact Online** — out of scope. Bookkeepers continue using Exact's UI directly (per CLAUDE.md #3). Stride creates quotes; it does not export to Exact.
+- **FluentForm** — kept, but only for VAD's specific use cases (e.g. ad-hoc surveys outside Stride's enrollment/intake flow). A future bridge plugin will sit between VAD's existing FluentForm forms and Stride's data model. **Not built now.**
+
+### Stride state for the dry-run
+
+| Integration | VAD data | Stride references | Action |
+|---|---|---|---|
+| FluentCRM | 25,952 subscribers, 26 tags, 6 lists | zero code references | None. Plugin stays active during dry-run (Stride boots cleaner with it), retired post-migration. |
+| FluentForm | 40 forms, 12,723 submissions | Stride's intake/evaluation are separate (own questionnaire system) | None. Forms carry over as historical data; bridge plugin to be written later. |
+| Exact Online | VAD's vad-vormingen-v3.0 plugin handled it | Stride only mentions Exact in admin help text | None. |
+
+### Cleanup at real-migration time
+
+- [ ] Decide whether to deactivate FluentCRM on production cutover or keep it running until the bridge plugin replaces select use cases.
+- [ ] Audit FluentForm forms: which are still actively linked from theme pages? Disable/archive the rest.
+- [ ] Document that Stride does NOT export to Exact — bookkeepers' workflow stays in Exact's UI.
 
 ---
 
