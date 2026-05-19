@@ -146,16 +146,43 @@ For each timestamp in `sfwd-courses_course_days`, create one `vad_session`:
 | `cancelled_at` | null |
 | `notes` | `'Migrated from VAD on YYYY-MM-DD'` audit marker |
 | `completion_tasks` | null (no signal) |
-| `enrollment_data` | **null with notes annotation** — the form-data problem. See deferred-decision below. |
+| `enrollment_data` | **`{"migrated_from_vad": {...VAD FluentForm JSON as-is...}}`** — see "Form-data approach" below. |
 
-### The form-data problem (deferred decision)
+### Form-data approach (resolved 2026-05-19)
 
-VAD collected enrollment-form responses via FluentForm. Stride stores them as JSON in `enrollment_data` keyed by Stride questionnaire field IDs. The mapping is not 1:1 — different forms per course, different field structures.
+VAD's FluentForm submissions are already structured JSON. We don't need to map VAD form fields → Stride questionnaire IDs. Just dump the raw submission into `enrollment_data` under a reserved key.
 
-**This script does NOT migrate form data.** Three options the editor can choose post-migration:
-- Leave `enrollment_data` null, note "data available in FluentForm submission archive #N" in `notes`
-- Hand-build a per-course mapping for the most-active courses (top 10?)
-- Email in-flight enrollees to re-submit the Stride form
+**Storage shape:**
+
+```json
+{
+  "migrated_from_vad": {
+    "submission_id": 12345,
+    "submitted_at": "2026-03-15 14:22:01",
+    "form_id": 7,
+    "form_title": "Inschrijving Basisvorming",
+    "fields": {
+      "naam": "Jan Vermeulen",
+      "functie": "Hulpverlener",
+      "organisatie": "CAW Antwerpen",
+      "...": "..."
+    }
+  }
+}
+```
+
+New Stride enrollments continue to use the existing stage-keyed shape (`enrollment_personal`, `intake`, `evaluation`). The two coexist — a migrated row has only `migrated_from_vad`; a Stride-native row has only the stages; a migrated row that later collects post-enrollment intake/evaluation has both.
+
+**Migration step**:
+1. Build a lookup `course_id → FluentForm form_id` (VAD attached one form per course; the link is in VAD's plugin config or course meta — investigation point during script-writing).
+2. Pull submissions from `ckqp_fluentform_submissions` filtered by form_id + user_id (or email).
+3. Decode the response JSON (FluentForm stores serialized PHP or JSON depending on version), normalise to the shape above.
+4. If no submission found for a given user × course → leave `enrollment_data = null` (user enrolled without filling the form, or form-less course).
+
+**Exporter integration** (separate code change, post-migration):
+- `EditionRegistrationExporter::writeAllSheets()` adds a conditional 8th sheet "Vorige inschrijfgegevens" that fires when any registration has `enrollment_data.migrated_from_vad`.
+- Each row dumps the original VAD submission with its field labels intact.
+- No mapping logic — editor sees the raw migrated data as one column per VAD form field, alongside the Stride-native sheets.
 
 ### Idempotency
 
@@ -249,7 +276,7 @@ All three scripts are idempotent — safe to re-run. Snapshot the DB before runn
 2. **Status flag → enum mapping**: which combinations are valid? Sample all 94 and see which flags are set.
 3. **Price-string parsing**: `sfwd-courses_course_pricing` is often a descriptive string ("Deel van aanbod tweejarige opleiding") not a number. Strategy: extract first `€?\d+(?:,\d{2})?` if present, else null.
 4. **wpi_item → course link**: confirm `sfwd-courses_course_invoice_item` is the canonical bridge before relying on it.
-5. **Form-data deferral**: get explicit editor decision on which courses keep `enrollment_data = null` vs which get a per-course manual mapping.
+5. **Course → FluentForm form_id link**: how does VAD attach an enrollment form to a course? Candidates: VAD plugin meta on the course, FluentForm setting referencing the course, or a translation table inside `vad-vormingen-v3.0`. Required to fetch the right submissions per user×course in Script 2.
 
 ## Anti-goals
 
