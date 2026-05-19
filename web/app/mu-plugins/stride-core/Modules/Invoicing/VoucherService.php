@@ -353,11 +353,12 @@ final class VoucherService
         if (isset($data['fields']) && is_array($data['fields'])) {
             $data = array_merge($data, $data['fields']);
         } elseif (isset($data['meta']) && is_array($data['meta'])) {
-            // Strip _ntdst_ prefix from meta keys for consistent access
+            $prefix = $this->repository->getMetaPrefix();
+            $prefixLen = strlen($prefix);
             $unprefixedMeta = [];
             foreach ($data['meta'] as $key => $value) {
-                $unprefixedKey = str_starts_with($key, '_ntdst_')
-                    ? substr($key, 7)  // strlen('_ntdst_') = 7
+                $unprefixedKey = ($prefix !== '' && str_starts_with($key, $prefix))
+                    ? substr($key, $prefixLen)
                     : $key;
                 $unprefixedMeta[$unprefixedKey] = $value;
             }
