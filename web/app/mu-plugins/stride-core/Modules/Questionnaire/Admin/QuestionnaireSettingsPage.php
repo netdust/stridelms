@@ -19,8 +19,8 @@ final class QuestionnaireSettingsPage
 {
     private const PAGE_SLUG    = 'stride-questionnaire';
     private const CAPABILITY   = 'manage_options';
-    private const NONCE_ACTION = 'stride_save_questionnaire';
-    private const NONCE_FIELD  = 'stride_questionnaire_nonce';
+    public const NONCE_ACTION = 'stride_save_questionnaire';
+    public const NONCE_FIELD  = 'stride_questionnaire_nonce';
 
     /**
      * Field names that must never reach the form-builder: writing to them
@@ -73,66 +73,58 @@ final class QuestionnaireSettingsPage
             return;
         }
 
-        wp_enqueue_style(
-            'select2',
-            'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css',
-            [],
-            '4.1.0'
-        );
-        wp_enqueue_script(
-            'select2',
-            'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js',
-            ['jquery'],
-            '4.1.0',
-            true
-        );
+        // Matches the existing enqueue pattern in this file: from
+        // Modules/Questionnaire/Admin, go up 3 levels to stride-core root.
+        $basePath = dirname(__DIR__, 3);
+        $cssFile  = $basePath . '/assets/css/admin/questionnaire-builder-v2.css';
+        $jsFile   = $basePath . '/assets/js/admin/questionnaire-builder-v2.js';
 
-        // jQuery UI sortable (bundled with WP)
+        // The admin-dashboard.css stylesheet defines all --sd-* tokens.
+        // AdminDashboardService registers it at handle `stride-admin-dashboard`.
+        if (wp_style_is('stride-admin-dashboard', 'registered')) {
+            wp_enqueue_style('stride-admin-dashboard');
+        }
+
+        // Alpine.js — AdminDashboardService registers it at handle `alpinejs`
+        // (3.14.9, CDN, defer). Register here if we're outside its scope so the
+        // call is idempotent.
+        if (!wp_script_is('alpinejs', 'registered')) {
+            wp_register_script(
+                'alpinejs',
+                'https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js',
+                [],
+                '3.14.9',
+                true
+            );
+            wp_script_add_data('alpinejs', 'defer', true);
+        }
+        wp_enqueue_script('alpinejs');
+
         wp_enqueue_script('jquery-ui-sortable');
-
-        $basePath = dirname(__DIR__, 3); // stride-core root (Questionnaire/Admin -> Modules -> stride-core)
-        $cssFile  = $basePath . '/assets/css/admin/questionnaire-builder.css';
-        $jsFile   = $basePath . '/assets/js/admin/questionnaire-builder.js';
 
         if (file_exists($cssFile)) {
             wp_enqueue_style(
-                'stride-questionnaire-builder',
-                plugins_url('assets/css/admin/questionnaire-builder.css', $basePath . '/stride-core.php'),
-                ['select2'],
+                'stride-questionnaire-builder-v2',
+                plugins_url('assets/css/admin/questionnaire-builder-v2.css', $basePath . '/stride-core.php'),
+                [],
                 (string) filemtime($cssFile)
             );
         }
 
         if (file_exists($jsFile)) {
             wp_enqueue_script(
-                'stride-questionnaire-builder',
-                plugins_url('assets/js/admin/questionnaire-builder.js', $basePath . '/stride-core.php'),
-                ['jquery', 'select2', 'jquery-ui-sortable'],
+                'stride-questionnaire-builder-v2',
+                plugins_url('assets/js/admin/questionnaire-builder-v2.js', $basePath . '/stride-core.php'),
+                ['jquery', 'jquery-ui-sortable'],
                 (string) filemtime($jsFile),
                 true
             );
 
-            $fieldTypes = $this->getFieldTypes();
-            $stages     = $this->getStages();
-
-            wp_localize_script('stride-questionnaire-builder', 'strideQuestionnaire', [
-                'assignments'    => $this->getAssignmentOptions(),
-                'userMetaFields' => array_keys($this->getUserMetaFieldNames()),
-                'fieldTypes'     => array_map(
-                    static fn(array $t) => ['label' => $t['label'], 'color' => $t['color']],
-                    $fieldTypes
-                ),
-                'stages'         => $stages,
-                'i18n'           => [
-                    'confirmDeleteGroup' => __('Groep en alle velden verwijderen?', 'stride'),
-                    'confirmDeleteField' => __('Veld verwijderen?', 'stride'),
-                    'searchPlaceholder'  => __('Zoek editie of traject...', 'stride'),
-                    'noResults'          => __('Geen resultaten', 'stride'),
-                    'userMetaWarning'    => __('Let op: dit veld overschrijft gebruikersgegevens bij inschrijving.', 'stride'),
-                    'addField'           => __('+ Veld toevoegen', 'stride'),
-                    'addGroup'           => __('+ Groep toevoegen', 'stride'),
-                ],
-            ]);
+            wp_localize_script(
+                'stride-questionnaire-builder-v2',
+                'strideQuestionnaireState',
+                $this->getStateJson()
+            );
         }
     }
 
@@ -150,7 +142,10 @@ final class QuestionnaireSettingsPage
             return;
         }
 
-        $rawGroups = $_POST['stride_questionnaire_groups'] ?? [];
+        // v2 builder posts as JSON; legacy (pre-v2) posted as nested form arrays
+        $rawGroups = isset($_POST['stride_questionnaire_groups_json'])
+            ? $this->parseSubmittedGroups((string) wp_unslash($_POST['stride_questionnaire_groups_json']))
+            : (array) ($_POST['stride_questionnaire_groups'] ?? []);
         $sanitized = $this->sanitizeGroups($rawGroups);
 
         $repo = ntdst_get(QuestionnaireRepository::class);
@@ -166,333 +161,36 @@ final class QuestionnaireSettingsPage
 
     public function renderPage(): void
     {
-        if (!current_user_can(self::CAPABILITY)) {
-            return;
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Geen toegang.', 'stride'));
         }
 
-        $repo        = ntdst_get(QuestionnaireRepository::class);
-        $groups      = $repo->getAllGroups();
-        $assignments = $this->getAssignmentOptions();
-        $fieldTypes  = $this->getFieldTypes();
-        $stages      = $this->getStages();
-
         ?>
-        <div class="wrap stride-questionnaire-wrap">
-            <h1><?= esc_html__('Formuliervelden', 'stride') ?></h1>
-            <p class="description">
-                <?= esc_html__('Beheer vragenlijsten en extra velden voor inschrijf-, intake- en evaluatieformulieren. Maak groepen aan en wijs ze toe aan edities of trajecten.', 'stride') ?>
-            </p>
-
-            <?php $this->renderSystemFieldsHelp(); ?>
-
-            <?php settings_errors('stride_questionnaire'); ?>
-
-            <form method="post" id="stride-questionnaire-form">
-                <?php wp_nonce_field(self::NONCE_ACTION, self::NONCE_FIELD); ?>
-
-                <div id="stride-questionnaire-container">
-                    <?php
-                    if (!empty($groups)) {
-                        foreach ($groups as $gi => $group) {
-                            $this->renderGroup($gi, $group, $fieldTypes, $stages, $assignments);
-                        }
-                    }
-                    ?>
-                </div>
-
-                <p class="stride-add-group-wrap">
-                    <button type="button" class="button button-primary" id="stride-add-group">
-                        <?= esc_html__('+ Groep toevoegen', 'stride') ?>
-                    </button>
-                </p>
-
-                <?php submit_button(__('Wijzigingen opslaan', 'stride')); ?>
-            </form>
-
-            <!-- Group template for JS -->
-            <script type="text/template" id="stride-group-template">
-                <?php $this->renderGroup('__GI__', [], $fieldTypes, $stages, $assignments); ?>
-            </script>
-
-            <!-- Field card template for JS -->
-            <script type="text/template" id="stride-field-card-template">
-                <?php $this->renderFieldCard('__GI__', '__FI__', [], $fieldTypes); ?>
-            </script>
+        <div class="wrap">
+            <h1 style="margin-bottom:16px"><?php esc_html_e('Vragenlijst', 'stride'); ?></h1>
+            <?php
+            settings_errors('stride_questionnaire');
+            include __DIR__ . '/templates/builder.php';
+            ?>
         </div>
         <?php
     }
 
-    private function renderGroup($gi, array $group, array $fieldTypes, array $stages, array $assignments): void
+    /**
+     * Decode the v2 builder's JSON payload back into the array shape
+     * sanitizeGroups() expects. Returns [] on malformed input — the
+     * existing sanitizer treats [] as "no groups", which is safe.
+     */
+    private function parseSubmittedGroups(string $json): array
     {
-        $label      = $group['label'] ?? '';
-        $stage      = $group['stage'] ?? 'enrollment_personal';
-        $groupId    = $group['id'] ?? 'qg_new_' . $gi;
-        $assigned   = $group['assignments'] ?? [];
-        $fields     = $group['fields'] ?? [];
-        $isNew      = empty($group);
-        $collapsed  = !$isNew; // new groups start expanded, existing collapsed
-
-        $stageLabel = $stages[$stage] ?? $stage;
-        $fieldCount = count($fields);
-        $assignCount = count($assigned);
-
-        // Stage badge color map
-        $stageBadgeColors = [
-            'interest'            => '#0d7a3e',
-            'waitlist'            => '#996300',
-            'enrollment_personal' => '#2271b1',
-            'enrollment_billing'  => '#135e96',
-            'intake'              => '#6c3483',
-            'evaluation'          => '#8c5e10',
-        ];
-        $stageBadgeColor = $stageBadgeColors[$stage] ?? '#666';
-
-        $blockClass = 'stride-group-block' . ($collapsed ? ' is-collapsed' : '');
-        $toggleIcon = $collapsed ? '&#9658;' : '&#9660;'; // ▸ or ▾
-
-        ?>
-        <div class="<?= esc_attr($blockClass) ?>" data-group-index="<?= esc_attr((string) $gi) ?>">
-            <input type="hidden"
-                   name="stride_questionnaire_groups[<?= esc_attr((string) $gi) ?>][id]"
-                   value="<?= esc_attr($groupId) ?>">
-
-            <div class="stride-group-header">
-                <span class="stride-drag-handle" title="<?= esc_attr__('Versleep om te sorteren', 'stride') ?>">&#9776;</span>
-
-                <span class="stride-group-label-preview">
-                    <?= $label ? esc_html($label) : esc_html__('Nieuwe groep', 'stride') ?>
-                </span>
-
-                <span class="stride-stage-badge"
-                      style="background-color: <?= esc_attr($stageBadgeColor) ?>;"
-                      data-stage="<?= esc_attr($stage) ?>">
-                    <?= esc_html($stageLabel) ?>
-                </span>
-
-                <span class="stride-assignment-count">
-                    <?php
-                    if ($assignCount > 0) {
-                        /* translators: %d: number of assignments */
-                        echo esc_html(sprintf(_n('%d toewijzing', '%d toewijzingen', $assignCount, 'stride'), $assignCount));
-                    } else {
-                        echo esc_html__('Niet toegewezen', 'stride');
-                    }
-                    ?>
-                </span>
-
-                <button type="button" class="stride-group-toggle" title="<?= esc_attr__('In-/uitklappen', 'stride') ?>">
-                    <?= $toggleIcon ?>
-                </button>
-
-                <button type="button" class="stride-remove-group" title="<?= esc_attr__('Verwijder groep', 'stride') ?>">&times;</button>
-            </div>
-
-            <div class="stride-group-body" <?= $collapsed ? 'style="display:none;"' : '' ?>>
-                <!-- Group label input -->
-                <div class="stride-group-label-row">
-                    <label>
-                        <span><?= esc_html__('Groepsnaam:', 'stride') ?></span>
-                        <input type="text"
-                               name="stride_questionnaire_groups[<?= esc_attr((string) $gi) ?>][label]"
-                               value="<?= esc_attr($label) ?>"
-                               class="stride-group-label-input regular-text"
-                               placeholder="<?= esc_attr__('bijv. Medische gegevens', 'stride') ?>">
-                    </label>
-                </div>
-
-                <!-- Stage dropdown -->
-                <div class="stride-stage-row">
-                    <label>
-                        <span><?= esc_html__('Fase:', 'stride') ?></span>
-                        <select name="stride_questionnaire_groups[<?= esc_attr((string) $gi) ?>][stage]"
-                                class="stride-stage-select">
-                            <?php foreach ($stages as $value => $stageText) : ?>
-                                <option value="<?= esc_attr($value) ?>" <?php selected($stage, $value); ?>>
-                                    <?= esc_html($stageText) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </label>
-                </div>
-
-                <!-- Assignments Select2 -->
-                <div class="stride-assignments-row">
-                    <label class="stride-assignments-label"><?= esc_html__('Toegewezen aan:', 'stride') ?></label>
-                    <select name="stride_questionnaire_groups[<?= esc_attr((string) $gi) ?>][assignments][]"
-                            class="stride-assignments-select"
-                            multiple="multiple"
-                            data-placeholder="<?= esc_attr__('Selecteer edities of trajecten...', 'stride') ?>">
-                        <?php foreach ($assignments as $optgroup) : ?>
-                            <optgroup label="<?= esc_attr($optgroup['label']) ?>">
-                                <?php foreach ($optgroup['options'] as $opt) : ?>
-                                    <option value="<?= esc_attr((string) $opt['value']) ?>"
-                                        <?php selected(in_array($opt['value'], $assigned, false)); ?>>
-                                        <?= esc_html($opt['label']) ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </optgroup>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <!-- Field cards -->
-                <div class="stride-field-cards" data-group-index="<?= esc_attr((string) $gi) ?>">
-                    <?php
-                    if (!empty($fields)) {
-                        foreach ($fields as $fi => $field) {
-                            $this->renderFieldCard($gi, $fi, $field, $fieldTypes);
-                        }
-                    }
-                    ?>
-                </div>
-
-                <!-- Type picker + add field button -->
-                <div class="stride-add-field-wrap">
-                    <button type="button" class="button stride-add-field-btn">
-                        <?= esc_html__('+ Veld toevoegen', 'stride') ?>
-                    </button>
-                    <div class="stride-type-picker" style="display:none;">
-                        <?php foreach ($fieldTypes as $typeKey => $typeDef) : ?>
-                            <button type="button"
-                                    class="stride-type-pick-btn"
-                                    data-type="<?= esc_attr($typeKey) ?>"
-                                    style="border-color: <?= esc_attr($typeDef['color']) ?>; color: <?= esc_attr($typeDef['color']) ?>;">
-                                <?= esc_html($typeDef['label']) ?>
-                            </button>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <?php
-    }
-
-    private function renderFieldCard($gi, $fi, array $field, array $fieldTypes): void
-    {
-        $label    = $field['label'] ?? '';
-        $name     = $field['name'] ?? '';
-        $type     = $field['type'] ?? 'text';
-        $options  = $field['options'] ?? '';
-        $required = !empty($field['required']);
-        $min      = isset($field['min']) ? (int) $field['min'] : 1;
-        $max      = isset($field['max']) ? (int) $field['max'] : 5;
-        $isNew    = empty($field);
-
-        $typeDef  = $fieldTypes[$type] ?? $fieldTypes['text'];
-        $typeColor = $typeDef['color'];
-        $typeLabel = $typeDef['label'];
-
-        $prefix = "stride_questionnaire_groups[{$gi}][fields][{$fi}]";
-
-        // New field cards start expanded, existing start collapsed
-        $cardCollapsed = !$isNew;
-        $cardClass = 'stride-field-card' . ($cardCollapsed ? ' is-collapsed' : '');
-
-        ?>
-        <div class="<?= esc_attr($cardClass) ?>" data-type="<?= esc_attr($type) ?>" data-field-index="<?= esc_attr((string) $fi) ?>">
-            <div class="stride-field-card-header">
-                <span class="stride-drag-handle" title="<?= esc_attr__('Versleep om te sorteren', 'stride') ?>">&#9776;</span>
-
-                <span class="stride-type-pill"
-                      style="background-color: <?= esc_attr($typeColor) ?>;"
-                      data-type="<?= esc_attr($type) ?>">
-                    <?= esc_html($typeLabel) ?>
-                </span>
-
-                <span class="stride-field-label-preview">
-                    <?= $label ? esc_html($label) : esc_html__('Nieuw veld', 'stride') ?>
-                </span>
-
-                <button type="button" class="stride-remove-field" title="<?= esc_attr__('Verwijder veld', 'stride') ?>">&times;</button>
-            </div>
-
-            <div class="stride-field-card-body" <?= $cardCollapsed ? 'style="display:none;"' : '' ?>>
-                <!-- Hidden type field -->
-                <input type="hidden"
-                       name="<?= esc_attr($prefix) ?>[type]"
-                       class="stride-field-type-input"
-                       value="<?= esc_attr($type) ?>">
-
-                <!-- Label — for description type this acts as content textarea -->
-                <div class="stride-field-config-row stride-config-label" data-show-for="text textarea select radio scale checkbox description">
-                    <?php if ($type === 'description') : ?>
-                        <label>
-                            <span><?= esc_html__('Inhoud:', 'stride') ?></span>
-                            <textarea name="<?= esc_attr($prefix) ?>[label]"
-                                      class="stride-field-label-text large-text"
-                                      rows="3"><?= esc_textarea($label) ?></textarea>
-                        </label>
-                    <?php else : ?>
-                        <label>
-                            <span><?= esc_html__('Label:', 'stride') ?></span>
-                            <input type="text"
-                                   name="<?= esc_attr($prefix) ?>[label]"
-                                   value="<?= esc_attr($label) ?>"
-                                   class="stride-field-label-text regular-text"
-                                   placeholder="<?= esc_attr__('bijv. BIG-nummer', 'stride') ?>">
-                        </label>
-                    <?php endif; ?>
-                </div>
-
-                <!-- Name — NOT for description -->
-                <div class="stride-field-config-row stride-config-name" data-show-for="text textarea select radio scale checkbox">
-                    <label>
-                        <span><?= esc_html__('Veldnaam (technisch):', 'stride') ?></span>
-                        <input type="text"
-                               name="<?= esc_attr($prefix) ?>[name]"
-                               value="<?= esc_attr($name) ?>"
-                               class="stride-field-name-input regular-text"
-                               placeholder="<?= esc_attr__('big_nummer', 'stride') ?>">
-                    </label>
-                </div>
-
-                <!-- Options — for select and radio only -->
-                <div class="stride-field-config-row stride-config-options" data-show-for="select radio">
-                    <label>
-                        <span><?= esc_html__('Opties (kommagescheiden):', 'stride') ?></span>
-                        <input type="text"
-                               name="<?= esc_attr($prefix) ?>[options]"
-                               value="<?= esc_attr($options) ?>"
-                               class="stride-field-options-input large-text"
-                               placeholder="<?= esc_attr__('Optie 1, Optie 2, Optie 3', 'stride') ?>">
-                    </label>
-                </div>
-
-                <!-- Scale min/max — for scale only -->
-                <div class="stride-field-config-row stride-config-scale" data-show-for="scale">
-                    <label>
-                        <span><?= esc_html__('Minimum:', 'stride') ?></span>
-                        <input type="number"
-                               name="<?= esc_attr($prefix) ?>[min]"
-                               value="<?= esc_attr((string) $min) ?>"
-                               class="stride-field-min-input small-text"
-                               min="0"
-                               max="100">
-                    </label>
-                    <label>
-                        <span><?= esc_html__('Maximum:', 'stride') ?></span>
-                        <input type="number"
-                               name="<?= esc_attr($prefix) ?>[max]"
-                               value="<?= esc_attr((string) $max) ?>"
-                               class="stride-field-max-input small-text"
-                               min="1"
-                               max="100">
-                    </label>
-                </div>
-
-                <!-- Required — for text, textarea, select, radio, scale only -->
-                <div class="stride-field-config-row stride-config-required" data-show-for="text textarea select radio scale">
-                    <label class="stride-inline-label">
-                        <input type="checkbox"
-                               name="<?= esc_attr($prefix) ?>[required]"
-                               value="1"
-                               <?php checked($required); ?>>
-                        <span><?= esc_html__('Verplicht veld', 'stride') ?></span>
-                    </label>
-                </div>
-            </div>
-        </div>
-        <?php
+        if ($json === '') {
+            return [];
+        }
+        $decoded = json_decode($json, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+        return $decoded;
     }
 
     private function sanitizeGroups($rawGroups): array
@@ -590,6 +288,10 @@ final class QuestionnaireSettingsPage
                         'required' => !empty($field['required']),
                     ];
 
+                    if (!empty($field['help'])) {
+                        $sanitizedField['help'] = sanitize_text_field($field['help']);
+                    }
+
                     // Options (select/radio)
                     if (in_array($fieldType, ['select', 'radio'], true)) {
                         $sanitizedField['options'] = sanitize_text_field($field['options'] ?? '');
@@ -618,20 +320,44 @@ final class QuestionnaireSettingsPage
     }
 
     /**
-     * Returns the 7 supported field types with label and badge color.
+     * Returns the 7 supported field types with label.
      *
-     * @return array<string, array{label: string, color: string}>
+     * @return array<string, array{label: string}>
      */
     private function getFieldTypes(): array
     {
         return [
-            'text'        => ['label' => __('Tekst', 'stride'),        'color' => '#2271b1'],
-            'textarea'    => ['label' => __('Tekstveld', 'stride'),     'color' => '#135e96'],
-            'select'      => ['label' => __('Selectie', 'stride'),      'color' => '#8c5e10'],
-            'radio'       => ['label' => __('Keuze', 'stride'),         'color' => '#6c3483'],
-            'scale'       => ['label' => __('Schaal', 'stride'),        'color' => '#0d7a3e'],
-            'checkbox'    => ['label' => __('Vinkje', 'stride'),        'color' => '#b26200'],
-            'description' => ['label' => __('Beschrijving', 'stride'),  'color' => '#666666'],
+            'text'        => ['label' => __('Tekst', 'stride')],
+            'textarea'    => ['label' => __('Tekstveld', 'stride')],
+            'select'      => ['label' => __('Selectie', 'stride')],
+            'radio'       => ['label' => __('Keuze', 'stride')],
+            'scale'       => ['label' => __('Schaal', 'stride')],
+            'checkbox'    => ['label' => __('Vinkje', 'stride')],
+            'description' => ['label' => __('Beschrijving', 'stride')],
+        ];
+    }
+
+    /**
+     * Serialize all admin state for Alpine.js hydration.
+     *
+     * Returned as plain array; caller wraps in wp_localize_script() for the
+     * JSON-only path.
+     *
+     * @return array{
+     *     groups: array,
+     *     fieldTypes: array<string, array{label: string}>,
+     *     stages: array<string, string>,
+     *     assignments: array,
+     * }
+     */
+    private function getStateJson(): array
+    {
+        $repo = ntdst_get(QuestionnaireRepository::class);
+        return [
+            'groups'      => $repo->getAllGroups(),
+            'fieldTypes'  => $this->getFieldTypes(),
+            'stages'      => $this->getStages(),
+            'assignments' => $this->getAssignmentOptions(),
         ];
     }
 
@@ -644,7 +370,6 @@ final class QuestionnaireSettingsPage
     {
         return [
             'interest'            => __('Interesse', 'stride'),
-            'waitlist'            => __('Wachtlijst', 'stride'),
             'enrollment_personal' => __('Inschrijving — Persoonlijk', 'stride'),
             'enrollment_billing'  => __('Inschrijving — Facturatie', 'stride'),
             'intake'              => __('Intake (voor opleiding)', 'stride'),
@@ -730,93 +455,5 @@ final class QuestionnaireSettingsPage
         }
 
         return $options;
-    }
-
-    /**
-     * Field names that map to user meta (and will overwrite on enrollment).
-     *
-     * Delegates to {@see \Stride\Modules\Enrollment\EnrollmentService::getUserMetaMapping()}
-     * so the admin "reserved name" warning and the actual persistence path
-     * read from one source.
-     *
-     * @return array<string, string>
-     */
-    private function getUserMetaFieldNames(): array
-    {
-        return \Stride\Modules\Enrollment\EnrollmentService::getUserMetaMapping();
-    }
-
-    /**
-     * Render the "Systeemvelden" help panel at the top of the form-builder.
-     *
-     * Discoverability for the reserved-names mechanism: when admin gives a
-     * field one of these names, its value automatically persists to the
-     * user's profile (wp_usermeta) in addition to the per-enrollment snapshot.
-     */
-    private function renderSystemFieldsHelp(): void
-    {
-        $groups = [
-            __('Persoonlijk', 'stride') => [
-                'phone'                       => __('Telefoonnummer', 'stride'),
-                'organisation'                => __('Organisatie / werkgever', 'stride'),
-                'department'                  => __('Afdeling', 'stride'),
-                'national_id'                 => __('Rijksregisternummer', 'stride'),
-                'date_of_birth'               => __('Geboortedatum', 'stride'),
-                'professional_license_number' => __('Erkenningsnummer / RIZIV', 'stride'),
-            ],
-            __('Facturatie', 'stride') => [
-                'company'       => __('Bedrijfsnaam (factuur)', 'stride'),
-                'vat_number'    => __('BTW-nummer', 'stride'),
-                'address'       => __('Factuuradres', 'stride'),
-                'postal_code'   => __('Postcode', 'stride'),
-                'city'          => __('Stad', 'stride'),
-                'invoice_email' => __('Factuur-emailadres', 'stride'),
-                'gln_number'    => __('GLN-nummer', 'stride'),
-            ],
-        ];
-        ?>
-        <details class="stride-system-fields-help" style="background:#fff;border:1px solid #c3c4c7;border-radius:4px;padding:0;margin:16px 0;">
-            <summary style="cursor:pointer;padding:12px 16px;font-weight:600;list-style:none;">
-                <span class="dashicons dashicons-info-outline" style="color:#2271b1;"></span>
-                <?= esc_html__('Systeemvelden — namen die opgeslagen worden op het gebruikersprofiel', 'stride') ?>
-                <span style="font-weight:400;color:#646970;font-size:12px;">
-                    <?= esc_html__('(klik om uit te klappen)', 'stride') ?>
-                </span>
-            </summary>
-            <div style="padding:0 16px 16px;">
-                <p style="margin-top:0;color:#3c434a;">
-                    <?= esc_html__('Als je een veld in dit formulier exact één van onderstaande namen geeft, wordt de waarde automatisch op het profiel van de gebruiker opgeslagen — niet alleen bij deze inschrijving. Zo hoeft de gebruiker bv. zijn rijksregisternummer maar één keer in te vullen, en kan een admin het later terugvinden in het gebruikersbeheer.', 'stride') ?>
-                </p>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
-                    <?php foreach ($groups as $groupLabel => $fields): ?>
-                        <div>
-                            <h4 style="margin:0 0 8px;font-size:13px;color:#1d2327;">
-                                <?= esc_html($groupLabel) ?>
-                            </h4>
-                            <table class="widefat" style="border:0;">
-                                <tbody>
-                                    <?php foreach ($fields as $name => $label): ?>
-                                        <tr>
-                                            <td style="border:0;padding:4px 8px 4px 0;width:1%;white-space:nowrap;">
-                                                <code style="background:#f0f0f1;padding:2px 6px;border-radius:3px;font-size:12px;">
-                                                    <?= esc_html($name) ?>
-                                                </code>
-                                            </td>
-                                            <td style="border:0;padding:4px 0;color:#3c434a;font-size:12px;">
-                                                <?= esc_html($label) ?>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-                <p style="margin:12px 0 0;color:#646970;font-size:12px;">
-                    <?= esc_html__('Gebruik je een andere naam? Dan blijft de waarde enkel bij deze ene inschrijving bewaard.', 'stride') ?>
-                </p>
-            </div>
-        </details>
-        <?php
     }
 }

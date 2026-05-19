@@ -1,0 +1,229 @@
+/*
+ * Questionnaire Builder v2 — admin styles
+ *
+ * All values come from --sd-* tokens defined in assets/css/admin-dashboard.css.
+ * If a value is hardcoded here, it's a bug.
+ *
+ * Spec: docs/superpowers/specs/2026-05-19-questionnaire-builder-redesign-design.md
+ */
+
+.qb-app {
+    font-family: var(--sd-font);
+    font-size: var(--sd-font-size);
+    color: var(--sd-text-primary);
+    background: var(--sd-primary-bg);
+    min-height: 100vh;
+}
+
+/* Toolbar (sticky at top of the page body) */
+.qb-toolbar {
+    position: sticky;
+    top: 32px; /* WP admin bar */
+    z-index: 5;
+    background: var(--sd-surface);
+    border-bottom: 1px solid var(--sd-border);
+    padding: 14px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.qb-toolbar__title { font-size: 14px; font-weight: 600; }
+.qb-toolbar__count {
+    background: var(--sd-primary-light);
+    color: var(--sd-primary-hover);
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-size: var(--sd-font-size-sm);
+    font-weight: 600;
+}
+.qb-toolbar__actions { display: flex; gap: 8px; }
+
+/* Group tabs */
+.qb-tabs {
+    background: var(--sd-surface);
+    border-bottom: 1px solid var(--sd-border);
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+.qb-tabs__list { display: flex; gap: 6px; flex-wrap: wrap; }
+.qb-tab {
+    background: var(--sd-surface);
+    color: var(--sd-text-secondary);
+    border: 1px solid var(--sd-border-strong);
+    border-radius: var(--sd-radius);
+    padding: 5px 10px;
+    font-size: var(--sd-font-size-sm);
+    cursor: pointer;
+    height: var(--sd-control-height-sm);
+}
+.qb-tab--active {
+    background: var(--sd-primary-subtle);
+    color: var(--sd-primary);
+    border-color: var(--sd-primary);
+}
+.qb-tab--add {
+    background: var(--sd-surface);
+    color: var(--sd-text-secondary);
+}
+
+/* Two-column body */
+.qb-body { display: grid; grid-template-columns: 1fr 320px; }
+.qb-canvas {
+    padding: 16px 20px;
+    border-right: 1px solid var(--sd-border);
+}
+.qb-inspector {
+    background: var(--sd-surface);
+    padding: 16px 20px;
+}
+
+/* Group header (in canvas) */
+.qb-group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--sd-border);
+}
+
+/* Group meta (assignments picker) */
+.qb-group-meta {
+    margin-bottom: 16px;
+    padding: 10px 12px;
+    background: var(--sd-surface);
+    border: 1px solid var(--sd-border);
+    border-radius: var(--sd-radius);
+}
+.qb-group-meta__label {
+    display: block;
+    font-size: var(--sd-font-size-sm);
+    font-weight: 600;
+    color: var(--sd-text-primary);
+    margin-bottom: 6px;
+}
+.qb-group-meta__select {
+    width: 100%;
+    font-size: var(--sd-font-size-sm);
+    padding: 6px 8px;
+    border: 1px solid var(--sd-border);
+    border-radius: var(--sd-radius-sm);
+    background: var(--sd-surface);
+    color: var(--sd-text-primary);
+}
+
+/* Field rows */
+.qb-field-list { list-style: none; margin: 0; padding: 0; }
+.qb-field-row {
+    background: var(--sd-surface);
+    border: 1px solid var(--sd-border);
+    border-radius: var(--sd-radius);
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    cursor: pointer;
+}
+.qb-field-row--selected {
+    background: var(--sd-primary-subtle);
+    border-color: var(--sd-primary);
+}
+.qb-field-row__grab { color: var(--sd-text-muted); cursor: grab; }
+.qb-field-row__label { font-size: var(--sd-font-size); font-weight: 500; }
+.qb-field-row__meta { font-size: 11px; color: var(--sd-text-muted); margin-top: 2px; }
+.qb-field-row--selected .qb-field-row__meta { color: var(--sd-primary); font-weight: 500; }
+
+/* Add-field dashed button */
+.qb-add-field {
+    background: var(--sd-surface);
+    border: 1px dashed var(--sd-border-strong);
+    border-radius: var(--sd-radius);
+    padding: 10px;
+    width: 100%;
+    color: var(--sd-text-secondary);
+    font-size: var(--sd-font-size);
+    cursor: pointer;
+    margin-top: 6px;
+}
+
+/* Inspector */
+.qb-inspector__title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--sd-text-muted);
+    margin-bottom: 14px;
+}
+.qb-inspector__field { margin-bottom: 14px; }
+.qb-inspector__label {
+    display: block;
+    font-size: var(--sd-font-size-sm);
+    font-weight: 600;
+    color: var(--sd-text-secondary);
+    margin-bottom: 4px;
+}
+.qb-inspector__input,
+.qb-inspector__select {
+    width: 100%;
+    border: 1px solid var(--sd-border-strong);
+    border-radius: var(--sd-radius);
+    padding: 6px 10px;
+    font-size: var(--sd-font-size);
+    height: var(--sd-control-height);
+    background: var(--sd-surface);
+    color: var(--sd-text-primary);
+}
+.qb-inspector__actions {
+    border-top: 1px solid var(--sd-border);
+    padding-top: 12px;
+    display: flex;
+    gap: 8px;
+    margin-top: 18px;
+}
+
+/* Empty state */
+.qb-empty {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--sd-text-muted);
+    font-size: var(--sd-font-size);
+}
+
+/* Buttons (reuse --sd- tokens) */
+.qb-btn {
+    background: var(--sd-surface);
+    border: 1px solid var(--sd-border-strong);
+    border-radius: var(--sd-radius);
+    padding: 6px 12px;
+    font-size: var(--sd-font-size);
+    color: var(--sd-text-primary);
+    cursor: pointer;
+    height: var(--sd-control-height);
+}
+.qb-btn--primary {
+    background: var(--sd-primary);
+    color: #fff;
+    border-color: var(--sd-primary);
+    font-weight: 500;
+}
+.qb-btn--primary:hover { background: var(--sd-primary-hover); }
+.qb-btn--danger {
+    color: var(--sd-danger);
+    border-color: var(--sd-danger);
+    flex: 1;
+}
+.qb-btn--ghost { background: none; border: none; color: var(--sd-text-muted); padding: 4px; }
+.qb-btn--sm { height: var(--sd-control-height-sm); font-size: var(--sd-font-size-sm); padding: 5px 10px; }
+
+/* Sortable.js placeholder styling */
+.qb-field-row.ui-sortable-helper { box-shadow: var(--sd-shadow-md); }
+.qb-field-row.ui-sortable-placeholder {
+    background: var(--sd-primary-light);
+    border: 1px dashed var(--sd-primary);
+    visibility: visible !important;
+}

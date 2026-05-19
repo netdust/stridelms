@@ -73,9 +73,9 @@ Expected: `OK (894 tests, 2261 assertions)` (current baseline)
 
 declare(strict_types=1);
 
-namespace Tests\Unit\Questionnaire;
+namespace Stride\Tests\Unit\Questionnaire;
 
-use Tests\TestCase;
+use Stride\Tests\TestCase;
 use Stride\Modules\Questionnaire\Admin\QuestionnaireSettingsPage;
 
 final class QuestionnaireSettingsPageTest extends TestCase
@@ -1440,3 +1440,53 @@ After all tasks:
 - **Test count:** +3 new unit tests guarding `getFieldTypes` shape, `getStateJson` shape, JSON payload decoding
 
 Public-side rendering, validator, repository, service: **unchanged**.
+
+---
+
+## Post-execution review findings (2026-05-20)
+
+Branch executed in full, 10 task commits + docs commit. Final cross-task code review surfaced **4 real bugs that the per-task reviewers missed** because they only saw one task at a time. Fix these before merging — branch is currently **Changes Requested**.
+
+### Critical (blocks merge)
+
+**1. `assigned` vs `assignments` field-name mismatch.**
+- `QuestionnaireRepository::getAllGroups()` (line 74) returns groups with key `assignments`
+- Plan/Task 5's `addGroup()` snippet wrote `assigned: []` instead
+- `_group-header.php:12` reads `selectedGroup.assigned.length`
+- For any hydrated existing group, `selectedGroup.assigned` is `undefined` → `TypeError` on page load (Alpine auto-selects the first group via `init()`)
+- **Fix**: rename `assigned` → `assignments` in `questionnaire-builder-v2.js` (the `addGroup` action) and in `_group-header.php` (the `.length` reader)
+- This is a plan bug — the snippet for Task 5 should have used `assignments`
+
+**2. `field.name` (technical field name) input dropped from v2 inspector.**
+- Old builder had a "Veldnaam (technisch)" input bound to `field.name`
+- `_inspector.php` (Task 6) doesn't expose it
+- PHP sanitizer still reads + persists `$field['name']` with `sanitize_key()` + denylist, so existing fields survive — but admins can't create new system-field mappings (the reserved-field auto-persistence feature documented in memory `pattern_questionnaire_reserved_fields.md`)
+- **Fix**: add a "Veldnaam (technisch)" `<input>` to `_inspector.php` bound to `selectedField.name`. Hide when `type === 'description'`. Match the old `data-show-for` logic.
+
+### Important (should fix before merge)
+
+**3. `field.help` UI silently dropped on save.**
+- Inspector binds to `selectedField.help` (line 47)
+- Alpine state defines `help: ''` (Task 5)
+- `sanitizeGroups()` in `QuestionnaireSettingsPage.php` never reads or persists `help`
+- Result: admin types help text, hits save, text vanishes on reload
+- **Fix**: extend `sanitizeGroups()` to copy `help` through. Or drop the inspector UI for it.
+
+**4. Assignment picker UI never wired.**
+- `getAssignmentOptions()` computes the options, `getStateJson()` exposes them as `assignments`, Alpine reads them — but no UI element lets admins change them
+- Existing assignments survive the round-trip via the JSON payload, but new groups always save with `assignments: []`
+- **Fix**: add a multi-select to `_group-header.php` consuming `assignments` state. Or drop `assignments` from `getStateJson` if not exposing in v1.
+
+### Minor
+
+5. `wp_verify_nonce($_POST[self::NONCE_FIELD], ...)` should `wp_unslash()` + `sanitize_text_field()` the raw POST input first.
+6. Legacy `(array) $_POST['stride_questionnaire_groups'] ?? []` fallback in `handleSave()` is now unreachable (no template emits that field). Remove it + the comment.
+7. Sortable graceful-degradation up/down buttons (spec line 222) not implemented. Drag silently disabled when Sortable missing. Acceptable; document as out-of-scope or implement.
+
+### Suggested follow-up commits
+
+- One commit fixing 1+2 (critical, single file each) — re-run unit tests
+- One commit fixing 3+4 (important, requires sanitizer + UI changes) — re-run unit tests
+- Optional commit for 5+6+7 (minor polish)
+
+After fixes, re-run final code review subagent. Then merge.
