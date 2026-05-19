@@ -136,7 +136,9 @@ $pillClass = $statusPill ? ($pillToneClasses[$statusPill['tone'] ?? 'muted'] ?? 
                 </p>
             <?php endif; ?>
 
-            <?php if ($progressPct !== null) : ?>
+            <?php // Progress bar: online (LD %) only. Edition attendance is shown
+                  // per-session via the attendance badge in the session list below.
+                  if ($progressPct !== null && $type === 'online') : ?>
                 <div>
                     <div class="flex items-center justify-between text-xs text-text-muted mb-1">
                         <?php if ($progressLabel) : ?>
@@ -152,16 +154,26 @@ $pillClass = $statusPill ? ($pillToneClasses[$statusPill['tone'] ?? 'muted'] ?? 
                 </div>
             <?php endif; ?>
 
-            <?php if (!empty($sessions)) : ?>
+            <?php if (!empty($sessions)) :
+                // Attendance badge config — mirrors partials/session-row.php so the
+                // dashboard's inline session list matches the edition-page idiom.
+                $attendanceConfig = [
+                    'present' => ['icon' => 'check-circle', 'class' => 'text-success',    'label' => __('Aanwezig', 'stridence')],
+                    'absent'  => ['icon' => 'x-circle',     'class' => 'text-error',      'label' => __('Afwezig', 'stridence')],
+                    'excused' => ['icon' => 'clock',        'class' => 'text-text-muted', 'label' => __('Gewettigd afwezig', 'stridence')],
+                ];
+            ?>
                 <div class="space-y-2">
                     <p class="text-xs font-medium text-text-muted uppercase tracking-wide">
                         <?php esc_html_e('Sessies', 'stridence'); ?>
                     </p>
                     <div class="divide-y divide-border rounded-lg border border-border">
                         <?php foreach ($sessions as $s) :
-                            $sDate  = $s['date'] ?? '';
-                            $sStart = $s['start_time'] ?? '';
-                            $sEnd   = $s['end_time'] ?? '';
+                            $sDate       = $s['date'] ?? '';
+                            $sStart      = $s['start_time'] ?? '';
+                            $sEnd        = $s['end_time'] ?? '';
+                            $sAttendance = $s['attendance'] ?? null;
+                            $att         = $sAttendance ? ($attendanceConfig[$sAttendance] ?? null) : null;
                         ?>
                             <div class="p-3 flex items-center gap-3 text-sm text-text-muted">
                                 <?php if ($sDate) : ?>
@@ -174,6 +186,12 @@ $pillClass = $statusPill ? ($pillToneClasses[$statusPill['tone'] ?? 'muted'] ?? 
                                     <span class="flex items-center gap-1">
                                         <?php echo stridence_icon('clock', 'w-4 h-4'); ?>
                                         <?php echo esc_html(trim($sStart . ' – ' . $sEnd, ' –')); ?>
+                                    </span>
+                                <?php endif; ?>
+                                <?php if ($att) : ?>
+                                    <span class="ml-auto inline-flex items-center gap-1 <?php echo esc_attr($att['class']); ?>" title="<?php echo esc_attr($att['label']); ?>">
+                                        <?php echo stridence_icon($att['icon'], 'w-4 h-4'); ?>
+                                        <span class="text-xs font-medium"><?php echo esc_html($att['label']); ?></span>
                                     </span>
                                 <?php endif; ?>
                             </div>
