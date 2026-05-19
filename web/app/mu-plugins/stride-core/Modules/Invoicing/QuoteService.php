@@ -68,7 +68,7 @@ final class QuoteService extends AbstractService
         );
 
         // PDF generator (registers own hooks)
-        new QuotePDFGenerator($this);
+        new QuotePDFGenerator($this, $this->repository);
 
         // Cancel quote when registration is cancelled
         add_action('stride/registration/cancelled', [$this, 'onRegistrationCancelled']);

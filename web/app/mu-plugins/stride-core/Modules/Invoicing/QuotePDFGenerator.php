@@ -23,6 +23,7 @@ final class QuotePDFGenerator
 
     public function __construct(
         private readonly QuoteService $quoteService,
+        private readonly QuoteRepository $repository,
     ) {
         $this->registerHooks();
     }
@@ -55,8 +56,7 @@ final class QuotePDFGenerator
      */
     public function resolveForEmail(int $quoteId): string
     {
-        $model = ntdst_data()->get(QuoteCPT::POST_TYPE);
-        $pdfPath = $model->getMeta($quoteId, 'pdf_path');
+        $pdfPath = $this->repository->getField($quoteId, 'pdf_path');
 
         // If PDF exists on disk, return it
         if ($pdfPath) {
@@ -79,12 +79,7 @@ final class QuotePDFGenerator
      */
     public function generate(int $quoteId): string|WP_Error
     {
-        $quoteService = $this->quoteService;
-        if (!$quoteService) {
-            return new WP_Error('service_unavailable', 'QuoteService not available');
-        }
-
-        $quote = $quoteService->getQuote($quoteId, true);
+        $quote = $this->quoteService->getQuote($quoteId, true);
 
         if (is_wp_error($quote)) {
             ntdst_log('invoicing')->error('PDF generation failed: quote not found', [
@@ -118,8 +113,7 @@ final class QuotePDFGenerator
 
         // Save relative path to quote meta
         $relativePath = $this->getRelativePath($storagePath);
-        $model = ntdst_data()->get(QuoteCPT::POST_TYPE);
-        $model->updateMeta($quoteId, 'pdf_path', $relativePath);
+        $this->repository->updateMeta($quoteId, ['pdf_path' => $relativePath]);
 
         ntdst_log('invoicing')->info('Quote PDF generated', [
             'quote_id' => $quoteId,

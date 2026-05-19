@@ -15,7 +15,8 @@ class QuotePDFGeneratorTest extends TestCase
     {
         parent::setUp();
         $mockQuoteService = $this->createMock(\Stride\Modules\Invoicing\QuoteService::class);
-        $this->generator = new QuotePDFGenerator($mockQuoteService);
+        $mockRepository = $this->createMock(\Stride\Modules\Invoicing\QuoteRepository::class);
+        $this->generator = new QuotePDFGenerator($mockQuoteService, $mockRepository);
     }
 
     /** @test */
@@ -170,14 +171,6 @@ class QuotePDFGeneratorTest extends TestCase
         $relative = $this->invokeMethod($this->generator, 'getRelativePath', [$fullPath]);
 
         $this->assertEquals('uploads/stride-quotes/OFF-2026-0001.pdf', $relative);
-    }
-
-    /** @test */
-    public function testGenerateReturnsWpErrorWhenQuoteServiceNotAvailable(): void
-    {
-        $result = $this->generator->generate(999);
-
-        $this->assertInstanceOf(\WP_Error::class, $result);
     }
 
     /** @test */
