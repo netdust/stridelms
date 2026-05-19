@@ -52,6 +52,96 @@
             selectField(id) {
                 this.selectedFieldId = id;
             },
+
+            // ── ID generation ─────────────────────────────────────
+            // New rows get a client-side `tmp_<random>` id. Server
+            // assigns the real id on save; the existing sanitizeGroups()
+            // accepts any string id, so this is safe.
+            _newId(prefix) {
+                return prefix + '_' + Math.random().toString(36).slice(2, 9);
+            },
+
+            // ── Group CRUD ────────────────────────────────────────
+            addGroup() {
+                const stageKeys = Object.keys(this.stages);
+                const id = this._newId('tmp_g');
+                this.groups.push({
+                    id,
+                    label: '',
+                    stage: stageKeys[0] || '',
+                    assigned: [],
+                    fields: [],
+                });
+                this.selectedGroupId = id;
+                this.selectedFieldId = null;
+                this.isDirty = true;
+            },
+
+            deleteGroup(id) {
+                const idx = this.groups.findIndex(g => g.id === id);
+                if (idx === -1) return;
+                this.groups.splice(idx, 1);
+                if (this.selectedGroupId === id) {
+                    this.selectedGroupId = this.groups[0]?.id || null;
+                    this.selectedFieldId = null;
+                }
+                this.isDirty = true;
+            },
+
+            // ── Field CRUD ────────────────────────────────────────
+            addField() {
+                if (!this.selectedGroup) return;
+                const id = this._newId('tmp_f');
+                this.selectedGroup.fields.push({
+                    id,
+                    name: '',
+                    label: '',
+                    help: '',
+                    type: 'text',
+                    required: false,
+                    options: '',
+                    min: 1,
+                    max: 5,
+                });
+                this.selectedFieldId = id;
+                this.isDirty = true;
+            },
+
+            duplicateField(id) {
+                if (!this.selectedGroup) return;
+                const src = this.selectedGroup.fields.find(f => f.id === id);
+                if (!src) return;
+                const copy = { ...src, id: this._newId('tmp_f'), label: src.label + ' (kopie)' };
+                const idx = this.selectedGroup.fields.findIndex(f => f.id === id);
+                this.selectedGroup.fields.splice(idx + 1, 0, copy);
+                this.selectedFieldId = copy.id;
+                this.isDirty = true;
+            },
+
+            deleteField(id) {
+                if (!this.selectedGroup) return;
+                const idx = this.selectedGroup.fields.findIndex(f => f.id === id);
+                if (idx === -1) return;
+                this.selectedGroup.fields.splice(idx, 1);
+                if (this.selectedFieldId === id) {
+                    this.selectedFieldId = null;
+                }
+                this.isDirty = true;
+            },
+
+            // ── Field-row meta hint ───────────────────────────────
+            fieldMeta(field) {
+                const typeLabel = this.fieldTypes[field.type]?.label || field.type;
+                const reqLabel = field.required ? 'vereist' : 'optioneel';
+                if (field.type === 'select' || field.type === 'radio') {
+                    const count = (field.options || '').split(/\r?\n/).filter(Boolean).length;
+                    return typeLabel + ' · ' + count + ' opties · ' + reqLabel;
+                }
+                if (field.type === 'description') {
+                    return typeLabel;
+                }
+                return typeLabel + ' · ' + reqLabel;
+            },
         };
     }
 
