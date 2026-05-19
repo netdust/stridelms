@@ -69,13 +69,46 @@ Stride hard-codes `stride_format` taxonomy with slugs `online`, `klassikaal`, `e
 
 VAD's equivalent is `course_locatie` with terms `vad` (206), `op-locatie` (70), `online` (35).
 
-- [x] **Rename taxonomy**: `UPDATE ckqp_term_taxonomy SET taxonomy='stride_format' WHERE taxonomy='course_locatie'`
-- [x] **Reconcile term slugs**: `op-locatie` → `klassikaal` (SQL UPDATE on ckqp_terms)
-- [x] Clear cache, recount term taxonomy counts
-- [x] `/online/` shows 35 e-learnings ✓
-- [ ] Open question: `vad` term (206 courses) — currently orphaned (Stride filters only `[online, klassikaal, e-learning, webinar]`). Decide later: drop, fold, or leave.
-- [ ] Optional: add `e-learning` / `webinar` terms if VAD has any. Probably not — all online folded into `online`.
-- [ ] Verify `/klassikaal/` shows the 70 classroom courses
+### Lessons from the experiment (read first before running)
+
+**Pitfall: `course_locatie` is NOT a format taxonomy.** It's a delivery channel — terms like `vad`, `op-locatie`, `online` mix "where it happens" with "how it's delivered". A webinar gets `online`, but it's not an e-learning. Renaming `course_locatie` → `stride_format` puts webinars in the e-learning catalog and is **wrong**. (Tried it 2026-05-19, reverted.)
+
+**The real format source is `ld_course_category`:**
+- `online-aanbod` (top-level) = the e-learnings → `stride_format/online`
+- `vad-vormingen` (top-level) = the classroom courses → `stride_format/klassikaal`
+
+**Filter chips on `/online/` come from `stride_theme`, NOT from format.** The sub-categories under `online-aanbod` in `ld_course_category` are what the editor wants to use as chips. Mirror those sub-cats into `stride_theme` so Stride's existing filter UI works without code changes.
+
+**Additive, never destructive.** We don't rename `ld_course_category` (LearnDash owns it). We add Stride's taxonomies on top of VAD's existing terms.
+
+### Migration steps to actually run
+
+- [ ] **Format mapping** (`stride_format`, top-level `ld_course_category` → format):
+  - `ld_course_category/online-aanbod` → `stride_format/online`
+  - `ld_course_category/vad-vormingen` → `stride_format/klassikaal`
+  - Decide what to do with `productinformatie`, `trainings-eupc`, `trainingen-uitgaansleven`, `trainingen-sportclubs` at top level if they're not nested under `online-aanbod` in production — they may be their own catalog category, not e-learning.
+
+- [ ] **Theme/chip mapping** (`stride_theme`, sub-categories under `online-aanbod` → chips on `/online/`):
+  - `middelengebruik-preventie-en-hulpverlening`
+  - `productinformatie`
+  - `trainingen-sportclubs` (named "Sportclubs")
+  - `trainings-eupc`
+  - `trainingen-uitgaansleven` (named "Uitgaansleven")
+  - Note: total via sub-cats during the dry-run was 31; `online-aanbod` had 36 courses. The 5-course gap means some e-learnings are tagged with the parent only and won't show under any chip until they get a sub-cat. Confirm whether to (a) auto-assign a default chip, (b) leave them unfiltered, or (c) fix upstream in VAD.
+
+- [ ] **Equivalent for `/klassikaal/`**: sub-categories under `vad-vormingen` (`basisvormingen` 24, `verdiepende-vormingen` 17, `studiedagen` 2, `ervaringsuitwisseling` 2, `train-de-trainers` 1) → mirror into `stride_theme` if the classroom page uses the same chip pattern. Verify by reading `page-klassikaal.php` first.
+
+- [ ] **Commit the mapping as a script**: `scripts/migrate-vad-to-stride/03-taxonomy.php` — idempotent (uses `get_term_by` before insert, `wp_set_object_terms` with append=true).
+
+- [ ] **Don't touch `course_locatie`** during migration. VAD's editors may still use it for reporting/filtering inside admin even if Stride ignores it.
+
+### What was done during the dry-run (2026-05-19)
+
+- [x] **Reverted** the wrong `course_locatie` → `stride_format` rename
+- [x] **Format**: tagged 36 e-learnings as `stride_format/online`, 354 classroom as `stride_format/klassikaal` (additive from `ld_course_category`)
+- [x] **Themes**: mirrored 5 sub-categories under `online-aanbod` into `stride_theme` (31 courses tagged)
+- [x] `/online/` renders 36 e-learnings with filter chips at top ✓
+- [ ] `/klassikaal/` not verified yet — sub-categories under `vad-vormingen` not yet mirrored
 
 ---
 
