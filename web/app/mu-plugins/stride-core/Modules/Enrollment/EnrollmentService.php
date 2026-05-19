@@ -9,6 +9,7 @@ use Stride\Contracts\LMSAdapterInterface;
 use Stride\Domain\RegistrationStatus;
 use Stride\Infrastructure\AbstractService;
 use Stride\Modules\Edition\SessionSelection;
+use Stride\Modules\User\CompanyAffiliation;
 use WP_Error;
 
 /**
@@ -299,7 +300,7 @@ final class EnrollmentService extends AbstractService
 
                 // Propagate company_id from user meta if not explicitly provided
                 if (!isset($options['company_id'])) {
-                    $companyId = (int) get_user_meta($userId, '_stride_company_id', true);
+                    $companyId = CompanyAffiliation::getCompanyId($userId);
                     if ($companyId) {
                         $registrationData['company_id'] = $companyId;
                     }
@@ -418,7 +419,7 @@ final class EnrollmentService extends AbstractService
         ];
 
         // Propagate company_id from user meta
-        $companyId = (int) get_user_meta($userId, '_stride_company_id', true);
+        $companyId = CompanyAffiliation::getCompanyId($userId);
         if ($companyId) {
             $registrationData['company_id'] = $companyId;
         }
@@ -506,7 +507,7 @@ final class EnrollmentService extends AbstractService
             'notes' => $options['notes'] ?? null,
         ];
 
-        $companyId = (int) get_user_meta($userId, '_stride_company_id', true);
+        $companyId = CompanyAffiliation::getCompanyId($userId);
         if ($companyId) {
             $registrationData['company_id'] = $companyId;
         }

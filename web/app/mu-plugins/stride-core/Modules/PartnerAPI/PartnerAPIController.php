@@ -9,6 +9,7 @@ use Stride\Modules\Attendance\AttendanceRepository;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionRepository;
+use Stride\Modules\User\CompanyAffiliation;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -130,7 +131,7 @@ final class PartnerAPIController
      */
     private function getCompanyId(): int
     {
-        return (int) get_user_meta(get_current_user_id(), '_stride_company_id', true);
+        return CompanyAffiliation::getCompanyId(get_current_user_id());
     }
 
     /**
@@ -143,7 +144,7 @@ final class PartnerAPIController
         $perPage = min(100, max(1, absint($request->get_param('per_page') ?? 20)));
 
         $args = [
-            'meta_key' => '_stride_company_id',
+            'meta_key' => CompanyAffiliation::META_KEY,
             'meta_value' => $companyId,
             'number' => $perPage,
             'paged' => $page,
@@ -190,7 +191,7 @@ final class PartnerAPIController
 
         // If user_id provided, verify it belongs to partner's company
         if (!empty($filters['user_id'])) {
-            $userCompanyId = (int) get_user_meta($filters['user_id'], '_stride_company_id', true);
+            $userCompanyId = CompanyAffiliation::getCompanyId((int) $filters['user_id']);
             if ($userCompanyId !== $companyId) {
                 return new WP_Error(
                     'rest_forbidden',
@@ -335,7 +336,7 @@ final class PartnerAPIController
 
         // Get company users
         $userQuery = new \WP_User_Query([
-            'meta_key' => '_stride_company_id',
+            'meta_key' => CompanyAffiliation::META_KEY,
             'meta_value' => $companyId,
             'fields' => 'ID',
         ]);
@@ -448,7 +449,7 @@ final class PartnerAPIController
 
         // Get company user IDs
         $userQuery = new \WP_User_Query([
-            'meta_key' => '_stride_company_id',
+            'meta_key' => CompanyAffiliation::META_KEY,
             'meta_value' => $companyId,
             'fields' => 'ID',
         ]);
@@ -554,7 +555,7 @@ final class PartnerAPIController
             if (is_wp_error($userId)) {
                 return new WP_Error('user_creation_failed', $userId->get_error_message(), ['status' => 400]);
             }
-            update_user_meta($userId, '_stride_company_id', $companyId);
+            CompanyAffiliation::setCompanyId($userId, $companyId);
             $user = get_userdata($userId);
 
             ntdst_log('partner-api')->info('Created user via Partner API', [
@@ -569,7 +570,7 @@ final class PartnerAPIController
         }
 
         // Verify user belongs to partner's company — never auto-assign
-        $userCompanyId = (int) get_user_meta($user->ID, '_stride_company_id', true);
+        $userCompanyId = CompanyAffiliation::getCompanyId((int) $user->ID);
         if (!$userCompanyId) {
             return new WP_Error(
                 'user_not_affiliated',
