@@ -20,6 +20,7 @@ class EditionService extends AbstractService implements EditionQueryInterface
 {
     public function __construct(
         private readonly EditionRepository $repository,
+        private readonly SessionRepository $sessions,
         private readonly \Stride\Modules\Membership\MembershipService $membership,
     ) {
         parent::__construct();
@@ -346,17 +347,7 @@ class EditionService extends AbstractService implements EditionQueryInterface
      */
     private function hasPublishedSessions(int $editionId): bool
     {
-        $ids = get_posts([
-            'post_type'      => SessionCPT::POST_TYPE,
-            'post_status'    => 'publish',
-            'posts_per_page' => 1,
-            'fields'         => 'ids',
-            'meta_query'     => [[
-                'key'   => '_ntdst_edition_id',
-                'value' => $editionId,
-            ]],
-        ]);
-        return !empty($ids);
+        return $this->sessions->countByEdition($editionId) > 0;
     }
 
     // === Event Handlers ===
@@ -423,13 +414,7 @@ class EditionService extends AbstractService implements EditionQueryInterface
 
     private function deleteChildSessions(int $editionId): void
     {
-        $sessions = get_posts([
-            'post_type' => SessionCPT::POST_TYPE,
-            'post_parent' => $editionId,
-            'post_status' => 'any',
-            'posts_per_page' => -1,
-            'fields' => 'ids',
-        ]);
+        $sessions = $this->sessions->findIdsByEdition($editionId);
 
         if (empty($sessions)) {
             return;

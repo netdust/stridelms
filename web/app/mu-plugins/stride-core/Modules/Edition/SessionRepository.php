@@ -32,6 +32,26 @@ final class SessionRepository extends AbstractRepository
     }
 
     /**
+     * Find session IDs for an edition, any non-trash post_status.
+     *
+     * Used by cascade-delete paths that need just the IDs. Goes through
+     * `where('edition_id', ...)` so the relationship matches `findByEdition()`
+     * / `countByEdition()` (meta-based, not post_parent-based) — keeps cascade
+     * consistent with the find/count paths.
+     *
+     * @return list<int>
+     */
+    public function findIdsByEdition(int $editionId): array
+    {
+        $rows = $this->model()
+            ->where('edition_id', $editionId)
+            ->where('post_status', 'any')
+            ->get();
+
+        return array_map(static fn(array $row): int => (int) ($row['id'] ?? $row['ID'] ?? 0), $rows);
+    }
+
+    /**
      * Find sessions by slot within an edition.
      *
      * @return array<array<string, mixed>>

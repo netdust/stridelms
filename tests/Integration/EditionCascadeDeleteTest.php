@@ -30,20 +30,28 @@ class EditionCascadeDeleteTest extends IntegrationTestCase
             'post_status' => 'publish',
         ]);
 
-        // Create child sessions
-        $this->sessionIds[] = wp_insert_post([
+        // Create child sessions. Real sessions (via SessionService::createSession)
+        // always have `_ntdst_edition_id` meta — that's the canonical relationship
+        // the codebase queries on. `post_parent` is set too but is incidental.
+        // Cascade-delete now goes through SessionRepository::findIdsByEdition()
+        // which matches on the meta.
+        $session1 = wp_insert_post([
             'post_type' => 'vad_session',
             'post_title' => 'Session 1',
             'post_status' => 'publish',
             'post_parent' => $this->editionId,
         ]);
+        update_post_meta($session1, '_ntdst_edition_id', $this->editionId);
+        $this->sessionIds[] = $session1;
 
-        $this->sessionIds[] = wp_insert_post([
+        $session2 = wp_insert_post([
             'post_type' => 'vad_session',
             'post_title' => 'Session 2',
             'post_status' => 'publish',
             'post_parent' => $this->editionId,
         ]);
+        update_post_meta($session2, '_ntdst_edition_id', $this->editionId);
+        $this->sessionIds[] = $session2;
 
         // Create a registration
         global $wpdb;

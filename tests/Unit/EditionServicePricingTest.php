@@ -6,6 +6,7 @@ namespace Stride\Tests\Unit;
 
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
+use Stride\Modules\Edition\SessionRepository;
 use Stride\Modules\Membership\MembershipService;
 use Stride\Domain\Money;
 use Stride\Tests\TestCase;
@@ -14,6 +15,7 @@ class EditionServicePricingTest extends TestCase
 {
     private EditionService $service;
     private EditionRepository $repository;
+    private SessionRepository $sessions;
     private MembershipService $membership;
 
     protected function setUp(): void
@@ -21,12 +23,13 @@ class EditionServicePricingTest extends TestCase
         parent::setUp();
 
         $this->repository = $this->createMock(EditionRepository::class);
+        $this->sessions = $this->createMock(SessionRepository::class);
         $this->membership = $this->createMock(MembershipService::class);
 
         // EditionService extends AbstractService which calls init() in constructor.
         // We need to bypass that for unit testing.
         $this->service = $this->getMockBuilder(EditionService::class)
-            ->setConstructorArgs([$this->repository, $this->membership])
+            ->setConstructorArgs([$this->repository, $this->sessions, $this->membership])
             ->onlyMethods(['init'])
             ->getMock();
     }

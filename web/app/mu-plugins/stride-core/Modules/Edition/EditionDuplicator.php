@@ -9,9 +9,9 @@ use WP_Error;
 use WP_Post;
 
 /**
- * Duplicates a vad_edition: copies registered fields via ntdst_data, applies
- * an explicit reset list for fields that shouldn't carry over, then clones
- * child sessions with dates reset to today.
+ * Duplicates a vad_edition: copies registered fields via the Edition /
+ * Session repositories, applies an explicit reset list for fields that
+ * shouldn't carry over, then clones child sessions with dates reset to today.
  *
  * Registrations, attendance, notifications, audit-log entries are never
  * touched. Edition-level `documents` are dropped (course-level documents
@@ -43,8 +43,10 @@ final class EditionDuplicator implements NTDST_Service_Meta
         ];
     }
 
-    public function __construct()
-    {
+    public function __construct(
+        private readonly EditionRepository $editions,
+        private readonly SessionRepository $sessions,
+    ) {
         $this->init();
     }
 
@@ -160,20 +162,19 @@ final class EditionDuplicator implements NTDST_Service_Meta
      */
     public function duplicate(int $sourceEditionId): int|WP_Error
     {
-        $source = get_post($sourceEditionId);
+        $source = $this->editions->find($sourceEditionId);
 
-        if (!$source instanceof WP_Post || $source->post_type !== EditionCPT::POST_TYPE) {
+        if (is_wp_error($source)) {
             return new WP_Error(
                 'not_found',
-                __('Bron-editie niet gevonden.', 'stride')
+                __('Bron-editie niet gevonden.', 'stride'),
             );
         }
 
-        $model  = ntdst_data()->get(EditionCPT::POST_TYPE);
-        $fields = $model->getMeta($sourceEditionId);
+        $fields = $this->editions->findFields($sourceEditionId);
         $fields = array_merge($fields, self::FIELD_RESETS);
 
-        $newPost = $model->create($fields + [
+        $newPost = $this->editions->create($fields + [
             'title'       => $source->post_title . ' (kopie)',
             'content'     => $source->post_content,
             'excerpt'     => $source->post_excerpt,
@@ -187,7 +188,7 @@ final class EditionDuplicator implements NTDST_Service_Meta
 
         $newId = (int) $newPost->ID;
 
-        foreach (get_object_taxonomies($source->post_type) as $taxonomy) {
+        foreach (get_object_taxonomies(EditionCPT::POST_TYPE) as $taxonomy) {
             $terms = wp_get_object_terms($sourceEditionId, $taxonomy, ['fields' => 'ids']);
             if (!is_wp_error($terms) && !empty($terms)) {
                 wp_set_object_terms($newId, $terms, $taxonomy);
@@ -202,34 +203,36 @@ final class EditionDuplicator implements NTDST_Service_Meta
     private function copySessions(int $sourceEditionId, int $newEditionId): void
     {
         $today = date('Y-m-d');
-        $sessionModel = ntdst_data()->get(SessionCPT::POST_TYPE);
 
-        $sourceSessions = $sessionModel
-            ->where('edition_id', $sourceEditionId)
-            ->limit(-1)
-            ->get();
-
-        foreach ($sourceSessions as $session) {
+        foreach ($this->sessions->findByEdition($sourceEditionId) as $session) {
             $sessionId = (int) ($session['ID'] ?? $session['id'] ?? 0);
             if ($sessionId <= 0) {
                 continue;
             }
 
-            $sessionPost = get_post($sessionId);
-            if (!$sessionPost instanceof WP_Post) {
+            $sessionPost = $this->sessions->find($sessionId);
+            if (is_wp_error($sessionPost)) {
                 continue;
             }
 
-            $sessionFields = $sessionModel->getMeta($sessionId);
+            $sessionFields = $this->sessions->findFields($sessionId);
             $sessionFields['edition_id'] = $newEditionId;
             $sessionFields['date']       = $today;
 
-            $sessionModel->create($sessionFields + [
+            $result = $this->sessions->create($sessionFields + [
                 'title'       => $sessionPost->post_title,
                 'content'     => $sessionPost->post_content,
                 'excerpt'     => $sessionPost->post_excerpt,
                 'post_status' => $sessionPost->post_status,
             ]);
+
+            if (is_wp_error($result)) {
+                ntdst_log('edition')->warning('Session copy failed during edition duplicate', [
+                    'source_session' => $sessionId,
+                    'target_edition' => $newEditionId,
+                    'error'          => $result->get_error_code() . ': ' . $result->get_error_message(),
+                ]);
+            }
         }
     }
 }
