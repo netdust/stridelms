@@ -250,7 +250,13 @@ final class EnrollmentRouter
         $result = $enrollmentService->enroll($userId, $edition->ID, $options);
 
         if (is_wp_error($result)) {
-            // Already enrolled or other error — redirect to edition page
+            ntdst_log('enrollment')->warning('Direct enrollment failed; redirecting', [
+                'code' => $result->get_error_code(),
+                'message' => $result->get_error_message(),
+                'edition_id' => $edition->ID,
+                'user_id' => $userId,
+                'mode' => $mode,
+            ]);
             wp_safe_redirect(get_permalink($edition->ID));
             exit;
         }
