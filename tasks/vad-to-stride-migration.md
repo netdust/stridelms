@@ -240,7 +240,139 @@ Estimated: ~30 min SQL + editorial review.
 
 ---
 
-## Phase 10 — Editions for future courses
+## Phase 10 — Field mapping audit (VAD course → Stride edition + sessions)
+
+VAD has **no edition CPT**. All scheduling lives on the **course** itself, in LD's `_sfwd-courses` settings blob. Migration must:
+1. For each upcoming VAD course, create **1 `vad_edition` post** with course-level fields copied over.
+2. For each entry in `sfwd-courses_course_days`, create **1 `vad_session` post**.
+3. Parse `sfwd-courses_course_program` (when present) for keuzecursus session-slot structure.
+
+### Stride Edition fields ← VAD source
+
+| Stride field | Required | VAD source | Status |
+|---|---|---|---|
+| `course_id` | ✓ | the course post itself | ✓ direct |
+| `start_date` | ✓ | `_next_course_date` (timestamp) OR first entry in `sfwd-courses_course_days` | ✓ direct |
+| `end_date` |   | `_last_course_date` (timestamp) OR last entry in `course_days` | ✓ direct |
+| `capacity` | ✓ | `sfwd-courses_course_max_participants` (often empty → 0 = unlimited) | ✓ direct |
+| `price` |   | `sfwd-courses_course_pricing` (string!) OR `sfwd-courses_course_price` | ⚠ **freeform text** — needs parsing to euros |
+| `price_non_member` |   | — | ❌ VAD has no member/non-member split |
+| `venue` |   | `sfwd-courses_course_address` | ✓ direct |
+| `status` |   | derived from `sfwd-courses_course_status_*` flags (full, cancelled, postponed, announcement) | ⚠ needs flag-to-enum mapping |
+| `speakers` |   | `sfwd-courses_course_supervisors` (string) + `sfwd-courses_course_speakers` (array of user IDs) | ⚠ two sources — pick one |
+| `selection_deadline` |   | `sfwd-courses_course_max_subscription_date` | ✓ direct |
+| `session_slots` |   | `sfwd-courses_course_program` (when course is keuzecursus) | ⚠ format unknown — sample one course with `course_program_enabled='on'` |
+| `completion_mode` |   | (no equivalent — Stride default = `'automatic'`) | — sensible default |
+| `completion_threshold` |   | (no equivalent) | — sensible default |
+| `notes` |   | — | — |
+| `requires_approval` |   | — | — default false |
+| `requires_questionnaire` |   | — | ⚠ derived from whether course has a FluentForm assigned in VAD's setup |
+| `requires_documents` |   | — | — default false |
+| `requires_session_selection` |   | true if `course_program_enabled` | ⚠ derived |
+| `selection_open` |   | — | — default false |
+| `post_requires_evaluation` |   | (VAD has evaluation forms?) | ⚠ unknown |
+| `post_requires_documents` |   | — | — default false |
+| `post_requires_approval` |   | — | — default false |
+| `enrollment_form` |   | derived from `_ld_price_type='vad'` + FluentForm presence | ⚠ derived (likely `'default'` or `'direct'`) |
+| `documents` |   | `sfwd-courses_course_materials` (when `_enabled='on'`) | ⚠ attachment ID resolution needed |
+
+### Stride Session fields ← VAD source
+
+VAD stores meeting days as an array of timestamps in `sfwd-courses_course_days`. **No per-day metadata** (no per-session venue, no per-session times — just the day). Times come from the course-level `sfwd-courses_course_duration` string (e.g. "van 9:30u tot 16:00u").
+
+| Stride field | Required | VAD source | Status |
+|---|---|---|---|
+| `edition_id` | ✓ | the edition we just created | ✓ |
+| `slot` |   | (only for keuzecursussen — from `course_program`) | ⚠ derived |
+| `date` | ✓ | one entry from `sfwd-courses_course_days` array | ✓ direct |
+| `start_time` |   | parsed from `sfwd-courses_course_duration` string | ⚠ regex parse |
+| `end_time` |   | parsed from `sfwd-courses_course_duration` string | ⚠ regex parse |
+| `location` |   | inherited from edition's `venue` (VAD doesn't override per-day) | ✓ default |
+| `type` |   | derived from `stride_format` (`klassikaal` → `in_person`) | ✓ derived |
+| `description` |   | — | — |
+| `webinar_link` |   | — (VAD didn't track) | — |
+| `lesson_ids` |   | — (VAD didn't link sessions to specific lessons) | — |
+| `capacity` |   | — | — inherit edition's |
+| `optional` |   | derived from `course_program` slot definition | ⚠ derived |
+| `price_modifier` |   | — | — default 0 |
+
+### Real example: course 14099 ("Kwaliteitsvol werken in de verslavingszorg - 2026")
+
+```
+_next_course_date         = 1762383600        → 2025-11-06 (UTC)
+sfwd-courses_course_when  = "21 mei en 12 juni 2026"   (display string)
+course_duration           = "van 9:30u tot 16:00u, onthaal met koffie vanaf 9:00u"
+course_address            = "VAD, Vanderlindenstraat 15, 1030 Brussel"
+course_supervisors        = "Sarah Heyse, ...; Barbara Van Dycke, ..."
+course_speakers           = [6618, 15692]   (user IDs)
+course_pricing            = "Deel van aanbod tweejarige opleiding"   (no €!)
+course_days               = [1779314400, 1781215200]   (2 sessions: 21 mei, 12 juni 2026)
+course_max_subscription_date = ""
+course_program            = []                          (not a keuzecursus)
+course_status_*           = all empty (no full/cancelled/postponed)
+```
+
+→ generates **1 edition** + **2 sessions** (21 mei, 12 juni). Times parsed from `course_duration`. Venue copied. Price → null (string isn't a number, falls back to course price_type=vad).
+
+### Open questions before writing the import
+
+- [ ] **Member vs non-member price**: VAD has one price (sometimes free-text). Stride's `price_non_member` will always be empty. Confirm OK or generate both from course-level price.
+- [ ] **Free-text pricing**: many courses have descriptive strings ("Deel van aanbod tweejarige opleiding") instead of a number. Strategy: parse digits when present, leave price empty otherwise — editor fills in later.
+- [ ] **Status derivation**: which `sfwd-courses_course_status_*` flag maps to which `OfferingStatus` enum? Plain "no flag set" probably = `open` for future-dated courses.
+- [ ] **Speakers**: keep the freeform `course_supervisors` string OR resolve the user-ID array `course_speakers` to names? Stride's `speakers` is a single text field.
+- [ ] **Time parsing**: `course_duration` is freeform Dutch text. Build a regex for `\d{1,2}[:hu]\d{0,2}u? tot \d{1,2}[:hu]\d{0,2}u?`. Fall back to empty when no match.
+- [ ] **`requires_questionnaire`**: which VAD courses had a FluentForm assigned? Audit + decide flag per course.
+- [ ] **`enrollment_form`**: for courses currently `_ld_price_type='vad'` that already got flipped to `closed`, what value? Probably `'default'` unless we have a `'direct'` use case.
+- [ ] **Keuzecursussen**: sample one course where `course_program_enabled='on'` to see the `course_program` structure → maps to `session_slots`.
+- [ ] **Past courses**: do we generate editions for past courses (archival) or only future? Stefan said "create editions for future courses" — past dates skipped.
+
+### Migration script outline (not built yet)
+
+```php
+// scripts/migrate-vad-to-stride-editions.php
+$cutoff = strtotime('today'); // only future-dated courses get editions
+foreach (get_posts(['post_type'=>'sfwd-courses', 'posts_per_page'=>-1, 'fields'=>'ids']) as $courseId) {
+    $next = (int) get_post_meta($courseId, '_next_course_date', true);
+    if ($next < $cutoff) continue;
+
+    $ld = get_post_meta($courseId, '_sfwd-courses', true);
+    $days = $ld['sfwd-courses_course_days'] ?? [];
+    if (empty($days)) continue; // can't generate an edition without dates
+
+    // Create vad_edition
+    $editionId = wp_insert_post([
+        'post_type'   => 'vad_edition',
+        'post_status' => 'publish',
+        'post_title'  => get_the_title($courseId) . ' — ' . date('Y-m-d', $next),
+    ]);
+    update_post_meta($editionId, '_ntdst_course_id',   $courseId);
+    update_post_meta($editionId, '_ntdst_start_date',  date('Y-m-d', $next));
+    update_post_meta($editionId, '_ntdst_end_date',    date('Y-m-d', (int) ($ld['_last_course_date'] ?? $next)));
+    update_post_meta($editionId, '_ntdst_venue',       $ld['sfwd-courses_course_address'] ?? '');
+    update_post_meta($editionId, '_ntdst_capacity',    (int) ($ld['sfwd-courses_course_max_participants'] ?? 0));
+    update_post_meta($editionId, '_ntdst_speakers',    $ld['sfwd-courses_course_supervisors'] ?? '');
+    update_post_meta($editionId, '_ntdst_status',      derive_status($ld));
+    // …
+    [$startTime, $endTime] = parse_duration_string($ld['sfwd-courses_course_duration'] ?? '');
+
+    // One vad_session per day
+    foreach ($days as $i => $ts) {
+        $sessionId = wp_insert_post([
+            'post_type'   => 'vad_session',
+            'post_status' => 'publish',
+            'post_title'  => 'Dag ' . ($i + 1) . ' — ' . date('Y-m-d', (int) $ts),
+        ]);
+        update_post_meta($sessionId, '_ntdst_edition_id', $editionId);
+        update_post_meta($sessionId, '_ntdst_date',       date('Y-m-d', (int) $ts));
+        update_post_meta($sessionId, '_ntdst_start_time', $startTime);
+        update_post_meta($sessionId, '_ntdst_end_time',   $endTime);
+        update_post_meta($sessionId, '_ntdst_location',   $ld['sfwd-courses_course_address'] ?? '');
+        update_post_meta($sessionId, '_ntdst_type',       'in_person'); // derived from format
+    }
+}
+```
+
+(Decisions above resolve the `// …` placeholders.)
 
 Stride generates new editions going forward. VAD has zero `vad_edition` posts. Decision: don't backfill historical editions; create editions only for upcoming/future scheduled courses.
 
