@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Stride\Handlers;
 
 use Stride\Domain\Money;
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Invoicing\QuoteService;
 use Stride\Modules\Invoicing\VoucherService;
 
@@ -72,8 +73,8 @@ final class EnrollmentQuoteHandler
         }
 
         // Get edition details
-        $edition = get_post($editionId);
-        if (!$edition) {
+        $edition = ntdst_get(EditionRepository::class)->find($editionId);
+        if (is_wp_error($edition)) {
             ntdst_log('invoicing')->warning('Skipping quote: edition not found', [
                 'registration_id' => $registrationId,
                 'edition_id' => $editionId,
