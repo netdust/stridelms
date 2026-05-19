@@ -142,7 +142,10 @@ final class QuestionnaireSettingsPage
             return;
         }
 
-        $rawGroups = $_POST['stride_questionnaire_groups'] ?? [];
+        // v2 builder posts as JSON; legacy (pre-v2) posted as nested form arrays
+        $rawGroups = isset($_POST['stride_questionnaire_groups_json'])
+            ? $this->parseSubmittedGroups((string) wp_unslash($_POST['stride_questionnaire_groups_json']))
+            : (array) ($_POST['stride_questionnaire_groups'] ?? []);
         $sanitized = $this->sanitizeGroups($rawGroups);
 
         $repo = ntdst_get(QuestionnaireRepository::class);
@@ -443,6 +446,23 @@ final class QuestionnaireSettingsPage
             </div>
         </div>
         <?php
+    }
+
+    /**
+     * Decode the v2 builder's JSON payload back into the array shape
+     * sanitizeGroups() expects. Returns [] on malformed input — the
+     * existing sanitizer treats [] as "no groups", which is safe.
+     */
+    private function parseSubmittedGroups(string $json): array
+    {
+        if ($json === '') {
+            return [];
+        }
+        $decoded = json_decode($json, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+        return $decoded;
     }
 
     private function sanitizeGroups($rawGroups): array

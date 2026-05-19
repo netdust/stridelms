@@ -51,4 +51,37 @@ final class QuestionnaireSettingsPageTest extends TestCase
         $this->assertIsArray($state['stages']);
         $this->assertIsArray($state['assignments']);
     }
+
+    public function testParseSubmittedGroupsDecodesJsonPayloadFromV2Builder(): void
+    {
+        $payload = [
+            [
+                'id'       => 'tmp_g1',
+                'label'    => 'Medische gegevens',
+                'stage'    => 'enrollment_personal',
+                'assigned' => [],
+                'fields'   => [
+                    [
+                        'id'       => 'tmp_f1',
+                        'name'     => '',
+                        'label'    => 'Allergieën?',
+                        'type'     => 'textarea',
+                        'required' => true,
+                    ],
+                ],
+            ],
+        ];
+
+        $page = new QuestionnaireSettingsPage();
+        $reflection = new \ReflectionMethod($page, 'parseSubmittedGroups');
+        $reflection->setAccessible(true);
+
+        $parsed = $reflection->invoke($page, json_encode($payload));
+
+        $this->assertIsArray($parsed);
+        $this->assertCount(1, $parsed);
+        $this->assertSame('Medische gegevens', $parsed[0]['label']);
+        $this->assertCount(1, $parsed[0]['fields']);
+        $this->assertSame('Allergieën?', $parsed[0]['fields'][0]['label']);
+    }
 }
