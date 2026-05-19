@@ -139,36 +139,6 @@ final class TrajectoryService extends AbstractService
     }
 
     /**
-     * Get course configuration for trajectory.
-     *
-     * @return array<array<string, mixed>>
-     */
-    public function getCourses(int $trajectoryId): array
-    {
-        return $this->repository->getCourses($trajectoryId);
-    }
-
-    /**
-     * Get required courses.
-     *
-     * @return array<array<string, mixed>>
-     */
-    public function getRequiredCourses(int $trajectoryId): array
-    {
-        return $this->repository->getRequiredCourses($trajectoryId);
-    }
-
-    /**
-     * Get elective groups.
-     *
-     * @return array<string, array<array<string, mixed>>>
-     */
-    public function getElectiveGroups(int $trajectoryId): array
-    {
-        return $this->repository->getElectiveGroups($trajectoryId);
-    }
-
-    /**
      * Get total course count.
      */
     public function getCourseCount(int $trajectoryId): int
@@ -185,14 +155,6 @@ final class TrajectoryService extends AbstractService
     }
 
     // === User Enrollment ===
-
-    /**
-     * Check if user is enrolled in trajectory.
-     */
-    public function isUserEnrolled(int $userId, int $trajectoryId): bool
-    {
-        return $this->registrations->existsForTrajectory($userId, $trajectoryId);
-    }
 
     /**
      * Check if trajectory requires admin approval for enrollment.

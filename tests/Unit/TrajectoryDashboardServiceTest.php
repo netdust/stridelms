@@ -185,13 +185,13 @@ class TrajectoryDashboardServiceTest extends TestCase
             ->once()
             ->andReturn(['mode' => TrajectoryMode::Cohort->value]);
 
-        $this->trajectoryService
+        $this->repository
             ->shouldReceive('getRequiredCourses')
             ->with($trajectoryId)
             ->once()
             ->andReturn([$course1, $course2]);
 
-        $this->trajectoryService
+        $this->repository
             ->shouldReceive('getElectiveGroups')
             ->with($trajectoryId)
             ->once()
@@ -253,13 +253,13 @@ class TrajectoryDashboardServiceTest extends TestCase
             ->once()
             ->andReturn(['mode' => TrajectoryMode::SelfPaced->value]);
 
-        $this->trajectoryService
+        $this->repository
             ->shouldReceive('getRequiredCourses')
             ->with($trajectoryId)
             ->once()
             ->andReturn([$requiredCourse]);
 
-        $this->trajectoryService
+        $this->repository
             ->shouldReceive('getElectiveGroups')
             ->with($trajectoryId)
             ->once()
@@ -308,11 +308,11 @@ class TrajectoryDashboardServiceTest extends TestCase
             ->shouldReceive('getTrajectory')
             ->andReturn(['mode' => TrajectoryMode::Cohort->value]);
 
-        $this->trajectoryService
+        $this->repository
             ->shouldReceive('getRequiredCourses')
             ->andReturn([$course]);
 
-        $this->trajectoryService
+        $this->repository
             ->shouldReceive('getElectiveGroups')
             ->andReturn([]);
 
@@ -355,13 +355,13 @@ class TrajectoryDashboardServiceTest extends TestCase
 
         $course = $this->createCourse(['ID' => 1001, 'post_title' => 'Course 1']);
 
-        $this->trajectoryService
+        $this->repository
             ->shouldReceive('getRequiredCourses')
             ->with($trajectoryId)
             ->once()
             ->andReturn([$course]);
 
-        $this->trajectoryService
+        $this->repository
             ->shouldReceive('getElectiveGroups')
             ->with($trajectoryId)
             ->once()

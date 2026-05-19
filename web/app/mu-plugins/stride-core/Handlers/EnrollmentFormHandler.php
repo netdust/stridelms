@@ -206,7 +206,7 @@ final class EnrollmentFormHandler
         }
 
         // Check user not already enrolled
-        if ($trajectoryService->isUserEnrolled($userId, $trajectoryId)) {
+        if (ntdst_get(RegistrationRepository::class)->existsForTrajectory($userId, $trajectoryId)) {
             return new WP_Error('already_enrolled', __('Je bent al ingeschreven voor dit traject.', 'stride'));
         }
 

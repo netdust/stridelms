@@ -17,6 +17,7 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
+use Stride\Modules\Trajectory\TrajectoryRepository;
 use Stride\Modules\Trajectory\TrajectoryService;
 
 $trajectory = $args['trajectory'];
@@ -28,7 +29,7 @@ $trajectoryService = ntdst_get(TrajectoryService::class);
 $trajectoryData = $trajectoryService->getTrajectory($trajectory->ID);
 
 // Get elective groups
-$electiveGroups = $trajectoryService->getElectiveGroups($trajectory->ID);
+$electiveGroups = ntdst_get(TrajectoryRepository::class)->getElectiveGroups($trajectory->ID);
 
 // Check choice window status
 $choiceAvailable = $trajectoryData['choice_available_date'] ?? '';

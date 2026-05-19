@@ -85,33 +85,7 @@ final class TrajectorySelection
         return count($enrollments) < $trajectory['capacity'];
     }
 
-    /**
-     * Check if user is enrolled in trajectory.
-     */
-    public function isEnrolled(int $userId, int $trajectoryId): bool
-    {
-        return $this->registrations->existsForTrajectory($userId, $trajectoryId);
-    }
-
-    /**
-     * Get user's trajectory enrollment.
-     */
-    public function getEnrollment(int $userId, int $trajectoryId): ?object
-    {
-        return $this->registrations->findByUserAndTrajectory($userId, $trajectoryId);
-    }
-
     // === Elective Selection ===
-
-    /**
-     * Get user's elective choices (edition IDs).
-     *
-     * @return array<int>
-     */
-    public function getSelections(int $registrationId): array
-    {
-        return $this->registrations->getSelections($registrationId);
-    }
 
     /**
      * Set elective choices for enrollment.
@@ -228,16 +202,6 @@ final class TrajectorySelection
     }
 
     // === Queries ===
-
-    /**
-     * Get user's trajectory enrollments.
-     *
-     * @return array<object>
-     */
-    public function getUserEnrollments(int $userId): array
-    {
-        return $this->registrations->findTrajectoryEnrollmentsByUser($userId);
-    }
 
     /**
      * Get days until choice deadline.

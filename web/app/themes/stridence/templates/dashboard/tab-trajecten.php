@@ -19,6 +19,7 @@ use Stride\Domain\RegistrationStatus;
 use Stride\Domain\TrajectoryMode;
 use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Enrollment\RegistrationRepository;
+use Stride\Modules\Trajectory\TrajectoryRepository;
 use Stride\Modules\Trajectory\TrajectoryService;
 use Stride\Modules\Edition\EditionService;
 
@@ -28,6 +29,7 @@ $user_id = $user->ID;
 // Get services
 $registrationRepo   = ntdst_get(RegistrationRepository::class);
 $trajectoryService  = ntdst_get(TrajectoryService::class);
+$trajectoryRepo     = ntdst_get(TrajectoryRepository::class);
 $editionService     = ntdst_get(EditionService::class);
 
 // Get user's trajectory enrollments
@@ -46,8 +48,8 @@ foreach ($enrollments as $enrollment) {
     }
 
     // Get trajectory courses
-    $required_courses = $trajectoryService->getRequiredCourses($trajectory_id);
-    $elective_groups  = $trajectoryService->getElectiveGroups($trajectory_id);
+    $required_courses = $trajectoryRepo->getRequiredCourses($trajectory_id);
+    $elective_groups  = $trajectoryRepo->getElectiveGroups($trajectory_id);
 
     // Calculate total courses count
     $total_courses = count($required_courses);

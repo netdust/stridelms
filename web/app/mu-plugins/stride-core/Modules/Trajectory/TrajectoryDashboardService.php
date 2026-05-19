@@ -67,8 +67,8 @@ final class TrajectoryDashboardService
         $trajectory = $this->trajectoryService->getTrajectory($trajectoryId);
         $mode = TrajectoryMode::tryFrom($trajectory['mode'] ?? '') ?? TrajectoryMode::Cohort;
 
-        $requiredCourses = $this->trajectoryService->getRequiredCourses($trajectoryId);
-        $electiveGroups = $this->trajectoryService->getElectiveGroups($trajectoryId);
+        $requiredCourses = $this->repository->getRequiredCourses($trajectoryId);
+        $electiveGroups = $this->repository->getElectiveGroups($trajectoryId);
 
         // Calculate required count
         $totalRequired = count($requiredCourses);
@@ -162,8 +162,8 @@ final class TrajectoryDashboardService
      */
     public function getMaterials(int $trajectoryId, int $userId): array
     {
-        $requiredCourses = $this->trajectoryService->getRequiredCourses($trajectoryId);
-        $electiveGroups = $this->trajectoryService->getElectiveGroups($trajectoryId);
+        $requiredCourses = $this->repository->getRequiredCourses($trajectoryId);
+        $electiveGroups = $this->repository->getElectiveGroups($trajectoryId);
 
         $allCourses = $requiredCourses;
         foreach ($electiveGroups as $group) {

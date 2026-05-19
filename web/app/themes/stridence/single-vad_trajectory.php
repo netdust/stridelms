@@ -12,12 +12,14 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
+use Stride\Modules\Trajectory\TrajectoryRepository;
 use Stride\Modules\Trajectory\TrajectoryService;
 
 $trajectory_id = get_the_ID();
 
 // Get trajectory service
 $trajectoryService = ntdst_get(TrajectoryService::class);
+$trajectoryRepo    = ntdst_get(TrajectoryRepository::class);
 
 // Get trajectory data via service
 $trajectory = $trajectoryService->getTrajectory($trajectory_id);
@@ -41,9 +43,9 @@ $price              = $trajectory['price'] ?? 0;
 $price_non_member   = $trajectory['price_non_member'] ?? 0;
 $capacity           = $trajectory['capacity'] ?? 0;
 
-// Get courses via service (now returns WP_Post objects)
-$required_courses   = $trajectoryService->getRequiredCourses($trajectory_id);
-$elective_groups    = $trajectoryService->getElectiveGroups($trajectory_id);
+// Get courses via repository (returns WP_Post objects)
+$required_courses   = $trajectoryRepo->getRequiredCourses($trajectory_id);
+$elective_groups    = $trajectoryRepo->getElectiveGroups($trajectory_id);
 
 $has_courses = !empty($required_courses) || !empty($elective_groups);
 
