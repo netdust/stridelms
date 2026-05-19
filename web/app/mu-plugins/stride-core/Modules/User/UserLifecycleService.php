@@ -520,31 +520,25 @@ class UserLifecycleService implements \NTDST_Service_Meta
      */
     private function exportQuotes(int $userId): array
     {
-        global $wpdb;
-        // vad_quote stores its meta WITHOUT a prefix (unlike vad_session +
-        // vad_edition which use _ntdst_). Quote model in stride-core does
-        // not declare a meta_prefix in NTDST Data Manager.
-        $quoteIds = $wpdb->get_col($wpdb->prepare(
-            "SELECT p.ID FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID AND pm.meta_key = 'user_id'
-             WHERE p.post_type = 'vad_quote' AND pm.meta_value = %d
-             ORDER BY p.post_date DESC",
-            $userId
-        ));
+        $quoteService = ntdst_get(\Stride\Modules\Invoicing\QuoteService::class);
+        $quotes = $quoteService ? $quoteService->getUserQuotes($userId) : [];
 
         $items = [];
-        foreach ($quoteIds as $quoteId) {
-            $qid = (int) $quoteId;
-            $number = (string) get_post_meta($qid, 'quote_number', true);
-            $status = (string) get_post_meta($qid, 'status', true);
-            $totalCents = (int) get_post_meta($qid, 'total', true);
-            $totalEur = number_format($totalCents / 100, 2, ',', '.');
-            $billing = get_post_meta($qid, 'billing', true);
+        foreach ($quotes as $quote) {
+            $qid = (int) ($quote['ID'] ?? $quote['id'] ?? 0);
+            if (!$qid) {
+                continue;
+            }
+            $totalMoney = $quote['total_money'] ?? null;
+            $totalEur = $totalMoney instanceof \Stride\Domain\Money
+                ? $totalMoney->format()
+                : '€ ' . number_format(((int) ($quote['total'] ?? 0)) / 100, 2, ',', '.');
+            $billing = $quote['billing'] ?? null;
 
             $rowData = [
-                ['name' => __('Offerte-nummer', 'stride'), 'value' => $number],
-                ['name' => __('Status', 'stride'), 'value' => $status],
-                ['name' => __('Totaalbedrag', 'stride'), 'value' => '€ ' . $totalEur],
+                ['name' => __('Offerte-nummer', 'stride'), 'value' => (string) ($quote['quote_number'] ?? '')],
+                ['name' => __('Status', 'stride'), 'value' => (string) ($quote['status'] ?? '')],
+                ['name' => __('Totaalbedrag', 'stride'), 'value' => $totalEur],
                 ['name' => __('Aangemaakt op', 'stride'), 'value' => (string) get_the_date('Y-m-d H:i', $qid)],
             ];
             if (is_array($billing) && !empty($billing['company'])) {
