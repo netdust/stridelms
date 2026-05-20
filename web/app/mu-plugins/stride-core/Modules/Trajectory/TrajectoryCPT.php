@@ -122,6 +122,36 @@ final class TrajectoryCPT
                 'label' => 'Goedkeuring vereist',
                 'description' => 'Enrollment requires admin approval',
             ],
+            'enrollment_form' => [
+                'type' => 'text',
+                'label' => 'Inschrijfformulier',
+                'description' => 'Welk formulier wordt gebruikt: default, minimal, direct',
+            ],
+            'requires_questionnaire' => [
+                'type' => 'boolean',
+                'label' => 'Vragenlijst vereist',
+                'description' => 'Enrollment requires questionnaire completion',
+            ],
+            'requires_documents' => [
+                'type' => 'boolean',
+                'label' => 'Documenten vereist',
+                'description' => 'Enrollment requires document upload',
+            ],
+            'post_requires_evaluation' => [
+                'type' => 'boolean',
+                'label' => 'Evaluatie vereist na afloop',
+                'description' => 'Post-trajectory evaluation questionnaire required',
+            ],
+            'post_requires_documents' => [
+                'type' => 'boolean',
+                'label' => 'Documenten vereist na afloop',
+                'description' => 'Post-trajectory document upload required',
+            ],
+            'post_requires_approval' => [
+                'type' => 'boolean',
+                'label' => 'Aftekenen door beheerder',
+                'description' => 'Post-trajectory admin sign-off required',
+            ],
         ];
     }
 

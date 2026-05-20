@@ -413,12 +413,13 @@ final class EditionAdminController
             $updateData['price_non_member'] = $cents;
         }
 
-        // Process boolean checkbox fields (sidebar requirements)
+        // Process boolean checkbox fields (sidebar + sessions metabox)
+        // Note: requires_session_selection is NOT in this list — it's derived
+        // from session_slots[].required below (single source of truth).
         $booleanFields = [
             'requires_approval',
             'requires_questionnaire',
             'requires_documents',
-            'requires_session_selection',
             'selection_open',
             'post_requires_evaluation',
             'post_requires_documents',
@@ -435,20 +436,27 @@ final class EditionAdminController
             $updateData['status'] = sanitize_text_field($_POST['stride_change_status']);
         }
 
-        // Process session slots configuration
+        // Process session slots configuration.
+        // requires_session_selection is derived: true iff any slot is marked required.
         if (isset($fields['session_slots']) && is_array($fields['session_slots'])) {
             $slots = [];
+            $hasRequiredSlot = false;
             foreach ($fields['session_slots'] as $slot) {
                 if (!empty($slot['slot'])) {
+                    $required = !empty($slot['required']);
+                    if ($required) {
+                        $hasRequiredSlot = true;
+                    }
                     $slots[] = [
                         'slot' => sanitize_text_field($slot['slot']),
                         'label' => sanitize_text_field($slot['label'] ?? ''),
                         'max_selections' => absint($slot['max_selections'] ?? 1),
-                        'required' => !empty($slot['required']),
+                        'required' => $required,
                     ];
                 }
             }
             $updateData['session_slots'] = $slots;
+            $updateData['requires_session_selection'] = $hasRequiredSlot;
         }
 
         // Process selection deadline
