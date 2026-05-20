@@ -658,6 +658,13 @@ class NTDST_Data_Model
             return true;
         }
 
+        // WP stores all meta as strings; the schema may sanitize to int/bool/etc.
+        // Treat scalar values as matching when their string representations are equal,
+        // so update_post_meta's "no-op" return-false doesn't trigger a batch rollback.
+        if (is_scalar($stored) && is_scalar($expected) && (string) $stored === (string) $expected) {
+            return true;
+        }
+
         return maybe_serialize($stored) === maybe_serialize($expected);
     }
 
