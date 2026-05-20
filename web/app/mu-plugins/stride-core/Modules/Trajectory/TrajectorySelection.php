@@ -19,6 +19,7 @@ final class TrajectorySelection
         private readonly TrajectoryService $trajectories,
         private readonly TrajectoryRepository $trajectoryRepo,
         private readonly RegistrationRepository $registrations,
+        private readonly TrajectoryCascadeService $cascade,
     ) {}
 
     // === Enrollment ===
@@ -54,6 +55,10 @@ final class TrajectorySelection
         if (is_wp_error($registrationId)) {
             return $registrationId;
         }
+
+        // Materialise child registrations for the trajectory's required courses
+        // (mandatory editions + pure-LD courses). Electives wait for setSelections().
+        $this->cascade->cascadeOnEnrollment($registrationId);
 
         do_action('stride/trajectory/enrolled', [
             'registration_id' => $registrationId,
@@ -122,6 +127,17 @@ final class TrajectorySelection
 
         if (!$result) {
             return new WP_Error('db_error', 'Failed to save choices');
+        }
+
+        // Cascade: add/remove child registrations to match the new selection.
+        // The selections JSON is the user's record of what they picked; the
+        // child rows are the authoritative "where they're actually enrolled."
+        // A capacity failure (`edition_full`) returns early without firing
+        // the choices_updated event — the selection state is inconsistent
+        // with reality and the caller surfaces the error.
+        $cascadeResult = $this->cascade->cascadeOnSelection($registrationId, $editionIds);
+        if (is_wp_error($cascadeResult)) {
+            return $cascadeResult;
         }
 
         do_action('stride/trajectory/choices_updated', [

@@ -203,9 +203,33 @@ final class PartnerAPIController
 
         $rows = $result['data'];
 
-        // Collect IDs for batch fetching
+        // Trajectory parents (trajectory_id set, no edition_id) need their
+        // cascade children nested under `child_registrations` so partners
+        // see one card per enrollment instead of N+1.
+        $parentRegistrationIds = array_values(array_filter(
+            array_map(fn($r) => (int) $r->id, $rows),
+            fn($id) => $id > 0
+        ));
+        $trajectoryParentIds = array_values(array_filter(
+            array_map(fn($r) => !empty($r->trajectory_id) && empty($r->edition_id) ? (int) $r->id : 0, $rows),
+            fn($id) => $id > 0
+        ));
+        $childrenByParent = !empty($trajectoryParentIds)
+            ? $this->registrationRepository->findByParents($trajectoryParentIds)
+            : [];
+
+        // Collect IDs for batch fetching — include both top-level rows and any
+        // nested children so we can format both in one batch lookup.
         $userIds = array_unique(array_map(fn($r) => (int) $r->user_id, $rows));
         $editionIds = array_filter(array_unique(array_map(fn($r) => (int) ($r->edition_id ?? 0), $rows)));
+        foreach ($childrenByParent as $children) {
+            foreach ($children as $child) {
+                if (!empty($child->edition_id)) {
+                    $editionIds[] = (int) $child->edition_id;
+                }
+            }
+        }
+        $editionIds = array_values(array_unique(array_filter($editionIds)));
 
         // Batch-fetch users
         $users = [];
@@ -242,26 +266,23 @@ final class PartnerAPIController
         }
 
         // Map results, skip orphaned registrations (deleted users)
-        $data = array_filter(array_map(function ($row) use ($users, $editions, $editionCourseMap, $courses) {
+        $data = array_filter(array_map(function ($row) use ($users, $editions, $editionCourseMap, $courses, $childrenByParent) {
             if (!isset($users[(int) $row->user_id])) {
                 return null;
             }
 
-            $editionId = $row->edition_id ? (int) $row->edition_id : 0;
-            $courseId = $editionCourseMap[$editionId] ?? 0;
+            $entry = $this->formatEnrollmentRow($row, $users, $editions, $editionCourseMap, $courses);
 
-            return [
-                'id' => (int) $row->id,
-                'user_id' => (int) $row->user_id,
-                'user_email' => ($users[(int) $row->user_id] ?? null)?->user_email,
-                'edition_id' => $editionId ?: null,
-                'edition_title' => ($editions[$editionId] ?? null)?->post_title,
-                'course_title' => ($courses[$courseId] ?? null)?->post_title,
-                'trajectory_id' => $row->trajectory_id ? (int) $row->trajectory_id : null,
-                'status' => $row->status,
-                'registered_at' => $row->registered_at ? gmdate('c', strtotime($row->registered_at)) : null,
-                'completed_at' => $row->completed_at ? gmdate('c', strtotime($row->completed_at)) : null,
-            ];
+            // Trajectory parent → nest children.
+            if (!empty($row->trajectory_id) && empty($row->edition_id)) {
+                $children = $childrenByParent[(int) $row->id] ?? [];
+                $entry['child_registrations'] = array_map(
+                    fn($child) => $this->formatEnrollmentRow($child, $users, $editions, $editionCourseMap, $courses),
+                    $children
+                );
+            }
+
+            return $entry;
         }, $rows));
 
         return new WP_REST_Response([
@@ -270,6 +291,41 @@ final class PartnerAPIController
             'page' => $filters['page'],
             'per_page' => $filters['per_page'],
         ]);
+    }
+
+    /**
+     * Shape a registration row for API output. Used by both list and detail
+     * endpoints, and for nested child rows inside trajectory parents.
+     *
+     * @param array<int, \WP_User> $users
+     * @param array<int, \WP_Post> $editions
+     * @param array<int, int> $editionCourseMap
+     * @param array<int, \WP_Post> $courses
+     * @return array<string, mixed>
+     */
+    private function formatEnrollmentRow(
+        object $row,
+        array $users,
+        array $editions,
+        array $editionCourseMap,
+        array $courses
+    ): array {
+        $editionId = !empty($row->edition_id) ? (int) $row->edition_id : 0;
+        $courseId = $editionCourseMap[$editionId] ?? 0;
+
+        return [
+            'id' => (int) $row->id,
+            'user_id' => (int) $row->user_id,
+            'user_email' => ($users[(int) $row->user_id] ?? null)?->user_email,
+            'edition_id' => $editionId ?: null,
+            'edition_title' => ($editions[$editionId] ?? null)?->post_title,
+            'course_title' => ($courses[$courseId] ?? null)?->post_title,
+            'trajectory_id' => !empty($row->trajectory_id) ? (int) $row->trajectory_id : null,
+            'parent_registration_id' => !empty($row->parent_registration_id) ? (int) $row->parent_registration_id : null,
+            'status' => $row->status,
+            'registered_at' => $row->registered_at ? gmdate('c', strtotime($row->registered_at)) : null,
+            'completed_at' => $row->completed_at ? gmdate('c', strtotime($row->completed_at)) : null,
+        ];
     }
 
     /**
@@ -308,7 +364,7 @@ final class PartnerAPIController
             : 0;
         $course = $courseId ? get_post($courseId) : null;
 
-        return new WP_REST_Response([
+        $response = [
             'id' => (int) $registration->id,
             'user_id' => (int) $registration->user_id,
             'user_email' => $user ? $user->user_email : null,
@@ -317,12 +373,46 @@ final class PartnerAPIController
             'edition_title' => $editionIsValid ? $edition->post_title : null,
             'course_title' => $course ? $course->post_title : null,
             'trajectory_id' => $registration->trajectory_id ? (int) $registration->trajectory_id : null,
+            'parent_registration_id' => !empty($registration->parent_registration_id) ? (int) $registration->parent_registration_id : null,
             'status' => $registration->status,
             'enrollment_path' => $registration->enrollment_path,
             'registered_at' => $registration->registered_at ? gmdate('c', strtotime($registration->registered_at)) : null,
             'completed_at' => $registration->completed_at ? gmdate('c', strtotime($registration->completed_at)) : null,
             'notes' => $registration->notes,
-        ]);
+        ];
+
+        // Trajectory parent → nest children with edition/course info.
+        if (!empty($registration->trajectory_id) && empty($registration->edition_id)) {
+            $children = $this->registrationRepository->findByParents([(int) $registration->id])[$registration->id] ?? [];
+
+            $childEditionIds = array_values(array_unique(array_filter(array_map(
+                fn($c) => (int) ($c->edition_id ?? 0),
+                $children
+            ))));
+            $childEditions = !empty($childEditionIds) ? $this->editionRepository->findManyById($childEditionIds) : [];
+            $childCourseMap = !empty($childEditionIds) ? $this->editionRepository->findCourseIdsForEditions($childEditionIds) : [];
+            $childCourseIds = array_values(array_unique(array_filter($childCourseMap)));
+            $childCourses = [];
+            if (!empty($childCourseIds)) {
+                $coursePosts = get_posts([
+                    'post_type' => 'sfwd-courses',
+                    'post__in' => $childCourseIds,
+                    'posts_per_page' => count($childCourseIds),
+                    'post_status' => 'any',
+                ]);
+                foreach ($coursePosts as $cp) {
+                    $childCourses[$cp->ID] = $cp;
+                }
+            }
+            $users = $user ? [(int) $user->ID => $user] : [];
+
+            $response['child_registrations'] = array_map(
+                fn($child) => $this->formatEnrollmentRow($child, $users, $childEditions, $childCourseMap, $childCourses),
+                $children
+            );
+        }
+
+        return new WP_REST_Response($response);
     }
 
     /**

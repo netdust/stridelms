@@ -428,16 +428,42 @@ final class RegistrationRepository
     }
 
     /**
-     * Get edition registrations linked to a trajectory.
+     * Get edition registrations linked to a trajectory for a given user.
+     *
+     * Includes:
+     *  - Legacy rows: `trajectory_id = X AND edition_id IS NOT NULL` (the
+     *    pre-cascade shape; some older rows may still match).
+     *  - Cascade children: rows whose `parent_registration_id` points at the
+     *    user's trajectory-parent row for this trajectory (the post-cascade
+     *    authoritative shape).
+     *
+     * After cascade ships, child rows are the source of truth for
+     * "is this user actually enrolled in this edition?"; the trajectory's
+     * `selections` JSON becomes the historical "what did they pick" record.
      *
      * @return array<object>
      */
     public function findEditionsByTrajectory(int $userId, int $trajectoryId): array
     {
         global $wpdb;
+        $table = $this->table();
 
         return $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$this->table()} WHERE user_id = %d AND trajectory_id = %d AND edition_id IS NOT NULL ORDER BY registered_at ASC",
+            "SELECT child.* FROM {$table} child
+             LEFT JOIN {$table} parent
+                ON parent.id = child.parent_registration_id
+                AND parent.user_id = %d
+                AND parent.trajectory_id = %d
+                AND parent.edition_id IS NULL
+             WHERE child.user_id = %d
+               AND child.edition_id IS NOT NULL
+               AND (
+                    child.trajectory_id = %d
+                    OR parent.id IS NOT NULL
+               )
+             ORDER BY child.registered_at ASC",
+            $userId,
+            $trajectoryId,
             $userId,
             $trajectoryId
         ));
@@ -635,6 +661,48 @@ final class RegistrationRepository
     }
 
     /**
+     * Batch-find children for many parent registrations in one query.
+     *
+     * Used by listing endpoints (e.g. PartnerAPI) that need to nest
+     * children under their trajectory parents without N+1 lookups.
+     *
+     * @param array<int> $parentIds
+     * @return array<int, array<object>> Map of parent_registration_id => children[]
+     */
+    public function findByParents(array $parentIds): array
+    {
+        if (empty($parentIds)) {
+            return [];
+        }
+
+        global $wpdb;
+        $ids = array_values(array_unique(array_filter(array_map('intval', $parentIds))));
+        if (empty($ids)) {
+            return [];
+        }
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$this->table()}
+             WHERE parent_registration_id IN ({$placeholders})
+             ORDER BY parent_registration_id, registered_at ASC",
+            ...$ids
+        ));
+
+        $grouped = array_fill_keys($ids, []);
+        foreach ($rows as $row) {
+            if (!empty($row->selections) && is_string($row->selections)) {
+                $row->selections = json_decode($row->selections, true);
+            }
+            if (!empty($row->completion_tasks) && is_string($row->completion_tasks)) {
+                $row->completion_tasks = json_decode($row->completion_tasks, true);
+            }
+            $grouped[(int) $row->parent_registration_id][] = $row;
+        }
+        return $grouped;
+    }
+
+    /**
      * Bulk-cancel all child registrations of a trajectory parent.
      *
      * Data-only — does NOT fire stride/registration/cancelled. Callers
@@ -677,13 +745,23 @@ final class RegistrationRepository
 
     /**
      * Check if user has any active registrations (not cancelled).
+     *
+     * Excludes cascade-children (rows with `parent_registration_id` set)
+     * because the dashboard renders them under their parent trajectory card,
+     * not as standalone enrollments. A user with ONLY trajectory enrollments
+     * should not see the "Opleidingen" tab light up — they see "Trajecten".
      */
     public function hasActiveRegistrations(int $userId): bool
     {
         global $wpdb;
         $table = $this->table();
         $result = $wpdb->get_var($wpdb->prepare(
-            "SELECT 1 FROM {$table} WHERE user_id = %d AND status != 'cancelled' LIMIT 1",
+            "SELECT 1 FROM {$table}
+             WHERE user_id = %d
+               AND status != 'cancelled'
+               AND parent_registration_id IS NULL
+               AND trajectory_id IS NULL
+             LIMIT 1",
             $userId
         ));
         return (bool) $result;
@@ -778,9 +856,17 @@ final class RegistrationRepository
         $perPage = min(100, max(1, absint($filters['per_page'] ?? 20)));
         $offset = ($page - 1) * $perPage;
 
-        // Build WHERE clause
+        // Build WHERE clause. Cascade child rows (those with
+        // parent_registration_id set) are excluded by default — they're
+        // internal representation, not standalone enrollments from the
+        // partner's perspective. Callers that need them (admin tools,
+        // audit) pass `include_children=true`.
         $where = ["company_id = %d"];
         $params = [$companyId];
+
+        if (empty($filters['include_children'])) {
+            $where[] = 'parent_registration_id IS NULL';
+        }
 
         if ($status !== null) {
             $where[] = "status = %s";

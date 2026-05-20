@@ -556,6 +556,15 @@ final class UserDashboardService
                 continue;
             }
 
+            // Hide cascade-children from the flat enrollments list. The
+            // parent trajectory card already represents them; rendering both
+            // would show each course twice. Nested rendering under the
+            // trajectory card is deferred — for v1, children only show up
+            // via TrajectoryDashboardService output.
+            if (!empty($reg->parent_registration_id)) {
+                continue;
+            }
+
             $editionId = (int) $reg->edition_id;
             $edition   = $editionMap[$editionId] ?? null;
 
@@ -759,6 +768,20 @@ final class UserDashboardService
             return [[], []];
         }
 
+        // Courses granted via a trajectory are rendered under their parent
+        // trajectory card by TrajectoryDashboardService — filter them out of
+        // the flat online list so users don't see the same course twice.
+        $trajectoryGrantedCourseIds = $this->collectTrajectoryGrantedCourseIds($userId);
+        if (!empty($trajectoryGrantedCourseIds)) {
+            $enrolledIds = array_values(array_diff(
+                array_map('intval', $enrolledIds),
+                $trajectoryGrantedCourseIds
+            ));
+            if (empty($enrolledIds)) {
+                return [[], []];
+            }
+        }
+
         // Start from user's enrolled courses, filter to online formats
         $onlineCourseIds = get_posts([
             'post_type'      => 'sfwd-courses',
@@ -815,6 +838,32 @@ final class UserDashboardService
         }
 
         return [$active, $completed];
+    }
+
+    /**
+     * Course IDs the user was granted access to via the trajectory cascade
+     * (Stap 5 / Stap 6 pure-LD branch). Reads the
+     * `_stride_trajectory_courses` user-meta written by
+     * `TrajectoryCascadeService::grantPureLdAccess()`. Empty when the user
+     * has no trajectory enrollments.
+     *
+     * @return array<int>
+     */
+    private function collectTrajectoryGrantedCourseIds(int $userId): array
+    {
+        $raw = get_user_meta($userId, \Stride\Modules\Trajectory\TrajectoryCascadeService::TRAJECTORY_COURSES_META_KEY, true);
+        if (!is_array($raw)) {
+            return [];
+        }
+
+        $courseIds = [];
+        foreach ($raw as $entry) {
+            $courseId = (int) ($entry['course_id'] ?? 0);
+            if ($courseId > 0) {
+                $courseIds[] = $courseId;
+            }
+        }
+        return array_values(array_unique($courseIds));
     }
 
     /**
