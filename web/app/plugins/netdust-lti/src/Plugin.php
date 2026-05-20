@@ -57,6 +57,7 @@ final class Plugin implements NTDST_Service_Meta
         if (is_admin()) {
             ntdst_get(Admin\SettingsPage::class);
             ntdst_get(Admin\CourseSettingsMetabox::class);
+            ntdst_get(Admin\LaunchTestPage::class);
             ntdst_get(ToolProvider\DeepLinkHandler::class);
         }
 

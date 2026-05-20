@@ -1,4 +1,13 @@
-<?php defined('ABSPATH') || exit; ?>
+<?php
+defined('ABSPATH') || exit;
+
+use NetdustLTI\Admin\LaunchTestPage;
+
+$launchTestPage = ntdst_get(LaunchTestPage::class);
+$launchTestTools = $launchTestPage->getTools();
+$launchTestEndpoints = $launchTestPage->getPlatformEndpoints();
+$launchTestCurrentUser = wp_get_current_user();
+?>
 <style>[x-cloak] { display: none !important; }</style>
 
 <div class="wrap ntdst-app" x-data="ltiApp()" x-cloak>
@@ -28,6 +37,9 @@
                 </button>
                 <button class="ntdst-sidebar-item" :class="{ active: tab === 'platforms' }" @click.prevent="setTab('platforms')">
                     <span class="dashicons dashicons-cloud"></span> Platforms
+                </button>
+                <button class="ntdst-sidebar-item" :class="{ active: tab === 'launch-test' }" @click.prevent="setTab('launch-test')">
+                    <span class="dashicons dashicons-share-alt2"></span> Launch Test
                 </button>
                 <button class="ntdst-sidebar-item" :class="{ active: tab === 'logs' }" @click.prevent="setTab('logs')">
                     <span class="dashicons dashicons-media-text"></span> Logs
@@ -349,6 +361,177 @@
                                     </td>
                                 </tr>
                             </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ════════════════════════════════════════════════
+             Launch Test Tab
+             ════════════════════════════════════════════════ -->
+        <div x-show="tab === 'launch-test'">
+            <div class="ntdst-page-header">
+                <h2 class="ntdst-section-title">Launch Test</h2>
+            </div>
+            <p class="ntdst-form-help" style="margin-top:0;margin-bottom:16px;">
+                <?php esc_html_e('Test launching external LTI tools from this platform.', 'netdust-lti'); ?>
+            </p>
+
+            <?php if (empty($launchTestTools)): ?>
+                <div class="notice notice-warning">
+                    <p>
+                        <?php esc_html_e('No LTI tools configured.', 'netdust-lti'); ?>
+                        <a href="<?php echo esc_url(admin_url('edit.php?post_type=lti_tool')); ?>">
+                            <?php esc_html_e('Add a tool first.', 'netdust-lti'); ?>
+                        </a>
+                    </p>
+                </div>
+            <?php else: ?>
+
+                <!-- Resource Launch -->
+                <div class="ntdst-card" style="margin-bottom:24px;">
+                    <div class="ntdst-card-header">
+                        <div>
+                            <h3 class="ntdst-card-title"><?php esc_html_e('Resource Launch', 'netdust-lti'); ?></h3>
+                            <p class="ntdst-form-help" style="margin-top:4px;"><?php esc_html_e('Launch a tool with LtiResourceLinkRequest message type.', 'netdust-lti'); ?></p>
+                        </div>
+                    </div>
+                    <div class="ntdst-card-body">
+                        <form method="post" action="<?php echo esc_url(home_url('/lti/platform/launch')); ?>" target="_blank">
+                            <?php wp_nonce_field('lti_launch_test', 'lti_launch_nonce'); ?>
+                            <input type="hidden" name="message_type" value="LtiResourceLinkRequest">
+
+                            <table class="form-table">
+                                <tr>
+                                    <th><label for="tool_id"><?php esc_html_e('Tool', 'netdust-lti'); ?></label></th>
+                                    <td>
+                                        <select name="tool_id" id="tool_id" class="regular-text" required>
+                                            <option value=""><?php esc_html_e('-- Select a tool --', 'netdust-lti'); ?></option>
+                                            <?php foreach ($launchTestTools as $tool): ?>
+                                                <option value="<?php echo esc_attr($tool['id']); ?>">
+                                                    <?php echo esc_html($tool['title']); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th><label for="resource_link_id"><?php esc_html_e('Resource Link ID', 'netdust-lti'); ?></label></th>
+                                    <td>
+                                        <input type="text" name="resource_link_id" id="resource_link_id" class="regular-text" placeholder="test-resource-123">
+                                        <p class="description"><?php esc_html_e('Optional. Auto-generated if empty.', 'netdust-lti'); ?></p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th><label for="target_link_uri"><?php esc_html_e('Target Link URI', 'netdust-lti'); ?></label></th>
+                                    <td>
+                                        <input type="url" name="target_link_uri" id="target_link_uri" class="regular-text" placeholder="https://tool.example.com/resource/123">
+                                        <p class="description"><?php esc_html_e('Optional. Overrides the tool\'s default launch URL.', 'netdust-lti'); ?></p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th><?php esc_html_e('Launch As', 'netdust-lti'); ?></th>
+                                    <td>
+                                        <label>
+                                            <input type="radio" name="launch_as" value="current" checked>
+                                            <?php printf(esc_html__('Current user (%s)', 'netdust-lti'), esc_html($launchTestCurrentUser->display_name)); ?>
+                                        </label><br>
+                                        <label>
+                                            <input type="radio" name="launch_as" value="test_learner">
+                                            <?php esc_html_e('Test learner (anonymous)', 'netdust-lti'); ?>
+                                        </label>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p class="submit">
+                                <input type="submit" class="button button-primary" value="<?php esc_attr_e('Launch Tool', 'netdust-lti'); ?>">
+                            </p>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Deep Linking -->
+                <div class="ntdst-card" style="margin-bottom:24px;">
+                    <div class="ntdst-card-header">
+                        <div>
+                            <h3 class="ntdst-card-title"><?php esc_html_e('Deep Linking Discovery', 'netdust-lti'); ?></h3>
+                            <p class="ntdst-form-help" style="margin-top:4px;"><?php esc_html_e('Request content selection using LtiDeepLinkingRequest.', 'netdust-lti'); ?></p>
+                        </div>
+                    </div>
+                    <div class="ntdst-card-body">
+                        <form method="post" action="<?php echo esc_url(home_url('/lti/platform/launch')); ?>" target="_blank">
+                            <?php wp_nonce_field('lti_deep_link_test', 'lti_deep_link_nonce'); ?>
+                            <input type="hidden" name="message_type" value="LtiDeepLinkingRequest">
+
+                            <table class="form-table">
+                                <tr>
+                                    <th><label for="dl_tool_id"><?php esc_html_e('Tool', 'netdust-lti'); ?></label></th>
+                                    <td>
+                                        <select name="tool_id" id="dl_tool_id" class="regular-text" required>
+                                            <option value=""><?php esc_html_e('-- Select a tool --', 'netdust-lti'); ?></option>
+                                            <?php foreach ($launchTestTools as $tool): ?>
+                                                <option value="<?php echo esc_attr($tool['id']); ?>">
+                                                    <?php echo esc_html($tool['title']); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th><?php esc_html_e('Accept Types', 'netdust-lti'); ?></th>
+                                    <td>
+                                        <label><input type="checkbox" name="accept_types[]" value="ltiResourceLink" checked> <?php esc_html_e('LTI Resource Link', 'netdust-lti'); ?></label><br>
+                                        <label><input type="checkbox" name="accept_types[]" value="link"> <?php esc_html_e('Link', 'netdust-lti'); ?></label><br>
+                                        <label><input type="checkbox" name="accept_types[]" value="file"> <?php esc_html_e('File', 'netdust-lti'); ?></label><br>
+                                        <label><input type="checkbox" name="accept_types[]" value="html"> <?php esc_html_e('HTML', 'netdust-lti'); ?></label><br>
+                                        <label><input type="checkbox" name="accept_types[]" value="image"> <?php esc_html_e('Image', 'netdust-lti'); ?></label>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p class="submit">
+                                <input type="submit" class="button button-secondary" value="<?php esc_attr_e('Request Content Selection', 'netdust-lti'); ?>">
+                            </p>
+                        </form>
+                    </div>
+                </div>
+
+            <?php endif; ?>
+
+            <!-- Platform Endpoints -->
+            <div class="ntdst-card">
+                <div class="ntdst-card-header">
+                    <div>
+                        <h3 class="ntdst-card-title"><span class="dashicons dashicons-download"></span> <?php esc_html_e('Platform Endpoints', 'netdust-lti'); ?></h3>
+                        <p class="ntdst-form-help" style="margin-top:4px;"><?php esc_html_e('Reference info for configuring external tools to work with this platform.', 'netdust-lti'); ?></p>
+                    </div>
+                </div>
+                <div class="ntdst-card-body">
+                    <table class="ntdst-endpoint-table">
+                        <thead>
+                            <tr>
+                                <th><?php esc_html_e('Endpoint', 'netdust-lti'); ?></th>
+                                <th><?php esc_html_e('URL', 'netdust-lti'); ?></th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($launchTestEndpoints as $key => $url):
+                                $label = ucwords(str_replace('_', ' ', $key));
+                                ?>
+                                <tr>
+                                    <td style="font-weight:500;white-space:nowrap;"><?php echo esc_html($label); ?></td>
+                                    <td><code class="ntdst-endpoint-url"><?php echo esc_html($url); ?></code></td>
+                                    <td style="text-align:right;">
+                                        <button type="button" class="ntdst-copy-btn"
+                                                :class="{ 'ntdst-copied': copied === 'plat-<?php echo esc_attr($key); ?>' }"
+                                                @click="copyToClipboard('<?php echo esc_js($url); ?>', 'plat-<?php echo esc_attr($key); ?>')"
+                                                x-text="copied === 'plat-<?php echo esc_attr($key); ?>' ? 'Copied!' : 'Copy'">Copy</button>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
                         </tbody>
                     </table>
                 </div>

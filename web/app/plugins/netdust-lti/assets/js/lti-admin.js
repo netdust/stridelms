@@ -58,7 +58,7 @@ document.addEventListener('alpine:init', () => {
 
         parseHash() {
             const hash = window.location.hash.replace('#', '');
-            const validTabs = ['dashboard', 'platforms', 'logs', 'howto'];
+            const validTabs = ['dashboard', 'platforms', 'launch-test', 'logs', 'howto'];
             if (hash && validTabs.includes(hash)) {
                 this.tab = hash;
                 this.loadTabData(hash);

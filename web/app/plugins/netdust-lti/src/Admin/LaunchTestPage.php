@@ -26,27 +26,16 @@ final class LaunchTestPage implements NTDST_Service_Meta
     public function __construct(
         private readonly ToolRepository $toolRepository
     ) {
-        add_action('admin_menu', [$this, 'registerPage']);
+        // No longer registers its own admin menu — content is now rendered as
+        // the "Launch Test" tab inside SettingsPage's app.
     }
 
-    public function registerPage(): void
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function getTools(): array
     {
-        add_submenu_page(
-            'options-general.php',
-            'LTI Launch Test',
-            'LTI Launch Test',
-            'manage_options',
-            'lti-launch-test',
-            [$this, 'renderPage']
-        );
-    }
-
-    public function renderPage(): void
-    {
-        $tools = $this->toolRepository->all();
-        $currentUser = wp_get_current_user();
-
-        include dirname(__DIR__, 2) . '/templates/admin/launch-test.php';
+        return $this->toolRepository->all();
     }
 
     /**
