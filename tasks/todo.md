@@ -120,6 +120,39 @@ Earlier audit mistake corrected: I grep'd for `do_action('stride/` but missed `$
 
 ---
 
+## Trajectory cascade + phased choices (started 2026-05-20, planning done)
+
+**Two plans, sequential. Do cascade first — phased-choices needs it.**
+
+### Plan 1: Cascade-enrollment — `plans/2026-05-20-trajectory-cascade-enrollment.md`
+
+All design decisions locked in with Stefan 2026-05-20 (see plan's "Decisions" table + `memory/STATE.md`).
+
+Execution steps (each independently verifiable):
+- [ ] **Step 1** — Schema: add `parent_registration_id BIGINT UNSIGNED NULL` + `INDEX idx_parent` to `RegistrationTable.php`. Verify via `DESCRIBE wp_vad_registrations`.
+- [ ] Step 2 — `RegistrationRepository::findByParent()` + `cancelChildren()` + allow `parent_registration_id` in create/update whitelist.
+- [ ] Step 3 — `TrajectoryCascadeService` skeleton, register in `plugin-config.php`.
+- [ ] Step 4 — `cascadeOnEnrollment()` for mandatory editions with edition_id.
+- [ ] Step 5 — `cascadeOnEnrollment()` pure-LD branch: `grantAccess()` + user-meta `_stride_trajectory_courses`.
+- [ ] Step 6 — `cascadeOnSelection()` with capacity check + add/remove children + `maybeCreateChildQuote()` for €0-trajectory + paid-child case.
+- [ ] Step 7 — `cascadeOnCancellation()` cohort variant (cascade-cancel + revoke LD access). Self-paced is no-op.
+- [ ] Step 8 — `cascadeOnStatusChange()` for cohort.
+- [ ] Step 9 — Wire into `TrajectorySelection::enroll()` + `setSelections()`. Children get `completion_tasks = []` (skip per-edition requirements).
+- [ ] Step 10 — Wire into `EnrollmentService::cancel()` + status-change paths.
+- [ ] Step 11 — Read-path updates: `UserDashboardService` skips children in flat list, renders pure-LD from user-meta. `TrajectoryDashboardService` reads from children for status.
+- [ ] Step 12 — `wp stride trajectory backfill-cascade` CLI for existing enrollments. Dry-run mode first.
+- [ ] Step 13 — PartnerAPI: 409 on `edition_full`, nested children in responses. Update API doc.
+- [ ] Step 14 — Manual shake-out via `tests/manual/shake-cascade.php`.
+- [ ] Step 15 — Acceptance test (Cest) — one cohort + one self-paced flow.
+
+### Plan 2: Phased choices — `plans/2026-05-20-trajectory-phased-choices.md`
+
+DO NOT START until cascade above is shipped + tested. Phased-choices' Risk #3 was YES; cascade resolves it.
+
+Plan has its own 9-step execution order — see file.
+
+---
+
 ## Deep-testing phase — STARTS HERE
 
 Stride codebase is feature-complete. User is starting deep testing in the coming days.

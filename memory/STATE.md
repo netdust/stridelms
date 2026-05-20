@@ -3,7 +3,31 @@
 Current state of the project for session continuity. Updated after meaningful work.
 **For "what's left to launch" see `docs/LAUNCH-CHECKLIST.md` (single source of truth).**
 
-Last refresh: 2026-05-16
+Last refresh: 2026-05-20
+
+---
+
+## Active work: Trajectory cascade + phased choices (started 2026-05-20)
+
+**Status:** Planning complete, implementation not started.
+
+**Two plans, do in order:**
+1. `plans/2026-05-20-trajectory-cascade-enrollment.md` — **prereq**, do first. Adds `parent_registration_id` column + `TrajectoryCascadeService`. Locks the parent→child model.
+2. `plans/2026-05-20-trajectory-phased-choices.md` — builds on (1). Per-keuzegroep `opens_at` / `deadline` + lazy task creation. Risk #3 in that plan ("is cascade-enrollment missing?") is YES — that's why (1) exists.
+
+**Decisions locked in (2026-05-20, with Stefan):**
+- Parent-child link: new column `parent_registration_id` on `wp_vad_registrations`
+- Mandatory editions → child created at parent-creation; electives → child at `setSelections()`
+- Pure-LD (no edition) → `grantAccess()` + user-meta `_stride_trajectory_courses`
+- Reuse existing `TrajectoryMode` enum (`cohort` vs `self_paced`) — no new field
+- Cohort: children inherit parent status (cancel cascades)
+- Self-paced: children independent (parent cancel does nothing)
+- Capacity check on elective choice → blocks with `WP_Error('edition_full')`
+- Children skip per-edition `requires_questionnaire` / `requires_documents` / `requires_approval` (those are satisfied at parent level)
+- Children have `quote_id = NULL` UNLESS trajectory = €0 AND child > €0 → cascade auto-generates child quote with parent's billing
+- Payment never blocks enrollment; access-denial for unpaid = manual admin task
+
+**Step 1 to execute next session:** Schema migration — add `parent_registration_id` column + `idx_parent` index in `Modules/Enrollment/RegistrationTable.php`. Triggered via `dbDelta`. Verify with `wp db query "DESCRIBE wp_vad_registrations"`.
 
 ---
 
@@ -437,6 +461,7 @@ Inventory only — left in place per user instruction:
 [2026-05-19] — session ended (no significant changes captured)
 [2026-05-19] — session ended (no significant changes captured)
 [2026-05-19] — session ended (no significant changes captured)
+[2026-05-20] — session ended (no significant changes captured)
 [2026-05-20] — session ended (no significant changes captured)
 [2026-05-20] — session ended (no significant changes captured)
 [2026-05-20] — session ended (no significant changes captured)
