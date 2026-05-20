@@ -40,10 +40,26 @@ final class AdminController
         add_action('admin_head', [$this, 'injectStyles']);
         add_action('admin_footer', [$this, 'injectScripts']);
         add_action('rest_api_init', [$this, 'registerRestRoutes']);
+        add_filter('stride_tools_menu_items', [$this, 'registerToolsCard']);
     }
 
+    /**
+     * Register under Stride Tools when available, fall back to WP Settings.
+     */
     public function registerMenu(): void
     {
+        if ($this->hasStrideTools()) {
+            add_submenu_page(
+                'stride-tools',
+                'Mail',
+                'Mail',
+                self::CAPABILITY,
+                self::MENU_SLUG,
+                [$this, 'renderPage']
+            );
+            return;
+        }
+
         add_options_page(
             'Netdust Mail',
             'Netdust Mail',
@@ -53,18 +69,40 @@ final class AdminController
         );
     }
 
+    /**
+     * Surface this tool on the Stride Tools index + dashboard card.
+     */
+    public function registerToolsCard(array $items): array
+    {
+        $items[] = [
+            'slug'        => self::MENU_SLUG,
+            'label'       => 'Mail',
+            'description' => 'E-mail templates, smart codes en triggers.',
+            'icon'        => 'dashicons-email-alt',
+            'capability'  => self::CAPABILITY,
+        ];
+        return $items;
+    }
+
+    private function hasStrideTools(): bool
+    {
+        return class_exists('\Stride\Admin\StrideToolsService');
+    }
+
     private function isMailPage(): bool
     {
         $screen = get_current_screen();
         if (!$screen) {
             return (sanitize_text_field($_GET['page'] ?? '') === self::MENU_SLUG);
         }
-        return $screen->id === 'settings_page_' . self::MENU_SLUG;
+        $expected = ($this->hasStrideTools() ? 'stride-tools_page_' : 'settings_page_') . self::MENU_SLUG;
+        return $screen->id === $expected;
     }
 
     public function enqueueAssets(string $hook): void
     {
-        if ($hook !== 'settings_page_' . self::MENU_SLUG) {
+        $expected = ($this->hasStrideTools() ? 'stride-tools_page_' : 'settings_page_') . self::MENU_SLUG;
+        if ($hook !== $expected) {
             return;
         }
 

@@ -33,6 +33,7 @@ final class AdminController implements \NTDST_Service_Meta
         add_action('admin_head', [$this, 'injectStyles']);
         add_action('admin_footer', [$this, 'injectScripts']);
         add_action('wp_ajax_ntdst_audit_export_csv', [$this, 'exportCsv']);
+        add_filter('stride_tools_menu_items', [$this, 'registerToolsCard']);
     }
 
     private function getCapability(): string
@@ -40,8 +41,28 @@ final class AdminController implements \NTDST_Service_Meta
         return apply_filters('ntdst/audit/capability', 'manage_options');
     }
 
+    private function hasStrideTools(): bool
+    {
+        return class_exists('\Stride\Admin\StrideToolsService');
+    }
+
+    /**
+     * Register under Stride Tools when available, fall back to WP Tools.
+     */
     public function registerAdminPage(): void
     {
+        if ($this->hasStrideTools()) {
+            add_submenu_page(
+                'stride-tools',
+                'Audit Log',
+                'Audit',
+                $this->getCapability(),
+                self::MENU_SLUG,
+                [$this, 'renderPage']
+            );
+            return;
+        }
+
         add_management_page(
             'Audit Log',
             'Audit Log',
@@ -49,6 +70,21 @@ final class AdminController implements \NTDST_Service_Meta
             self::MENU_SLUG,
             [$this, 'renderPage']
         );
+    }
+
+    /**
+     * Surface this tool on the Stride Tools index + dashboard card.
+     */
+    public function registerToolsCard(array $items): array
+    {
+        $items[] = [
+            'slug'        => self::MENU_SLUG,
+            'label'       => 'Audit',
+            'description' => 'Activiteitenlogboek en CSV-export.',
+            'icon'        => 'dashicons-shield',
+            'capability'  => $this->getCapability(),
+        ];
+        return $items;
     }
 
     public function enqueueAssets(string $hook): void

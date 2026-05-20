@@ -57,6 +57,7 @@ final class AuthService implements \NTDST_Service_Meta
         add_action('admin_menu', [$this, 'addSettingsPage']);
         add_action('admin_init', [$this, 'registerSettings']);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAdminAssets']);
+        add_filter('stride_tools_menu_items', [$this, 'registerToolsCard']);
 
         // Privacy tools
         add_filter('wp_privacy_personal_data_exporters', [$this, 'registerPrivacyExporter']);
@@ -350,6 +351,18 @@ final class AuthService implements \NTDST_Service_Meta
 
     public function addSettingsPage(): void
     {
+        if ($this->hasStrideTools()) {
+            add_submenu_page(
+                'stride-tools',
+                __('Authentication', 'ntdst-auth'),
+                __('Authenticatie', 'ntdst-auth'),
+                'manage_options',
+                'ntdst-auth',
+                [$this, 'renderSettingsPage']
+            );
+            return;
+        }
+
         add_options_page(
             __('Authentication', 'ntdst-auth'),
             __('Authentication', 'ntdst-auth'),
@@ -357,6 +370,29 @@ final class AuthService implements \NTDST_Service_Meta
             'ntdst-auth',
             [$this, 'renderSettingsPage']
         );
+    }
+
+    /**
+     * Surface this tool on the Stride Tools index + dashboard card.
+     *
+     * @param array $items
+     * @return array
+     */
+    public function registerToolsCard(array $items): array
+    {
+        $items[] = [
+            'slug'        => 'ntdst-auth',
+            'label'       => __('Authenticatie', 'ntdst-auth'),
+            'description' => __('Login, redirects en privacy-exporters.', 'ntdst-auth'),
+            'icon'        => 'dashicons-lock',
+            'capability'  => 'manage_options',
+        ];
+        return $items;
+    }
+
+    private function hasStrideTools(): bool
+    {
+        return class_exists('\Stride\Admin\StrideToolsService');
     }
 
     public function registerSettings(): void
@@ -369,7 +405,8 @@ final class AuthService implements \NTDST_Service_Meta
 
     public function enqueueAdminAssets(string $hook): void
     {
-        if ($hook !== 'settings_page_ntdst-auth') {
+        $expected = ($this->hasStrideTools() ? 'stride-tools_page_' : 'settings_page_') . 'ntdst-auth';
+        if ($hook !== $expected) {
             return;
         }
 

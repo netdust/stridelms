@@ -26,26 +26,56 @@ class AssistantService implements \NTDST_Service_Meta
     {
         add_action('admin_menu', [$this, 'registerAdminPage']);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
+        add_action('admin_head', [$this, 'loadChrome']);
+        add_filter('stride_tools_menu_items', [$this, 'registerToolsCard']);
 
         if (!$this->hasApiKey()) {
             add_action('admin_notices', [$this, 'showApiKeyNotice']);
         }
     }
 
-    public function registerAdminPage(): void
+    private function getCapability(): string
     {
         $capability = get_option('ntdst_assistant_capability', 'edit_others_posts');
-
         $allowed = ['manage_options', 'edit_others_posts', 'stride_manage', 'stride_view'];
-        if (!in_array($capability, $allowed, true)) {
-            $capability = 'edit_others_posts';
+        return in_array($capability, $allowed, true) ? $capability : 'edit_others_posts';
+    }
+
+    /**
+     * Surface this tool on the Stride Tools index + dashboard card.
+     */
+    public function registerToolsCard(array $items): array
+    {
+        $items[] = [
+            'slug'        => self::MENU_SLUG,
+            'label'       => 'Assistant',
+            'description' => 'AI-assistent voor admin taken en analyses.',
+            'icon'        => 'dashicons-format-chat',
+            'capability'  => $this->getCapability(),
+        ];
+        return $items;
+    }
+
+    public function loadChrome(): void
+    {
+        $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+        if (!$screen || !str_contains((string) $screen->id, self::MENU_SLUG)) {
+            return;
         }
+        if (function_exists('stride_load_tool_chrome')) {
+            stride_load_tool_chrome();
+        }
+    }
+
+    public function registerAdminPage(): void
+    {
+        $parent = class_exists('\Stride\Admin\StrideToolsService') ? 'stride-tools' : 'stride-dashboard';
 
         add_submenu_page(
-            'stride-dashboard',
+            $parent,
             'Stride Assistant',
             'Assistant',
-            $capability,
+            $this->getCapability(),
             self::MENU_SLUG,
             [$this, 'renderPage'],
         );
