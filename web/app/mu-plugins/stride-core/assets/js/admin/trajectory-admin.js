@@ -320,11 +320,16 @@
             var html = buildCourseItemHtml(parsed, title, 'ntdst_fields[elective_groups][' + groupIdx + '][courses][]');
             $group.find('.stride-elective-course-list').append(html);
             $select.val(null).trigger('change');
+            refreshGroupSummary($group);
         });
 
         // Remove course
         $(document).on('click', '.remove-course', function() {
+            var $group = $(this).closest('.stride-elective-group');
             $(this).closest('.stride-course-item').remove();
+            if ($group.length) {
+                refreshGroupSummary($group);
+            }
         });
 
         // Delete elective group
@@ -333,6 +338,40 @@
                 $(this).closest('.stride-elective-group').remove();
             }
         });
+
+        // Expand group (pencil)
+        $(document).on('click', '.stride-edit-group', function(e) {
+            e.preventDefault();
+            $(this).closest('.stride-elective-group').addClass('is-editing')
+                .find('.stride-group-edit input[type="text"]').first().focus();
+        });
+
+        // Collapse group (Klaar)
+        $(document).on('click', '.stride-group-done', function(e) {
+            e.preventDefault();
+            $(this).closest('.stride-elective-group').removeClass('is-editing');
+        });
+
+        // Live-update summary when name / pick_count change inside the edit panel
+        $(document).on('change keyup', '.stride-group-edit input[name*="[name]"], .stride-group-edit input[name*="[pick_count]"]', function() {
+            refreshGroupSummary($(this).closest('.stride-elective-group'));
+        });
+
+    }
+
+    /**
+     * Sync the compact summary line on an elective group with its underlying inputs + course list.
+     */
+    function refreshGroupSummary($group) {
+        var $edit = $group.find('.stride-group-edit');
+        var name = $edit.find('input[name*="[name]"]').val() || '';
+        var pickCount = parseInt($edit.find('input[name*="[pick_count]"]').val(), 10) || 1;
+        var courseCount = $group.find('.stride-elective-course-list .stride-course-item').length;
+
+        var $summary = $group.find('.stride-group-summary');
+        $summary.find('.stride-group-summary-label').text(name || '(Nieuwe groep)');
+        var courseWord = courseCount === 1 ? 'cursus' : 'cursussen';
+        $summary.find('.stride-group-summary-meta').text('Kies ' + pickCount + ' · ' + courseCount + ' ' + courseWord);
     }
 
     /**

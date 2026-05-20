@@ -714,6 +714,104 @@
                 var $hint = $(this).closest('.stride-session-form').find('#stride-price-modifier-hint');
                 $hint.toggle($(this).val() === '');
             });
+
+            // Visual + state updates when "Verplicht" toggles
+            $(document).on('change', '.stride-slot-required', function() {
+                $(this).closest('.stride-slot-row').toggleClass('is-required', $(this).is(':checked'));
+                self.refreshSlotSummary($(this).closest('.stride-slot-row'));
+                self.updateKeuzegroepenState();
+            });
+
+            // Refresh compact summary whenever an edit-panel field changes
+            $(document).on('change keyup', '.stride-slot-edit input', function() {
+                self.refreshSlotSummary($(this).closest('.stride-slot-row'));
+            });
+
+            // Pencil opens the edit panel
+            $(document).on('click', '.stride-edit-slot', function(e) {
+                e.preventDefault();
+                $(this).closest('.stride-slot-row').addClass('is-editing')
+                    .find('.stride-slot-edit input').first().focus();
+            });
+
+            // "Klaar" collapses back to compact
+            $(document).on('click', '.stride-slot-done', function(e) {
+                e.preventDefault();
+                $(this).closest('.stride-slot-row').removeClass('is-editing');
+            });
+
+            // State updates when window controls change
+            $(document).on('change', 'input[name="ntdst_fields[selection_open]"], input[name="ntdst_fields[selection_deadline]"]', function() {
+                self.updateKeuzegroepenState();
+            });
+        },
+
+        /**
+         * Sync the compact summary on a slot row with the values in its edit panel.
+         * Mirrors the PHP renderSlotRow() summary output.
+         */
+        refreshSlotSummary: function($row) {
+            var $edit = $row.find('.stride-slot-edit');
+            var label = $edit.find('input[name*="[label]"]').val();
+            var slotId = $edit.find('input[name*="[slot]"]').val();
+            var maxSel = parseInt($edit.find('input[name*="[max_selections]"]').val(), 10) || 1;
+            var required = $edit.find('.stride-slot-required').is(':checked');
+
+            var $summary = $row.find('.stride-slot-summary');
+            $summary.find('.stride-slot-summary-label').text(label || slotId || '(Nieuwe groep)');
+
+            // Required badge lives in the actions cluster (right side, before the pencil)
+            var $actions = $summary.find('.stride-slot-summary-actions');
+            var $badge = $actions.find('.stride-slot-summary-badge');
+            if (required && !$badge.length) {
+                $actions.prepend($('<span class="stride-slot-summary-badge">Verplicht</span>'));
+            } else if (!required && $badge.length) {
+                $badge.remove();
+            }
+
+            var metaText = 'Kies ' + maxSel;
+            $summary.find('.stride-slot-summary-meta').html(
+                metaText + (slotId ? ' · <code>' + $('<div>').text(slotId).html() + '</code>' : '')
+            );
+        },
+
+        /**
+         * Update the short status pill at the top of Keuzegroepen.
+         * Mirrors the server-side logic in EditionSessionsMetabox::renderSlotConfiguration().
+         */
+        updateKeuzegroepenState: function() {
+            var $state = $('#stride-keuzegroepen-state');
+            if (!$state.length) return;
+
+            var $rows = $('#stride-session-slots-list .stride-slot-row');
+            var hasSlots = $rows.length > 0;
+            var hasRequiredSlot = $rows.find('.stride-slot-required:checked').length > 0;
+            var open = $('input[name="ntdst_fields[selection_open]"][type="checkbox"]').is(':checked');
+            var deadlineStr = $('input[name="ntdst_fields[selection_deadline]"]').val();
+            var deadlinePassed = false;
+            if (deadlineStr) {
+                var d = new Date(deadlineStr);
+                d.setHours(23, 59, 59, 999);
+                deadlinePassed = d.getTime() < Date.now();
+            }
+
+            var label = '', cls = '';
+            if (!hasRequiredSlot) {
+                label = 'Optioneel'; cls = 'is-neutral';
+            } else if (deadlinePassed) {
+                label = 'Deadline verstreken'; cls = 'is-warning';
+            } else if (open) {
+                label = 'Actief'; cls = 'is-active';
+            }
+
+            $state
+                .removeClass('is-active is-warning is-neutral')
+                .addClass(cls)
+                .text(label)
+                .toggle(label !== '');
+
+            // Show window block once at least one slot exists
+            $('#stride-selection-window').toggle(hasSlots);
         },
 
         /**
@@ -734,11 +832,12 @@
             // Append to list
             $list.append($newRow);
 
-            // Focus on the first input
-            $newRow.find('input[type="text"]').first().focus();
+            // Focus on the first input in the edit panel (new rows start in edit mode)
+            $newRow.find('.stride-slot-edit input[type="text"]').first().focus();
 
             // Update session slot dropdown
             self.updateSessionSlotDropdown();
+            self.updateKeuzegroepenState();
         },
 
         /**
@@ -750,6 +849,7 @@
 
             // Re-index remaining rows
             this.reindexSlotRows();
+            this.updateKeuzegroepenState();
         },
 
         /**

@@ -945,17 +945,106 @@
     background: #fff;
     border: 1px solid #ddd;
     border-radius: 3px;
-    padding: 12px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
+    overflow: hidden;
 }
 
 .stride-slot-row:last-child {
     margin-bottom: 0;
 }
 
+.stride-slot-row.is-required {
+    border-left: 3px solid #dba617;
+}
+
+/* Compact summary row */
+.stride-slot-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    gap: 12px;
+}
+
+.stride-slot-summary-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.stride-slot-summary-label {
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.stride-slot-summary-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: #fcf0e0;
+    color: #8a4b00;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.stride-slot-summary-meta {
+    font-size: 12px;
+    color: #646970;
+}
+
+.stride-slot-summary-meta code {
+    font-size: 11px;
+    background: #f0f0f1;
+    padding: 1px 6px;
+    border-radius: 2px;
+}
+
+.stride-slot-summary-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.stride-slot-summary-actions .button-link {
+    padding: 4px;
+    line-height: 1;
+    color: #2271b1;
+    text-decoration: none;
+    box-shadow: none;
+}
+
+.stride-slot-summary-actions .button-link:hover,
+.stride-slot-summary-actions .button-link:focus {
+    text-decoration: none;
+    box-shadow: none;
+}
+
+.stride-slot-summary-actions .stride-remove-slot {
+    color: #a00;
+}
+
+/* Expanded edit panel — hidden by default, shown when row has .is-editing */
+.stride-slot-edit {
+    display: none;
+    padding: 12px;
+    border-top: 1px solid #eee;
+    background: #f9f9f9;
+}
+
+.stride-slot-row.is-editing .stride-slot-edit {
+    display: block;
+}
+
+.stride-slot-row.is-editing .stride-slot-summary {
+    display: none;
+}
+
 .stride-field-row.four-col {
     display: grid;
-    grid-template-columns: 1fr 1.5fr 0.8fr auto;
+    grid-template-columns: 1.5fr 1fr 0.8fr auto;
     gap: 12px;
     align-items: end;
 }
@@ -975,10 +1064,75 @@
     white-space: nowrap;
 }
 
+.stride-slot-actions .stride-slot-required-toggle {
+    font-weight: 600 !important;
+    padding: 4px 8px;
+    border-radius: 3px;
+    transition: background-color 0.15s ease;
+    cursor: pointer;
+}
+
+.stride-slot-row.is-required .stride-slot-required-toggle {
+    background: #fcf0e0;
+    color: #8a4b00;
+}
+
 .stride-remove-slot {
     color: #a00;
     padding: 4px;
     line-height: 1;
+}
+
+/* Window form (Sessiekeuze) — labels left, controls right */
+.stride-window-form {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid #e0e0e0;
+}
+
+.stride-window-row {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 0;
+}
+
+.stride-window-label {
+    font-weight: 600;
+    font-size: 12px;
+    color: #1d2327;
+}
+
+.stride-window-control input[type="date"] {
+    max-width: 200px;
+    font-size: 12px;
+}
+
+/* State pill at top of Keuzegroepen */
+.stride-keuzegroepen-state {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 3px 10px;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    background: #f0f0f1;
+    color: #50575e;
+}
+.stride-keuzegroepen-state.is-active {
+    background: #edfaef;
+    color: #1a4731;
+}
+.stride-keuzegroepen-state.is-warning {
+    background: #fcf0e0;
+    color: #8a4b00;
+}
+.stride-keuzegroepen-state.is-neutral {
+    background: #f0f0f1;
+    color: #50575e;
 }
 
 .stride-remove-slot:hover {
