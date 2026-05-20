@@ -4,6 +4,50 @@ Patterns, gotchas, and fixes discovered during development. Search here before d
 
 ---
 
+## Schema Migrations on Existing Tables
+
+### dbDelta silently refuses ALTERs on `vad_registrations`
+- Reproduced 2026-05-20 adding `parent_registration_id` for trajectory cascade. The CREATE TABLE uses `INDEX` (not `KEY`) and other formatting dbDelta's parser dislikes — so on existing DBs, dbDelta returns without errors but applies nothing.
+- The migration-option flag flips to `1`, suggesting success. SHOW COLUMNS confirms nothing changed. Easy to miss.
+- **Use explicit ALTER TABLE for migrations, not dbDelta.** Keep dbDelta only for first-install CREATE.
+
+### Migration recipe (one-shot ALTER, then clean up)
+For a single column / index addition to an existing Stride table:
+
+1. **Add the column to `CREATE TABLE`** in `<Module>/<X>Table.php::create()` so fresh installs get it.
+2. **Write a temporary static migration method** on the same class — guarded by `INFORMATION_SCHEMA.COLUMNS` / `INFORMATION_SCHEMA.STATISTICS` so it's idempotent:
+   ```php
+   $hasColumn = $wpdb->get_var($wpdb->prepare(
+       "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = %s
+          AND COLUMN_NAME = 'parent_registration_id'",
+       $table
+   ));
+   if ((int) $hasColumn === 0) {
+       $wpdb->query("ALTER TABLE {$table} ADD COLUMN parent_registration_id BIGINT UNSIGNED NULL AFTER trajectory_id");
+   }
+   ```
+3. **Add a one-shot shim in `stride-core.php`**, keyed on a new option flag:
+   ```php
+   if (get_option('stride_tables_created') && !get_option('stride_parent_reg_added')) {
+       \Stride\Modules\Enrollment\RegistrationTable::addParentRegistrationColumn();
+       update_option('stride_parent_reg_added', '1');
+   }
+   ```
+4. **Trigger it locally** — `ddev exec wp eval 'echo "boot";'` is enough (any `wp` command boots WP and fires init).
+5. **Verify** — `ddev exec wp db query "SHOW COLUMNS FROM <prefix>_vad_registrations LIKE 'xxx'"`.
+6. **Run the same shim on staging and prod** before merging.
+7. **Then clean up.** Once the ALTER is everywhere it needs to be:
+   - Remove the migration method from `<X>Table.php`
+   - Remove the shim from `stride-core.php`
+   - Delete the option flag (`wp option delete stride_xxx_added`) on each env
+   - The `CREATE TABLE` keeps the column, so fresh installs stay correct.
+
+The migration code is throwaway scaffolding. Once the column exists in every env, the runtime code shouldn't carry the migration forever.
+
+---
+
 ## Architecture Patterns
 
 ### Service Registration Rules
