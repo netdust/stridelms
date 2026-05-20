@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace Stride\Modules\Enrollment;
 
-use Stride\Domain\OfferingStatus;
-use Stride\Modules\Edition\EditionService;
-use Stride\Modules\Trajectory\TrajectoryService;
-
 /**
  * URL routing for enrollment and completion forms.
  *
@@ -63,24 +59,10 @@ final class EnrollmentRouter
             exit;
         }
 
-        $trajectoryService = ntdst_get(TrajectoryService::class);
-        $mode = $this->computeEnrollmentMode(
-            $trajectoryService->getTrajectory($trajectory->ID)['status_enum'] ?? OfferingStatus::Draft,
-            $trajectoryService->requiresApproval($trajectory->ID),
-            $trajectoryService->isEnrollmentOpen($trajectory->ID),
-        );
+        $args = ntdst_get(EnrollmentFormResolver::class)
+            ->resolveTemplateArgs($trajectory, 'trajectory');
 
-        $formType = $trajectoryService->getEnrollmentForm($trajectory->ID);
-
-        ntdst_response()
-            ->with('item', $trajectory)
-            ->with('type', 'trajectory')
-            ->with('enrollment_open', $mode !== 'closed')
-            ->with('enrollment_mode', $mode)
-            ->with('form_type', $formType)
-            ->render('enrollment/form');
-
-        return null;
+        return $this->renderResolved($args, get_permalink($trajectory->ID));
     }
 
     private function handleCourseEnrollment(string $slug): ?string
@@ -103,52 +85,42 @@ final class EnrollmentRouter
             exit;
         }
 
-        // Check if user is already enrolled
-        $enrollmentService = $this->enrollmentService;
-        if ($enrollmentService->hasActiveRegistration(get_current_user_id(), editionId: $edition->ID)) {
-            ntdst_response()
-                ->with('item', $edition)
-                ->with('type', 'edition')
-                ->with('already_enrolled', true)
-                ->render('enrollment/form');
+        $args = ntdst_get(EnrollmentFormResolver::class)
+            ->resolveTemplateArgs($edition, 'edition');
+
+        if ($args['state'] === 'direct') {
+            $this->handleDirectEnrollment($edition, $args['enrollment_mode']);
             return null;
         }
 
-        $editionService = ntdst_get(EditionService::class);
-        // Effective status routes klassikaal-no-sessions and past editions
-        // to the correct mode (interest / closed) before we render anything.
-        $status = $editionService->getEffectiveStatus($edition->ID);
-        $mode = $this->computeEnrollmentMode(
-            $status,
-            $editionService->requiresApproval($edition->ID),
-            $status->allowsEnrollment() && $editionService->hasAvailableSpots($edition->ID),
-        );
+        return $this->renderResolved($args, get_permalink($edition->ID));
+    }
 
-        // Closed mode: edition is cancelled, postponed, in progress, completed,
-        // archived, or past its date. Don't render the form — punt back to the
-        // edition page where the correct disabled CTA / explanation lives.
-        if ($mode === 'closed') {
-            wp_safe_redirect(get_permalink($edition->ID));
+    /**
+     * Render the enrollment form wrapper based on the resolver's state.
+     *
+     * @param array<string, mixed> $args
+     */
+    private function renderResolved(array $args, string $closedRedirect): ?string
+    {
+        if ($args['state'] === 'closed') {
+            wp_safe_redirect($closedRedirect);
             exit;
         }
 
-        $isOnline = $editionService->isOnline($edition->ID);
-        $formType = $editionService->getEnrollmentForm($edition->ID);
+        $response = ntdst_response()
+            ->with('item', $args['item'])
+            ->with('type', $args['item_type'])
+            ->with('enrollment_open', $args['enrollment_open'])
+            ->with('enrollment_mode', $args['enrollment_mode'])
+            ->with('is_online', $args['is_online'])
+            ->with('form_type', $args['form_type']);
 
-        // Direct enrollment: skip form, enroll immediately
-        if ($formType === 'direct') {
-            $this->handleDirectEnrollment($edition, $mode);
-            return null;
+        if ($args['already_enrolled']) {
+            $response->with('already_enrolled', true);
         }
 
-        ntdst_response()
-            ->with('item', $edition)
-            ->with('type', 'edition')
-            ->with('enrollment_open', $mode !== 'closed')
-            ->with('enrollment_mode', $mode)
-            ->with('is_online', $isOnline)
-            ->with('form_type', $formType)
-            ->render('enrollment/form');
+        $response->render('enrollment/form');
 
         return null;
     }
@@ -270,23 +242,6 @@ final class EnrollmentRouter
         // Success — redirect to edition page with confirmation
         wp_safe_redirect(add_query_arg('enrolled', '1', get_permalink($edition->ID)));
         exit;
-    }
-
-    private function computeEnrollmentMode(OfferingStatus $status, bool $requiresApproval, bool $enrollmentOpen): string
-    {
-        if ($status->allowsInterest()) {
-            return 'interest';
-        }
-
-        if ($status->allowsWaitlist()) {
-            return 'waitlist';
-        }
-
-        if ($enrollmentOpen) {
-            return $requiresApproval ? 'pending_approval' : 'enrollment';
-        }
-
-        return 'closed';
     }
 
     /**
