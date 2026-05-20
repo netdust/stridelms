@@ -130,6 +130,7 @@ final class RegistrationRepository
             'user_id' => isset($data['user_id']) ? absint($data['user_id']) : null,
             'edition_id' => $editionId,
             'trajectory_id' => $trajectoryId,
+            'parent_registration_id' => isset($data['parent_registration_id']) ? absint($data['parent_registration_id']) : null,
             'company_id' => isset($data['company_id']) ? absint($data['company_id']) : null,
             'status' => $data['status'] ?? RegistrationStatus::Confirmed->value,
             'enrollment_path' => $data['enrollment_path'] ?? self::PATH_INDIVIDUAL,
@@ -597,6 +598,81 @@ final class RegistrationRepository
         return $grouped;
     }
 
+    // === Parent/child queries (trajectory cascade) ===
+
+    /**
+     * Find all child registrations of a trajectory parent.
+     *
+     * Children are edition-level registrations created by the cascade service
+     * when a user enrolls in (or makes a selection for) a trajectory. They
+     * have `edition_id` set, `trajectory_id` NULL, and `parent_registration_id`
+     * pointing at the trajectory parent row.
+     *
+     * @return array<object>
+     */
+    public function findByParent(int $parentRegistrationId): array
+    {
+        global $wpdb;
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$this->table()} WHERE parent_registration_id = %d ORDER BY registered_at ASC",
+            $parentRegistrationId
+        ));
+
+        foreach ($rows as $row) {
+            if (!empty($row->selections) && is_string($row->selections)) {
+                $row->selections = json_decode($row->selections, true);
+            }
+            if (!empty($row->completion_tasks) && is_string($row->completion_tasks)) {
+                $row->completion_tasks = json_decode($row->completion_tasks, true);
+            }
+            if (!empty($row->enrollment_data) && is_string($row->enrollment_data)) {
+                $row->enrollment_data = json_decode($row->enrollment_data, true);
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Bulk-cancel all child registrations of a trajectory parent.
+     *
+     * Data-only — does NOT fire stride/registration/cancelled. Callers
+     * (TrajectoryCascadeService) own lifecycle side-effects: LD revoke,
+     * audit, mail, event dispatch. This matches the convention set by
+     * `cancel()` above.
+     *
+     * Idempotent: rows already in `cancelled` status are skipped, so the
+     * count returned reflects rows actually transitioned this call.
+     *
+     * @return int Number of children transitioned to cancelled
+     */
+    public function cancelChildren(int $parentRegistrationId): int
+    {
+        global $wpdb;
+
+        $affected = $wpdb->query($wpdb->prepare(
+            "UPDATE {$this->table()}
+             SET status = %s, cancelled_at = %s, completion_tasks = NULL
+             WHERE parent_registration_id = %d
+               AND status != %s",
+            RegistrationStatus::Cancelled->value,
+            current_time('mysql'),
+            $parentRegistrationId,
+            RegistrationStatus::Cancelled->value
+        ));
+
+        if ($affected === false) {
+            return 0;
+        }
+
+        if ($affected > 0) {
+            $this->clearCache();
+        }
+
+        return (int) $affected;
+    }
+
     // === User queries ===
 
     /**
@@ -840,7 +916,7 @@ final class RegistrationRepository
     {
         global $wpdb;
 
-        $allowed = ['status', 'selections', 'selections_locked_at', 'quote_id', 'completed_at', 'cancelled_at', 'notes', 'completion_tasks', 'enrollment_data'];
+        $allowed = ['status', 'selections', 'selections_locked_at', 'quote_id', 'completed_at', 'cancelled_at', 'notes', 'completion_tasks', 'enrollment_data', 'parent_registration_id'];
         $update = [];
 
         foreach ($allowed as $field) {
