@@ -70,11 +70,14 @@ final class EnrollmentRouter
             $trajectoryService->isEnrollmentOpen($trajectory->ID),
         );
 
+        $formType = $trajectoryService->getEnrollmentForm($trajectory->ID);
+
         ntdst_response()
             ->with('item', $trajectory)
             ->with('type', 'trajectory')
             ->with('enrollment_open', $mode !== 'closed')
             ->with('enrollment_mode', $mode)
+            ->with('form_type', $formType)
             ->render('enrollment/form');
 
         return null;

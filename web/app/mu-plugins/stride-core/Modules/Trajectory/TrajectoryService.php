@@ -354,6 +354,18 @@ final class TrajectoryService extends AbstractService
         return (bool) $this->repository->getField($trajectoryId, 'requires_approval', false);
     }
 
+    /**
+     * Get the enrollment form key for this trajectory.
+     *
+     * Mirrors EditionService::getEnrollmentForm so EnrollmentRouter can pass
+     * `form_type` to the shared enrollment template — the template hides the
+     * billing step when form_type === 'minimal'.
+     */
+    public function getEnrollmentForm(int $trajectoryId): string
+    {
+        return (string) $this->repository->getField($trajectoryId, 'enrollment_form', 'default');
+    }
+
     // === Deadline Checks ===
 
     /**
