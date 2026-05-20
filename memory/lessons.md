@@ -6,6 +6,19 @@ Patterns, gotchas, and fixes discovered during development. Search here before d
 
 ## Test Harness Gotchas
 
+### `createTestEdition()` ignores `meta_input`, expects `meta`
+- `IntegrationTestCase::createTestEdition(array $data)` looks at `$data['meta']` for overrides, NOT `$data['meta_input']` (the WP-native key).
+- `meta_input` keys get merged into `$postData` and passed to `wp_insert_post()` — they DO get persisted, but they bypass the helper's defaults. So `$data['meta_input' => ['_ntdst_price' => 0]]` writes 0 to postmeta BUT the helper still applies its `_ntdst_price => 10000` default afterwards via `update_post_meta`, overwriting the 0.
+- **Use `'meta' => [...]` in test data.** Pattern: `$this->createTestEdition(['meta' => ['_ntdst_price' => 50.00]])`.
+- Same applies to `createTestCourse`, `createTestVoucher`, etc. — verify each helper's signature before passing meta.
+
+### Edition prices are stored as **euro floats**, not cents
+- `_ntdst_price` and `_ntdst_price_non_member` postmeta are euro floats (e.g., `50.00` = €50.00).
+- `EditionService::getPrice()` reads the raw value with `Money::eur($amount)` which multiplies by 100 to get cents.
+- The comment in `tests/Integration/bootstrap.php` line 152 (`'_ntdst_price' => 10000, // 100.00 EUR in cents`) is **misleading** — it's actually 10000 euros, not 100. Existing tests don't read the price so it goes unnoticed.
+- When writing a test that asserts on edition prices: use the euro float convention (`50.00`), then assert against `$quote['subtotal'] === 5000` (which is the cents-int Money output).
+- VAT applies — `$quote['total']` is `subtotal + tax`, not the bare price. Assert on `subtotal` if you don't want to bake the VAT rate into the test.
+
 ### Silent zero-output failure = fatal at class-load
 - If `vendor/bin/phpunit tests/Integration/<file>.php` returns RC=255 with **zero bytes of output**, PHP died loading the test class itself (compile/link error, not an assertion failure).
 - Cause we hit 2026-05-20: redeclaring a method that already exists in `IntegrationTestCase` (in `tests/Integration/bootstrap.php`) at a *narrower* visibility than the parent — e.g. defining `private function createTestCourse()` when the parent has `protected function createTestCourse()`. PHP emits `Access level must be protected or weaker` at compile time. No test output, no stack trace from phpunit, just exit 255.
