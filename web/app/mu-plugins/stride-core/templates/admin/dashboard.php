@@ -397,6 +397,33 @@ defined('ABSPATH') || exit;
                         </div>
                     </div>
 
+                    <?php $tools = function_exists('stride_tools_menu_items') ? stride_tools_menu_items() : []; ?>
+                    <?php if (!empty($tools)): ?>
+                        <!-- Stride Tools quick links -->
+                        <div class="sd-card sd-tools-card">
+                            <div class="sd-card__header">
+                                <h3 class="sd-card__title">Tools</h3>
+                                <a class="sd-card__link"
+                                   href="<?php echo esc_url(admin_url('admin.php?page=stride-tools')); ?>">Alles bekijken →</a>
+                            </div>
+                            <div class="sd-card__body">
+                                <ul class="sd-tools-card__list">
+                                    <?php foreach ($tools as $tool):
+                                        $url  = admin_url('admin.php?page=' . urlencode($tool['slug']));
+                                        $icon = (string) ($tool['icon'] ?? 'dashicons-admin-generic');
+                                        ?>
+                                        <li>
+                                            <a href="<?php echo esc_url($url); ?>" class="sd-tools-card__item">
+                                                <span class="dashicons <?php echo esc_attr($icon); ?>"></span>
+                                                <span><?php echo esc_html($tool['label']); ?></span>
+                                            </a>
+                                        </li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+
                 </div><!-- /.sd-layout__secondary -->
             </div><!-- /.sd-layout -->
 

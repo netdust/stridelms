@@ -54,18 +54,39 @@ final class QuestionnaireSettingsPage
         add_action('admin_init', [$this, 'handleSave']);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
         add_action('admin_head', [$this, 'inlineHeadAssets']);
+        add_filter('stride_tools_menu_items', [$this, 'registerToolsCard']);
     }
 
     public function registerPage(): void
     {
+        $parent = class_exists('\Stride\Admin\StrideToolsService') ? 'stride-tools' : 'stride-dashboard';
+
         add_submenu_page(
-            'stride-dashboard',
+            $parent,
             'Formuliervelden',
             'Formuliervelden',
             self::CAPABILITY,
             self::PAGE_SLUG,
             [$this, 'renderPage']
         );
+    }
+
+    /**
+     * Surface this tool on the Stride Tools index + dashboard card.
+     *
+     * @param array $items
+     * @return array
+     */
+    public function registerToolsCard(array $items): array
+    {
+        $items[] = [
+            'slug'        => self::PAGE_SLUG,
+            'label'       => 'Formuliervelden',
+            'description' => 'Beheer velden voor inschrijvings- en evaluatieformulieren.',
+            'icon'        => 'dashicons-forms',
+            'capability'  => self::CAPABILITY,
+        ];
+        return $items;
     }
 
     public function enqueueAssets(string $hook): void
@@ -113,16 +134,14 @@ final class QuestionnaireSettingsPage
             return;
         }
 
+        // Shared tokens + tool-header CSS (idempotent — safe to call repeatedly).
+        if (function_exists('stride_load_tool_chrome')) {
+            stride_load_tool_chrome();
+        }
+
         $basePath      = dirname(__DIR__, 3);
-        $tokensCssFile = $basePath . '/assets/css/admin-dashboard.css';
         $builderCssFile = $basePath . '/assets/css/admin/questionnaire-builder-v2.css';
         $jsFile        = $basePath . '/assets/js/admin/questionnaire-builder-v2.js';
-
-        if (file_exists($tokensCssFile)) {
-            echo '<style id="stride-dashboard-tokens">';
-            include $tokensCssFile;
-            echo '</style>';
-        }
 
         if (file_exists($builderCssFile)) {
             echo '<style id="stride-questionnaire-builder-v2-css">';

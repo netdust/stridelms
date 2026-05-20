@@ -20,6 +20,18 @@ final class AdminGuidePage
     public function __construct()
     {
         add_action('admin_menu', [$this, 'registerPage'], 90);
+        add_action('admin_head', [$this, 'loadChrome']);
+    }
+
+    public function loadChrome(): void
+    {
+        $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+        if (!$screen || !str_contains((string) $screen->id, self::PAGE_SLUG)) {
+            return;
+        }
+        if (function_exists('stride_load_tool_chrome')) {
+            stride_load_tool_chrome();
+        }
     }
 
     public function registerPage(): void

@@ -22,7 +22,10 @@ $templateDir = __DIR__ . '/settings';
 
 <div class="wrap" x-data="strideSettingsApp()" x-cloak>
 
-    <h1>Stride Instellingen</h1>
+    <?php stride_tool_header(
+        'Instellingen',
+        'Bedrijfsgegevens, profieltypes, meldingen en algemene configuratie.'
+    ); ?>
 
     <!-- Status message bar -->
     <div x-show="message" x-transition.opacity

@@ -14,6 +14,9 @@ defined('ABSPATH') || exit;
 // Load autoloader
 require_once __DIR__ . '/autoload.php';
 
+// Load shared admin chrome helpers (stride_tool_header, stride_load_tool_chrome).
+require_once __DIR__ . '/templates/admin/_tool-header.php';
+
 // Load config
 $config = require __DIR__ . '/plugin-config.php';
 

@@ -1,11 +1,10 @@
 <?php defined('ABSPATH') || exit; ?>
 <div class="wrap stride-guide">
 
-<h1>Handleiding</h1>
-<p class="stride-guide-intro">
-    Welkom bij Stride. Deze handleiding legt uit hoe het systeem werkt, hoe de onderdelen samenhangen,
-    en hoe je als beheerder het meeste uit het platform haalt.
-</p>
+<?php stride_tool_header(
+    'Handleiding',
+    'Welkom bij Stride. Deze handleiding legt uit hoe het systeem werkt, hoe de onderdelen samenhangen, en hoe je als beheerder het meeste uit het platform haalt.'
+); ?>
 
 <nav class="stride-guide-nav">
     <a href="#concepten">Concepten</a>

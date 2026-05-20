@@ -39,6 +39,18 @@ class AnnualReportPage implements \NTDST_Service_Meta
     {
         add_action('admin_menu', [$this, 'registerSubmenu'], 20);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
+        add_action('admin_head', [$this, 'loadChrome']);
+    }
+
+    public function loadChrome(): void
+    {
+        $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+        if (!$screen || !str_contains((string) $screen->id, self::PAGE_SLUG)) {
+            return;
+        }
+        if (function_exists('stride_load_tool_chrome')) {
+            stride_load_tool_chrome();
+        }
     }
 
     public function registerSubmenu(): void
