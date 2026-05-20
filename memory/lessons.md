@@ -4,6 +4,40 @@ Patterns, gotchas, and fixes discovered during development. Search here before d
 
 ---
 
+## Test Harness Gotchas
+
+### Silent zero-output failure = fatal at class-load
+- If `vendor/bin/phpunit tests/Integration/<file>.php` returns RC=255 with **zero bytes of output**, PHP died loading the test class itself (compile/link error, not an assertion failure).
+- Cause we hit 2026-05-20: redeclaring a method that already exists in `IntegrationTestCase` (in `tests/Integration/bootstrap.php`) at a *narrower* visibility than the parent — e.g. defining `private function createTestCourse()` when the parent has `protected function createTestCourse()`. PHP emits `Access level must be protected or weaker` at compile time. No test output, no stack trace from phpunit, just exit 255.
+- The `failOnRisky` + `beStrictAboutOutputDuringTests` + `failOnWarning` combo in `phpunit.xml.dist` amplifies this — fatals during file load produce no stream output at all.
+
+**Diagnostic recipe when you see RC=255 + empty output:**
+```bash
+# Write a wrapper script INSIDE the project root (not /tmp host vs container)
+cat > _diag.sh <<'EOF'
+#!/bin/bash
+cd /var/www/html
+php -d display_errors=stderr -r "
+require 'vendor/autoload.php';
+require 'tests/Integration/bootstrap.php';
+register_shutdown_function(function () {
+    \$e = error_get_last();
+    if (\$e) echo 'FATAL: ' . print_r(\$e, true);
+});
+require 'tests/Integration/<your-test>.php';
+"
+EOF
+chmod +x _diag.sh
+ddev exec /var/www/html/_diag.sh
+```
+The shutdown handler catches and prints fatals that phpunit swallows.
+
+**Before adding any helper to an integration test:**
+- Grep for `protected function <name>` in `tests/Integration/bootstrap.php`. Reuse the parent's helper; don't redeclare.
+- Existing protected helpers as of 2026-05-20: `createTestEdition`, `createTestCourse`, `createTestVoucher`, `createTestQuote`, `createTestLtiPlatform`, `actingAs`, `assertUserMeta`, `assertUserMetaEmpty`, `cleanupUserMeta`, `deleteTestRegistration`.
+
+---
+
 ## Schema Migrations on Existing Tables
 
 ### dbDelta silently refuses ALTERs on `vad_registrations`
