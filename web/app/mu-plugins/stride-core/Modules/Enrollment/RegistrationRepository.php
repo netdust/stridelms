@@ -22,6 +22,29 @@ final class RegistrationRepository
     /** @var array<string, array<object>> Per-request cache for findByUser results */
     private array $findByUserCache = [];
 
+    /**
+     * Wrap form payload in the canonical stage envelope.
+     *
+     * Every stage entry inside `enrollment_data` follows this shape:
+     * `{ submitted_at, submitted_by, data }`.
+     *
+     * @param array<string, mixed> $data        Form payload (questionnaire answers etc.)
+     * @param int|null             $submittedBy Actor WP user ID. Pass `null` for
+     *                              anonymous (interest/waitlist pre-account).
+     *                              Callers should resolve `get_current_user_id() ?: null`
+     *                              before calling when the current user is the actor.
+     * @param string|null          $submittedAt ISO-8601 UTC. Defaults to `gmdate('c')`.
+     * @return array{submitted_at: string, submitted_by: int|null, data: array<string, mixed>}
+     */
+    public static function wrapStage(array $data, ?int $submittedBy = null, ?string $submittedAt = null): array
+    {
+        return [
+            'submitted_at' => $submittedAt ?? gmdate('c'),
+            'submitted_by' => $submittedBy,
+            'data' => $data,
+        ];
+    }
+
     private function table(): string
     {
         return RegistrationTable::getTableName();
