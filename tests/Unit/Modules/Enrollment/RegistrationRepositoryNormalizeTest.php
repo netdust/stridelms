@@ -31,7 +31,14 @@ final class RegistrationRepositoryNormalizeTest extends TestCase
 
     public function testWrapStageAcceptsNullSubmittedBy(): void
     {
+        // Simulate anonymous context (no logged-in user) so auto-resolve yields null.
+        global $_test_current_user_id;
+        $prev = $_test_current_user_id;
+        $_test_current_user_id = 0;
+
         $result = RegistrationRepository::wrapStage(['email' => 'a@b.c'], null, '2026-05-24T12:00:00+00:00');
+
+        $_test_current_user_id = $prev;
 
         $this->assertNull($result['submitted_by']);
         $this->assertSame(['email' => 'a@b.c'], $result['data']);
@@ -42,5 +49,19 @@ final class RegistrationRepositoryNormalizeTest extends TestCase
         $result = RegistrationRepository::wrapStage([], 42, '2026-05-24T12:00:00+00:00');
 
         $this->assertSame([], $result['data']);
+    }
+
+    public function testWrapStageOmittedSubmittedByResolvesToNullWhenAnonymous(): void
+    {
+        // No user logged in in the unit test context — current id = 0 — should map to null.
+        global $_test_current_user_id;
+        $prev = $_test_current_user_id;
+        $_test_current_user_id = 0;
+
+        $result = RegistrationRepository::wrapStage(['name' => 'Jan'], null, '2026-05-24T12:00:00+00:00');
+
+        $_test_current_user_id = $prev;
+
+        $this->assertNull($result['submitted_by']);
     }
 }

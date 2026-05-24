@@ -29,15 +29,22 @@ final class RegistrationRepository
      * `{ submitted_at, submitted_by, data }`.
      *
      * @param array<string, mixed> $data        Form payload (questionnaire answers etc.)
-     * @param int|null             $submittedBy Actor WP user ID. Pass `null` for
+     * @param int|null             $submittedBy Actor WP user ID. `null` for
      *                              anonymous (interest/waitlist pre-account).
-     *                              Callers should resolve `get_current_user_id() ?: null`
-     *                              before calling when the current user is the actor.
+     *                              Defaults to `get_current_user_id() ?: null`.
+     *                              Pass an explicit ID to override (e.g. colleague
+     *                              enrolment — actor is the enroller, not the
+     *                              participant).
      * @param string|null          $submittedAt ISO-8601 UTC. Defaults to `gmdate('c')`.
      * @return array{submitted_at: string, submitted_by: int|null, data: array<string, mixed>}
      */
     public static function wrapStage(array $data, ?int $submittedBy = null, ?string $submittedAt = null): array
     {
+        if ($submittedBy === null) {
+            $current = function_exists('get_current_user_id') ? get_current_user_id() : 0;
+            $submittedBy = $current > 0 ? $current : null;
+        }
+
         return [
             'submitted_at' => $submittedAt ?? gmdate('c'),
             'submitted_by' => $submittedBy,
