@@ -837,6 +837,27 @@ final class EnrollmentService extends AbstractService
             }
         }
 
+        // Snapshot the original selection into enrollment_data (append-only).
+        // `none` type when no selection step ran; `edition` with session IDs otherwise.
+        // This records intent at enrollment time — distinct from the live `selections` column.
+        $hasSessions = !empty($selectedSessions) && $this->sessionSelection;
+        if ($hasSessions) {
+            $this->registrations->appendInitialSelectionPhase(
+                $registrationId,
+                [
+                    'phase'       => 'enrollment',
+                    'session_ids' => array_map('intval', $selectedSessions),
+                ],
+                'edition'
+            );
+        } else {
+            $this->registrations->appendInitialSelectionPhase(
+                $registrationId,
+                ['phase' => 'enrollment'],
+                'none'
+            );
+        }
+
         // Get quote ID from registration (created by handler)
         $quoteService = ntdst_get(\Stride\Modules\Invoicing\QuoteService::class);
         $quote = $quoteService->getQuoteByRegistration($registrationId);
