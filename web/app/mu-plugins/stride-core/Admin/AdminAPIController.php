@@ -1348,8 +1348,10 @@ final class AdminAPIController
                 if (is_string($raw) && $raw !== '') {
                     $decoded = json_decode($raw, true);
                     if (is_array($decoded)) {
-                        // status maps to the stage key (interest/waitlist)
-                        $stageData = $decoded[$reg->status] ?? [];
+                        // status maps to the stage key (interest/waitlist).
+                        // Wrapped shape: $decoded[$status]['data'][field].
+                        $stageEnvelope = $decoded[$reg->status] ?? [];
+                        $stageData = is_array($stageEnvelope['data'] ?? null) ? $stageEnvelope['data'] : [];
                     }
                 }
                 $name = $stageData['name'] ?? '(anoniem)';
