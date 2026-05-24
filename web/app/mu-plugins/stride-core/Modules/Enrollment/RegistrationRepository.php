@@ -141,6 +141,57 @@ final class RegistrationRepository
         return $normalized;
     }
 
+    /**
+     * Append a phase entry to `enrollment_data.initial_selection.phases[]`.
+     *
+     * Append-only: existing entries are never mutated. The first call initializes
+     * the `initial_selection` structure with the given `$type`; subsequent calls
+     * ignore the `$type` argument (the type is set once at creation).
+     *
+     * `captured_at` and `captured_by` are enriched if not already present on
+     * `$phase`. Caller can override `captured_by` to record an actor distinct
+     * from the registration's `user_id` (e.g. colleague enrolment).
+     *
+     * @param int                  $registrationId
+     * @param array<string, mixed> $phase Required: `phase` (string). Optional:
+     *                              `session_ids` or `edition_ids` (int[]),
+     *                              `captured_at` (ISO-8601), `captured_by` (int|null).
+     * @param string               $type One of: 'edition', 'trajectory', 'none'.
+     */
+    public function appendInitialSelectionPhase(int $registrationId, array $phase, string $type): bool
+    {
+        $row = $this->find($registrationId);
+        if (!$row) {
+            if (function_exists('ntdst_log')) {
+                ntdst_log('enrollment')->warning('appendInitialSelectionPhase: row not found', [
+                    'registration_id' => $registrationId,
+                ]);
+            }
+            return false;
+        }
+
+        $data = is_array($row->enrollment_data ?? null) ? $row->enrollment_data : [];
+
+        if (!isset($data['initial_selection']) || !is_array($data['initial_selection'])) {
+            $data['initial_selection'] = [
+                'type'   => $type,
+                'phases' => [],
+            ];
+        }
+
+        if (!array_key_exists('captured_at', $phase)) {
+            $phase['captured_at'] = gmdate('c');
+        }
+        if (!array_key_exists('captured_by', $phase)) {
+            $current = function_exists('get_current_user_id') ? get_current_user_id() : 0;
+            $phase['captured_by'] = $current > 0 ? $current : null;
+        }
+
+        $data['initial_selection']['phases'][] = $phase;
+
+        return $this->update($registrationId, ['enrollment_data' => $data]);
+    }
+
     private function table(): string
     {
         return RegistrationTable::getTableName();
