@@ -23,6 +23,25 @@ final class RegistrationRepository
     private array $findByUserCache = [];
 
     /**
+     * Stage keys (6) hold wrapped questionnaire payloads.
+     */
+    private const STAGE_KEYS = [
+        'interest', 'waitlist', 'enrollment_personal',
+        'enrollment_billing', 'intake', 'evaluation',
+    ];
+
+    /**
+     * Allowlist of top-level keys inside `enrollment_data`.
+     *
+     * Stage keys + `initial_selection` (append-only phase log of user selections).
+     */
+    private const ALLOWED_ROOT_KEYS = [
+        'interest', 'waitlist', 'enrollment_personal',
+        'enrollment_billing', 'intake', 'evaluation',
+        'initial_selection',
+    ];
+
+    /**
      * Wrap form payload in the canonical stage envelope.
      *
      * Every stage entry inside `enrollment_data` follows this shape:
@@ -50,6 +69,76 @@ final class RegistrationRepository
             'submitted_by' => $submittedBy,
             'data' => $data,
         ];
+    }
+
+    /**
+     * Normalize an `enrollment_data` array against the canonical shape.
+     *
+     * - Drops unknown root-level keys (logs each drop as a warning).
+     * - Enforces the 3-key `{ submitted_at, submitted_by, data }` envelope on each
+     *   stage, filling missing meta with defaults and dropping unknown inner keys.
+     * - Passes `initial_selection` through structurally; deep validation lives in
+     *   `appendInitialSelectionPhase()` which is the only writer.
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    public static function normalizeEnrollmentData(array $data): array
+    {
+        $normalized = [];
+        $logger = function_exists('ntdst_log') ? ntdst_log('enrollment') : null;
+
+        foreach ($data as $key => $value) {
+            if (!in_array($key, self::ALLOWED_ROOT_KEYS, true)) {
+                if ($logger) {
+                    $logger->warning('enrollment_data: dropped unknown root key', ['key' => $key]);
+                }
+                continue;
+            }
+
+            if ($key === 'initial_selection') {
+                if (is_array($value)) {
+                    $normalized[$key] = $value;
+                }
+                continue;
+            }
+
+            // Stage key — must be wrapped.
+            if (!is_array($value)) {
+                if ($logger) {
+                    $logger->warning('enrollment_data: dropped non-array stage value', ['stage' => $key]);
+                }
+                continue;
+            }
+
+            $stageData = isset($value['data']) && is_array($value['data']) ? $value['data'] : [];
+            $submittedAt = isset($value['submitted_at']) && is_string($value['submitted_at']) && $value['submitted_at'] !== ''
+                ? $value['submitted_at']
+                : null;
+            $submittedBy = array_key_exists('submitted_by', $value) ? $value['submitted_by'] : null;
+            $submittedBy = is_int($submittedBy) ? $submittedBy : null;
+
+            if ($submittedAt === null && $logger) {
+                $logger->warning('enrollment_data: stage missing submitted_at, defaulting', ['stage' => $key]);
+            }
+
+            $normalized[$key] = [
+                'submitted_at' => $submittedAt ?? gmdate('c'),
+                'submitted_by' => $submittedBy,
+                'data' => $stageData,
+            ];
+
+            // Log unknown inner keys (everything beyond the 3-key envelope is dropped).
+            $extraKeys = array_diff(array_keys($value), ['submitted_at', 'submitted_by', 'data']);
+            if (!empty($extraKeys) && $logger) {
+                $logger->warning('enrollment_data: dropped unknown inner keys', [
+                    'stage' => $key,
+                    'keys' => array_values($extraKeys),
+                ]);
+            }
+        }
+
+        return $normalized;
     }
 
     private function table(): string

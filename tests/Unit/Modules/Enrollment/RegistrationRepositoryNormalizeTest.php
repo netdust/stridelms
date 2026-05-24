@@ -64,4 +64,88 @@ final class RegistrationRepositoryNormalizeTest extends TestCase
 
         $this->assertNull($result['submitted_by']);
     }
+
+    public function testNormalizeDropsUnknownRootKeys(): void
+    {
+        $input = [
+            'interest' => RegistrationRepository::wrapStage(['name' => 'Jan'], null, '2026-05-24T12:00:00+00:00'),
+            'random_key' => ['something' => 'else'],
+            'profession' => 'doctor',
+        ];
+
+        $result = RegistrationRepository::normalizeEnrollmentData($input);
+
+        $this->assertArrayHasKey('interest', $result);
+        $this->assertArrayNotHasKey('random_key', $result);
+        $this->assertArrayNotHasKey('profession', $result);
+    }
+
+    public function testNormalizePassesWellFormedStageThrough(): void
+    {
+        $stage = RegistrationRepository::wrapStage(['name' => 'Jan'], 42, '2026-05-24T12:00:00+00:00');
+        $input = ['enrollment_personal' => $stage];
+
+        $result = RegistrationRepository::normalizeEnrollmentData($input);
+
+        $this->assertSame($stage, $result['enrollment_personal']);
+    }
+
+    public function testNormalizeFillsMissingMetaOnStage(): void
+    {
+        $input = ['interest' => ['data' => ['name' => 'Jan']]]; // missing submitted_at / submitted_by
+
+        $result = RegistrationRepository::normalizeEnrollmentData($input);
+
+        $this->assertArrayHasKey('submitted_at', $result['interest']);
+        $this->assertArrayHasKey('submitted_by', $result['interest']);
+        $this->assertNull($result['interest']['submitted_by']);
+        $this->assertSame(['name' => 'Jan'], $result['interest']['data']);
+    }
+
+    public function testNormalizeDropsUnknownKeysInsideStage(): void
+    {
+        $input = [
+            'interest' => [
+                'submitted_at' => '2026-05-24T12:00:00+00:00',
+                'submitted_by' => null,
+                'data' => ['name' => 'Jan'],
+                'rogue_key' => 'should be dropped',
+            ],
+        ];
+
+        $result = RegistrationRepository::normalizeEnrollmentData($input);
+
+        $this->assertArrayNotHasKey('rogue_key', $result['interest']);
+        $this->assertSame(['name' => 'Jan'], $result['interest']['data']);
+    }
+
+    public function testNormalizePassesInitialSelectionThrough(): void
+    {
+        $initial = [
+            'type' => 'edition',
+            'phases' => [
+                [
+                    'phase' => 'enrollment',
+                    'captured_at' => '2026-05-24T12:00:00+00:00',
+                    'captured_by' => 42,
+                    'session_ids' => [1, 2, 3],
+                ],
+            ],
+        ];
+        $input = ['initial_selection' => $initial];
+
+        $result = RegistrationRepository::normalizeEnrollmentData($input);
+
+        $this->assertSame($initial, $result['initial_selection']);
+    }
+
+    public function testNormalizeHandlesNonArrayStageValue(): void
+    {
+        // Defensive: scalar value at a stage key shouldn't crash; should be dropped.
+        $input = ['interest' => 'oops'];
+
+        $result = RegistrationRepository::normalizeEnrollmentData($input);
+
+        $this->assertArrayNotHasKey('interest', $result);
+    }
 }
