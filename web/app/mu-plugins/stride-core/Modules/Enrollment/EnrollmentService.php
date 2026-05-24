@@ -9,6 +9,7 @@ use Stride\Contracts\LMSAdapterInterface;
 use Stride\Domain\RegistrationStatus;
 use Stride\Infrastructure\AbstractService;
 use Stride\Modules\Edition\SessionSelection;
+use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\User\CompanyAffiliation;
 use WP_Error;
 
@@ -801,7 +802,10 @@ final class EnrollmentService extends AbstractService
                 $this->updateUserProfile($participantId, $profileFields);
             }
             if (!empty($courseFields)) {
-                $enrollOptions['enrollment_data'] = $courseFields;
+                $actorId = get_current_user_id() ?: null;
+                $enrollOptions['enrollment_data'] = [
+                    'enrollment_personal' => RegistrationRepository::wrapStage($courseFields, $actorId),
+                ];
             }
         }
 

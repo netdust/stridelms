@@ -6,6 +6,7 @@ namespace Stride\Tests\Integration;
 
 use IntegrationTestCase;
 use Stride\Handlers\EnrollmentFormHandler;
+use Stride\Modules\Enrollment\EnrollmentService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 
 /**
@@ -95,5 +96,49 @@ final class EnrollmentFormHandlerWrapTest extends IntegrationTestCase
         $this->assertArrayHasKey('submitted_at', $billing, 'enrollment_billing should have submitted_at');
         $this->assertArrayHasKey('data', $billing, 'enrollment_billing should have data key');
         $this->assertSame(self::$testUserId, $billing['submitted_by'], 'submitted_by should be current user');
+    }
+
+    public function testDirectExtraFieldsAtServiceLayerWriteWrappedPersonalStage(): void
+    {
+        $courseId  = $this->createTestCourse();
+        $editionId = $this->createTestEdition([
+            'meta' => [
+                '_ntdst_course_id'    => $courseId,
+                '_ntdst_price'        => 0,
+                '_ntdst_status'       => 'open',
+                '_ntdst_capacity_max' => 10,
+            ],
+        ]);
+
+        $this->actingAs(self::$testUserId);
+
+        $service = ntdst_get(EnrollmentService::class);
+        $result  = $service->processEnrollment([
+            'edition_id'      => $editionId,
+            'user_id'         => self::$testUserId,
+            'enrollment_type' => 'self',
+            'first_name'      => 'Jan',
+            'last_name'       => 'Janssens',
+            'email'           => 'jan-direct@example.com',
+            'terms_accepted'  => true,
+            'extra_fields'    => ['fav_color' => 'blue'],
+        ]);
+
+        if (is_wp_error($result)) {
+            $this->fail('Enrollment failed: ' . $result->get_error_message());
+        }
+
+        $this->assertIsArray($result, 'enrollment should succeed');
+        $regId = (int) ($result['registration_id'] ?? 0);
+        $this->assertGreaterThan(0, $regId, 'registration_id should be set');
+        $this->testRegistrationIds[] = $regId;
+
+        $row = ntdst_get(RegistrationRepository::class)->find($regId);
+        $this->assertNotNull($row, 'registration row should exist');
+        $enrollmentData = $row->enrollment_data ?? [];
+
+        $this->assertArrayHasKey('enrollment_personal', $enrollmentData, 'must have enrollment_personal stage');
+        $this->assertSame('blue', $enrollmentData['enrollment_personal']['data']['fav_color'] ?? null);
+        $this->assertArrayNotHasKey('fav_color', $enrollmentData, 'must not persist fav_color at root');
     }
 }

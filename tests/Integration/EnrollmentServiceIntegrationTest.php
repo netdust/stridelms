@@ -301,10 +301,12 @@ class EnrollmentServiceIntegrationTest extends IntegrationTestCase
         $enrollmentData = is_string($registration->enrollment_data ?? null)
             ? json_decode($registration->enrollment_data, true)
             : (array) ($registration->enrollment_data ?? []);
-        $this->assertSame('+32-attacker', $enrollmentData['phone'] ?? null);
-        $this->assertSame('attacker@evil.test', $enrollmentData['invoice_email'] ?? null);
-        $this->assertSame('Attacker Lane 99', $enrollmentData['address'] ?? null);
-        $this->assertSame('arbitrary course field', $enrollmentData['note_for_admin'] ?? null);
+        // After namespacing (2026-05-24 spec), extra_fields land under enrollment_personal.data
+        $personalData = $enrollmentData['enrollment_personal']['data'] ?? [];
+        $this->assertSame('+32-attacker', $personalData['phone'] ?? null);
+        $this->assertSame('attacker@evil.test', $personalData['invoice_email'] ?? null);
+        $this->assertSame('Attacker Lane 99', $personalData['address'] ?? null);
+        $this->assertSame('arbitrary course field', $personalData['note_for_admin'] ?? null);
 
         wp_delete_user($victimId);
     }
