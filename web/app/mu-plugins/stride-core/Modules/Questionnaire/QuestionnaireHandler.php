@@ -58,13 +58,14 @@ final class QuestionnaireHandler
         $existing = $registrations->findAnonymousForEmailAndEdition($email, $editionId);
 
         $stageData = array_merge(['name' => $name, 'email' => $email], $extraFields);
+        $wrapped = RegistrationRepository::wrapStage($stageData, get_current_user_id() ?: null);
 
         if ($existing) {
-            $existingData = json_decode($existing->enrollment_data ?? '{}', true) ?: [];
-            $existingData['interest'] = $stageData;
+            $existingData = is_array($existing->enrollment_data ?? null) ? $existing->enrollment_data : [];
+            $existingData['interest'] = $wrapped;
             $updated = $registrations->update((int) $existing->id, [
                 'status' => RegistrationStatus::Interest->value,
-                'enrollment_data' => wp_json_encode($existingData),
+                'enrollment_data' => $existingData,
             ]);
             if (!$updated) {
                 ntdst_log('enrollment')->error('Interest registration update failed', [
@@ -80,7 +81,7 @@ final class QuestionnaireHandler
                 'edition_id' => $editionId,
                 'status' => RegistrationStatus::Interest->value,
                 'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
-                'enrollment_data' => ['interest' => $stageData],
+                'enrollment_data' => ['interest' => $wrapped],
             ]);
 
             if (is_wp_error($registrationId)) {
@@ -125,13 +126,14 @@ final class QuestionnaireHandler
         $existing = $registrations->findAnonymousForEmailAndEdition($email, $editionId);
 
         $stageData = array_merge(['name' => $name, 'email' => $email], $extraFields);
+        $wrapped = RegistrationRepository::wrapStage($stageData, get_current_user_id() ?: null);
 
         if ($existing) {
-            $existingData = json_decode($existing->enrollment_data ?? '{}', true) ?: [];
-            $existingData['waitlist'] = $stageData;
+            $existingData = is_array($existing->enrollment_data ?? null) ? $existing->enrollment_data : [];
+            $existingData['waitlist'] = $wrapped;
             $updated = $registrations->update((int) $existing->id, [
                 'status' => RegistrationStatus::Waitlist->value,
-                'enrollment_data' => wp_json_encode($existingData),
+                'enrollment_data' => $existingData,
             ]);
             if (!$updated) {
                 ntdst_log('enrollment')->error('Waitlist registration update failed', [
@@ -146,7 +148,7 @@ final class QuestionnaireHandler
                 'edition_id' => $editionId,
                 'status' => RegistrationStatus::Waitlist->value,
                 'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
-                'enrollment_data' => ['waitlist' => $stageData],
+                'enrollment_data' => ['waitlist' => $wrapped],
             ]);
 
             if (is_wp_error($registrationId)) {
@@ -206,12 +208,15 @@ final class QuestionnaireHandler
             return $validationResult;
         }
 
-        // Merge stage data into enrollment_data
-        $existingData = json_decode($registration->enrollment_data ?? '{}', true) ?: [];
-        $existingData[$stage] = $extraFields;
+        // Merge stage data into enrollment_data (already decoded to array by the repository)
+        $existingData = is_array($registration->enrollment_data ?? null) ? $registration->enrollment_data : [];
+        $existingData[$stage] = RegistrationRepository::wrapStage(
+            $extraFields,
+            get_current_user_id() ?: null
+        );
 
         $updated = $registrations->update((int) $registration->id, [
-            'enrollment_data' => wp_json_encode($existingData),
+            'enrollment_data' => $existingData,
         ]);
         if (!$updated) {
             ntdst_log('enrollment')->error('Stage submission update failed', [
