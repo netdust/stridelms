@@ -385,7 +385,7 @@ final class RegistrationRepository
     /**
      * Find an interest registration by email and edition.
      *
-     * Searches enrollment_data JSON for interest.email match.
+     * Searches enrollment_data JSON for $.interest.data.email match.
      */
     public function findByEmailAndEdition(string $email, int $editionId): ?object
     {
@@ -425,7 +425,7 @@ final class RegistrationRepository
     /**
      * Find a registration by email and edition for a given status/stage.
      *
-     * Looks for the email inside enrollment_data.{stage}.email, where stage
+     * Looks for the email inside enrollment_data.{stage}.data.email, where stage
      * matches the status value (e.g. 'interest' or 'waitlist').
      */
     public function findByEmailAndEditionForStage(string $email, int $editionId, RegistrationStatus $status): ?object
