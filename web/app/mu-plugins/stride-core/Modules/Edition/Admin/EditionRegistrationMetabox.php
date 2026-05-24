@@ -208,7 +208,6 @@ final class EditionRegistrationMetabox
                     $status = RegistrationStatus::tryFrom($registration['status'] ?? '') ?? RegistrationStatus::Pending;
                     $completionTasks = $this->getCompletionTasks($registration);
                     $meta = $userMeta[$userId] ?? [];
-                    $enrollmentData = $this->getEnrollmentData($registration);
                     $organisation = $meta['organisation'] ?? '';
 
                     // Determine admin-facing badge and actions
