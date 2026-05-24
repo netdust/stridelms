@@ -1,9 +1,11 @@
 <?php
 /**
- * @var array $enrollmentData
- * @var array $sessionSelections   // [['slot_label' => ?string, 'session' => ?array]]
- * @var array $questionnaireAnswers // [question stem => answer]
- * @var array $documents           // [['filename', 'size', 'uploaded_at', 'url']]
+ * @var array $enrollmentData        Raw enrollment_data (for backward compat; prefer $stages / $initialSelection).
+ * @var array $sessionSelections     [['slot_label' => ?string, 'session' => ?array]]
+ * @var array $questionnaireAnswers  [question stem => answer]
+ * @var array $documents             [['filename', 'size', 'uploaded_at', 'url']]
+ * @var array $initialSelection      Built by RegistrationModalController::buildInitialSelection().
+ * @var array $stages                Built by RegistrationModalController::buildStagesForDisplay().
  */
 
 declare(strict_types=1);
@@ -11,34 +13,116 @@ declare(strict_types=1);
 if (!defined('ABSPATH')) {
     exit;
 }
-
-$skipKeys = ['organisation', 'department'];
 ?>
 <div class="stride-modal-body">
+
+    <?php if (!empty($initialSelection)): ?>
+    <section class="stride-modal-section" data-section="initial-selection" data-open="1">
+        <h3 class="stride-modal-section-title"><?php esc_html_e('Originele keuze', 'stride'); ?></h3>
+        <?php foreach ($initialSelection as $phase): ?>
+            <div class="stride-modal-phase">
+                <div class="stride-modal-phase-header">
+                    <strong><?php echo esc_html($phase['phase_label']); ?></strong>
+                    <?php if ($phase['captured_at_display'] !== ''): ?>
+                        <span class="stride-modal-meta">
+                            <?php printf(
+                                /* translators: 1: date, 2: person name */
+                                esc_html__('Vastgelegd op %1$s door %2$s', 'stride'),
+                                esc_html($phase['captured_at_display']),
+                                esc_html($phase['captured_by_display'])
+                            ); ?>
+                        </span>
+                    <?php endif; ?>
+                </div>
+                <ul class="stride-modal-phase-items">
+                    <?php foreach ($phase['items'] as $item): ?>
+                        <li<?php echo $item['deleted'] ? ' class="stride-modal-deleted"' : ''; ?>>
+                            <?php echo esc_html($item['label']); ?>
+                            <?php if ($item['deleted']): ?>
+                                <span class="stride-modal-deleted-marker"><?php esc_html_e('(verwijderd)', 'stride'); ?></span>
+                            <?php endif; ?>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+        <?php endforeach; ?>
+    </section>
+    <?php endif; ?>
+
+    <?php if (!empty($stages)): ?>
+    <section class="stride-modal-section" data-section="form" data-open="1">
+        <h3 class="stride-modal-section-title"><?php esc_html_e('Formuliergegevens', 'stride'); ?></h3>
+        <?php foreach ($stages as $stage): ?>
+            <div class="stride-modal-stage">
+                <div class="stride-modal-stage-header">
+                    <strong><?php echo esc_html($stage['label']); ?></strong>
+                    <?php if ($stage['submitted_at_display'] !== ''): ?>
+                        <span class="stride-modal-meta">
+                            <?php printf(
+                                /* translators: 1: date, 2: person name */
+                                esc_html__('Ingediend op %1$s door %2$s', 'stride'),
+                                esc_html($stage['submitted_at_display']),
+                                esc_html($stage['submitted_by_display'])
+                            ); ?>
+                        </span>
+                    <?php endif; ?>
+                </div>
+                <dl class="stride-modal-dl">
+                    <?php foreach ($stage['data'] as $key => $value): ?>
+                        <?php if ($value === '' || $value === false || $value === null): continue; endif; ?>
+                        <div class="stride-form-row" data-key="<?php echo esc_attr((string) $key); ?>">
+                            <dt><?php echo esc_html(ucfirst(str_replace('_', ' ', (string) $key))); ?></dt>
+                            <dd>
+                                <?php
+                                if (is_array($value)) {
+                                    echo esc_html((string) wp_json_encode($value));
+                                } else {
+                                    echo esc_html($value === true ? __('Ja', 'stride') : (string) $value);
+                                }
+                                ?>
+                            </dd>
+                        </div>
+                    <?php endforeach; ?>
+                </dl>
+            </div>
+        <?php endforeach; ?>
+    </section>
+    <?php elseif (!empty($enrollmentData)): ?>
+    <?php
+    /*
+     * Fallback: enrollment_data exists but is not yet namespace-wrapped.
+     * Render flat keys, skipping known non-display fields and envelope-level keys.
+     * This branch handles legacy records written before the Task-14 migration.
+     */
+    $skipKeys = ['organisation', 'department', 'initial_selection', 'interest', 'waitlist',
+                 'enrollment_personal', 'enrollment_billing', 'intake', 'evaluation'];
+    ?>
     <section class="stride-modal-section" data-section="form" data-open="1">
         <h3 class="stride-modal-section-title"><?php esc_html_e('Inschrijvingsformulier', 'stride'); ?></h3>
-        <?php if (empty($enrollmentData)): ?>
-            <p class="stride-modal-empty"><?php esc_html_e('Geen inschrijvingsformulier voor deze editie.', 'stride'); ?></p>
-        <?php else: ?>
-            <dl class="stride-modal-dl">
-                <?php foreach ($enrollmentData as $key => $value): ?>
-                    <?php if (in_array($key, $skipKeys, true) || $value === '' || $value === false || $value === null): continue; endif; ?>
-                    <div class="stride-form-row" data-key="<?php echo esc_attr((string) $key); ?>">
-                        <dt><?php echo esc_html(ucfirst(str_replace('_', ' ', (string) $key))); ?></dt>
-                        <dd>
-                            <?php
-                            if (is_array($value)) {
-                                echo esc_html(wp_json_encode($value));
-                            } else {
-                                echo esc_html($value === true ? __('Ja', 'stride') : (string) $value);
-                            }
-                            ?>
-                        </dd>
-                    </div>
-                <?php endforeach; ?>
-            </dl>
-        <?php endif; ?>
+        <dl class="stride-modal-dl">
+            <?php foreach ($enrollmentData as $key => $value): ?>
+                <?php if (in_array($key, $skipKeys, true) || $value === '' || $value === false || $value === null): continue; endif; ?>
+                <div class="stride-form-row" data-key="<?php echo esc_attr((string) $key); ?>">
+                    <dt><?php echo esc_html(ucfirst(str_replace('_', ' ', (string) $key))); ?></dt>
+                    <dd>
+                        <?php
+                        if (is_array($value)) {
+                            echo esc_html((string) wp_json_encode($value));
+                        } else {
+                            echo esc_html($value === true ? __('Ja', 'stride') : (string) $value);
+                        }
+                        ?>
+                    </dd>
+                </div>
+            <?php endforeach; ?>
+        </dl>
     </section>
+    <?php else: ?>
+    <section class="stride-modal-section" data-section="form" data-open="1">
+        <h3 class="stride-modal-section-title"><?php esc_html_e('Inschrijvingsformulier', 'stride'); ?></h3>
+        <p class="stride-modal-empty"><?php esc_html_e('Geen inschrijvingsformulier voor deze editie.', 'stride'); ?></p>
+    </section>
+    <?php endif; ?>
 
     <section class="stride-modal-section" data-section="sessions" data-open="1">
         <h3 class="stride-modal-section-title"><?php esc_html_e('Sessiekeuzes', 'stride'); ?></h3>

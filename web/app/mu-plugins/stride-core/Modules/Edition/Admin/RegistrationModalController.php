@@ -139,6 +139,8 @@ final class RegistrationModalController
             ? $tasks['questionnaire']['data']['answers']
             : [];
         $documents = $this->buildDocuments($tasks);
+        $initialSelection = $this->buildInitialSelection($enrollmentData['initial_selection'] ?? null);
+        $stages = $this->buildStagesForDisplay($enrollmentData);
 
         ob_start();
         $partialPath = dirname(__DIR__, 3) . '/templates/admin/partials/registration-modal-enrollment.php';
@@ -177,6 +179,115 @@ final class RegistrationModalController
         }
 
         return $rows;
+    }
+
+    /**
+     * @param mixed $initial  Raw initial_selection value from enrollment_data.
+     * @return array<int, array{
+     *   phase_label: string,
+     *   captured_at_display: string,
+     *   captured_by_display: string,
+     *   items: array<int, array{label: string, deleted: bool}>
+     * }>
+     */
+    private function buildInitialSelection(mixed $initial): array
+    {
+        if (!is_array($initial) || empty($initial['phases'])) {
+            return [];
+        }
+        $out = [];
+        foreach ($initial['phases'] as $phase) {
+            $ids = $phase['session_ids'] ?? $phase['edition_ids'] ?? [];
+            if (!is_array($ids)) {
+                continue;
+            }
+            $items = [];
+            foreach ($ids as $id) {
+                $post = get_post((int) $id);
+                if (!$post) {
+                    $items[] = ['label' => '#' . (int) $id, 'deleted' => true];
+                    continue;
+                }
+                $label = $post->post_title;
+                if ($post->post_type === 'vad_session') {
+                    $date = get_post_meta($post->ID, 'session_date', true);
+                    if ($date) {
+                        $label .= ' — ' . date_i18n('d/m/Y', strtotime((string) $date));
+                    }
+                }
+                $items[] = ['label' => $label, 'deleted' => false];
+            }
+
+            $capturedBy = $phase['captured_by'] ?? null;
+            $byDisplay = __('(systeem)', 'stride');
+            if ($capturedBy) {
+                $user = get_userdata((int) $capturedBy);
+                $byDisplay = $user ? $user->display_name : ('#' . (int) $capturedBy);
+            }
+            $capturedAt = $phase['captured_at'] ?? '';
+            $atDisplay = $capturedAt ? date_i18n('d/m/Y H:i', strtotime((string) $capturedAt)) : '';
+
+            $phaseLabel = match ($phase['phase'] ?? 'enrollment') {
+                'enrollment' => __('Inschrijving', 'stride'),
+                default => ucfirst(str_replace('_', ' ', (string) ($phase['phase'] ?? ''))),
+            };
+
+            $out[] = [
+                'phase_label'          => $phaseLabel,
+                'captured_at_display'  => $atDisplay,
+                'captured_by_display'  => $byDisplay,
+                'items'                => $items,
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * @param array<string, mixed> $enrollmentData
+     * @return array<string, array{
+     *   label: string,
+     *   submitted_at_display: string,
+     *   submitted_by_display: string,
+     *   data: array<string, mixed>
+     * }>
+     */
+    private function buildStagesForDisplay(array $enrollmentData): array
+    {
+        $labels = [
+            'interest'            => __('Interesse', 'stride'),
+            'waitlist'            => __('Wachtlijst', 'stride'),
+            'enrollment_personal' => __('Inschrijving — Persoonlijk', 'stride'),
+            'enrollment_billing'  => __('Inschrijving — Facturatie', 'stride'),
+            'intake'              => __('Intake', 'stride'),
+            'evaluation'          => __('Evaluatie', 'stride'),
+        ];
+        $out = [];
+        foreach ($labels as $key => $label) {
+            $envelope = $enrollmentData[$key] ?? null;
+            if (!is_array($envelope)) {
+                continue;
+            }
+            $data = is_array($envelope['data'] ?? null) ? $envelope['data'] : [];
+            if (empty($data)) {
+                continue;
+            }
+            $submittedBy = $envelope['submitted_by'] ?? null;
+            $byDisplay = __('(anoniem)', 'stride');
+            if ($submittedBy) {
+                $user = get_userdata((int) $submittedBy);
+                $byDisplay = $user ? $user->display_name : ('#' . (int) $submittedBy);
+            }
+            $submittedAt = $envelope['submitted_at'] ?? '';
+            $atDisplay = $submittedAt ? date_i18n('d/m/Y H:i', strtotime((string) $submittedAt)) : '';
+
+            $out[$key] = [
+                'label'                 => $label,
+                'submitted_at_display'  => $atDisplay,
+                'submitted_by_display'  => $byDisplay,
+                'data'                  => $data,
+            ];
+        }
+        return $out;
     }
 
     private function renderCompletion(object $registration): string
