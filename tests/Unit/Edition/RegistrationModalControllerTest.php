@@ -251,6 +251,185 @@ class RegistrationModalControllerTest extends TestCase
         );
     }
 
+    // --- Task 14: initial_selection + per-stage submitter metadata ---
+
+    public function testEnrollmentModalRendersWrappedStageDataWithLabel(): void
+    {
+        $enrollmentData = [
+            'enrollment_personal' => [
+                'data'         => ['first_name' => 'Jan', 'last_name' => 'Peeters'],
+                'submitted_at' => '2026-05-01 09:00:00',
+                'submitted_by' => null,
+            ],
+        ];
+
+        $reg = (object) [
+            'id' => 1, 'user_id' => 42, 'edition_id' => 99,
+            'enrollment_data' => wp_json_encode($enrollmentData),
+            'completion_tasks' => '{}',
+        ];
+
+        $registrations = $this->createMock(RegistrationRepository::class);
+        $registrations->method('find')->willReturn($reg);
+
+        $editionRepository = $this->createMock(EditionRepository::class);
+        $editionRepository->method('find')->willReturn(new \WP_Post(['post_title' => 'E']));
+
+        global $_test_users;
+        $_test_users[42] = new \WP_User((object) ['ID' => 42, 'display_name' => 'Test User']);
+
+        $controller = new RegistrationModalController(
+            $this->createMock(EditionService::class),
+            $editionRepository,
+            $this->createMock(SessionService::class),
+            $this->createMock(SessionSelection::class),
+            $registrations,
+        );
+        $result = $controller->buildPayload(1, 'enrollment');
+
+        unset($_test_users[42]);
+
+        // Stage label (Dutch) must appear
+        self::assertStringContainsString('Inschrijving — Persoonlijk', $result['html']);
+        // Field data inside the stage must appear
+        self::assertStringContainsString('Jan', $result['html']);
+        self::assertStringContainsString('Peeters', $result['html']);
+        // Anoniem submitted_by when null
+        self::assertStringContainsString('(anoniem)', $result['html']);
+        // The new primary heading, not the legacy one
+        self::assertStringContainsString('Formuliergegevens', $result['html']);
+    }
+
+    public function testEnrollmentModalRendersStageWithSubmitterMetadata(): void
+    {
+        global $_test_users;
+        $_test_users[42] = new \WP_User(['ID' => 42, 'display_name' => 'Test User']);
+        $_test_users[99] = new \WP_User(['ID' => 99, 'display_name' => 'Admin Beheerder']);
+
+        $enrollmentData = [
+            'interest' => [
+                'data'         => ['newsletter' => true],
+                'submitted_at' => '2026-04-10 14:30:00',
+                'submitted_by' => 99,
+            ],
+        ];
+
+        $reg = (object) [
+            'id' => 1, 'user_id' => 42, 'edition_id' => 99,
+            'enrollment_data' => wp_json_encode($enrollmentData),
+            'completion_tasks' => '{}',
+        ];
+
+        $registrations = $this->createMock(RegistrationRepository::class);
+        $registrations->method('find')->willReturn($reg);
+
+        $editionRepository = $this->createMock(EditionRepository::class);
+        $editionRepository->method('find')->willReturn(new \WP_Post(['post_title' => 'E']));
+
+        $controller = new RegistrationModalController(
+            $this->createMock(EditionService::class),
+            $editionRepository,
+            $this->createMock(SessionService::class),
+            $this->createMock(SessionSelection::class),
+            $registrations,
+        );
+        $result = $controller->buildPayload(1, 'enrollment');
+
+        unset($_test_users[42], $_test_users[99]);
+
+        self::assertStringContainsString('Interesse', $result['html']);
+        // Submitter display name must appear
+        self::assertStringContainsString('Admin Beheerder', $result['html']);
+        // Date formatted as d/m/Y H:i
+        self::assertStringContainsString('10/04/2026', $result['html']);
+    }
+
+    public function testEnrollmentModalRendersInitialSelectionPhases(): void
+    {
+        global $_test_users;
+        $_test_users[42] = new \WP_User(['ID' => 42, 'display_name' => 'Test User']);
+        $_test_users[7]  = new \WP_User(['ID' => 7, 'display_name' => 'Stefan V']);
+
+        $enrollmentData = [
+            'initial_selection' => [
+                'phases' => [
+                    [
+                        'phase'       => 'enrollment',
+                        'edition_ids' => [201, 99999],  // 99999 = deleted post
+                        'captured_at' => '2026-05-15 11:00:00',
+                        'captured_by' => 7,
+                    ],
+                ],
+            ],
+        ];
+
+        $reg = (object) [
+            'id' => 1, 'user_id' => 42, 'edition_id' => 99,
+            'enrollment_data' => wp_json_encode($enrollmentData),
+            'completion_tasks' => '{}',
+        ];
+
+        $registrations = $this->createMock(RegistrationRepository::class);
+        $registrations->method('find')->willReturn($reg);
+
+        $editionRepository = $this->createMock(EditionRepository::class);
+        $editionRepository->method('find')->willReturn(new \WP_Post(['post_title' => 'E']));
+
+        $controller = new RegistrationModalController(
+            $this->createMock(EditionService::class),
+            $editionRepository,
+            $this->createMock(SessionService::class),
+            $this->createMock(SessionSelection::class),
+            $registrations,
+        );
+        $result = $controller->buildPayload(1, 'enrollment');
+
+        unset($_test_users[42], $_test_users[7]);
+
+        // Section heading must be present
+        self::assertStringContainsString('Originele keuze', $result['html']);
+        // Phase label resolves to Dutch
+        self::assertStringContainsString('Inschrijving', $result['html']);
+        // Captured-by display name
+        self::assertStringContainsString('Stefan V', $result['html']);
+        // Deleted post falls back to #99999 marker
+        self::assertStringContainsString('#99999', $result['html']);
+        // Deleted marker text
+        self::assertStringContainsString('(verwijderd)', $result['html']);
+    }
+
+    public function testEnrollmentModalOmitsInitialSelectionSectionWhenEmpty(): void
+    {
+        $reg = (object) [
+            'id' => 1, 'user_id' => 42, 'edition_id' => 99,
+            'enrollment_data' => '{}',
+            'completion_tasks' => '{}',
+        ];
+
+        $registrations = $this->createMock(RegistrationRepository::class);
+        $registrations->method('find')->willReturn($reg);
+
+        $editionRepository = $this->createMock(EditionRepository::class);
+        $editionRepository->method('find')->willReturn(new \WP_Post(['post_title' => 'E']));
+
+        global $_test_users;
+        $_test_users[42] = new \WP_User((object) ['ID' => 42, 'display_name' => 'Test User']);
+
+        $controller = new RegistrationModalController(
+            $this->createMock(EditionService::class),
+            $editionRepository,
+            $this->createMock(SessionService::class),
+            $this->createMock(SessionSelection::class),
+            $registrations,
+        );
+        $result = $controller->buildPayload(1, 'enrollment');
+
+        unset($_test_users[42]);
+
+        // Section must be absent when no initial_selection data exists
+        self::assertStringNotContainsString('Originele keuze', $result['html']);
+    }
+
     public function testCompletionModalRendersTasksAndProgress(): void
     {
         $reg = (object) [
