@@ -28,6 +28,7 @@ Separately: the user's **original** session and elective choices are not preserv
 
 - No schema change to `wp_vad_registrations`.
 - No backfill of existing rows (production has zero non-null `enrollment_data` rows).
+- Local seed scripts (`scripts/seed.php`) and any test fixtures that pre-populate `enrollment_data` need updating to the new shape as part of this work. Stale local data is acceptable; readers tolerate missing stages, they just won't show the new `submitted_at` / `submitted_by` until the row is rewritten.
 - No metabox UI in this pass (modal + export only).
 - No name-resolution stored in JSON — names are resolved at view time from `vad_session` / `vad_edition`.
 
@@ -35,14 +36,40 @@ Separately: the user's **original** session and elective choices are not preserv
 
 ## Canonical shape
 
+Every stage entry is wrapped with metadata so the submission timestamp lives next to the data:
+
 ```json
 {
-  "interest":            { "...questionnaire stage answers..." },
-  "waitlist":            { "..." },
-  "enrollment_personal": { "..." },
-  "enrollment_billing":  { "..." },
-  "intake":              { "..." },
-  "evaluation":          { "..." },
+  "interest": {
+    "submitted_at": "2026-05-24T14:32:11+00:00",
+    "submitted_by": null,
+    "data": { "name": "...", "email": "...", "...other questionnaire fields...": "..." }
+  },
+  "waitlist": {
+    "submitted_at": "2026-05-24T14:32:11+00:00",
+    "submitted_by": null,
+    "data": { "...": "..." }
+  },
+  "enrollment_personal": {
+    "submitted_at": "2026-05-24T14:32:11+00:00",
+    "submitted_by": 42,
+    "data": { "...": "..." }
+  },
+  "enrollment_billing": {
+    "submitted_at": "2026-05-24T14:32:11+00:00",
+    "submitted_by": 42,
+    "data": { "...": "..." }
+  },
+  "intake": {
+    "submitted_at": "2026-05-24T14:32:11+00:00",
+    "submitted_by": 42,
+    "data": { "...": "..." }
+  },
+  "evaluation": {
+    "submitted_at": "2026-05-24T14:32:11+00:00",
+    "submitted_by": 42,
+    "data": { "...": "..." }
+  },
 
   "initial_selection": {
     "type": "edition",
@@ -50,12 +77,24 @@ Separately: the user's **original** session and elective choices are not preserv
       {
         "phase": "enrollment",
         "captured_at": "2026-05-24T14:32:11+00:00",
+        "captured_by": 42,
         "session_ids": [123, 456]
       }
     ]
   }
 }
 ```
+
+**Stage entry contract:**
+- Every stage value is an object with exactly three keys: `submitted_at` (ISO-8601 UTC), `submitted_by` (int WP user ID, or `null` for anonymous submissions like interest/waitlist before account creation), and `data` (the form payload).
+- Each time the stage is (re-)submitted, all three keys overwrite (last-write-wins for the stage). The previous submission is not preserved — if full history is needed later, that's a separate audit-log concern.
+- `data` may be empty (`{}`) but never absent.
+- `submitted_at` is required; missing it is a write-time error.
+- `submitted_by` comes from `get_current_user_id()` at write time. For interest/waitlist (anonymous), it's explicitly `null`. For admin-acting-on-behalf-of (e.g. enrolling a colleague), it's the admin's ID — the registration row's `user_id` already records the *participant*; `submitted_by` records the *actor* and may differ.
+
+**Phase entry contract (`initial_selection.phases[]`):**
+- Each phase entry carries `phase`, `captured_at`, `captured_by` (int WP user ID, may be `null` for system-triggered captures), and the IDs picked.
+- Same actor-vs-participant distinction: `captured_by` is the actor, not necessarily the registration's `user_id`.
 
 ### Allowlist (7 keys)
 
@@ -91,9 +130,17 @@ Stage keys are user-submitted questionnaire data. `initial_selection` is a syste
 
 **New private method** `normalizeEnrollmentData(array $data): array`:
 - Iterates top-level keys
-- Keys in `ALLOWED_KEYS` with array values pass through
-- Anything else is logged via `ntdst_log('enrollment')->warning('enrollment_data: dropped unknown root key', [...])` and dropped
+- Keys in `ALLOWED_KEYS` pass through with shape enforcement:
+  - **Stage keys** (`interest`, `waitlist`, `enrollment_personal`, `enrollment_billing`, `intake`, `evaluation`): value must be an array with `data` (array), `submitted_at` (non-empty string), and `submitted_by` (int or null). Missing `submitted_at` is filled with `gmdate('c')` and logged as a warning (defensive — writers should always set it). Missing `submitted_by` is filled with `null` and logged. Missing `data` defaults to `[]`. Any other keys on the stage object are dropped + logged.
+  - **`initial_selection`**: value must be an array with `type` (string) and `phases` (array). Passed through structurally.
+- Anything else at the top level is logged via `ntdst_log('enrollment')->warning('enrollment_data: dropped unknown root key', [...])` and dropped
 - Returns the cleaned array
+
+**New helper** `wrapStage(array $data, ?int $submittedBy = null, ?string $submittedAt = null): array`:
+- Returns `['submitted_at' => $submittedAt ?? gmdate('c'), 'submitted_by' => $submittedBy ?? (get_current_user_id() ?: null), 'data' => $data]`
+- `submitted_by` defaults to the current WP user, falling back to `null` for anonymous contexts (interest / waitlist forms).
+- Callers can override `$submittedBy` to record on-behalf-of writes (e.g. colleague enrolment: pass the enroller's ID, not the participant's).
+- Used by all writers to construct the wrapped stage shape consistently
 
 **Called from:**
 - `create()` — line 141 area, before `wp_json_encode`
@@ -103,18 +150,50 @@ Stage keys are user-submitted questionnaire data. `initial_selection` is a syste
 **New public method** `appendInitialSelectionPhase(int $registrationId, array $phase): bool`:
 - Reads current row's `enrollment_data`
 - Initializes `initial_selection` if missing (with `type` derived from caller-provided phase shape)
-- Appends `$phase` to `initial_selection.phases[]`
+- Enriches `$phase` with `captured_at` (defaults to `gmdate('c')`) and `captured_by` (defaults to `get_current_user_id() ?: null`) if not already set by caller — same actor-override pattern as `wrapStage`
+- Appends the enriched phase to `initial_selection.phases[]`
 - Writes back via `update()` (which normalizes again — idempotent and safe)
 - Returns false + logs warning if row not found
 - The append-only contract is enforced inside this method — no caller can mutate existing phases
 
 ### `EnrollmentService::processEnrollment`
 
-**Lines 776-806** (the `extra_fields` flat fallback): instead of writing `$enrollOptions['enrollment_data'] = $courseFields`, wrap as `$enrollOptions['enrollment_data'] = ['enrollment_personal' => $courseFields]`. Direct callers (admin tools) get stage-shaped data without changing their interface.
+**Lines 776-806** (the `extra_fields` flat fallback): instead of writing `$enrollOptions['enrollment_data'] = $courseFields`, wrap as `$enrollOptions['enrollment_data'] = ['enrollment_personal' => RegistrationRepository::wrapStage($courseFields)]`. Direct callers (admin tools) get stage-shaped, timestamped data without changing their interface.
 
 **After successful `setSelections`** (around line 819): call `$this->registrations->appendInitialSelectionPhase($registrationId, ['phase' => 'enrollment', 'captured_at' => gmdate('c'), 'session_ids' => $sessionIds])`. The repo method handles the `type: 'edition'` initialization on first call.
 
 If no sessions are selected (no selection step ran), still write a `type: 'none'` initial_selection record with an empty `phases[0]` so the absence is explicit — distinguishes "no selection needed" from "selection lost".
+
+### `QuestionnaireHandler` (interest / waitlist / intake / evaluation)
+
+All four submit paths currently write `$existingData[$stage] = $stageData;` (flat). Update each to use the wrap helper:
+
+```php
+$existingData[$stage] = RegistrationRepository::wrapStage($stageData);
+```
+
+`submitted_by` resolution per handler:
+- `handleSubmitInterest` / `handleSubmitWaitlist`: pass `get_current_user_id() ?: null` — anonymous submissions store `null`.
+- `handleSubmitStage` (intake / evaluation): always logged-in by the existing `not_logged_in` guard at line 176-178; helper default (`get_current_user_id()`) is correct.
+
+Call sites:
+- `handleSubmitInterest` (line 64, line 83)
+- `handleSubmitWaitlist` (line 131, line 149)
+- `handleSubmitStage` (line 211 — covers `intake` and `evaluation`)
+
+Each re-submit refreshes `submitted_at` (last-write-wins, per the stage contract).
+
+### `EnrollmentFormHandler`
+
+`splitExtraFieldsByStage` returns `['enrollment_personal' => [...], 'enrollment_billing' => [...]]` flat (lines 622-624). Wrap before handing to `processEnrollment`, passing the *actor* (the user pressing submit), which may differ from the participant in colleague enrolments:
+
+```php
+$actorId = get_current_user_id() ?: null;
+$stageData['enrollment_personal'] = RegistrationRepository::wrapStage($stageData['enrollment_personal'] ?? [], $actorId);
+$stageData['enrollment_billing']  = RegistrationRepository::wrapStage($stageData['enrollment_billing']  ?? [], $actorId);
+```
+
+Single `submitted_at` per stage at form-submission time. Both stages submit together via one form, so both get the same timestamp and the same `submitted_by` — that's fine; they're separate stages with the same submission moment from the same actor.
 
 ### `TrajectorySelection`
 
@@ -128,15 +207,19 @@ If no sessions are selected (no selection step ran), still write a `type: 'none'
 
 ### `RegistrationModalController`
 
-Add an "Originele keuze" panel above the questionnaire-stage panels. Iterates `initial_selection.phases[]`:
-- For each phase, show the phase label (`Inschrijving`, `Fase 1`, …) and `captured_at`
+**Stage panels:** read each stage as `$stage['data']` (form payload), and display `$stage['submitted_at']` + `$stage['submitted_by']` as a small metadata header per stage (e.g. "Ingediend op 24/05/2026 14:32 door Stefan Vandermeulen"). Resolve `submitted_by` → display name via `get_userdata()`; show "(anoniem)" if `null`.
+
+**Initial selection panel:** add an "Originele keuze" panel above the questionnaire-stage panels. Iterates `initial_selection.phases[]`:
+- For each phase, show the phase label (`Inschrijving`, `Fase 1`, …), `captured_at`, and `captured_by` (resolved to display name, or "(systeem)" if `null`)
 - Resolve `session_ids` → session titles + dates via `SessionRepository`
 - Resolve `edition_ids` → edition titles via `EditionRepository`
 - Fallback: if IDs no longer resolve (session deleted), show the raw ID with a "(verwijderd)" marker
 
 ### `EditionRegistrationExporter`
 
-Add one "Originele keuze" column per export (not per phase). Value is a phase-prefixed, comma-joined string:
+**Stage-data reading:** the existing stage-summary code (`EditionRegistrationExporter.php:847-913`) currently reads `enrollment_data[$stage]` directly. Update to read `enrollment_data[$stage]['data']` (the form payload), so the column values stay identical for end users. Treat missing/malformed `data` as `[]`.
+
+**Initial selection column:** add one "Originele keuze" column per export (not per phase). Value is a phase-prefixed, comma-joined string:
 
 ```
 Inschrijving: Sessie A (2026-03-01), Sessie B (2026-03-08)
@@ -152,11 +235,12 @@ Empty string when `initial_selection` is missing or `type: 'none'`.
 
 ### Stage-reader audit
 
-Verify these readers iterate only the 6 stage keys, never the root:
-- `EditionRegistrationExporter.php:847-913` — already stage-aware (`$stagesToShow`); add `enrollment_billing` to the visible list, confirm no root-fallback path.
-- `EditionRegistrationMetabox.php:633` — check the template renders by stage.
-- `RegistrationModalController.php:132` — confirm iteration is stage-keyed.
-- `AdminAPIController.php:1335-1347` — comment says "name/email captured in enrollment_data"; verify it reads `$.interest.email` / `$.enrollment_personal.email`, not root.
+Verify these readers iterate only the 6 stage keys, never the root, and read `[stage]['data'][field]` (not `[stage][field]`):
+- `EditionRegistrationExporter.php:847-913` — already stage-aware (`$stagesToShow`); update to read `[stage]['data']` payload, add `enrollment_billing` to the visible list, confirm no root-fallback path.
+- `EditionRegistrationMetabox.php:633` — check the template renders by stage, update to read `[stage]['data']`.
+- `RegistrationModalController.php:132` — confirm iteration is stage-keyed, update to read `[stage]['data']`.
+- `AdminAPIController.php:1335-1347` — comment says "name/email captured in enrollment_data"; verify it reads `$.interest.data.email` / `$.enrollment_personal.data.email` (after spec lands), not root or pre-wrap path.
+- Also search for any JSON_EXTRACT SQL paths: `RegistrationRepository.php:244-245` uses `$.interest.email` and `$.waitlist.email` — update to `$.interest.data.email` and `$.waitlist.data.email`.
 
 Any reader doing root-level iteration gets the same drop-with-log treatment for unknown keys (defensive — should be impossible after writes normalize).
 
@@ -166,24 +250,38 @@ Any reader doing root-level iteration gets the same drop-with-log treatment for 
 
 ### Unit — `RegistrationRepositoryTest`
 
+- `wrapStage` builds the 3-key envelope (`submitted_at`, `submitted_by`, `data`)
+- `wrapStage` defaults `submitted_by` to `get_current_user_id()` and accepts explicit override
+- `wrapStage` defaults `submitted_by` to `null` when no user is logged in
 - `normalizeEnrollmentData` drops unknown root keys and logs a warning
-- `normalizeEnrollmentData` passes stage keys through unchanged
+- `normalizeEnrollmentData` passes well-formed stage entries through unchanged
+- `normalizeEnrollmentData` fills missing `submitted_at` / `submitted_by` with defaults and logs
+- `normalizeEnrollmentData` drops unknown keys *inside* a stage object
 - `normalizeEnrollmentData` passes `initial_selection` through unchanged
 - `create()` with mixed (stage + unknown root) input persists only stage keys
 - `update()` with unknown root keys persists only stage keys
 - `upgradeFromInterest()` merge produces stage-shaped output even when input is flat
-- `appendInitialSelectionPhase` initializes the structure on first call
+- `appendInitialSelectionPhase` initializes the structure on first call with `captured_by` from current user
 - `appendInitialSelectionPhase` appends a second phase without mutating the first
 - `appendInitialSelectionPhase` is idempotent on the row-not-found path (returns false + logs)
 
 ### Unit — `EnrollmentServiceTest`
 
-- `processEnrollment` with `extra_fields` from a direct caller writes to `enrollment_personal`, not root
+- `processEnrollment` with `extra_fields` from a direct caller writes to `enrollment_personal.data`, not root
+- `processEnrollment` writes `submitted_by` matching the acting user
 - `processEnrollment` calls `appendInitialSelectionPhase` after successful `setSelections`
 - `processEnrollment` writes `type: 'none'` initial_selection when no sessions are selected
 
+### Unit — `QuestionnaireHandlerTest`
+
+- Interest submission persists `submitted_by: null` for anonymous users, actor ID when logged in
+- Waitlist submission same as above
+- Intake / evaluation submission persists `submitted_by` = the participant (logged-in guard ensures non-null)
+- Re-submitting a stage updates `submitted_at` + `submitted_by` (last-write-wins)
+
 ### Unit — Exporter
 
+- Stage-summary column reads `[stage]['data']` payload, not the wrapper
 - "Originele keuze" column renders single-phase correctly
 - Column renders multi-phase correctly with ` | ` separator
 - Column shows empty string when `initial_selection` is missing
@@ -191,8 +289,10 @@ Any reader doing root-level iteration gets the same drop-with-log treatment for 
 
 ### Acceptance
 
-- Full edition form submission → row has stage-keyed `enrollment_data`, no root-level keys, `initial_selection.phases[0].session_ids` matches submitted sessions
-- Full trajectory form submission → row has `initial_selection.type: 'trajectory'`, phase 0 has the mandatory editions
+- Full edition form submission → row has stage-keyed `enrollment_data`, no root-level keys, each stage has `submitted_at` / `submitted_by` / `data`, `initial_selection.phases[0].session_ids` matches submitted sessions
+- Anonymous interest submission → `interest.submitted_by` is `null`
+- Full trajectory form submission → row has `initial_selection.type: 'trajectory'`, phase 0 has the mandatory editions + actor in `captured_by`
+- Colleague enrolment → `enrollment_personal.submitted_by` is the enroller's ID, registration row's `user_id` is the participant — they differ
 
 ---
 
