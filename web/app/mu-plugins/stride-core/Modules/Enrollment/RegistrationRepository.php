@@ -209,10 +209,7 @@ final class RegistrationRepository
                     ? (json_decode($existing->enrollment_data, true) ?: [])
                     : (is_array($existing->enrollment_data ?? null) ? $existing->enrollment_data : []);
                 $newData = is_array($data['enrollment_data'] ?? null) ? $data['enrollment_data'] : [];
-                $mergedData = $existingData;
-                foreach ($newData as $k => $v) {
-                    $mergedData[$k] = $v;
-                }
+                $mergedData = self::normalizeEnrollmentData(array_merge($existingData, $newData));
 
                 $reactivate = [
                     'status' => $data['status'] ?? RegistrationStatus::Confirmed->value,
@@ -257,7 +254,9 @@ final class RegistrationRepository
             'quote_id' => isset($data['quote_id']) ? absint($data['quote_id']) : null,
             'enrolled_by' => isset($data['enrolled_by']) ? absint($data['enrolled_by']) : null,
             'notes' => isset($data['notes']) ? sanitize_textarea_field($data['notes']) : null,
-            'enrollment_data' => isset($data['enrollment_data']) ? wp_json_encode($data['enrollment_data']) : null,
+            'enrollment_data' => isset($data['enrollment_data']) && is_array($data['enrollment_data'])
+                ? wp_json_encode(self::normalizeEnrollmentData($data['enrollment_data']))
+                : null,
         ];
 
         $result = $wpdb->insert($this->table(), $insert);
@@ -415,7 +414,7 @@ final class RegistrationRepository
                 'user_id'         => $userId,
                 'status'          => $status,
                 'enrollment_path' => $enrollmentPath,
-                'enrollment_data' => wp_json_encode($enrollmentData),
+                'enrollment_data' => wp_json_encode(self::normalizeEnrollmentData($enrollmentData)),
                 'registered_at'   => current_time('mysql'),
             ],
             ['id' => $registrationId]
@@ -1128,6 +1127,11 @@ final class RegistrationRepository
             if (array_key_exists($field, $data)) {
                 $value = $data[$field];
                 if (in_array($field, ['selections', 'completion_tasks', 'enrollment_data'], true) && is_array($value)) {
+                    if ($field === 'enrollment_data') {
+                        $value = self::normalizeEnrollmentData($value);
+                        // Keep $data[$field] in sync so the diff comparison below uses normalized shape.
+                        $data[$field] = $value;
+                    }
                     $value = wp_json_encode($value);
                 }
                 $update[$field] = $value;
