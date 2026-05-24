@@ -60,6 +60,17 @@ final class TrajectorySelection
         // (mandatory editions + pure-LD courses). Electives wait for setSelections().
         $this->cascade->cascadeOnEnrollment($registrationId);
 
+        // Snapshot the mandatory editions chosen at enrollment time.
+        $mandatoryEditionIds = $this->getMandatoryEditionIds($trajectoryId);
+        $this->registrations->appendInitialSelectionPhase(
+            $registrationId,
+            [
+                'phase'       => 'enrollment',
+                'edition_ids' => $mandatoryEditionIds,
+            ],
+            'trajectory'
+        );
+
         do_action('stride/trajectory/enrolled', [
             'registration_id' => $registrationId,
             'user_id' => $userId,
@@ -140,6 +151,18 @@ final class TrajectorySelection
             return $cascadeResult;
         }
 
+        // Append-only: every call records a new phase entry. The phased-choices
+        // feature (future) will pass distinct phase labels; today all calls use
+        // 'enrollment'.
+        $this->registrations->appendInitialSelectionPhase(
+            $registrationId,
+            [
+                'phase'       => 'enrollment',
+                'edition_ids' => array_values(array_map('intval', $editionIds)),
+            ],
+            'trajectory'
+        );
+
         do_action('stride/trajectory/choices_updated', [
             'registration_id' => $registrationId,
             'trajectory_id' => $trajectoryId,
@@ -218,6 +241,39 @@ final class TrajectorySelection
     }
 
     // === Queries ===
+
+    // === Helpers ===
+
+    /**
+     * Return the mandatory edition IDs configured on a trajectory.
+     *
+     * Mandatory = `required: true` AND `type: edition` AND `edition_id > 0`.
+     * Used by the initial_selection snapshot in enroll(). If the trajectory has
+     * no mandatory editions (or cannot be loaded), returns an empty array — the
+     * snapshot still records `type=trajectory` + the `enrollment` phase.
+     *
+     * @return array<int>
+     */
+    private function getMandatoryEditionIds(int $trajectoryId): array
+    {
+        $trajectory = $this->trajectories->getTrajectory($trajectoryId);
+        if (!$trajectory) {
+            return [];
+        }
+
+        $ids = [];
+        foreach ($trajectory['courses'] ?? [] as $course) {
+            if (
+                ($course['required'] ?? false) === true
+                && ($course['type'] ?? '') === 'edition'
+                && !empty($course['edition_id'])
+            ) {
+                $ids[] = (int) $course['edition_id'];
+            }
+        }
+
+        return array_values($ids);
+    }
 
     /**
      * Get days until choice deadline.
