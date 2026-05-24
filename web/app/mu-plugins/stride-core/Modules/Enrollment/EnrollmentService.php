@@ -805,6 +805,12 @@ final class EnrollmentService extends AbstractService
             }
         }
 
+        // Honor pre-wrapped enrollment_data set by the caller (e.g. EnrollmentFormHandler)
+        // when no extra_fields processing overrode it.
+        if (!isset($enrollOptions['enrollment_data']) && is_array($data['enrollment_data'] ?? null)) {
+            $enrollOptions['enrollment_data'] = $data['enrollment_data'];
+        }
+
         // Perform enrollment
         $registrationId = $this->enroll($participantId, $editionId, $enrollOptions);
 

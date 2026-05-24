@@ -133,9 +133,13 @@ final class EnrollmentFormHandler
             return $billingResult;
         }
 
-        // Replace flat extra_fields with stage-keyed enrollment_data
+        // Replace flat extra_fields with stage-keyed, wrapped enrollment_data
         unset($enrollmentData['extra_fields']);
-        $enrollmentData['enrollment_data'] = $stageData;
+        $actorId = get_current_user_id() ?: null;
+        $enrollmentData['enrollment_data'] = [
+            'enrollment_personal' => RegistrationRepository::wrapStage($stageData['enrollment_personal'] ?? [], $actorId),
+            'enrollment_billing'  => RegistrationRepository::wrapStage($stageData['enrollment_billing']  ?? [], $actorId),
+        ];
 
         $enrollment = ntdst_get(EnrollmentService::class);
         $result = $enrollment->processEnrollment($enrollmentData);
@@ -256,9 +260,12 @@ final class EnrollmentFormHandler
             return $billingResult;
         }
 
-        // Replace flat extra_fields with stage-keyed enrollment_data
         unset($billingData['extra_fields']);
-        $billingData['enrollment_data'] = $stageData;
+        $actorId = get_current_user_id() ?: null;
+        $billingData['enrollment_data'] = [
+            'enrollment_personal' => RegistrationRepository::wrapStage($stageData['enrollment_personal'] ?? [], $actorId),
+            'enrollment_billing'  => RegistrationRepository::wrapStage($stageData['enrollment_billing']  ?? [], $actorId),
+        ];
 
         // Create enrollment via TrajectorySelection
         $selectionService = ntdst_get(TrajectorySelection::class);
