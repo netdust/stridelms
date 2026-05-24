@@ -366,9 +366,9 @@ final class EditionRegistrationExporter
         // Metadata columns
         $headers = array_merge($headers, [
             'Status', 'Inschrijfwijze', 'Ingeschreven door', 'Inschrijfdatum',
-            'Voltooid op', 'Geannuleerd op', 'Sessieselectie', 'Extra gegevens', 'Opmerking',
+            'Voltooid op', 'Geannuleerd op', 'Sessieselectie', 'Extra gegevens', 'Originele keuze', 'Opmerking',
         ]);
-        $colWidths = array_merge($colWidths, [14, 14, 22, 18, 18, 18, 14, 30, 30]);
+        $colWidths = array_merge($colWidths, [14, 14, 22, 18, 18, 18, 14, 30, 34, 30]);
 
         // Set column widths (OpenSpout uses 1-indexed columns)
         foreach ($colWidths as $idx => $width) {
@@ -453,6 +453,9 @@ final class EditionRegistrationExporter
             // Excludes the per-stage email/name which are already shown in the email column.
             $extraSummary = $this->summarizeEnrollmentData($enrollmentData);
             $cells[] = Cell::fromValue($extraSummary);
+
+            // Originele keuze — initial_selection snapshot formatted as phase-prefixed labels
+            $cells[] = Cell::fromValue($this->summarizeInitialSelection($enrollmentData));
 
             $cells[] = Cell::fromValue($registration['notes'] ?? '');
 
@@ -857,7 +860,7 @@ final class EditionRegistrationExporter
      */
     private function summarizeEnrollmentData(array $enrollmentData): string
     {
-        $stagesToShow = ['enrollment_personal', 'intake', 'evaluation'];
+        $stagesToShow = ['enrollment_personal', 'enrollment_billing', 'intake', 'evaluation'];
         // Fields already present in their own columns — don't repeat them.
         $skipKeys = ['name', 'email', 'phone', 'first_name', 'last_name',
                      'company', 'billing_company', 'billing_vat', 'billing_address_1',
@@ -865,10 +868,12 @@ final class EditionRegistrationExporter
                      'organisation', 'department'];
         $lines = [];
         foreach ($stagesToShow as $stage) {
-            if (empty($enrollmentData[$stage]) || !is_array($enrollmentData[$stage])) {
+            $stageEnvelope = $enrollmentData[$stage] ?? null;
+            if (!is_array($stageEnvelope)) {
                 continue;
             }
-            foreach ($enrollmentData[$stage] as $key => $value) {
+            $stageData = is_array($stageEnvelope['data'] ?? null) ? $stageEnvelope['data'] : [];
+            foreach ($stageData as $key => $value) {
                 if (in_array($key, $skipKeys, true)) {
                     continue;
                 }
@@ -910,7 +915,8 @@ final class EditionRegistrationExporter
             $userId = (int) ($registration['user_id'] ?? 0);
             $user = $userId ? ($data['users'][$userId] ?? null) : null;
             $meta = $userId ? ($data['userMeta'][$userId] ?? []) : [];
-            $stageData = $registration['enrollment_data_parsed'][$stage] ?? [];
+            $stageEnvelope = $registration['enrollment_data_parsed'][$stage] ?? [];
+            $stageData = is_array($stageEnvelope['data'] ?? null) ? $stageEnvelope['data'] : [];
 
             $name = $user
                 ? trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')) ?: ($user->display_name ?? '')
@@ -975,5 +981,62 @@ final class EditionRegistrationExporter
             $meta[(int) $row->user_id][$row->meta_key] = $row->meta_value;
         }
         return $meta;
+    }
+
+    /**
+     * Format `initial_selection` for the deelnemers sheet "Originele keuze" column.
+     *
+     * Resolves session IDs and edition IDs to human labels at render time.
+     * Multiple phases are joined with ` | `.
+     *
+     * @param array<string, mixed> $enrollmentData parsed enrollment_data JSON
+     */
+    private function summarizeInitialSelection(array $enrollmentData): string
+    {
+        $initial = $enrollmentData['initial_selection'] ?? null;
+        if (!is_array($initial)) {
+            return '';
+        }
+        $type = $initial['type'] ?? 'none';
+        if ($type === 'none') {
+            return '';
+        }
+        $phases = $initial['phases'] ?? [];
+        if (!is_array($phases) || empty($phases)) {
+            return '';
+        }
+
+        $phaseLabel = static function (string $phase): string {
+            return match ($phase) {
+                'enrollment' => 'Inschrijving',
+                default => ucfirst(str_replace('_', ' ', $phase)),
+            };
+        };
+
+        $parts = [];
+        foreach ($phases as $phase) {
+            $label = $phaseLabel((string) ($phase['phase'] ?? 'enrollment'));
+            $ids = $phase['session_ids'] ?? $phase['edition_ids'] ?? [];
+            if (!is_array($ids) || empty($ids)) {
+                continue;
+            }
+            $names = [];
+            foreach ($ids as $id) {
+                $post = get_post((int) $id);
+                if (!$post) {
+                    $names[] = '#' . (int) $id . ' (verwijderd)';
+                    continue;
+                }
+                if ($post->post_type === 'vad_session') {
+                    $date = get_post_meta($post->ID, 'session_date', true);
+                    $names[] = $post->post_title . ($date ? ' (' . date_i18n('d/m/Y', strtotime($date)) . ')' : '');
+                } else {
+                    $names[] = $post->post_title;
+                }
+            }
+            $parts[] = $label . ': ' . implode(', ', $names);
+        }
+
+        return implode(' | ', $parts);
     }
 }
