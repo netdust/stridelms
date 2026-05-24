@@ -410,8 +410,8 @@ final class RegistrationRepository
              AND user_id IS NULL
              AND status IN (%s, %s)
              AND (
-                JSON_UNQUOTE(JSON_EXTRACT(enrollment_data, '$.interest.email')) = %s
-                OR JSON_UNQUOTE(JSON_EXTRACT(enrollment_data, '$.waitlist.email')) = %s
+                JSON_UNQUOTE(JSON_EXTRACT(enrollment_data, '$.interest.data.email')) = %s
+                OR JSON_UNQUOTE(JSON_EXTRACT(enrollment_data, '$.waitlist.data.email')) = %s
              )
              LIMIT 1",
             $editionId,
@@ -433,7 +433,7 @@ final class RegistrationRepository
         global $wpdb;
 
         $table = $this->table();
-        $jsonPath = '$.' . $status->value . '.email';
+        $jsonPath = '$.' . $status->value . '.data.email';
 
         return $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$table}
