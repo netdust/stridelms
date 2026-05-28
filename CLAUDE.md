@@ -49,9 +49,35 @@ The core development loop follows three phases:
 |-------|-------|------|
 | **Brainstorm** | `superpowers:brainstorming` | Before any creative work — features, components, modifications. Explores intent, requirements, and design before code. |
 | **Plan** | `superpowers:writing-plans` | After brainstorming, when you have spec/requirements for a multi-step task. Produces a structured implementation plan. |
+| **Plan (security)** | `netdust-core:threat-modeling` | Alongside `writing-plans` when the plan touches surfaces listed under "Threat-modeling triggers" below. Produces a `## Threat model` section the plan embeds inline, BEFORE task breakdown. Required for security-rich features — opt-in for everything else. |
 | **Implement** | `superpowers:executing-plans` | Execute a written plan in a session with review checkpoints. |
 | **Implement (parallel)** | `superpowers:subagent-driven-development` | Execute plans with independent tasks using parallel subagents. |
 | **Parallel dispatch** | `superpowers:dispatching-parallel-agents` | When facing 2+ independent tasks that need no shared state. |
+
+### Threat-modeling triggers (WordPress / NTDST surfaces)
+
+Invoke `netdust-core:threat-modeling` alongside `writing-plans` when the plan touches ANY of these. The list is the trigger predicate — one match is enough.
+
+| Surface | WP/NTDST examples |
+|---|---|
+| User-controlled URLs | Webhook endpoints, OAuth redirect URLs, external API calls (mailers, payment gateways, LearnDash integrations), embed URLs, REST proxy endpoints |
+| AJAX handlers | New `wp_ajax_*` or `wp_ajax_nopriv_*` handler — nonces, capability checks, sanitization, output escaping all need explicit spec |
+| REST endpoints | `register_rest_route` additions — `permission_callback`, schema validation, capability enforcement |
+| Shortcodes | New `add_shortcode` registration that takes attributes from post content |
+| Settings pages | `add_options_page` / `add_settings_field` that takes user input + persists to `wp_options` |
+| Untrusted parsing | Frontmatter from external MD, CSV imports, file uploads, third-party API JSON responses, RSS/atom feeds |
+| Capability boundaries | New `current_user_can` check or new capability registration, cross-role visibility surfaces |
+| Multi-tenancy / role-based isolation | LearnDash group access, course/lesson visibility based on role, partner-API scoping |
+| File handling | Uploads (path traversal via filename), downloads (content-type sniffing), attachment storage |
+| Database with user-controlled `$wpdb` input | Any `$wpdb->prepare`-free path, `meta_query` with user-supplied keys, custom-table writes |
+| BYOK / external credentials | API keys for third-party services (Mollie, Combell, mailer providers) stored in options or post meta |
+| Partner API surface | Any new endpoint under `/wp-json/stride-partner/v1/` — auth model, rate limits, scoped data access |
+
+**Worked example** (across stacks): `~/Projects/folio/docs/superpowers/plans/2026-05-27-phase-3-agent-runner.md` section `## Threat model`. Different stack (Bun/TS), same shape — list of assets, actors, attacks paired with mitigations, explicit out-of-scope deferrals. For WP-specific worked examples, expect one to be authored in Stride's next plan that qualifies.
+
+**Do NOT invoke** for refactors with no new attack surface, pure UI/CSS changes, theme template tweaks that don't touch input, migrations on internal tables with no user-facing change, test-only additions, or pure documentation.
+
+If unsure whether a plan qualifies, default to running the skill — false positives cost 15 minutes, false negatives cost hours of `/code-review` review-fix loops.
 
 ### Testing
 

@@ -229,6 +229,13 @@ Two distinct stores exist:
 - **`~/.claude/projects/-home-ntdst-Sites-stride/memory/`** — Claude's auto-memory (cross-session, includes `MEMORY.md` index + named topic files). Useful but separate.
 The project memory is what survives in git for the team. Auto-memory survives for me across sessions on this machine.
 
+### Plans for security-rich features need a `## Threat model` section before tasks
+When writing a plan that touches user-controlled URLs, AJAX handlers, REST endpoints, shortcodes, settings pages with user input, untrusted parsing, capability boundaries, multi-tenancy, file handling, `$wpdb` with user input, BYOK/external credentials, or partner-API surfaces — invoke `netdust-core:threat-modeling` alongside `superpowers:writing-plans`. The skill produces a `## Threat model` section the plan embeds inline before task breakdown, with named assets, named attacks paired with mitigations, and explicit out-of-scope deferrals.
+
+**Why this matters:** without a threat model in the plan, every `/code-review` round on the implementing sub-phase independently re-discovers the attack surface. Each round catches a different subset. The cap-of-15 on medium-effort reviews can hide critical-class findings below the threshold across multiple rounds. Convergence is slow and probabilistic. With one, reviews verify against the named mitigations and converge in one round.
+
+**Calibration evidence:** Folio Phase 3 Sub-phase B (2026-05-28) shipped 7 tasks of BYOK + provider-URL code without a threat model. Two rounds of `/code-review` at medium effort surfaced ~30 security-class findings, with critical-class items still emerging in round 2 (SSRF + IPv4-mapped IPv6 bypass, credential exfiltration via attacker-controlled baseUrl, persistence-path validation gap, localhost-default abuse). The threat model was written retrospectively — at the cost of two review-fix rounds the proactive version would have collapsed into one. For WP-specific surfaces (XSS via post meta, capability checks, nonces, REST endpoint registration), the same dynamic applies. Trigger list lives in `CLAUDE.md` under "Threat-modeling triggers (WordPress / NTDST surfaces)."
+
 ---
 
 ## API Design Decisions
