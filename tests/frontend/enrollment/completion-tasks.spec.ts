@@ -1,4 +1,5 @@
 import { test as baseTest, expect, type Page } from '@playwright/test';
+import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as crypto from 'crypto';
 
@@ -18,7 +19,8 @@ import * as crypto from 'crypto';
  *
  * Key URLs:
  *   Dashboard enrollments: /mijn-account/?tab=inschrijvingen
- *   Completion page:       /vormingen/{slug}/voltooien/
+ *   Completion page:       /edities/{edition-slug}/voltooien/  (routed by EDITION
+ *                          slug, NOT course slug — see EnrollmentRouter)
  */
 
 // ---------------------------------------------------------------------------
@@ -28,12 +30,33 @@ import * as crypto from 'crypto';
 const TEST_EMAIL = 'student1@seed.test';
 const TEST_PASSWORD = 'seedpass123';
 
-// seed_student1 user id (from scripts/seed.php). Hardcoded because the test-
-// login backdoor in web/app/mu-plugins/test-login-helper.php signs by user_id.
-// Drifts safely: the backdoor wp_die's "User not found" if the ID is stale,
-// which surfaces immediately as a test failure rather than silent skip.
-const TEST_USER_ID = 3194;
+// seed_student1 user id — resolved DYNAMICALLY from the email, because seed IDs
+// drift on every re-seed (a hardcoded id silently points at the wrong/absent user
+// once the DB is re-seeded). The test-login backdoor signs by user_id, so we look
+// the current id up once via wp-cli and cache it.
 const TEST_LOGIN_SECRET = 'stride_codeception_test_secret_2024';
+
+let _cachedUserId = 0;
+function resolveTestUserId(): number {
+  if (_cachedUserId) return _cachedUserId;
+  const php =
+    "$u=get_user_by('email','student1@seed.test')?:get_user_by('email','seed_student1@seed.test'); echo $u?$u->ID:0;";
+  const rel = `scripts/.uid-${crypto.randomBytes(3).toString('hex')}.php`;
+  fs.writeFileSync(rel, `<?php\n${php}`);
+  try {
+    const out = execSync(`ddev exec wp eval-file ${rel}`, {
+      encoding: 'utf-8',
+      cwd: process.cwd(),
+    }).trim();
+    _cachedUserId = parseInt(out, 10) || 0;
+  } finally {
+    fs.rmSync(rel, { force: true });
+  }
+  if (!_cachedUserId) {
+    throw new Error('Could not resolve student1@seed.test user id — is the DB seeded?');
+  }
+  return _cachedUserId;
+}
 
 // ---------------------------------------------------------------------------
 // Auth helpers
@@ -43,7 +66,7 @@ const AUTH_FILE_USER = '/tmp/stride-completion-user-auth.json';
 
 async function userLogin(
   page: Page,
-  userId: number = TEST_USER_ID,
+  userId: number = resolveTestUserId(),
 ): Promise<void> {
   // Skip the real /login UI: it's AJAX-driven, rate-limited (5/15min per IP),
   // and parallel Playwright workers tripped the limit during baseline runs.
@@ -75,7 +98,7 @@ async function userLogin(
 async function gotoAuthenticated(
   page: Page,
   url: string,
-  userId: number = TEST_USER_ID,
+  userId: number = resolveTestUserId(),
 ): Promise<void> {
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
