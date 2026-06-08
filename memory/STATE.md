@@ -3,31 +3,35 @@
 Current state of the project for session continuity. Updated after meaningful work.
 **For "what's left to launch" see `docs/LAUNCH-CHECKLIST.md` (single source of truth).**
 
-Last refresh: 2026-05-20
+Last refresh: 2026-06-08 (reconstructed from git after audit found STATE stale since 2026-05-20)
 
 ---
 
-## Active work: Trajectory cascade + phased choices (started 2026-05-20)
+## Where we are (2026-06-08)
 
-**Status:** Planning complete, implementation not started.
+Phase-1 launch **feature-complete**; in a deep-testing cycle before launch. Baseline assessment: `docs/architecture/BASELINE-2026-06-08.md`.
 
-**Two plans, do in order:**
-1. `plans/2026-05-20-trajectory-cascade-enrollment.md` — **prereq**, do first. Adds `parent_registration_id` column + `TrajectoryCascadeService`. Locks the parent→child model.
-2. `plans/2026-05-20-trajectory-phased-choices.md` — builds on (1). Per-keuzegroep `opens_at` / `deadline` + lazy task creation. Risk #3 in that plan ("is cascade-enrollment missing?") is YES — that's why (1) exists.
+- **Tests: 913 unit + 261 integration green** (913 verified 2026-06-08; was incorrectly recorded as 674/221).
+- **Code health:** boots clean; framework engine + domain layer + theme clean; drift concentrated in `Admin/` god class + per-CPT admin controllers (deferred per ship-mode). Impersonation audit-bypass (`AdminAPIController.php`) **fixed 2026-06-08** — now routes through `AuditService::record()`. NetdustMail test isolation bug **fixed 2026-06-08**.
+- **Harness:** opted in (CLAUDE.md + `ARCHITECTURE-INVARIANTS.md` exist). Next feature runs through `harnessed-development`; `compounding` will grow `docs/architecture/CODE-MAP.md`.
 
-**Decisions locked in (2026-05-20, with Stefan):**
-- Parent-child link: new column `parent_registration_id` on `wp_vad_registrations`
-- Mandatory editions → child created at parent-creation; electives → child at `setSelections()`
-- Pure-LD (no edition) → `grantAccess()` + user-meta `_stride_trajectory_courses`
-- Reuse existing `TrajectoryMode` enum (`cohort` vs `self_paced`) — no new field
-- Cohort: children inherit parent status (cancel cascades)
-- Self-paced: children independent (parent cancel does nothing)
-- Capacity check on elective choice → blocks with `WP_Error('edition_full')`
-- Children skip per-edition `requires_questionnaire` / `requires_documents` / `requires_approval` (those are satisfied at parent level)
-- Children have `quote_id = NULL` UNLESS trajectory = €0 AND child > €0 → cascade auto-generates child quote with parent's billing
-- Payment never blocks enrollment; access-denial for unpaid = manual admin task
+## Trajectory cascade — DONE 2026-05-20
 
-**Step 1 to execute next session:** Schema migration — add `parent_registration_id` column + `idx_parent` index in `Modules/Enrollment/RegistrationTable.php`. Triggered via `dbDelta`. Verify with `wp db query "DESCRIBE wp_vad_registrations"`.
+**Status:** ✅ Shipped. (STATE previously said "not started" — false; it shipped the same day the plan was written.)
+- `09c28ab9` (22:41) — `parent_registration_id` schema + child queries (was "step 1 to execute next session" — already done).
+- `b712c8c6` (23:52) — cascade-enrollment steps 4–15 (`TrajectoryCascadeService` + cascade on enroll/select/cancel/status-change + PartnerAPI).
+- Locked decisions (mandatory@parent-create / electives@setSelections, pure-LD via grantAccess + `_stride_trajectory_courses`, cohort cascades / self-paced independent, capacity `WP_Error('edition_full')`, child quote only when trajectory €0 & child >€0) — all implemented as specified.
+
+## enrollment_data namespacing + initial_selection — DONE 2026-05-24
+
+(Was entirely absent from STATE — 20+ commits, plan `eeba1e95`.) Wrapped stage envelope (submitted_at/submitted_by/submitter_metadata), snapshot of initial selections at enroll/setSelections, admin modal + export integration across enrollment/trajectory/questionnaire services.
+
+## Next up
+
+- **Phased choices — NOT started.** Plan `plans/2026-05-20-trajectory-phased-choices.md`. Was blocked on cascade (now unblocked). Per-keuzegroep `opens_at`/`deadline` + lazy task creation.
+- Pre-launch deploy tasks (todo.md ~178–184): deactivate LTI, configure SMTP, recreate footer pages.
+
+> **Note:** lines below ~178 contain 400+ auto-captured "session ended (no significant changes)" entries — noise, not signal. Safe to ignore; collapse on a future curation pass.
 
 ---
 
@@ -598,6 +602,7 @@ Inventory only — left in place per user instruction:
 [2026-05-24] — session ended (no significant changes captured)
 [2026-06-05] — session ended (no significant changes captured)
 [2026-06-05] — session ended (no significant changes captured)
+[2026-06-08] — session ended (no significant changes captured)
 [2026-06-08] — session ended (no significant changes captured)
 [2026-06-08] — session ended (no significant changes captured)
 [2026-06-08] — session ended (no significant changes captured)
