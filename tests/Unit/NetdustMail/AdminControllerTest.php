@@ -70,7 +70,9 @@ class AdminControllerTest extends TestCase
 
     public function testRegisterMenuAddsOptionsPage(): void
     {
-        global $_test_options_pages;
+        global $_test_options_pages, $submenu;
+        $_test_options_pages = [];
+        $submenu = [];
 
         $controller = new AdminController(
             $this->mockSmartCodeRegistry,
@@ -80,9 +82,19 @@ class AdminControllerTest extends TestCase
 
         $controller->registerMenu();
 
-        $this->assertArrayHasKey('netdust-mail', $_test_options_pages);
-        $this->assertEquals('Netdust Mail', $_test_options_pages['netdust-mail']['page_title']);
-        $this->assertEquals('manage_options', $_test_options_pages['netdust-mail']['capability']);
+        // The controller branches on hasStrideTools() === class_exists(StrideToolsService).
+        // In an isolated run that class is absent (standalone options page); when the full
+        // suite has loaded stride-core it is present (Stride Tools submenu). Assert the
+        // branch the controller actually took, so the test is correct in both worlds.
+        if (class_exists('\Stride\Admin\StrideToolsService')) {
+            $this->assertArrayHasKey('stride-tools', $submenu);
+            $slugs = array_column($submenu['stride-tools'], 2);
+            $this->assertContains('netdust-mail', $slugs);
+        } else {
+            $this->assertArrayHasKey('netdust-mail', $_test_options_pages);
+            $this->assertEquals('Netdust Mail', $_test_options_pages['netdust-mail']['page_title']);
+            $this->assertEquals('manage_options', $_test_options_pages['netdust-mail']['capability']);
+        }
     }
 
     public function testEnqueueAssetsDoesNothingForOtherPages(): void
@@ -118,7 +130,10 @@ class AdminControllerTest extends TestCase
             $this->mockAttachmentHandler
         );
 
-        $controller->enqueueAssets('settings_page_netdust-mail');
+        // Hook suffix depends on whether the menu is a Stride Tools submenu or a
+        // standalone options page — mirror the controller's own branch.
+        $hook = (class_exists('\Stride\Admin\StrideToolsService') ? 'stride-tools_page_' : 'settings_page_') . 'netdust-mail';
+        $controller->enqueueAssets($hook);
 
         $this->assertTrue(wp_script_is('alpinejs', 'enqueued'));
     }
@@ -144,7 +159,8 @@ class AdminControllerTest extends TestCase
             $this->mockAttachmentHandler
         );
 
-        $controller->enqueueAssets('settings_page_netdust-mail');
+        $hook = (class_exists('\Stride\Admin\StrideToolsService') ? 'stride-tools_page_' : 'settings_page_') . 'netdust-mail';
+        $controller->enqueueAssets($hook);
 
         $this->assertArrayHasKey('l10n', $wp_scripts['alpinejs']);
         $this->assertArrayHasKey('MailConfig', $wp_scripts['alpinejs']['l10n']);

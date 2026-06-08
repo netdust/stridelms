@@ -3243,24 +3243,21 @@ final class AdminAPIController
         $token = $handler->generateToken();
         $handler->storeSession($token, $adminId, $targetId);
 
-        // Audit trail — schema is entity_type / entity_id (NOT subject_id).
-        // Writing the wrong column previously dropped the row silently under
-        // MySQL strict mode, leaving zero record of who impersonated whom.
-        global $wpdb;
-        $auditTable = $wpdb->prefix . 'audit_log';
-        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $auditTable))) {
-            $wpdb->insert($auditTable, [
-                'action'      => 'impersonation.started',
-                'actor_id'    => $adminId,
-                'actor_type'  => 'user',
-                'entity_type' => 'user',
-                'entity_id'   => $targetId,
-                'context'     => wp_json_encode([
+        // Audit trail via AuditService::record() — the single write path that
+        // owns the entity_type/entity_id schema, JSON-encodes context, stamps
+        // created_at, and logs. (Previously a raw $wpdb->insert here bypassed it.)
+        $audit = ntdst_get(\NTDST\Audit\AuditService::class);
+        if ($audit) {
+            $audit->record(
+                'user',
+                $targetId,
+                'impersonation.started',
+                $adminId,
+                [
                     'target_name'  => $targetUser->display_name,
                     'target_email' => $targetUser->user_email,
-                ]),
-                'created_at'  => current_time('mysql', true),
-            ]);
+                ]
+            );
         }
 
         // Switch session to target user
@@ -3315,23 +3312,20 @@ final class AdminAPIController
             'domain'  => COOKIE_DOMAIN,
         ]);
 
-        // Symmetric audit row — same schema as impersonation.started.
-        global $wpdb;
-        $auditTable = $wpdb->prefix . 'audit_log';
-        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $auditTable))) {
+        // Symmetric audit row — same single write path as impersonation.started.
+        $audit = ntdst_get(\NTDST\Audit\AuditService::class);
+        if ($audit) {
             $targetUser = $targetId > 0 ? get_userdata($targetId) : null;
-            $wpdb->insert($auditTable, [
-                'action'      => 'impersonation.ended',
-                'actor_id'    => $adminId,
-                'actor_type'  => 'user',
-                'entity_type' => 'user',
-                'entity_id'   => $targetId,
-                'context'     => wp_json_encode([
+            $audit->record(
+                'user',
+                $targetId,
+                'impersonation.ended',
+                $adminId,
+                [
                     'target_name'  => $targetUser?->display_name,
                     'target_email' => $targetUser?->user_email,
-                ]),
-                'created_at'  => current_time('mysql', true),
-            ]);
+                ]
+            );
         }
 
         // Switch back to admin
