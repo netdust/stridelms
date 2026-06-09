@@ -241,7 +241,8 @@ class VoucherServiceIntegrationTest extends IntegrationTestCase
         $voucherId = $this->createTestVoucher([
             'code' => $code,
             'meta' => [
-                '_ntdst_valid_until' => date('Y-m-d', strtotime('-1 day')),
+                // Site clock, not PHP/UTC — see validationRejectsNotYetValidVoucherFromHelper.
+                '_ntdst_valid_until' => date('Y-m-d', current_time('timestamp') - DAY_IN_SECONDS),
             ],
         ]);
 
@@ -260,7 +261,9 @@ class VoucherServiceIntegrationTest extends IntegrationTestCase
         $voucherId = $this->createTestVoucher([
             'code' => $code,
             'meta' => [
-                '_ntdst_valid_from' => date('Y-m-d', strtotime('+1 day')),
+                // Site clock, not PHP/UTC: validateVoucher() compares against
+                // current_time('Y-m-d'), which diverges from date() near midnight UTC.
+                '_ntdst_valid_from' => date('Y-m-d', current_time('timestamp') + DAY_IN_SECONDS),
             ],
         ]);
 

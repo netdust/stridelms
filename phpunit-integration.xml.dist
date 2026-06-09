@@ -16,9 +16,13 @@
         </testsuite>
     </testsuites>
 
-    <source>
+    <!-- restrictWarnings/Notices: only issues raised from OUR source fail the
+         suite — third-party plugin warnings (e.g. LearnDash internals) are
+         reported but don't turn the run red. -->
+    <source restrictWarnings="true" restrictNotices="true">
         <include>
             <directory>web/app/themes/stride/services</directory>
+            <directory>web/app/themes/stridence/services</directory>
             <directory>web/app/mu-plugins/stride-core</directory>
         </include>
     </source>
