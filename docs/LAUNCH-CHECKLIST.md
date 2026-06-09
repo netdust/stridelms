@@ -3,32 +3,38 @@
 **Authoritative list of what must be true before Phase 1 production launch.**
 **Companion to:** `memory/STATE.md` (current-state snapshot) and `tasks/todo.md` (active sprint scratchpad).
 
-Last updated: 2026-05-14 (post audit phase — codebase feature-complete)
+Last updated: 2026-06-10 (hardening sprint — pre-testing audit fixes all verified, hardening plan active)
 
 ---
 
 ## 🎯 What's next (read this first)
 
-**Stride codebase is feature-complete.** All P0 + P1 launch code items are shipped. Next phase: **deep testing**, starting in the coming days.
+**Stride codebase is feature-complete and the 2026-05-14 pre-testing fixes are all DONE** (items 1–7 below verified in current code 2026-06-09 by independent review agents — see `tasks/todo.md` for file:line evidence). Active work: the **hardening sprint** (plan approved 2026-06-10, tracked at the top of `tasks/todo.md`):
 
-**Recommended fixes BEFORE deep testing begins** (otherwise testers re-discover them, wasting re-run cycles). Full details in `tasks/audit-2026-05-14-{security,performance}.md`:
+- ✅ Phase 0 — housekeeping: invariants bundle in CI, **stride-client-vad now tracked in git** (the launch brand was not in version control), kindred duplicate loader removed (VAD = single active brand), debris pruned
+- Phase 1 — 3 verified-open bug clusters: `isEnrolled()` MODE_FREE gap, dashboard nav inconsistency, `validateSelections()` field-shape bugs
+- Phase 2 — security: test-login-helper env-gating, launch-surface deferred audit items (H4, M1, M3, M5, M6, L3), explicit capability checks in wp_ajax handlers
+- Phase 3 — targeted P0 edge-testing through the real browser (per `docs/architecture/FEATURE-STATUS.md`, only Auth currently clears the edge-tested bar)
+- Phase 4 — deploy readiness
 
-| # | What | File | Effort |
-|---|---|---|---|
-| 1 | 🚨 Verify + fix C3 colleague-enrolment PII overwrite | `EnrollmentService.php:591-657` | medium |
-| 2 | 🚨 Fix C1 CSV injection in admin export | `AdminAPIController.php:3040-3074` | 5 min |
-| 3 | 🚨 Fix H1 perf — drop eager PDF render + async-ify mail in enrollment | `QuoteService.php:408` + `StrideMailBridge.php:77` | 30 min |
-| 4 | ⚠ Fix H1 sec — anonymisation gate needs `stride_manage` check | `UserLifecycleService.php:282-303` | 15 min |
-| 5 | ⚠ Fix H3 sec — impersonation audit writes wrong columns | `AdminAPIController.php:2865-2878` | 10 min |
-| 6 | ⚠ Fix H2/H3 perf — batch `searchUsers` + `getUserDetail` quotes | `AdminAPIController.php:2367, 2520` | 1 hr |
-| 7 | ⚠ Fix H4 perf — one-line CAST in taxonomy join | `AdminAPIController.php:1123-1156` | 5 min |
+| # | 2026-05-14 pre-testing fix | Status |
+|---|---|---|
+| 1 | C3 colleague-enrolment PII overwrite | ✅ guard at `EnrollmentService.php:730-799` |
+| 2 | C1 CSV injection in admin export | ✅ `sanitizeCsvCell()` at `AdminAPIController:3498` |
+| 3 | H1 perf — eager PDF + sync mail | ✅ async via `StrideMailBridge:85-86` |
+| 4 | H1 sec — anonymisation gate | ✅ `stride_manage` at `UserLifecycleService:182,301` |
+| 5 | H3 sec — impersonation audit columns | ✅ via `AuditService::record()` (`b91fbbdf`) |
+| 6 | H2/H3 perf — searchUsers/getUserDetail batching | ✅ `BatchQueryHelper` |
+| 7 | H4 perf — taxonomy join CAST | ✅ `AdminAPIController:1175` |
 
 **Deploy-time tasks (NOT code, do at staging/prod push):**
+- ⚠ **Create/verify deploy tooling first** — `site.yml` declares `make deploy-staging` but no Makefile exists in the repo
 - Deactivate `netdust-lti` plugin in WP admin
 - Configure real SMTP credentials in Fluent SMTP (currently routes to mailpit)
 - Set `stride_admin_email` option to real VAD admin inbox
 - Recreate 6 footer pages on staging/prod (see commit `d85c7eba`)
-- Decide whether to hide Trajectory admin UI for v1
+- Trajectory admin UI stays visible for v1 (standing decision 2026-05-13)
+- Verify `test-login-helper.php` inert outside dev (Phase-2 hardened: `WP_ENV` guard + env-only secret)
 
 ---
 

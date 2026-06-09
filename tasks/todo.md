@@ -4,6 +4,18 @@ Working scratchpad. Authoritative launch list lives in `docs/LAUNCH-CHECKLIST.md
 
 ---
 
+## Hardening sprint — ACTIVE (started 2026-06-10)
+
+Plan: `~/.claude/plans/glowing-roaming-wozniak.md` (approved 2026-06-10). Goal: launch confidence — no blocking bugs, no security issues, loose ends closed.
+
+- [x] **Phase 0 — Housekeeping & green baseline**: invariants bundle committed (`7f2ddce9`); stride-client-vad tracked in git — launch brand was NOT in version control (`bb1d052c`); kindred duplicate loader removed, VAD = single active brand (`7948e836`); debris deleted (.debug-enrolled2.php, repro-save-venue.php); stale worktree pruned; todo.md/checklist truth-up; suites green (see below)
+- [ ] **Phase 1 — Verified-open bug fixes (TDD)**: (A) `isEnrolled()` MODE_FREE gap `LearnDashHelper.php:73-97`; (B) dashboard nav consistency `UserDashboardService.php:94-125`; (C) `TrajectorySelection::validateSelections()` 4 field-shape bugs `:218-223`; (D) error_log→ntdst_log (2 sites)
+- [ ] **Phase 2 — Security hardening**: test-login-helper.php env-gate + secret rotation; audit deferred items H4 (PII redaction for stride_view), M3 (session cross-edition validation), M5 (upload whitelist), M6 (reserved meta-key guard), M1 (interest-merge guard), M4 (verify closed), L3 (export throttle); explicit capability checks in 16 wp_ajax handlers
+- [ ] **Phase 3 — Targeted P0 edge-testing gate**: drive enrollment edges / attendance / completion→certificate / online states / dashboard empty states / quote locking / anonymise through real browser; new Cests as regression net; flip FEATURE-STATUS rows with evidence
+- [ ] **Phase 4 — Deploy readiness**: deploy-time list + evidence-trail refresh. ⚠ NEW: `site.yml` declares `make deploy-staging` but **no Makefile exists** — deploy tooling must be created/verified before launch.
+
+---
+
 ## Pre-existing test failure — investigate post-launch
 
 `WPDataConnectorTest::canUpdateExistingPlatform` (Integration) fails on staging — **not** caused by the 2026-05-18 ntdst-core port from PR #2 (verified: same failure with both the old and new Data.php).
@@ -124,26 +136,16 @@ Earlier audit mistake corrected: I grep'd for `do_action('stride/` but missed `$
 
 **Two plans, sequential. Do cascade first — phased-choices needs it.**
 
-### Plan 1: Cascade-enrollment — `plans/2026-05-20-trajectory-cascade-enrollment.md`
+### Plan 1: Cascade-enrollment ✅ DONE (2026-05-20, verified in code 2026-06-09)
 
-All design decisions locked in with Stefan 2026-05-20 (see plan's "Decisions" table + `memory/STATE.md`).
+All 15 steps shipped in `09c28ab9` (schema + repo queries) + `b712c8c6` (steps 4–15).
+Verified against current code 2026-06-09: backfill CLI exists (`TrajectoryService` registers
+`stride trajectory backfill-cascade`), PartnerAPI maps `edition_full → 409` + nests
+`child_registrations`, `tests/manual/shake-cascade.php` exists, `TrajectoryCascadeCest` exists.
+This checklist was stale — the code shipped the same day the plan was written.
 
-Execution steps (each independently verifiable):
-- [ ] **Step 1** — Schema: add `parent_registration_id BIGINT UNSIGNED NULL` + `INDEX idx_parent` to `RegistrationTable.php`. Verify via `DESCRIBE wp_vad_registrations`.
-- [ ] Step 2 — `RegistrationRepository::findByParent()` + `cancelChildren()` + allow `parent_registration_id` in create/update whitelist.
-- [ ] Step 3 — `TrajectoryCascadeService` skeleton, register in `plugin-config.php`.
-- [ ] Step 4 — `cascadeOnEnrollment()` for mandatory editions with edition_id.
-- [ ] Step 5 — `cascadeOnEnrollment()` pure-LD branch: `grantAccess()` + user-meta `_stride_trajectory_courses`.
-- [ ] Step 6 — `cascadeOnSelection()` with capacity check + add/remove children + `maybeCreateChildQuote()` for €0-trajectory + paid-child case.
-- [ ] Step 7 — `cascadeOnCancellation()` cohort variant (cascade-cancel + revoke LD access). Self-paced is no-op.
-- [ ] Step 8 — `cascadeOnStatusChange()` for cohort.
-- [ ] Step 9 — Wire into `TrajectorySelection::enroll()` + `setSelections()`. Children get `completion_tasks = []` (skip per-edition requirements).
-- [ ] Step 10 — Wire into `EnrollmentService::cancel()` + status-change paths.
-- [ ] Step 11 — Read-path updates: `UserDashboardService` skips children in flat list, renders pure-LD from user-meta. `TrajectoryDashboardService` reads from children for status.
-- [ ] Step 12 — `wp stride trajectory backfill-cascade` CLI for existing enrollments. Dry-run mode first.
-- [ ] Step 13 — PartnerAPI: 409 on `edition_full`, nested children in responses. Update API doc.
-- [ ] Step 14 — Manual shake-out via `tests/manual/shake-cascade.php`.
-- [ ] Step 15 — Acceptance test (Cest) — one cohort + one self-paced flow.
+Known follow-up (post-launch, lives in phased-choices plan): pure-LD electives without
+edition_id are not selectable/cascadable (`memory/project_pure_ld_electives_gap`).
 
 ### Plan 2: Phased choices — `plans/2026-05-20-trajectory-phased-choices.md`
 
@@ -161,27 +163,25 @@ Stride codebase is feature-complete. User is starting deep testing in the coming
 
 Full reports: `tasks/audit-2026-05-14-security.md` + `tasks/audit-2026-05-14-performance.md` (commit `5a3b4490`).
 
-**Recommended fixes BEFORE testers start** — otherwise they'll re-discover them and re-runs cost more than the fixes:
+**All top fixes DONE & re-verified in current code 2026-06-09** (read-only review agents, file:line evidence):
 
-#### Security (top 4 of 19)
-1. 🚨 **C3 — Colleague-enrolment PII overwrite** — `EnrollmentService.php:591-657`. Agent says: logged-in user can enrol "a colleague" and overwrite that colleague's user-meta (national_id, billing_*, invoice_email). **Verify the code path against the agent's reading first.** If true: don't call `updateUserProfile($participantId, ...)` for already-existing colleagues. Highest exploitability.
-2. 🚨 **C1 — CSV injection in admin export** — `AdminAPIController::exportRegistrations:3040-3074`. Prefix any cell starting with `=+-@\t\r` with `'`. 5-minute fix.
-3. ⚠ **H1 — Anonymisation gate weak** — `UserLifecycleService::handleAdminAnonymisePost:282-303`. Add `current_user_can('stride_manage')`. Block users with Stride roles.
-4. ⚠ **H3 — Impersonation audit writes wrong columns** — `AdminAPIController:2865-2878`. Schema uses `entity_id`, code writes `subject_id`. Silent log loss.
+- ✅ C3 colleague-PII overwrite — guard at `EnrollmentService.php:730-799` (existing colleagues never get `updateUserProfile()` with PII)
+- ✅ C1 CSV injection — `sanitizeCsvCell()` at `AdminAPIController:3498-3507`
+- ✅ H1 anonymisation gate — `stride_manage` checks at `UserLifecycleService:182,301`
+- ✅ H2/H3 impersonation — caller≠target check + symmetric audit via `AuditService::record()` (`b91fbbdf`)
+- ✅ Perf H1–H4 — async mail (`StrideMailBridge:85-86`), batched searchUsers/getUserDetail, taxonomy CAST (`AdminAPIController:1175`)
 
-#### Performance (top 4 of 17)
-1. 🚨 **H1 perf — Enrollment is 1-3s synchronous** — `QuoteService.php:408` fires `regenerate_pdf` eagerly + `StrideMailBridge` sends 2 SMTP synchronously. Drop the eager render (`resolveForEmail()` lazy-renders anyway); push mails to `wp_schedule_single_event`. Biggest UX risk under real SMTP latency.
-2. ⚠ **H2 perf — `searchUsers` N+1** — 20 extra queries per admin keystroke. Batch with `update_meta_cache` + grouped count query.
-3. ⚠ **H3 perf — `getUserDetail` quotes N+1** — ~100 queries. Mirror the existing batched `getQuotes()` pattern.
-4. ⚠ **H4 perf — Taxonomy join cast** — varchar→bigint kills indexes. One-line `CAST(... AS UNSIGNED)`.
+Deferred MEDIUM/LOW from the audit: launch-surface subset (H4, M1, M3, M5, M6, L3) being fixed in **hardening sprint Phase 2** (top of this file); the rest stays post-launch.
 
 ### Deploy-time tasks (NOT code changes)
 
+- ⚠ **Create/verify deploy tooling** — `site.yml` says `deploy.method: makefile` + `make deploy-staging`, but no Makefile exists in the repo. Ploi git-pull or a deploy script must exist before anything can ship.
 - Deactivate `netdust-lti` plugin in WP admin
 - Configure production SMTP credentials in Fluent SMTP (currently routing to mailpit)
 - Set `stride_admin_email` option to real admin inbox
 - Recreate the 6 footer pages on staging + prod (currently dev-DB only — see commit `d85c7eba`)
-- Decide whether to hide Trajectory admin UI
+- Trajectory admin UI stays visible for v1 (standing decision 2026-05-13)
+- `web/app/mu-plugins/test-login-helper.php` is untracked (local-only) — after Phase-2 hardening it gets tracked; verify it's inert on staging/prod (`WP_ENV` guard + no env secret set)
 
 ### Post-launch backlog (NOT for v1)
 
