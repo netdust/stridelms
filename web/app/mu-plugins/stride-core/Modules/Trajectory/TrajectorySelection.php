@@ -213,26 +213,46 @@ final class TrajectorySelection
      */
     public function validateSelections(int $trajectoryId, array $editionIds): true|WP_Error
     {
+        $editionIds = array_map('intval', $editionIds);
         $electiveGroups = $this->trajectoryRepo->getElectiveGroups($trajectoryId);
 
-        foreach ($electiveGroups as $groupName => $courses) {
-            $courseIds = array_column($courses, 'course_id');
-            $pickCount = $courses[0]['pick_count'] ?? 1;
+        foreach ($electiveGroups as $group) {
+            $groupName = (string) ($group['name'] ?? 'Keuze');
+            // `required` carries the group's min_choices; unset/0 keeps the
+            // historic default of "pick exactly one".
+            $required = max(1, (int) ($group['required'] ?? 0));
 
-            // Count how many chosen from this group
-            $chosenInGroup = count(array_intersect($editionIds, $courseIds));
+            // Selections are edition ids — collect the group's edition-backed
+            // choices from each course post's attached trajectory_config.
+            $groupEditionIds = [];
+            foreach ($group['courses'] ?? [] as $coursePost) {
+                $config = $coursePost->trajectory_config ?? [];
+                $editionId = (int) ($config['edition_id'] ?? 0);
+                if ($editionId > 0) {
+                    $groupEditionIds[] = $editionId;
+                }
+            }
 
-            if ($chosenInGroup < $pickCount) {
+            // Pure-LD electives have no edition_id and are not selectable yet
+            // (deferred to phased choices) — a group with nothing selectable
+            // must not block the submission.
+            if ($groupEditionIds === []) {
+                continue;
+            }
+
+            $chosenInGroup = count(array_intersect($editionIds, $groupEditionIds));
+
+            if ($chosenInGroup < $required) {
                 return new WP_Error(
                     'incomplete_choices',
-                    sprintf('Group "%s" requires %d selection(s), got %d', $groupName, $pickCount, $chosenInGroup)
+                    sprintf('Group "%s" requires %d selection(s), got %d', $groupName, $required, $chosenInGroup)
                 );
             }
 
-            if ($chosenInGroup > $pickCount) {
+            if ($chosenInGroup > $required) {
                 return new WP_Error(
                     'too_many_choices',
-                    sprintf('Group "%s" allows %d selection(s), got %d', $groupName, $pickCount, $chosenInGroup)
+                    sprintf('Group "%s" allows %d selection(s), got %d', $groupName, $required, $chosenInGroup)
                 );
             }
         }
