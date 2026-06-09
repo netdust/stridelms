@@ -1,0 +1,448 @@
+/**
+ * VAD — Design Token Overrides
+ *
+ * "Deep navy on warm cream paper, terracotta as the single accent."
+ * Belgian NGO institutional aesthetic — structural, geometric, flat.
+ *
+ * Source: live extraction from vad.be (2026-05-19).
+ * Primary palette: #2F4A6D (navy) / #C96858 (terracotta) / #EAF2F2 (ice).
+ *
+ * Design principles:
+ *  - Square corners everywhere — no radius. VAD's signature is hard angles.
+ *  - Navy is everything: headings, body text, primary buttons, footer.
+ *  - Terracotta is the only accent — used sparingly for active states + CTAs.
+ *  - Diagonal "sliced" hero gradient is the one decorative motif.
+ *  - Per gotcha_learndash_css_skin: tokens at :root + hex format + hardcoded
+ *    overrides for LD's #235af3 surfaces.
+ *  - Per feedback_no_side_borders: bg shifts, not one-sided borders.
+ */
+
+:root {
+  /* ── Brand Colors — Navy + Terracotta ── */
+  --color-primary: 47 74 109;             /* #2F4A6D deep navy */
+  --color-primary-hover: 35 56 84;        /* #233854 darker navy */
+  --color-primary-subtle: 234 242 242;    /* #EAF2F2 ice-blue tint */
+  --color-primary-light: 173 192 211;     /* #ADC0D3 light navy wash */
+  --color-primary-dark: 25 41 64;         /* #192940 deepest navy */
+  --color-accent: 201 104 88;             /* #C96858 terracotta */
+  --color-accent-light: 240 213 207;      /* #F0D5CF soft terracotta tint */
+
+  /* ── Neutrals — Warm paper + navy ink ── */
+  --color-surface: 255 255 255;           /* #FFFFFF body bg */
+  --color-surface-alt: 248 247 242;       /* #F8F7F2 warm off-white */
+  --color-surface-card: 255 255 255;      /* #FFFFFF flat cards */
+  --color-border: 226 226 226;            /* #E2E2E2 neutral line */
+  --color-border-strong: 200 200 200;     /* #C8C8C8 stronger line */
+  --color-text: 47 74 109;                /* #2F4A6D navy as primary text */
+  --color-text-muted: 105 115 130;        /* #697382 muted slate */
+  --color-text-inverse: 255 255 255;
+
+  /* ── 5-tier surface ladder ── */
+  --color-surface-container: 248 247 242;        /* #F8F7F2 emphasised panels */
+  --color-surface-container-high: 234 242 242;   /* #EAF2F2 ice-blue panels */
+  --color-surface-container-highest: 226 226 226;/* #E2E2E2 overlays */
+  --color-secondary-container: 234 242 242;      /* ice-blue tint */
+  --color-tertiary: 201 104 88;                  /* terracotta as tertiary anchor */
+  --color-tertiary-light: 240 213 207;
+
+  /* ── Status Colors — VAD-aligned (no harsh greens) ── */
+  --color-success: 85 130 100;            /* #558264 muted forest (sits with navy) */
+  --color-warning: 201 145 58;            /* #C9913A warm ochre */
+  --color-error: 168 56 38;               /* #A83826 brick red */
+  --color-info: 47 74 109;                /* navy */
+
+  /* ── Badge Colors — VAD palette ── */
+  --color-badge-open-bg: 224 234 226;          /* muted forest tint */
+  --color-badge-open-text: 53 88 65;
+  --color-badge-few-bg: 248 230 196;           /* ochre tint */
+  --color-badge-few-text: 130 91 28;
+  --color-badge-full-bg: 240 213 207;          /* terracotta tint = "sold out" */
+  --color-badge-full-text: 159 70 55;
+  --color-badge-cancelled-bg: 232 232 232;
+  --color-badge-cancelled-text: 100 100 100;
+  --color-badge-online-bg: 234 242 242;        /* ice-blue */
+  --color-badge-online-text: 47 74 109;
+  --color-badge-free-bg: 224 234 226;
+  --color-badge-free-text: 53 88 65;
+
+  /* ── Typography ── */
+  --font-sans: 'Nunito Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-heading: 'Montserrat', 'Nunito Sans', system-ui, sans-serif;
+  --font-serif: Georgia, 'Times New Roman', serif;     /* unused — VAD has no serif */
+  --font-label: 'Nunito Sans', system-ui, sans-serif;  /* no monospace in VAD's stack */
+  --font-display-alt: 'Montserrat', 'Nunito Sans', sans-serif;
+
+  /* ── Spacing ── */
+  --space-section: 6rem;
+  --space-block: 3.5rem;
+  --space-element: 1.5rem;
+
+  /* ── Border Radius — VAD is geometric, square corners ── */
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+
+  /* ── Shadows — minimal, navy-tinted ── */
+  --shadow-xs: 0 1px 2px rgba(47, 74, 109, 0.06);
+  --shadow-sm: 0 2px 6px rgba(47, 74, 109, 0.08);
+  --shadow-md: 0 8px 20px -6px rgba(47, 74, 109, 0.10);
+  --shadow-lg: 0 20px 40px -12px rgba(47, 74, 109, 0.14);
+  --shadow-overlay: 0 24px 50px -14px rgba(47, 74, 109, 0.18);
+  --shadow-card: var(--shadow-xs);
+  --shadow-elevated: var(--shadow-sm);
+
+  /* ── Motion — slow, institutional ── */
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --duration-fast: 180ms;
+  --duration-normal: 320ms;
+
+  /* ── Brand utilities ── */
+  --vad-page-max: 1320px;
+  --vad-gutter: clamp(20px, 4vw, 56px);
+}
+
+/* ═══════════════════════════════════════════ Component overrides ═══════════════════════════════════════════ */
+
+/* ── Body baseline ── */
+body {
+  font-family: var(--font-sans);
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── Headings — Montserrat 600, navy ── */
+h1, h2, h3, h4, h5, h6,
+.font-heading {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  color: rgb(var(--color-primary));
+  letter-spacing: normal;
+}
+
+h1 { font-size: clamp(32px, 4.5vw, 42px); line-height: 1.2; }
+h2 { font-size: clamp(24px, 3vw, 32px);   line-height: 1.25; }
+h3 { font-size: clamp(20px, 2.4vw, 24px); line-height: 1.3; }
+
+/* ── Selection ── */
+::selection {
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-text-inverse));
+}
+
+/* ── Links inside prose ── */
+.prose-stride a:not([class]),
+.entry-content a:not([class]) {
+  color: rgb(var(--color-accent));
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+.prose-stride a:not([class]):hover,
+.entry-content a:not([class]):hover { color: rgb(var(--color-primary)); }
+
+/* ── Buttons — square, weighty, no radius ── */
+.btn-primary,
+.btn-secondary,
+.btn-accent,
+.btn-outline-dark,
+.btn-outline-light,
+.btn-ghost,
+.btn-danger {
+  border-radius: 0;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  transition: background var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out);
+}
+
+.btn-primary {
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-text-inverse));
+  border: 1px solid rgb(var(--color-primary));
+}
+.btn-primary:hover {
+  background: rgb(var(--color-primary-hover));
+  border-color: rgb(var(--color-primary-hover));
+}
+
+.btn-accent {
+  background: rgb(var(--color-accent));
+  color: rgb(var(--color-text-inverse));
+  border: 1px solid rgb(var(--color-accent));
+}
+.btn-accent:hover {
+  background: rgb(159 70 55);   /* deeper terracotta */
+  border-color: rgb(159 70 55);
+}
+
+.btn-secondary {
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+  border: 1px solid rgb(var(--color-border-strong));
+}
+.btn-secondary:hover {
+  background: rgb(var(--color-surface-alt));
+}
+
+.btn-outline-dark {
+  background: transparent;
+  color: rgb(var(--color-primary));
+  border: 1px solid rgb(var(--color-primary));
+}
+.btn-outline-dark:hover {
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-text-inverse));
+}
+
+.btn-outline-light {
+  background: transparent;
+  color: rgb(var(--color-text-inverse));
+  border: 1px solid rgba(255, 255, 255, 0.7);
+}
+.btn-outline-light:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: rgb(var(--color-primary));
+  border: 1px solid transparent;
+}
+.btn-ghost:hover {
+  background: rgb(var(--color-surface-alt));
+}
+
+.btn-sm { font-size: 13px; padding: 0.5rem 0.875rem; }
+.btn-lg { font-size: 16px; padding: 0.9rem 1.6rem; }
+
+/* ── Cards — flat, square, no rounded corners ── */
+.card,
+.card-bordered,
+.card-interactive,
+.dash-card,
+.dash-card-hero,
+.dash-card-interactive,
+.dash-panel {
+  background: rgb(var(--color-surface-card));
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 0;
+  box-shadow: var(--shadow-card);
+}
+.card-interactive:hover,
+.dash-card-interactive:hover {
+  border-color: rgb(var(--color-primary));
+  box-shadow: var(--shadow-md);
+}
+
+/* ── Hero / page header diagonal slice (VAD's signature motif) ── */
+.page-hero,
+.hero-banner,
+.bg-surface-alt:has(.page-header) {
+  background: linear-gradient(120deg,
+              rgb(var(--color-primary-subtle)) 70%,
+              rgb(var(--color-surface-alt)) 70%);
+}
+
+/* ── Form elements — square, navy on white ── */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="tel"],
+input[type="search"],
+input[type="number"],
+input[type="url"],
+input[type="date"],
+input[type="time"],
+select,
+textarea {
+  border-radius: 0;
+  border: 1px solid rgb(var(--color-border-strong));
+  font-family: var(--font-sans);
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid rgb(var(--color-primary));
+  outline-offset: -1px;
+  border-color: rgb(var(--color-primary));
+}
+
+/* ── Badges — square + tight ── */
+.badge,
+.status-badge,
+[class*="badge-"] {
+  border-radius: 0;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+/* ── Tables — minimal, navy headers ── */
+table thead th {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  color: rgb(var(--color-primary));
+  border-bottom: 2px solid rgb(var(--color-primary));
+}
+
+/* ── Tabs — underline-style active state, terracotta highlight ── */
+.tab-active,
+[aria-selected="true"].tab-link,
+.nav-tab.active {
+  color: rgb(var(--color-accent));
+  border-bottom-color: rgb(var(--color-accent));
+}
+
+/* ═══════════════════════════════════════════ LearnDash skin ═══════════════════════════════════════════ */
+
+/* Per gotcha_learndash_css_skin — apply at :root scope so focus-sidebar
+   (which lives outside .learndash-wrapper) also picks them up. LD uses
+   #235af3 hardcoded in ~50 rules — :root tokens won't override those.
+   Need direct selector matches with !important. */
+
+:root {
+  /* LD theme token overrides (hex format, not RGB triplets) */
+  --ld-color-system-body-text: #2F4A6D;
+  --ld-color-system-dark: #233854;
+  --ld-color-system-border: #E2E2E2;
+
+  /* Buttons */
+  --ld-color-button-bg: #2F4A6D;
+  --ld-color-button-bg-hover: #233854;
+  --ld-color-button: #FFFFFF;
+  --ld-color-button-secondary-border: #2F4A6D;
+
+  /* Links */
+  --ld-color-semantic-text-link: #C96858;
+  --ld-color-semantic-text-link-hover: #2F4A6D;
+
+  /* Primary brand alias */
+  --ld-color-brand-primary: #2F4A6D;
+
+  /* Typography */
+  --ld-typography-font-family: 'Nunito Sans', system-ui, sans-serif;
+}
+
+.learndash-wrapper,
+.ld-focus,
+.ld-focus-sidebar { font-family: var(--font-sans); }
+
+/* Focus mode background layers — LD hardcodes white in 5 places. */
+body.ld-in-focus-mode,
+body.ld-in-focus-mode .learndash-wrapper,
+.learndash-wrapper .ld-focus .ld-focus-main,
+.learndash-wrapper .ld-focus .ld-focus-main .ld-focus-content,
+.learndash-wrapper .ld-focus .ld-tabs-content,
+.learndash-wrapper .ld-focus .ld-tab-content {
+  background: rgb(var(--color-surface-alt)) !important;
+}
+
+.learndash-wrapper .ld-focus .ld-focus-header {
+  background: rgb(var(--color-surface)) !important;
+  border-bottom-color: rgb(var(--color-border)) !important;
+}
+
+.learndash-wrapper h1,
+.learndash-wrapper h2 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  letter-spacing: normal;
+  color: rgb(var(--color-primary));
+}
+
+.learndash-wrapper h1,
+.ld-focus h1 {
+  font-size: clamp(28px, 3vw, 36px);
+  line-height: 1.2;
+}
+
+/* Status icons — recolor completed checks to muted forest (matches navy palette) */
+.learndash-wrapper .ld-status-complete,
+.learndash-wrapper .ld-status-icon-complete {
+  color: rgb(var(--color-success));
+}
+
+/* ── Hardcoded #235af3 overrides ─────────────────────────────────────────
+   LD's learndash.css ships ~50 rules with `color: #235af3` and
+   `background-color: #235af3` hardcoded. Override at the exact selectors. */
+
+/* Focus-mode sidebar header */
+.learndash-wrapper .ld-focus .ld-focus-sidebar .ld-course-navigation-heading {
+  background-color: rgb(var(--color-primary)) !important;
+}
+
+/* Sidebar toggle button */
+.learndash-wrapper .ld-focus .ld-focus-sidebar .ld-focus-sidebar-trigger .ld-icon {
+  background: rgb(var(--color-primary)) !important;
+}
+
+/* Current-lesson highlight in sidebar */
+.learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-item-preview-heading,
+.learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-title {
+  color: rgb(var(--color-accent)) !important;
+}
+.learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-item-preview-heading .ld-status-incomplete,
+.learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-title .ld-status-incomplete {
+  border-color: rgb(var(--color-accent)) !important;
+}
+
+/* "X% COMPLETE" label */
+.learndash-wrapper .ld-progress .ld-progress-percentage {
+  color: rgb(var(--color-primary)) !important;
+}
+
+/* .ld-primary-color utility */
+.learndash-wrapper .ld-primary-color,
+.learndash-wrapper .ld-primary-color-hover:hover {
+  color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-primary-background {
+  background-color: rgb(var(--color-primary)) !important;
+}
+
+/* Transparent buttons (Next Lesson, Mark Complete link) */
+.learndash-wrapper .ld-button.ld-button-transparent,
+.learndash-wrapper .ld-button.ld-button-transparent.ld-status-complete,
+.learndash-wrapper .learndash_mark_complete_button.ld-button-transparent,
+.learndash-wrapper #learndash_mark_complete_button.ld-button-transparent {
+  color: rgb(var(--color-accent)) !important;
+}
+.learndash-wrapper .ld-button.ld-button-transparent:hover,
+.learndash-wrapper .ld-button.ld-button-transparent:focus {
+  color: rgb(var(--color-primary)) !important;
+}
+
+/* Focus-header action links (top-right top bar) */
+.learndash-wrapper .ld-focus .ld-focus-header .ld-content-action a,
+.learndash-wrapper .ld-focus .ld-focus-header .ld-content-action .ld-button,
+.learndash-wrapper .ld-focus-header a,
+.learndash-wrapper .ld-focus-header a:visited,
+.learndash-wrapper .ld-focus-header button {
+  color: rgb(var(--color-accent)) !important;
+}
+.learndash-wrapper .ld-focus-header a:hover,
+.learndash-wrapper .ld-focus-header button:hover {
+  color: rgb(var(--color-primary)) !important;
+}
+
+/* LD buttons — square + navy */
+.learndash-wrapper .ld-button {
+  border-radius: 0 !important;
+  font-family: var(--font-sans) !important;
+  font-weight: 700 !important;
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
