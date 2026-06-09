@@ -7,11 +7,13 @@
  * /opleidingen/<course-slug>/ — owned by LD, decorated by Stride. Branches on
  * active-edition presence:
  *
- *  - Has active edition(s) → editions list wins. Edition CTA(s) flow through
- *    /edities/<edition-slug>/ → /edities/<edition-slug>/inschrijving/.
- *  - 0 editions, online format → Stride self-enroll CTA on the sidebar.
+ *  - Online, active edition(s) → sidebar CTA targets the primary edition
+ *    (status-gated): /edities/<edition-slug>/inschrijving/, or
+ *    interest/waitlist per OfferingStatus.
+ *  - Online, 0 editions → Stride self-enroll CTA on the sidebar.
  *    "?enroll=1" handler grants LD access (free) + bounces to first lesson.
- *  - 0 editions, klassikaal → info only, "Geen actieve edities" notice.
+ *  - Klassikaal, active edition(s) → editions list wins.
+ *  - Klassikaal, 0 editions → info only, "Geen actieve edities" notice.
  *
  * See tasks/url-structure-rework.md for the full decision rules.
  *
@@ -23,6 +25,8 @@ declare(strict_types=1);
 defined('ABSPATH') || exit;
 
 use Stride\Modules\Edition\EditionRepository;
+use Stride\Modules\Edition\EditionService;
+use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Integrations\LearnDash\LearnDashHelper;
 
 $course_id = get_the_ID();
@@ -33,8 +37,41 @@ $editions = $editionRepository->findByCourse($course_id);
 $active_edition_ids = $editionRepository->findActiveIdsByCourse($course_id);
 $has_active_edition = !empty($active_edition_ids);
 
-// Show the self-enroll sidebar only for pure-LD online courses (no active edition).
-$show_self_enroll_sidebar = $is_online && !$has_active_edition;
+// Online courses always get the CTA sidebar. Pure-LD courses self-enroll;
+// edition-backed online courses route to the primary edition (previously
+// this case rendered NO CTA at all — info page with no path to enroll).
+$show_online_sidebar = $is_online;
+
+$online_sidebar_args = [
+    'course_id'              => $course_id,
+    'enrollment_url'         => '',
+    'user_enrolled'          => false,
+    'edition_price'          => null,
+    'primary_edition_id'     => 0,
+    'primary_edition_status' => null,
+];
+
+if ($is_online && $has_active_edition) {
+    $editionService   = ntdst_get(EditionService::class);
+    $primaryEditionId = (int) $active_edition_ids[0];
+    $primaryStatus    = $editionService->getEffectiveStatus($primaryEditionId);
+    $viewerId         = get_current_user_id();
+
+    $registration = $viewerId
+        ? ntdst_get(RegistrationRepository::class)->findByUserAndEdition($viewerId, $primaryEditionId)
+        : null;
+
+    $online_sidebar_args = [
+        'course_id'              => $course_id,
+        'enrollment_url'         => $primaryStatus->allowsEnrollment()
+            ? stride_enrollment_url($primaryEditionId)
+            : '',
+        'user_enrolled'          => $registration !== null && ($registration->status ?? '') !== 'cancelled',
+        'edition_price'          => $editionService->getPrice($primaryEditionId, $viewerId ?: null),
+        'primary_edition_id'     => $primaryEditionId,
+        'primary_edition_status' => $primaryStatus,
+    ];
+}
 
 $breadcrumbs = [
     ['label' => __('Opleidingen', 'stridence'), 'url' => get_post_type_archive_link('sfwd-courses')],
@@ -61,29 +98,22 @@ get_header();
     ?>
 
     <div class="container py-8 lg:py-12">
-        <?php if ($show_self_enroll_sidebar) : ?>
-            <!-- Pure-LD online course: two-column with self-enroll sidebar -->
+        <?php if ($show_online_sidebar) : ?>
+            <!-- Online course: two-column with CTA sidebar (self-enroll for
+                 pure-LD, primary-edition CTA when an active edition exists) -->
             <div class="grid lg:grid-cols-3 gap-8 lg:gap-12">
                 <div class="lg:col-span-2 space-y-12">
                     <?php
                     stridence_template_part('templates/course/content', null, [
                         'course_id'     => $course_id,
                         'is_online'     => true,
-                        'show_editions' => false,
+                        'editions'      => $editions,
+                        'show_editions' => $has_active_edition,
                     ]);
                     ?>
                 </div>
                 <div class="lg:col-span-1">
-                    <?php
-                    stridence_template_part('templates/course/sidebar-online', null, [
-                        'course_id'              => $course_id,
-                        'enrollment_url'         => '',
-                        'user_enrolled'          => false,
-                        'edition_price'          => null,
-                        'primary_edition_id'     => 0,
-                        'primary_edition_status' => null,
-                    ]);
-                    ?>
+                    <?php stridence_template_part('templates/course/sidebar-online', null, $online_sidebar_args); ?>
                 </div>
             </div>
         <?php else : ?>
@@ -113,16 +143,11 @@ get_header();
         <?php endif; ?>
     </div>
 
-    <?php if ($show_self_enroll_sidebar) : ?>
+    <?php if ($show_online_sidebar) : ?>
         <?php
-        stridence_template_part('templates/course/mobile-cta', null, [
-            'course_id'              => $course_id,
-            'is_online'              => true,
-            'enrollment_url'         => '',
-            'user_enrolled'          => false,
-            'primary_edition_id'     => 0,
-            'primary_edition_status' => null,
-        ]);
+        stridence_template_part('templates/course/mobile-cta', null, array_merge($online_sidebar_args, [
+            'is_online' => true,
+        ]));
         ?>
     <?php endif; ?>
 </article>

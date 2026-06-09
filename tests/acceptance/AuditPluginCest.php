@@ -24,7 +24,7 @@ class AuditPluginCest
     public function auditLogPageLoads(AcceptanceTester $I): void
     {
         $I->wantTo('verify the Audit Log admin page loads without errors');
-        $I->loginAsUserId($this->adminId, '/wp/wp-admin/tools.php?page=ntdst-audit-log');
+        $I->loginAsUserId($this->adminId, '/wp/wp-admin/admin.php?page=ntdst-audit-log');
         $I->see('Audit Log');
         $I->seeElement('.ntdst-app');
         $I->seeElement('.ntdst-sidebar');
@@ -34,7 +34,7 @@ class AuditPluginCest
     public function auditLogShowsEntries(AcceptanceTester $I): void
     {
         $I->wantTo('verify the Audit Log table shows data after Alpine loads');
-        $I->loginAsUserId($this->adminId, '/wp/wp-admin/tools.php?page=ntdst-audit-log');
+        $I->loginAsUserId($this->adminId, '/wp/wp-admin/admin.php?page=ntdst-audit-log');
         $I->see('Audit Log');
 
         // Wait for Alpine.js to render table rows
@@ -45,7 +45,7 @@ class AuditPluginCest
     public function auditLogHasFilterControls(AcceptanceTester $I): void
     {
         $I->wantTo('verify the Audit Log has date and entity type filter controls');
-        $I->loginAsUserId($this->adminId, '/wp/wp-admin/tools.php?page=ntdst-audit-log');
+        $I->loginAsUserId($this->adminId, '/wp/wp-admin/admin.php?page=ntdst-audit-log');
         $I->see('Audit Log');
 
         // Filter form elements
@@ -58,7 +58,7 @@ class AuditPluginCest
     public function auditLogHasExportTab(AcceptanceTester $I): void
     {
         $I->wantTo('verify the Export tab exists in the sidebar');
-        $I->loginAsUserId($this->adminId, '/wp/wp-admin/tools.php?page=ntdst-audit-log');
+        $I->loginAsUserId($this->adminId, '/wp/wp-admin/admin.php?page=ntdst-audit-log');
         $I->see('Export', '.ntdst-sidebar');
     }
 
@@ -138,7 +138,7 @@ class AuditPluginCest
     {
         $I->wantTo('verify non-admin users cannot access the Audit Log page');
         // Navigate without logging in
-        $I->amOnPage('/wp/wp-admin/tools.php?page=ntdst-audit-log');
+        $I->amOnPage('/wp/wp-admin/admin.php?page=ntdst-audit-log');
         // Should redirect to login or show forbidden
         $I->dontSee('Audit Log', 'h1');
     }

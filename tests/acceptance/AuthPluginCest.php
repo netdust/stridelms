@@ -12,6 +12,17 @@ use Tests\Support\AcceptanceTester;
  */
 class AuthPluginCest
 {
+    public function _before(AcceptanceTester $I): void
+    {
+        // Rate-limit counters live in transients and persist across suite
+        // runs — saturated register/login counters from a previous run would
+        // block this run's attempts with 'rate_limited' instead of success.
+        $I->dontHaveInDatabase(
+            $I->grabPrefixedTableNameFor('options'),
+            ['option_name like' => '_transient%ntdst_rate_%']
+        );
+    }
+
     // -------------------------------------------------------------------------
     // Login Page Tests
     // -------------------------------------------------------------------------
@@ -91,23 +102,9 @@ class AuthPluginCest
         // Wait for Alpine.js to initialize
         $I->waitForElement('input[type="email"]', 5);
 
-        // Switch to magic link mode if password form is showing
-        // The link text contains "email link" — click it to toggle mode
-        $magicLinkToggle = $I->grabMultiple('a', 'text');
-        $I->executeJS("
-            const links = document.querySelectorAll('a');
-            for (const link of links) {
-                if (link.textContent.includes('email link')) {
-                    link.click();
-                    break;
-                }
-            }
-        ");
-
-        // Wait for magic link form to appear
-        $I->waitForElement('#email-magic', 5);
-
-        // Fill the magic link email and submit via Alpine component
+        // Drive the Alpine component directly — works whether the page is in
+        // magic-only mode (current config: enable_password=false, field
+        // id="email") or dual mode with a toggle (field id="email-magic").
         $I->executeJS("
             const container = document.querySelector('[x-data]');
             const comp = Alpine.\$data(container);

@@ -261,6 +261,12 @@ class TrajectoryCascadeCest
             'post_date_gmt' => gmdate('Y-m-d H:i:s'),
             'post_content' => '',
             'post_title' => $title,
+            // wp_posts has NOT NULL text columns without defaults — strict
+            // sql_mode rejects inserts that omit them.
+            'post_excerpt' => '',
+            'to_ping' => '',
+            'pinged' => '',
+            'post_content_filtered' => '',
             'post_status' => 'publish',
             'comment_status' => 'closed',
             'ping_status' => 'closed',

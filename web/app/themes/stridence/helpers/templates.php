@@ -249,6 +249,7 @@ function stridence_build_course_card_args_from_enrollment(array $enrollment, boo
 
     return [
         'course_id'    => $courseId,
+        'edition_id'   => (int) ($enrollment['edition_id'] ?? 0),
         'course_title' => $courseTitle,
         'thumbnail_id' => $thumbnailId ?: null,
         'type'         => $isOnline ? 'online' : 'edition',

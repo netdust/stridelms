@@ -20,6 +20,7 @@ defined('ABSPATH') || exit;
 $args = $args ?? [];
 
 $courseId    = (int) ($args['course_id'] ?? 0);
+$editionId   = (int) ($args['edition_id'] ?? 0);
 $courseTitle = (string) ($args['course_title'] ?? '');
 $thumbnailId = $args['thumbnail_id'] ?? null;
 $type        = (string) ($args['type'] ?? 'public');
@@ -53,7 +54,10 @@ $pillToneClasses = [
 ];
 $pillClass = $statusPill ? ($pillToneClasses[$statusPill['tone'] ?? 'muted'] ?? $pillToneClasses['muted']) : '';
 ?>
-<div class="card" x-data="expandable(<?php echo $initialOpen ? 'true' : 'false'; ?>)">
+<div class="card"
+     x-data="expandable(<?php echo $initialOpen ? 'true' : 'false'; ?>)"
+     <?php if ($courseId) : ?>data-course-id="<?php echo (int) $courseId; ?>"<?php endif; ?>
+     <?php if ($editionId) : ?>data-edition-id="<?php echo (int) $editionId; ?>"<?php endif; ?>>
     <button type="button"
             class="w-full p-4 flex items-center gap-4 text-left"
             @click="toggle()">
