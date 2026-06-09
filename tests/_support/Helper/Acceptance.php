@@ -60,7 +60,7 @@ class Acceptance extends Module
     {
         $db = $this->getModule('WPDb');
         $rows = $db->grabColumnFromDatabase(
-            'stride_postmeta',
+            $db->grabPrefixedTableNameFor('postmeta'),
             'meta_value',
             ['meta_key' => '_ntdst_edition_id']
         );
@@ -71,7 +71,7 @@ class Acceptance extends Module
         foreach ($counts as $editionId => $count) {
             if ($count >= $minSessions) {
                 // Verify the edition is published
-                $exists = (int) $db->grabFromDatabase('stride_posts', 'ID', [
+                $exists = (int) $db->grabFromDatabase($db->grabPrefixedTableNameFor('posts'), 'ID', [
                     'ID'          => $editionId,
                     'post_type'   => 'vad_edition',
                     'post_status' => 'publish',
@@ -96,10 +96,10 @@ class Acceptance extends Module
     {
         $db = $this->getModule('WPDb');
 
-        $userIds = array_flip(array_map('intval', $db->grabColumnFromDatabase('stride_users', 'ID')));
+        $userIds = array_flip(array_map('intval', $db->grabColumnFromDatabase($db->grabPrefixedTableNameFor('users'), 'ID')));
 
         // Load (edition_id, user_id) pairs together so we can correlate per-row.
-        $regs = $db->grabAllFromDatabase('stride_vad_registrations', 'edition_id, user_id', []);
+        $regs = $db->grabAllFromDatabase($db->grabPrefixedTableNameFor('vad_registrations'), 'edition_id, user_id', []);
 
         $counts = [];
         foreach ($regs as $r) {
@@ -112,7 +112,7 @@ class Acceptance extends Module
         arsort($counts);
 
         foreach (array_keys($counts) as $editionId) {
-            $exists = (int) $db->grabFromDatabase('stride_posts', 'ID', [
+            $exists = (int) $db->grabFromDatabase($db->grabPrefixedTableNameFor('posts'), 'ID', [
                 'ID'          => $editionId,
                 'post_type'   => 'vad_edition',
                 'post_status' => 'publish',
@@ -123,6 +123,38 @@ class Acceptance extends Module
         }
 
         return 0;
+    }
+
+    /**
+     * Resolve a usable administrator account without assuming a login name.
+     *
+     * Prefers the seeded `seed_admin` (scripts/seed.php); falls back to the
+     * lowest-ID user holding the administrator capability. Returns 0 when the
+     * database has no administrator at all.
+     */
+    public function grabAdminUserId(): int
+    {
+        $db = $this->getModule('WPDb');
+
+        $seedAdmin = $db->grabFromDatabase(
+            $db->grabPrefixedTableNameFor('users'),
+            'ID',
+            ['user_login' => 'seed_admin']
+        );
+        if ((int) $seedAdmin > 0) {
+            return (int) $seedAdmin;
+        }
+
+        $userId = $db->grabFromDatabase(
+            $db->grabPrefixedTableNameFor('usermeta'),
+            'user_id',
+            [
+                'meta_key' => $db->grabTablePrefix() . 'capabilities',
+                'meta_value like' => '%administrator%',
+            ]
+        );
+
+        return (int) $userId;
     }
 
     /**

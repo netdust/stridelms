@@ -14,7 +14,7 @@ class AuditPluginCest
 
     public function _before(AcceptanceTester $I): void
     {
-        $this->adminId = (int) $I->grabFromDatabase('stride_users', 'ID', ['user_login' => 'admin']);
+        $this->adminId = $I->grabAdminUserId();
     }
 
     // ---------------------------------------------------------------
@@ -69,14 +69,14 @@ class AuditPluginCest
     public function auditTableExists(AcceptanceTester $I): void
     {
         $I->wantTo('verify the audit_log table exists and has data');
-        $I->seeInDatabase('stride_audit_log', []);
+        $I->seeInDatabase($I->grabPrefixedTableNameFor('audit_log'), []);
     }
 
     public function auditRecordPreservesSlashInAction(AcceptanceTester $I): void
     {
         $I->wantTo('verify audit records preserve / in action names');
 
-        $I->haveInDatabase('stride_audit_log', [
+        $I->haveInDatabase($I->grabPrefixedTableNameFor('audit_log'), [
             'entity_type' => 'test',
             'entity_id' => 99999,
             'action' => 'test.stride/verify-slash',
@@ -86,14 +86,14 @@ class AuditPluginCest
             'created_at' => date('Y-m-d H:i:s'),
         ]);
 
-        $I->seeInDatabase('stride_audit_log', [
+        $I->seeInDatabase($I->grabPrefixedTableNameFor('audit_log'), [
             'entity_type' => 'test',
             'entity_id' => 99999,
             'action' => 'test.stride/verify-slash',
         ]);
 
         // Cleanup
-        $I->dontHaveInDatabase('stride_audit_log', [
+        $I->dontHaveInDatabase($I->grabPrefixedTableNameFor('audit_log'), [
             'entity_type' => 'test',
             'entity_id' => 99999,
         ]);
@@ -103,7 +103,7 @@ class AuditPluginCest
     {
         $I->wantTo('verify audit context is stored as valid JSON');
 
-        $I->haveInDatabase('stride_audit_log', [
+        $I->haveInDatabase($I->grabPrefixedTableNameFor('audit_log'), [
             'entity_type' => 'test',
             'entity_id' => 88888,
             'action' => 'test.json-check',
@@ -113,7 +113,7 @@ class AuditPluginCest
             'created_at' => date('Y-m-d H:i:s'),
         ]);
 
-        $context = $I->grabFromDatabase('stride_audit_log', 'context', [
+        $context = $I->grabFromDatabase($I->grabPrefixedTableNameFor('audit_log'), 'context', [
             'entity_type' => 'test',
             'entity_id' => 88888,
         ]);
@@ -124,7 +124,7 @@ class AuditPluginCest
         \PHPUnit\Framework\Assert::assertSame('value', $decoded['key']);
 
         // Cleanup
-        $I->dontHaveInDatabase('stride_audit_log', [
+        $I->dontHaveInDatabase($I->grabPrefixedTableNameFor('audit_log'), [
             'entity_type' => 'test',
             'entity_id' => 88888,
         ]);

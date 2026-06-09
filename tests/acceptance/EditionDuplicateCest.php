@@ -15,9 +15,9 @@ class EditionDuplicateCest
 
     public function _before(AcceptanceTester $I): void
     {
-        $this->adminId = (int) $I->grabFromDatabase('stride_users', 'ID', ['user_login' => 'admin']);
+        $this->adminId = $I->grabAdminUserId();
         if (!$this->adminId) {
-            $I->fail('Admin user not found in database');
+            throw new \RuntimeException('Admin user not found in database');
         }
         $I->loginAsUserId($this->adminId, '/wp/wp-admin/');
     }
@@ -25,7 +25,7 @@ class EditionDuplicateCest
     public function _after(AcceptanceTester $I): void
     {
         // Drop any "(kopie)" leftovers from this run.
-        $I->dontHaveInDatabase('stride_posts', [
+        $I->dontHaveInDatabase($I->grabPrefixedTableNameFor('posts'), [
             'post_type'       => 'vad_edition',
             'post_title LIKE' => '% (kopie)',
         ]);

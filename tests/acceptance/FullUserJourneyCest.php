@@ -19,7 +19,7 @@ use Tests\Support\AcceptanceTester;
  *
  * URLs:
  * - Registration: /registreren (ntdst-auth plugin)
- * - Enrollment: /vormingen/{slug}/inschrijving/ (route-based)
+ * - Enrollment: /edities/{slug}/inschrijving/ (route-based)
  * - Dashboard: /mijn-account/ (page template)
  * - Profile: /mijn-account/?tab=profiel
  * - Quotes: /mijn-account/?tab=offertes
@@ -201,7 +201,7 @@ class FullUserJourneyCest
         $I->activateUserById($userId, '/aanmelden/');
 
         // Verify activation worked
-        $I->seeInDatabase('stride_usermeta', [
+        $I->seeInDatabase($I->grabPrefixedTableNameFor('usermeta'), [
             'user_id' => $userId,
             'meta_key' => 'ntdst_auth_activated',
             'meta_value' => '1',
@@ -230,7 +230,7 @@ class FullUserJourneyCest
         $I->haveUserMetaInDatabase($userId, 'first_name', $this->testFirstName);
         $I->haveUserMetaInDatabase($userId, 'last_name', $this->testLastName);
 
-        $enrollUrl = '/vormingen/' . $this->editionId . '/inschrijving/';
+        $enrollUrl = '/edities/' . $this->editionId . '/inschrijving/';
 
         // Login as activated user
         $I->loginAsUserId($userId, $enrollUrl);
@@ -270,7 +270,7 @@ class FullUserJourneyCest
         $I->dontSee('Fatal error');
 
         // Verify registration created
-        $I->seeInDatabase('stride_vad_registrations', [
+        $I->seeInDatabase($I->grabPrefixedTableNameFor('vad_registrations'), [
             'user_id' => $userId,
             'edition_id' => $this->editionId,
         ]);
@@ -297,7 +297,7 @@ class FullUserJourneyCest
         $I->haveUserMetaInDatabase($userId, 'ntdst_auth_activated', '1');
 
         // Create registration
-        $regId = $I->haveInDatabase('stride_vad_registrations', [
+        $regId = $I->haveInDatabase($I->grabPrefixedTableNameFor('vad_registrations'), [
             'user_id' => $userId,
             'edition_id' => $this->editionId,
             'status' => 'confirmed',
@@ -349,7 +349,7 @@ class FullUserJourneyCest
         $I->haveUserMetaInDatabase($userId, 'ntdst_auth_activated', '1');
 
         // Create confirmed registration
-        $regId = $I->haveInDatabase('stride_vad_registrations', [
+        $regId = $I->haveInDatabase($I->grabPrefixedTableNameFor('vad_registrations'), [
             'user_id' => $userId,
             'edition_id' => $this->editionId,
             'status' => 'confirmed',
@@ -361,7 +361,7 @@ class FullUserJourneyCest
         $I->haveUserMetaInDatabase($userId, 'course_' . $this->courseId . '_access_from', (string) time());
 
         // Simulate attendance marking for normal session
-        $I->haveInDatabase('stride_vad_attendance', [
+        $I->haveInDatabase($I->grabPrefixedTableNameFor('vad_attendance'), [
             'edition_id' => $this->editionId,
             'session_id' => $this->normalSessionId,
             'user_id' => $userId,
@@ -370,14 +370,14 @@ class FullUserJourneyCest
         ]);
 
         // Verify normal session attendance recorded
-        $I->seeInDatabase('stride_vad_attendance', [
+        $I->seeInDatabase($I->grabPrefixedTableNameFor('vad_attendance'), [
             'session_id' => $this->normalSessionId,
             'user_id' => $userId,
             'status' => 'present',
         ]);
 
         // Simulate attendance for opt-in session
-        $I->haveInDatabase('stride_vad_attendance', [
+        $I->haveInDatabase($I->grabPrefixedTableNameFor('vad_attendance'), [
             'edition_id' => $this->editionId,
             'session_id' => $this->optInSessionId,
             'user_id' => $userId,
@@ -386,7 +386,7 @@ class FullUserJourneyCest
         ]);
 
         // Verify opt-in session attendance recorded
-        $I->seeInDatabase('stride_vad_attendance', [
+        $I->seeInDatabase($I->grabPrefixedTableNameFor('vad_attendance'), [
             'session_id' => $this->optInSessionId,
             'user_id' => $userId,
             'status' => 'present',
@@ -419,7 +419,7 @@ class FullUserJourneyCest
         $I->haveUserMetaInDatabase($userId, 'ntdst_auth_activated', '1');
 
         // Create confirmed registration
-        $regId = $I->haveInDatabase('stride_vad_registrations', [
+        $regId = $I->haveInDatabase($I->grabPrefixedTableNameFor('vad_registrations'), [
             'user_id' => $userId,
             'edition_id' => $this->editionId,
             'status' => 'confirmed',
@@ -431,7 +431,7 @@ class FullUserJourneyCest
         $I->haveUserMetaInDatabase($userId, 'course_' . $this->courseId . '_access_from', (string) time());
 
         // Mark session as attended
-        $I->haveInDatabase('stride_vad_attendance', [
+        $I->haveInDatabase($I->grabPrefixedTableNameFor('vad_attendance'), [
             'edition_id' => $this->editionId,
             'session_id' => $this->normalSessionId,
             'user_id' => $userId,
@@ -450,7 +450,7 @@ class FullUserJourneyCest
         $I->dontSee('Fatal error');
 
         // Verify completion meta was set
-        $I->seeInDatabase('stride_usermeta', [
+        $I->seeInDatabase($I->grabPrefixedTableNameFor('usermeta'), [
             'user_id' => $userId,
             'meta_key' => 'course_completed_' . $this->courseId,
         ]);
@@ -493,7 +493,7 @@ class FullUserJourneyCest
         // STEP 2: Login and enroll in course
         // =====================================================================
 
-        $enrollUrl = '/vormingen/' . $this->editionId . '/inschrijving/';
+        $enrollUrl = '/edities/' . $this->editionId . '/inschrijving/';
         $I->loginAsUserId($userId, $enrollUrl);
         $I->waitForElement('form', 10);
 
@@ -523,7 +523,7 @@ class FullUserJourneyCest
         $I->wait(5);
 
         // Verify enrollment
-        $I->seeInDatabase('stride_vad_registrations', [
+        $I->seeInDatabase($I->grabPrefixedTableNameFor('vad_registrations'), [
             'user_id' => $userId,
             'edition_id' => $this->editionId,
         ]);
@@ -535,7 +535,7 @@ class FullUserJourneyCest
         // =====================================================================
 
         // Mark attendance for normal session
-        $I->haveInDatabase('stride_vad_attendance', [
+        $I->haveInDatabase($I->grabPrefixedTableNameFor('vad_attendance'), [
             'edition_id' => $this->editionId,
             'session_id' => $this->normalSessionId,
             'user_id' => $userId,
@@ -544,7 +544,7 @@ class FullUserJourneyCest
         ]);
 
         // Mark attendance for opt-in session
-        $I->haveInDatabase('stride_vad_attendance', [
+        $I->haveInDatabase($I->grabPrefixedTableNameFor('vad_attendance'), [
             'edition_id' => $this->editionId,
             'session_id' => $this->optInSessionId,
             'user_id' => $userId,
@@ -552,13 +552,13 @@ class FullUserJourneyCest
             'marked_at' => date('Y-m-d H:i:s'),
         ]);
 
-        $I->seeInDatabase('stride_vad_attendance', [
+        $I->seeInDatabase($I->grabPrefixedTableNameFor('vad_attendance'), [
             'session_id' => $this->normalSessionId,
             'user_id' => $userId,
             'status' => 'present',
         ]);
 
-        $I->seeInDatabase('stride_vad_attendance', [
+        $I->seeInDatabase($I->grabPrefixedTableNameFor('vad_attendance'), [
             'session_id' => $this->optInSessionId,
             'user_id' => $userId,
             'status' => 'present',
@@ -573,7 +573,7 @@ class FullUserJourneyCest
         $I->haveUserMetaInDatabase($userId, 'course_completed_' . $this->courseId, (string) time());
         $I->haveUserMetaInDatabase($userId, 'course_' . $this->courseId . '_access_from', (string) ($timestamp - 86400));
 
-        $I->seeInDatabase('stride_usermeta', [
+        $I->seeInDatabase($I->grabPrefixedTableNameFor('usermeta'), [
             'user_id' => $userId,
             'meta_key' => 'course_completed_' . $this->courseId,
         ]);

@@ -21,7 +21,7 @@ class TrajectoryCest
         $I->wantTo('verify trajectory detail course cards expand on click');
 
         // Find any published trajectory slug
-        $trajectoryId = (int) $I->grabFromDatabase('stride_posts', 'ID', [
+        $trajectoryId = (int) $I->grabFromDatabase($I->grabPrefixedTableNameFor('posts'), 'ID', [
             'post_type'   => 'vad_trajectory',
             'post_status' => 'publish',
         ]);
@@ -29,7 +29,7 @@ class TrajectoryCest
             $I->comment('No published trajectories — skipping trajectory acceptance check.');
             return;
         }
-        $slug = (string) $I->grabFromDatabase('stride_posts', 'post_name', ['ID' => $trajectoryId]);
+        $slug = (string) $I->grabFromDatabase($I->grabPrefixedTableNameFor('posts'), 'post_name', ['ID' => $trajectoryId]);
 
         $I->amOnPage('/trajecten/' . $slug . '/');
 

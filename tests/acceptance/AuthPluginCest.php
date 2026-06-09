@@ -142,7 +142,7 @@ class AuthPluginCest
         $I->wantTo('verify registration shows success message');
 
         // Clear rate limits to avoid being blocked by previous test runs
-        $I->dontHaveInDatabase('stride_options', ['option_name LIKE' => '%ntdst_auth_rate%']);
+        $I->dontHaveInDatabase($I->grabPrefixedTableNameFor('options'), ['option_name LIKE' => '%ntdst_auth_rate%']);
 
         $I->amOnPage('/registreren');
 
@@ -344,7 +344,7 @@ class AuthPluginCest
 
         // A rate limit transient should exist in the options table
         // Transient key pattern: _transient_ntdst_auth_rate_{md5('login_ip_' + ip)}
-        $I->seeInDatabase('stride_options', [
+        $I->seeInDatabase($I->grabPrefixedTableNameFor('options'), [
             'option_name LIKE' => '%ntdst_auth_rate%',
         ]);
     }
@@ -360,7 +360,7 @@ class AuthPluginCest
         $I->wantTo('verify registration attempt increments rate limit counter');
 
         // Clear any existing rate limit transients so this test isn't blocked
-        $I->dontHaveInDatabase('stride_options', ['option_name LIKE' => '%ntdst_auth_rate%']);
+        $I->dontHaveInDatabase($I->grabPrefixedTableNameFor('options'), ['option_name LIKE' => '%ntdst_auth_rate%']);
 
         $I->amOnPage('/registreren');
         $I->waitForElement('#email', 5);
@@ -392,7 +392,7 @@ class AuthPluginCest
         $I->waitForText('inbox', 10);
 
         // A rate limit transient should exist for registration
-        $I->seeInDatabase('stride_options', [
+        $I->seeInDatabase($I->grabPrefixedTableNameFor('options'), [
             'option_name LIKE' => '%ntdst_auth_rate%',
         ]);
     }

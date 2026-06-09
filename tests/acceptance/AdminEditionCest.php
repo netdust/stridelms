@@ -18,10 +18,10 @@ class AdminEditionCest
     public function _before(AcceptanceTester $I): void
     {
         // Get admin user ID
-        $this->adminId = (int) $I->grabFromDatabase('stride_users', 'ID', ['user_login' => 'admin']);
+        $this->adminId = $I->grabAdminUserId();
 
         if (!$this->adminId) {
-            $I->fail('Admin user not found in database');
+            throw new \RuntimeException('Admin user not found in database');
         }
 
         // Login as admin
@@ -38,11 +38,11 @@ class AdminEditionCest
      */
     public function _after(AcceptanceTester $I): void
     {
-        $I->dontHaveInDatabase('stride_posts', [
+        $I->dontHaveInDatabase($I->grabPrefixedTableNameFor('posts'), [
             'post_type'  => 'vad_session',
             'post_title' => '',
         ]);
-        $I->dontHaveInDatabase('stride_posts', [
+        $I->dontHaveInDatabase($I->grabPrefixedTableNameFor('posts'), [
             'post_type'        => 'vad_edition',
             'post_title LIKE'  => 'Test Edition %',
         ]);
@@ -76,7 +76,7 @@ class AdminEditionCest
         $editionId = $I->grabEditionWithMinSessions(2);
 
         if (!$editionId) {
-            $I->fail('No published edition with 2+ sessions found in seed data');
+            throw new \RuntimeException('No published edition with 2+ sessions found in seed data');
         }
 
         return $this->editionWithSessionsId = $editionId;
@@ -180,7 +180,7 @@ class AdminEditionCest
         $I->seeElement('.notice-success, #message.updated');
 
         // Verify in database
-        $I->seeInDatabase('stride_posts', [
+        $I->seeInDatabase($I->grabPrefixedTableNameFor('posts'), [
             'post_title' => $editionTitle,
             'post_type' => 'vad_edition',
             'post_status' => 'publish',
@@ -200,13 +200,13 @@ class AdminEditionCest
         $I->wantTo('edit an existing edition');
 
         // Get an existing edition from the database
-        $editionId = $I->grabFromDatabase('stride_posts', 'ID', [
+        $editionId = $I->grabFromDatabase($I->grabPrefixedTableNameFor('posts'), 'ID', [
             'post_type' => 'vad_edition',
             'post_status' => 'publish',
         ]);
 
         if (!$editionId) {
-            $I->fail('No published edition found in database');
+            throw new \RuntimeException('No published edition found in database');
         }
 
         // Go to edit page
@@ -233,13 +233,13 @@ class AdminEditionCest
         $I->wantTo('verify edition metaboxes render correctly');
 
         // Get an existing edition
-        $editionId = $I->grabFromDatabase('stride_posts', 'ID', [
+        $editionId = $I->grabFromDatabase($I->grabPrefixedTableNameFor('posts'), 'ID', [
             'post_type' => 'vad_edition',
             'post_status' => 'publish',
         ]);
 
         if (!$editionId) {
-            $I->fail('No published edition found in database');
+            throw new \RuntimeException('No published edition found in database');
         }
 
         $I->amOnPage('/wp/wp-admin/post.php?post=' . $editionId . '&action=edit');

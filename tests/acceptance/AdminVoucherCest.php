@@ -17,10 +17,10 @@ class AdminVoucherCest
     public function _before(AcceptanceTester $I): void
     {
         // Get admin user ID
-        $this->adminId = (int) $I->grabFromDatabase('stride_users', 'ID', ['user_login' => 'admin']);
+        $this->adminId = $I->grabAdminUserId();
 
         if (!$this->adminId) {
-            $I->fail('Admin user not found in database');
+            throw new \RuntimeException('Admin user not found in database');
         }
 
         // Login as admin
@@ -141,7 +141,7 @@ class AdminVoucherCest
         $I->wantTo('edit an existing voucher');
 
         // Get an existing voucher from database
-        $voucherId = $I->grabFromDatabase('stride_posts', 'ID', [
+        $voucherId = $I->grabFromDatabase($I->grabPrefixedTableNameFor('posts'), 'ID', [
             'post_type' => 'vad_voucher',
             'post_status' => 'publish',
         ]);
@@ -173,7 +173,7 @@ class AdminVoucherCest
         $I->wantTo('verify voucher metaboxes render correctly');
 
         // Get an existing voucher
-        $voucherId = $I->grabFromDatabase('stride_posts', 'ID', [
+        $voucherId = $I->grabFromDatabase($I->grabPrefixedTableNameFor('posts'), 'ID', [
             'post_type' => 'vad_voucher',
             'post_status' => 'publish',
         ]);

@@ -18,7 +18,7 @@ class AssistantPluginCest
 
     public function _before(AcceptanceTester $I): void
     {
-        $this->adminId = (int) $I->grabFromDatabase('stride_users', 'ID', ['user_login' => 'admin']);
+        $this->adminId = $I->grabAdminUserId();
     }
 
     // ---------------------------------------------------------------
@@ -46,7 +46,7 @@ class AssistantPluginCest
     {
         $I->wantTo('verify empty state shows when no messages');
         // Clear any existing conversation first
-        $I->dontHaveInDatabase('stride_options', ['option_name LIKE' => '%ntdst_assistant_conv_%']);
+        $I->dontHaveInDatabase($I->grabPrefixedTableNameFor('options'), ['option_name LIKE' => '%ntdst_assistant_conv_%']);
 
         $I->loginAsUserId($this->adminId, '/wp/wp-admin/admin.php?page=stride-assistant');
 
@@ -151,7 +151,7 @@ class AssistantPluginCest
         $I->wantTo('verify the Assistant menu requires edit_others_posts capability');
 
         // Find a subscriber user (or create test via DB)
-        $subscriberId = $I->grabFromDatabase('stride_users', 'ID', ['user_login' => 'seed_student1']);
+        $subscriberId = $I->grabFromDatabase($I->grabPrefixedTableNameFor('users'), 'ID', ['user_login' => 'seed_student1']);
 
         if ($subscriberId) {
             $I->loginAsUserId((int) $subscriberId, '/wp/wp-admin/admin.php?page=stride-assistant');
@@ -198,7 +198,7 @@ class AssistantPluginCest
         $I->wantTo('verify export directory has .htaccess protection');
 
         // Check if export dir exists (may not exist yet if no exports have run)
-        $uploadsDir = $I->grabFromDatabase('stride_options', 'option_value', ['option_name' => 'upload_path']);
+        $uploadsDir = $I->grabFromDatabase($I->grabPrefixedTableNameFor('options'), 'option_value', ['option_name' => 'upload_path']);
 
         // We can verify the ExportService creates .htaccess by checking the dir
         // If the dir exists from earlier tests, it should have .htaccess
@@ -212,12 +212,12 @@ class AssistantPluginCest
         $I->wantTo('verify export cleanup cron is scheduled');
 
         // The cron event should exist in the cron array
-        $I->seeInDatabase('stride_options', [
+        $I->seeInDatabase($I->grabPrefixedTableNameFor('options'), [
             'option_name' => 'cron',
         ]);
 
         // Grab the cron option and verify our hook exists
-        $cronOption = $I->grabFromDatabase('stride_options', 'option_value', ['option_name' => 'cron']);
+        $cronOption = $I->grabFromDatabase($I->grabPrefixedTableNameFor('options'), 'option_value', ['option_name' => 'cron']);
         \PHPUnit\Framework\Assert::assertStringContainsString(
             'ntdst_assistant_cleanup_exports',
             $cronOption,

@@ -18,17 +18,12 @@ class SmokeTestCest
     {
         $I->wantTo('verify admin dashboard loads for admin user');
 
-        // Get admin user ID (user ID 1 is typically admin)
-        $adminId = $I->grabFromDatabase('stride_users', 'ID', ['user_login' => 'admin']);
-
-        if ($adminId) {
-            $I->loginAsUserId((int) $adminId, '/wp/wp-admin/');
-            $I->see('Dashboard');
-        } else {
-            // If no admin user exists, skip this test
-            $I->comment('No admin user found - skipping admin dashboard test');
-            $I->amOnPage('/');
-            $I->seeElement('body');
+        $adminId = $I->grabAdminUserId();
+        if (!$adminId) {
+            throw new \RuntimeException('No administrator account found in database');
         }
+
+        $I->loginAsUserId($adminId, '/wp/wp-admin/');
+        $I->see('Dashboard');
     }
 }

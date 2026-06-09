@@ -28,7 +28,7 @@ class OnlineEnrollmentCest
     public function _before(AcceptanceTester $I): void
     {
         $this->courseData = $this->resolveSeedData($I);
-        $this->studentUserId = (int) $I->grabFromDatabase('stride_users', 'ID', ['user_login' => 'seed_student1']);
+        $this->studentUserId = (int) $I->grabFromDatabase($I->grabPrefixedTableNameFor('users'), 'ID', ['user_login' => 'seed_student1']);
 
         $this->cleanupRegistrations($I);
     }
@@ -41,7 +41,7 @@ class OnlineEnrollmentCest
     private function cleanupRegistrations(AcceptanceTester $I): void
     {
         foreach ($this->courseData as $scenario) {
-            $I->dontHaveInDatabase('stride_vad_registrations', [
+            $I->dontHaveInDatabase($I->grabPrefixedTableNameFor('vad_registrations'), [
                 'user_id'    => $this->studentUserId,
                 'edition_id' => $scenario['edition_id'],
             ]);
@@ -52,11 +52,11 @@ class OnlineEnrollmentCest
         // seed-data LD usermeta we must not touch.
         $minimalCourseId = $this->courseData['minimal']['course_id'] ?? 0;
         if ($minimalCourseId) {
-            $I->dontHaveInDatabase('stride_usermeta', [
+            $I->dontHaveInDatabase($I->grabPrefixedTableNameFor('usermeta'), [
                 'user_id'  => $this->studentUserId,
                 'meta_key' => 'course_' . $minimalCourseId . '_access_from',
             ]);
-            $I->dontHaveInDatabase('stride_usermeta', [
+            $I->dontHaveInDatabase($I->grabPrefixedTableNameFor('usermeta'), [
                 'user_id'  => $this->studentUserId,
                 'meta_key' => 'learndash_course_' . $minimalCourseId . '_enrolled_at',
             ]);
@@ -75,24 +75,24 @@ class OnlineEnrollmentCest
 
     private function findEditionByCourseTitlePrefix(AcceptanceTester $I, string $prefix): array
     {
-        $courseId = $I->grabFromDatabase('stride_posts', 'ID', [
+        $courseId = $I->grabFromDatabase($I->grabPrefixedTableNameFor('posts'), 'ID', [
             'post_type' => 'sfwd-courses',
             'post_status' => 'publish',
             'post_title LIKE' => $prefix . '%',
         ]);
 
-        $editionId = $I->grabFromDatabase('stride_postmeta', 'post_id', [
+        $editionId = $I->grabFromDatabase($I->grabPrefixedTableNameFor('postmeta'), 'post_id', [
             'meta_key' => '_ntdst_course_id',
             'meta_value' => $courseId,
         ]);
 
-        $slug = $I->grabFromDatabase('stride_posts', 'post_name', ['ID' => $editionId]);
+        $slug = $I->grabFromDatabase($I->grabPrefixedTableNameFor('posts'), 'post_name', ['ID' => $editionId]);
 
         return [
             'course_id' => (int) $courseId,
             'edition_id' => (int) $editionId,
             'slug' => $slug,
-            'enrollment_url' => '/vormingen/' . $editionId . '/inschrijving/',
+            'enrollment_url' => '/edities/' . $editionId . '/inschrijving/',
         ];
     }
 
@@ -186,7 +186,7 @@ class OnlineEnrollmentCest
         ");
         $I->wait(3);
 
-        $I->seeInDatabase('stride_vad_registrations', [
+        $I->seeInDatabase($I->grabPrefixedTableNameFor('vad_registrations'), [
             'edition_id' => $this->courseData['minimal']['edition_id'],
             'user_id' => $this->studentUserId,
         ]);
@@ -209,7 +209,7 @@ class OnlineEnrollmentCest
         $I->dontSee('Gegevens');
         $I->dontSee('Facturatie');
 
-        $I->seeInDatabase('stride_vad_registrations', [
+        $I->seeInDatabase($I->grabPrefixedTableNameFor('vad_registrations'), [
             'edition_id' => $this->courseData['direct']['edition_id'],
             'user_id' => $this->studentUserId,
         ]);
@@ -222,7 +222,7 @@ class OnlineEnrollmentCest
     {
         $I->wantTo('verify already enrolled user sees already-enrolled message');
 
-        $I->haveInDatabase('stride_vad_registrations', [
+        $I->haveInDatabase($I->grabPrefixedTableNameFor('vad_registrations'), [
             'user_id'         => $this->studentUserId,
             'edition_id'      => $this->courseData['default']['edition_id'],
             'status'          => 'confirmed',
@@ -245,7 +245,7 @@ class OnlineEnrollmentCest
     {
         $I->wantTo('verify closed online course shows Inschrijven CTA');
 
-        $courseSlug = $I->grabFromDatabase('stride_posts', 'post_name', [
+        $courseSlug = $I->grabFromDatabase($I->grabPrefixedTableNameFor('posts'), 'post_name', [
             'ID' => $this->courseData['default']['course_id'],
         ]);
 
@@ -263,7 +263,7 @@ class OnlineEnrollmentCest
     {
         $I->wantTo('verify webinar course page shows Webinar format label');
 
-        $courseSlug = $I->grabFromDatabase('stride_posts', 'post_name', [
+        $courseSlug = $I->grabFromDatabase($I->grabPrefixedTableNameFor('posts'), 'post_name', [
             'ID' => $this->courseData['webinar']['course_id'],
         ]);
 
@@ -284,7 +284,7 @@ class OnlineEnrollmentCest
     {
         $I->wantTo('verify online edition edit page hides sessions metabox');
 
-        $adminId = (int) $I->grabFromDatabase('stride_users', 'ID', ['user_login' => 'seed_admin']);
+        $adminId = (int) $I->grabFromDatabase($I->grabPrefixedTableNameFor('users'), 'ID', ['user_login' => 'seed_admin']);
         $I->loginAsUserId($adminId, '/wp/wp-admin/post.php?post=' . $this->courseData['minimal']['edition_id'] . '&action=edit');
 
         $I->waitForElement('#post', 10);
@@ -309,7 +309,7 @@ class OnlineEnrollmentCest
 
         $courseId = $this->courseData['minimal']['course_id'];
 
-        $I->haveInDatabase('stride_vad_registrations', [
+        $I->haveInDatabase($I->grabPrefixedTableNameFor('vad_registrations'), [
             'user_id'         => $this->studentUserId,
             'edition_id'      => $this->courseData['minimal']['edition_id'],
             'status'          => 'confirmed',

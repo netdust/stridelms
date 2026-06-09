@@ -18,7 +18,7 @@ use Tests\Support\AcceptanceTester;
  */
 class TrajectoryCascadeCest
 {
-    private const PREFIX = 'stride_';
+    private string $prefix = '';
 
     private int $studentId = 0;
     private int $parentRegistrationId = 0;
@@ -30,8 +30,9 @@ class TrajectoryCascadeCest
 
     public function _before(AcceptanceTester $I): void
     {
+        $this->prefix = $I->grabTablePrefix();
         $this->studentId = (int) $I->grabFromDatabase(
-            self::PREFIX . 'users',
+            $this->prefix . 'users',
             'ID',
             ['user_login' => 'seed_student1']
         );
@@ -108,7 +109,7 @@ class TrajectoryCascadeCest
         $I->waitForElement('section', 5);
 
         $childStatus = $I->grabFromDatabase(
-            self::PREFIX . 'vad_registrations',
+            $this->prefix . 'vad_registrations',
             'status',
             ['id' => $this->childRegistrationId]
         );
@@ -119,7 +120,7 @@ class TrajectoryCascadeCest
         );
 
         $childParent = $I->grabFromDatabase(
-            self::PREFIX . 'vad_registrations',
+            $this->prefix . 'vad_registrations',
             'parent_registration_id',
             ['id' => $this->childRegistrationId]
         );
@@ -135,21 +136,21 @@ class TrajectoryCascadeCest
     private function seedCohortCascadeState(AcceptanceTester $I): void
     {
         $this->trajectoryPostId = $this->insertPost($I, 'vad_trajectory', 'Cascade Cest Cohort');
-        $I->haveInDatabase(self::PREFIX . 'postmeta', [
+        $I->haveInDatabase($this->prefix . 'postmeta', [
             'post_id' => $this->trajectoryPostId,
             'meta_key' => '_ntdst_mode',
             'meta_value' => 'cohort',
         ]);
 
         $this->editionPostId = $this->insertPost($I, 'vad_edition', 'Cascade Cest Edition');
-        $I->haveInDatabase(self::PREFIX . 'postmeta', [
+        $I->haveInDatabase($this->prefix . 'postmeta', [
             'post_id' => $this->editionPostId,
             'meta_key' => '_ntdst_status',
             'meta_value' => 'open',
         ]);
 
         // Parent trajectory registration.
-        $this->parentRegistrationId = $I->haveInDatabase(self::PREFIX . 'vad_registrations', [
+        $this->parentRegistrationId = $I->haveInDatabase($this->prefix . 'vad_registrations', [
             'user_id' => $this->studentId,
             'trajectory_id' => $this->trajectoryPostId,
             'edition_id' => null,
@@ -160,7 +161,7 @@ class TrajectoryCascadeCest
         ]);
 
         // Cascade child on an edition, linked via parent_registration_id.
-        $this->childRegistrationId = $I->haveInDatabase(self::PREFIX . 'vad_registrations', [
+        $this->childRegistrationId = $I->haveInDatabase($this->prefix . 'vad_registrations', [
             'user_id' => $this->studentId,
             'trajectory_id' => null,
             'edition_id' => $this->editionPostId,
@@ -174,13 +175,13 @@ class TrajectoryCascadeCest
     private function seedDirectEnrollmentControl(AcceptanceTester $I): void
     {
         $this->directEditionPostId = $this->insertPost($I, 'vad_edition', 'Cascade Cest Direct Edition');
-        $I->haveInDatabase(self::PREFIX . 'postmeta', [
+        $I->haveInDatabase($this->prefix . 'postmeta', [
             'post_id' => $this->directEditionPostId,
             'meta_key' => '_ntdst_status',
             'meta_value' => 'open',
         ]);
 
-        $this->directRegistrationId = $I->haveInDatabase(self::PREFIX . 'vad_registrations', [
+        $this->directRegistrationId = $I->haveInDatabase($this->prefix . 'vad_registrations', [
             'user_id' => $this->studentId,
             'edition_id' => $this->directEditionPostId,
             'status' => 'confirmed',
@@ -192,21 +193,21 @@ class TrajectoryCascadeCest
     private function seedSelfPacedCancelledState(AcceptanceTester $I): void
     {
         $this->trajectoryPostId = $this->insertPost($I, 'vad_trajectory', 'Cascade Cest Self-Paced');
-        $I->haveInDatabase(self::PREFIX . 'postmeta', [
+        $I->haveInDatabase($this->prefix . 'postmeta', [
             'post_id' => $this->trajectoryPostId,
             'meta_key' => '_ntdst_mode',
             'meta_value' => 'self_paced',
         ]);
 
         $this->editionPostId = $this->insertPost($I, 'vad_edition', 'Self-Paced Cest Edition');
-        $I->haveInDatabase(self::PREFIX . 'postmeta', [
+        $I->haveInDatabase($this->prefix . 'postmeta', [
             'post_id' => $this->editionPostId,
             'meta_key' => '_ntdst_status',
             'meta_value' => 'open',
         ]);
 
         // Parent: cancelled
-        $this->parentRegistrationId = $I->haveInDatabase(self::PREFIX . 'vad_registrations', [
+        $this->parentRegistrationId = $I->haveInDatabase($this->prefix . 'vad_registrations', [
             'user_id' => $this->studentId,
             'trajectory_id' => $this->trajectoryPostId,
             'status' => 'cancelled',
@@ -216,7 +217,7 @@ class TrajectoryCascadeCest
         ]);
 
         // Child: still confirmed (self-paced no-op semantics)
-        $this->childRegistrationId = $I->haveInDatabase(self::PREFIX . 'vad_registrations', [
+        $this->childRegistrationId = $I->haveInDatabase($this->prefix . 'vad_registrations', [
             'user_id' => $this->studentId,
             'edition_id' => $this->editionPostId,
             'parent_registration_id' => $this->parentRegistrationId,
@@ -229,18 +230,18 @@ class TrajectoryCascadeCest
     private function cleanup(AcceptanceTester $I): void
     {
         if ($this->parentRegistrationId) {
-            $I->dontHaveInDatabase(self::PREFIX . 'vad_registrations', ['id' => $this->parentRegistrationId]);
+            $I->dontHaveInDatabase($this->prefix . 'vad_registrations', ['id' => $this->parentRegistrationId]);
         }
         if ($this->childRegistrationId) {
-            $I->dontHaveInDatabase(self::PREFIX . 'vad_registrations', ['id' => $this->childRegistrationId]);
+            $I->dontHaveInDatabase($this->prefix . 'vad_registrations', ['id' => $this->childRegistrationId]);
         }
         if ($this->directRegistrationId) {
-            $I->dontHaveInDatabase(self::PREFIX . 'vad_registrations', ['id' => $this->directRegistrationId]);
+            $I->dontHaveInDatabase($this->prefix . 'vad_registrations', ['id' => $this->directRegistrationId]);
         }
         foreach ([$this->trajectoryPostId, $this->editionPostId, $this->directEditionPostId] as $postId) {
             if ($postId > 0) {
-                $I->dontHaveInDatabase(self::PREFIX . 'postmeta', ['post_id' => $postId]);
-                $I->dontHaveInDatabase(self::PREFIX . 'posts', ['ID' => $postId]);
+                $I->dontHaveInDatabase($this->prefix . 'postmeta', ['post_id' => $postId]);
+                $I->dontHaveInDatabase($this->prefix . 'posts', ['ID' => $postId]);
             }
         }
 
@@ -254,7 +255,7 @@ class TrajectoryCascadeCest
 
     private function insertPost(AcceptanceTester $I, string $postType, string $title): int
     {
-        return (int) $I->haveInDatabase(self::PREFIX . 'posts', [
+        return (int) $I->haveInDatabase($this->prefix . 'posts', [
             'post_author' => 1,
             'post_date' => date('Y-m-d H:i:s'),
             'post_date_gmt' => gmdate('Y-m-d H:i:s'),
@@ -280,7 +281,7 @@ class TrajectoryCascadeCest
     private function countCardsForEdition(AcceptanceTester $I, int $editionId): int
     {
         return (int) $I->executeJS(
-            "return document.querySelectorAll('a[href*=\"edition_id={$editionId}\"], a[href*=\"/vormingen/\"][data-edition-id=\"{$editionId}\"], [data-edition-id=\"{$editionId}\"]').length;"
+            "return document.querySelectorAll('a[href*=\"edition_id={$editionId}\"], a[href*=\"/edities/\"][data-edition-id=\"{$editionId}\"], [data-edition-id=\"{$editionId}\"]').length;"
         );
     }
 }

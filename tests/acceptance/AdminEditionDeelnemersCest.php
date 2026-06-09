@@ -16,9 +16,9 @@ class AdminEditionDeelnemersCest
 
     public function _before(AcceptanceTester $I): void
     {
-        $this->adminId = (int) $I->grabFromDatabase('stride_users', 'ID', ['user_login' => 'admin']);
+        $this->adminId = $I->grabAdminUserId();
         if (!$this->adminId) {
-            $I->fail('Admin user not found in database');
+            throw new \RuntimeException('Admin user not found in database');
         }
         $I->loginAsUserId($this->adminId, '/wp/wp-admin/');
     }
@@ -30,7 +30,7 @@ class AdminEditionDeelnemersCest
         }
         $id = $I->grabEditionWithRegistrations();
         if (!$id) {
-            $I->fail('No published edition with registrations found in seed data');
+            throw new \RuntimeException('No published edition with registrations found in seed data');
         }
         return $this->editionId = $id;
     }

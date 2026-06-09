@@ -22,7 +22,7 @@ class DashboardCest
         $I->wantTo('verify the first course card auto-expands on the dashboard home');
 
         // Login as seed_student1 (existing seed user, multiple enrollments)
-        $userId = (int) $I->grabFromDatabase('stride_users', 'ID', ['user_login' => 'seed_student1']);
+        $userId = (int) $I->grabFromDatabase($I->grabPrefixedTableNameFor('users'), 'ID', ['user_login' => 'seed_student1']);
         $I->loginAsUserId($userId, '/mijn-account/');
 
         $I->waitForElement('section', 5);
@@ -71,7 +71,7 @@ class DashboardCest
     {
         $I->wantTo('verify the first card on inschrijvingen tab auto-expands');
 
-        $userId = (int) $I->grabFromDatabase('stride_users', 'ID', ['user_login' => 'seed_student1']);
+        $userId = (int) $I->grabFromDatabase($I->grabPrefixedTableNameFor('users'), 'ID', ['user_login' => 'seed_student1']);
         $I->loginAsUserId($userId, '/mijn-account/?tab=inschrijvingen');
 
         $I->waitForElement('section', 5);

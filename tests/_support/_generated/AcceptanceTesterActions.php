@@ -1,4 +1,4 @@
-<?php  //[STAMP] bade1ccbb1bdc624ccd51f6963f87b92
+<?php  //[STAMP] 35a1eaf529ed61824879ff89a864570a
 // phpcs:ignoreFile
 namespace Tests\Support\_generated;
 
@@ -8430,6 +8430,21 @@ trait AcceptanceTesterActions
      */
     public function grabEditionWithRegistrations(): int {
         return $this->getScenario()->runStep(new \Codeception\Step\Action('grabEditionWithRegistrations', func_get_args()));
+    }
+
+ 
+    /**
+     * [!] Method is generated. Documentation taken from corresponding module.
+     *
+     * Resolve a usable administrator account without assuming a login name.
+     *
+     * Prefers the seeded `seed_admin` (scripts/seed.php); falls back to the
+     * lowest-ID user holding the administrator capability. Returns 0 when the
+     * database has no administrator at all.
+     * @see \Tests\Support\Helper\Acceptance::grabAdminUserId()
+     */
+    public function grabAdminUserId(): int {
+        return $this->getScenario()->runStep(new \Codeception\Step\Action('grabAdminUserId', func_get_args()));
     }
 
  

@@ -9,7 +9,7 @@ use Tests\Support\AcceptanceTester;
  *
  * Tests the enrollment flow from user perspective.
  *
- * Enrollment uses route-based URLs: /vormingen/{slug}/inschrijving/
+ * Enrollment uses route-based URLs: /edities/{slug}/inschrijving/
  * The form is a multi-step Alpine.js wizard (enrollmentForm component):
  *   Step 0: Enrollment type selection (self/colleague/private)
  *   Step 1: Personal info (first_name, last_name, email, phone)
@@ -71,7 +71,7 @@ class EnrollmentCest
      */
     private function enrollmentUrl(): string
     {
-        return '/vormingen/' . $this->testEditionId . '/inschrijving/';
+        return '/edities/' . $this->testEditionId . '/inschrijving/';
     }
 
     // =========================================================================
@@ -170,7 +170,7 @@ class EnrollmentCest
         $I->waitForElement('form', 10);
 
         // Don't fill or submit anything — just verify no registration exists
-        $I->dontSeeInDatabase('stride_vad_registrations', [
+        $I->dontSeeInDatabase($I->grabPrefixedTableNameFor('vad_registrations'), [
             'user_id' => $this->testUserId,
             'edition_id' => $this->testEditionId,
         ]);
@@ -184,7 +184,7 @@ class EnrollmentCest
         $I->wantTo('see message when already enrolled');
 
         // Create existing registration
-        $I->haveInDatabase('stride_vad_registrations', [
+        $I->haveInDatabase($I->grabPrefixedTableNameFor('vad_registrations'), [
             'user_id' => $this->testUserId,
             'edition_id' => $this->testEditionId,
             'status' => 'confirmed',
@@ -296,7 +296,7 @@ class EnrollmentCest
         $I->dontSee('Fatal error');
 
         // Verify registration created in database
-        $I->seeInDatabase('stride_vad_registrations', [
+        $I->seeInDatabase($I->grabPrefixedTableNameFor('vad_registrations'), [
             'user_id' => $this->testUserId,
             'edition_id' => $this->testEditionId,
         ]);
@@ -341,7 +341,7 @@ class EnrollmentCest
     {
         $I->wantTo('see 404 when invalid edition slug is used');
 
-        $I->loginAsUserId($this->testUserId, '/vormingen/nonexistent-edition-99999/inschrijving/');
+        $I->loginAsUserId($this->testUserId, '/edities/nonexistent-edition-99999/inschrijving/');
 
         // EnrollmentRouter calls trigger404() for non-existent editions
         // The 404 template shows "Pagina niet gevonden" (Dutch)
