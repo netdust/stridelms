@@ -98,6 +98,7 @@
     "test:unit": "phpunit --testsuite Unit",
     "test:integration": "phpunit -c phpunit-integration.xml.dist",
     "test:coverage": "phpunit --coverage-html coverage",
-    "audit:drift": "bash scripts/audit-drift.sh"
+    "audit:drift": "bash scripts/audit-drift.sh",
+    "check:invariants": "bash scripts/check-invariants.sh"
   }
 }

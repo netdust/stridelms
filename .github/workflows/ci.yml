@@ -12,6 +12,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    # Architecture invariants — fails the build only on a blocking violation
+    # (INV-1: a REST route with no permission_callback). Advisory items are
+    # printed but do not fail. Pure bash/grep — runs once, before Composer.
+    # See ARCHITECTURE-INVARIANTS.md.
+    - name: Check architecture invariants
+      if: matrix.php-version == '8.3'
+      run: bash scripts/check-invariants.sh
+
     - name: Setup PHP
       uses: shivammathur/setup-php@v2
       with:

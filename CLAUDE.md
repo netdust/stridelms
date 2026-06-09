@@ -253,8 +253,8 @@ stride/
 │   │   │       ├── templates/
 │   │   │       │   ├── admin/          # Admin templates (dashboard, settings, handleiding)
 │   │   │       │   └── pdf/            # PDF templates (quote.php)
-│   │   │       ├── FieldRegistry.php   # Field name constants
 │   │   │       └── plugin-config.php   # Service registration
+│   │   │       # Field names: no central registry — each CPT's getFields() is the source of truth (see ARCHITECTURE-INVARIANTS.md INV-3)
 │   │   ├── plugins/                     # Composer-managed plugins
 │   │   └── themes/
 │   │       └── stridence/

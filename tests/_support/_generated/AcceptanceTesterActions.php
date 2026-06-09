@@ -1,4 +1,4 @@
-<?php  //[STAMP] ed272662ecd9d74ae061a8d5ce564dab
+<?php  //[STAMP] bade1ccbb1bdc624ccd51f6963f87b92
 // phpcs:ignoreFile
 namespace Tests\Support\_generated;
 
@@ -8421,8 +8421,11 @@ trait AcceptanceTesterActions
     /**
      * [!] Method is generated. Documentation taken from corresponding module.
      *
-     * Find a published vad_edition that has at least one registration.
-     * Avoids hardcoded edition IDs in tests — seed data changes and IDs drift.
+     * Find a published vad_edition that has at least one registration whose
+     * user still exists. Seed data can contain orphaned registrations
+     * (e.g. user_id 2220323 → no matching wp_users row) — those would hit
+     * the user_unavailable guard in RegistrationModalController and break
+     * tests that don't care about that branch.
      * @see \Tests\Support\Helper\Acceptance::grabEditionWithRegistrations()
      */
     public function grabEditionWithRegistrations(): int {

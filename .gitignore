@@ -13,6 +13,7 @@ web/app/mu-plugins/*
 !web/app/mu-plugins/ntdst-coreloader.php
 !web/app/mu-plugins/stride-core/
 !web/app/mu-plugins/stride-coreloader.php
+!web/app/mu-plugins/stride-client-vad/
 !web/app/mu-plugins/bedrock-autoloader.php
 web/app/themes/*
 !web/app/themes/stride/
@@ -58,3 +59,10 @@ wp-cli.local.yml
 
 # Superpowers brainstorming workspace (visual companion mockups)
 .superpowers/
+memory/.stop-hook-state.json
+
+# Claude Code session workspace (worktrees, local settings)
+.claude/
+
+# PHPUnit result cache (machine-local, churns every run)
+.phpunit.cache/
