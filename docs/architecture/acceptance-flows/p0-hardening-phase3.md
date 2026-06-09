@@ -113,8 +113,27 @@ Happy paths: ✓ `OnlineEnrollmentCest` (7 tests incl. CTA fix regression)
 
 ---
 
-## Verification manifest (situation B — filled as driven)
+## Verification manifest (situation B — driven 2026-06-10)
+
+All `[drive]` cells driven through Codeception/WPWebDriver (real Chrome).
+13 new edge tests across 3 Cests, all green.
 
 | Flow/edge | Result | Evidence |
 |---|---|---|
-| _(filled during this phase)_ | | |
+| F1 empty required fields | pass | `EnrollmentEdgeCest::serverRefusesSubmissionWithEmptyRequiredFields` |
+| F1 double + re-entry → 1 row | pass | `EnrollmentEdgeCest::doubleAndRepeatSubmitYieldExactlyOneRegistration` |
+| F1 capacity-full refused | pass | `EnrollmentEdgeCest::capacityFullEditionRefusesEnrollment` |
+| F2 colleague PII guard (C3) | pass | `EnrollmentEdgeCest::colleagueEnrollmentLeavesExistingProfileUntouched` |
+| F2 colleague empty email | pass | `EnrollmentEdgeCest::colleagueWithEmptyEmailIsRefused` |
+| F3 voucher unknown/expired/exhausted/scope + valid | pass | `EnrollmentEdgeCest::voucherDenialStatesRenderTheRightErrors` (anti-enumeration generic message contract pinned; valid passes, no used_count consumed) |
+| F4 mark present → row | pass | `AttendanceCest::adminMarksPresentAndRowIsRecorded` |
+| F4 re-mark updates not duplicates | pass | `AttendanceCest::reMarkingUpdatesRowDoesNotDuplicate` |
+| F4 empty-state (no physical sessions) | pass | `AttendanceCest::editionWithoutPhysicalSessionsShowsEmptyState` |
+| F4 unauth mark refused | pass | `AttendanceCest::unauthenticatedMarkAttendanceIsRefused` |
+| F7 nav identical across tabs (1B) | pass | `DashboardQuoteGdprEdgeCest::newUserSeesConsistentNavAcrossTabs` |
+| F8 locked rejects / unlocked accepts | pass | `DashboardQuoteGdprEdgeCest::lockedQuoteRejectsBillingUpdateUnlockedAccepts` |
+| F9 anonymise strips PII, keeps reg, idempotent | pass | `DashboardQuoteGdprEdgeCest::adminAnonymiseStripsPiiKeepsRegistrationAndIsIdempotent` |
+| F5 completion→certificate | not-driven | unit/integration-covered; LD-owned cert URL signing deferred (post-launch audit) |
+| F6 online expired-access boundary | not-driven (unit-covered) | 4 separate-process unit tests `LearnDashHelperEnrollmentStateTest` (the `1f35717a` regression net) |
+
+**Bugs surfaced while driving:** none in product code — the failures hit were test-fixture fidelity (quote meta needs bare keys, the Data API prefixes on read) and faithful-layer choices (hover-hidden row-action text → assert source; anonymised user correctly has no re-anonymise action). F5/F6 left at unit/integration coverage per the targeted-P0 scope.
