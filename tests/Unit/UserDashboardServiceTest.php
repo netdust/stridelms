@@ -545,6 +545,35 @@ class UserDashboardServiceTest extends TestCase
     }
 
     // ================================================================
+    // getNavData() — must derive from the same data as home nav_items
+    // ================================================================
+
+    /**
+     * @test
+     *
+     * Regression: bug_dashboard_nav_inconsistent. Home computed nav flags
+     * from the full enrollment/quote data while getNavData() used separate
+     * existence queries (hasActiveRegistrations etc.) with DIFFERENT
+     * semantics — sidebar items appeared on the home tab and vanished on
+     * every other tab. The two surfaces must derive from one source.
+     */
+    public function getNavDataMatchesHomeNavItemsForSameUser(): void
+    {
+        global $_test_users;
+        $_test_users[1] = new WP_User(['ID' => 1, 'first_name' => 'Jan', 'last_name' => 'Peeters', 'user_email' => 'jan@example.com', 'display_name' => 'Jan Peeters']);
+
+        // Make the legacy existence queries disagree with the (empty) full
+        // data set: a single-source implementation is immune to this skew.
+        $this->regRepo->method('hasActiveRegistrations')->willReturn(true);
+        $this->regRepo->method('hasTrajectoryEnrollments')->willReturn(true);
+
+        $home = $this->service->getHomeData(1);
+        $nav = $this->service->getNavData(1);
+
+        $this->assertSame($home['nav_items'], $nav);
+    }
+
+    // ================================================================
     // Helpers
     // ================================================================
 

@@ -1137,12 +1137,10 @@ final class TrajectoryAdminController
             $messages = json_decode($jsonString, true);
 
             if (json_last_error() !== JSON_ERROR_NONE) {
-                // Log JSON decode error for debugging
-                error_log(sprintf(
-                    'Stride Trajectory: JSON decode error for messages on post %d: %s',
-                    $postId,
-                    json_last_error_msg()
-                ));
+                ntdst_log('trajectory')->warning('JSON decode error for messages', [
+                    'post_id' => $postId,
+                    'error'   => json_last_error_msg(),
+                ]);
             } elseif (is_array($messages)) {
                 // Filter out deleted messages and sanitize
                 $sanitizedMessages = [];

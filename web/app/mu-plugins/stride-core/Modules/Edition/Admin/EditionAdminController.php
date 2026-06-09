@@ -470,12 +470,10 @@ final class EditionAdminController
             $notes = json_decode($jsonString, true);
 
             if (json_last_error() !== JSON_ERROR_NONE) {
-                // Log JSON decode error for debugging
-                error_log(sprintf(
-                    'Stride Edition: JSON decode error for notes on post %d: %s',
-                    $postId,
-                    json_last_error_msg()
-                ));
+                ntdst_log('edition')->warning('JSON decode error for notes', [
+                    'post_id' => $postId,
+                    'error'   => json_last_error_msg(),
+                ]);
             } elseif (is_array($notes)) {
                 // Filter out deleted notes and sanitize
                 $sanitizedNotes = [];

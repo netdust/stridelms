@@ -91,48 +91,50 @@ final class UserDashboardService
             'active_enrollments'   => $activeEnrollments,
             'active_trajectories'  => $trajectories,
             'recent_certificates'  => $certificates,
-            'nav_items'            => [
-                'opleidingen'  => !empty($activeEnrollments) || !empty($enrollmentData['completed_items']),
-                'trajecten'    => !empty($trajectories),
-                'agenda'       => !empty($enrollmentData['upcoming_sessions']),
-                'offertes'     => !empty($quoteData['active']) || !empty($quoteData['cancelled']),
-                'certificaten' => !empty($enrollmentData['completed_items']),
-            ],
+            'nav_items'            => $this->buildNavItems($enrollmentData, $quoteData, $trajectories),
         ];
     }
 
     /**
-     * Get lightweight navigation data without loading full enrollment/quote data.
+     * Get navigation visibility flags for non-home dashboard tabs.
      *
-     * Uses existence checks (COUNT/LIMIT 1) instead of fetching all records.
-     * For use on non-home dashboard tabs that only need nav visibility flags.
+     * Derives from the SAME data as getHomeData()'s nav_items. A previous
+     * version used separate existence queries with different semantics
+     * (e.g. certificaten gated on having registrations instead of having
+     * completed items), which made sidebar items appear on the home tab and
+     * vanish on every other tab.
      *
      * @return array{opleidingen: bool, trajecten: bool, agenda: bool, offertes: bool, certificaten: bool}
      */
     public function getNavData(int $userId): array
     {
-        $hasRegistrations = $this->registrationRepo->hasActiveRegistrations($userId);
-        $hasTrajectories = $this->registrationRepo->hasTrajectoryEnrollments($userId);
-        $hasQuotes = $this->hasQuotes($userId);
-
-        return [
-            'opleidingen'  => $hasRegistrations,
-            'trajecten'    => $hasTrajectories,
-            'agenda'       => $hasRegistrations,
-            'offertes'     => $hasQuotes,
-            'certificaten' => $hasRegistrations,
-        ];
+        return $this->buildNavItems(
+            $this->getEnrollmentData($userId),
+            $this->getQuoteData($userId),
+            $this->buildActiveTrajectories($userId),
+        );
     }
 
     /**
-     * Check if user has any quotes (published).
+     * Single derivation of the dashboard nav flags — home and all other tabs
+     * MUST route through this so the sidebar never flickers between tabs.
+     *
+     * @return array{opleidingen: bool, trajecten: bool, agenda: bool, offertes: bool, certificaten: bool}
      */
-    private function hasQuotes(int $userId): bool
+    private function buildNavItems(array $enrollmentData, array $quoteData, array $trajectories): array
     {
-        $quoteService = ntdst_get(\Stride\Modules\Invoicing\QuoteService::class);
-        $quotes = $quoteService->getUserQuotes($userId);
+        $activeEnrollments = array_merge(
+            $enrollmentData['active_editions'] ?? [],
+            $enrollmentData['active_online'] ?? []
+        );
 
-        return !empty($quotes);
+        return [
+            'opleidingen'  => !empty($activeEnrollments) || !empty($enrollmentData['completed_items']),
+            'trajecten'    => !empty($trajectories),
+            'agenda'       => !empty($enrollmentData['upcoming_sessions']),
+            'offertes'     => !empty($quoteData['active']) || !empty($quoteData['cancelled']),
+            'certificaten' => !empty($enrollmentData['completed_items']),
+        ];
     }
 
     /**

@@ -15,7 +15,7 @@ use Stride\Integrations\LearnDash\LearnDashHelper;
  *   - guest          → login URL with redirect_to back to ?enroll=1
  *   - logged in
  *     - open mode    → grant LD access (idempotent) + redirect to first lesson
- *     - free mode    → ld_update_course_access() + redirect to first lesson
+ *     - free mode    → LMSAdapterInterface::grantAccess() + redirect to first lesson
  *     - other modes  → strip the query arg, let LD render normally
  *
  * Only fires when:
@@ -73,8 +73,9 @@ final class CourseEnrollHandler implements \NTDST_Service_Meta
         $mode   = LearnDashHelper::getAccessMode($course->ID);
 
         // Free courses need an explicit grant; open mode is access-on-demand.
-        if ($mode === LearnDashHelper::MODE_FREE && function_exists('ld_update_course_access')) {
-            ld_update_course_access($userId, $course->ID);
+        // Mutations go through the adapter (INV-6), never raw LD functions.
+        if ($mode === LearnDashHelper::MODE_FREE) {
+            ntdst_get(\Stride\Contracts\LMSAdapterInterface::class)->grantAccess($userId, $course->ID);
         }
 
         wp_safe_redirect(LearnDashHelper::getFirstLessonUrl($course->ID), 302);
