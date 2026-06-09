@@ -20,6 +20,21 @@ Pre-deep-testing scan by `security-sentinel` agent. Scope: stride-core PHP surfa
 
 Medium + Low items not re-verified in this pass — defer to follow-up audit. Code below documents original findings for reference.
 
+## Status update (verified 2026-06-10, hardening sprint)
+
+**MEDIUM items re-verified against current code — most were already fixed:**
+
+- ✅ **M1** — interest-upgrade guarded: only self-enrollment (`$callerId === $userId`) AND interest row with `user_id = 0` upgrades (`EnrollmentService.php:~230`).
+- ⏸ **M2** — trajectory quote race: still open, deferred with the trajectory module (post-launch).
+- ✅ **M3** — `SessionSelection::setSelections()` validates every session ID against the registration's edition (`Modules/Edition/SessionSelection.php:61-67`).
+- ✅ **M4** — `VoucherProrater::prorate()` divides by `max($sessionCount, 1)`; integration test `prorateFallsBackForZeroSessionEdition` covers it.
+- ✅ **M5** — completion uploads restricted to PDF/JPEG/PNG (`CompletionTaskHandler::ALLOWED_MIME_TYPES`), .doc/.docx intentionally excluded.
+- ✅ **M6** — `QuestionnaireSettingsPage::DENIED_FIELD_NAMES` blocks WP-internal keys (wp_capabilities, user_pass, session_tokens, …) at builder-save time; user-meta writes are allowlist-by-construction via `getUserMetaMapping()`.
+- ⏸ **C2 / L2** — Partner API scope: deferred with the Partner API (post-launch, API not active in v1).
+- ✅ **L3** — accepted as documented (self-spam rate-limited 30/60s).
+
+Raw `wp_ajax` capability check: every admin-page AJAX controller routes through `verifyAjaxNonce()` = nonce + explicit `current_user_can('edit_posts')` (RegistrationModalController uses `manage_options`; AnnualReportHandler gates on `stride_view`).
+
 ---
 
 ## CRITICAL — Fix before launch

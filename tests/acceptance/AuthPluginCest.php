@@ -176,7 +176,7 @@ class AuthPluginCest
         $I->click('button[type="submit"]');
 
         // Wait for AJAX response - message is "Check your inbox for instructions..."
-        $I->waitForText('inbox', 10);
+        $I->waitForText('inbox', 20); // registration sends mail synchronously — slow under full-suite load
         $I->see('inbox');
     }
 
@@ -386,7 +386,7 @@ class AuthPluginCest
         $I->click('button[type="submit"]');
 
         // Wait for AJAX response
-        $I->waitForText('inbox', 10);
+        $I->waitForText('inbox', 20); // registration sends mail synchronously — slow under full-suite load
 
         // A rate limit transient should exist for registration
         $I->seeInDatabase($I->grabPrefixedTableNameFor('options'), [

@@ -15,9 +15,31 @@ use Codeception\Module;
 class Acceptance extends Module
 {
     /**
-     * Shared secret for test login - must match test-login-helper.php
+     * Shared secret for the test-login-helper.php mu-plugin.
+     *
+     * Sourced from the environment (STRIDE_TEST_LOGIN_SECRET in the project
+     * .env, which Bedrock also loads on the web side) — never hardcoded.
      */
-    private const TEST_LOGIN_SECRET = 'stride_codeception_test_secret_2024';
+    private function testLoginSecret(): string
+    {
+        $secret = getenv('STRIDE_TEST_LOGIN_SECRET');
+        if (is_string($secret) && $secret !== '') {
+            return $secret;
+        }
+
+        // Codeception's CLI process doesn't load the project .env — read the
+        // same file Bedrock loads so both sides share one source of truth.
+        $envFile = codecept_root_dir('.env');
+        if (is_readable($envFile)
+            && preg_match('/^STRIDE_TEST_LOGIN_SECRET=(.+)$/m', (string) file_get_contents($envFile), $m)
+        ) {
+            return trim($m[1], "\"' \r");
+        }
+
+        throw new \RuntimeException(
+            'STRIDE_TEST_LOGIN_SECRET is not set — add it to the project .env (see web/app/mu-plugins/test-login-helper.php).'
+        );
+    }
 
     /**
      * Login a user by ID using the test login helper.
@@ -35,7 +57,7 @@ class Acceptance extends Module
         $webDriver = $this->getModule('WPWebDriver');
 
         // Generate the test key using shared secret
-        $testKey = md5('stride_test_' . $userId . '_' . self::TEST_LOGIN_SECRET);
+        $testKey = hash_hmac('sha256', 'login:' . $userId, $this->testLoginSecret());
 
         // Build the test login URL
         $testLoginUrl = '/?stride_test_login=1&user_id=' . $userId . '&test_key=' . $testKey;
@@ -173,7 +195,7 @@ class Acceptance extends Module
         $webDriver = $this->getModule('WPWebDriver');
 
         // Generate the test key using shared secret
-        $testKey = md5('stride_test_activate_' . $userId . '_' . self::TEST_LOGIN_SECRET);
+        $testKey = hash_hmac('sha256', 'activate:' . $userId, $this->testLoginSecret());
 
         // Build the test activation URL
         $testActivateUrl = '/?stride_test_activate=1&user_id=' . $userId . '&test_key=' . $testKey;
