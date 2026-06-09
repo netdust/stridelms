@@ -173,11 +173,36 @@ class AuthPluginCest
         $I->checkOption('#consent_privacy');
 
         // Submit form
+        $this->submitRegistrationAndAwaitInbox($I);
+        $I->see('inbox');
+    }
+
+    /**
+     * Submit the registration form and wait for the success message.
+     *
+     * Under full-suite load the DDEV PHP-FPM pool gets saturated by LearnDash
+     * ProPanel reporting AJAX fired from wp-admin pages other Cests opened —
+     * the registration fetch then fails CLIENT-side and Alpine renders
+     * "Network error". One retry distinguishes pool saturation from a real
+     * registration failure; anything other than a network error still throws.
+     */
+    private function submitRegistrationAndAwaitInbox(AcceptanceTester $I): void
+    {
         $I->click('button[type="submit"]');
 
-        // Wait for AJAX response - message is "Check your inbox for instructions..."
-        $I->waitForText('inbox', 20); // registration sends mail synchronously — slow under full-suite load
-        $I->see('inbox');
+        try {
+            $I->waitForText('inbox', 20);
+        } catch (\Exception $e) {
+            $message = (string) $I->executeJS(
+                'const el = document.querySelector("[x-data]"); return el ? (Alpine.$data(el).message || "") : "";'
+            );
+            if (stripos($message, 'network') === false) {
+                throw $e;
+            }
+            $I->comment('Network error from saturated FPM pool — retrying submit once');
+            $I->click('button[type="submit"]');
+            $I->waitForText('inbox', 20);
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -383,10 +408,7 @@ class AuthPluginCest
 
         $I->checkOption('#consent_terms');
         $I->checkOption('#consent_privacy');
-        $I->click('button[type="submit"]');
-
-        // Wait for AJAX response
-        $I->waitForText('inbox', 20); // registration sends mail synchronously — slow under full-suite load
+        $this->submitRegistrationAndAwaitInbox($I);
 
         // A rate limit transient should exist for registration
         $I->seeInDatabase($I->grabPrefixedTableNameFor('options'), [
