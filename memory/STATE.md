@@ -3,7 +3,25 @@
 Current state of the project for session continuity. Updated after meaningful work.
 **For "what's left to launch" see `docs/LAUNCH-CHECKLIST.md` (single source of truth).**
 
-Last refresh: 2026-06-08 (reconstructed from git after audit found STATE stale since 2026-05-20)
+Last refresh: 2026-06-10 (hardening sprint, phases 0–2 done)
+
+---
+
+## Hardening sprint — 2026-06-10 (phases 0–2 DONE, 3–4 open)
+
+Plan approved by Stefan (saved at `~/.claude/plans/glowing-roaming-wozniak.md`; tracked in `tasks/todo.md` top block). Decisions: **VAD = launch brand**, Phase-3 test depth = targeted P0 flows. ~10 commits, `7f2ddce9..1304ed0a`.
+
+**Suites: 924 unit + 369 integration + 108 acceptance — all green** (acceptance verified 108/108 on the 2026-06-10 final run).
+
+Highlights (full detail in todo.md + FEATURE-STATUS addendum):
+- **Acceptance suite was structurally unrunnable since authoring** (hardcoded `stride_` prefixes vs `ckqp_`, `/vormingen/` URLs, nonexistent `admin` login, `$I->fail()`). Repaired prefix-agnostic; 23/108 → 108/108. The "126 tests" previously cited as evidence had never run.
+- **Real bugs fixed:** `validateSelections()` rejected every elective selection (4 shape bugs); dashboard nav flicker (single-source derivation); **edition-backed online courses had NO enrollment CTA on /opleidingen/** (sidebar edition branches existed but were never fed); INV-6 write bypass (CourseEnrollHandler).
+- **Launch brand was not in git:** `stride-client-vad/` was caught by the mu-plugins ignore rule — tracked now. Kindred's duplicate live loader removed (was active simultaneously with VAD).
+- **test-login-helper.php hardened:** WP_ENV production gate, env-only secret (STRIDE_TEST_LOGIN_SECRET in .env), HMAC + hash_equals; now tracked in git.
+- **Audit truth-up:** H4/M1/M3/M4/M5/M6 were already fixed in code (report said deferred). Open: M2 (trajectory quote race) + C2/L2 (Partner API) — both post-launch modules. See report's two Status sections.
+- **Env gotchas fixed:** stale v3 `upload_path` option in dev DB (broke all uploads — also a migration risk for prod DB ports!); voucher test TZ flake (site clock vs UTC near midnight).
+
+**Open:** Phase 3 (targeted P0 edge-testing: enrollment edges, attendance — zero acceptance coverage, completion→certificate, dashboard empty states, quote locking, anonymise flow) + Phase 4 (deploy readiness — ⚠ **no Makefile exists** though site.yml declares `make deploy-staging`; prod .env must NOT set STRIDE_TEST_LOGIN_SECRET).
 
 ---
 

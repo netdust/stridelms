@@ -8,7 +8,23 @@
 
 Legend: ✅ solid · ⚠️ partial/known-thin · ❌ missing/broken · — n/a
 
-_Last assessed: 2026-06-08. Evidence: 17 acceptance Cests (126 tests), 35 shake-out manifests, LAUNCH-CHECKLIST, gap memories, 913 unit + 261 integration green. Sources cross-checked by 3 independent readers._
+_Last assessed: 2026-06-08; hardening-sprint addendum 2026-06-10. Evidence: 17 acceptance Cests, 35 shake-out manifests, LAUNCH-CHECKLIST, gap memories. Sources cross-checked by 3 independent readers._
+
+## 2026-06-10 hardening sprint — status changes
+
+**The acceptance suite is real now.** The committed suite could never have run against this environment (hardcoded `stride_` table prefixes vs live `ckqp_`, pre-rename `/vormingen/` URLs, a nonexistent `admin` login, `$I->fail()` undefined). After repair: **107/108 → 108/108 green** (was 23/108 executable). Suite counts: **924 unit + 369 integration + 108 acceptance**.
+
+Fixed this sprint (each with regression tests):
+- `TrajectorySelection::validateSelections()` — 4 field-shape bugs; rejected EVERY elective selection (`e8561043`)
+- Dashboard nav single-source derivation — sidebar no longer flickers between tabs (`98094869`)
+- **Edition-backed online courses had NO enrollment CTA** — `/opleidingen/<slug>/` rendered info-only with no path to enroll when an active edition existed (`d7911813`)
+- `isEnrolled()` MODE_FREE gap: confirmed fixed since `1f35717a` (2026-05-20); 4 separate-process regression tests added
+- INV-6 write bypass closed (CourseEnrollHandler → adapter), error_log → ntdst_log (2 sites)
+- test-login-helper: WP_ENV production gate + env-only secret (old hardcoded secret retired)
+- stride-client-vad (the launch brand) was NOT in version control — now tracked; kindred duplicate loader deactivated
+- Deferred-MEDIUM audit items re-verified: M1/M3/M4/M5/M6 + H4 were already fixed in code; only M2 + C2/L2 (post-launch modules) remain
+
+Row updates: **Online / self-paced** weakest-link bugs are resolved (gap + CTA loop + missing edition CTA). **User dashboard** nav inconsistency resolved. **Trajectory** validateSelections fixed; cascade child/parent dashboard rendering now acceptance-verified (TrajectoryCascadeCest 2/2) — phased choices + pure-LD electives stay post-launch.
 
 ---
 
