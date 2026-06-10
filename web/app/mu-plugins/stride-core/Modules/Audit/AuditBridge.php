@@ -521,6 +521,11 @@ final class AuditBridge extends AbstractService
      *
      * Entity-id falls back to user_id from context so admin can filter
      * "all mail sent to user X" via the existing AuditRepository queries.
+     *
+     * mail.sent is a send-log, NOT a notification source (audit H-4): the
+     * recorded context deliberately omits user_id (so subject_user_id stays
+     * NULL), and NotificationService::EXCLUDED_ACTIONS excludes the action
+     * defensively for historical/drifted rows that do carry it.
      */
     public function onMailSent(string $templateSlug, array $context, mixed $to): void
     {

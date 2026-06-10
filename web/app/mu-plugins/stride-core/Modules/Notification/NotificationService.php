@@ -20,6 +20,27 @@ final class NotificationService implements \NTDST_Service_Meta
 {
     private const META_KEY = '_stride_notifications_read';
 
+    /**
+     * Per-user transient for the unread badge count (audit H-4): the
+     * dashboard reads it on every page view, so the audit-table query runs
+     * at most once per TTL per user. Event-driven invalidation via the
+     * ntdst/audit/recorded hook keeps it correct within the TTL window.
+     * Upgrades to Redis automatically when a persistent object cache lands.
+     */
+    private const COUNT_TRANSIENT_PREFIX = 'stride_unread_count_';
+
+    private const COUNT_TTL = 10 * MINUTE_IN_SECONDS;
+
+    /**
+     * Actions that must never surface as notifications. mail.sent is an
+     * operational send-log (audit H-4 recommendation): current AuditBridge
+     * rows omit context.user_id, but historical/drifted rows may carry it —
+     * the exclusion makes the policy explicit either way.
+     *
+     * @var string[]
+     */
+    public const EXCLUDED_ACTIONS = ['mail.sent'];
+
     /** @var array<int, array> Per-request notification cache */
     private array $cache = [];
 
@@ -43,6 +64,11 @@ final class NotificationService implements \NTDST_Service_Meta
     private function init(): void
     {
         add_filter('ntdst/api_data/stride_mark_notifications_read', [$this, 'handleMarkAllRead'], 10, 2);
+
+        // Event-driven cache invalidation: every new subject-targeted audit
+        // entry (fired by ntdst-audit's AuditService::record) busts that
+        // user's cached unread count.
+        add_action('ntdst/audit/recorded', [$this, 'onAuditRecorded'], 10, 4);
     }
 
     /**
@@ -59,7 +85,7 @@ final class NotificationService implements \NTDST_Service_Meta
         $readMap = $this->getReadMap($userId);
 
         // 1. Get audit entries where user is the subject (not actor)
-        $entries = $this->auditService->getForSubjectUser($userId, 50, 30);
+        $entries = $this->auditService->getForSubjectUser($userId, 50, 30, self::EXCLUDED_ACTIONS);
 
         // 2. Get session note updates for editions user is enrolled in
         $editionIds = $this->getEnrolledEditionIds($userId);
@@ -96,13 +122,41 @@ final class NotificationService implements \NTDST_Service_Meta
 
     /**
      * Count unread notifications.
+     *
+     * Cached in a per-user transient (audit H-4): the dashboard calls this
+     * on every page view. TTL bounds staleness for events the listener
+     * can't target (e.g. session.note_updated fans out to all enrollees);
+     * onAuditRecorded() busts it immediately for subject-targeted events.
      */
     public function getUnreadCount(int $userId): int
     {
-        return count(array_filter(
+        $cached = get_transient(self::COUNT_TRANSIENT_PREFIX . $userId);
+
+        if ($cached !== false) {
+            return (int) $cached;
+        }
+
+        $count = count(array_filter(
             $this->getNotifications($userId),
             fn(array $n): bool => !$n['read'],
         ));
+
+        set_transient(self::COUNT_TRANSIENT_PREFIX . $userId, $count, self::COUNT_TTL);
+
+        return $count;
+    }
+
+    /**
+     * Audit listener: a new event targeting a subject user invalidates that
+     * user's cached count — a stale badge never survives a new event.
+     */
+    public function onAuditRecorded(string $action, string $entityType, int $entityId, array $context): void
+    {
+        $subjectId = $context['user_id'] ?? null;
+
+        if (is_numeric($subjectId) && (int) $subjectId > 0) {
+            $this->invalidateCountCache((int) $subjectId);
+        }
     }
 
     /**
@@ -121,7 +175,7 @@ final class NotificationService implements \NTDST_Service_Meta
         }
 
         update_user_meta($userId, self::META_KEY, wp_json_encode($readMap));
-        unset($this->cache[$userId]);
+        $this->invalidateCountCache($userId);
     }
 
     /**
@@ -134,7 +188,18 @@ final class NotificationService implements \NTDST_Service_Meta
         if (!isset($readMap[$notificationId])) {
             $readMap[$notificationId] = time();
             update_user_meta($userId, self::META_KEY, wp_json_encode($readMap));
+            $this->invalidateCountCache($userId);
         }
+    }
+
+    /**
+     * Drop both cache layers for a user: the count transient and the
+     * per-request notification list.
+     */
+    private function invalidateCountCache(int $userId): void
+    {
+        delete_transient(self::COUNT_TRANSIENT_PREFIX . $userId);
+        unset($this->cache[$userId]);
     }
 
     /**
