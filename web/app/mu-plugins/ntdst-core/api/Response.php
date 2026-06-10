@@ -274,11 +274,6 @@ class NTDST_Response
 
     /**
      * Send file response.
-     *
-     * Filename is sanitized to strip CRLF (header injection) and double
-     * quotes (Content-Disposition value boundary). Adds both `filename=`
-     * (ASCII fallback) and `filename*=UTF-8''…` per RFC 5987 so non-ASCII
-     * names (Dutch accents etc.) render correctly across browsers.
      */
     protected function sendFile(
         string $content,
@@ -286,6 +281,35 @@ class NTDST_Response
         ?string $contentType,
         string $disposition,
     ): never {
+        nocache_headers();
+        foreach ($this->fileHeaders($content, $filename, $contentType, $disposition) as $header) {
+            header($header);
+        }
+
+        echo $content;
+        exit;
+    }
+
+    /**
+     * Build the headers for a file response.
+     *
+     * Filename is sanitized to strip CRLF (header injection) and double
+     * quotes (Content-Disposition value boundary). Adds both `filename=`
+     * (ASCII fallback) and `filename*=UTF-8''…` per RFC 5987 so non-ASCII
+     * names (Dutch accents etc.) render correctly across browsers.
+     *
+     * `X-Content-Type-Options: nosniff` is always sent: a body whose bytes
+     * look like HTML/SVG (e.g. a user-uploaded "proof") must never be
+     * sniffed into executing markup in the site origin.
+     *
+     * @return list<string>
+     */
+    protected function fileHeaders(
+        string $content,
+        string $filename,
+        ?string $contentType,
+        string $disposition,
+    ): array {
         $contentType ??= self::getMimeType($filename);
 
         // basename strips paths; the regex strips header-injection chars
@@ -295,13 +319,12 @@ class NTDST_Response
         $ascii = preg_replace('/[^\x20-\x7e]/', '_', $safe) ?? $safe;
         $utf8 = "filename*=UTF-8''" . rawurlencode($safe);
 
-        nocache_headers();
-        header('Content-Type: ' . $contentType);
-        header('Content-Disposition: ' . $disposition . '; filename="' . $ascii . '"; ' . $utf8);
-        header('Content-Length: ' . strlen($content));
-
-        echo $content;
-        exit;
+        return [
+            'Content-Type: ' . $contentType,
+            'Content-Disposition: ' . $disposition . '; filename="' . $ascii . '"; ' . $utf8,
+            'Content-Length: ' . strlen($content),
+            'X-Content-Type-Options: nosniff',
+        ];
     }
 
     /**

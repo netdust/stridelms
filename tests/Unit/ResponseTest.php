@@ -98,6 +98,59 @@ class ResponseTest extends TestCase
     }
 
     /**
+     * File-download responses must carry the threat-model M4 headers:
+     * Content-Type from the caller-supplied (validated) MIME,
+     * Content-Disposition: attachment, and X-Content-Type-Options: nosniff
+     * so an HTML/SVG body uploaded as "proof" can never be sniffed into
+     * executing in the site origin.
+     *
+     * @test
+     */
+    public function testFileHeadersCarryDownloadSecurityHeaders(): void
+    {
+        $response = ntdst_response();
+        $ref = new \ReflectionMethod($response, 'fileHeaders');
+        $ref->setAccessible(true);
+
+        $content = '%PDF-1.4 fake';
+        $headers = $ref->invoke($response, $content, 'proof.pdf', 'application/pdf', 'attachment');
+
+        $this->assertContains(
+            'X-Content-Type-Options: nosniff',
+            $headers,
+            'Download responses must opt out of MIME sniffing (threat-model M4)',
+        );
+        $this->assertContains('Content-Type: application/pdf', $headers);
+        $this->assertContains('Content-Length: ' . strlen($content), $headers);
+
+        $disposition = array_values(array_filter(
+            $headers,
+            static fn(string $h): bool => str_starts_with($h, 'Content-Disposition:'),
+        ));
+        $this->assertCount(1, $disposition, 'Exactly one Content-Disposition header expected');
+        $this->assertStringContainsString('attachment', $disposition[0]);
+        $this->assertStringContainsString('filename="proof.pdf"', $disposition[0]);
+    }
+
+    /**
+     * The stored validated MIME may be absent — headers must fall back to
+     * filename-based detection, never to a sniffable empty Content-Type.
+     *
+     * @test
+     */
+    public function testFileHeadersFallBackToFilenameMimeDetection(): void
+    {
+        $response = ntdst_response();
+        $ref = new \ReflectionMethod($response, 'fileHeaders');
+        $ref->setAccessible(true);
+
+        $headers = $ref->invoke($response, 'data', 'calendar.ics', null, 'attachment');
+
+        $this->assertContains('Content-Type: text/calendar; charset=utf-8', $headers);
+        $this->assertContains('X-Content-Type-Options: nosniff', $headers);
+    }
+
+    /**
      * @test
      */
     public function testResponseCanBeCreatedWithFactory(): void
