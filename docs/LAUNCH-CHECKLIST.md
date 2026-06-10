@@ -29,6 +29,8 @@ Last updated: 2026-06-10 (hardening sprint — pre-testing audit fixes all verif
 
 **Deploy-time tasks (NOT code, do at staging/prod push):**
 - ⚠ **Create/verify deploy tooling first** — `site.yml` declares `make deploy-staging` but no Makefile exists in the repo
+- **nginx deny rule for completion proofs** — add `location ^~ /app/uploads/stride-proofs/ { deny all; }` to the environment's nginx config (Ploi), BEFORE the static-file locations, then verify post-deploy with the two-curl check (expect 403 then 200) — exact commands in `site.yml:35-36`
+- **Verify ntdst-audit plugin active post-deploy** — `wp plugin is-active ntdst-audit` (PII-reveal audit trail; the dashboard "Audittrail" health dot flags red if the AuditService class is missing)
 - Deactivate `netdust-lti` plugin in WP admin
 - Configure real SMTP credentials in Fluent SMTP (currently routes to mailpit)
 - Set `stride_admin_email` option to real VAD admin inbox

@@ -41,6 +41,20 @@ Plan: `~/.claude/plans/glowing-roaming-wozniak.md` (approved 2026-06-10). Goal: 
 
 ---
 
+## Follow-ups from the audit-remediation close-out (2026-06-10, panel review)
+
+Consolidated from the six-persona branch review. None block the branch; each has a named owner-context.
+
+1. **Cross-project sync — ntdst-core nosniff + Mailer & ntdst-audit v1.1.0**: propagate the universal file-response nosniff posture and the Mailer changes in ntdst-core, plus ntdst-audit v1.1.0 (schema v2, subject_user_id), to the canonical framework copy / Rossi reference. Fleet-level, do at next framework sync.
+2. **Registrations UNIQUE key**: add the missing UNIQUE constraint (user_id, edition_id, status-class) on `wp_vad_registrations` at the next SCHEMA_VERSION bump — piggyback on the version-gated migrate() (now with failure backoff), never as a standalone ALTER.
+3. **Dateless / self-paced catalog ruling** (product, Stefan): dateless editions are currently excluded from all catalog enumerations — the start_date orderby forces an EXISTS clause. Single canonical note: `stridence_catalog_date_window_meta_query()` docblock (helpers/catalog.php). Also covers the archive classroom teaser's missing date window (pre-existing divergence, noted inline).
+4. **front-page.php status-literal convergence + missing audit grep**: front-page.php still hand-rolls active-status literals instead of `OfferingStatus::activeValues()`; the audit's "active-status grep" sweep was never run — do both together.
+5. **F2 Redis enablement**: post-Q5 (Ploi plan confirmation) + parked task 1.2 (ops access). Drop-in is prepped; procedure + flush fleet-rule in site.yml notes.
+6. **Dashboard LD-floor product question (Q3)**: 32 free e-learnings hydrate per user on the dashboard — also makes the "inschrijvingen" empty state unreachable (shake-out F3). Needs a product ruling on whether open-access courses belong on the dashboard at all.
+7. **quote-admin.js taxRate localization**: the admin quote JS carries its own tax-rate assumption — localize it from QuoteCalculator (INV-8) via wp_localize_script so the JS preview can't drift from the server derivation.
+
+---
+
 ## Pre-existing test failure — investigate post-launch
 
 `WPDataConnectorTest::canUpdateExistingPlatform` (Integration) fails on staging — **not** caused by the 2026-05-18 ntdst-core port from PR #2 (verified: same failure with both the old and new Data.php).

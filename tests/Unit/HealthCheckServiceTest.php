@@ -74,11 +74,41 @@ class HealthCheckServiceTest extends TestCase
         $this->assertSame('amber', $result['mail']);
     }
 
-    public function test_returns_both_keys(): void
+    public function test_returns_all_keys(): void
     {
         $service = new HealthCheckService();
         $result = $service->evaluate(0, 0, false);
         $this->assertArrayHasKey('registration', $result);
         $this->assertArrayHasKey('mail', $result);
+        $this->assertArrayHasKey('audit', $result);
+    }
+
+    // AF-2 residual: the PII-reveal audit trail depends on the ntdst-audit
+    // plugin being active. If it is deactivated (deploy mistake, plugin
+    // conflict), reveals proceed UNLOGGED — that must be a RED flag on the
+    // dashboard, not silence.
+
+    public function test_audit_red_when_audit_service_inactive(): void
+    {
+        $service = new HealthCheckService();
+        $result = $service->evaluate(
+            lastRegistration: time(),
+            lastMailSend: time(),
+            hasOpenEditions: true,
+            auditActive: false,
+        );
+        $this->assertSame('red', $result['audit'], 'Inactive audit trail must flag RED (PII reveals would go unlogged)');
+    }
+
+    public function test_audit_green_when_audit_service_active(): void
+    {
+        $service = new HealthCheckService();
+        $result = $service->evaluate(
+            lastRegistration: time(),
+            lastMailSend: time(),
+            hasOpenEditions: true,
+            auditActive: true,
+        );
+        $this->assertSame('green', $result['audit']);
     }
 }

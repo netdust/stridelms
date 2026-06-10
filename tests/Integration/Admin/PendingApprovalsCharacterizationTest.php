@@ -8,13 +8,14 @@ use IntegrationTestCase;
 use WP_REST_Request;
 
 /**
- * Characterization harness for audit H-8 (Task E2).
- *
- * Pins the EXACT bucket behavior of GET /stride/v1/admin/pending-approvals
- * BEFORE the bounded/column-trimmed rewrite, so the rewrite can prove
- * "identical buckets on seed data pre/post". Every row in the matrix pins a
- * branch of the bucketing logic, including the edges that the SQL push-down
- * must preserve:
+ * PERMANENT regression pin for the pending-approvals bucketing (audit H-8 /
+ * Task E2). Originally the pre-rewrite characterization harness; the
+ * bounded/column-trimmed rewrite (and the INV-3 move of the scan SQL into
+ * RegistrationRepository) are done — this suite now guards against any
+ * re-fork or drift of the bucket semantics. Every row in the matrix pins a
+ * branch of the bucketing logic, including the edges the SQL pre-filter
+ * must keep preserving (SQL may only ever OVER-fetch; PHP re-checks are
+ * authoritative):
  *
  *  - approval present but status key missing  → defaults to 'pending' (R9)
  *  - user tasks done, NO approval key, stale-aged → emits NOTHING (R10 — the

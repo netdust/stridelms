@@ -19,7 +19,7 @@ document.addEventListener('alpine:init', () => {
         userDetailReturnTo: null, // 'dashboard' when admin arrived from actie-vereist card
         upcomingSessions: [],
         activityFeed: [],
-        healthChecks: { registration: 'green', mail: 'green' },
+        healthChecks: { registration: 'green', mail: 'green', audit: 'green' },
 
         // ── Editions ─────────────────────────────────────────────
         editions: [],

@@ -43,7 +43,7 @@ grep -rn "add_cap\|'stride_manage'\|'stride_view'" --include="*.php" web/app/mu-
 
 ## INV-2 — Frontend AJAX nonce is verified once, by the framework
 
-**Convergence point:** `ntdst-core/api/Endpoints.php:330` — `if (!wp_verify_nonce($nonce, $action))` — gates **every** `ntdst/api_data/{action}` dispatch before the filter fires (`:340`).
+**Convergence point:** `ntdst-core/api/Endpoints.php:333` — `if (!wp_verify_nonce($nonce, $action))` — gates **every** `ntdst/api_data/{action}` dispatch before the filter fires (`:343`).
 
 **The rule.** Frontend write/read actions register as `add_filter('ntdst/api_data/<action>', $cb, 10, 2)` (or via `Theme.php:536`'s wrapper). The handler receives already-nonce-verified input; it MUST NOT re-verify, and MUST NOT be reachable by any path that skips Endpoints.php. New frontend AJAX = a new `ntdst/api_data/*` filter, never a raw `add_action('wp_ajax_*')` that hand-rolls its own nonce.
 
@@ -82,8 +82,9 @@ grep -rn "ntdst/api_data/" --include="*.php" web/app/mu-plugins/stride-core
 - `EditionService::deleteEditionRegistrations()` — bulk `$wpdb->delete` by edition (no bulk-delete-by-edition in the repo).
 - `Infrastructure/BatchQueryHelper.php` — N+1-prevention batch reads across `vad_registrations` / `vad_attendance` / `postmeta` / `term_relationships`.
 - `Modules/Edition/EditionFilesZipExporter.php` — export query.
+- `Admin/AdminAPIController.php` — **accepted zone** (post-launch extraction pointer: `project_unified_api_postlaunch`): the 3,5k-line legacy admin controller still carries many direct `$wpdb` reads (dashboards, stats, exports). New registration-table query *shapes* are extracted to `RegistrationRepository` as they are touched (CR-D3 `idsWithCompletionTasks`, the pending-approvals scans `findPendingWithOpenApproval`/`findConfirmedWithOpenPostApproval`, 2026-06-10) — but the remaining body is accepted until the service-layer extraction, so the INV-3 advisory listing this file is expected, not a regression.
 
-All four use `$wpdb->prepare` and are concentrated for auditability. A **new** direct `$wpdb` against these tables outside their owning repository (and not one of the four above) is the bypass to flag.
+All of the above use `$wpdb->prepare` and are concentrated for auditability. A **new** direct `$wpdb` against these tables outside their owning repository (and not one of the exceptions above) is the bypass to flag.
 
 **Audit move:**
 ```bash

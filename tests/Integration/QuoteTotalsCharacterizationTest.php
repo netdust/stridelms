@@ -15,23 +15,23 @@ use Stride\Modules\Invoicing\QuoteService;
 use Stride\Modules\Invoicing\VoucherService;
 
 /**
- * Characterization tests for Task C1 (audit finding H-5).
+ * PERMANENT regression pin for the quote money math (Task C1 / audit H-5).
  *
- * Pins the CURRENT subtotal -> discount -> tax -> total derivation of the
- * two code paths that each carry their own `0.21` literal:
+ * Originally authored as the characterization harness for consolidating the
+ * duplicated `0.21` literals into QuoteCalculator (INV-8); that refactor is
+ * done. The suite's permanent role is two-fold:
  *
- *   - QuoteAdminController::applyManualDiscount / removeDiscount /
- *     processItemsData (admin path)
- *   - QuoteService::onSessionSelectionCompleted / applyVoucher (service path)
- *
- * over a shared fixture matrix (normal discount, discount > subtotal,
- * EUR 0 quote, half-cent rounding edge), BEFORE the literals are
- * consolidated into QuoteCalculator. Every assertion here must stay green
- * across the refactor — totals identical pre/post.
- *
- * The matrix test also asserts the two paths AGREE with each other on tax
- * and total for every fixture; a failure there is a live financial bug,
- * not a test bug (plan says: stop, do not refactor).
+ *  1. Regression pin — the subtotal -> discount -> tax -> total derivation
+ *     over the fixture matrix (normal discount, discount > subtotal, EUR 0
+ *     quote, half-cent rounding edge) must never drift, on either surface:
+ *     - QuoteAdminController::applyManualDiscount / removeDiscount /
+ *       processItemsData (admin path)
+ *     - QuoteService::onSessionSelectionCompleted / applyVoucher (service path)
+ *  2. Anti-re-fork guard — the matrix test asserts the two paths AGREE with
+ *     each other on tax and total for every fixture. If someone re-forks the
+ *     derivation (a new hand-rolled VAT computation outside QuoteCalculator),
+ *     the agreement assertion is what catches the divergence; a failure here
+ *     is a live financial bug, not a test bug.
  *
  * All amounts are int euro-cents (the real storage representation).
  *

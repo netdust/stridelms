@@ -2416,7 +2416,13 @@ final class AdminAPIController
         ));
 
         $service = new HealthCheckService();
-        $checks = $service->evaluate($lastRegistration, $lastMailSend, $hasOpenEditions);
+        $checks = $service->evaluate(
+            $lastRegistration,
+            $lastMailSend,
+            $hasOpenEditions,
+            // AF-2 residual: PII-reveal audit trail inactive = red flag.
+            class_exists(\NTDST\Audit\AuditService::class),
+        );
 
         return new WP_REST_Response($checks);
     }

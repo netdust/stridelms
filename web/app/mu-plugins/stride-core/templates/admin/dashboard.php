@@ -270,6 +270,10 @@ defined('ABSPATH') || exit;
                                 <span class="sd-health-dot" :class="'sd-health-dot--' + healthChecks.mail"></span>
                                 E-mail
                             </span>
+                            <span class="sd-health-checks__item" title="Rood: audit-plugin inactief — PII-inzages worden niet gelogd">
+                                <span class="sd-health-dot" :class="'sd-health-dot--' + (healthChecks.audit || 'green')"></span>
+                                Audittrail
+                            </span>
                         </div>
                     </div>
 
