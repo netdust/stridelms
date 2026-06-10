@@ -12,8 +12,6 @@
 # immutable — it never overwrites an already-set environment variable).
 set -euo pipefail
 
-WP_URL="${WP_URL:-http://localhost:8080}"
-
 # Plugin-local Composer deps: some committed plugins ship their own
 # composer.json but gitignore vendor/ (netdust-mail requires its
 # vendor/autoload.php unconditionally at load; netdust-lti needs its locked
@@ -24,7 +22,7 @@ for dir in web/app/plugins/*/; do
   fi
 done
 
-wp core install --url="$WP_URL" --title=StrideCI \
+wp core install --url=http://localhost:8080 --title=StrideCI \
   --admin_user=ciadmin --admin_password=ciadmin \
   --admin_email=ci@example.com --skip-email
 

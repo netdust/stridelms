@@ -1,6 +1,12 @@
 name: Integration
 
-on: [push, pull_request, workflow_dispatch]
+# Push trigger limited to long-lived branches (PR-branch pushes otherwise
+# double-run every suite); ci-seam-* kept for throwaway seam-proof pushes.
+on:
+  push:
+    branches: [main, staging, 'ci-seam-*']
+  pull_request:
+  workflow_dispatch:
 
 # Runs the real integration suite (phpunit-integration.xml.dist) against a
 # fresh WordPress install + MariaDB — replaces the old devcontainer job that

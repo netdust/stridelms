@@ -3,7 +3,7 @@
 # Level 1 with a generated baseline: every pre-existing finding is absorbed
 # by phpstan-baseline.neon; NEW violations fail CI (composer lint:stan).
 # Regenerate the baseline ONLY with explicit sign-off:
-#   vendor/bin/phpstan analyse --memory-limit=1G --generate-baseline
+#   vendor/bin/phpstan analyse --memory-limit=2G --generate-baseline
 #
 # Known limitation (recorded in the audit plan): level-1 PHPStan cannot see
 # inside $wpdb SQL strings, so dead-column queries (H-1 class, e.g.

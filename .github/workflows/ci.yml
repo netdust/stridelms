@@ -1,6 +1,12 @@
 name: CI
 
-on: [push, pull_request]
+# Push trigger limited to long-lived branches (PR-branch pushes otherwise
+# double-run every suite); ci-seam-* kept for throwaway seam-proof pushes.
+on:
+  push:
+    branches: [main, staging, 'ci-seam-*']
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
