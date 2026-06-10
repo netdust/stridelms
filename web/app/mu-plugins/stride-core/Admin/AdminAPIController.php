@@ -335,7 +335,8 @@ final class AdminAPIController
             ],
         ]);
 
-        // Reveal a single sensitive field (national_id, date_of_birth, professional_license_number)
+        // Reveal a single sensitive field (national_id, date_of_birth,
+        // professional_license_number, phone) — every success is audited.
         register_rest_route(self::NAMESPACE, '/admin/users/(?P<id>\d+)/reveal', [
             'methods' => 'GET',
             'callback' => [$this, 'revealSensitiveField'],
@@ -2925,7 +2926,9 @@ final class AdminAPIController
      * GET /admin/users/{id}/reveal?field=...
      *
      * Returns the raw value of one sensitive identity field. Admin-only,
-     * one field per call — keeps reveal explicit (and audit-friendly later).
+     * one field per call — keeps reveal explicit. Every successful reveal
+     * writes an audit row (threat-model M5): the access attempt is the
+     * event, even when the stored value is empty.
      */
     public function revealSensitiveField(WP_REST_Request $request): WP_REST_Response
     {
@@ -2942,6 +2945,21 @@ final class AdminAPIController
         }
 
         $value = get_user_meta($userId, $field, true) ?: '';
+
+        // Audit the PII access. A failed audit write is logged but does NOT
+        // block the reveal (availability over strictness — AF-2 ruling).
+        $audit = ntdst_get(\NTDST\Audit\AuditService::class);
+        $recorded = $audit
+            ? $audit->record('user', $userId, 'admin.pii_reveal', null, ['field' => $field])
+            : new WP_Error('audit_unavailable', 'AuditService not available');
+
+        if (is_wp_error($recorded)) {
+            ntdst_log('audit')->warning('PII reveal audit write failed', [
+                'user_id' => $userId,
+                'field' => $field,
+                'error' => $recorded->get_error_message(),
+            ]);
+        }
 
         return new WP_REST_Response([
             'field' => $field,
