@@ -2948,7 +2948,12 @@ final class AdminAPIController
 
         // Audit the PII access. A failed audit write is logged but does NOT
         // block the reveal (availability over strictness — AF-2 ruling).
-        $audit = ntdst_get(\NTDST\Audit\AuditService::class);
+        // class_exists guard: the container THROWS on unresolvable ids, so
+        // resolving without it would 500 when ntdst-audit is deactivated
+        // (review finding CR-B2) — check availability before resolving.
+        $audit = class_exists(\NTDST\Audit\AuditService::class)
+            ? ntdst_get(\NTDST\Audit\AuditService::class)
+            : null;
         $recorded = $audit
             ? $audit->record('user', $userId, 'admin.pii_reveal', null, ['field' => $field])
             : new WP_Error('audit_unavailable', 'AuditService not available');
