@@ -49,6 +49,76 @@ function stridence_catalog_items(string $catalog): array
 }
 
 /**
+ * THE eligibility meta_query for catalog edition enumeration (panel
+ * simplicity SF-1): active status + date window (end_date within a 2-day
+ * grace past today, start_date fallback when end_date is missing). One
+ * builder for all three sites — /klassikaal, /online and the course
+ * archive's online query — so the window rule cannot fork again.
+ *
+ * NOTE — dateless (self-paced) editions are currently EXCLUDED: every
+ * caller pairs this with `orderby => meta_value` + `meta_key => start_date`,
+ * which forces an EXISTS AND-clause on start_date, so a fully dateless
+ * edition can never match (runtime-proven: a published open dateless
+ * edition does not list). Pre-existing parity with the old pages — latent;
+ * follow-up ruling tracked in tasks/todo.md ("dateless/self-paced catalog").
+ *
+ * @param string $prefix Edition meta prefix (EditionRepository::getMetaPrefix())
+ * @return array<int, array<string, mixed>> meta_query clauses (AND-joined by WP_Query)
+ */
+function stridence_catalog_date_window_meta_query(string $prefix): array
+{
+    $past_cutoff = date('Y-m-d', strtotime('-2 days'));
+
+    return [
+        [
+            'key'     => $prefix . 'status',
+            'value'   => OfferingStatus::activeValues(),
+            'compare' => 'IN',
+        ],
+        [
+            'relation' => 'OR',
+            [
+                'key'     => $prefix . 'end_date',
+                'value'   => $past_cutoff,
+                'compare' => '>=',
+                'type'    => 'DATE',
+            ],
+            [
+                // Fallback when end_date is missing: use start_date
+                'relation' => 'AND',
+                [
+                    'key'     => $prefix . 'end_date',
+                    'compare' => 'NOT EXISTS',
+                ],
+                [
+                    'key'     => $prefix . 'start_date',
+                    'value'   => $past_cutoff,
+                    'compare' => '>=',
+                    'type'    => 'DATE',
+                ],
+            ],
+        ],
+    ];
+}
+
+/**
+ * Observability for the enumeration cap (panel perf SF-2): a query that
+ * fills STRIDENCE_CATALOG_MAX_ITEMS has silently truncated the catalog —
+ * surface it instead of presenting the capped list as the whole offer.
+ *
+ * @param array<int|WP_Post> $results
+ */
+function stridence_catalog_warn_if_capped(array $results, string $context): void
+{
+    if (count($results) >= STRIDENCE_CATALOG_MAX_ITEMS) {
+        ntdst_log()->warning('catalog enumeration filled STRIDENCE_CATALOG_MAX_ITEMS — items beyond the cap are silently hidden', [
+            'context' => $context,
+            'cap' => STRIDENCE_CATALOG_MAX_ITEMS,
+        ]);
+    }
+}
+
+/**
  * Eligible items for /klassikaal: active-status editions inside the date
  * window (2-day grace past end_date, start_date fallback), excluding
  * editions of online-only-format courses. Ordered by start_date ASC.
@@ -56,7 +126,6 @@ function stridence_catalog_items(string $catalog): array
 function stridence_catalog_klassikaal_items(): array
 {
     $prefix = ntdst_get(EditionRepository::class)->getMetaPrefix();
-    $past_cutoff = date('Y-m-d', strtotime('-2 days'));
 
     $query = new WP_Query([
         'post_type'      => 'vad_edition',
@@ -64,40 +133,12 @@ function stridence_catalog_klassikaal_items(): array
         'post_status'    => 'publish',
         'fields'         => 'ids',
         'no_found_rows'  => true,
-        'meta_query'     => [
-            [
-                'key'     => $prefix . 'status',
-                'value'   => OfferingStatus::activeValues(),
-                'compare' => 'IN',
-            ],
-            [
-                'relation' => 'OR',
-                [
-                    'key'     => $prefix . 'end_date',
-                    'value'   => $past_cutoff,
-                    'compare' => '>=',
-                    'type'    => 'DATE',
-                ],
-                [
-                    // Fallback when end_date is missing: use start_date
-                    'relation' => 'AND',
-                    [
-                        'key'     => $prefix . 'end_date',
-                        'compare' => 'NOT EXISTS',
-                    ],
-                    [
-                        'key'     => $prefix . 'start_date',
-                        'value'   => $past_cutoff,
-                        'compare' => '>=',
-                        'type'    => 'DATE',
-                    ],
-                ],
-            ],
-        ],
+        'meta_query'     => stridence_catalog_date_window_meta_query($prefix),
         'orderby'        => 'meta_value',
         'meta_key'       => $prefix . 'start_date',
         'order'          => 'ASC',
     ]);
+    stridence_catalog_warn_if_capped($query->posts, 'klassikaal editions');
 
     $items = stridence_catalog_edition_items_from_ids(array_map('intval', $query->posts));
 
@@ -124,13 +165,8 @@ function stridence_catalog_klassikaal_items(): array
 /**
  * Eligible items for /online: one card per enrollable — (a) active editions
  * of online-format courses inside the date window, plus (b) pure-LD online
- * courses that never had an edition.
- *
- * NOTE: dateless (self-paced) editions are currently EXCLUDED — the
- * `orderby => meta_value` + `meta_key => start_date` pair forces an EXISTS
- * AND-clause on start_date, which makes the dateless OR-branch below
- * unreachable (runtime-proven: a published open dateless edition does not
- * list). Pre-existing parity with the old pages — latent; see follow-up.
+ * courses that never had an edition. Dateless (self-paced) editions are
+ * excluded — see stridence_catalog_date_window_meta_query().
  */
 function stridence_catalog_online_items(): array
 {
@@ -150,6 +186,7 @@ function stridence_catalog_online_items(): array
             ],
         ],
     ]);
+    stridence_catalog_warn_if_capped($online_course_ids, 'online courses');
 
     if (empty($online_course_ids)) {
         return [];
@@ -158,65 +195,24 @@ function stridence_catalog_online_items(): array
     $items = [];
 
     // --- (a) Active editions of online courses ---
-    $past_cutoff = date('Y-m-d', strtotime('-2 days'));
+    $online_meta_query = stridence_catalog_date_window_meta_query($prefix);
+    $online_meta_query[] = [
+        'key'     => $prefix . 'course_id',
+        'value'   => $online_course_ids,
+        'compare' => 'IN',
+    ];
     $edition_query = new WP_Query([
         'post_type'      => 'vad_edition',
         'posts_per_page' => STRIDENCE_CATALOG_MAX_ITEMS,
         'post_status'    => 'publish',
         'fields'         => 'ids',
         'no_found_rows'  => true,
-        'meta_query'     => [
-            [
-                'key'     => $prefix . 'status',
-                'value'   => OfferingStatus::activeValues(),
-                'compare' => 'IN',
-            ],
-            [
-                'key'     => $prefix . 'course_id',
-                'value'   => $online_course_ids,
-                'compare' => 'IN',
-            ],
-            [
-                'relation' => 'OR',
-                [
-                    'key'     => $prefix . 'end_date',
-                    'value'   => $past_cutoff,
-                    'compare' => '>=',
-                    'type'    => 'DATE',
-                ],
-                [
-                    // Fallback when end_date is missing: use start_date
-                    'relation' => 'AND',
-                    [
-                        'key'     => $prefix . 'end_date',
-                        'compare' => 'NOT EXISTS',
-                    ],
-                    [
-                        'key'     => $prefix . 'start_date',
-                        'value'   => $past_cutoff,
-                        'compare' => '>=',
-                        'type'    => 'DATE',
-                    ],
-                ],
-                [
-                    // DEAD BRANCH: unreachable — the orderby meta_key forces
-                    // start_date EXISTS, contradicting NOT EXISTS (see docblock).
-                    'relation' => 'AND',
-                    [
-                        'key'     => $prefix . 'end_date',
-                        'compare' => 'NOT EXISTS',
-                    ],
-                    [
-                        'key'     => $prefix . 'start_date',
-                        'compare' => 'NOT EXISTS',
-                    ],
-                ],
-            ],
-        ],
+        'meta_query'     => $online_meta_query,
         'orderby'        => 'meta_value',
         'meta_key'       => $prefix . 'start_date',
         'order'          => 'ASC',
     ]);
+    stridence_catalog_warn_if_capped($edition_query->posts, 'online editions');
 
     $items = stridence_catalog_edition_items_from_ids(array_map('intval', $edition_query->posts));
 
@@ -454,11 +450,12 @@ function stridence_prefetch_course_cards(array $course_ids, ?int $user_id = null
 
     // One query: active-status editions for the whole course set, in the
     // same default order (date DESC) the per-card get_posts() used, so the
-    // "first best" pick stays identical.
+    // "first best" pick stays identical. Bounded by the same enumeration
+    // cap as the catalog lists (perf SF-2 — was an unbounded -1).
     $edition_ids = get_posts([
         'post_type'      => 'vad_edition',
         'post_status'    => 'publish',
-        'posts_per_page' => -1,
+        'posts_per_page' => STRIDENCE_CATALOG_MAX_ITEMS,
         'fields'         => 'ids',
         'meta_query'     => [
             [
@@ -473,6 +470,7 @@ function stridence_prefetch_course_cards(array $course_ids, ?int $user_id = null
             ],
         ],
     ]);
+    stridence_catalog_warn_if_capped($edition_ids, 'course-card pre-pass editions');
     $edition_ids = array_map('intval', $edition_ids);
 
     $primary = [];

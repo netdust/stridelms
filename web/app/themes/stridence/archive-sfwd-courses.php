@@ -35,6 +35,11 @@ $online_course_ids = get_posts([
     ],
 ]);
 
+// NOTE (pre-existing divergence, left as-is): unlike the online query below
+// and the /klassikaal page, this classroom teaser has NO date window — it
+// filters on active status only (stridence_catalog_date_window_meta_query
+// would add the end_date/start_date grace window). Convergence is a product
+// ruling, not a refactor — tracked with the dateless-catalog follow-up.
 $edition_meta_query = [
     [
         'key'     => $meta_prefix . 'status',
@@ -89,62 +94,21 @@ $trajectories = $trajectory_model->where('post_status', 'publish')
 $online_items = [];
 
 if (!empty($online_course_ids)) {
-    $online_past_cutoff = date('Y-m-d', strtotime('-2 days'));
+    // Eligibility rule shared with /klassikaal and /online — single builder
+    // (dateless/self-paced exclusion documented there).
+    $online_meta_query = stridence_catalog_date_window_meta_query($meta_prefix);
+    $online_meta_query[] = [
+        'key'     => $meta_prefix . 'course_id',
+        'value'   => $online_course_ids,
+        'compare' => 'IN',
+    ];
     $online_edition_query = new WP_Query([
         'post_type'      => 'vad_edition',
         'posts_per_page' => 6,
         'post_status'    => 'publish',
         'fields'         => 'ids',
         'no_found_rows'  => true,
-        'meta_query'     => [
-            [
-                'key'     => $meta_prefix . 'status',
-                'value'   => OfferingStatus::activeValues(),
-                'compare' => 'IN',
-            ],
-            [
-                'key'     => $meta_prefix . 'course_id',
-                'value'   => $online_course_ids,
-                'compare' => 'IN',
-            ],
-            [
-                'relation' => 'OR',
-                [
-                    'key'     => $meta_prefix . 'end_date',
-                    'value'   => $online_past_cutoff,
-                    'compare' => '>=',
-                    'type'    => 'DATE',
-                ],
-                [
-                    'relation' => 'AND',
-                    [
-                        'key'     => $meta_prefix . 'end_date',
-                        'compare' => 'NOT EXISTS',
-                    ],
-                    [
-                        'key'     => $meta_prefix . 'start_date',
-                        'value'   => $online_past_cutoff,
-                        'compare' => '>=',
-                        'type'    => 'DATE',
-                    ],
-                ],
-                [
-                    // DEAD BRANCH: unreachable — the orderby meta_key below
-                    // forces start_date EXISTS, contradicting NOT EXISTS.
-                    // Dateless (self-paced) editions are currently excluded;
-                    // pre-existing parity, latent — see helpers/catalog.php.
-                    'relation' => 'AND',
-                    [
-                        'key'     => $meta_prefix . 'end_date',
-                        'compare' => 'NOT EXISTS',
-                    ],
-                    [
-                        'key'     => $meta_prefix . 'start_date',
-                        'compare' => 'NOT EXISTS',
-                    ],
-                ],
-            ],
-        ],
+        'meta_query'     => $online_meta_query,
         'orderby'        => 'meta_value',
         'meta_key'       => $meta_prefix . 'start_date',
         'order'          => 'ASC',
