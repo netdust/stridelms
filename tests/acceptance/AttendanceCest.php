@@ -101,15 +101,16 @@ class AttendanceCest
 
         $I->waitForElement('.stride-attendance-toggle[data-user-id="' . $this->studentId . '"]', 10);
 
-        // First click cycles unmarked → present (see edition-admin.js cycle).
-        $I->click('.stride-attendance-toggle[data-user-id="' . $this->studentId . '"][data-session-id="' . $this->sessionId . '"]');
+        $selector = '.stride-attendance-toggle[data-user-id="' . $this->studentId . '"][data-session-id="' . $this->sessionId . '"]';
 
-        // Wait for the AJAX round-trip to land the row.
-        $I->waitForJS(
-            "return true;",
-            1
-        );
-        $I->wait(3);
+        // First click cycles unmarked → present (see edition-admin.js cycle).
+        $I->click($selector);
+
+        // Condition-based wait (no fixed sleep): the JS removes the
+        // 'processing' class in the AJAX success callback, AFTER the server
+        // wrote the row — so present:not(.processing) means the DB write
+        // is committed. A fixed wait() flaked when the round-trip was slow.
+        $I->waitForElement($selector . '.present:not(.processing)', 10);
 
         $I->seeInDatabase($I->grabPrefixedTableNameFor('vad_attendance'), [
             'session_id' => $this->sessionId,
@@ -135,9 +136,13 @@ class AttendanceCest
         $selector = '.stride-attendance-toggle[data-user-id="' . $this->studentId . '"][data-session-id="' . $this->sessionId . '"]';
 
         $I->click($selector); // → present
-        $I->wait(2);
+        // The 'processing' guard in edition-admin.js silently SWALLOWS any
+        // click that lands while the previous AJAX is in flight — a fixed
+        // wait(2) flaked whenever the round-trip ran longer, leaving the row
+        // 'present' and the second click ignored. Wait for the guard to lift.
+        $I->waitForElement($selector . '.present:not(.processing)', 10);
         $I->click($selector); // → absent
-        $I->wait(3);
+        $I->waitForElement($selector . '.absent:not(.processing)', 10);
 
         $count = (int) $I->grabNumRecords($I->grabPrefixedTableNameFor('vad_attendance'), [
             'session_id' => $this->sessionId,
