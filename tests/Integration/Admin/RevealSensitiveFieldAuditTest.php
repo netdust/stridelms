@@ -177,6 +177,68 @@ final class RevealSensitiveFieldAuditTest extends IntegrationTestCase
         );
     }
 
+    public function testFailedAuditWriteLogsWarningAndDoesNotBlockReveal(): void
+    {
+        // Shake-out F4 (AF-2 ruling: availability over strictness). A failed
+        // AuditService::record() must log via ntdst_log('audit') and NOT
+        // block the reveal response. The failure is genuine: the
+        // ntdst/audit/table_name filter points the insert at a table that
+        // does not exist, so $wpdb->insert() fails for real — no mocks.
+        global $wpdb;
+
+        update_user_meta(self::$testUserId, 'national_id', '85.07.30-033.61');
+
+        $before = count($this->auditRowsFor(self::$testUserId));
+
+        $captured = [];
+        $logSpy = static function ($level, $message, $context) use (&$captured): void {
+            $captured[] = ['level' => $level, 'message' => (string) $message, 'context' => (array) $context];
+        };
+        $breakTable = static fn(): string => 'audit_log_missing_f4_test';
+
+        add_action('ntdst_log_audit', $logSpy, 10, 3);
+        add_filter('ntdst/audit/table_name', $breakTable);
+        $suppressing = $wpdb->suppress_errors(true);
+
+        try {
+            $response = $this->dispatchReveal(self::$testUserId, 'national_id');
+        } finally {
+            $wpdb->suppress_errors($suppressing);
+            remove_filter('ntdst/audit/table_name', $breakTable);
+            remove_action('ntdst_log_audit', $logSpy, 10);
+        }
+
+        // 1. The reveal is NOT blocked: 200 + the value still returned.
+        $this->assertSame(
+            200,
+            $response->get_status(),
+            'A failed audit write must not block the reveal (availability over strictness — AF-2)'
+        );
+        $data = (array) $response->get_data();
+        $this->assertSame('85.07.30-033.61', $data['value'] ?? null, 'Reveal value must survive the audit failure');
+
+        // 2. No audit row landed in the REAL table (the write genuinely failed).
+        $this->assertCount(
+            $before,
+            $this->auditRowsFor(self::$testUserId),
+            'The failed insert must leave zero audit rows in the real table'
+        );
+
+        // 3. The failure was logged on the audit channel.
+        $warnings = array_filter(
+            $captured,
+            static fn(array $entry): bool => str_contains($entry['message'], 'PII reveal audit write failed')
+        );
+        $this->assertNotEmpty(
+            $warnings,
+            'A failed audit write must log "PII reveal audit write failed" via ntdst_log(audit). Captured: '
+            . wp_json_encode(array_column($captured, 'message'))
+        );
+        $warning = array_values($warnings)[0];
+        $this->assertSame('national_id', $warning['context']['field'] ?? null, 'The warning context must name the field');
+        $this->assertSame(self::$testUserId, $warning['context']['user_id'] ?? null, 'The warning context must name the user');
+    }
+
     public function testNonExistentUserReturns404AndWritesNoAuditRow(): void
     {
         $bogusId = 99999999;
