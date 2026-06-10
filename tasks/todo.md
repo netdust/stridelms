@@ -13,6 +13,31 @@ Plan: `~/.claude/plans/glowing-roaming-wozniak.md` (approved 2026-06-10). Goal: 
 - [x] **Phase 2 — Security hardening** (2026-06-10): test-login-helper WP_ENV gate + env-only secret + HMAC (`1304ed0a`); re-verification found H4/M1/M3/M4/M5/M6 already fixed in code (audit report status updated); wp_ajax controllers all do nonce + explicit capability; still-open = M2 + C2/L2 (post-launch modules, documented)
 - [x] **Phase 3 — Targeted P0 edge-testing gate** (2026-06-10): 13 new edge tests — `EnrollmentEdgeCest` (6: empty fields, double-submit, capacity-full, colleague PII guard, voucher denials), `AttendanceCest` (4: mark/re-mark/empty-state/auth — was zero-coverage), `DashboardQuoteGdprEdgeCest` (3: nav consistency, quote lock, anonymise). Matrix+manifest `docs/architecture/acceptance-flows/p0-hardening-phase3.md`. 6 FEATURE-STATUS rows flipped to ✅. Also deflaked 2 pre-existing tests (canAddSession seed-accretion, registration rate-limit retry). **Suites: 924 unit + 369 integration + 121 acceptance green.** F5 (cert) + F6 (expired-access) left unit/integration-covered per targeted scope.
 - [ ] **Phase 4 — Deploy readiness**: deploy-time list + final evidence refresh. ⚠ `site.yml` declares `make deploy-staging` but **no Makefile exists** — deploy tooling must be created/verified before launch. Production .env must NOT set STRIDE_TEST_LOGIN_SECRET. Standing list: deactivate netdust-lti, real SMTP, set stride_admin_email, replay 6 footer pages on staging/prod.
+  - 2026-06-10 crash note: phase 4 was 1 minute in when the machine restarted. Pending decision it was about to ask: deploy method should likely be **git-push** (Ploi auto-deploy webhook runs `composer install --no-dev` on push) — the `makefile` method in site.yml is aspirational. **Stefan: Makefile/deploy-method decision parked, solve later.** Don't block other work on it.
+
+---
+
+## NEXT SPRINT — Audit remediation (handoff, written 2026-06-10)
+
+**Source of truth: `docs/architecture/AUDIT-2026-06-10.md`** (grade B−; 3 Critical / 8 High / 12 Medium / 9 Low; contains the full milestone task plan with acceptance criteria, effort, and a `Deps` column). Entry point: `harnessed-development` → planner as a Class-B freshness review of that doc — reconcile against current source first; the audit ran concurrently with hardening Phase 3, so a few statuses predate it.
+
+**Scope ruling (Stefan, 2026-06-10, ship-mode):**
+- **In scope:** Milestone 0 (CI safety net — do FIRST, it protects everything else), Milestone 1 (launch blockers), and the perf-critical core of Milestone 2 (CR-2 dashboard, CR-3 catalog, H-3 object cache, H-4 audit-log badge) — read-path collapse at 4,000 users is launch-relevant.
+- **Post-launch:** Milestone 3 (polish), AdminAPIController decomposition, Partner-API rate limiting, module cycles — all per the audit's own "Explicitly NOT fixing now".
+- **Parked by Stefan:** task 1.2 (Makefile / deploy method) — he'll solve it himself. Skip it; task 2.3 (Redis) depends on 1.2 only for ops access, not code — prep the drop-in, defer enablement.
+
+**Execute in the audit's dependency order** (Deps column is authoritative): 0.1→0.5 before 1.1; 0.5 before 1.1; 1.1 before 2.6. Quick-wins batch (audit §Quick wins, ~1 day): 0.1, 1.1, 1.3, 1.4, 1.6, 3.5, 3.7.
+
+**Already resolved since the audit was written — do not re-do:**
+- Open question 6 (stale memory entries re impersonation bypass) — corrected during hardening Phase 2.
+- Acceptance-suite prefix mismatch — fixed (`eb931fd1`); suites green 924 unit + 369 integration + 121 acceptance (2026-06-10).
+- H-2 is the parked Makefile item above.
+
+**Open questions needing Stefan before the dependent task (audit §Open Questions):**
+- Q2: what do users upload as completion proof? → decides if 1.7 (protect uploads) is launch-blocking or M3.
+- Q3: perf budget — audit's ≤40 queries catalog / ≤60 dashboard are inferred targets; confirm or adjust.
+- Q4: git history rewrite go/no-go for the 90 MB purge (3.1) — untrack now, rewrite later is the safe default.
+- Q5: is Redis available on the Ploi production plan? → shapes H-3 mitigation.
 
 ---
 

@@ -3,7 +3,13 @@
 Current state of the project for session continuity. Updated after meaningful work.
 **For "what's left to launch" see `docs/LAUNCH-CHECKLIST.md` (single source of truth).**
 
-Last refresh: 2026-06-10 (hardening sprint, phases 0–3 done)
+Last refresh: 2026-06-10 (hardening sprint, phases 0–3 done; audit-remediation handoff written)
+
+---
+
+## NEXT: Audit remediation sprint — handoff ready
+
+Full handoff block at the top of `tasks/todo.md` (§NEXT SPRINT). Source: `docs/architecture/AUDIT-2026-06-10.md` (grade B−). Scope ruled by Stefan 2026-06-10: Milestones 0+1 + perf-critical M2; M3 post-launch; task 1.2 (Makefile/deploy method) parked — Stefan handles it. Execute via harnessed-development → planner (Class-B freshness review), audit's Deps column is authoritative for order. 4 open questions need Stefan first (uploads sensitivity, perf budget, history rewrite, Redis on Ploi) — listed in the todo.md block.
 
 ---
 
