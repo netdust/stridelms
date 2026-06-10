@@ -17,7 +17,15 @@ Plan: `~/.claude/plans/glowing-roaming-wozniak.md` (approved 2026-06-10). Goal: 
 
 ---
 
-## NEXT SPRINT — Audit remediation (handoff, written 2026-06-10)
+## ✅ DONE — Audit remediation sprint (executed 2026-06-10, ~75 commits on staging)
+
+**Executed via harnessed-development**: planner Class-B freshness review → plan `tasks/plans/2026-06-10-audit-remediation-plan.md` (threat model M1–M9 + invariants + AF-1..5 matrix) → 7 review clusters (A–G) each with a tiered gate (3× STANDARD, 4× FULL incl. security-sentinel + drift) → spec-close `/shakeout` (test-effectiveness manifest + AF-1..5 driven through real browser/wire + 6-persona FULL branch panel: **0 blockers**, all SHOULD-FIX remediated).
+
+**Closed:** M0 entire (CI now runs 974 unit + 458 integration in GitHub Actions, seam-proven RED→GREEN; PHPStan L1 baselined; INV-5 grep blind spot), M1 minus parked 1.2 (dead columns H-1, partner ENUM M-4, PII-reveal audit row M-1, VAT consolidation H-5 + new blocking INV-8, date-helper move H-6 + INV-5 blocking, proof protection M-2 incl. nginx deny + private attachments), perf-critical M2 (dashboard memoization CR-2, bounded approvals H-8, batched export, audit-table generated column + badge cache H-4 — index-backed on 82k rows, catalog batch hydration CR-3 — 168→11 queries, Redis prep-only H-3 per Q5), riders 3.5 + 3.7. **Suites at close: 974 unit / 458 integration (1 pre-existing skip) / 128 acceptance — all green; invariants script exit 0.**
+
+**Notable finds during execution:** staging DB is MySQL-family → the audit-table migration was made flavor-portable before it could brick a deploy; quote paths proven to AGREE (no live financial bug); the catalog endpoint shipped guest-broken once and was caught + wire-fixed at the G gate; protected proofs were still REST-enumerable until the final panel caught it (now `private`).
+
+Original handoff (kept for reference):
 
 **Source of truth: `docs/architecture/AUDIT-2026-06-10.md`** (grade B−; 3 Critical / 8 High / 12 Medium / 9 Low; contains the full milestone task plan with acceptance criteria, effort, and a `Deps` column). Entry point: `harnessed-development` → planner as a Class-B freshness review of that doc — reconcile against current source first; the audit ran concurrently with hardening Phase 3, so a few statuses predate it.
 
