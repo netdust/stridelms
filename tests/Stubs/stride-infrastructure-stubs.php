@@ -132,7 +132,7 @@ namespace NTDST\Audit {
                 string $action,
                 ?int $actorId = null,
                 array $context = []
-            ): void {
+            ): int|\WP_Error {
                 $this->recordedCalls[] = [
                     'entity_type' => $entityType,
                     'entity_id' => $entityId,
@@ -140,6 +140,18 @@ namespace NTDST\Audit {
                     'actor_id' => $actorId,
                     'context' => $context,
                 ];
+
+                // Mirror the real AuditService (mode-2 stub sync, audit
+                // 2026-06-10): record() returns int|WP_Error — callers
+                // branch on is_wp_error() (AdminAPIController PII reveal,
+                // CR-B2) — and fires ntdst/audit/recorded, which consumers
+                // (NotificationService badge cache, CR-F2) listen to. A
+                // void/silent stub forks test-world from real-world.
+                if (function_exists('do_action')) {
+                    do_action('ntdst/audit/recorded', $action, $entityType, $entityId, $context, $actorId);
+                }
+
+                return count($this->recordedCalls);
             }
 
             /**
