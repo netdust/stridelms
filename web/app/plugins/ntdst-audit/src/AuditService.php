@@ -35,6 +35,9 @@ final class AuditService implements \NTDST_Service_Meta
             update_option('ntdst_audit_table_created', true, true);
         }
 
+        // Versioned schema upgrades (option-gated; no-op once stamped).
+        AuditTable::migrate();
+
         // Clear orphaned cron from old hook name (one-time cleanup)
         if (wp_next_scheduled('stride_audit_cleanup')) {
             wp_clear_scheduled_hook('stride_audit_cleanup');
@@ -83,6 +86,21 @@ final class AuditService implements \NTDST_Service_Meta
                 'entity_type' => $entityType,
                 'entity_id' => $entityId,
             ]);
+
+            /**
+             * Fires after an audit entry is recorded.
+             *
+             * Lets consumers react to new events without polling — e.g.
+             * Stride invalidates its cached unread-notification count for
+             * the subject user (context.user_id).
+             *
+             * @param string   $action     Recorded action slug.
+             * @param string   $entityType Entity type.
+             * @param int      $entityId   Entity ID.
+             * @param array    $context    Context payload as passed in.
+             * @param int|null $actorId    Resolved actor (null = system).
+             */
+            do_action('ntdst/audit/recorded', $action, $entityType, $entityId, $context, $actorId);
         }
 
         return $result;
@@ -106,10 +124,14 @@ final class AuditService implements \NTDST_Service_Meta
 
     /**
      * Get audit entries where user is the subject (not actor).
+     *
+     * @param string[] $excludeActions Action slugs that must never count as
+     *                                 subject-targeted (consumer policy, e.g.
+     *                                 Stride excludes 'mail.sent').
      */
-    public function getForSubjectUser(int $userId, int $limit = 50, int $daysBack = 30): array
+    public function getForSubjectUser(int $userId, int $limit = 50, int $daysBack = 30, array $excludeActions = []): array
     {
-        return $this->repository->findBySubjectUser($userId, $limit, $daysBack);
+        return $this->repository->findBySubjectUser($userId, $limit, $daysBack, $excludeActions);
     }
 
     /**
