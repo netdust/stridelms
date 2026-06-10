@@ -434,5 +434,10 @@ class EditionService extends AbstractService implements EditionQueryInterface
         global $wpdb;
         $table = $wpdb->prefix . 'vad_registrations';
         $wpdb->delete($table, ['edition_id' => $editionId], ['%d']);
+
+        // Justified INV-3 bypass (bulk delete), but the invalidation
+        // convergence point allows no bulk-path exception: drop the
+        // repository's per-request cache so stale rows can't be served.
+        ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class)->clearCache();
     }
 }
