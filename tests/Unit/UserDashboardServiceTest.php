@@ -88,7 +88,9 @@ class UserDashboardServiceTest extends TestCase
         $this->assertArrayHasKey('active_enrollments', $result);
         $this->assertArrayHasKey('active_trajectories', $result);
         $this->assertArrayHasKey('recent_certificates', $result);
-        $this->assertArrayHasKey('nav_items', $result);
+        // nav_items was deleted with buildNavItems() + the orphaned
+        // nav-dock.php template — its only reader (CR-E4).
+        $this->assertArrayNotHasKey('nav_items', $result);
     }
 
     /** @test */
@@ -104,21 +106,6 @@ class UserDashboardServiceTest extends TestCase
         $this->assertEquals('Jan Peeters', $result['user']['name']);
         $this->assertEquals('JP', $result['user']['initials']);
         $this->assertEquals('jan@example.com', $result['user']['email']);
-    }
-
-    /** @test */
-    public function testGetHomeDataNavItemsAllFalseWhenEmpty(): void
-    {
-        global $_test_users;
-        $_test_users[1] = new WP_User(['ID' => 1, 'first_name' => 'Jan', 'last_name' => 'Peeters', 'user_email' => 'jan@example.com', 'display_name' => 'Jan Peeters']);
-
-        $result = $this->service->getHomeData(1);
-
-        $this->assertFalse($result['nav_items']['opleidingen']);
-        $this->assertFalse($result['nav_items']['trajecten']);
-        $this->assertFalse($result['nav_items']['agenda']);
-        $this->assertFalse($result['nav_items']['offertes']);
-        $this->assertFalse($result['nav_items']['certificaten']);
     }
 
     /** @test */

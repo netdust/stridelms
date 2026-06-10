@@ -90,7 +90,6 @@ final class UserDashboardService
      *   active_enrollments: array,
      *   active_trajectories: array,
      *   recent_certificates: array,
-     *   nav_items: array{opleidingen: bool, trajecten: bool, agenda: bool, offertes: bool, certificaten: bool},
      * }
      */
     public function getHomeData(int $userId): array
@@ -126,29 +125,6 @@ final class UserDashboardService
             'active_enrollments'   => $activeEnrollments,
             'active_trajectories'  => $trajectories,
             'recent_certificates'  => $certificates,
-            'nav_items'            => $this->buildNavItems($enrollmentData, $quoteData, $trajectories),
-        ];
-    }
-
-    /**
-     * Single derivation of the dashboard nav flags — home and all other tabs
-     * MUST route through this so the sidebar never flickers between tabs.
-     *
-     * @return array{opleidingen: bool, trajecten: bool, agenda: bool, offertes: bool, certificaten: bool}
-     */
-    private function buildNavItems(array $enrollmentData, array $quoteData, array $trajectories): array
-    {
-        $activeEnrollments = array_merge(
-            $enrollmentData['active_editions'] ?? [],
-            $enrollmentData['active_online'] ?? [],
-        );
-
-        return [
-            'opleidingen'  => !empty($activeEnrollments) || !empty($enrollmentData['completed_items']),
-            'trajecten'    => !empty($trajectories),
-            'agenda'       => !empty($enrollmentData['upcoming_sessions']),
-            'offertes'     => !empty($quoteData['active']) || !empty($quoteData['cancelled']),
-            'certificaten' => !empty($enrollmentData['completed_items']),
         ];
     }
 
