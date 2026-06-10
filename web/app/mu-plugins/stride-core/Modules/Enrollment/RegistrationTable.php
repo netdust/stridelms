@@ -16,6 +16,16 @@ final class RegistrationTable
 {
     public const TABLE_NAME = 'vad_registrations';
 
+    /**
+     * Versioned schema upgrades for installs whose table predates a change.
+     * Bump when ALTERing the table; add the matching step in migrate().
+     *
+     * v2: enrollment_path ENUM gains 'partner' (audit M-4).
+     */
+    public const SCHEMA_VERSION = 2;
+
+    private const SCHEMA_VERSION_OPTION = 'stride_registrations_schema_version';
+
     public static function getTableName(): string
     {
         global $wpdb;
@@ -36,7 +46,7 @@ final class RegistrationTable
             trajectory_id BIGINT UNSIGNED NULL,
             parent_registration_id BIGINT UNSIGNED NULL,
             status ENUM('confirmed','cancelled','waitlist','completed','interest','pending') DEFAULT 'confirmed',
-            enrollment_path ENUM('individual','colleague','trajectory') DEFAULT 'individual',
+            enrollment_path ENUM('individual','colleague','trajectory','partner') DEFAULT 'individual',
             selections JSON NULL COMMENT 'Session IDs or elective edition IDs',
             selections_locked_at DATETIME NULL,
             quote_id BIGINT UNSIGNED NULL,
@@ -62,6 +72,48 @@ final class RegistrationTable
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         dbDelta($sql);
+
+        // Fresh tables are created at the latest schema — stamp the version so
+        // migrate() doesn't re-run historical steps.
+        update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION);
+    }
+
+    /**
+     * Versioned, idempotent schema upgrades for pre-existing installs.
+     *
+     * Option-gated like stride_roles_version in stride-core.php; each step is
+     * additionally safe to re-run (additive DDL + constant-valued backfill).
+     */
+    public static function migrate(): void
+    {
+        if ((int) get_option(self::SCHEMA_VERSION_OPTION, 1) >= self::SCHEMA_VERSION) {
+            return;
+        }
+
+        if (!self::exists()) {
+            // No table yet — create() will build the latest schema and stamp the version.
+            return;
+        }
+
+        global $wpdb;
+
+        $table = self::getTableName();
+
+        // v2 (audit M-4 / threat-model M7): add 'partner' to enrollment_path.
+        // Purely additive — existing values are untouched. Pre-v2, inserts using
+        // RegistrationRepository::PATH_PARTNER were coerced to '' under
+        // non-strict SQL mode; backfill those rows when they are company-scoped.
+        $wpdb->query(
+            "ALTER TABLE {$table}
+            MODIFY enrollment_path ENUM('individual','colleague','trajectory','partner') DEFAULT 'individual'",
+        );
+        $wpdb->query(
+            "UPDATE {$table}
+            SET enrollment_path = 'partner'
+            WHERE enrollment_path = '' AND company_id IS NOT NULL",
+        );
+
+        update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION);
     }
 
     public static function exists(): bool

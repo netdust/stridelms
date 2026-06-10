@@ -35,6 +35,10 @@ add_action('init', function (): void {
         \Stride\Modules\Enrollment\RegistrationTable::create();
         update_option('stride_tables_created', '1');
     }
+
+    // Versioned schema upgrades for installs whose table predates a change
+    // (gated internally on stride_registrations_schema_version).
+    \Stride\Modules\Enrollment\RegistrationTable::migrate();
 }, 1);
 
 // Create attendance table if missing
