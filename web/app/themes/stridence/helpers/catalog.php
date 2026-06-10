@@ -279,6 +279,16 @@ function stridence_catalog_edition_items_from_ids(array $edition_ids): array
         $fields = $editionRepo->findFields($id);
         $course_id = (int) ($fields['course_id'] ?? 0);
 
+        // Shake-out F2 (AF-4 wrong-order edge / INF-1): an edition whose
+        // course is no longer published (trashed, draft, private, deleted)
+        // must not produce a public card — get_post_status() returns the
+        // status for TRASHED posts too, so a plain get_post() null-check
+        // only catches hard deletes. Course-less editions (course_id 0)
+        // stay eligible. Cache-hit: course posts were primed above.
+        if ($course_id && get_post_status($course_id) !== 'publish') {
+            continue;
+        }
+
         $items[] = [
             'kind'    => 'edition',
             'edition' => [

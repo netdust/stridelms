@@ -58,6 +58,15 @@ $course_id       = $get('course_id');
 $status          = isset($args['status']) ? (string) $args['status'] : (string) $get('status', 'open');
 $spots_remaining = isset($args['spots_remaining']) ? (int) $args['spots_remaining'] : null;
 
+// Defensive mirror of the eligible-items builder filter (shake-out F2):
+// an edition whose course is no longer published must not render a card
+// at all — not even the edition-title fallback. Catches stale item arrays
+// built before the course was trashed (mid-flow). Cache-hit when the
+// pre-pass primed course posts; no fatal either way.
+if ($course_id && get_post_status($course_id) !== 'publish') {
+    return;
+}
+
 // Fetch course if not provided but course_id available. Cache-hit: the
 // pre-pass primed all course posts. Only a PUBLISHED course may leak its
 // title/thumbnail into a public card (INF-1 — draft/private/trashed
