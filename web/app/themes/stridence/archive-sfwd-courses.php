@@ -12,9 +12,12 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
+use Stride\Domain\OfferingStatus;
 use Stride\Modules\Edition\EditionRepository;
 
 $editionRepository = ntdst_get(EditionRepository::class);
+$meta_prefix = $editionRepository->getMetaPrefix();
+$archive_user_id = get_current_user_id() ?: null;
 
 // --- Classroom editions ---
 // Get online course IDs to exclude their editions
@@ -34,8 +37,8 @@ $online_course_ids = get_posts([
 
 $edition_meta_query = [
     [
-        'key'     => '_ntdst_status',
-        'value'   => ['announcement', 'open', 'full', 'in_progress'],
+        'key'     => $meta_prefix . 'status',
+        'value'   => OfferingStatus::activeValues(),
         'compare' => 'IN',
     ],
 ];
@@ -44,12 +47,12 @@ if (!empty($online_course_ids)) {
     $edition_meta_query[] = [
         'relation' => 'OR',
         [
-            'key'     => '_ntdst_course_id',
+            'key'     => $meta_prefix . 'course_id',
             'value'   => $online_course_ids,
             'compare' => 'NOT IN',
         ],
         [
-            'key'     => '_ntdst_course_id',
+            'key'     => $meta_prefix . 'course_id',
             'compare' => 'NOT EXISTS',
         ],
     ];
@@ -59,30 +62,17 @@ $edition_query = new WP_Query([
     'post_type'      => 'vad_edition',
     'posts_per_page' => 6,
     'post_status'    => 'publish',
+    'fields'         => 'ids',
+    'no_found_rows'  => true,
     'meta_query'     => $edition_meta_query,
     'orderby'        => 'meta_value',
-    'meta_key'       => '_ntdst_start_date',
+    'meta_key'       => $meta_prefix . 'start_date',
     'order'          => 'ASC',
 ]);
 
-$classroom_editions = [];
-foreach ($edition_query->posts as $edition_post) {
-    $edition_obj = $editionRepository->find($edition_post->ID);
-    if (!$edition_obj || is_wp_error($edition_obj)) {
-        continue;
-    }
-    $classroom_editions[] = [
-        'id'              => $edition_obj->ID,
-        'title'           => $edition_obj->post_title,
-        'course_id'       => $edition_obj->fields['course_id'] ?? null,
-        'start_date'      => $edition_obj->fields['start_date'] ?? null,
-        'venue'           => $edition_obj->fields['venue'] ?? null,
-        'price'           => $edition_obj->fields['price'] ?? null,
-        'capacity'        => $edition_obj->fields['capacity'] ?? null,
-        'status'          => $edition_obj->fields['status'] ?? 'open',
-        'spots_remaining' => $edition_obj->fields['spots_remaining'] ?? null,
-    ];
-}
+// Batch-hydrated card items (Task G1 / audit 2.2) — rendered through the
+// catalog pre-pass; the card partials are pure renderers.
+$classroom_items = stridence_catalog_edition_items_from_ids(array_map('intval', $edition_query->posts));
 
 // --- Trajectories ---
 $trajectory_model = ntdst_data()->get('vad_trajectory');
@@ -96,7 +86,7 @@ $trajectories = $trajectory_model->where('post_status', 'publish')
 // --- Online enrollables (active editions + pure-LD courses) ---
 // Same rule as page-online.php: catalog list = the set of things a visitor
 // can enroll in. See [[lesson_url_role_split]].
-$online_enrollables = [];
+$online_items = [];
 
 if (!empty($online_course_ids)) {
     $online_past_cutoff = date('Y-m-d', strtotime('-2 days'));
@@ -104,21 +94,23 @@ if (!empty($online_course_ids)) {
         'post_type'      => 'vad_edition',
         'posts_per_page' => 6,
         'post_status'    => 'publish',
+        'fields'         => 'ids',
+        'no_found_rows'  => true,
         'meta_query'     => [
             [
-                'key'     => '_ntdst_status',
-                'value'   => ['announcement', 'open', 'full', 'in_progress'],
+                'key'     => $meta_prefix . 'status',
+                'value'   => OfferingStatus::activeValues(),
                 'compare' => 'IN',
             ],
             [
-                'key'     => '_ntdst_course_id',
+                'key'     => $meta_prefix . 'course_id',
                 'value'   => $online_course_ids,
                 'compare' => 'IN',
             ],
             [
                 'relation' => 'OR',
                 [
-                    'key'     => '_ntdst_end_date',
+                    'key'     => $meta_prefix . 'end_date',
                     'value'   => $online_past_cutoff,
                     'compare' => '>=',
                     'type'    => 'DATE',
@@ -126,11 +118,11 @@ if (!empty($online_course_ids)) {
                 [
                     'relation' => 'AND',
                     [
-                        'key'     => '_ntdst_end_date',
+                        'key'     => $meta_prefix . 'end_date',
                         'compare' => 'NOT EXISTS',
                     ],
                     [
-                        'key'     => '_ntdst_start_date',
+                        'key'     => $meta_prefix . 'start_date',
                         'value'   => $online_past_cutoff,
                         'compare' => '>=',
                         'type'    => 'DATE',
@@ -140,69 +132,38 @@ if (!empty($online_course_ids)) {
                     // Self-paced online edition (no dates at all) — always show
                     'relation' => 'AND',
                     [
-                        'key'     => '_ntdst_end_date',
+                        'key'     => $meta_prefix . 'end_date',
                         'compare' => 'NOT EXISTS',
                     ],
                     [
-                        'key'     => '_ntdst_start_date',
+                        'key'     => $meta_prefix . 'start_date',
                         'compare' => 'NOT EXISTS',
                     ],
                 ],
             ],
         ],
         'orderby'        => 'meta_value',
-        'meta_key'       => '_ntdst_start_date',
+        'meta_key'       => $meta_prefix . 'start_date',
         'order'          => 'ASC',
     ]);
-    foreach ($online_edition_query->posts as $edition_post) {
-        $edition_obj = $editionRepository->find($edition_post->ID);
-        if (!$edition_obj || is_wp_error($edition_obj)) {
-            continue;
-        }
-        $course_id = (int) ($edition_obj->fields['course_id'] ?? 0);
-        $online_enrollables[] = [
-            'kind'    => 'edition',
-            'edition' => [
-                'id'              => $edition_obj->ID,
-                'title'           => $edition_obj->post_title,
-                'course_id'       => $course_id,
-                'start_date'      => $edition_obj->fields['start_date'] ?? null,
-                'venue'           => $edition_obj->fields['venue'] ?? null,
-                'price'           => $edition_obj->fields['price'] ?? null,
-                'capacity'        => $edition_obj->fields['capacity'] ?? null,
-                'status'          => $edition_obj->fields['status'] ?? 'open',
-                'spots_remaining' => $edition_obj->fields['spots_remaining'] ?? null,
-            ],
-        ];
-    }
+    $online_items = stridence_catalog_edition_items_from_ids(array_map('intval', $online_edition_query->posts));
 }
 
 // Top up with pure-LD courses (courses with NO edition at all — not "no
 // currently-visible edition"). A course with only past editions is off-catalog
 // until a new one is scheduled.
-$remaining = 6 - count($online_enrollables);
+$remaining = 6 - count($online_items);
 if ($remaining > 0 && !empty($online_course_ids)) {
-    global $wpdb;
-    $in_placeholders = implode(',', array_fill(0, count($online_course_ids), '%d'));
-    $any_edition_course_ids = $wpdb->get_col($wpdb->prepare(
-        "SELECT DISTINCT pm.meta_value + 0
-         FROM {$wpdb->postmeta} pm
-         INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
-         WHERE pm.meta_key = '_ntdst_course_id'
-           AND p.post_type = 'vad_edition'
-           AND pm.meta_value IN ($in_placeholders)",
-        ...$online_course_ids,
-    ));
-    $any_edition_course_ids = array_map('intval', $any_edition_course_ids);
-    $pure_ld_ids = array_diff($online_course_ids, $any_edition_course_ids);
+    $with_editions = $editionRepository->courseIdsWithAnyEdition(array_map('intval', $online_course_ids));
+    $pure_ld_ids = array_values(array_diff(array_map('intval', $online_course_ids), $with_editions));
     foreach (array_slice($pure_ld_ids, 0, $remaining) as $course_id) {
-        $course = get_post($course_id);
-        if (!$course) {
+        if (!get_post($course_id)) {
             continue;
         }
-        $online_enrollables[] = [
-            'kind'   => 'course',
-            'course' => $course,
+        $online_items[] = [
+            'kind'      => 'course',
+            'course_id' => $course_id,
+            'themes'    => [],
         ];
     }
 }
@@ -265,15 +226,9 @@ get_header();
             <?php esc_html_e('Leer samen met anderen onder begeleiding van ervaren docenten.', 'stridence'); ?>
         </p>
 
-        <?php if (!empty($classroom_editions)) : ?>
+        <?php if (!empty($classroom_items)) : ?>
             <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                <?php foreach ($classroom_editions as $edition) : ?>
-                    <?php
-                    stridence_template_part('partials/card-edition', null, [
-                        'edition' => $edition,
-                    ]);
-                    ?>
-                <?php endforeach; ?>
+                <?php echo stridence_catalog_render_cards($classroom_items, $archive_user_id); // Escaped within the partials.?>
             </div>
         <?php else : ?>
             <?php
@@ -300,19 +255,9 @@ get_header();
             <?php esc_html_e('Leer op je eigen tempo met onze e-learning modules en webinars.', 'stridence'); ?>
         </p>
 
-        <?php if (!empty($online_enrollables)) : ?>
+        <?php if (!empty($online_items)) : ?>
             <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                <?php foreach ($online_enrollables as $item) : ?>
-                    <?php if ($item['kind'] === 'edition') : ?>
-                        <?php stridence_template_part('partials/card-edition', null, [
-                            'edition' => $item['edition'],
-                        ]); ?>
-                    <?php else : ?>
-                        <?php stridence_template_part('partials/card-course', null, [
-                            'course' => $item['course'],
-                        ]); ?>
-                    <?php endif; ?>
-                <?php endforeach; ?>
+                <?php echo stridence_catalog_render_cards($online_items, $archive_user_id); // Escaped within the partials.?>
             </div>
         <?php else : ?>
             <?php

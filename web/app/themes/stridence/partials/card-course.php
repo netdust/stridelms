@@ -1,21 +1,26 @@
 <?php
 /**
- * Course Card Partial
+ * Course Card Partial — PURE RENDERER (Task G1 / audit 2.2).
  *
  * Renders a course card with status badge showing enrollment/progress state.
  * For logged-in users: shows their enrollment status (enrolled, in progress, completed).
  * For guests: shows course availability status.
  *
+ * All per-card lookups are data-in: callers run the catalog batch pre-pass
+ * (helpers/catalog.php — stridence_prefetch_course_cards() resolves the
+ * primary visible edition with the same enrollable > active ranking this
+ * partial previously computed with a WP_Query PER CARD, plus the visitor's
+ * LD state). When prefetched keys are absent (mid-flow fallback), the card
+ * renders the generic availability badge — degraded but never fatal.
+ *
  * @param array $args {
- *     @type WP_Post $course Course post object
+ *     @type WP_Post    $course          Course post object
+ *     @type array|null $primary_edition Prefetched ['id' => int, 'status' => OfferingStatus, 'spots' => ?int] or null (pure-LD)
+ *     @type array|null $user_state      Prefetched ['enrolled' => bool, 'progress' => int] or null (guest / not enrolled)
  * }
  */
 
 defined('ABSPATH') || exit;
-
-use Stride\Integrations\LearnDash\LearnDashHelper;
-use Stride\Modules\Edition\EditionService;
-use Stride\Domain\OfferingStatus;
 
 $course = $args['course'] ?? null;
 
@@ -24,56 +29,8 @@ if (!$course instanceof WP_Post) {
     return;
 }
 
-/**
- * Find the course's primary visible edition (if any). Same shape as the
- * /edities/<course>/ router's resolver: enrollable > active > nothing.
- * Returns ['id' => int, 'status' => OfferingStatus, 'spots' => ?int]
- * or null when no visible edition exists (pure-LD course).
- */
-$primary_edition = null;
-$edition_ids = get_posts([
-    'post_type'      => 'vad_edition',
-    'post_status'    => 'publish',
-    'posts_per_page' => -1,
-    'fields'         => 'ids',
-    'meta_query'     => [
-        ['key' => '_ntdst_course_id', 'value' => $course->ID],
-        [
-            'key'     => '_ntdst_status',
-            'value'   => ['announcement', 'open', 'full', 'in_progress'],
-            'compare' => 'IN',
-        ],
-    ],
-]);
-
-if (!empty($edition_ids)) {
-    $editionSvc = ntdst_get(EditionService::class);
-    $best = null;
-    $bestRank = -1;
-    foreach ($edition_ids as $eid) {
-        $eff = $editionSvc->getEffectiveStatus((int) $eid);
-        // Effective status may flip a past edition to Completed — filter that out
-        // (we already wanted active statuses; the date-flip is a stale visibility leak).
-        if (!$eff->isActive()) {
-            continue;
-        }
-        $rank = $eff->allowsEnrollment() ? 2 : 1;
-        if ($rank > $bestRank) {
-            $best = ['id' => (int) $eid, 'status' => $eff];
-            $bestRank = $rank;
-            if ($rank === 2) {
-                break;
-            }
-        }
-    }
-    if ($best) {
-        $capacity = (int) $editionSvc->getCapacity($best['id']);
-        $best['spots'] = $capacity > 0
-            ? max(0, $capacity - $editionSvc->getRegisteredCount($best['id']))
-            : null;
-        $primary_edition = $best;
-    }
-}
+$primary_edition = $args['primary_edition'] ?? null;
+$user_state      = $args['user_state'] ?? null;
 
 // Pure-LD course card. Link to the canonical course URL — LD owns
 // /opleidingen/<slug>/, Stride decorates it via single-sfwd-courses.php.
@@ -99,14 +56,13 @@ $thumbnail = get_the_post_thumbnail(
 // Otherwise: if course has a primary visible edition, show its effective
 // status. Pure-LD courses (no edition) fall back to the generic "Beschikbaar"
 // availability badge.
-$userId = get_current_user_id();
 $badge_status = null;     // 'edition' → render via badge-status partial; else inline
 $badge_class = '';
 $badge_label = '';
 $badge_icon = '';
 
-if ($userId && LearnDashHelper::isActive() && LearnDashHelper::isEnrolled($course->ID, $userId)) {
-    $progress = LearnDashHelper::getProgress($course->ID, $userId);
+if (!empty($user_state['enrolled'])) {
+    $progress = (int) ($user_state['progress'] ?? 0);
 
     if ($progress >= 100) {
         $badge_status = 'completed';

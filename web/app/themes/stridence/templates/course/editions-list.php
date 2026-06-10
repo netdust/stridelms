@@ -21,7 +21,7 @@ defined('ABSPATH') || exit;
 
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\EditionRepository;
-use Stride\Modules\Edition\SessionService;
+use Stride\Modules\Edition\SessionRepository;
 use Stride\Modules\Enrollment\EnrollmentService;
 
 $editions  = $args['editions'] ?? [];
@@ -29,10 +29,25 @@ $course_id = (int) ($args['course_id'] ?? 0);
 $is_online = (bool) ($args['is_online'] ?? false);
 $user_id   = get_current_user_id();
 
-$editionService    = ntdst_get(EditionService::class);
-$editionRepo       = ntdst_get(EditionRepository::class);
-$sessionService    = ntdst_get(SessionService::class);
-$enrollmentService = $user_id ? ntdst_get(EnrollmentService::class) : null;
+$editionService = ntdst_get(EditionService::class);
+$editionRepo    = ntdst_get(EditionRepository::class);
+
+// Batch pre-pass (Task G1 / audit 2.2): statuses through the single INV-7
+// decision point, session counts in one GROUP BY, the user's enrolled set
+// in one cached read — instead of four lookups per row.
+$edition_ids = [];
+foreach ($editions as $edition) {
+    $eid = (int) ($edition['id'] ?? $edition['ID'] ?? 0);
+    if ($eid) {
+        $edition_ids[] = $eid;
+    }
+}
+
+$statuses       = $editionService->getEffectiveStatuses($edition_ids);
+$session_counts = ntdst_get(SessionRepository::class)->countByEditions($edition_ids);
+$enrolled_ids   = $user_id
+    ? ntdst_get(EnrollmentService::class)->getEnrolledEditionIds($user_id)
+    : [];
 
 $today = strtotime(date('Y-m-d'));
 
@@ -41,19 +56,19 @@ $past     = [];
 
 foreach ($editions as $edition) {
     $edition_id = (int) ($edition['id'] ?? $edition['ID'] ?? 0);
-    if (!$edition_id) {
+    if (!$edition_id || !isset($statuses[$edition_id])) {
         continue;
     }
 
     // Resolve fields via the repository — it strips the _ntdst_ prefix and
-    // is the single source of truth. The raw $edition array keys aren't
-    // reliable for meta values.
+    // is the single source of truth (cache-hit: the batch pre-pass primed
+    // all rows). The raw $edition array keys aren't reliable for meta values.
     $start_date    = (string) $editionRepo->getField($edition_id, 'start_date', '');
     $end_date      = (string) $editionRepo->getField($edition_id, 'end_date', '');
     $venue         = (string) $editionRepo->getField($edition_id, 'venue', '');
-    $status        = $editionService->getEffectiveStatus($edition_id);
-    $session_count = $sessionService->getSessionCount($edition_id);
-    $is_enrolled   = $enrollmentService && $enrollmentService->isEnrolled($user_id, $edition_id);
+    $status        = $statuses[$edition_id];
+    $session_count = (int) ($session_counts[$edition_id] ?? 0);
+    $is_enrolled   = in_array($edition_id, $enrolled_ids, true);
 
     // Hide editions that should never reach the public discovery surface.
     // Active statuses (Announcement/Open/Full/InProgress) go in upcoming;

@@ -1,13 +1,23 @@
 <?php
 /**
- * Edition Card Partial
+ * Edition Card Partial — PURE RENDERER (Task G1 / audit 2.2).
  *
  * Renders an edition card with course context, including thumbnail with status badge,
  * course title, date, venue, price, and enrollment CTA.
  *
+ * All per-card lookups are data-in: callers run the catalog batch pre-pass
+ * (helpers/catalog.php — stridence_catalog_render_cards()) and pass the
+ * resolved values. This partial must NOT call services/repositories — that
+ * is what made the catalog N+1 (CR-3). When prefetched keys are absent
+ * (mid-flow fallback), the card renders from the stored edition values.
+ *
  * @param array $args {
- *     @type object|array $edition Edition object/array with id/ID, start_date, venue/location, price, spots_remaining, status
- *     @type WP_Post      $course  Optional course post for title and thumbnail
+ *     @type object|array $edition         Edition object/array with id/ID, start_date, venue/location, price, capacity, status
+ *     @type WP_Post      $course          Optional course post for title and thumbnail
+ *     @type string       $status          Prefetched EFFECTIVE status value (INV-7 — from EditionService::getEffectiveStatuses())
+ *     @type int|null     $spots_remaining Prefetched spots remaining (null = unlimited/unknown)
+ *     @type bool         $is_enrolled     Prefetched: current user has a confirmed registration
+ *     @type int|null     $progress        Prefetched LD progress %, only for enrolled cards with a course
  * }
  */
 
@@ -40,22 +50,17 @@ $venue           = $get('venue') ?? $get('location');
 $price           = $get('price');
 $course_id       = $get('course_id');
 
-// Status + spots derive from EditionService so the card always reflects
-// reality (incl. the past-date override that flips stored "open" → Afgelopen).
-// Fall back to the stored array value when no edition id is available.
-$status          = $get('status', 'open');
-$spots_remaining = null;
-if ($edition_id) {
-    $editionSvc = ntdst_get(\Stride\Modules\Edition\EditionService::class);
-    $status     = $editionSvc->getEffectiveStatus((int) $edition_id)->value;
+// Status + spots come prefetched from the catalog pre-pass: the EFFECTIVE
+// status (incl. the past-date override that flips stored "open" → Afgelopen)
+// is decided once, in EditionService (INV-7), never per card here.
+// Mid-flow fallback: a card whose prefetch data is missing renders from the
+// stored array value — degraded but never fatal, never a per-card query.
+$status          = isset($args['status']) ? (string) $args['status'] : (string) $get('status', 'open');
+$spots_remaining = isset($args['spots_remaining']) ? (int) $args['spots_remaining'] : null;
 
-    $capacity = (int) $get('capacity', 0);
-    if ($capacity > 0) {
-        $spots_remaining = max(0, $capacity - $editionSvc->getRegisteredCount((int) $edition_id));
-    }
-}
-
-// Fetch course if not provided but course_id available
+// Fetch course if not provided but course_id available. Cache-hit: the
+// pre-pass primed all course posts. A trashed/deleted course leaves
+// $course null and the card falls back to the edition title (no fatal).
 if (!$course && $course_id) {
     $course = get_post($course_id);
 }
@@ -74,23 +79,18 @@ if ($course instanceof WP_Post) {
     );
 }
 
-// Check if current user is enrolled in this edition
-$is_enrolled = false;
-$enrolled_badge = null;
-if (is_user_logged_in() && $edition_id) {
-    $enrollmentService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class);
-    $is_enrolled = $enrollmentService->isEnrolled(get_current_user_id(), (int) $edition_id);
+// Enrolled state + progress come prefetched (one enrolled-set read + LD
+// progress per enrolled card in the pre-pass — never a lookup per card).
+$is_enrolled = (bool) ($args['is_enrolled'] ?? false);
+$progress    = isset($args['progress']) ? (int) $args['progress'] : null;
 
-    if ($is_enrolled && $course_id) {
-        $progress = \Stride\Integrations\LearnDash\LearnDashHelper::getProgress((int) $course_id);
-        if ($progress >= 100) {
-            $enrolled_badge = ['class' => 'bg-success text-text-inverse', 'label' => __('Afgerond', 'stridence'), 'icon' => 'check'];
-        } elseif ($progress > 0) {
-            $enrolled_badge = ['class' => 'bg-accent text-text-inverse', 'label' => sprintf(__('%d%% voltooid', 'stridence'), $progress), 'icon' => 'clock'];
-        } else {
-            $enrolled_badge = ['class' => 'bg-primary text-text-inverse', 'label' => __('Ingeschreven', 'stridence'), 'icon' => 'check'];
-        }
-    } elseif ($is_enrolled) {
+$enrolled_badge = null;
+if ($is_enrolled) {
+    if ($progress !== null && $progress >= 100) {
+        $enrolled_badge = ['class' => 'bg-success text-text-inverse', 'label' => __('Afgerond', 'stridence'), 'icon' => 'check'];
+    } elseif ($progress !== null && $progress > 0) {
+        $enrolled_badge = ['class' => 'bg-accent text-text-inverse', 'label' => sprintf(__('%d%% voltooid', 'stridence'), $progress), 'icon' => 'clock'];
+    } else {
         $enrolled_badge = ['class' => 'bg-primary text-text-inverse', 'label' => __('Ingeschreven', 'stridence'), 'icon' => 'check'];
     }
 }

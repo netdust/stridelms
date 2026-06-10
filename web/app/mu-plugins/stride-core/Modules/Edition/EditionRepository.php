@@ -190,6 +190,43 @@ final class EditionRepository extends AbstractRepository
     }
 
     /**
+     * Of the given course ids, return those that have at least one edition.
+     *
+     * Used by the catalog (Task G1 / audit 2.2) to tell pure-LD courses
+     * (never had an edition) apart from courses whose editions all expired —
+     * the latter go off-catalog until a new edition is scheduled. Matches
+     * the relationship semantics the theme templates previously inlined as
+     * raw SQL: any edition post, any non-deleted status.
+     *
+     * @param array<int> $courseIds
+     * @return list<int>
+     */
+    public function courseIdsWithAnyEdition(array $courseIds): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $courseIds)));
+        if (empty($ids)) {
+            return [];
+        }
+
+        global $wpdb;
+
+        $courseKey    = $this->getMetaPrefix() . 'course_id';
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+
+        $rows = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT pm.meta_value + 0
+             FROM {$wpdb->postmeta} pm
+             INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+             WHERE pm.meta_key = %s
+               AND p.post_type = %s
+               AND pm.meta_value IN ({$placeholders})",
+            array_merge([$courseKey, $this->postType], $ids),
+        ));
+
+        return array_map('intval', $rows);
+    }
+
+    /**
      * Update edition status.
      */
     public function updateStatus(int $editionId, OfferingStatus $status): void
