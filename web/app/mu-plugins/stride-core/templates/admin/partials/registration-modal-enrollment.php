@@ -178,6 +178,10 @@ if (!defined('ABSPATH')) {
             // Proofs are in protected storage — download via the authenticated
             // handler. The framework nonce is verified by NTDST_Endpoints;
             // _wpnonce (wp_rest) authenticates the admin's cookie for REST.
+            // form-POST (not ntdstAPI.download) is deliberate: native browser
+            // download semantics for a POST-only endpoint with zero JS; do NOT
+            // copy this as the default api_data invocation — use
+            // ntdstAPI.call/download elsewhere.
             $proofActionUrl = rest_url('ntdst/v1/action');
             $proofNonce = wp_create_nonce('stride_download_proof');
             $proofRestNonce = wp_create_nonce('wp_rest');

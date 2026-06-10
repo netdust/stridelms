@@ -259,17 +259,41 @@ final class CompletionProofStorage
 
         // Remove derivative image sizes: thumbnails of a diploma are as
         // sensitive as the original and nothing renders them.
+        $oldDir = dirname($path);
+        // The stub's array shape omits keys real WP adds (original_image on
+        // big-image-scaled uploads) — widen so unset() below typechecks.
+        /** @var array<string, mixed>|false $meta */
         $meta = wp_get_attachment_metadata($attachmentId);
         if (is_array($meta)) {
-            $oldDir = dirname($path);
             foreach (($meta['sizes'] ?? []) as $size) {
                 if (!empty($size['file'])) {
                     @unlink($oldDir . '/' . $size['file']);
                 }
             }
+
+            // Big-image scaling (CR-D2): for JPG/PNG > 2560px the attached
+            // file is the `-scaled` copy while the FULL-RESOLUTION original
+            // stays behind as `original_image` — the most sensitive copy.
+            if (!empty($meta['original_image'])) {
+                @unlink($oldDir . '/' . $meta['original_image']);
+                unset($meta['original_image']);
+            }
+
             $meta['sizes'] = [];
             $meta['file'] = (string) get_post_meta($attachmentId, '_wp_attached_file', true);
             wp_update_attachment_metadata($attachmentId, $meta);
+        }
+
+        // Image-edit backups are the same class (CR-D2): full-size copies
+        // left in the public dir by the media editor.
+        $backupSizes = get_post_meta($attachmentId, '_wp_attachment_backup_sizes', true);
+        if (is_array($backupSizes)) {
+            foreach ($backupSizes as $size) {
+                if (is_array($size) && !empty($size['file'])) {
+                    @unlink($oldDir . '/' . $size['file']);
+                }
+            }
+            delete_post_meta($attachmentId, '_wp_attachment_backup_sizes');
         }
 
         self::markProtected($attachmentId, $registrationId);

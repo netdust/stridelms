@@ -153,6 +153,50 @@ final class CompletionProofMigrationTest extends IntegrationTestCase
         );
     }
 
+    /** @test */
+    public function migrationRemovesScaledImageOriginalAndBackupSizesFromPublicDir(): void
+    {
+        // CR-D2: big-image scaling leaves the full-resolution ORIGINAL
+        // (metadata original_image) behind in the public dated dir while
+        // _wp_attached_file points at the -scaled copy. Image-edit backups
+        // (_wp_attachment_backup_sizes) are the same class. Both must be
+        // purged by the migration — the original is the most sensitive copy.
+        [, $attachmentId, $scaledPath, $originalPath, $backupPath] = $this->seedLegacyScaledImageProof();
+
+        $protectedDir = trailingslashit((string) wp_upload_dir()['basedir']) . 'stride-proofs';
+
+        $this->forceMigration();
+
+        $newPath = (string) get_attached_file($attachmentId);
+        $this->createdFiles[] = $newPath;
+
+        $this->assertStringStartsWith($protectedDir . '/', $newPath, 'Scaled main file must be relocated into stride-proofs/');
+        $this->assertFileExists($newPath, 'Relocated scaled file must exist at the new path');
+        $this->assertFileDoesNotExist($scaledPath, 'Public scaled copy must be gone');
+        $this->assertFileDoesNotExist(
+            $originalPath,
+            'Full-resolution original_image must NOT survive in the public dir (CR-D2)',
+        );
+        $this->assertFileDoesNotExist(
+            $backupPath,
+            'Image-edit backup-size file must NOT survive in the public dir (CR-D2)',
+        );
+
+        $meta = wp_get_attachment_metadata($attachmentId);
+        $this->assertIsArray($meta);
+        $this->assertArrayNotHasKey('original_image', $meta, 'original_image meta must be cleared after purge');
+        $this->assertSame(
+            '',
+            (string) get_post_meta($attachmentId, '_wp_attachment_backup_sizes', true),
+            '_wp_attachment_backup_sizes meta must be cleared after purge',
+        );
+        $this->assertSame(
+            CompletionProofStorage::VERSION,
+            (int) get_option('stride_proof_storage_version'),
+            'Version option must be stamped after a successful run',
+        );
+    }
+
     // === Helpers ===
 
     /**
@@ -194,6 +238,76 @@ final class CompletionProofMigrationTest extends IntegrationTestCase
         ]);
 
         return [$regId, $attachmentId, $publicPath];
+    }
+
+    /**
+     * Seed a pre-D1 LARGE image proof: WordPress big-image scaling stored a
+     * `-scaled` copy as the attached file and left the full-resolution
+     * original behind (metadata `original_image`), plus an image-edit backup
+     * (`_wp_attachment_backup_sizes`) — all in the public dated dir.
+     *
+     * @return array{0: int, 1: int, 2: string, 3: string, 4: string}
+     *         [registration id, attachment id, scaled path, original path, backup path]
+     */
+    private function seedLegacyScaledImageProof(): array
+    {
+        $token = 'legacy-photo-' . wp_generate_password(8, false);
+
+        $upload = wp_upload_bits($token . '-scaled.jpg', null, 'JPEG scaled copy');
+        $this->assertEmpty($upload['error'] ?? '', 'Fixture upload failed: ' . (string) ($upload['error'] ?? ''));
+        $scaledPath = (string) $upload['file'];
+        $this->createdFiles[] = $scaledPath;
+
+        $dir = dirname($scaledPath);
+        // wp_unique_filename() suffixes uploads ending in `-scaled` (-1, -2…)
+        // to protect the big-image convention — strip both for the base name.
+        $base = preg_replace('/-scaled(-\d+)?\.jpg$/', '', basename($scaledPath));
+
+        $originalPath = $dir . '/' . $base . '.jpg';
+        file_put_contents($originalPath, 'JPEG full-resolution original');
+        $this->createdFiles[] = $originalPath;
+
+        $backupPath = $dir . '/' . $base . '-e1700000000-768x512.jpg';
+        file_put_contents($backupPath, 'JPEG image-edit backup');
+        $this->createdFiles[] = $backupPath;
+
+        $attachmentId = (int) wp_insert_attachment(
+            ['post_mime_type' => 'image/jpeg', 'post_title' => 'Legacy photo proof', 'post_status' => 'inherit'],
+            $scaledPath,
+        );
+        $this->assertGreaterThan(0, $attachmentId);
+        $this->createdAttachmentIds[] = $attachmentId;
+
+        wp_update_attachment_metadata($attachmentId, [
+            'file' => _wp_relative_upload_path($scaledPath),
+            'width' => 2560,
+            'height' => 1707,
+            'sizes' => [],
+            'original_image' => basename($originalPath),
+        ]);
+        update_post_meta($attachmentId, '_wp_attachment_backup_sizes', [
+            'full-orig' => ['file' => basename($backupPath), 'width' => 768, 'height' => 512],
+        ]);
+
+        $edition = $this->createTestEdition();
+        $regId = $this->repo->create([
+            'user_id' => self::$testUserId,
+            'edition_id' => $edition,
+            'status' => 'confirmed',
+            'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
+        ]);
+        $this->assertIsInt($regId);
+        $this->createdRegistrationIds[] = $regId;
+
+        $this->repo->updateCompletionTasks($regId, [
+            'documents' => [
+                'status' => 'completed',
+                'phase' => 'enrollment',
+                'data' => ['files' => [$attachmentId]],
+            ],
+        ]);
+
+        return [$regId, $attachmentId, $scaledPath, $originalPath, $backupPath];
     }
 
     private function forceMigration(): void
