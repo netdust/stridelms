@@ -177,6 +177,8 @@ grep -rn "learndash_\|ld_update_course_access\|sfwd_" --include="*.php" web/app/
 
 **Known weakness / notes:**
 - **Status transitions are NOT centralized** — there is no state machine. Writes happen inline (`EditionService::setStatus()`, `EnrollmentService::confirmRegistration()`, `EnrollmentCompletion::completeTask()`). The invariant constrains the **read** side (always via `getEffectiveStatus`), not the write side. A future hardening would funnel transitions through one method; until then, transition logic is reviewed case-by-case.
+- **Deliberate degradation (known bypass): the card-partial stored-status fallback.** `partials/card-edition.php` renders the *stored* status when the prefetched `$args['status']` is absent (mid-flow fallback — degraded but never fatal, never a per-card query). This is the one accepted raw-status read on a display surface; any OTHER raw-status read for a gate/display remains a violation.
+- **Catalog-card convergence point:** catalog cards render ONLY through `stridence_catalog_render_cards()` / the batch pre-pass (`stridence_prefetch_edition_cards()` / `stridence_prefetch_course_cards()` in `themes/stridence/helpers/catalog.php`), which feeds INV-7 statuses + enrolled state + spots into the pure-renderer partials. **Bypass signal:** invoking `partials/card-edition` / `partials/card-course` directly without prefetched data — that path silently falls back to stored status (the degradation above) and reintroduces per-card lookups.
 
 **Audit move:**
 ```bash

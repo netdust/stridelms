@@ -499,10 +499,19 @@ function stridence_prefetch_course_cards(array $course_ids, ?int $user_id = null
 
     $ld_active = $user_id && LearnDashHelper::isActive();
 
+    // CR-G5: resolve the user's enrolled-course set ONCE and check membership
+    // per card — a per-card LearnDashHelper::isEnrolled() was an N+1 outside
+    // the budget contract (152 queries measured at a 16-course-card slice).
+    // Nuance vs isEnrolled(): an OPEN-access course the user never started is
+    // no longer flagged enrolled — correct for a catalog card.
+    $enrolled_courses = $ld_active
+        ? array_map('intval', LearnDashHelper::getEnrolledCourses($user_id))
+        : [];
+
     $out = [];
     foreach ($ids as $course_id) {
         $user_state = null;
-        if ($ld_active && LearnDashHelper::isEnrolled($course_id, $user_id)) {
+        if ($ld_active && in_array($course_id, $enrolled_courses, true)) {
             $user_state = [
                 'enrolled' => true,
                 'progress' => LearnDashHelper::getProgress($course_id, $user_id),

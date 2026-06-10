@@ -173,6 +173,125 @@ final class CatalogRenderQueryBudgetTest extends IntegrationTestCase
     }
 
     /**
+     * Seed online-format courses: $editionCount get an open future edition,
+     * $pureLdCount stay edition-less (pure-LD course cards).
+     *
+     * @return array{0: list<int>, 1: list<int>} [edition course ids, pure-LD course ids]
+     */
+    private function seedOnlineCatalog(int $editionCount, int $pureLdCount): array
+    {
+        $term = term_exists('online', 'stride_format') ?: wp_insert_term('online', 'stride_format');
+        $termId = is_array($term) ? (int) $term['term_id'] : (int) $term;
+
+        $future = date('Y-m-d', strtotime('+30 days'));
+
+        $editionCourses = [];
+        for ($i = 0; $i < $editionCount; $i++) {
+            $courseId = $this->createTestCourse();
+            wp_set_object_terms($courseId, [$termId], 'stride_format');
+            $editionCourses[] = $courseId;
+
+            $this->createTestEdition(['meta' => [
+                '_ntdst_status'     => 'open',
+                '_ntdst_course_id'  => $courseId,
+                '_ntdst_start_date' => $future,
+                '_ntdst_end_date'   => $future,
+            ]]);
+        }
+
+        $pureLdCourses = [];
+        for ($i = 0; $i < $pureLdCount; $i++) {
+            $courseId = $this->createTestCourse();
+            wp_set_object_terms($courseId, [$termId], 'stride_format');
+            $pureLdCourses[] = $courseId;
+        }
+
+        return [$editionCourses, $pureLdCourses];
+    }
+
+    /**
+     * Measure queries for the /online mechanism: eligible-items list + a
+     * mixed 24-card slice (edition cards AND pure-LD course cards — the
+     * course-card branch is the CR-G5 path under test). The slice is
+     * composed deterministically (8 edition + 16 course cards) so live data
+     * can't silently empty the branch being measured.
+     */
+    private function measureOnlineRender(): array
+    {
+        wp_cache_flush();
+        ntdst_get(RegistrationRepository::class)->clearCache();
+
+        global $wpdb;
+        $before = (int) $wpdb->num_queries;
+
+        $items = stridence_catalog_items('online');
+
+        $editionItems = array_values(array_filter($items, static fn(array $i): bool => ($i['kind'] ?? 'edition') === 'edition'));
+        $courseItems  = array_values(array_filter($items, static fn(array $i): bool => ($i['kind'] ?? '') === 'course'));
+        $slice = array_merge(array_slice($editionItems, 0, 8), array_slice($courseItems, 0, 16));
+
+        $html = stridence_catalog_render_cards($slice, get_current_user_id() ?: null);
+
+        return [(int) $wpdb->num_queries - $before, $items, $html, count($courseItems)];
+    }
+
+    /**
+     * @test
+     *
+     * CR-G5 — the /online course-card path is part of the budget contract.
+     * RED: this measurement did not exist; the render loop called
+     * LearnDashHelper::isEnrolled() once PER pure-LD course card, outside
+     * any batch. Same contract as klassikaal: budget bound at both sizes +
+     * N-independence as the catalog grows.
+     */
+    public function onlineCatalogRenderQueryCountIsIndependentOfCatalogSize(): void
+    {
+        $this->assertTrue(
+            function_exists('stridence_catalog_items'),
+            'stridence theme catalog helpers must be loaded',
+        );
+
+        $this->actingAs(self::$testUserId);
+
+        [, $pureLd] = $this->seedOnlineCatalog(8, 16);
+
+        // Enrolled fixture: LD's universal enrollment marker on one pure-LD
+        // course, so the enrolled/user_state branch is part of the render.
+        update_user_meta(self::$testUserId, 'course_' . $pureLd[0] . '_access_from', (string) time());
+
+        [$queriesSmall, $itemsSmall, $htmlSmall, $courseItemsSmall] = $this->measureOnlineRender();
+
+        $this->assertGreaterThanOrEqual(16, $courseItemsSmall, 'seeded pure-LD courses must be eligible course cards');
+        $this->assertNotSame('', trim($htmlSmall), 'online slice must render non-empty HTML');
+        $this->assertLessThanOrEqual(
+            self::QUERY_BUDGET,
+            $queriesSmall,
+            "online catalog render used {$queriesSmall} queries; budget is " . self::QUERY_BUDGET,
+        );
+
+        // Grow the catalog — mostly pure-LD courses, the CR-G5 path.
+        $this->seedOnlineCatalog(2, 20);
+
+        [$queriesGrown, $itemsGrown, $htmlGrown] = $this->measureOnlineRender();
+
+        $this->assertGreaterThan(count($itemsSmall), count($itemsGrown), 'growth seed must enlarge the catalog');
+        $this->assertNotSame('', trim($htmlGrown));
+        $this->assertLessThanOrEqual(
+            self::QUERY_BUDGET,
+            $queriesGrown,
+            "online catalog render at grown size used {$queriesGrown} queries; budget is " . self::QUERY_BUDGET,
+        );
+
+        $this->assertLessThanOrEqual(
+            $queriesSmall + self::N_INDEPENDENCE_TOLERANCE,
+            $queriesGrown,
+            "online query count grew with catalog size ({$queriesSmall} -> {$queriesGrown}) — per-card N+1 on the course-card path",
+        );
+
+        delete_user_meta(self::$testUserId, 'course_' . $pureLd[0] . '_access_from');
+    }
+
+    /**
      * @test
      *
      * AF-4 empty/zero edge: with zero eligible editions the helper chain

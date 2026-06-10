@@ -59,9 +59,11 @@ $status          = isset($args['status']) ? (string) $args['status'] : (string) 
 $spots_remaining = isset($args['spots_remaining']) ? (int) $args['spots_remaining'] : null;
 
 // Fetch course if not provided but course_id available. Cache-hit: the
-// pre-pass primed all course posts. A trashed/deleted course leaves
-// $course null and the card falls back to the edition title (no fatal).
-if (!$course && $course_id) {
+// pre-pass primed all course posts. Only a PUBLISHED course may leak its
+// title/thumbnail into a public card (INF-1 — draft/private/trashed
+// courses must not disclose); otherwise the card falls back to the
+// edition title (no fatal).
+if (!$course && $course_id && get_post_status($course_id) === 'publish') {
     $course = get_post($course_id);
 }
 
