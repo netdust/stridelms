@@ -55,9 +55,12 @@ class NTDST_Mailer
 
     public function __construct()
     {
-        // Set defaults from WordPress settings
-        $this->from_email = get_option('admin_email');
-        $this->from_name = get_option('blogname');
+        // Set defaults from WordPress settings.
+        // Cast defensively: on a not-yet-installed site (e.g. `wp core install`
+        // bootstrapping an empty DB in CI) these options do not exist yet and
+        // get_option() returns false, which would fatal on the typed properties.
+        $this->from_email = (string) (get_option('admin_email') ?: '');
+        $this->from_name = (string) (get_option('blogname') ?: '');
     }
 
     /**
