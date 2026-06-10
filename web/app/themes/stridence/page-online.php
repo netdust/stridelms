@@ -3,7 +3,15 @@
  * Template Name: Online
  *
  * Catalog page for online/e-learning courses.
- * Client-side theme filtering and pagination via Alpine.js.
+ *
+ * One card per enrollable: an active edition of an online-format course, OR
+ * a pure-LD online course with zero editions (lesson_url_role_split — the
+ * catalog list = the set of things a visitor can enroll in).
+ *
+ * Server-renders the first STRIDENCE_CATALOG_PER_PAGE cards through the
+ * batch pre-pass (helpers/catalog.php — Task G1 / audit 2.2); theme
+ * filtering and "Toon meer" pagination fetch further server-rendered
+ * slices via the `stride_catalog_page` endpoint (ntdstAPI).
  *
  * @package stridence
  */
@@ -11,8 +19,6 @@
 declare(strict_types=1);
 
 defined('ABSPATH') || exit;
-
-use Stride\Modules\Edition\EditionRepository;
 
 // Get theme terms for tabs
 $themes = get_terms([
@@ -23,178 +29,15 @@ if (is_wp_error($themes)) {
     $themes = [];
 }
 
-// One card per enrollable. For online courses an enrollable is either:
-//   (a) an active edition of an online-format course, OR
-//   (b) a pure-LD online-format course with zero active editions.
-// Two active editions of the same course → two cards. Matches the rule
-// described in [[lesson_url_role_split]]: /edities/* is transactional,
-// so the catalog list = the set of things a visitor can enroll in.
+// Eligible items (light list: ids + theme slugs) + counts for the tabs.
+$catalog_items = stridence_catalog_items('online');
+$theme_counts = stridence_catalog_theme_counts($catalog_items);
+$total = count($catalog_items);
+$per_page = STRIDENCE_CATALOG_PER_PAGE;
 
-$online_format_slugs = ['online', 'e-learning', 'webinar'];
-
-// All online-format course IDs (used to scope the edition query AND to find
-// pure-LD courses for the second pass).
-$online_course_ids = get_posts([
-    'post_type'      => 'sfwd-courses',
-    'posts_per_page' => 500,
-    'post_status'    => 'publish',
-    'fields'         => 'ids',
-    'tax_query'      => [
-        [
-            'taxonomy' => 'stride_format',
-            'field'    => 'slug',
-            'terms'    => $online_format_slugs,
-        ],
-    ],
-]);
-
-$enrollables = []; // mixed list of ['kind' => 'edition'|'course', ..., 'themes' => [slugs]]
-
-// --- (a) Active editions of online courses ---
-// Scheduled online editions are rare (most online courses are pure-LD), but when
-// they exist their dates matter. Apply the same 2-day past-cutoff used by
-// klassikaal so just-finished cohorts stay findable for a day, then drop off.
-if (!empty($online_course_ids)) {
-    $editionRepository = ntdst_get(EditionRepository::class);
-    $past_cutoff = date('Y-m-d', strtotime('-2 days'));
-
-    $edition_query = new WP_Query([
-        'post_type'      => 'vad_edition',
-        'posts_per_page' => 200,
-        'post_status'    => 'publish',
-        'meta_query'     => [
-            [
-                'key'     => '_ntdst_status',
-                'value'   => ['announcement', 'open', 'full', 'in_progress'],
-                'compare' => 'IN',
-            ],
-            [
-                'key'     => '_ntdst_course_id',
-                'value'   => $online_course_ids,
-                'compare' => 'IN',
-            ],
-            [
-                'relation' => 'OR',
-                [
-                    'key'     => '_ntdst_end_date',
-                    'value'   => $past_cutoff,
-                    'compare' => '>=',
-                    'type'    => 'DATE',
-                ],
-                [
-                    // Fallback when end_date is missing: use start_date
-                    'relation' => 'AND',
-                    [
-                        'key'     => '_ntdst_end_date',
-                        'compare' => 'NOT EXISTS',
-                    ],
-                    [
-                        'key'     => '_ntdst_start_date',
-                        'value'   => $past_cutoff,
-                        'compare' => '>=',
-                        'type'    => 'DATE',
-                    ],
-                ],
-                [
-                    // Self-paced online edition (no dates at all) — always show
-                    'relation' => 'AND',
-                    [
-                        'key'     => '_ntdst_end_date',
-                        'compare' => 'NOT EXISTS',
-                    ],
-                    [
-                        'key'     => '_ntdst_start_date',
-                        'compare' => 'NOT EXISTS',
-                    ],
-                ],
-            ],
-        ],
-        'orderby'        => 'meta_value',
-        'meta_key'       => '_ntdst_start_date',
-        'order'          => 'ASC',
-    ]);
-
-    foreach ($edition_query->posts as $edition_post) {
-        $edition_obj = $editionRepository->find($edition_post->ID);
-        if (!$edition_obj || is_wp_error($edition_obj)) {
-            continue;
-        }
-        $course_id = (int) ($edition_obj->fields['course_id'] ?? 0);
-
-        $theme_slugs = [];
-        if ($course_id) {
-            $course_themes = get_the_terms($course_id, 'stride_theme');
-            if ($course_themes && !is_wp_error($course_themes)) {
-                $theme_slugs = wp_list_pluck($course_themes, 'slug');
-            }
-        }
-
-        $enrollables[] = [
-            'kind'    => 'edition',
-            'edition' => [
-                'id'              => $edition_obj->ID,
-                'title'           => $edition_obj->post_title,
-                'course_id'       => $course_id,
-                'start_date'      => $edition_obj->fields['start_date'] ?? null,
-                'end_date'        => $edition_obj->fields['end_date'] ?? null,
-                'venue'           => $edition_obj->fields['venue'] ?? null,
-                'price'           => $edition_obj->fields['price'] ?? null,
-                'capacity'        => $edition_obj->fields['capacity'] ?? null,
-                'status'          => $edition_obj->fields['status'] ?? 'open',
-                'spots_remaining' => $edition_obj->fields['spots_remaining'] ?? null,
-            ],
-            'themes'  => $theme_slugs,
-        ];
-    }
-}
-
-// --- (b) Pure-LD online courses ---
-// A "pure-LD" course is one that has NEVER had an edition (or has all editions
-// deleted). A course whose editions are all expired is NOT pure-LD — it goes
-// off-catalog until the editor schedules a new edition. So scope by "course
-// has any edition at all", not by "course has a currently-visible edition."
-$any_edition_course_ids = [];
-if (!empty($online_course_ids)) {
-    global $wpdb;
-    $in_placeholders = implode(',', array_fill(0, count($online_course_ids), '%d'));
-    $any_edition_course_ids = $wpdb->get_col($wpdb->prepare(
-        "SELECT DISTINCT pm.meta_value + 0
-         FROM {$wpdb->postmeta} pm
-         INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
-         WHERE pm.meta_key = '_ntdst_course_id'
-           AND p.post_type = 'vad_edition'
-           AND pm.meta_value IN ($in_placeholders)",
-        ...$online_course_ids,
-    ));
-    $any_edition_course_ids = array_map('intval', $any_edition_course_ids);
-}
-$pure_ld_course_ids = array_diff($online_course_ids, $any_edition_course_ids);
-foreach ($pure_ld_course_ids as $course_id) {
-    $course = get_post($course_id);
-    if (!$course) {
-        continue;
-    }
-    $theme_slugs = [];
-    $course_themes = get_the_terms($course_id, 'stride_theme');
-    if ($course_themes && !is_wp_error($course_themes)) {
-        $theme_slugs = wp_list_pluck($course_themes, 'slug');
-    }
-    $enrollables[] = [
-        'kind'   => 'course',
-        'course' => $course,
-        'themes' => $theme_slugs,
-    ];
-}
-
-// Theme counts for filter tabs
-$theme_counts = [];
-foreach ($enrollables as $item) {
-    foreach ($item['themes'] as $slug) {
-        $theme_counts[$slug] = ($theme_counts[$slug] ?? 0) + 1;
-    }
-}
-
-$total = count($enrollables);
+// Server-render the first slice only — the rest is paged via the endpoint.
+$initial_slice = array_slice($catalog_items, 0, $per_page);
+$initial_html = stridence_catalog_render_cards($initial_slice, get_current_user_id() ?: null);
 
 get_header();
 ?>
@@ -211,31 +54,61 @@ get_header();
     </div>
 </div>
 
-<div x-data="{ filter: '', page: 1, totalPages: 1, filteredCount: <?php echo $total; ?> }"
-     x-effect="
-         const cards = [...$refs.grid.children];
-         const perPage = 12;
-         const filtered = cards.filter(c => !filter || (c.dataset.themes || '').split(',').includes(filter));
-         filteredCount = filtered.length;
-         totalPages = Math.ceil(filtered.length / perPage) || 1;
-         if (page > totalPages) page = 1;
-         const start = (page - 1) * perPage;
-         cards.forEach(c => c.style.display = 'none');
-         filtered.slice(start, start + perPage).forEach(c => c.style.display = '');
-     ">
+<div x-data="{
+        catalog: 'online',
+        filter: '',
+        page: 1,
+        total: <?php echo (int) $total; ?>,
+        counts: <?php echo esc_attr(wp_json_encode($theme_counts, JSON_FORCE_OBJECT)); ?>,
+        shown: <?php echo count($initial_slice); ?>,
+        loading: false,
+        error: false,
+        get filteredTotal() { return this.filter ? (this.counts[this.filter] || 0) : this.total },
+        get hasMore() { return this.shown < this.filteredTotal },
+        async setFilter(slug) {
+            if (this.loading || this.filter === slug) return;
+            this.filter = slug;
+            this.page = 1;
+            await this.fetchPage(true);
+        },
+        async loadMore() {
+            if (this.loading) return;
+            this.page++;
+            await this.fetchPage(false);
+        },
+        async fetchPage(replace) {
+            this.loading = true;
+            this.error = false;
+            try {
+                const res = await ntdstAPI.call('stride_catalog_page', { catalog: this.catalog, page: this.page, theme: this.filter });
+                if (replace) {
+                    this.$refs.grid.innerHTML = res.html;
+                    this.shown = res.count;
+                } else {
+                    this.$refs.grid.insertAdjacentHTML('beforeend', res.html);
+                    this.shown += res.count;
+                }
+            } catch (e) {
+                this.error = true;
+                if (!replace) this.page--;
+            } finally {
+                this.loading = false;
+            }
+        }
+    }">
 
     <!-- Theme Filter Tabs -->
     <?php if (!empty($themes)) : ?>
     <div class="border-b border-border bg-surface">
         <div class="container">
             <nav class="flex overflow-x-auto -mb-px scrollbar-hide" aria-label="<?php esc_attr_e("Thema's", 'stridence'); ?>">
-                <button @click="filter = ''; page = 1" type="button"
+                <button @click="setFilter('')" type="button"
                     :class="filter === ''
                         ? 'whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 border-primary text-primary'
                         : 'whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 border-transparent text-text-muted hover:text-text hover:border-border'"
                     :aria-current="filter === '' ? 'page' : false">
                     <?php esc_html_e('Alle', 'stridence'); ?>
-                    <span class="ml-1 text-xs text-text-muted">(<?php echo esc_html($total); ?>)</span>
+                    <span class="ml-1 text-xs text-text-muted">(<?php echo esc_html((string) $total); ?>)</span>
                 </button>
 
                 <?php foreach ($themes as $theme) :
@@ -244,13 +117,13 @@ get_header();
                         continue;
                     }
                     ?>
-                    <button @click="filter = '<?php echo esc_attr($theme->slug); ?>'; page = 1" type="button"
+                    <button @click="setFilter('<?php echo esc_attr($theme->slug); ?>')" type="button"
                         :class="filter === '<?php echo esc_attr($theme->slug); ?>'
                             ? 'whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 border-primary text-primary'
                             : 'whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 border-transparent text-text-muted hover:text-text hover:border-border'"
                         :aria-current="filter === '<?php echo esc_attr($theme->slug); ?>' ? 'page' : false">
                         <?php echo esc_html($theme->name); ?>
-                        <span class="ml-1 text-xs text-text-muted">(<?php echo esc_html($count); ?>)</span>
+                        <span class="ml-1 text-xs text-text-muted">(<?php echo esc_html((string) $count); ?>)</span>
                     </button>
                 <?php endforeach; ?>
             </nav>
@@ -260,65 +133,41 @@ get_header();
 
     <!-- Enrollable Grid (one card per active edition + one per pure-LD course) -->
     <div class="container py-8 lg:py-12">
-        <?php if (!empty($enrollables)) : ?>
+        <?php if ($total > 0) : ?>
             <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3" x-ref="grid">
-                <?php foreach ($enrollables as $item) : ?>
-                    <div data-themes="<?php echo esc_attr(implode(',', $item['themes'])); ?>">
-                        <?php if ($item['kind'] === 'edition') : ?>
-                            <?php stridence_template_part('partials/card-edition', null, [
-                                'edition' => $item['edition'],
-                            ]); ?>
-                        <?php else : ?>
-                            <?php stridence_template_part('partials/card-course', null, [
-                                'course' => $item['course'],
-                            ]); ?>
-                        <?php endif; ?>
-                    </div>
-                <?php endforeach; ?>
+                <?php echo $initial_html; // Card HTML — escaped within the partials.?>
             </div>
 
             <!-- Empty state for filtered results -->
-            <div x-show="filteredCount === 0" x-cloak class="text-center py-12">
+            <div x-show="filteredTotal === 0 && !loading" x-cloak class="text-center py-12">
                 <?php
-                    stridence_template_part('partials/empty-state', null, [
-                        'icon'    => 'monitor',
-                        'title'   => __('Geen opleidingen gevonden', 'stridence'),
-                        'message' => __('Er zijn geen online opleidingen in dit thema.', 'stridence'),
-                    ]);
-?>
+                stridence_template_part('partials/empty-state', null, [
+                    'icon'    => 'monitor',
+                    'title'   => __('Geen opleidingen gevonden', 'stridence'),
+                    'message' => __('Er zijn geen online opleidingen in dit thema.', 'stridence'),
+                ]);
+            ?>
             </div>
 
-            <!-- Pagination -->
-            <nav x-show="totalPages > 1" x-cloak class="mt-12 flex justify-center" aria-label="<?php esc_attr_e('Paginatie', 'stridence'); ?>">
-                <div class="flex items-center gap-1">
-                    <button @click="page = Math.max(1, page - 1)" :disabled="page <= 1"
-                        class="inline-flex items-center justify-center min-w-[40px] h-10 px-3 rounded-lg text-sm font-medium transition-colors hover:bg-surface-alt disabled:opacity-30 disabled:pointer-events-none">
-                        <span class="sr-only"><?php esc_html_e('Vorige', 'stridence'); ?></span>
-                        <?php echo stridence_icon('chevron-left', 'w-5 h-5'); ?>
-                    </button>
+            <!-- Load error -->
+            <p x-show="error" x-cloak class="mt-8 text-center text-sm text-text-muted">
+                <?php esc_html_e('Er ging iets mis bij het laden. Probeer het opnieuw.', 'stridence'); ?>
+            </p>
 
-                    <template x-for="p in totalPages" :key="p">
-                        <button @click="page = p"
-                            :class="p === page ? 'bg-primary text-text-inverse' : 'hover:bg-surface-alt'"
-                            class="inline-flex items-center justify-center min-w-[40px] h-10 px-3 rounded-lg text-sm font-medium transition-colors"
-                            x-text="p">
-                        </button>
-                    </template>
-
-                    <button @click="page = Math.min(totalPages, page + 1)" :disabled="page >= totalPages"
-                        class="inline-flex items-center justify-center min-w-[40px] h-10 px-3 rounded-lg text-sm font-medium transition-colors hover:bg-surface-alt disabled:opacity-30 disabled:pointer-events-none">
-                        <span class="sr-only"><?php esc_html_e('Volgende', 'stridence'); ?></span>
-                        <?php echo stridence_icon('chevron-right', 'w-5 h-5'); ?>
-                    </button>
-                </div>
-            </nav>
+            <!-- Toon meer -->
+            <div x-show="hasMore" x-cloak class="mt-12 text-center">
+                <button @click="loadMore()" :disabled="loading" type="button" class="btn-primary">
+                    <span x-show="!loading"><?php esc_html_e('Toon meer', 'stridence'); ?></span>
+                    <span x-show="loading"><?php esc_html_e('Laden…', 'stridence'); ?></span>
+                </button>
+            </div>
 
         <?php else : ?>
             <?php
             stridence_template_part('partials/empty-state', null, [
-                'icon'    => 'monitor',
-                'title'   => __('Geen opleidingen gevonden', 'stridence'),
-                'message' => __('Er zijn momenteel geen online opleidingen beschikbaar.', 'stridence'),
+            'icon'    => 'monitor',
+            'title'   => __('Geen opleidingen gevonden', 'stridence'),
+            'message' => __('Er zijn momenteel geen online opleidingen beschikbaar.', 'stridence'),
             ]);
             ?>
         <?php endif; ?>
