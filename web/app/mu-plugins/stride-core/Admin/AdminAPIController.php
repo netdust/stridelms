@@ -1998,10 +1998,6 @@ final class AdminAPIController
      */
     public function getPendingApprovals(WP_REST_Request $request): WP_REST_Response
     {
-        global $wpdb;
-
-        $table = RegistrationTable::getTableName();
-
         $staleDays = max(1, (int) ($request->get_param('stale_days') ?? 7));
         $page = max(1, (int) ($request->get_param('page') ?: 1));
         $perPage = max(1, (int) ($request->get_param('per_page') ?: 20));
@@ -2021,41 +2017,18 @@ final class AdminAPIController
 
         $staleThreshold = gmdate('Y-m-d H:i:s', time() - ($staleDays * DAY_IN_SECONDS));
 
+        // INV-3: the registrations table is repository-owned — both scan
+        // queries (exact SQL incl. COLLATE pin + scan cap) live in
+        // RegistrationRepository; the controller keeps bucketing/pagination.
+        $registrationRepo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+
         // Enrollment phase: pending registrations that can still yield an item —
         // an open admin-approval task (bucket 1) or stale-aged (bucket 3 candidate).
-        $pendingRows = $wpdb->get_results($wpdb->prepare(
-            "SELECT id, user_id, edition_id, registered_at, completion_tasks
-             FROM {$table}
-             WHERE status = 'pending'
-               AND completion_tasks IS NOT NULL
-               AND (
-                   (JSON_EXTRACT(completion_tasks, '$.approval') IS NOT NULL
-                    AND COALESCE(JSON_VALUE(completion_tasks, '$.approval.status'), 'pending') COLLATE utf8mb4_bin <> 'completed')
-                   OR registered_at <= %s
-               )
-             ORDER BY registered_at ASC
-             LIMIT %d",
-            $staleThreshold,
-            self::APPROVALS_SCAN_CAP,
-        ));
+        $pendingRows = $registrationRepo->findPendingWithOpenApproval($staleThreshold, self::APPROVALS_SCAN_CAP);
 
         // Post-course phase: confirmed registrations with an open post_approval
         // task whose post-course user tasks (fixed keys) are absent-or-completed.
-        $confirmedRows = $wpdb->get_results($wpdb->prepare(
-            "SELECT id, user_id, edition_id, registered_at, completion_tasks
-             FROM {$table}
-             WHERE status = 'confirmed'
-               AND completion_tasks IS NOT NULL
-               AND JSON_EXTRACT(completion_tasks, '$.post_approval') IS NOT NULL
-               AND COALESCE(JSON_VALUE(completion_tasks, '$.post_approval.status'), 'pending') COLLATE utf8mb4_bin <> 'completed'
-               AND (JSON_EXTRACT(completion_tasks, '$.post_evaluation') IS NULL
-                    OR JSON_VALUE(completion_tasks, '$.post_evaluation.status') COLLATE utf8mb4_bin = 'completed')
-               AND (JSON_EXTRACT(completion_tasks, '$.post_documents') IS NULL
-                    OR JSON_VALUE(completion_tasks, '$.post_documents.status') COLLATE utf8mb4_bin = 'completed')
-             ORDER BY registered_at ASC
-             LIMIT %d",
-            self::APPROVALS_SCAN_CAP,
-        ));
+        $confirmedRows = $registrationRepo->findConfirmedWithOpenPostApproval(self::APPROVALS_SCAN_CAP);
 
         $completionService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
         /** @var list<array{0: object, 1: array, 2: string, 3: array}> $matches */
@@ -2063,7 +2036,7 @@ final class AdminAPIController
         $counts = ['approval' => 0, 'post_approval' => 0, 'stale_user' => 0];
 
         foreach ($pendingRows as $row) {
-            $tasks = json_decode($row->completion_tasks ?? '{}', true) ?: [];
+            $tasks = is_array($row->completion_tasks) ? $row->completion_tasks : [];
             $userTasksDone = $completionService->areUserTasksComplete($tasks);
 
             // Bucket 1: user is done, waiting on admin approval
@@ -2096,7 +2069,7 @@ final class AdminAPIController
         // Bucket 2: post-course approval. SQL already filtered on the fixed
         // keys; the PHP re-check stays authoritative (the filter may over-fetch).
         foreach ($confirmedRows as $row) {
-            $tasks = json_decode($row->completion_tasks ?? '{}', true) ?: [];
+            $tasks = is_array($row->completion_tasks) ? $row->completion_tasks : [];
 
             if (!isset($tasks['post_approval']) || $tasks['post_approval']['status'] === 'completed') {
                 continue;

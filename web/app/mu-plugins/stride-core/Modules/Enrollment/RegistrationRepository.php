@@ -1204,6 +1204,84 @@ final class RegistrationRepository
             "SELECT id, completion_tasks FROM {$this->table()} WHERE completion_tasks IS NOT NULL",
         );
 
+        return $this->decodeCompletionTaskRows($rows);
+    }
+
+    /**
+     * Approvals scan, enrollment phase (INV-3, panel drift Important-2):
+     * pending registrations that can still yield a pending-approvals item —
+     * an open admin-approval task or stale-aged. The caller's PHP re-checks
+     * stay authoritative; this SQL filter is shaped to only ever OVER-fetch.
+     * The task status comparison carries an explicit COLLATE utf8mb4_bin so
+     * SQL matches PHP's strict ===/!== exactly (CR-E1); the LIMIT is the
+     * caller's scan cap (CR-E2 — a full result set means "maybe clipped").
+     *
+     * @return array<object> rows with ->id (int), ->user_id, ->edition_id,
+     *                       ->registered_at and ->completion_tasks
+     *                       (array|null — JSON-decoded, repo convention)
+     */
+    public function findPendingWithOpenApproval(string $staleThreshold, int $scanCap): array
+    {
+        global $wpdb;
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, user_id, edition_id, registered_at, completion_tasks
+             FROM {$this->table()}
+             WHERE status = 'pending'
+               AND completion_tasks IS NOT NULL
+               AND (
+                   (JSON_EXTRACT(completion_tasks, '$.approval') IS NOT NULL
+                    AND COALESCE(JSON_VALUE(completion_tasks, '$.approval.status'), 'pending') COLLATE utf8mb4_bin <> 'completed')
+                   OR registered_at <= %s
+               )
+             ORDER BY registered_at ASC
+             LIMIT %d",
+            $staleThreshold,
+            $scanCap,
+        ));
+
+        return $this->decodeCompletionTaskRows($rows);
+    }
+
+    /**
+     * Approvals scan, post-course phase (INV-3): confirmed registrations
+     * with an open post_approval task whose post-course user tasks (fixed
+     * keys) are absent-or-completed. Same over-fetch + COLLATE + scan-cap
+     * contract as findPendingWithOpenApproval().
+     *
+     * @return array<object> same row shape as findPendingWithOpenApproval()
+     */
+    public function findConfirmedWithOpenPostApproval(int $scanCap): array
+    {
+        global $wpdb;
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, user_id, edition_id, registered_at, completion_tasks
+             FROM {$this->table()}
+             WHERE status = 'confirmed'
+               AND completion_tasks IS NOT NULL
+               AND JSON_EXTRACT(completion_tasks, '$.post_approval') IS NOT NULL
+               AND COALESCE(JSON_VALUE(completion_tasks, '$.post_approval.status'), 'pending') COLLATE utf8mb4_bin <> 'completed'
+               AND (JSON_EXTRACT(completion_tasks, '$.post_evaluation') IS NULL
+                    OR JSON_VALUE(completion_tasks, '$.post_evaluation.status') COLLATE utf8mb4_bin = 'completed')
+               AND (JSON_EXTRACT(completion_tasks, '$.post_documents') IS NULL
+                    OR JSON_VALUE(completion_tasks, '$.post_documents.status') COLLATE utf8mb4_bin = 'completed')
+             ORDER BY registered_at ASC
+             LIMIT %d",
+            $scanCap,
+        ));
+
+        return $this->decodeCompletionTaskRows($rows);
+    }
+
+    /**
+     * Repo row convention for completion-task scans: int id, decoded tasks.
+     *
+     * @param array<object> $rows
+     * @return array<object>
+     */
+    private function decodeCompletionTaskRows(array $rows): array
+    {
         foreach ($rows as $row) {
             $row->id = (int) $row->id;
             $row->completion_tasks = is_string($row->completion_tasks)
