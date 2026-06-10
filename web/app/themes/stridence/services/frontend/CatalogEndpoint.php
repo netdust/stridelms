@@ -28,6 +28,14 @@ final class CatalogEndpoint
     public function register(): void
     {
         add_filter('ntdst/api_data/stride_catalog_page', [$this, 'handleCatalogPage'], 10, 2);
+
+        // The catalog is public: without this, check_nonce_permission()
+        // refuses anonymous nonces and guests get a 401 on every "Toon meer"
+        // / theme-filter fetch (CR-G1). Same pattern as QuestionnaireHandler.
+        add_filter(
+            'ntdst/api/public_actions',
+            static fn(array $actions): array => [...$actions, 'stride_catalog_page'],
+        );
     }
 
     /**
@@ -37,13 +45,15 @@ final class CatalogEndpoint
      */
     public function handleCatalogPage(array $data, array $params): array|WP_Error
     {
-        $catalog = sanitize_key((string) ($params['catalog'] ?? ''));
+        // String-type guards: JSON params are attacker-shaped — an array
+        // here would warn/fatal inside the (string) cast chain (INF-2).
+        $catalog = sanitize_key(is_string($params['catalog'] ?? null) ? $params['catalog'] : '');
         if (!in_array($catalog, self::CATALOGS, true)) {
             return new WP_Error('invalid_catalog', __('Onbekende catalogus.', 'stridence'));
         }
 
         $page  = max(1, absint($params['page'] ?? 1));
-        $theme = sanitize_key((string) ($params['theme'] ?? ''));
+        $theme = sanitize_key(is_string($params['theme'] ?? null) ? $params['theme'] : '');
 
         $items = stridence_catalog_items($catalog);
         if ($theme !== '') {

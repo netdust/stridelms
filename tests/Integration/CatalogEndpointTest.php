@@ -37,6 +37,104 @@ final class CatalogEndpointTest extends IntegrationTestCase
     /**
      * @test
      *
+     * CR-G1 (CRITICAL): the catalog is a PUBLIC surface. The framework's
+     * check_nonce_permission() only issues anonymous nonces for actions on
+     * the `ntdst/api/public_actions` filter — without this registration,
+     * every guest "Toon meer" / theme-filter fetch dies with a 401.
+     */
+    public function catalogPageIsRegisteredAsAPublicAction(): void
+    {
+        $this->assertContains(
+            'stride_catalog_page',
+            apply_filters('ntdst/api/public_actions', []),
+            'stride_catalog_page must be on ntdst/api/public_actions — guests cannot page/filter the catalog otherwise (CR-G1)',
+        );
+    }
+
+    /**
+     * @test
+     *
+     * CR-G1 seam — the GUEST wire path over real HTTP, no mocks: an
+     * unauthenticated client fetches an anonymous nonce for
+     * stride_catalog_page and then a server-rendered page-1 slice through
+     * the real /get_nonce → /action chain. Mirrors how ntdstAPI drives it
+     * from the browser. The negative case lives in
+     * privateActionStillRequiresAuthForAnonymousNonce() below.
+     */
+    public function guestCanFetchNonceAndPageThroughRealHttp(): void
+    {
+        $future = date('Y-m-d', strtotime('+30 days'));
+        $editionId = $this->createTestEdition(['meta' => [
+            '_ntdst_status'     => 'open',
+            '_ntdst_start_date' => $future,
+            '_ntdst_end_date'   => $future,
+        ]]);
+
+        // 1. Anonymous nonce fetch (no auth cookies — wp_remote_post sends none).
+        $nonceResponse = wp_remote_post(rest_url('ntdst/v1/get_nonce'), [
+            'sslverify' => false,
+            'headers'   => ['Content-Type' => 'application/json'],
+            'body'      => wp_json_encode(['action' => 'stride_catalog_page']),
+        ]);
+        $this->assertFalse(is_wp_error($nonceResponse), 'HTTP to own site must work for this assertion to mean anything');
+        $this->assertSame(
+            200,
+            wp_remote_retrieve_response_code($nonceResponse),
+            'anonymous get_nonce for stride_catalog_page must return 200, got '
+                . wp_remote_retrieve_response_code($nonceResponse) . ' — guests are locked out of the catalog (CR-G1)',
+        );
+        $nonceBody = json_decode((string) wp_remote_retrieve_body($nonceResponse), true);
+        $nonce = (string) ($nonceBody['data']['nonce'] ?? '');
+        $this->assertNotSame('', $nonce, 'nonce payload must contain a nonce');
+
+        // 2. Anonymous paged fetch through the real handle_action chain.
+        $actionResponse = wp_remote_post(rest_url('ntdst/v1/action'), [
+            'sslverify' => false,
+            'headers'   => ['Content-Type' => 'application/json'],
+            'body'      => wp_json_encode([
+                'action'  => 'stride_catalog_page',
+                'nonce'   => $nonce,
+                'catalog' => 'klassikaal',
+                'page'    => 1,
+            ]),
+        ]);
+        $this->assertFalse(is_wp_error($actionResponse));
+        $this->assertSame(200, wp_remote_retrieve_response_code($actionResponse));
+
+        $body = json_decode((string) wp_remote_retrieve_body($actionResponse), true);
+        $this->assertTrue((bool) ($body['success'] ?? false), 'anonymous catalog page fetch must succeed');
+        $this->assertStringContainsString(
+            'href="' . esc_url(get_permalink($editionId)) . '"',
+            (string) ($body['data']['html'] ?? ''),
+            'the guest slice must contain server-rendered cards',
+        );
+    }
+
+    /**
+     * @test
+     *
+     * Adversarial counterpart of the guest wire path: making the catalog
+     * public must NOT loosen the gate for everything else — an anonymous
+     * nonce fetch for a non-public action stays 401.
+     */
+    public function privateActionStillRequiresAuthForAnonymousNonce(): void
+    {
+        $response = wp_remote_post(rest_url('ntdst/v1/get_nonce'), [
+            'sslverify' => false,
+            'headers'   => ['Content-Type' => 'application/json'],
+            'body'      => wp_json_encode(['action' => 'stride_submit_intake']),
+        ]);
+        $this->assertFalse(is_wp_error($response));
+        $this->assertSame(
+            401,
+            wp_remote_retrieve_response_code($response),
+            'non-public actions must keep requiring authentication for nonce issuance',
+        );
+    }
+
+    /**
+     * @test
+     *
      * AF-4 boundary: seed past the server cap; every seeded card appears on
      * exactly ONE page — pagination boundary card neither dropped nor doubled.
      */

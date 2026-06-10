@@ -63,9 +63,16 @@ get_header();
         get hasMore() { return this.shown < this.filteredTotal },
         async setFilter(slug) {
             if (this.loading || this.filter === slug) return;
+            const prevFilter = this.filter;
+            const prevPage = this.page;
             this.filter = slug;
             this.page = 1;
-            await this.fetchPage(true);
+            // Roll back on failure (S8): the grid still shows the old slice,
+            // so filter/page must match it — same as the append path does.
+            if (!await this.fetchPage(true)) {
+                this.filter = prevFilter;
+                this.page = prevPage;
+            }
         },
         async loadMore() {
             if (this.loading) return;
@@ -84,9 +91,11 @@ get_header();
                     this.$refs.grid.insertAdjacentHTML('beforeend', res.html);
                     this.shown += res.count;
                 }
+                return true;
             } catch (e) {
                 this.error = true;
                 if (!replace) this.page--;
+                return false;
             } finally {
                 this.loading = false;
             }
