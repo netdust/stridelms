@@ -91,6 +91,53 @@ final class RegistrationTableMigrateGuardTest extends TestCase
             RegistrationTable::SCHEMA_VERSION,
             (int) get_option('stride_registrations_schema_version'),
         );
+        $this->assertFalse(
+            get_transient('stride_registrations_migration_backoff'),
+            'A clean run must not set the failure-backoff transient',
+        );
+    }
+
+    // === Failure backoff (panel SF-2 / drift Important-1 — the mechanism
+    // both siblings carry: CompletionProofStorage RETRY_TRANSIENT, AuditTable
+    // CR-F3). A failed run must set a 5-minute backoff transient; while it
+    // lives, migrate() bails BEFORE issuing DDL so a persistently failing
+    // ALTER does not re-run + log-spam on every request. The version option
+    // stays unstamped, so retry semantics are unchanged once it lapses. ===
+
+    public function testAlterFailureSetsBackoffAndSkipsRerunWhileActive(): void
+    {
+        $wpdb = $this->fakeWpdb([false, true, 1], 'Lock wait timeout exceeded');
+
+        RegistrationTable::migrate();
+
+        $this->assertNotFalse(
+            get_transient('stride_registrations_migration_backoff'),
+            'A failed ALTER must set the failure-backoff transient (siblings: proof storage D-2, AuditTable CR-F3)',
+        );
+
+        // Next init request while the backoff lives: bail before any DDL.
+        RegistrationTable::migrate();
+        $this->assertCount(
+            1,
+            $wpdb->queries,
+            'While the backoff transient lives, migrate() must not re-issue the ALTER',
+        );
+        $this->assertFalse(
+            get_option('stride_registrations_schema_version'),
+            'Backing off must not stamp the version — the migration still owes a successful run',
+        );
+    }
+
+    public function testBackfillFailureAlsoSetsBackoff(): void
+    {
+        $this->fakeWpdb([true, false], 'Server has gone away');
+
+        RegistrationTable::migrate();
+
+        $this->assertNotFalse(
+            get_transient('stride_registrations_migration_backoff'),
+            'A failed backfill UPDATE must set the failure-backoff transient too',
+        );
     }
 
     public function testFailedRunIsRetriedOnNextInit(): void
@@ -100,7 +147,9 @@ final class RegistrationTableMigrateGuardTest extends TestCase
         RegistrationTable::migrate();
         $this->assertFalse(get_option('stride_registrations_schema_version'));
 
-        // Next init request: DB healthy → migrate() must run again and stamp.
+        // Backoff lapses (transient expiry), then the next init request with
+        // a healthy DB must run again and stamp (D-2 sibling semantics).
+        delete_transient('stride_registrations_migration_backoff');
         $wpdb = $this->fakeWpdb([true, 1]);
         RegistrationTable::migrate();
 

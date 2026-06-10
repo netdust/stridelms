@@ -26,6 +26,15 @@ final class RegistrationTable
 
     private const SCHEMA_VERSION_OPTION = 'stride_registrations_schema_version';
 
+    /**
+     * Set after a failed run (panel SF-2 / drift Important-1 — same mechanism
+     * as CompletionProofStorage::RETRY_TRANSIENT and AuditTable CR-F3): while
+     * it lives, migrate() bails before issuing DDL so a persistently failing
+     * ALTER does not re-run + log-spam on every request. The version option
+     * stays unstamped, so the retry semantics are unchanged once it lapses.
+     */
+    private const RETRY_TRANSIENT = 'stride_registrations_migration_backoff';
+
     public static function getTableName(): string
     {
         global $wpdb;
@@ -90,6 +99,11 @@ final class RegistrationTable
             return;
         }
 
+        if (get_transient(self::RETRY_TRANSIENT) !== false) {
+            // A recent run failed — back off until the transient lapses.
+            return;
+        }
+
         if (!self::exists()) {
             // No table yet — create() will build the latest schema and stamp the version.
             return;
@@ -116,7 +130,9 @@ final class RegistrationTable
                 'error' => $wpdb->last_error,
             ]);
 
-            // Don't stamp the version: the next init request retries (steps are idempotent).
+            // Don't stamp the version: retried once the backoff lapses (steps are idempotent).
+            set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
+
             return;
         }
 
@@ -132,6 +148,8 @@ final class RegistrationTable
                 'step' => 'backfill_partner_path',
                 'error' => $wpdb->last_error,
             ]);
+
+            set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
 
             return;
         }
