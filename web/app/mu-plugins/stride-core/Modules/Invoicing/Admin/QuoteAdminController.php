@@ -67,7 +67,7 @@ final class QuoteAdminController
             [$this, 'renderOverviewMetabox'],
             QuoteCPT::POST_TYPE,
             'normal',
-            'high'
+            'high',
         );
 
         // Notes metabox
@@ -77,7 +77,7 @@ final class QuoteAdminController
             [$this, 'renderNotesMetabox'],
             QuoteCPT::POST_TYPE,
             'normal',
-            'default'
+            'default',
         );
 
         // Status & actions sidebar
@@ -87,7 +87,7 @@ final class QuoteAdminController
             [$this, 'renderActionsMetabox'],
             QuoteCPT::POST_TYPE,
             'side',
-            'high'
+            'high',
         );
     }
 
@@ -104,14 +104,14 @@ final class QuoteAdminController
             'select2',
             'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css',
             [],
-            '4.1.0'
+            '4.1.0',
         );
         wp_enqueue_script(
             'select2',
             'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js',
             ['jquery'],
             '4.1.0',
-            true
+            true,
         );
 
         // Quote admin styles (from stride-core mu-plugin)
@@ -122,7 +122,7 @@ final class QuoteAdminController
                 'stride-quote-admin',
                 plugins_url('assets/css/admin/quote-admin.css', $basePath . '/stride-core.php'),
                 [],
-                filemtime($cssFile)
+                filemtime($cssFile),
             );
         }
 
@@ -134,7 +134,7 @@ final class QuoteAdminController
                 plugins_url('assets/js/admin/quote-admin.js', $basePath . '/stride-core.php'),
                 ['jquery', 'select2'],
                 filemtime($jsFile),
-                true
+                true,
             );
 
             $currentUser = wp_get_current_user();
@@ -199,7 +199,9 @@ final class QuoteAdminController
                 </div>
             <?php else: ?>
                 <?php foreach ($notes as $index => $note): ?>
-                    <?php if (!empty($note['_deleted'])) continue; ?>
+                    <?php if (!empty($note['_deleted'])) {
+                        continue;
+                    } ?>
                     <?php
                     $isCustomer = ($note['type'] ?? 'admin') === 'customer';
                     $typeClass = $isCustomer ? 'customer' : 'admin';
@@ -253,8 +255,8 @@ final class QuoteAdminController
     public function handleSave(int $postId, WP_Post $post): void
     {
         // Verify nonce
-        if (!isset($_POST['stride_quote_nonce']) ||
-            !wp_verify_nonce($_POST['stride_quote_nonce'], 'stride_save_quote')) {
+        if (!isset($_POST['stride_quote_nonce'])
+            || !wp_verify_nonce($_POST['stride_quote_nonce'], 'stride_save_quote')) {
             return;
         }
 
@@ -370,7 +372,7 @@ final class QuoteAdminController
                 do_action('stride/quote/send_email', $postId, $sendTo, $sendCc);
                 $this->setAdminNotice('success', sprintf(
                     __('Offerte verzonden naar %s.', 'stride'),
-                    $sendTo
+                    $sendTo,
                 ));
                 $this->suppressDefaultNotice();
             }
@@ -410,7 +412,7 @@ final class QuoteAdminController
         set_transient(
             'stride_quote_notice_' . get_current_user_id(),
             ['type' => $type, 'message' => $message],
-            30
+            30,
         );
     }
 
@@ -457,7 +459,7 @@ final class QuoteAdminController
         printf(
             '<div class="notice notice-%s is-dismissible"><p>%s</p></div>',
             esc_attr($type),
-            esc_html($notice['message'])
+            esc_html($notice['message']),
         );
     }
 

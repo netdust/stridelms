@@ -108,14 +108,14 @@ $renderOption = function (array $session) {
             <?php endif; ?>
             <?php
             $priceModifier = (int) ($session['price_modifier'] ?? 0);
-            $sessionSlot = $session['slot'] ?? '';
-            if ($priceModifier !== 0 && $sessionSlot !== ''):
-                if ($priceModifier > 0) {
-                    $formatted = '+€ ' . number_format($priceModifier / 100, 2, ',', '.');
-                } else {
-                    $formatted = '-€ ' . number_format(abs($priceModifier) / 100, 2, ',', '.');
-                }
-            ?>
+    $sessionSlot = $session['slot'] ?? '';
+    if ($priceModifier !== 0 && $sessionSlot !== ''):
+        if ($priceModifier > 0) {
+            $formatted = '+€ ' . number_format($priceModifier / 100, 2, ',', '.');
+        } else {
+            $formatted = '-€ ' . number_format(abs($priceModifier) / 100, 2, ',', '.');
+        }
+    ?>
                 <span class="text-xs font-medium <?= $priceModifier > 0 ? 'text-status-warning' : 'text-status-success' ?> ml-1">
                     (<?= esc_html($formatted) ?>)
                 </span>
@@ -170,8 +170,10 @@ $renderOption = function (array $session) {
                 $required = $sc['required'] ?? false;
                 $slotSessions = $grouped[$slotName] ?? [];
 
-                if (empty($slotSessions)) continue;
-            ?>
+                if (empty($slotSessions)) {
+                    continue;
+                }
+                ?>
                 <div>
                     <div class="flex items-center justify-between mb-2">
                         <h4 class="text-sm font-semibold text-text"><?= esc_html($slotLabel) ?></h4>
@@ -219,13 +221,13 @@ $renderOption = function (array $session) {
 
     <?php
     $hasModifiers = false;
-    foreach ($sessions as $s) {
-        if (!empty($s['slot']) && (int) ($s['price_modifier'] ?? 0) !== 0) {
-            $hasModifiers = true;
-            break;
-        }
+foreach ($sessions as $s) {
+    if (!empty($s['slot']) && (int) ($s['price_modifier'] ?? 0) !== 0) {
+        $hasModifiers = true;
+        break;
     }
-    if ($hasModifiers):
+}
+if ($hasModifiers):
     ?>
         <p class="text-xs text-text-muted mt-3 flex items-center gap-1">
             <?= stridence_icon('info', 'w-3.5 h-3.5') ?>

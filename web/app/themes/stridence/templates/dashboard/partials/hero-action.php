@@ -132,7 +132,7 @@ $badge_config = match ($type) {
                         — <?php echo esc_html(sprintf(
                             __('%d van %d lessen', 'stridence'),
                             $data['completed_lessons'] ?? 0,
-                            $data['total_lessons']
+                            $data['total_lessons'],
                         )); ?>
                     <?php endif; ?>
                 </p>

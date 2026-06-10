@@ -150,13 +150,13 @@ final class EditionSessionsMetabox
             <td class="column-price-mod" style="white-space: nowrap;">
                 <?php
                 $modifier = (int) ($session['price_modifier'] ?? 0);
-                if ($modifier !== 0):
-                    $sign = $modifier > 0 ? '+' : '';
-                    echo esc_html($sign . number_format($modifier / 100, 2, ',', '.'));
-                else:
-                    echo '-';
-                endif;
-                ?>
+        if ($modifier !== 0):
+            $sign = $modifier > 0 ? '+' : '';
+            echo esc_html($sign . number_format($modifier / 100, 2, ',', '.'));
+        else:
+            echo '-';
+        endif;
+        ?>
             </td>
             <td class="column-actions">
                 <button type="button" class="button-link stride-edit-session" title="<?php esc_attr_e('Bewerken', 'stride'); ?>">
@@ -334,18 +334,18 @@ final class EditionSessionsMetabox
 
             <?php
             $stateLabel = '';
-            $stateClass = '';
-            if (!$hasRequiredSlot) {
-                $stateLabel = __('Optioneel', 'stride');
-                $stateClass = 'is-neutral';
-            } elseif ($deadlinePassed) {
-                $stateLabel = __('Deadline verstreken', 'stride');
-                $stateClass = 'is-warning';
-            } elseif ($selectionOpen) {
-                $stateLabel = __('Actief', 'stride');
-                $stateClass = 'is-active';
-            }
-            ?>
+        $stateClass = '';
+        if (!$hasRequiredSlot) {
+            $stateLabel = __('Optioneel', 'stride');
+            $stateClass = 'is-neutral';
+        } elseif ($deadlinePassed) {
+            $stateLabel = __('Deadline verstreken', 'stride');
+            $stateClass = 'is-warning';
+        } elseif ($selectionOpen) {
+            $stateLabel = __('Actief', 'stride');
+            $stateClass = 'is-active';
+        }
+        ?>
             <span class="stride-keuzegroepen-state <?= esc_attr($stateClass) ?>"
                   id="stride-keuzegroepen-state"
                   style="<?= $stateLabel === '' ? 'display:none;' : '' ?>">
@@ -418,7 +418,7 @@ final class EditionSessionsMetabox
                         <?php printf(
                             /* translators: %d: count of allowed selections */
                             esc_html(_n('Kies %d', 'Kies %d', (int) $maxSelections, 'stride')),
-                            (int) $maxSelections
+                            (int) $maxSelections,
                         ); ?>
                         <?php if ($slotId): ?>
                             · <code><?php echo esc_html($slotId); ?></code>

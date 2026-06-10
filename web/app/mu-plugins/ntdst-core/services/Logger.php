@@ -144,7 +144,7 @@ class NTDST_Logger
         // or by enabling WP_DEBUG.
         $dbEnabled = apply_filters(
             'ntdst_log_database_enabled',
-            defined('WP_DEBUG') && WP_DEBUG
+            defined('WP_DEBUG') && WP_DEBUG,
         );
 
         if ($dbEnabled) {

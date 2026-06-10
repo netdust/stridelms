@@ -545,7 +545,7 @@ final class EditionRegistrationMetabox
             <p class="description" style="margin: 0 0 8px; font-size: 11px; color: #646970;">
                 <?php echo esc_html(sprintf(
                     __('%d deelnemer(s) direct ingeschreven via LearnDash.', 'stride'),
-                    count($users)
+                    count($users),
                 )); ?>
             </p>
             <table class="wp-list-table widefat fixed striped stride-registration-table">
@@ -591,7 +591,7 @@ final class EditionRegistrationMetabox
 
         return $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$table} WHERE edition_id = %d ORDER BY registered_at DESC",
-            $editionId
+            $editionId,
         ), ARRAY_A) ?: [];
     }
 
@@ -617,7 +617,7 @@ final class EditionRegistrationMetabox
         $results = $wpdb->get_results($wpdb->prepare(
             "SELECT user_id, meta_key, meta_value FROM {$wpdb->usermeta}
              WHERE user_id IN ({$userPlaceholders}) AND meta_key IN ({$keyPlaceholders})",
-            ...array_merge($userIds, $metaKeys)
+            ...array_merge($userIds, $metaKeys),
         ));
 
         $meta = [];

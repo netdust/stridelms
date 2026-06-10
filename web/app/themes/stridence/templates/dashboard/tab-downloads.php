@@ -162,9 +162,9 @@ $all_quotes = array_merge($quoteData['active'], $quoteData['cancelled']);
                                     <?php
                                     printf(
                                         esc_html__('Behaald op %s', 'stridence'),
-                                        esc_html(stride_format_date($cert['completed_at']))
+                                        esc_html(stride_format_date($cert['completed_at'])),
                                     );
-                                    ?>
+                                ?>
                                 </span>
                             <?php endif; ?>
                         </div>
@@ -200,9 +200,9 @@ $all_quotes = array_merge($quoteData['active'], $quoteData['cancelled']);
                                 <?php
                                 printf(
                                     esc_html__('Offerte #%s', 'stridence'),
-                                    esc_html($quote['quote_number'])
+                                    esc_html($quote['quote_number']),
                                 );
-                                ?>
+                    ?>
                             </span>
                             <?php if ($quote['created_at']) : ?>
                                 <span class="text-xs text-text-muted block">

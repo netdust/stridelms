@@ -142,7 +142,7 @@ class ProfileTypeService implements \NTDST_Service_Meta
             "SELECT COUNT(*) FROM {$wpdb->usermeta}
              WHERE meta_key = %s AND meta_value LIKE %s",
             self::USER_META_KEY,
-            '%"' . $wpdb->esc_like($slug) . '"%'
+            '%"' . $wpdb->esc_like($slug) . '"%',
         ));
     }
 

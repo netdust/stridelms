@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Stride\Modules\Audit;
@@ -51,7 +52,7 @@ final class ActivityShortcode
                 </div>',
                 esc_attr($icon),
                 esc_html($date),
-                wp_kses_post($label)
+                wp_kses_post($label),
             );
         }
 

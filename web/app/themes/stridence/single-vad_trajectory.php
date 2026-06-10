@@ -77,7 +77,7 @@ get_header();
             stridence_template_part('partials/breadcrumb', null, [
                 'items' => $breadcrumbs,
             ]);
-            ?>
+?>
 
             <!-- Format badge -->
             <div class="flex items-center gap-2 mb-4">
@@ -92,10 +92,10 @@ get_header();
                     <?php the_title(); ?>
                 </h1>
                 <?php
-                stridence_template_part('partials/badge-status', null, [
-                    'status' => $badge_status,
-                ]);
-                ?>
+    stridence_template_part('partials/badge-status', null, [
+        'status' => $badge_status,
+    ]);
+?>
             </div>
 
             <div class="flex flex-wrap gap-6 text-text-muted">
@@ -110,15 +110,15 @@ get_header();
                     <span class="flex items-center gap-2">
                         <?php echo stridence_icon('book-open', 'w-5 h-5'); ?>
                         <?php
-                        $total_courses = count($required_courses);
-                        foreach ($elective_groups as $group) {
-                            $total_courses += count($group['courses'] ?? []);
-                        }
-                        printf(
-                            esc_html(_n('%d cursus', '%d cursussen', $total_courses, 'stridence')),
-                            $total_courses
-                        );
-                        ?>
+        $total_courses = count($required_courses);
+                    foreach ($elective_groups as $group) {
+                        $total_courses += count($group['courses'] ?? []);
+                    }
+                    printf(
+                        esc_html(_n('%d cursus', '%d cursussen', $total_courses, 'stridence')),
+                        $total_courses,
+                    );
+                    ?>
                     </span>
                 <?php endif; ?>
 
@@ -137,7 +137,7 @@ get_header();
     stridence_template_part('templates/trajectory/tabs', null, [
         'has_courses' => $has_courses,
     ]);
-    ?>
+?>
 
     <!-- Two Column Layout -->
     <div class="container py-8 lg:py-12">
@@ -145,13 +145,13 @@ get_header();
             <!-- Main Content (2/3) -->
             <div class="lg:col-span-2 space-y-12">
                 <?php
-                stridence_template_part('templates/trajectory/content', null, [
-                    'trajectory_id'     => $trajectory_id,
-                    'required_courses'  => $required_courses,
-                    'elective_groups'   => $elective_groups,
-                    'trajectory'        => $trajectory,
-                ]);
-                ?>
+            stridence_template_part('templates/trajectory/content', null, [
+                'trajectory_id'     => $trajectory_id,
+                'required_courses'  => $required_courses,
+                'elective_groups'   => $elective_groups,
+                'trajectory'        => $trajectory,
+            ]);
+?>
             </div>
 
             <!-- Sidebar (1/3) - Enrollment Card -->
@@ -166,12 +166,12 @@ get_header();
                             <span class="text-text-muted"><?php esc_html_e('Prijs (leden)', 'stridence'); ?></span>
                             <span class="font-semibold">
                                 <?php
-                                if ($price > 0) {
-                                    echo esc_html(stride_format_money((int) ($price * 100)));
-                                } else {
-                                    esc_html_e('Op aanvraag', 'stridence');
-                                }
-                                ?>
+                if ($price > 0) {
+                    echo esc_html(stride_format_money((int) ($price * 100)));
+                } else {
+                    esc_html_e('Op aanvraag', 'stridence');
+                }
+?>
                             </span>
                         </div>
                         <?php if ($price_non_member > 0 && $price_non_member !== $price) : ?>
@@ -193,11 +193,11 @@ get_header();
                                 <span class="text-text-muted"><?php esc_html_e('Maximaal', 'stridence'); ?></span>
                                 <span>
                                     <?php
-                                    printf(
-                                        esc_html(_n('%d deelnemer', '%d deelnemers', $capacity, 'stridence')),
-                                        $capacity
-                                    );
-                                    ?>
+    printf(
+        esc_html(_n('%d deelnemer', '%d deelnemers', $capacity, 'stridence')),
+        $capacity,
+    );
+                            ?>
                                 </span>
                             </div>
                         <?php endif; ?>

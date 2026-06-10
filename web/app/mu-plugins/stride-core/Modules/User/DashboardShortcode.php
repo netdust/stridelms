@@ -64,7 +64,7 @@ final class DashboardShortcode
                 esc_html($startDate ? date_i18n('j F Y', strtotime($startDate)) : 'Datum onbekend'),
                 $venue ? '<span uk-icon="location"></span> ' . esc_html($venue) : '',
                 $status === 'completed' ? 'uk-label-success' : 'uk-label-primary',
-                esc_html(ucfirst($status ?: 'ingeschreven'))
+                esc_html(ucfirst($status ?: 'ingeschreven')),
             );
         }
 

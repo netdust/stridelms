@@ -68,7 +68,7 @@ $faq_topics = [
                 <div class="lg:col-span-2 space-y-3">
                     <?php foreach ($topic['items'] as $i => $faq) :
                         $faq_id = $t . '_' . $i;
-                    ?>
+                        ?>
                         <div class="card-bordered">
                             <button type="button"
                                     class="w-full p-4 text-left flex items-center justify-between"

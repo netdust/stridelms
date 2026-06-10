@@ -167,8 +167,10 @@ get_header();
 
                 <?php foreach ($themes as $theme) :
                     $count = $theme_counts[$theme->slug] ?? 0;
-                    if ($count === 0) continue;
-                ?>
+                    if ($count === 0) {
+                        continue;
+                    }
+                    ?>
                     <button @click="filter = '<?php echo esc_attr($theme->slug); ?>'; page = 1" type="button"
                         :class="filter === '<?php echo esc_attr($theme->slug); ?>'
                             ? 'whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 border-primary text-primary'
@@ -190,10 +192,10 @@ get_header();
                 <?php foreach ($all_editions as $edition) : ?>
                     <div data-themes="<?php echo esc_attr(implode(',', $edition['themes'])); ?>">
                         <?php
-                        stridence_template_part('partials/card-edition', null, [
-                            'edition' => $edition,
-                        ]);
-                        ?>
+                            stridence_template_part('partials/card-edition', null, [
+                                'edition' => $edition,
+                            ]);
+                    ?>
                     </div>
                 <?php endforeach; ?>
             </div>
@@ -206,7 +208,7 @@ get_header();
                     'title'   => __('Geen opleidingen gevonden', 'stridence'),
                     'message' => __('Er zijn geen klassikale opleidingen in dit thema.', 'stridence'),
                 ]);
-                ?>
+            ?>
             </div>
 
             <!-- Pagination -->
@@ -237,9 +239,9 @@ get_header();
         <?php else : ?>
             <?php
             stridence_template_part('partials/empty-state', null, [
-                'icon'    => 'calendar',
-                'title'   => __('Geen opleidingen gevonden', 'stridence'),
-                'message' => __('Er zijn momenteel geen klassikale opleidingen gepland.', 'stridence'),
+            'icon'    => 'calendar',
+            'title'   => __('Geen opleidingen gevonden', 'stridence'),
+            'message' => __('Er zijn momenteel geen klassikale opleidingen gepland.', 'stridence'),
             ]);
             ?>
         <?php endif; ?>

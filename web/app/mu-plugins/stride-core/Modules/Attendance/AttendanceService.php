@@ -93,7 +93,7 @@ final class AttendanceService extends AbstractService
             $userId,
             $status,
             $editionId,
-            $actor
+            $actor,
         );
 
         if (!is_wp_error($result)) {

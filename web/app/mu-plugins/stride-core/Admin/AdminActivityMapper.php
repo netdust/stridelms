@@ -193,7 +193,7 @@ final class AdminActivityMapper
                 => ['auth', "{$name} uitgelogd"],
 
             default
-                => ['action', "{$name}: {$action}"],
+            => ['action', "{$name}: {$action}"],
         };
     }
 

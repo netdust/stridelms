@@ -67,7 +67,7 @@ if (!$is_online && !empty($editions)) {
         stridence_template_part('partials/breadcrumb', null, [
             'items' => $breadcrumbs,
         ]);
-        ?>
+?>
 
         <!-- Format badge -->
         <div class="flex items-center gap-2 mb-4">
@@ -88,7 +88,7 @@ if (!$is_online && !empty($editions)) {
                     $format_label = __('Online cursus', 'stridence');
                     $format_icon = 'wifi';
                 }
-            ?>
+?>
                 <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-accent text-text-inverse">
                     <?php echo stridence_icon($format_icon, 'w-3 h-3'); ?>
                     <?php echo esc_html($format_label); ?>
@@ -117,11 +117,11 @@ if (!$is_online && !empty($editions)) {
                     <span class="flex items-center gap-2">
                         <?php echo stridence_icon('calendar', 'w-5 h-5'); ?>
                         <?php
-                        echo esc_html(sprintf(
-                            __('Volgende editie: %s', 'stridence'),
-                            stride_format_date($next_edition_date)
-                        ));
-                        ?>
+            echo esc_html(sprintf(
+                __('Volgende editie: %s', 'stridence'),
+                stride_format_date($next_edition_date),
+            ));
+                    ?>
                     </span>
                 <?php endif; ?>
 
@@ -129,11 +129,11 @@ if (!$is_online && !empty($editions)) {
                     <span class="flex items-center gap-2">
                         <?php echo stridence_icon('layers', 'w-5 h-5'); ?>
                         <?php
-                        echo esc_html(sprintf(
-                            _n('%d geplande editie', '%d geplande edities', $upcoming_count, 'stridence'),
-                            $upcoming_count
-                        ));
-                        ?>
+                    echo esc_html(sprintf(
+                        _n('%d geplande editie', '%d geplande edities', $upcoming_count, 'stridence'),
+                        $upcoming_count,
+                    ));
+                    ?>
                     </span>
                 <?php endif; ?>
 
@@ -141,15 +141,15 @@ if (!$is_online && !empty($editions)) {
                     <span class="flex items-center gap-2 font-semibold text-text">
                         <?php echo stridence_icon('receipt', 'w-5 h-5 text-text-muted'); ?>
                         <?php
-                        if ($price_min_cents === $price_max_cents) {
-                            echo esc_html(stride_format_money($price_min_cents));
-                        } else {
-                            echo esc_html(sprintf(
-                                __('vanaf %s', 'stridence'),
-                                stride_format_money($price_min_cents)
-                            ));
-                        }
-                        ?>
+                    if ($price_min_cents === $price_max_cents) {
+                        echo esc_html(stride_format_money($price_min_cents));
+                    } else {
+                        echo esc_html(sprintf(
+                            __('vanaf %s', 'stridence'),
+                            stride_format_money($price_min_cents),
+                        ));
+                    }
+            ?>
                     </span>
                 <?php endif; ?>
             </div>

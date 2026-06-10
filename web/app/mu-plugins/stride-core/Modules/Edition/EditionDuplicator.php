@@ -69,14 +69,14 @@ final class EditionDuplicator implements NTDST_Service_Meta
 
         $url = wp_nonce_url(
             admin_url('admin.php?action=stride_duplicate_edition&edition_id=' . $post->ID),
-            'stride_duplicate_edition_' . $post->ID
+            'stride_duplicate_edition_' . $post->ID,
         );
 
         $actions['stride_duplicate'] = sprintf(
             '<a href="%s" aria-label="%s">%s</a>',
             esc_url($url),
             esc_attr__('Dupliceer deze editie', 'stride'),
-            esc_html__('Dupliceren', 'stride')
+            esc_html__('Dupliceren', 'stride'),
         );
 
         return $actions;
@@ -121,7 +121,7 @@ final class EditionDuplicator implements NTDST_Service_Meta
     {
         $url = add_query_arg(
             ['post_type' => 'vad_edition', 'stride_notice' => $notice],
-            admin_url('edit.php')
+            admin_url('edit.php'),
         );
         wp_safe_redirect($url);
         exit;
@@ -153,7 +153,7 @@ final class EditionDuplicator implements NTDST_Service_Meta
 
         printf(
             '<div class="notice notice-error is-dismissible"><p>%s</p></div>',
-            esc_html($messages[$notice])
+            esc_html($messages[$notice]),
         );
     }
 

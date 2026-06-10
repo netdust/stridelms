@@ -164,7 +164,7 @@ if (!empty($online_course_ids)) {
          WHERE pm.meta_key = '_ntdst_course_id'
            AND p.post_type = 'vad_edition'
            AND pm.meta_value IN ($in_placeholders)",
-        ...$online_course_ids
+        ...$online_course_ids,
     ));
     $any_edition_course_ids = array_map('intval', $any_edition_course_ids);
 }
@@ -240,8 +240,10 @@ get_header();
 
                 <?php foreach ($themes as $theme) :
                     $count = $theme_counts[$theme->slug] ?? 0;
-                    if ($count === 0) continue;
-                ?>
+                    if ($count === 0) {
+                        continue;
+                    }
+                    ?>
                     <button @click="filter = '<?php echo esc_attr($theme->slug); ?>'; page = 1" type="button"
                         :class="filter === '<?php echo esc_attr($theme->slug); ?>'
                             ? 'whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 border-primary text-primary'
@@ -264,12 +266,12 @@ get_header();
                     <div data-themes="<?php echo esc_attr(implode(',', $item['themes'])); ?>">
                         <?php if ($item['kind'] === 'edition') : ?>
                             <?php stridence_template_part('partials/card-edition', null, [
-                                'edition' => $item['edition'],
-                            ]); ?>
+                                    'edition' => $item['edition'],
+                                ]); ?>
                         <?php else : ?>
                             <?php stridence_template_part('partials/card-course', null, [
-                                'course' => $item['course'],
-                            ]); ?>
+                                    'course' => $item['course'],
+                                ]); ?>
                         <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
@@ -278,12 +280,12 @@ get_header();
             <!-- Empty state for filtered results -->
             <div x-show="filteredCount === 0" x-cloak class="text-center py-12">
                 <?php
-                stridence_template_part('partials/empty-state', null, [
-                    'icon'    => 'monitor',
-                    'title'   => __('Geen opleidingen gevonden', 'stridence'),
-                    'message' => __('Er zijn geen online opleidingen in dit thema.', 'stridence'),
-                ]);
-                ?>
+                    stridence_template_part('partials/empty-state', null, [
+                        'icon'    => 'monitor',
+                        'title'   => __('Geen opleidingen gevonden', 'stridence'),
+                        'message' => __('Er zijn geen online opleidingen in dit thema.', 'stridence'),
+                    ]);
+?>
             </div>
 
             <!-- Pagination -->
@@ -314,9 +316,9 @@ get_header();
         <?php else : ?>
             <?php
             stridence_template_part('partials/empty-state', null, [
-                'icon'    => 'monitor',
-                'title'   => __('Geen opleidingen gevonden', 'stridence'),
-                'message' => __('Er zijn momenteel geen online opleidingen beschikbaar.', 'stridence'),
+'icon'    => 'monitor',
+'title'   => __('Geen opleidingen gevonden', 'stridence'),
+'message' => __('Er zijn momenteel geen online opleidingen beschikbaar.', 'stridence'),
             ]);
             ?>
         <?php endif; ?>

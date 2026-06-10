@@ -77,14 +77,14 @@ $has_courses = !empty($required_courses) || !empty($elective_groups);
             <p class="text-text-muted text-sm">
                 <?php
                 $total_courses = count($required_courses);
-                foreach ($elective_groups as $group) {
-                    $total_courses += count($group['courses'] ?? []);
-                }
-                printf(
-                    esc_html(_n('%d cursus', '%d cursussen', $total_courses, 'stridence')),
-                    $total_courses
-                );
-                ?>
+foreach ($elective_groups as $group) {
+    $total_courses += count($group['courses'] ?? []);
+}
+printf(
+    esc_html(_n('%d cursus', '%d cursussen', $total_courses, 'stridence')),
+    $total_courses,
+);
+?>
             </p>
         </div>
         <div class="card-bordered p-5">
@@ -94,13 +94,13 @@ $has_courses = !empty($required_courses) || !empty($elective_groups);
             </h3>
             <p class="text-text-muted text-sm">
                 <?php
-                $mode = $trajectory['mode'] ?? 'cohort';
-                if ($mode === 'self_paced') {
-                    esc_html_e('In eigen tempo', 'stridence');
-                } else {
-                    esc_html_e('Vast programma met cohort', 'stridence');
-                }
-                ?>
+$mode = $trajectory['mode'] ?? 'cohort';
+if ($mode === 'self_paced') {
+    esc_html_e('In eigen tempo', 'stridence');
+} else {
+    esc_html_e('Vast programma met cohort', 'stridence');
+}
+?>
             </p>
         </div>
     </div>
@@ -166,18 +166,18 @@ $has_courses = !empty($required_courses) || !empty($elective_groups);
             <div x-show="open" x-collapse>
                 <div class="px-5 pb-5 text-text-muted">
                     <?php
-                    $choice_date = $trajectory['choice_available_date'] ?? '';
-                    $choice_deadline = $trajectory['choice_deadline'] ?? '';
-                    if ($choice_date && $choice_deadline) {
-                        printf(
-                            '<p>' . esc_html__('Je kunt je keuzecursussen kiezen tussen %s en %s. Je ontvangt tijdig een herinnering.', 'stridence') . '</p>',
-                            esc_html(stride_format_date($choice_date)),
-                            esc_html(stride_format_date($choice_deadline))
-                        );
-                    } else {
-                        echo '<p>' . esc_html__('De keuzeperiode wordt bekendgemaakt na je inschrijving. Je ontvangt tijdig een herinnering.', 'stridence') . '</p>';
-                    }
-                    ?>
+    $choice_date = $trajectory['choice_available_date'] ?? '';
+$choice_deadline = $trajectory['choice_deadline'] ?? '';
+if ($choice_date && $choice_deadline) {
+    printf(
+        '<p>' . esc_html__('Je kunt je keuzecursussen kiezen tussen %s en %s. Je ontvangt tijdig een herinnering.', 'stridence') . '</p>',
+        esc_html(stride_format_date($choice_date)),
+        esc_html(stride_format_date($choice_deadline)),
+    );
+} else {
+    echo '<p>' . esc_html__('De keuzeperiode wordt bekendgemaakt na je inschrijving. Je ontvangt tijdig een herinnering.', 'stridence') . '</p>';
+}
+?>
                 </div>
             </div>
         </div>

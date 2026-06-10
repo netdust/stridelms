@@ -24,7 +24,7 @@ $templateDir = __DIR__ . '/settings';
 
     <?php stride_tool_header(
         'Instellingen',
-        'Bedrijfsgegevens, profieltypes, meldingen en algemene configuratie.'
+        'Bedrijfsgegevens, profieltypes, meldingen en algemene configuratie.',
     ); ?>
 
     <!-- Status message bar -->

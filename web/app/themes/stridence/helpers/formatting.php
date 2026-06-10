@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Formatting Helper Functions
  *
@@ -24,12 +25,12 @@ function stride_format_date(string $date, string $format = 'j F Y'): string
 
     $months_en = [
         'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'
+        'July', 'August', 'September', 'October', 'November', 'December',
     ];
 
     $months_nl = [
         'januari', 'februari', 'maart', 'april', 'mei', 'juni',
-        'juli', 'augustus', 'september', 'oktober', 'november', 'december'
+        'juli', 'augustus', 'september', 'oktober', 'november', 'december',
     ];
 
     $days_en = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -82,4 +83,3 @@ function stride_enrollment_url(int $id, string $type = 'edition'): string
 
     return home_url('/edities/' . $slug . '/inschrijving/');
 }
-

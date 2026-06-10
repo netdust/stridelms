@@ -26,8 +26,7 @@ class AnnualReportService implements \NTDST_Service_Meta
     public function __construct(
         private readonly EditionRepository $editions,
         private readonly SessionRepository $sessions,
-    ) {
-    }
+    ) {}
 
     public function buildReport(int $year): AnnualReport
     {
@@ -128,7 +127,7 @@ class AnnualReportService implements \NTDST_Service_Meta
                AND r.edition_id IN ({$placeholders})
              GROUP BY pm.meta_value",
             $this->editions->getMetaPrefix() . 'course_id',
-            ...$editionIds
+            ...$editionIds,
         ));
 
         $out = [];
@@ -157,7 +156,7 @@ class AnnualReportService implements \NTDST_Service_Meta
                  GROUP BY pm.meta_value
                  ORDER BY enrolled DESC",
                 $this->editions->getMetaPrefix() . 'course_id',
-                ...$editionIds
+                ...$editionIds,
             ));
             foreach ($raw as $r) {
                 $enrolled  = (int) $r->enrolled;
@@ -223,7 +222,7 @@ class AnnualReportService implements \NTDST_Service_Meta
                 SessionCPT::POST_TYPE,
                 $start,
                 $end,
-                ...$editionIds
+                ...$editionIds,
             ));
 
             $attendanceTable = AttendanceTable::getTableName();
@@ -241,7 +240,7 @@ class AnnualReportService implements \NTDST_Service_Meta
                     "SELECT COUNT(*) FROM {$attendanceTable}
                      WHERE session_id = %d
                        AND status IN ({$attendedValues})",
-                    (int) $s->session_id
+                    (int) $s->session_id,
                 ));
                 $courseHours[$courseId] = ($courseHours[$courseId] ?? 0.0) + ($duration * $attended);
             }
@@ -256,7 +255,7 @@ class AnnualReportService implements \NTDST_Service_Meta
                    AND r.edition_id IN ({$placeholders})
                  GROUP BY pm.meta_value",
                 $this->editions->getMetaPrefix() . 'course_id',
-                ...$editionIds
+                ...$editionIds,
             ));
             foreach ($rowsParticipants as $r) {
                 $courseParticipants[(int) $r->course_id] = (int) $r->users;
@@ -327,7 +326,7 @@ class AnnualReportService implements \NTDST_Service_Meta
                AND r.edition_id IN ({$placeholders})
              GROUP BY um.meta_value",
             'organisation',
-            ...$editionIds
+            ...$editionIds,
         ));
 
         $out = [];
@@ -377,7 +376,7 @@ class AnnualReportService implements \NTDST_Service_Meta
                AND r.edition_id IN ({$placeholders})
              GROUP BY pt",
             'profile_type',
-            ...$editionIds
+            ...$editionIds,
         ));
 
         $out = [];
@@ -435,7 +434,7 @@ class AnnualReportService implements \NTDST_Service_Meta
             'status',
             'total',
             $start,
-            $end
+            $end,
         ));
 
         $count    = count($rows);
@@ -484,7 +483,7 @@ class AnnualReportService implements \NTDST_Service_Meta
                AND pm.meta_value != ''
              ORDER BY y DESC",
             $this->editions->getMetaPrefix() . 'start_date',
-            EditionCPT::POST_TYPE
+            EditionCPT::POST_TYPE,
         ));
         return array_map('intval', $rows);
     }
@@ -520,7 +519,7 @@ class AnnualReportService implements \NTDST_Service_Meta
             EditionCPT::POST_TYPE,
             $this->editions->getMetaPrefix() . 'start_date',
             $start,
-            $end
+            $end,
         ));
         return array_map('intval', $rows);
     }
@@ -543,7 +542,7 @@ class AnnualReportService implements \NTDST_Service_Meta
             "SELECT COUNT(*) FROM {$table}
              WHERE status IN ('confirmed', 'completed')
                AND edition_id IN ({$placeholders})",
-            ...$ids
+            ...$ids,
         ));
     }
 
@@ -560,7 +559,7 @@ class AnnualReportService implements \NTDST_Service_Meta
             "SELECT COUNT(*) FROM {$table}
              WHERE status = 'completed'
                AND edition_id IN ({$placeholders})",
-            ...$ids
+            ...$ids,
         ));
     }
 
@@ -586,7 +585,7 @@ class AnnualReportService implements \NTDST_Service_Meta
             "SELECT COUNT(DISTINCT user_id) FROM {$table}
              WHERE status IN ('confirmed', 'completed')
                AND edition_id IN ({$placeholders})",
-            ...$ids
+            ...$ids,
         ));
     }
 
@@ -608,7 +607,7 @@ class AnnualReportService implements \NTDST_Service_Meta
                AND r.status IN ('confirmed', 'completed')
                AND r.edition_id IN ({$placeholders})",
             'organisation',
-            ...$ids
+            ...$ids,
         ));
     }
 
@@ -637,7 +636,7 @@ class AnnualReportService implements \NTDST_Service_Meta
             SessionCPT::POST_TYPE,
             $start,
             $end,
-            ...$editionIds
+            ...$editionIds,
         ));
     }
 
@@ -673,7 +672,7 @@ class AnnualReportService implements \NTDST_Service_Meta
             SessionCPT::POST_TYPE,
             $start,
             $end,
-            ...$editionIds
+            ...$editionIds,
         ));
 
         $attendanceTable = AttendanceTable::getTableName();
@@ -689,7 +688,7 @@ class AnnualReportService implements \NTDST_Service_Meta
                 "SELECT COUNT(*) FROM {$attendanceTable}
                  WHERE session_id = %d
                    AND status IN ({$attendedValues})",
-                (int) $s->ID
+                (int) $s->ID,
             ));
             $totalHours += $duration * $attended;
         }

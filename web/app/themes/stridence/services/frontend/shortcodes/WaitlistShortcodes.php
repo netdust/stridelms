@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace stridence\services\frontend\shortcodes;
@@ -27,7 +28,7 @@ final class WaitlistShortcodes
                 __('Geen editie geselecteerd', 'stridence'),
                 __('Selecteer eerst een editie via de cursuspagina.', 'stridence'),
                 __('Naar cursussen', 'stridence'),
-                get_post_type_archive_link('sfwd-courses')
+                get_post_type_archive_link('sfwd-courses'),
             );
         }
 
@@ -38,7 +39,7 @@ final class WaitlistShortcodes
                 __('Editie niet gevonden', 'stridence'),
                 __('Deze editie bestaat niet of is verwijderd.', 'stridence'),
                 __('Naar cursussen', 'stridence'),
-                get_post_type_archive_link('sfwd-courses')
+                get_post_type_archive_link('sfwd-courses'),
             );
         }
 

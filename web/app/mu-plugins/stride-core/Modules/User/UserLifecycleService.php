@@ -128,7 +128,7 @@ class UserLifecycleService implements \NTDST_Service_Meta
 
         $url = wp_nonce_url(
             admin_url('admin-post.php?action=stride_anonymise_user&user=' . $user->ID),
-            'stride_anonymise_user_' . $user->ID
+            'stride_anonymise_user_' . $user->ID,
         );
         $confirm = esc_attr__('Gebruiker anonimiseren? PII wordt verwijderd; inschrijvingen blijven bewaard.', 'stride');
         ?>
@@ -214,7 +214,7 @@ class UserLifecycleService implements \NTDST_Service_Meta
             ['user_login' => sprintf('anonymised_%d', $userId), 'user_activation_key' => ''],
             ['ID' => $userId],
             ['%s', '%s'],
-            ['%d']
+            ['%d'],
         );
         clean_user_cache($userId);
 
@@ -257,21 +257,21 @@ class UserLifecycleService implements \NTDST_Service_Meta
             $at = (int) get_user_meta($user->ID, self::META_ANONYMISED_AT, true);
             $actions = ['stride_anonymised' => sprintf(
                 '<span style="color:#646970;">%s</span>',
-                esc_html(sprintf(__('Geanonimiseerd op %s', 'stride'), date_i18n('d M Y', $at)))
+                esc_html(sprintf(__('Geanonimiseerd op %s', 'stride'), date_i18n('d M Y', $at))),
             )];
             return $actions;
         }
 
         $url = wp_nonce_url(
             admin_url('admin-post.php?action=stride_anonymise_user&user=' . $user->ID),
-            'stride_anonymise_user_' . $user->ID
+            'stride_anonymise_user_' . $user->ID,
         );
         $confirm = esc_attr__('Gebruiker anonimiseren? PII wordt verwijderd; inschrijvingen blijven bewaard.', 'stride');
         $anonAction = sprintf(
             '<a href="%s" onclick="return confirm(\'%s\');">%s</a>',
             esc_url($url),
             $confirm,
-            esc_html__('Anonimiseer', 'stride')
+            esc_html__('Anonimiseer', 'stride'),
         );
 
         // Insert before any 'delete' action (WP delete stays as nuclear option for caps)
@@ -336,11 +336,11 @@ class UserLifecycleService implements \NTDST_Service_Meta
         $attTable = $GLOBALS['wpdb']->prefix . 'vad_attendance';
         $regsCount = (int) $GLOBALS['wpdb']->get_var($GLOBALS['wpdb']->prepare(
             "SELECT COUNT(*) FROM {$regsTable} WHERE user_id = %d",
-            $userId
+            $userId,
         ));
         $attCount = (int) $GLOBALS['wpdb']->get_var($GLOBALS['wpdb']->prepare(
             "SELECT COUNT(*) FROM {$attTable} WHERE user_id = %d",
-            $userId
+            $userId,
         ));
 
         ntdst_log('user-lifecycle')->warning('Hard-delete of user with active records', [
@@ -375,17 +375,17 @@ class UserLifecycleService implements \NTDST_Service_Meta
         $orphanRegs = $wpdb->get_results(
             "SELECT r.id, r.user_id FROM {$regsTable} r
              LEFT JOIN {$usersTable} u ON u.ID = r.user_id
-             WHERE r.user_id IS NOT NULL AND u.ID IS NULL"
+             WHERE r.user_id IS NOT NULL AND u.ID IS NULL",
         );
         $orphanAtt = $wpdb->get_results(
             "SELECT a.id, a.user_id FROM {$attTable} a
              LEFT JOIN {$usersTable} u ON u.ID = a.user_id
-             WHERE a.user_id IS NOT NULL AND u.ID IS NULL"
+             WHERE a.user_id IS NOT NULL AND u.ID IS NULL",
         );
 
         $missingUserIds = array_unique(array_merge(
             array_map(static fn($r) => (int) $r->user_id, $orphanRegs),
-            array_map(static fn($a) => (int) $a->user_id, $orphanAtt)
+            array_map(static fn($a) => (int) $a->user_id, $orphanAtt),
         ));
 
         if (empty($missingUserIds)) {
@@ -397,7 +397,7 @@ class UserLifecycleService implements \NTDST_Service_Meta
             'Found %d registration row(s) and %d attendance row(s) referencing %d deleted user(s).',
             count($orphanRegs),
             count($orphanAtt),
-            count($missingUserIds)
+            count($missingUserIds),
         ));
         foreach ($missingUserIds as $uid) {
             WP_CLI::log(sprintf('  deleted user_id=%d', $uid));
@@ -413,7 +413,7 @@ class UserLifecycleService implements \NTDST_Service_Meta
         foreach ($orphanRegs as $row) {
             $existingNotes = $wpdb->get_var($wpdb->prepare(
                 "SELECT notes FROM {$regsTable} WHERE id = %d",
-                $row->id
+                $row->id,
             ));
             $newNotes = $existingNotes ? trim($existingNotes . "\n" . $marker) : $marker;
             $wpdb->update($regsTable, ['notes' => $newNotes], ['id' => $row->id], ['%s'], ['%d']);
@@ -463,7 +463,7 @@ class UserLifecycleService implements \NTDST_Service_Meta
         $items = array_merge(
             $this->exportRegistrations($userId),
             $this->exportQuotes($userId),
-            $this->exportAttendance($userId)
+            $this->exportAttendance($userId),
         );
 
         return ['data' => $items, 'done' => true];
@@ -480,7 +480,7 @@ class UserLifecycleService implements \NTDST_Service_Meta
              FROM {$wpdb->prefix}vad_registrations
              WHERE user_id = %d
              ORDER BY registered_at DESC",
-            $userId
+            $userId,
         ));
 
         $items = [];
@@ -567,7 +567,7 @@ class UserLifecycleService implements \NTDST_Service_Meta
              FROM {$wpdb->prefix}vad_attendance
              WHERE user_id = %d
              ORDER BY marked_at DESC",
-            $userId
+            $userId,
         ));
 
         $items = [];

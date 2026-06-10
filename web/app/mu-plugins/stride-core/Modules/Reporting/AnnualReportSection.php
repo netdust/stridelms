@@ -1,4 +1,5 @@
 <?php
+
 // web/app/mu-plugins/stride-core/Modules/Reporting/AnnualReportSection.php
 declare(strict_types=1);
 
@@ -15,8 +16,7 @@ final class AnnualReportSection
         public readonly string $title,
         public readonly array $headers,
         public readonly array $rows,
-    ) {
-    }
+    ) {}
 
     public function toArray(): array
     {

@@ -47,16 +47,16 @@ $progressPercent = $totalRequired > 0 ? round(($completedCount / $totalRequired)
                     printf(
                         esc_html__('%d van %d cursussen afgerond', 'stridence'),
                         $completedCount,
-                        $totalRequired
+                        $totalRequired,
                     );
-                    ?>
+?>
                 </p>
             </div>
             <div class="flex items-center gap-2">
                 <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium <?php echo $progress['mode'] === TrajectoryMode::Cohort ? 'bg-primary/10 text-primary' : 'bg-accent/10 text-accent'; ?>">
                     <?php echo $progress['mode'] === TrajectoryMode::Cohort
-                        ? esc_html__('Cohort', 'stridence')
-                        : esc_html__('Zelfgestuurd', 'stridence'); ?>
+    ? esc_html__('Cohort', 'stridence')
+    : esc_html__('Zelfgestuurd', 'stridence'); ?>
                 </span>
             </div>
         </div>
@@ -68,7 +68,7 @@ $progressPercent = $totalRequired > 0 ? round(($completedCount / $totalRequired)
             'required' => $totalRequired,
             'label' => __('Totale voortgang', 'stridence'),
         ]);
-        ?>
+?>
     </div>
 
     <!-- Required Courses -->
@@ -81,7 +81,7 @@ $progressPercent = $totalRequired > 0 ? round(($completedCount / $totalRequired)
                 <?php foreach ($progress['required_courses'] as $course) :
                     $isComplete = LearnDashHelper::isComplete($course->ID, $user->ID);
                     $isInProgress = in_array($course->ID, $progress['in_progress_courses'], true);
-                ?>
+                    ?>
                     <div class="p-4 flex items-center justify-between gap-4">
                         <div class="flex items-center gap-3 min-w-0">
                             <?php if ($isComplete) : ?>
@@ -144,7 +144,7 @@ $progressPercent = $totalRequired > 0 ? round(($completedCount / $totalRequired)
                 $groupCompleted++;
             }
         }
-    ?>
+        ?>
         <section>
             <div class="flex items-center justify-between mb-3">
                 <h3 class="text-sm font-medium text-text-muted uppercase tracking-wide">
@@ -161,7 +161,7 @@ $progressPercent = $totalRequired > 0 ? round(($completedCount / $totalRequired)
                 <?php foreach ($courses as $course) :
                     $isComplete = LearnDashHelper::isComplete($course->ID, $user->ID);
                     $isInProgress = in_array($course->ID, $progress['in_progress_courses'], true);
-                ?>
+                    ?>
                     <div class="p-4 flex items-center justify-between gap-4">
                         <div class="flex items-center gap-3 min-w-0">
                             <?php if ($isComplete) : ?>

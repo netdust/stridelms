@@ -54,7 +54,7 @@ final class NTDST_MetaboxGenerator
                 $theme_dist_uri . '/theme-services.js',
                 ['jquery', 'jquery-ui-sortable'],
                 null,
-                true
+                true,
             );
 
             // Add type="module" for ES module support
@@ -121,7 +121,7 @@ final class NTDST_MetaboxGenerator
                     $model_name,
                     $config['metabox_context'] ?? 'normal',
                     $config['metabox_priority'] ?? 'high',
-                    ['model_name' => $model_name, 'fields' => $fields]
+                    ['model_name' => $model_name, 'fields' => $fields],
                 );
             }
         }
@@ -161,7 +161,7 @@ final class NTDST_MetaboxGenerator
                 $model_name,
                 $group_config['context'] ?? 'normal',
                 $group_config['priority'] ?? 'default',
-                ['model_name' => $model_name, 'fields' => $group_fields]
+                ['model_name' => $model_name, 'fields' => $group_fields],
             );
         }
 
@@ -176,7 +176,7 @@ final class NTDST_MetaboxGenerator
                 $model_name,
                 'normal',
                 'low',
-                ['model_name' => $model_name, 'fields' => $ungrouped_fields]
+                ['model_name' => $model_name, 'fields' => $ungrouped_fields],
             );
         }
     }
@@ -197,7 +197,7 @@ final class NTDST_MetaboxGenerator
                 'model_name' => $model_name,
                 'fields' => $all_fields,
                 'field_groups' => $field_groups,
-            ]
+            ],
         );
     }
 

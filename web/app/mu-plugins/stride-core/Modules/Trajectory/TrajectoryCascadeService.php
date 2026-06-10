@@ -599,7 +599,7 @@ final class TrajectoryCascadeService
                 return new WP_Error(
                     'edition_full',
                     sprintf(__('Editie %d is volzet', 'stride'), $editionId),
-                    ['edition_id' => $editionId]
+                    ['edition_id' => $editionId],
                 );
             }
 

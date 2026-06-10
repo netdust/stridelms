@@ -205,7 +205,7 @@ final class QuoteUpdateHandler
         if (!empty($quote['locked'])) {
             return new WP_Error(
                 'locked',
-                __('Deze offerte is vergrendeld door de beheerder en kan niet meer worden bijgewerkt.', 'stride')
+                __('Deze offerte is vergrendeld door de beheerder en kan niet meer worden bijgewerkt.', 'stride'),
             );
         }
 

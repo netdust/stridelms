@@ -24,7 +24,7 @@ final class VoucherCodeGenerator
     public static function generate(
         string $prefix = self::DEFAULT_PREFIX,
         ?callable $existsCheck = null,
-        int $maxAttempts = 10
+        int $maxAttempts = 10,
     ): string {
         for ($i = 0; $i < $maxAttempts; $i++) {
             $code = self::buildCode($prefix);
@@ -49,7 +49,7 @@ final class VoucherCodeGenerator
             '%s-%s-%s',
             strtoupper($prefix),
             strtoupper(wp_generate_password(4, false)),
-            strtoupper(wp_generate_password(4, false))
+            strtoupper(wp_generate_password(4, false)),
         );
     }
 }

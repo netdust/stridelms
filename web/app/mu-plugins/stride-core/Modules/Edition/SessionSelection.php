@@ -217,7 +217,7 @@ final class SessionSelection
             if ($selectedInSlot < $pickCount) {
                 return new WP_Error(
                     'incomplete_selection',
-                    sprintf('Slot "%s" requires %d selection(s), got %d', $slotName, $pickCount, $selectedInSlot)
+                    sprintf('Slot "%s" requires %d selection(s), got %d', $slotName, $pickCount, $selectedInSlot),
                 );
             }
         }

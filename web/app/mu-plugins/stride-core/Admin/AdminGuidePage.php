@@ -42,7 +42,7 @@ final class AdminGuidePage
             'Handleiding',
             self::CAPABILITY,
             self::PAGE_SLUG,
-            [$this, 'render']
+            [$this, 'render'],
         );
     }
 

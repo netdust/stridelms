@@ -17,19 +17,19 @@ get_header();
             <?php
             // Get the content - this executes shortcodes
             $content = get_the_content();
-            $content = apply_filters('the_content', $content);
+        $content = apply_filters('the_content', $content);
 
-            // Check if content contains our form shortcodes (full-width layout)
-            $has_form_shortcode = has_shortcode(get_the_content(), 'stride_enrollment')
-                               || has_shortcode(get_the_content(), 'stride_interest')
-                               || has_shortcode(get_the_content(), 'stride_waitlist');
+        // Check if content contains our form shortcodes (full-width layout)
+        $has_form_shortcode = has_shortcode(get_the_content(), 'stride_enrollment')
+                           || has_shortcode(get_the_content(), 'stride_interest')
+                           || has_shortcode(get_the_content(), 'stride_waitlist');
 
-            if ($has_form_shortcode) {
-                // Full-width output for form pages (shortcode handles its own container)
-                echo $content;
-            } else {
-                // Standard page layout with container
-                ?>
+        if ($has_form_shortcode) {
+            // Full-width output for form pages (shortcode handles its own container)
+            echo $content;
+        } else {
+            // Standard page layout with container
+            ?>
                 <header class="bg-surface-alt border-b border-border">
                     <div class="container py-8 lg:py-12">
                         <h1 class="font-heading text-3xl lg:text-4xl font-bold text-text">
@@ -44,8 +44,8 @@ get_header();
                     </div>
                 </div>
                 <?php
-            }
-            ?>
+        }
+        ?>
         </article>
     <?php endwhile; ?>
 </main>

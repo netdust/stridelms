@@ -183,9 +183,9 @@ usort($certificates, fn($a, $b) => strcmp($b['completed_at'], $a['completed_at']
                                         printf(
                                             /* translators: %s: completion date */
                                             esc_html__('Behaald op %s', 'stridence'),
-                                            esc_html(stride_format_date($cert['completed_at']))
+                                            esc_html(stride_format_date($cert['completed_at'])),
                                         );
-                                        ?>
+                                ?>
                                     </span>
                                 </div>
                             <?php endif; ?>

@@ -50,7 +50,7 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                     $canApplyVoucher = $isDraftOrSent && empty($quote['voucher_code']);
                     $canCancel      = $quote['status'] !== QuoteStatus::Exported;
                     $hasSecondClick = $canEditBilling || $canApplyVoucher;
-                ?>
+                    ?>
                     <div class="card" x-data="expandable(<?php echo $i === 0 ? 'true' : 'false'; ?>)">
                         <!-- Header -->
                         <button type="button"
@@ -167,7 +167,7 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                                                 </button>
                                                 <button type="button"
                                                         @click="confirm(async () => {
-                                                            await ntdstAPI.call('stride_cancel_quote', { quote_id: <?php echo (int)$quote['id']; ?> });
+                                                            await ntdstAPI.call('stride_cancel_quote', { quote_id: <?php echo (int) $quote['id']; ?> });
                                                             $dispatch('toast', { message: 'Inschrijving geannuleerd', type: 'success' });
                                                             setTimeout(() => location.reload(), 1000);
                                                         })"
@@ -185,15 +185,15 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                                             <?php if ($canEditBilling) : ?>
                                                 <div x-data="inlineEditSection({
                                                          action: 'stride_update_quote',
-                                                         params: { quote_id: <?php echo (int)$quote['id']; ?> },
+                                                         params: { quote_id: <?php echo (int) $quote['id']; ?> },
                                                          fields: <?php echo esc_attr(json_encode([
-                                                             'company'     => $quote['billing']['company'] ?? '',
-                                                             'email'       => $quote['billing']['email'] ?? '',
-                                                             'address'     => $quote['billing']['address'] ?? '',
-                                                             'postal_code' => $quote['billing']['postal_code'] ?? '',
-                                                             'city'        => $quote['billing']['city'] ?? '',
-                                                             'vat_number'  => $quote['billing']['vat_number'] ?? '',
-                                                         ])); ?>
+                                                                 'company'     => $quote['billing']['company'] ?? '',
+                                                                 'email'       => $quote['billing']['email'] ?? '',
+                                                                 'address'     => $quote['billing']['address'] ?? '',
+                                                                 'postal_code' => $quote['billing']['postal_code'] ?? '',
+                                                                 'city'        => $quote['billing']['city'] ?? '',
+                                                                 'vat_number'  => $quote['billing']['vat_number'] ?? '',
+                                                             ])); ?>
                                                      })"
                                                      x-init="startEdit()">
                                                     <p class="text-xs font-medium text-text-muted uppercase tracking-wide mb-3">
@@ -260,7 +260,7 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                                                                     error = '';
                                                                     try {
                                                                         await ntdstAPI.call('stride_apply_quote_voucher', {
-                                                                            quote_id: <?php echo (int)$quote['id']; ?>,
+                                                                            quote_id: <?php echo (int) $quote['id']; ?>,
                                                                             voucher_code: code
                                                                         });
                                                                         applied = true;
@@ -296,11 +296,11 @@ function stridence_quote_status_classes(QuoteStatus $status): string
         <?php else : ?>
             <?php
             stridence_template_part('partials/empty-state', null, [
-                'icon'    => 'file-text',
-                'title'   => __('Geen offertes', 'stridence'),
-                'message' => __('Je hebt nog geen offertes. Offertes worden automatisch aangemaakt wanneer je je inschrijft voor een opleiding.', 'stridence'),
-                'action'  => __('Bekijk opleidingen', 'stridence'),
-                'url'     => get_post_type_archive_link('sfwd-courses'),
+                    'icon'    => 'file-text',
+                    'title'   => __('Geen offertes', 'stridence'),
+                    'message' => __('Je hebt nog geen offertes. Offertes worden automatisch aangemaakt wanneer je je inschrijft voor een opleiding.', 'stridence'),
+                    'action'  => __('Bekijk opleidingen', 'stridence'),
+                    'url'     => get_post_type_archive_link('sfwd-courses'),
             ]);
             ?>
         <?php endif; ?>
@@ -317,9 +317,9 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                     printf(
                         /* translators: %d: number of cancelled quotes */
                         esc_html__('Geannuleerd (%d)', 'stridence'),
-                        count($cancelled)
+                        count($cancelled),
                     );
-                    ?>
+        ?>
                 </h3>
                 <span class="text-text-muted transition-transform duration-200"
                       :class="{ 'rotate-180': open }">
@@ -340,10 +340,10 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                                 </span>
                                 <span class="text-xs">
                                     <?php
-                                    if ($quote['created_at']) {
-                                        echo esc_html(stride_format_date($quote['created_at']));
-                                    }
-                                    ?>
+                        if ($quote['created_at']) {
+                            echo esc_html(stride_format_date($quote['created_at']));
+                        }
+                        ?>
                                 </span>
                             </div>
                             <span class="text-sm line-through shrink-0">

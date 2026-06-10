@@ -67,7 +67,7 @@ final class QuestionnaireSettingsPage
             'Formuliervelden',
             self::CAPABILITY,
             self::PAGE_SLUG,
-            [$this, 'renderPage']
+            [$this, 'renderPage'],
         );
     }
 
@@ -103,7 +103,7 @@ final class QuestionnaireSettingsPage
                 'https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js',
                 [],
                 '3.14.9',
-                true
+                true,
             );
             wp_script_add_data('alpinejs', 'defer', true);
         }
@@ -187,7 +187,7 @@ final class QuestionnaireSettingsPage
             'stride_questionnaire',
             'saved',
             __('Formuliervelden opgeslagen.', 'stride'),
-            'updated'
+            'updated',
         );
     }
 
@@ -202,8 +202,8 @@ final class QuestionnaireSettingsPage
             <h1 style="margin-bottom:16px"><?php esc_html_e('Vragenlijst', 'stride'); ?></h1>
             <?php
             settings_errors('stride_questionnaire');
-            include __DIR__ . '/templates/builder.php';
-            ?>
+        include __DIR__ . '/templates/builder.php';
+        ?>
         </div>
         <?php
     }

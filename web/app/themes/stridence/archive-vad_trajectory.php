@@ -119,7 +119,7 @@ get_header();
 
                 // Target audience
                 $target_audience = $meta['target_audience'] ?? $meta['_ntdst_target_audience'] ?? '';
-            ?>
+                ?>
                 <article class="card overflow-hidden flex flex-col md:flex-row">
                     <!-- Media Column -->
                     <div class="hidden md:block w-36 shrink-0 bg-gradient-to-br from-primary/5 to-accent/5 border-r border-border">
@@ -182,11 +182,11 @@ get_header();
                                         <?php echo stridence_icon('book-open', 'w-4 h-4'); ?>
                                         <span>
                                             <?php
-                                            printf(
-                                                esc_html(_n('%d cursus', '%d cursussen', $course_count, 'stridence')),
-                                                $course_count
-                                            );
-                                            ?>
+                                                printf(
+                                                    esc_html(_n('%d cursus', '%d cursussen', $course_count, 'stridence')),
+                                                    $course_count,
+                                                );
+                                    ?>
                                         </span>
                                     </div>
                                 <?php endif; ?>

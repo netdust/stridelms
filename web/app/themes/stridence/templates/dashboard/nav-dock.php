@@ -75,7 +75,7 @@ $bottom_items = [
             continue;
         }
         $is_active = ($current_tab === $slug);
-    ?>
+        ?>
         <a href="<?php echo esc_url($item['url']); ?>"
            class="dock-item <?php echo $is_active ? 'active' : ''; ?>"
            <?php echo $is_active ? 'aria-current="page"' : ''; ?>
@@ -92,7 +92,7 @@ $bottom_items = [
             continue;
         }
         $is_active = ($current_tab === $slug);
-    ?>
+        ?>
         <a href="<?php echo esc_url($item['url']); ?>"
            class="dock-item <?php echo $is_active ? 'active' : ''; ?>"
            <?php echo $is_active ? 'aria-current="page"' : ''; ?>

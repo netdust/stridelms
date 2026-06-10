@@ -61,7 +61,7 @@ class AnnualReportPage implements \NTDST_Service_Meta
             __('Jaarrapport', 'stride'),
             self::CAPABILITY,
             self::PAGE_SLUG,
-            [$this, 'render']
+            [$this, 'render'],
         ) ?: null;
     }
 
@@ -81,7 +81,7 @@ class AnnualReportPage implements \NTDST_Service_Meta
                 'stride-annual-report',
                 plugins_url('assets/css/admin/annual-report.css', $basePath . '/stride-core.php'),
                 [],
-                (string) filemtime($cssFile)
+                (string) filemtime($cssFile),
             );
         }
 
@@ -90,7 +90,7 @@ class AnnualReportPage implements \NTDST_Service_Meta
             'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js',
             [],
             '4.4.1',
-            true
+            true,
         );
 
         // Page component MUST register on window before Alpine boots.
@@ -103,7 +103,7 @@ class AnnualReportPage implements \NTDST_Service_Meta
                 plugins_url('assets/js/admin/annual-report.js', $basePath . '/stride-core.php'),
                 ['chart-js'],
                 (string) filemtime($jsFile),
-                true
+                true,
             );
         }
 
@@ -112,7 +112,7 @@ class AnnualReportPage implements \NTDST_Service_Meta
             'https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js',
             ['stride-annual-report'],
             '3.14.9',
-            ['strategy' => 'defer', 'in_footer' => true]
+            ['strategy' => 'defer', 'in_footer' => true],
         );
 
         // Add crossorigin for CDN scripts (consistent with AdminDashboardService).
@@ -138,7 +138,7 @@ class AnnualReportPage implements \NTDST_Service_Meta
             'report'         => $this->reportToJs($this->service->buildReport($requestedYear)),
             'pdfUrl'         => admin_url(
                 'admin-ajax.php?action=stride_annual_report_pdf&year=' . $requestedYear
-                . '&_wpnonce=' . wp_create_nonce('stride_annual_report')
+                . '&_wpnonce=' . wp_create_nonce('stride_annual_report'),
             ),
             'csvBaseUrl'     => admin_url('admin-ajax.php?action=stride_annual_report_csv'),
             'csvNonce'       => wp_create_nonce('stride_annual_report'),
@@ -200,7 +200,7 @@ class AnnualReportPage implements \NTDST_Service_Meta
             'kpis'         => $report->kpis,
             'sections'     => array_map(
                 static fn($section) => $section->toArray(),
-                $report->sections
+                $report->sections,
             ),
         ];
     }

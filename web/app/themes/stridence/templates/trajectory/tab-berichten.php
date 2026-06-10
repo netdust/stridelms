@@ -72,7 +72,7 @@ $messageTypes = [
                 $author = $authorId ? get_userdata($authorId) : null;
                 $authorName = $author ? ($author->display_name ?: $author->user_login) : __('Beheerder', 'stridence');
                 $date = $message['date'] ?? '';
-            ?>
+                ?>
                 <article class="card p-4">
                     <header class="flex items-start justify-between gap-4 mb-3">
                         <div class="flex items-center gap-3">

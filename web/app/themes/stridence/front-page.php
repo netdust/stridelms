@@ -22,7 +22,7 @@ get_header();
             <h1 class="font-serif text-6xl lg:text-7xl xl:text-8xl font-light leading-tight mb-8">
                 <?php echo wp_kses(
                     __('Versterk je zorgteam met <em class="italic text-primary">deskundige</em> opleidingen.', 'stridence'),
-                    ['em' => ['class' => []]]
+                    ['em' => ['class' => []]],
                 ); ?>
             </h1>
             <p class="text-lg lg:text-xl text-text-muted leading-relaxed max-w-2xl mb-10">
@@ -54,39 +54,39 @@ get_header();
         <div class="grid md:grid-cols-3 gap-6">
             <?php
             $trajectory_count = wp_count_posts('vad_trajectory');
-            $trajectory_total = isset($trajectory_count->publish) ? (int) $trajectory_count->publish : 0;
+$trajectory_total = isset($trajectory_count->publish) ? (int) $trajectory_count->publish : 0;
 
-            $edition_query = new WP_Query([
-                'post_type'      => 'vad_edition',
-                'post_status'    => 'publish',
-                'posts_per_page' => 1,
-                'fields'         => 'ids',
-                'meta_query'     => [
-                    [
-                        'key'     => '_ntdst_status',
-                        'value'   => ['draft', 'completed', 'archived'],
-                        'compare' => 'NOT IN',
-                    ],
-                ],
-            ]);
-            $edition_total = $edition_query->found_posts;
+$edition_query = new WP_Query([
+    'post_type'      => 'vad_edition',
+    'post_status'    => 'publish',
+    'posts_per_page' => 1,
+    'fields'         => 'ids',
+    'meta_query'     => [
+        [
+            'key'     => '_ntdst_status',
+            'value'   => ['draft', 'completed', 'archived'],
+            'compare' => 'NOT IN',
+        ],
+    ],
+]);
+$edition_total = $edition_query->found_posts;
 
-            $online_query = new WP_Query([
-                'post_type'      => 'sfwd-courses',
-                'post_status'    => 'publish',
-                'posts_per_page' => 1,
-                'fields'         => 'ids',
-                'tax_query'      => [
-                    [
-                        'taxonomy' => 'stride_format',
-                        'field'    => 'slug',
-                        'terms'    => ['online', 'e-learning', 'webinar'],
-                        'operator' => 'IN',
-                    ],
-                ],
-            ]);
-            $online_total = $online_query->found_posts;
-            ?>
+$online_query = new WP_Query([
+    'post_type'      => 'sfwd-courses',
+    'post_status'    => 'publish',
+    'posts_per_page' => 1,
+    'fields'         => 'ids',
+    'tax_query'      => [
+        [
+            'taxonomy' => 'stride_format',
+            'field'    => 'slug',
+            'terms'    => ['online', 'e-learning', 'webinar'],
+            'operator' => 'IN',
+        ],
+    ],
+]);
+$online_total = $online_query->found_posts;
+?>
 
             <a href="<?php echo esc_url(home_url('/trajecten/')); ?>" class="card p-10 text-center group cursor-pointer">
                 <div class="w-16 h-16 mx-auto mb-5 rounded-full bg-primary-subtle flex items-center justify-center group-hover:bg-primary/20 transition-colors">
@@ -146,7 +146,7 @@ $courses = get_posts([
 ]);
 
 if (!empty($courses)) :
-?>
+    ?>
 <section class="section bg-surface-alt rounded-t-[48px]">
     <div class="container">
         <div class="flex items-end justify-between mb-12">
@@ -225,7 +225,7 @@ if (!empty($courses)) :
     <blockquote class="font-serif text-3xl lg:text-4xl font-light leading-snug mb-12">
         <?php echo wp_kses(
             __('"De opleiding palliatieve zorg heeft mijn hele aanpak veranderd. Ik voelde me voor het eerst echt <em class="italic text-primary">voorbereid</em> op de moeilijkste gesprekken met families."', 'stridence'),
-            ['em' => ['class' => []]]
+            ['em' => ['class' => []]],
         ); ?>
     </blockquote>
     <div class="flex flex-col items-center">

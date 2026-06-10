@@ -73,7 +73,7 @@ final class TrajectoryAdminController
             [$this, 'renderDetailsMetabox'],
             TrajectoryCPT::POST_TYPE,
             'normal',
-            'high'
+            'high',
         );
 
         // Courses metabox
@@ -83,7 +83,7 @@ final class TrajectoryAdminController
             [$this, 'renderCoursesMetabox'],
             TrajectoryCPT::POST_TYPE,
             'normal',
-            'default'
+            'default',
         );
 
         // Enrollments metabox
@@ -93,7 +93,7 @@ final class TrajectoryAdminController
             [$this, 'renderEnrollmentsMetabox'],
             TrajectoryCPT::POST_TYPE,
             'normal',
-            'default'
+            'default',
         );
 
         // Messages metabox
@@ -103,7 +103,7 @@ final class TrajectoryAdminController
             [$this, 'renderMessagesMetabox'],
             TrajectoryCPT::POST_TYPE,
             'normal',
-            'default'
+            'default',
         );
 
         // Sidebar
@@ -113,7 +113,7 @@ final class TrajectoryAdminController
             [$this, 'renderSidebarMetabox'],
             TrajectoryCPT::POST_TYPE,
             'side',
-            'high'
+            'high',
         );
     }
 
@@ -130,14 +130,14 @@ final class TrajectoryAdminController
             'select2',
             'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css',
             [],
-            '4.1.0'
+            '4.1.0',
         );
         wp_enqueue_script(
             'select2',
             'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js',
             ['jquery'],
             '4.1.0',
-            true
+            true,
         );
 
         // Trajectory admin styles (from stride-core mu-plugin)
@@ -148,7 +148,7 @@ final class TrajectoryAdminController
                 'stride-trajectory-admin',
                 plugins_url('assets/css/admin/trajectory-admin.css', $basePath . '/stride-core.php'),
                 ['select2'],
-                filemtime($cssFile)
+                filemtime($cssFile),
             );
         }
 
@@ -160,7 +160,7 @@ final class TrajectoryAdminController
                 plugins_url('assets/js/admin/trajectory-admin.js', $basePath . '/stride-core.php'),
                 ['jquery', 'select2'],
                 filemtime($jsFile),
-                true
+                true,
             );
 
             $currentUser = wp_get_current_user();
@@ -315,9 +315,9 @@ final class TrajectoryAdminController
                             'toolbar1' => 'formatselect,bold,italic,underline,bullist,numlist,link,unlink,wp_more,fullscreen',
                             'toolbar2' => '',
                         ],
-                    ]
+                    ],
                 );
-                ?>
+        ?>
             </div>
 
             <!-- Tab: Deadlines -->
@@ -416,8 +416,10 @@ final class TrajectoryAdminController
                 <?php if (empty($electiveGroups)): ?>
                     <p class="stride-no-courses"><?php esc_html_e('Nog geen keuzegroepen. Klik op "+ Nieuwe groep" om te beginnen.', 'stride'); ?></p>
                 <?php else: ?>
-                    <?php $groupIndex = 0; foreach ($electiveGroups as $groupName => $group): ?>
-                        <?php $this->renderElectiveGroup($groupIndex, $group); $groupIndex++; ?>
+                    <?php $groupIndex = 0;
+                    foreach ($electiveGroups as $groupName => $group): ?>
+                        <?php $this->renderElectiveGroup($groupIndex, $group);
+                        $groupIndex++; ?>
                     <?php endforeach; ?>
                 <?php endif; ?>
             </div>
@@ -446,13 +448,13 @@ final class TrajectoryAdminController
                         <?php printf(
                             /* translators: %d: pick count */
                             esc_html__('Kies %d', 'stride'),
-                            (int) ($group['pick_count'] ?? 1)
+                            (int) ($group['pick_count'] ?? 1),
                         ); ?>
                         ·
                         <?php printf(
                             /* translators: %d: number of courses */
                             esc_html(_n('%d cursus', '%d cursussen', $courseCount, 'stride')),
-                            $courseCount
+                            $courseCount,
                         ); ?>
                     </span>
                 </div>
@@ -645,7 +647,7 @@ final class TrajectoryAdminController
                             <td>
                                 <?php
                                 $userEditUrl = $user ? get_edit_user_link($user->ID) : null;
-                                if ($userEditUrl): ?>
+                        if ($userEditUrl): ?>
                                     <a href="<?php echo esc_url($userEditUrl); ?>"><?php echo esc_html($userName); ?></a>
                                 <?php else: ?>
                                     <?php echo esc_html($userName); ?>
@@ -841,7 +843,9 @@ final class TrajectoryAdminController
                 </div>
             <?php else: ?>
                 <?php foreach ($messages as $index => $message): ?>
-                    <?php if (!empty($message['_deleted'])) continue; ?>
+                    <?php if (!empty($message['_deleted'])) {
+                        continue;
+                    } ?>
                     <?php
                     $type = $message['type'] ?? 'announcement';
                     $typeConfig = $messageTypes[$type] ?? $messageTypes['announcement'];
@@ -1006,8 +1010,8 @@ final class TrajectoryAdminController
 
     public function handleSave(int $postId, WP_Post $post): void
     {
-        if (!isset($_POST[self::NONCE_FIELD]) ||
-            !wp_verify_nonce($_POST[self::NONCE_FIELD], self::NONCE_SAVE)) {
+        if (!isset($_POST[self::NONCE_FIELD])
+            || !wp_verify_nonce($_POST[self::NONCE_FIELD], self::NONCE_SAVE)) {
             return;
         }
 
@@ -1371,9 +1375,11 @@ final class TrajectoryAdminController
         }
 
         if (!empty($search)) {
-            $enrollments = array_filter($enrollments, function($e) use ($search) {
+            $enrollments = array_filter($enrollments, function ($e) use ($search) {
                 $user = get_userdata($e->user_id);
-                if (!$user) return false;
+                if (!$user) {
+                    return false;
+                }
                 $name = strtolower($user->display_name . ' ' . $user->user_email);
                 return str_contains($name, strtolower($search));
             });

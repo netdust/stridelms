@@ -1,4 +1,5 @@
 <?php
+
 /**
  * NTDST Query Cache - Centralized caching for data queries
  *
@@ -67,7 +68,7 @@ class NTDST_Query_Cache
             $query_args['cache_results'],
             $query_args['update_post_meta_cache'],
             $query_args['update_post_term_cache'],
-            $query_args['suppress_filters']
+            $query_args['suppress_filters'],
         );
 
         // Sort keys for deterministic ordering
@@ -298,7 +299,7 @@ class NTDST_Query_Cache
             'ntdst_should_invalidate_meta',
             $should_invalidate,
             $meta_key,
-            $post_id
+            $post_id,
         );
 
         if (!$should_invalidate) {

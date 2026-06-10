@@ -877,9 +877,9 @@ class NTDST_Data_Model
                 // Throw exception to fail loudly rather than silently returning wrong results
                 $this->query_args = [];
                 throw new \InvalidArgumentException(
-                    "whereNot() does not support negation for core field '{$field}'. " .
-                    "Supported fields: post_status, post_author, post_parent. " .
-                    "For other fields, use a custom meta field or filter results in PHP."
+                    "whereNot() does not support negation for core field '{$field}'. "
+                    . "Supported fields: post_status, post_author, post_parent. "
+                    . "For other fields, use a custom meta field or filter results in PHP.",
                 );
             }
         } else {
@@ -891,7 +891,7 @@ class NTDST_Data_Model
             $this->query_args['meta_query'][] = [
                 'key' => $this->prefixMetaKey($field),
                 'value' => $value,
-                'compare' => '!='
+                'compare' => '!=',
             ];
         }
 
@@ -921,7 +921,7 @@ class NTDST_Data_Model
             $this->query_args['meta_query'][] = [
                 'key' => $this->prefixMetaKey($field),
                 'value' => $values,
-                'compare' => 'IN'
+                'compare' => 'IN',
             ];
         }
 
@@ -1704,7 +1704,7 @@ class NTDST_Data_Manager
         global $wpdb;
         $results = $wpdb->get_results($wpdb->prepare(
             "SELECT meta_key, meta_value FROM {$wpdb->postmeta} WHERE post_id = %d",
-            $post_id
+            $post_id,
         ));
 
         $meta = [];
@@ -1743,7 +1743,7 @@ class NTDST_Data_Manager
              INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id
              INNER JOIN {$wpdb->terms} t ON tt.term_id = t.term_id
              WHERE tr.object_id = %d",
-            $post_id
+            $post_id,
         ));
 
         $terms = [];

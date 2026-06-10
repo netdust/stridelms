@@ -104,7 +104,7 @@ class AdminDashboardService extends AbstractService
             self::MENU_SLUG,
             [$this, 'renderDashboard'],
             'dashicons-welcome-learn-more',
-            2
+            2,
         );
 
         // Add explicit Dashboard submenu as first item
@@ -114,7 +114,7 @@ class AdminDashboardService extends AbstractService
             'Dashboard',
             self::CAPABILITY,
             self::MENU_SLUG,
-            [$this, 'renderDashboard']
+            [$this, 'renderDashboard'],
         );
     }
 
@@ -178,21 +178,21 @@ class AdminDashboardService extends AbstractService
             'flatpickr',
             'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css',
             [],
-            '4.6.13'
+            '4.6.13',
         );
         wp_enqueue_script(
             'flatpickr',
             'https://cdn.jsdelivr.net/npm/flatpickr',
             [],
             '4.6.13',
-            true
+            true,
         );
         wp_enqueue_script(
             'flatpickr-nl',
             'https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/nl.js',
             ['flatpickr'],
             '4.6.13',
-            true
+            true,
         );
 
         wp_enqueue_script(
@@ -200,7 +200,7 @@ class AdminDashboardService extends AbstractService
             'https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js',
             ['flatpickr'],
             '3.14.9',
-            ['strategy' => 'defer']
+            ['strategy' => 'defer'],
         );
 
         // Add crossorigin for CDN scripts (required for SRI)

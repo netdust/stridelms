@@ -160,7 +160,7 @@ foreach ($enrollments as $enrollment) {
                     $dashboard_url = $trajectory_slug
                         ? home_url('/mijn-account/trajecten/' . $trajectory_slug . '/')
                         : get_permalink($traj['trajectory_id']);
-                ?>
+                    ?>
                     <a href="<?php echo esc_url($dashboard_url); ?>"
                        class="flex items-center gap-4 px-4 py-3.5 border-b border-border/60 last:border-b-0 cursor-pointer hover:bg-surface-alt transition-colors">
                         <div class="flex-1 min-w-0">
@@ -170,8 +170,8 @@ foreach ($enrollments as $enrollment) {
                                 </span>
                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium <?php echo $traj['mode'] === TrajectoryMode::Cohort ? 'bg-primary/10 text-primary' : 'bg-accent/10 text-accent'; ?>">
                                     <?php echo $traj['mode'] === TrajectoryMode::Cohort
-                                        ? esc_html__('Cohort', 'stridence')
-                                        : esc_html__('Zelfgestuurd', 'stridence'); ?>
+                                            ? esc_html__('Cohort', 'stridence')
+                                            : esc_html__('Zelfgestuurd', 'stridence'); ?>
                                 </span>
                             </div>
                             <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted">
@@ -180,7 +180,7 @@ foreach ($enrollments as $enrollment) {
                                     <?php printf(
                                         esc_html__('%d van %d cursussen', 'stridence'),
                                         $traj['completed_count'],
-                                        $traj['total_required']
+                                        $traj['total_required'],
                                     ); ?>
                                 </span>
                                 <?php if ($traj['in_progress_count'] > 0) : ?>
@@ -188,7 +188,7 @@ foreach ($enrollments as $enrollment) {
                                         <?php echo stridence_icon('clock', 'w-3.5 h-3.5'); ?>
                                         <?php printf(
                                             esc_html__('%d in uitvoering', 'stridence'),
-                                            $traj['in_progress_count']
+                                            $traj['in_progress_count'],
                                         ); ?>
                                     </span>
                                 <?php endif; ?>
@@ -231,9 +231,9 @@ foreach ($enrollments as $enrollment) {
                     printf(
                         /* translators: %d: number of completed trajectories */
                         esc_html__('Afgeronde trajecten (%d)', 'stridence'),
-                        count($completed)
+                        count($completed),
                     );
-                    ?>
+        ?>
                 </h3>
                 <span class="text-text-muted transition-transform duration-200"
                       :class="{ 'rotate-180': open }">
@@ -255,7 +255,7 @@ foreach ($enrollments as $enrollment) {
                                 <span class="text-xs text-text-muted">
                                     <?php printf(
                                         esc_html__('%d cursussen afgerond', 'stridence'),
-                                        $traj['completed_count']
+                                        $traj['completed_count'],
                                     ); ?>
                                 </span>
                             </div>

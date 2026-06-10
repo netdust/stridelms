@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Stride\Admin;
@@ -21,7 +22,7 @@ final class ImpersonationHandler
     public function validateTarget(
         int $targetUserId,
         bool $targetIsAdmin,
-        bool $callerHasManageOptions
+        bool $callerHasManageOptions,
     ): true|\WP_Error {
         if (!$callerHasManageOptions) {
             return new \WP_Error('forbidden', __('You do not have permission to impersonate users.', 'stride'));
@@ -58,7 +59,7 @@ final class ImpersonationHandler
         set_transient(
             self::TRANSIENT_PREFIX . $token,
             ['admin_id' => $originalAdminId, 'target_id' => $targetUserId],
-            self::TTL
+            self::TTL,
         );
     }
 

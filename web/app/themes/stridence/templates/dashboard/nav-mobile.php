@@ -59,7 +59,7 @@ $tabs = [
             $classes = $is_active
                 ? 'relative flex flex-col items-center justify-center gap-0.5 px-2 py-2 text-primary min-w-0'
                 : 'relative flex flex-col items-center justify-center gap-0.5 px-2 py-2 text-text-muted hover:text-text transition-colors min-w-0';
-        ?>
+            ?>
             <a href="<?php echo esc_url($tab['url']); ?>"
                class="<?php echo esc_attr($classes); ?>"
                <?php echo $is_active ? 'aria-current="page"' : ''; ?>>

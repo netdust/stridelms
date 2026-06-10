@@ -16,8 +16,7 @@ class QuestionnaireValidator
 {
     public function __construct(
         private readonly QuestionnaireRepository $repository,
-    ) {
-    }
+    ) {}
 
     /**
      * Validates submitted data against the field definitions for a stage.

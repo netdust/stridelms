@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Stride\Modules\Questionnaire;
@@ -212,7 +213,7 @@ final class QuestionnaireHandler
         $existingData = is_array($registration->enrollment_data ?? null) ? $registration->enrollment_data : [];
         $existingData[$stage] = RegistrationRepository::wrapStage(
             $extraFields,
-            get_current_user_id() ?: null
+            get_current_user_id() ?: null,
         );
 
         $updated = $registrations->update((int) $registration->id, [

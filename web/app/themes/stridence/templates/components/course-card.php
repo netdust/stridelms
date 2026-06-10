@@ -119,7 +119,7 @@ $pillClass = $statusPill ? ($pillToneClasses[$statusPill['tone'] ?? 'muted'] ?? 
             <span class="w-2 h-2 rounded-full bg-warning shrink-0" title="<?php
                 echo esc_attr(sprintf(
                     _n('%d openstaande taak', '%d openstaande taken', $pendingTasksCount, 'stridence'),
-                    $pendingTasksCount
+                    $pendingTasksCount,
                 ));
             ?>"></span>
         <?php endif; ?>
@@ -166,7 +166,7 @@ $pillClass = $statusPill ? ($pillToneClasses[$statusPill['tone'] ?? 'muted'] ?? 
                     'absent'  => ['icon' => 'x-circle',     'class' => 'text-error',      'label' => __('Afwezig', 'stridence')],
                     'excused' => ['icon' => 'clock',        'class' => 'text-text-muted', 'label' => __('Gewettigd afwezig', 'stridence')],
                 ];
-            ?>
+                ?>
                 <div class="space-y-2">
                     <p class="text-xs font-medium text-text-muted uppercase tracking-wide">
                         <?php esc_html_e('Sessies', 'stridence'); ?>
@@ -178,7 +178,7 @@ $pillClass = $statusPill ? ($pillToneClasses[$statusPill['tone'] ?? 'muted'] ?? 
                             $sEnd        = $s['end_time'] ?? '';
                             $sAttendance = $s['attendance'] ?? null;
                             $att         = $sAttendance ? ($attendanceConfig[$sAttendance] ?? null) : null;
-                        ?>
+                            ?>
                             <div class="p-3 flex items-center gap-3 text-sm text-text-muted">
                                 <?php if ($sDate) : ?>
                                     <span class="flex items-center gap-1">
@@ -242,7 +242,7 @@ $pillClass = $statusPill ? ($pillToneClasses[$statusPill['tone'] ?? 'muted'] ?? 
                         <?php echo esc_html(sprintf(
                             __('Taken: %d van %d voltooid', 'stridence'),
                             $tsDone,
-                            $tsTotal
+                            $tsTotal,
                         )); ?>
                     </p>
                 <?php endif;

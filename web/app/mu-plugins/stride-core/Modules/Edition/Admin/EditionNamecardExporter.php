@@ -8,7 +8,6 @@ use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\SimpleType\Jc;
 use PhpOffice\PhpWord\Writer\WriterInterface;
-use Stride\Domain\RegistrationStatus;
 use Stride\Infrastructure\BatchQueryHelper;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
@@ -67,7 +66,7 @@ final class EditionNamecardExporter
         $registrations = $this->getConfirmedRegistrations($editionId);
 
         $userIds = array_unique(array_filter(
-            array_map(fn($r) => (int) $r['user_id'], $registrations)
+            array_map(fn($r) => (int) $r['user_id'], $registrations),
         ));
         $users = BatchQueryHelper::batchGetUsers($userIds);
         $userMeta = $this->batchGetOrgMeta($userIds);
@@ -107,14 +106,14 @@ final class EditionNamecardExporter
         $section->addText(
             htmlspecialchars($editionTitle),
             ['size' => 14, 'bold' => true, 'color' => '2271B1'],
-            ['alignment' => Jc::CENTER, 'spaceAfter' => 60]
+            ['alignment' => Jc::CENTER, 'spaceAfter' => 60],
         );
 
         if ($startDate) {
             $section->addText(
                 date_i18n('j F Y', strtotime($startDate)),
                 ['size' => 10, 'color' => '646970'],
-                ['alignment' => Jc::CENTER, 'spaceAfter' => 200]
+                ['alignment' => Jc::CENTER, 'spaceAfter' => 200],
             );
         }
 
@@ -142,13 +141,13 @@ final class EditionNamecardExporter
                 $cell->addText(
                     htmlspecialchars($card['name']),
                     ['size' => 16, 'bold' => true, 'color' => '1D2327'],
-                    ['alignment' => Jc::CENTER, 'spaceAfter' => 40]
+                    ['alignment' => Jc::CENTER, 'spaceAfter' => 40],
                 );
                 if ($card['org']) {
                     $cell->addText(
                         htmlspecialchars($card['org']),
                         ['size' => 10, 'color' => '646970'],
-                        ['alignment' => Jc::CENTER]
+                        ['alignment' => Jc::CENTER],
                     );
                 }
             }
@@ -171,7 +170,7 @@ final class EditionNamecardExporter
             "SELECT user_id, status FROM {$table}
              WHERE edition_id = %d AND status IN ('confirmed', 'completed')
              ORDER BY registered_at ASC",
-            $editionId
+            $editionId,
         ), ARRAY_A) ?: [];
     }
 
@@ -191,7 +190,7 @@ final class EditionNamecardExporter
         $results = $wpdb->get_results($wpdb->prepare(
             "SELECT user_id, meta_key, meta_value FROM {$wpdb->usermeta}
              WHERE user_id IN ({$userPlaceholders}) AND meta_key IN ({$keyPlaceholders})",
-            ...array_merge($userIds, $metaKeys)
+            ...array_merge($userIds, $metaKeys),
         ));
 
         $meta = [];

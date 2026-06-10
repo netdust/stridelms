@@ -55,7 +55,7 @@ foreach ($enrollments as $enrollment) {
         <!-- Greeting + Acties (elevated panel) -->
         <?php
             $visibleCount = 3;
-            $hasMore = !empty($actions) && count($actions) > $visibleCount;
+        $hasMore = !empty($actions) && count($actions) > $visibleCount;
         ?>
         <section class="rounded-xl bg-primary-subtle shadow-lg ring-1 ring-primary/10 p-6 sm:p-8"
                  <?php echo $hasMore ? 'x-data="{ expanded: false }"' : ''; ?>>
@@ -81,7 +81,7 @@ foreach ($enrollments as $enrollment) {
                     $actionType = $action['type'] ?? '';
                     $hidden     = $hasMore && $i >= $visibleCount;
                     $xAttr      = $hidden ? 'x-show="expanded" x-cloak' : '';
-                ?>
+                    ?>
                     <?php if ($actionType === 'online_lesson') : ?>
                         <a href="<?php echo esc_url($action['url']); ?>"
                            class="flex items-center gap-2.5 rounded-lg border border-blue-200 bg-blue-50/50 px-3 py-2 hover:border-blue-300 hover:bg-blue-50 transition-colors"
@@ -149,7 +149,7 @@ foreach ($enrollments as $enrollment) {
                         $isTomorrow = ($session['date'] ?? '') === date('Y-m-d', strtotime('+1 day'));
                         $editionSlug = get_post_field('post_name', (int) ($session['edition_id'] ?? 0));
                         $detailUrl   = $editionSlug ? home_url('/edities/' . $editionSlug . '/') : '';
-                    ?>
+                        ?>
                         <a href="<?php echo esc_url($detailUrl); ?>"
                            class="flex items-center gap-3 rounded-lg border border-border/60 bg-surface-card pl-1.5 pr-3 py-2 hover:border-border transition-colors">
                             <?php if ($isToday || $isTomorrow) : ?>
@@ -166,16 +166,16 @@ foreach ($enrollments as $enrollment) {
                                 <span class="font-medium text-text"><?php echo esc_html($session['course_title'] ?? ''); ?></span>
                                 <br>
                                 <span class="text-xs text-text-muted"><?php
-                                    if (!empty($session['start_time'])) {
-                                        echo esc_html($session['start_time']);
-                                        if (!empty($session['end_time'])) {
-                                            echo ' – ' . esc_html($session['end_time']);
+                                        if (!empty($session['start_time'])) {
+                                            echo esc_html($session['start_time']);
+                                            if (!empty($session['end_time'])) {
+                                                echo ' – ' . esc_html($session['end_time']);
+                                            }
                                         }
-                                    }
-                                    if (!empty($session['location'])) {
-                                        echo ' · ' . esc_html($session['location']);
-                                    }
-                                ?></span>
+                        if (!empty($session['location'])) {
+                            echo ' · ' . esc_html($session['location']);
+                        }
+                        ?></span>
                             </span>
                             <?php echo stridence_icon('chevron-right', 'w-4 h-4 text-text-muted shrink-0'); ?>
                         </a>

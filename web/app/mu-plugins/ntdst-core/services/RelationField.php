@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 /**
@@ -58,7 +59,7 @@ final class NTDST_RelationField implements NTDST_Service_Meta
                 // Add metabox to target post type showing where it's referenced
                 $metabox_title = $field_config['reverse_label'] ?? sprintf(
                     'Featured in %s',
-                    ucwords(str_replace('_', ' ', $source_post_type)) . 's'
+                    ucwords(str_replace('_', ' ', $source_post_type)) . 's',
                 );
 
                 add_meta_box(
@@ -72,7 +73,7 @@ final class NTDST_RelationField implements NTDST_Service_Meta
                         'source_post_type' => $source_post_type,
                         'field_name' => $field_name,
                         'target_post_type' => $target_post_type,
-                    ]
+                    ],
                 );
             }
         }
@@ -182,7 +183,7 @@ final class NTDST_RelationField implements NTDST_Service_Meta
             '[' . $post_id . ']',            // single-element exact
             '[' . $post_id . ',%',           // first element
             '%,' . $post_id . ',%',          // middle element
-            '%,' . $post_id . ']'            // last element
+            '%,' . $post_id . ']',            // last element
         );
         $candidates = $wpdb->get_results($sql) ?: [];
 
@@ -201,7 +202,7 @@ final class NTDST_RelationField implements NTDST_Service_Meta
 }
 
 // Auto-initialize when theme is ready
-add_action('after_setup_theme', function() {
+add_action('after_setup_theme', function () {
     // Only initialize if Theme is available
     if (class_exists('NTDST_Theme')) {
         $theme = ntdst_get(NTDST_Theme::class);

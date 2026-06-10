@@ -102,7 +102,7 @@ final class TrajectoryService extends AbstractService
 
         ntdst_get(TrajectoryCascadeService::class)->cascadeOnStatusChange(
             $registrationId,
-            \Stride\Domain\RegistrationStatus::Confirmed->value
+            \Stride\Domain\RegistrationStatus::Confirmed->value,
         );
     }
 
@@ -185,7 +185,7 @@ final class TrajectoryService extends AbstractService
             '%s on %d trajectory parent registration(s)%s.',
             $commit ? 'Backfilling' : 'Dry-run',
             count($parents),
-            $trajectoryFilter > 0 ? " (trajectory={$trajectoryFilter})" : ''
+            $trajectoryFilter > 0 ? " (trajectory={$trajectoryFilter})" : '',
         ));
 
         if (!$commit) {
@@ -209,7 +209,7 @@ final class TrajectoryService extends AbstractService
                     (int) $parent->trajectory_id,
                     (int) $parent->user_id,
                     (string) $parent->status,
-                    $existingCount
+                    $existingCount,
                 ));
                 continue;
             }
@@ -225,7 +225,7 @@ final class TrajectoryService extends AbstractService
                     $parentId,
                     $report['error'],
                     $report['children_before'],
-                    $report['children_after']
+                    $report['children_after'],
                 ));
             } else {
                 \WP_CLI::log(sprintf(
@@ -233,7 +233,7 @@ final class TrajectoryService extends AbstractService
                     $parentId,
                     $report['children_before'],
                     $report['children_after'],
-                    $added
+                    $added,
                 ));
             }
         }
@@ -243,7 +243,7 @@ final class TrajectoryService extends AbstractService
                 'Backfill complete. Parents processed: %d. Children created: %d. Errors: %d.',
                 count($parents),
                 $totalChildrenCreated,
-                $totalErrors
+                $totalErrors,
             ));
         }
     }

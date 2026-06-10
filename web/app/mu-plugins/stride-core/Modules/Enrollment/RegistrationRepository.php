@@ -334,7 +334,7 @@ final class RegistrationRepository
 
         $row = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$this->table()} WHERE id = %d",
-            $id
+            $id,
         ));
 
         if ($row && $row->selections) {
@@ -364,7 +364,7 @@ final class RegistrationRepository
         $row = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$this->table()} WHERE user_id = %d AND edition_id = %d",
             $userId,
-            $editionId
+            $editionId,
         ));
 
         if ($row && $row->selections) {
@@ -418,7 +418,7 @@ final class RegistrationRepository
             RegistrationStatus::Interest->value,
             RegistrationStatus::Waitlist->value,
             $email,
-            $email
+            $email,
         ));
     }
 
@@ -444,7 +444,7 @@ final class RegistrationRepository
             $editionId,
             $status->value,
             $jsonPath,
-            $email
+            $email,
         ));
     }
 
@@ -468,7 +468,7 @@ final class RegistrationRepository
                 'enrollment_data' => wp_json_encode(self::normalizeEnrollmentData($enrollmentData)),
                 'registered_at'   => current_time('mysql'),
             ],
-            ['id' => $registrationId]
+            ['id' => $registrationId],
         );
 
         if ($result !== false) {
@@ -487,7 +487,7 @@ final class RegistrationRepository
         return (bool) $wpdb->get_var($wpdb->prepare(
             "SELECT 1 FROM {$this->table()} WHERE user_id = %d AND edition_id = %d LIMIT 1",
             $userId,
-            $editionId
+            $editionId,
         ));
     }
 
@@ -522,7 +522,7 @@ final class RegistrationRepository
 
         return (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM {$this->table()} WHERE edition_id = %d AND status = 'confirmed'",
-            $editionId
+            $editionId,
         ));
     }
 
@@ -535,7 +535,7 @@ final class RegistrationRepository
         global $wpdb;
         return (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM {$this->table()} WHERE edition_id = %d AND status = 'confirmed' FOR UPDATE",
-            $editionId
+            $editionId,
         ));
     }
 
@@ -551,7 +551,7 @@ final class RegistrationRepository
         $row = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$this->table()} WHERE user_id = %d AND trajectory_id = %d AND edition_id IS NULL",
             $userId,
-            $trajectoryId
+            $trajectoryId,
         ));
 
         if ($row && $row->selections) {
@@ -570,7 +570,7 @@ final class RegistrationRepository
         return (bool) $wpdb->get_var($wpdb->prepare(
             "SELECT 1 FROM {$this->table()} WHERE user_id = %d AND trajectory_id = %d AND edition_id IS NULL LIMIT 1",
             $userId,
-            $trajectoryId
+            $trajectoryId,
         ));
     }
 
@@ -634,7 +634,7 @@ final class RegistrationRepository
             $userId,
             $trajectoryId,
             $userId,
-            $trajectoryId
+            $trajectoryId,
         ));
     }
 
@@ -676,7 +676,7 @@ final class RegistrationRepository
             "SELECT trajectory_id, COUNT(*) AS c FROM {$this->table()}
              WHERE trajectory_id IN ({$placeholders}) AND edition_id IS NULL
              GROUP BY trajectory_id",
-            ...$ids
+            ...$ids,
         ));
 
         $out = array_fill_keys($ids, 0);
@@ -699,7 +699,7 @@ final class RegistrationRepository
             RegistrationStatus::Confirmed->value,
             RegistrationStatus::Completed->value,
             RegistrationStatus::Pending->value,
-        ]
+        ],
     ): array {
         if (empty($editionIds) || empty($statuses)) {
             return array_fill_keys(array_map('intval', $editionIds), 0);
@@ -715,7 +715,7 @@ final class RegistrationRepository
              WHERE edition_id IN ({$idPlaceholders})
                AND status IN ({$statusPlaceholders})
              GROUP BY edition_id",
-            ...array_merge($ids, $statuses)
+            ...array_merge($ids, $statuses),
         ));
 
         $out = array_fill_keys($ids, 0);
@@ -748,7 +748,7 @@ final class RegistrationRepository
             "SELECT status, COUNT(*) AS c FROM {$this->table()}
              WHERE edition_id IN ({$placeholders})
              GROUP BY status",
-            ...$ids
+            ...$ids,
         ));
 
         $out = [];
@@ -780,7 +780,7 @@ final class RegistrationRepository
             "SELECT id, trajectory_id, user_id, status, registered_at FROM {$this->table()}
              WHERE trajectory_id IN ({$placeholders}) AND edition_id IS NULL
              ORDER BY trajectory_id, registered_at DESC",
-            ...$ids
+            ...$ids,
         ));
 
         $grouped = array_fill_keys($ids, []);
@@ -811,7 +811,7 @@ final class RegistrationRepository
 
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$this->table()} WHERE parent_registration_id = %d ORDER BY registered_at ASC",
-            $parentRegistrationId
+            $parentRegistrationId,
         ));
 
         foreach ($rows as $row) {
@@ -855,7 +855,7 @@ final class RegistrationRepository
             "SELECT * FROM {$this->table()}
              WHERE parent_registration_id IN ({$placeholders})
              ORDER BY parent_registration_id, registered_at ASC",
-            ...$ids
+            ...$ids,
         ));
 
         $grouped = array_fill_keys($ids, []);
@@ -896,7 +896,7 @@ final class RegistrationRepository
             RegistrationStatus::Cancelled->value,
             current_time('mysql'),
             $parentRegistrationId,
-            RegistrationStatus::Cancelled->value
+            RegistrationStatus::Cancelled->value,
         ));
 
         if ($affected === false) {
@@ -931,7 +931,7 @@ final class RegistrationRepository
                AND parent_registration_id IS NULL
                AND trajectory_id IS NULL
              LIMIT 1",
-            $userId
+            $userId,
         ));
         return (bool) $result;
     }
@@ -945,7 +945,7 @@ final class RegistrationRepository
         $table = $this->table();
         $result = $wpdb->get_var($wpdb->prepare(
             "SELECT 1 FROM {$table} WHERE user_id = %d AND trajectory_id IS NOT NULL AND trajectory_id > 0 AND status != 'cancelled' LIMIT 1",
-            $userId
+            $userId,
         ));
         return (bool) $result;
     }
@@ -1001,7 +1001,7 @@ final class RegistrationRepository
 
         return $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$this->table()} WHERE user_id = %d AND trajectory_id IS NOT NULL AND edition_id IS NULL AND status != 'cancelled' ORDER BY registered_at DESC",
-            $userId
+            $userId,
         ));
     }
 
@@ -1088,7 +1088,7 @@ final class RegistrationRepository
         $result = $wpdb->update(
             $this->table(),
             ['selections' => wp_json_encode($selections)],
-            ['id' => $registrationId]
+            ['id' => $registrationId],
         ) !== false;
 
         if ($result) {
@@ -1124,7 +1124,7 @@ final class RegistrationRepository
         return $wpdb->update(
             $this->table(),
             ['selections_locked_at' => current_time('mysql')],
-            ['id' => $registrationId]
+            ['id' => $registrationId],
         ) !== false;
     }
 
@@ -1152,7 +1152,7 @@ final class RegistrationRepository
             ['completion_tasks' => wp_json_encode($tasks)],
             ['id' => $registrationId],
             ['%s'],
-            ['%d']
+            ['%d'],
         );
 
         $this->clearCache();

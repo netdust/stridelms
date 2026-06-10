@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 /**
@@ -128,7 +129,7 @@ class NTDST_Container
             $unknown = array_diff(array_keys($params), $known);
             if ($unknown) {
                 throw new RuntimeException(
-                    "Unknown parameter(s) for {$id}: " . implode(', ', $unknown)
+                    "Unknown parameter(s) for {$id}: " . implode(', ', $unknown),
                 );
             }
         }

@@ -42,7 +42,7 @@ if (empty($items)) {
                 $chevronColor = 'text-status-warning';
                 $icon = 'alert-circle';
             }
-        ?>
+            ?>
             <a href="<?php echo esc_url($item['url']); ?>"
                class="flex items-center gap-2.5 rounded-lg border <?php echo $borderClass; ?> px-3 py-2 transition-colors">
                 <?php echo stridence_icon($icon, 'w-4 h-4 ' . $iconColor . ' shrink-0'); ?>
@@ -50,10 +50,10 @@ if (empty($items)) {
                 <span class="text-xs text-text-muted shrink-0 ml-auto">
                     <?php echo esc_html($item['label']); ?>
                     <?php
-                    $total = (int) ($item['total_tasks'] ?? 0);
-                    $done  = (int) ($item['done_tasks'] ?? 0);
-                    if ($total > 0) :
-                    ?>
+                        $total = (int) ($item['total_tasks'] ?? 0);
+            $done  = (int) ($item['done_tasks'] ?? 0);
+            if ($total > 0) :
+                ?>
                         &middot; <?php echo esc_html($done . '/' . $total); ?>
                     <?php endif; ?>
                 </span>

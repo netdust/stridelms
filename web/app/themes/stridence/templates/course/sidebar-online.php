@@ -131,7 +131,7 @@ $expiration_ts = ($days_remaining !== null)
                 <p class="text-xs text-text-muted">
                     <?php echo esc_html(sprintf(
                         __('Toegang tot %s', 'stridence'),
-                        stride_format_date(date('Y-m-d', $expiration_ts))
+                        stride_format_date(date('Y-m-d', $expiration_ts)),
                     )); ?>
                 </p>
             <?php endif; ?>
@@ -169,21 +169,21 @@ $expiration_ts = ($days_remaining !== null)
 
             <?php if ($days_remaining !== null) :
                 $is_urgent = $days_remaining <= 14;
-            ?>
+                ?>
                 <div class="flex items-start gap-2 p-3 rounded-lg text-sm <?php echo $is_urgent ? 'bg-warning/10 text-warning-dark' : 'bg-surface-alt text-text-muted'; ?>">
                     <?php echo stridence_icon($is_urgent ? 'alert-circle' : 'clock', 'w-4 h-4 mt-0.5 shrink-0'); ?>
                     <div>
                         <span class="font-medium">
                             <?php echo esc_html(sprintf(
                                 _n('Nog %d dag toegang', 'Nog %d dagen toegang', $days_remaining, 'stridence'),
-                                $days_remaining
+                                $days_remaining,
                             )); ?>
                         </span>
                         <?php if ($expiration_ts) : ?>
                             <span class="block text-xs mt-0.5">
                                 <?php echo esc_html(sprintf(
                                     __('Vervalt op %s', 'stridence'),
-                                    stride_format_date(date('Y-m-d', $expiration_ts))
+                                    stride_format_date(date('Y-m-d', $expiration_ts)),
                                 )); ?>
                             </span>
                         <?php endif; ?>
@@ -247,7 +247,7 @@ $expiration_ts = ($days_remaining !== null)
             // (when needed) and bounces to the first lesson. Guests get
             // login-then-return.
             $pureLdEnrollUrl = add_query_arg('enroll', '1', get_permalink($course_id));
-            ?>
+?>
             <?php if ($is_open && $has_access) : ?>
                 <a href="<?php echo esc_url(LearnDashHelper::getFirstLessonUrl($course_id)); ?>" class="btn btn-primary w-full text-center">
                     <?php esc_html_e('Direct starten', 'stridence'); ?>
@@ -305,7 +305,7 @@ $expiration_ts = ($days_remaining !== null)
         || ($has_points_requirement && $points_required > 0)
         || $start_date || $end_date;
 
-    if ($has_info) :
+if ($has_info) :
     ?>
         <div class="mt-6 pt-5 border-t border-border">
             <h4 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
@@ -318,7 +318,7 @@ $expiration_ts = ($days_remaining !== null)
                         <dd class="font-medium text-text">
                             <?php echo esc_html(sprintf(
                                 _n('%d punt', '%d punten', $course_points, 'stridence'),
-                                $course_points
+                                $course_points,
                             )); ?>
                         </dd>
                     </div>
@@ -330,7 +330,7 @@ $expiration_ts = ($days_remaining !== null)
                         <dd class="font-medium text-text">
                             <?php echo esc_html(sprintf(
                                 _n('%d punt', '%d punten', $points_required, 'stridence'),
-                                $points_required
+                                $points_required,
                             )); ?>
                         </dd>
                     </div>
@@ -342,7 +342,7 @@ $expiration_ts = ($days_remaining !== null)
                         <dd class="font-medium text-text">
                             <?php echo esc_html(sprintf(
                                 _n('%d dag', '%d dagen', $expire_days_setting, 'stridence'),
-                                $expire_days_setting
+                                $expire_days_setting,
                             )); ?>
                         </dd>
                     </div>

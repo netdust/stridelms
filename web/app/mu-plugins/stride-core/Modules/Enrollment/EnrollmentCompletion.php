@@ -193,13 +193,13 @@ final class EnrollmentCompletion
                         if ($deadline) {
                             $availability[$type]['reason'] = sprintf(
                                 __('Kies voor %s', 'stride'),
-                                date_i18n('d M Y', strtotime($deadline))
+                                date_i18n('d M Y', strtotime($deadline)),
                             );
                         }
                     }
                     break;
 
-                // Post-course tasks
+                    // Post-course tasks
                 case 'post_evaluation':
                 case 'post_documents':
                     $availability[$type] = ['state' => 'available', 'reason' => ''];
@@ -550,7 +550,7 @@ final class EnrollmentCompletion
              ORDER BY registered_at DESC",
             $userId,
             RegistrationStatus::Pending->value,
-            RegistrationStatus::Confirmed->value
+            RegistrationStatus::Confirmed->value,
         ));
 
         // Filter: only return registrations where at least one task is incomplete

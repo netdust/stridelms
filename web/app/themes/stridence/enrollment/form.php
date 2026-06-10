@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Enrollment Form Page Template (router-rendered).
  *

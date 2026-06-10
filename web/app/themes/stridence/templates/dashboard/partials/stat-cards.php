@@ -29,7 +29,7 @@ $colorMap = [
         $color = $stat['color'] ?? 'primary';
         $icon  = $stat['icon'] ?? 'info';
         $c     = $colorMap[$color] ?? $colorMap['primary'];
-    ?>
+        ?>
         <div class="px-4 py-3.5 rounded-xl bg-surface-card border border-border/50">
             <div class="flex items-center gap-3">
                 <span class="w-9 h-9 rounded-lg <?php echo esc_attr($c['bg']); ?> flex items-center justify-center shrink-0">

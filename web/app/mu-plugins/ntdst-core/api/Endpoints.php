@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 /**
@@ -24,7 +25,9 @@ declare(strict_types=1);
  *    (overwritten by get_request_params). Do not pass `_files` as data.
  */
 
-if (!defined('ABSPATH')) exit;
+if (!defined('ABSPATH')) {
+    exit;
+}
 
 final class NTDST_Endpoints
 {
@@ -430,7 +433,7 @@ final class NTDST_Endpoints
             $users = get_users($args);
 
             // Transform to match expected format
-            $results = array_map(function($user) {
+            $results = array_map(function ($user) {
                 return [
                     'ID' => $user->ID,
                     'id' => $user->ID,

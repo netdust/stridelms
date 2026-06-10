@@ -59,7 +59,7 @@ final class QuotesShortcode
                 esc_html($quote['total_money']->format()),
                 $statusClass,
                 esc_html($quote['status_enum']->label()),
-                esc_url(add_query_arg(['tab' => 'offertes', 'quote_id' => $quote['id'] ?? $quote['ID']], home_url('/mijn-account/')))
+                esc_url(add_query_arg(['tab' => 'offertes', 'quote_id' => $quote['id'] ?? $quote['ID']], home_url('/mijn-account/'))),
             );
         }
 

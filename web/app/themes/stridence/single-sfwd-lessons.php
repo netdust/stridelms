@@ -28,7 +28,7 @@ get_header();
             // This includes Focus Mode when enabled
             the_content();
         endwhile;
-        ?>
+?>
     </div>
 </article>
 

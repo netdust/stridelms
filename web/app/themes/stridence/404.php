@@ -19,7 +19,7 @@ get_header();
         'action'  => __('Terug naar home', 'stridence'),
         'url'     => home_url('/'),
     ]);
-    ?>
+?>
 </div>
 
 <?php

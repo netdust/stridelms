@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 /**
@@ -283,7 +284,7 @@ class NTDST_Response
         string $content,
         string $filename,
         ?string $contentType,
-        string $disposition
+        string $disposition,
     ): never {
         $contentType ??= self::getMimeType($filename);
 

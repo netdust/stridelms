@@ -17,8 +17,7 @@ final class SessionService
 {
     public function __construct(
         private readonly SessionRepository $repository,
-    ) {
-    }
+    ) {}
 
     // === CRUD ===
 

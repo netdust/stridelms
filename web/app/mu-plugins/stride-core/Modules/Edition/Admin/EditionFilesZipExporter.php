@@ -189,7 +189,7 @@ class EditionFilesZipExporter
         $table = $wpdb->prefix . 'vad_registrations';
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$table} WHERE edition_id = %d ORDER BY registered_at DESC",
-            $editionId
+            $editionId,
         ), ARRAY_A);
         return $rows ?: [];
     }

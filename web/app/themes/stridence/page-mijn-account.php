@@ -127,7 +127,7 @@ get_header();
                         'user' => $user,
                     ]);
                 }
-                ?>
+?>
             </main>
 
         </div>

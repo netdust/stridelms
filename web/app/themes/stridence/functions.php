@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Stridence Theme - Functions
  *
@@ -250,4 +251,3 @@ require_once __DIR__ . '/services/frontend/shortcodes/EvaluationShortcodes.php';
 // ========================================
 // HELPER FUNCTIONS
 // ========================================
-

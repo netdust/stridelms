@@ -63,7 +63,7 @@ final class VoucherAdminController
             [$this, 'renderVoucherMetabox'],
             VoucherCPT::POST_TYPE,
             'normal',
-            'high'
+            'high',
         );
 
         // Redemptions history
@@ -73,7 +73,7 @@ final class VoucherAdminController
             [$this, 'renderAuditMetabox'],
             VoucherCPT::POST_TYPE,
             'normal',
-            'low'
+            'low',
         );
 
         // Status sidebar
@@ -83,7 +83,7 @@ final class VoucherAdminController
             [$this, 'renderActionsMetabox'],
             VoucherCPT::POST_TYPE,
             'side',
-            'high'
+            'high',
         );
     }
 
@@ -240,7 +240,7 @@ final class VoucherAdminController
                     'orderby' => 'title',
                     'order' => 'ASC',
                 ]);
-                ?>
+        ?>
                 <div class="stride-field-row">
                     <div class="stride-field">
                         <label><?php esc_html_e('Geldig voor', 'stride'); ?></label>
@@ -396,13 +396,13 @@ final class VoucherAdminController
                     <span class="meta-value">
                         <?php
                         $usageLimit = (int) ($voucher['usage_limit'] ?? 0);
-                        $usedCount = (int) ($voucher['used_count'] ?? 0);
-                        if ($usageLimit > 0) {
-                            printf('%d / %d', $usedCount, $usageLimit);
-                        } else {
-                            printf('%d', $usedCount);
-                        }
-                        ?>
+        $usedCount = (int) ($voucher['used_count'] ?? 0);
+        if ($usageLimit > 0) {
+            printf('%d / %d', $usedCount, $usageLimit);
+        } else {
+            printf('%d', $usedCount);
+        }
+        ?>
                     </span>
                 </li>
                 <?php if (!empty($voucher['valid_until'])): ?>
@@ -413,9 +413,9 @@ final class VoucherAdminController
                 <?php endif; ?>
                 <?php
                 $createdBy = (int) ($voucher['created_by'] ?? 0);
-                $createdByUser = $createdBy ? get_userdata($createdBy) : null;
-                if ($createdByUser):
-                ?>
+        $createdByUser = $createdBy ? get_userdata($createdBy) : null;
+        if ($createdByUser):
+            ?>
                 <li>
                     <span class="meta-label"><?php esc_html_e('Aangemaakt door', 'stride'); ?></span>
                     <span class="meta-value"><?php echo esc_html($createdByUser->display_name ?: $createdByUser->user_login); ?></span>
@@ -432,8 +432,8 @@ final class VoucherAdminController
     public function handleSave(int $postId, WP_Post $post): void
     {
         // Verify nonce
-        if (!isset($_POST[self::NONCE_FIELD]) ||
-            !wp_verify_nonce($_POST[self::NONCE_FIELD], self::NONCE_SAVE)) {
+        if (!isset($_POST[self::NONCE_FIELD])
+            || !wp_verify_nonce($_POST[self::NONCE_FIELD], self::NONCE_SAVE)) {
             return;
         }
 
@@ -676,7 +676,7 @@ final class VoucherAdminController
                 } elseif ($scopeMode === 'except' && !empty($excluded)) {
                     $titles = array_filter(array_map(
                         fn($id) => get_the_title((int) $id) ?: null,
-                        $excluded
+                        $excluded,
                     ));
                     if (count($titles) > 3) {
                         $preview = array_slice($titles, 0, 3);

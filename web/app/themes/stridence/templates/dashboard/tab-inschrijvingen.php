@@ -86,7 +86,7 @@ $cancelled_editions = $data['cancelled_editions'];
                 <h3 class="text-base font-semibold text-text">
                     <?php printf(
                         esc_html__('Afgerond (%d)', 'stridence'),
-                        count($completed_items)
+                        count($completed_items),
                     ); ?>
                 </h3>
                 <span class="text-text-muted transition-transform duration-200"
@@ -116,9 +116,9 @@ $cancelled_editions = $data['cancelled_editions'];
                     <?php
                     printf(
                         esc_html__('Geannuleerd (%d)', 'stridence'),
-                        count($cancelled_editions)
+                        count($cancelled_editions),
                     );
-                    ?>
+        ?>
                 </h3>
                 <span class="text-text-muted transition-transform duration-200"
                       :class="{ 'rotate-180': open }">

@@ -137,7 +137,7 @@ final class SessionRepository extends AbstractRepository
                 ON pm_start.post_id = pm_end.post_id AND pm_end.meta_key = %s
              WHERE pm_start.post_id IN ({$placeholders})
                AND pm_start.meta_key = %s",
-            $args
+            $args,
         ));
 
         $totalHours = 0.0;

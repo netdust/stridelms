@@ -386,7 +386,7 @@ final class EditionDetailsMetabox
                 /* translators: 1: stored start date, 2: first session date */
                 __('Startdatum (%1$s) komt niet overeen met de eerste sessie (%2$s).', 'stride'),
                 $startDate,
-                $sessionMin
+                $sessionMin,
             );
         }
         if ($endDate && $sessionMax !== $endDate) {
@@ -394,7 +394,7 @@ final class EditionDetailsMetabox
                 /* translators: 1: stored end date, 2: last session date */
                 __('Einddatum (%1$s) komt niet overeen met de laatste sessie (%2$s).', 'stride'),
                 $endDate,
-                $sessionMax
+                $sessionMax,
             );
         }
         // Missing edition dates but sessions exist
@@ -402,14 +402,14 @@ final class EditionDetailsMetabox
             $warnings[] = sprintf(
                 /* translators: %s: first session date */
                 __('Startdatum is leeg, terwijl de eerste sessie op %s gepland staat.', 'stride'),
-                $sessionMin
+                $sessionMin,
             );
         }
         if (!$endDate && $sessionMin !== $sessionMax) {
             $warnings[] = sprintf(
                 /* translators: %s: last session date */
                 __('Einddatum is leeg, terwijl de laatste sessie op %s gepland staat.', 'stride'),
-                $sessionMax
+                $sessionMax,
             );
         }
 
@@ -434,7 +434,9 @@ final class EditionDetailsMetabox
                 $filename = basename(get_attached_file($attachmentId) ?: '');
                 $filetype = wp_check_filetype($filename);
                 $filesize = size_format(filesize(get_attached_file($attachmentId) ?: '') ?: 0);
-                if (!$url) continue;
+                if (!$url) {
+                    continue;
+                }
                 ?>
                 <div class="stride-document-item" data-id="<?php echo esc_attr($attachmentId); ?>" style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 4px; margin-bottom: 6px;">
                     <span class="dashicons dashicons-media-document" style="color: #2271b1;"></span>

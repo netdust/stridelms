@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Stride\Modules\Mail;
 
 use Stride\Domain\Money;
-use Stride\Domain\QuoteStatus;
 use Stride\Domain\RegistrationStatus;
 use Stride\Infrastructure\AbstractService;
 use Stride\Integrations\LearnDash\LearnDashHelper;
@@ -211,7 +210,9 @@ final class StrideMailBridge extends AbstractService
                     'label' => __('Status', 'stride'),
                     'callback' => function ($ctx) {
                         $reg = $this->resolveRegistration($ctx);
-                        if (!$reg) return null;
+                        if (!$reg) {
+                            return null;
+                        }
                         $status = RegistrationStatus::tryFrom($reg->status);
                         return $status?->label();
                     },
@@ -227,9 +228,13 @@ final class StrideMailBridge extends AbstractService
                     'label' => __('Gekozen sessies', 'stride'),
                     'callback' => function ($ctx) {
                         $reg = $this->resolveRegistration($ctx);
-                        if (!$reg || empty($reg->selections)) return null;
+                        if (!$reg || empty($reg->selections)) {
+                            return null;
+                        }
                         $selections = is_string($reg->selections) ? json_decode($reg->selections, true) : $reg->selections;
-                        if (empty($selections)) return null;
+                        if (empty($selections)) {
+                            return null;
+                        }
                         $titles = [];
                         foreach ($selections as $sessionId) {
                             $post = get_post((int) $sessionId);
@@ -242,10 +247,14 @@ final class StrideMailBridge extends AbstractService
                     'label' => __('Documenten', 'stride'),
                     'callback' => function ($ctx) {
                         $reg = $this->resolveRegistration($ctx);
-                        if (!$reg) return null;
+                        if (!$reg) {
+                            return null;
+                        }
                         $tasks = is_string($reg->completion_tasks) ? json_decode($reg->completion_tasks, true) : ($reg->completion_tasks ?? []);
                         $files = $tasks['documents']['data']['files'] ?? $tasks['post_documents']['data']['files'] ?? [];
-                        if (empty($files)) return null;
+                        if (empty($files)) {
+                            return null;
+                        }
                         $names = [];
                         foreach ($files as $fileId) {
                             $path = get_attached_file((int) $fileId);
@@ -264,7 +273,9 @@ final class StrideMailBridge extends AbstractService
                     'label' => __('Voltooien URL', 'stride'),
                     'callback' => function ($ctx) {
                         $editionId = $this->resolveEditionId($ctx);
-                        if (!$editionId) return null;
+                        if (!$editionId) {
+                            return null;
+                        }
                         $slug = get_post_field('post_name', $editionId);
                         return $slug ? home_url('/edities/' . $slug . '/voltooien/') : null;
                     },
@@ -273,11 +284,17 @@ final class StrideMailBridge extends AbstractService
                     'label' => __('Taken overzicht', 'stride'),
                     'callback' => function ($ctx) {
                         $regId = (int) ($ctx['registration_id'] ?? 0);
-                        if (!$regId) return null;
+                        if (!$regId) {
+                            return null;
+                        }
                         $reg = $this->registrationRepo->find($regId);
-                        if (!$reg || empty($reg->completion_tasks)) return null;
+                        if (!$reg || empty($reg->completion_tasks)) {
+                            return null;
+                        }
                         $tasks = is_string($reg->completion_tasks) ? json_decode($reg->completion_tasks, true) : $reg->completion_tasks;
-                        if (empty($tasks)) return null;
+                        if (empty($tasks)) {
+                            return null;
+                        }
                         $labels = [
                             'questionnaire' => 'Vragenlijst invullen',
                             'documents' => 'Documenten uploaden',
@@ -286,7 +303,9 @@ final class StrideMailBridge extends AbstractService
                         ];
                         $lines = [];
                         foreach ($tasks as $type => $task) {
-                            if (($task['phase'] ?? 'enrollment') !== 'enrollment') continue;
+                            if (($task['phase'] ?? 'enrollment') !== 'enrollment') {
+                                continue;
+                            }
                             $label = $labels[$type] ?? $type;
                             $status = ($task['status'] ?? 'pending') === 'completed' ? '✓' : '○';
                             $lines[] = $status . ' ' . $label;
@@ -330,7 +349,9 @@ final class StrideMailBridge extends AbstractService
                     'callback' => function ($ctx) {
                         $courseId = (int) ($ctx['course_id'] ?? 0);
                         $userId = (int) ($ctx['user_id'] ?? 0);
-                        if (!$courseId || !$userId) return null;
+                        if (!$courseId || !$userId) {
+                            return null;
+                        }
                         return LearnDashHelper::getCertificateLink($courseId, $userId) ?: null;
                     },
                 ],
@@ -752,7 +773,9 @@ final class StrideMailBridge extends AbstractService
     private function resolveEditionField(array $ctx, string $field): ?string
     {
         $editionId = $this->resolveEditionId($ctx);
-        if (!$editionId) return null;
+        if (!$editionId) {
+            return null;
+        }
 
         return match ($field) {
             'title' => get_the_title($editionId) ?: null,

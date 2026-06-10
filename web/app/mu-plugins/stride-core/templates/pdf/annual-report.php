@@ -53,9 +53,9 @@ $fmt = function ($v, string $key): string {
     <table class="kpi-grid">
         <?php
         $kpiKeys = array_keys($report->kpis);
-        $count = count($kpiKeys);
-        for ($i = 0; $i < $count; $i += 2):
-            ?>
+$count = count($kpiKeys);
+for ($i = 0; $i < $count; $i += 2):
+    ?>
             <tr>
                 <?php for ($j = 0; $j < 2; $j++):
                     $k = $kpiKeys[$i + $j] ?? null;

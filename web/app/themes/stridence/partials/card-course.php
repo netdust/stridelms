@@ -90,7 +90,7 @@ $excerpt = !empty($course->post_excerpt)
 $thumbnail = get_the_post_thumbnail(
     $course,
     'stride_course_card',
-    ['class' => 'w-full h-full object-cover transition-transform hover:scale-105']
+    ['class' => 'w-full h-full object-cover transition-transform hover:scale-105'],
 );
 
 // Determine status badge.

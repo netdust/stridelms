@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 defined('ABSPATH') || exit;
@@ -287,7 +288,7 @@ class NTDST_Theme
         foreach (['theme_support', 'image_sizes', 'menus', 'sidebars'] as $arrayKey) {
             if (isset($config[$arrayKey]) && !is_array($config[$arrayKey])) {
                 throw new InvalidArgumentException(
-                    "NTDST_Theme config['{$arrayKey}'] must be an array"
+                    "NTDST_Theme config['{$arrayKey}'] must be an array",
                 );
             }
         }
@@ -718,7 +719,7 @@ class NTDST_Theme
         // Invalid usage — fail loud rather than emit a warning that gets
         // swallowed outside of WP_DEBUG_LOG.
         throw new InvalidArgumentException(
-            'Invalid mixin usage. Use either mixin($name, $instance) or mixin($object)'
+            'Invalid mixin usage. Use either mixin($name, $instance) or mixin($object)',
         );
     }
 

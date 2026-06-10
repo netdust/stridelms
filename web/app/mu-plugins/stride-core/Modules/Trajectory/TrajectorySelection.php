@@ -68,7 +68,7 @@ final class TrajectorySelection
                 'phase'       => 'enrollment',
                 'edition_ids' => $mandatoryEditionIds,
             ],
-            'trajectory'
+            'trajectory',
         );
 
         do_action('stride/trajectory/enrolled', [
@@ -160,7 +160,7 @@ final class TrajectorySelection
                 'phase'       => 'enrollment',
                 'edition_ids' => array_values(array_map('intval', $editionIds)),
             ],
-            'trajectory'
+            'trajectory',
         );
 
         do_action('stride/trajectory/choices_updated', [
@@ -245,14 +245,14 @@ final class TrajectorySelection
             if ($chosenInGroup < $required) {
                 return new WP_Error(
                     'incomplete_choices',
-                    sprintf('Group "%s" requires %d selection(s), got %d', $groupName, $required, $chosenInGroup)
+                    sprintf('Group "%s" requires %d selection(s), got %d', $groupName, $required, $chosenInGroup),
                 );
             }
 
             if ($chosenInGroup > $required) {
                 return new WP_Error(
                     'too_many_choices',
-                    sprintf('Group "%s" allows %d selection(s), got %d', $groupName, $required, $chosenInGroup)
+                    sprintf('Group "%s" allows %d selection(s), got %d', $groupName, $required, $chosenInGroup),
                 );
             }
         }

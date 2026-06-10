@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace stridence\services\frontend\hooks;
@@ -69,7 +70,7 @@ final class AssetHooks
                     'stridence-' . $index,
                     STRIDENCE_URI . '/dist/' . $css_file,
                     [],
-                    STRIDENCE_VERSION
+                    STRIDENCE_VERSION,
                 );
             }
         }
@@ -79,7 +80,7 @@ final class AssetHooks
             STRIDENCE_URI . '/dist/' . $entry['file'],
             [],
             STRIDENCE_VERSION,
-            true
+            true,
         );
 
         add_filter('script_loader_tag', static function (string $tag, string $handle): string {

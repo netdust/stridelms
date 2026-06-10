@@ -123,7 +123,7 @@ final class EditionActionsMetabox
                     /* translators: 1: locked count, 2: total */
                     __('%1$d van %2$d vergrendeld', 'stride'),
                     $lockedCount,
-                    $total
+                    $total,
                 )); ?>
             </p>
             <button type="button"
@@ -170,7 +170,7 @@ final class EditionActionsMetabox
                 } elseif ($percentage >= 80) {
                     $barClass = 'warning';
                 }
-                ?>
+        ?>
                 <div class="stride-capacity-bar <?php echo esc_attr($barClass); ?>">
                     <div class="stride-capacity-fill" style="width: <?php echo esc_attr($percentage); ?>%;"></div>
                 </div>
@@ -239,7 +239,7 @@ final class EditionActionsMetabox
         OfferingSidebarPartial::render(
             $post,
             'vad_edition',
-            __('Sessiekeuze wordt beheerd in de Sessies-metabox.', 'stride')
+            __('Sessiekeuze wordt beheerd in de Sessies-metabox.', 'stride'),
         );
     }
 

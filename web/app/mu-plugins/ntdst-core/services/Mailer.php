@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 /**
@@ -495,37 +496,37 @@ if (!function_exists('ntdst_notify')) {
 if (!function_exists('ntdst_wrap_email_in_layout')) {
     function ntdst_wrap_email_in_layout(string $content, string $subject = ''): string
     {
-    // Escape values that come from settings or callers; $content is HTML
-    // by contract (templates handle their own escaping).
-    $site_name = esc_html(get_option('blogname'));
-    $site_url = esc_url(home_url());
-    $safe_subject = esc_html($subject);
+        // Escape values that come from settings or callers; $content is HTML
+        // by contract (templates handle their own escaping).
+        $site_name = esc_html(get_option('blogname'));
+        $site_url = esc_url(home_url());
+        $safe_subject = esc_html($subject);
 
-    // Look for layout template
-    $layout_paths = apply_filters('ntdst_email_layout_paths', [
-        get_stylesheet_directory() . '/views/emails/layout.php',
-        get_template_directory() . '/views/emails/layout.php',
-        NTDST_PATH . '/templates/emails/layout.php',
-    ]);
+        // Look for layout template
+        $layout_paths = apply_filters('ntdst_email_layout_paths', [
+            get_stylesheet_directory() . '/views/emails/layout.php',
+            get_template_directory() . '/views/emails/layout.php',
+            NTDST_PATH . '/templates/emails/layout.php',
+        ]);
 
-    $layout_file = null;
-    foreach ($layout_paths as $path) {
-        if (file_exists($path)) {
-            $layout_file = $path;
-            break;
+        $layout_file = null;
+        foreach ($layout_paths as $path) {
+            if (file_exists($path)) {
+                $layout_file = $path;
+                break;
+            }
         }
-    }
 
-    // If layout file exists, use it
-    if ($layout_file) {
-        ob_start();
-        include $layout_file;
-        return ob_get_clean();
-    }
+        // If layout file exists, use it
+        if ($layout_file) {
+            ob_start();
+            include $layout_file;
+            return ob_get_clean();
+        }
 
-    // Fallback to inline layout
-    $year = date('Y');
-    return <<<HTML
+        // Fallback to inline layout
+        $year = date('Y');
+        return <<<HTML
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -596,4 +597,3 @@ add_filter('wp_mail', function ($args) {
 
     return $args;
 }, 999);
-

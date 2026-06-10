@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace stridence\services\frontend\hooks;
@@ -83,7 +84,7 @@ final class LearnDashHooks
             esc_url($course_url),
             esc_attr(sprintf(__('Terug naar %s', 'stridence'), $course_title)),
             stridence_icon('chevron-left', 'ld-brand-back-icon'),
-            esc_html__('Terug', 'stridence')
+            esc_html__('Terug', 'stridence'),
         );
     }
 

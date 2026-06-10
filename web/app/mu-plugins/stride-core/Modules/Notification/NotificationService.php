@@ -101,7 +101,7 @@ final class NotificationService implements \NTDST_Service_Meta
     {
         return count(array_filter(
             $this->getNotifications($userId),
-            fn(array $n): bool => !$n['read']
+            fn(array $n): bool => !$n['read'],
         ));
     }
 

@@ -8,8 +8,6 @@ use Stride\Contracts\EditionQueryInterface;
 use Stride\Domain\OfferingStatus;
 use Stride\Domain\Money;
 use Stride\Infrastructure\AbstractService;
-use WP_Post;
-use WP_Error;
 
 /**
  * Edition business logic.
@@ -114,7 +112,7 @@ class EditionService extends AbstractService implements EditionQueryInterface
 
         $count = (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM {$table} WHERE edition_id = %d AND status IN ('confirmed', 'completed', 'pending')",
-            $editionId
+            $editionId,
         ));
 
         set_transient($cacheKey, $count, 60);

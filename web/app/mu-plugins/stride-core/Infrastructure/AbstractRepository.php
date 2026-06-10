@@ -36,7 +36,7 @@ abstract class AbstractRepository implements RepositoryInterface
         if ($post === null || is_wp_error($post)) {
             return new WP_Error(
                 'not_found',
-                sprintf('%s with ID %d not found', $this->postType, $id)
+                sprintf('%s with ID %d not found', $this->postType, $id),
             );
         }
 

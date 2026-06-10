@@ -29,7 +29,7 @@ $electiveGroups  = $args['elective_groups'] ?? [];
         <?php foreach ($requiredCourses as $course) :
             $args = stridence_build_course_card_args_from_trajectory_course(
                 $course,
-                ['label' => __('Verplicht', 'stridence'), 'tone' => 'primary']
+                ['label' => __('Verplicht', 'stridence'), 'tone' => 'primary'],
             );
             get_template_part('templates/components/course-card', null, $args);
         endforeach; ?>
@@ -45,7 +45,7 @@ $electiveGroups  = $args['elective_groups'] ?? [];
         if (empty($courses)) {
             continue;
         }
-    ?>
+        ?>
     <div class="mb-8 last:mb-0">
         <h3 class="font-heading font-semibold text-lg mb-4 flex items-center gap-2">
             <?php echo stridence_icon('list', 'w-5 h-5 text-accent'); ?>
@@ -60,7 +60,7 @@ $electiveGroups  = $args['elective_groups'] ?? [];
             <?php foreach ($courses as $course) :
                 $args = stridence_build_course_card_args_from_trajectory_course(
                     $course,
-                    ['label' => __('Keuzevak', 'stridence'), 'tone' => 'accent']
+                    ['label' => __('Keuzevak', 'stridence'), 'tone' => 'accent'],
                 );
                 get_template_part('templates/components/course-card', null, $args);
             endforeach; ?>

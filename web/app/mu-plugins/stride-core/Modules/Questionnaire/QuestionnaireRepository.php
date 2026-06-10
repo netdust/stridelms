@@ -92,7 +92,7 @@ class QuestionnaireRepository
         $groups = $this->getGroupsForPost($postId, $postType);
 
         return array_values(
-            array_filter($groups, static fn(array $g) => ($g['stage'] ?? '') === $stage)
+            array_filter($groups, static fn(array $g) => ($g['stage'] ?? '') === $stage),
         );
     }
 

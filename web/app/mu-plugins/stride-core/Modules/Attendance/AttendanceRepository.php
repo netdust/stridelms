@@ -42,7 +42,7 @@ final class AttendanceRepository
                     'marked_by' => $markedBy,
                     'marked_at' => current_time('mysql'),
                 ],
-                ['id' => $existing->id]
+                ['id' => $existing->id],
             );
 
             if ($result === false) {
@@ -77,7 +77,7 @@ final class AttendanceRepository
 
         return $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$this->table()} WHERE id = %d",
-            $id
+            $id,
         ));
     }
 
@@ -91,7 +91,7 @@ final class AttendanceRepository
         return $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$this->table()} WHERE session_id = %d AND user_id = %d",
             $sessionId,
-            $userId
+            $userId,
         ));
     }
 
@@ -129,7 +129,7 @@ final class AttendanceRepository
         return $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$this->table()} WHERE user_id = %d AND edition_id = %d ORDER BY session_id ASC",
             $userId,
-            $editionId
+            $editionId,
         ));
     }
 
@@ -196,7 +196,7 @@ final class AttendanceRepository
         return (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM {$this->table()} WHERE user_id = %d AND edition_id = %d AND status IN ($statuses)",
             $userId,
-            $editionId
+            $editionId,
         ));
     }
 
@@ -210,7 +210,7 @@ final class AttendanceRepository
         return (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM {$this->table()} WHERE user_id = %d AND edition_id = %d",
             $userId,
-            $editionId
+            $editionId,
         ));
     }
 
@@ -250,7 +250,7 @@ final class AttendanceRepository
 
         $results = $wpdb->get_col($wpdb->prepare(
             "SELECT user_id FROM {$this->table()} WHERE session_id = %d AND status IN ($statuses)",
-            $sessionId
+            $sessionId,
         ));
 
         return array_map('intval', $results);

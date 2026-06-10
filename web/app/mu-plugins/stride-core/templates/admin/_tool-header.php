@@ -108,7 +108,7 @@ if (!function_exists('stride_tool_header')) {
                         ?>
                         <a class="<?php echo esc_attr($class); ?>"
                            href="<?php echo esc_url($url); ?>"
-                           <?php echo $attrs; // raw — caller is trusted ?>
+                           <?php echo $attrs; // raw — caller is trusted?>
                         ><?php echo esc_html($label); ?></a>
                     <?php endforeach; ?>
                 </div>

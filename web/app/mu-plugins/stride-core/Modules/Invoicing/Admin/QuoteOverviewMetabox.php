@@ -118,18 +118,18 @@ final class QuoteOverviewMetabox
                                 <option value=""><?php esc_html_e('Selecteer klant...', 'stride'); ?></option>
                                 <?php
                                 $users = get_users(['orderby' => 'display_name', 'order' => 'ASC', 'number' => 200]);
-                                foreach ($users as $u) {
-                                    $selected = ($u->ID === $userId) ? 'selected' : '';
-                                    $label = $u->display_name . ($u->user_email ? " ({$u->user_email})" : '');
-                                    printf(
-                                        '<option value="%d" %s data-email="%s">%s</option>',
-                                        $u->ID,
-                                        $selected,
-                                        esc_attr($u->user_email),
-                                        esc_html($label)
-                                    );
-                                }
-                                ?>
+                            foreach ($users as $u) {
+                                $selected = ($u->ID === $userId) ? 'selected' : '';
+                                $label = $u->display_name . ($u->user_email ? " ({$u->user_email})" : '');
+                                printf(
+                                    '<option value="%d" %s data-email="%s">%s</option>',
+                                    $u->ID,
+                                    $selected,
+                                    esc_attr($u->user_email),
+                                    esc_html($label),
+                                );
+                            }
+                            ?>
                             </select>
                             <?php if ($user): ?>
                                 <a href="<?php echo esc_url(get_edit_user_link($userId)); ?>" class="stride-user-link" target="_blank">
@@ -377,7 +377,7 @@ final class QuoteOverviewMetabox
                     'show_option_none' => __('Selecteer gebruiker...', 'stride'),
                     'option_none_value' => '',
                 ]);
-                ?>
+        ?>
             </div>
 
             <div class="form-field">
@@ -385,22 +385,22 @@ final class QuoteOverviewMetabox
                 <select name="ntdst_fields[edition_id]" id="quote_edition_id">
                     <option value=""><?php esc_html_e('Selecteer editie...', 'stride'); ?></option>
                     <?php
-                    $editions = get_posts([
-                        'post_type' => 'vad_edition',
-                        'posts_per_page' => 200,
-                        'orderby' => 'meta_value',
-                        'meta_key' => 'start_date',
-                        'order' => 'DESC',
-                        'post_status' => 'publish',
-                    ]);
-                    foreach ($editions as $edition) {
-                        printf(
-                            '<option value="%d">%s</option>',
-                            $edition->ID,
-                            esc_html($edition->post_title)
-                        );
-                    }
-                    ?>
+            $editions = get_posts([
+                'post_type' => 'vad_edition',
+                'posts_per_page' => 200,
+                'orderby' => 'meta_value',
+                'meta_key' => 'start_date',
+                'order' => 'DESC',
+                'post_status' => 'publish',
+            ]);
+        foreach ($editions as $edition) {
+            printf(
+                '<option value="%d">%s</option>',
+                $edition->ID,
+                esc_html($edition->post_title),
+            );
+        }
+        ?>
                 </select>
             </div>
 

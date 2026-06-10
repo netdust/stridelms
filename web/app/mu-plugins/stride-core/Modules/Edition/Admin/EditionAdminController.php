@@ -99,7 +99,7 @@ final class EditionAdminController
             [$this, 'renderDetailsMetabox'],
             EditionCPT::POST_TYPE,
             'normal',
-            'high'
+            'high',
         );
 
         // Sessions metabox
@@ -109,7 +109,7 @@ final class EditionAdminController
             [$this, 'renderSessionsMetabox'],
             EditionCPT::POST_TYPE,
             'normal',
-            'default'
+            'default',
         );
 
         // Registrations & Attendance metabox
@@ -119,7 +119,7 @@ final class EditionAdminController
             [$this, 'renderRegistrationMetabox'],
             EditionCPT::POST_TYPE,
             'normal',
-            'default'
+            'default',
         );
 
         // Notes metabox
@@ -129,7 +129,7 @@ final class EditionAdminController
             [$this, 'renderNotesMetabox'],
             EditionCPT::POST_TYPE,
             'normal',
-            'default'
+            'default',
         );
 
         // Status & actions sidebar
@@ -139,7 +139,7 @@ final class EditionAdminController
             [$this, 'renderActionsMetabox'],
             EditionCPT::POST_TYPE,
             'side',
-            'high'
+            'high',
         );
     }
 
@@ -159,14 +159,14 @@ final class EditionAdminController
             'select2',
             'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css',
             [],
-            '4.1.0'
+            '4.1.0',
         );
         wp_enqueue_script(
             'select2',
             'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js',
             ['jquery'],
             '4.1.0',
-            true
+            true,
         );
 
         // Edition admin styles (from stride-core mu-plugin)
@@ -177,7 +177,7 @@ final class EditionAdminController
                 'stride-edition-admin',
                 plugins_url('assets/css/admin/edition-admin.css', $basePath . '/stride-core.php'),
                 [],
-                filemtime($cssFile)
+                filemtime($cssFile),
             );
         }
 
@@ -189,7 +189,7 @@ final class EditionAdminController
                 plugins_url('assets/js/admin/edition-admin.js', $basePath . '/stride-core.php'),
                 ['jquery', 'select2'],
                 filemtime($jsFile),
-                true
+                true,
             );
 
             $currentUser = wp_get_current_user();
@@ -308,7 +308,9 @@ final class EditionAdminController
                 </div>
             <?php else: ?>
                 <?php foreach ($notes as $index => $note): ?>
-                    <?php if (!empty($note['_deleted'])) continue; ?>
+                    <?php if (!empty($note['_deleted'])) {
+                        continue;
+                    } ?>
                     <?php
                     $type = $note['type'] ?? 'userinfo';
                     $typeConfig = $noteTypes[$type] ?? $noteTypes['userinfo'];
@@ -357,8 +359,8 @@ final class EditionAdminController
     public function handleSave(int $postId, WP_Post $post): void
     {
         // Verify nonce
-        if (!isset($_POST['stride_edition_nonce']) ||
-            !wp_verify_nonce($_POST['stride_edition_nonce'], self::NONCE_SAVE)) {
+        if (!isset($_POST['stride_edition_nonce'])
+            || !wp_verify_nonce($_POST['stride_edition_nonce'], self::NONCE_SAVE)) {
             return;
         }
 
@@ -1173,13 +1175,13 @@ final class EditionAdminController
             <td class="column-price-mod" style="white-space: nowrap;">
                 <?php
                 $modifier = (int) ($session['price_modifier'] ?? 0);
-                if ($modifier !== 0):
-                    $sign = $modifier > 0 ? '+' : '';
-                    echo esc_html($sign . number_format($modifier / 100, 2, ',', '.'));
-                else:
-                    echo '-';
-                endif;
-                ?>
+        if ($modifier !== 0):
+            $sign = $modifier > 0 ? '+' : '';
+            echo esc_html($sign . number_format($modifier / 100, 2, ',', '.'));
+        else:
+            echo '-';
+        endif;
+        ?>
             </td>
             <td class="column-actions">
                 <button type="button" class="button-link stride-edit-session" title="<?php esc_attr_e('Bewerken', 'stride'); ?>">
@@ -1230,7 +1232,7 @@ final class EditionAdminController
 
         return $wpdb->get_results($wpdb->prepare(
             "SELECT user_id FROM {$table} WHERE edition_id = %d AND status = 'confirmed'",
-            $editionId
+            $editionId,
         ), ARRAY_A) ?: [];
     }
 

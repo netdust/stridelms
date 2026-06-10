@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Stride\Modules\Reporting;
@@ -15,8 +16,7 @@ final class AnnualReport
         public readonly string $generatedAt,
         public readonly array $kpis,
         public readonly array $sections,
-    ) {
-    }
+    ) {}
 
     public function kpiChangePercent(string $key): ?float
     {

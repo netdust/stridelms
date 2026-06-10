@@ -83,9 +83,9 @@ $selections = $enrollment->selections ? json_decode($enrollment->selections, tru
                 <?php
                 printf(
                     esc_html__('Je kunt je keuzes maken vanaf %s.', 'stridence'),
-                    esc_html(date_i18n('j F Y', strtotime($choiceAvailable)))
+                    esc_html(date_i18n('j F Y', strtotime($choiceAvailable))),
                 );
-                ?>
+        ?>
             </p>
 
             <!-- Preview electives -->
@@ -125,11 +125,11 @@ $selections = $enrollment->selections ? json_decode($enrollment->selections, tru
                     </p>
                     <p class="text-sm text-text-muted">
                         <?php
-                        printf(
-                            esc_html__('Maak je keuze voor %s.', 'stridence'),
-                            esc_html(date_i18n('j F Y', strtotime($choiceDeadline)))
-                        );
-                        ?>
+                printf(
+                    esc_html__('Maak je keuze voor %s.', 'stridence'),
+                    esc_html(date_i18n('j F Y', strtotime($choiceDeadline))),
+                );
+        ?>
                     </p>
                 </div>
             </div>
@@ -140,7 +140,7 @@ $selections = $enrollment->selections ? json_decode($enrollment->selections, tru
                 $groupName = $group['name'] ?? __('Keuzegroep', 'stridence');
                 $required = (int) ($group['required'] ?? 1);
                 $courses = $group['courses'] ?? [];
-            ?>
+                ?>
                 <div class="card p-4">
                     <h3 class="font-medium text-text mb-1">
                         <?php echo esc_html($groupName); ?>
@@ -153,7 +153,7 @@ $selections = $enrollment->selections ? json_decode($enrollment->selections, tru
                         <?php foreach ($courses as $course) :
                             $isSelected = in_array($course->ID, $selections[$groupIndex] ?? [], true);
                             $inputType = $required === 1 ? 'radio' : 'checkbox';
-                        ?>
+                            ?>
                             <label class="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary cursor-pointer transition-colors <?php echo $isSelected ? 'border-primary bg-primary/5' : ''; ?>">
                                 <input type="<?php echo esc_attr($inputType); ?>"
                                        name="selections[<?php echo esc_attr($groupIndex); ?>]<?php echo $required > 1 ? '[]' : ''; ?>"
@@ -191,16 +191,20 @@ $selections = $enrollment->selections ? json_decode($enrollment->selections, tru
 
                 <?php foreach ($electiveGroups as $groupIndex => $group) :
                     $groupSelections = $selections[$groupIndex] ?? [];
-                    if (empty($groupSelections)) continue;
-                ?>
+                    if (empty($groupSelections)) {
+                        continue;
+                    }
+                    ?>
                     <div class="mb-4">
                         <p class="text-sm font-medium text-text mb-2">
                             <?php echo esc_html($group['name'] ?? __('Keuzegroep', 'stridence')); ?>
                         </p>
                         <ul class="space-y-2">
                             <?php foreach ($group['courses'] ?? [] as $course) :
-                                if (!in_array($course->ID, $groupSelections, true)) continue;
-                            ?>
+                                if (!in_array($course->ID, $groupSelections, true)) {
+                                    continue;
+                                }
+                                ?>
                                 <li class="flex items-center gap-2 text-text">
                                     <?php echo stridence_icon('check', 'w-4 h-4 text-success'); ?>
                                     <?php echo esc_html($course->post_title); ?>

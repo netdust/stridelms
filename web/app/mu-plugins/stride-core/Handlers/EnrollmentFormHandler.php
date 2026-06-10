@@ -110,7 +110,7 @@ final class EnrollmentFormHandler
         $stageData = $this->splitExtraFieldsByStage(
             $enrollmentData['extra_fields'] ?? [],
             $editionId,
-            'vad_edition'
+            'vad_edition',
         );
 
         $validator = ntdst_get(QuestionnaireValidator::class);
@@ -118,7 +118,7 @@ final class EnrollmentFormHandler
         $personalResult = $validator->validate(
             $stageData['enrollment_personal'] ?? [],
             $editionId,
-            'enrollment_personal'
+            'enrollment_personal',
         );
         if (is_wp_error($personalResult)) {
             return $personalResult;
@@ -127,7 +127,7 @@ final class EnrollmentFormHandler
         $billingResult = $validator->validate(
             $stageData['enrollment_billing'] ?? [],
             $editionId,
-            'enrollment_billing'
+            'enrollment_billing',
         );
         if (is_wp_error($billingResult)) {
             return $billingResult;
@@ -235,7 +235,7 @@ final class EnrollmentFormHandler
         $stageData = $this->splitExtraFieldsByStage(
             $billingData['extra_fields'] ?? [],
             $trajectoryId,
-            'vad_trajectory'
+            'vad_trajectory',
         );
 
         $validator = ntdst_get(QuestionnaireValidator::class);
@@ -244,7 +244,7 @@ final class EnrollmentFormHandler
             $stageData['enrollment_personal'] ?? [],
             $trajectoryId,
             'enrollment_personal',
-            'vad_trajectory'
+            'vad_trajectory',
         );
         if (is_wp_error($personalResult)) {
             return $personalResult;
@@ -254,7 +254,7 @@ final class EnrollmentFormHandler
             $stageData['enrollment_billing'] ?? [],
             $trajectoryId,
             'enrollment_billing',
-            'vad_trajectory'
+            'vad_trajectory',
         );
         if (is_wp_error($billingResult)) {
             return $billingResult;
@@ -289,7 +289,7 @@ final class EnrollmentFormHandler
             $enrollmentId,
             $trajectoryId,
             $billingData,
-            $params['voucher_code'] ?? ''
+            $params['voucher_code'] ?? '',
         );
 
         if (is_wp_error($quoteId)) {
@@ -308,7 +308,7 @@ final class EnrollmentFormHandler
 
             return new WP_Error(
                 'quote_creation_failed',
-                __('De inschrijving kon niet worden afgerond omdat de offerte niet aangemaakt werd. Probeer opnieuw of contacteer ons.', 'stride')
+                __('De inschrijving kon niet worden afgerond omdat de offerte niet aangemaakt werd. Probeer opnieuw of contacteer ons.', 'stride'),
             );
         }
 
@@ -345,7 +345,7 @@ final class EnrollmentFormHandler
         int $enrollmentId,
         int $trajectoryId,
         array $billingData,
-        string $voucherCode
+        string $voucherCode,
     ): int|WP_Error {
         $trajectoryService = ntdst_get(TrajectoryService::class);
         $trajectory = $trajectoryService->getTrajectory($trajectoryId);
@@ -412,7 +412,7 @@ final class EnrollmentFormHandler
             $items,
             $billing,
             $appliedVoucherCode,
-            $discount
+            $discount,
         );
     }
 
@@ -616,7 +616,7 @@ final class EnrollmentFormHandler
 
         $billingFieldNames = array_column(
             $questionnaireRepo->getFlatFieldsForStage($postId, 'enrollment_billing', $postType),
-            'name'
+            'name',
         );
 
         $stageData = [

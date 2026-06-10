@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Stride\Modules\User;
 
 use Stride\Domain\AttendanceStatus;
-use Stride\Domain\QuoteStatus;
 use Stride\Domain\RegistrationStatus;
 use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Attendance\AttendanceService;
@@ -39,8 +38,7 @@ final class UserDashboardService
         private readonly SessionService $sessionService,
         private readonly AttendanceService $attendanceService,
         private readonly EditionCompletion $completionService,
-    ) {
-    }
+    ) {}
 
     /**
      * Get aggregated data for the dashboard home screen.
@@ -67,7 +65,7 @@ final class UserDashboardService
 
         $activeEnrollments = array_merge(
             $enrollmentData['active_editions'],
-            $enrollmentData['active_online']
+            $enrollmentData['active_online'],
         );
 
         $actions      = $this->buildActionList($enrollmentData, $quoteData);
@@ -125,7 +123,7 @@ final class UserDashboardService
     {
         $activeEnrollments = array_merge(
             $enrollmentData['active_editions'] ?? [],
-            $enrollmentData['active_online'] ?? []
+            $enrollmentData['active_online'] ?? [],
         );
 
         return [
@@ -499,8 +497,8 @@ final class UserDashboardService
             $wpdb->prepare(
                 "SELECT post_id, meta_value FROM {$wpdb->postmeta}
                  WHERE post_id IN ({$idList}) AND meta_key = %s",
-                $courseIdKey
-            )
+                $courseIdKey,
+            ),
         );
         $courseIdMap = [];
         $courseIds = [];
@@ -578,8 +576,8 @@ final class UserDashboardService
             $courseId = $courseIdMap[$editionId] ?? 0;
             if ($courseId) {
                 $formats = get_the_terms($courseId, 'stride_format');
-                $isOnline = $formats && !is_wp_error($formats) &&
-                    !empty(array_filter($formats, fn($f) => in_array($f->slug, ['online', 'webinar', 'e-learning'], true)));
+                $isOnline = $formats && !is_wp_error($formats)
+                    && !empty(array_filter($formats, fn($f) => in_array($f->slug, ['online', 'webinar', 'e-learning'], true)));
                 if ($isOnline) {
                     continue;
                 }
@@ -777,7 +775,7 @@ final class UserDashboardService
         if (!empty($trajectoryGrantedCourseIds)) {
             $enrolledIds = array_values(array_diff(
                 array_map('intval', $enrolledIds),
-                $trajectoryGrantedCourseIds
+                $trajectoryGrantedCourseIds,
             ));
             if (empty($enrolledIds)) {
                 return [[], []];

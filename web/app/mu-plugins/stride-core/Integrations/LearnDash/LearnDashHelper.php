@@ -770,7 +770,7 @@ final class LearnDashHelper
         $timestamp = $wpdb->get_var($wpdb->prepare(
             "SELECT MAX(activity_updated) FROM {$table} WHERE user_id = %d AND course_id = %d",
             $userId,
-            $courseId
+            $courseId,
         ));
 
         return $timestamp ? (int) $timestamp : null;

@@ -27,7 +27,6 @@ defined('ABSPATH') || exit;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
-use Stride\Integrations\LearnDash\LearnDashHelper;
 
 $course_id = get_the_ID();
 $is_online = stridence_is_online_course($course_id);
@@ -89,13 +88,13 @@ get_header();
         'is_online'   => $is_online,
         'editions'    => $editions,
     ]);
-    ?>
+?>
 
     <?php
-    stridence_template_part('templates/course/tabs', null, [
-        'is_online' => $is_online,
-    ]);
-    ?>
+stridence_template_part('templates/course/tabs', null, [
+    'is_online' => $is_online,
+]);
+?>
 
     <div class="container py-8 lg:py-12">
         <?php if ($show_online_sidebar) : ?>
@@ -104,13 +103,13 @@ get_header();
             <div class="grid lg:grid-cols-3 gap-8 lg:gap-12">
                 <div class="lg:col-span-2 space-y-12">
                     <?php
-                    stridence_template_part('templates/course/content', null, [
-                        'course_id'     => $course_id,
-                        'is_online'     => true,
-                        'editions'      => $editions,
-                        'show_editions' => $has_active_edition,
-                    ]);
-                    ?>
+                stridence_template_part('templates/course/content', null, [
+                    'course_id'     => $course_id,
+                    'is_online'     => true,
+                    'editions'      => $editions,
+                    'show_editions' => $has_active_edition,
+                ]);
+            ?>
                 </div>
                 <div class="lg:col-span-1">
                     <?php stridence_template_part('templates/course/sidebar-online', null, $online_sidebar_args); ?>
@@ -122,11 +121,11 @@ get_header();
             <div class="max-w-3xl space-y-12">
                 <?php
                 stridence_template_part('templates/course/content', null, [
-                    'course_id' => $course_id,
-                    'is_online' => $is_online,
-                    'editions'  => $editions,
+            'course_id' => $course_id,
+            'is_online' => $is_online,
+            'editions'  => $editions,
                 ]);
-                ?>
+            ?>
 
                 <?php if (!$is_online && !$has_active_edition) : ?>
                     <!-- Klassikaal, 0 active editions: notice only -->

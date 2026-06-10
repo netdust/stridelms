@@ -65,7 +65,7 @@ final class StrideToolsService extends AbstractService
             self::MENU_SLUG,
             [$this, 'renderIndex'],
             'dashicons-admin-tools',
-            3
+            3,
         );
 
         // Explicit 'Overzicht' submenu so the index page is reachable once
@@ -76,7 +76,7 @@ final class StrideToolsService extends AbstractService
             'Overzicht',
             self::CAPABILITY,
             self::MENU_SLUG,
-            [$this, 'renderIndex']
+            [$this, 'renderIndex'],
         );
     }
 

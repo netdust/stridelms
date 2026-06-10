@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Template helpers — thin wrappers around NTDST_Response.
  *
@@ -139,7 +140,7 @@ function stridence_build_course_card_args_from_enrollment(array $enrollment, boo
             ? sprintf(
                 _n('%d van %d les', '%d van %d lessen', $totalLessons, 'stridence'),
                 $completedLessons,
-                $totalLessons
+                $totalLessons,
             )
             : null;
         $meta['days_remaining'] = isset($enrollment['days_remaining']) ? (int) $enrollment['days_remaining'] : null;
@@ -203,7 +204,7 @@ function stridence_build_course_card_args_from_enrollment(array $enrollment, boo
                 $meta['progress_label'] = sprintf(
                     _n('%d van %d sessie', '%d van %d sessies', $required, 'stridence'),
                     $attended,
-                    $required
+                    $required,
                 );
             }
         }

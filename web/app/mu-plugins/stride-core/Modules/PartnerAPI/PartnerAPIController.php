@@ -99,7 +99,7 @@ final class PartnerAPIController
             return new WP_Error(
                 'rest_not_logged_in',
                 __('Authentication required.', 'stride'),
-                ['status' => 401]
+                ['status' => 401],
             );
         }
 
@@ -108,7 +108,7 @@ final class PartnerAPIController
             return new WP_Error(
                 'rest_forbidden',
                 __('Partner role required.', 'stride'),
-                ['status' => 403]
+                ['status' => 403],
             );
         }
 
@@ -117,7 +117,7 @@ final class PartnerAPIController
             return new WP_Error(
                 'rest_forbidden',
                 __('Partner account not configured.', 'stride'),
-                ['status' => 403]
+                ['status' => 403],
             );
         }
 
@@ -194,7 +194,7 @@ final class PartnerAPIController
                 return new WP_Error(
                     'rest_forbidden',
                     __('User does not belong to your company.', 'stride'),
-                    ['status' => 403]
+                    ['status' => 403],
                 );
             }
         }
@@ -208,11 +208,11 @@ final class PartnerAPIController
         // see one card per enrollment instead of N+1.
         $parentRegistrationIds = array_values(array_filter(
             array_map(fn($r) => (int) $r->id, $rows),
-            fn($id) => $id > 0
+            fn($id) => $id > 0,
         ));
         $trajectoryParentIds = array_values(array_filter(
             array_map(fn($r) => !empty($r->trajectory_id) && empty($r->edition_id) ? (int) $r->id : 0, $rows),
-            fn($id) => $id > 0
+            fn($id) => $id > 0,
         ));
         $childrenByParent = !empty($trajectoryParentIds)
             ? $this->registrationRepository->findByParents($trajectoryParentIds)
@@ -278,7 +278,7 @@ final class PartnerAPIController
                 $children = $childrenByParent[(int) $row->id] ?? [];
                 $entry['child_registrations'] = array_map(
                     fn($child) => $this->formatEnrollmentRow($child, $users, $editions, $editionCourseMap, $courses),
-                    $children
+                    $children,
                 );
             }
 
@@ -308,7 +308,7 @@ final class PartnerAPIController
         array $users,
         array $editions,
         array $editionCourseMap,
-        array $courses
+        array $courses,
     ): array {
         $editionId = !empty($row->edition_id) ? (int) $row->edition_id : 0;
         $courseId = $editionCourseMap[$editionId] ?? 0;
@@ -342,7 +342,7 @@ final class PartnerAPIController
             return new WP_Error(
                 'rest_not_found',
                 __('Enrollment not found.', 'stride'),
-                ['status' => 404]
+                ['status' => 404],
             );
         }
 
@@ -351,7 +351,7 @@ final class PartnerAPIController
             return new WP_Error(
                 'rest_forbidden',
                 __('Access denied.', 'stride'),
-                ['status' => 403]
+                ['status' => 403],
             );
         }
 
@@ -387,7 +387,7 @@ final class PartnerAPIController
 
             $childEditionIds = array_values(array_unique(array_filter(array_map(
                 fn($c) => (int) ($c->edition_id ?? 0),
-                $children
+                $children,
             ))));
             $childEditions = !empty($childEditionIds) ? $this->editionRepository->findManyById($childEditionIds) : [];
             $childCourseMap = !empty($childEditionIds) ? $this->editionRepository->findCourseIdsForEditions($childEditionIds) : [];
@@ -408,7 +408,7 @@ final class PartnerAPIController
 
             $response['child_registrations'] = array_map(
                 fn($child) => $this->formatEnrollmentRow($child, $users, $childEditions, $childCourseMap, $childCourses),
-                $children
+                $children,
             );
         }
 
@@ -451,7 +451,7 @@ final class PartnerAPIController
              FROM {$wpdb->prefix}learndash_user_activity
              WHERE user_id IN ({$userIdList})
                AND activity_type = 'course'
-               AND activity_completed > 0"
+               AND activity_completed > 0",
         );
 
         if ($total === 0) {
@@ -473,8 +473,8 @@ final class PartnerAPIController
                  ORDER BY activity_completed DESC
                  LIMIT %d OFFSET %d",
                 $perPage,
-                $offset
-            )
+                $offset,
+            ),
         );
 
         // Batch-fetch users and courses for this page only
@@ -665,7 +665,7 @@ final class PartnerAPIController
             return new WP_Error(
                 'user_not_affiliated',
                 __('User is not affiliated with any company. Contact an administrator.', 'stride'),
-                ['status' => 422]
+                ['status' => 422],
             );
         }
         if ($userCompanyId !== $companyId) {

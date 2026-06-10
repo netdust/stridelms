@@ -29,7 +29,7 @@ if (!defined('ABSPATH')) {
                                 /* translators: 1: date, 2: person name */
                                 esc_html__('Vastgelegd op %1$s door %2$s', 'stride'),
                                 esc_html($phase['captured_at_display']),
-                                esc_html($phase['captured_by_display'])
+                                esc_html($phase['captured_by_display']),
                             ); ?>
                         </span>
                     <?php endif; ?>
@@ -62,7 +62,7 @@ if (!defined('ABSPATH')) {
                                 /* translators: 1: date, 2: person name */
                                 esc_html__('Ingediend op %1$s door %2$s', 'stride'),
                                 esc_html($stage['submitted_at_display']),
-                                esc_html($stage['submitted_by_display'])
+                                esc_html($stage['submitted_by_display']),
                             ); ?>
                         </span>
                     <?php endif; ?>
@@ -79,7 +79,7 @@ if (!defined('ABSPATH')) {
                                 } else {
                                     echo esc_html($value === true ? __('Ja', 'stride') : (string) $value);
                                 }
-                                ?>
+                        ?>
                             </dd>
                         </div>
                     <?php endforeach; ?>
@@ -95,8 +95,8 @@ if (!defined('ABSPATH')) {
      * This branch handles legacy records written before the Task-14 migration.
      */
     $skipKeys = ['organisation', 'department', 'initial_selection', 'interest', 'waitlist',
-                 'enrollment_personal', 'enrollment_billing', 'intake', 'evaluation'];
-    ?>
+        'enrollment_personal', 'enrollment_billing', 'intake', 'evaluation'];
+        ?>
     <section class="stride-modal-section" data-section="form" data-open="1">
         <h3 class="stride-modal-section-title"><?php esc_html_e('Inschrijvingsformulier', 'stride'); ?></h3>
         <dl class="stride-modal-dl">
@@ -106,12 +106,12 @@ if (!defined('ABSPATH')) {
                     <dt><?php echo esc_html(ucfirst(str_replace('_', ' ', (string) $key))); ?></dt>
                     <dd>
                         <?php
-                        if (is_array($value)) {
-                            echo esc_html((string) wp_json_encode($value));
-                        } else {
-                            echo esc_html($value === true ? __('Ja', 'stride') : (string) $value);
-                        }
-                        ?>
+                            if (is_array($value)) {
+                                echo esc_html((string) wp_json_encode($value));
+                            } else {
+                                echo esc_html($value === true ? __('Ja', 'stride') : (string) $value);
+                            }
+                ?>
                     </dd>
                 </div>
             <?php endforeach; ?>

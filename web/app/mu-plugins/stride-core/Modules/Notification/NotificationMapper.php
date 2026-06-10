@@ -12,8 +12,7 @@ final class NotificationMapper
     public function __construct(
         private readonly EditionRepository $editions,
         private readonly SessionRepository $sessions,
-    ) {
-    }
+    ) {}
 
     /**
      * @return array{id: string, type: string, title: string, body: string, url: string, timestamp: int}

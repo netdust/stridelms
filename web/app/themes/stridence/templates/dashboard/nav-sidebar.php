@@ -29,7 +29,7 @@ $base_url = get_permalink();
 $firstName = explode(' ', trim($user->display_name))[0];
 $initials = strtoupper(
     mb_substr($user->first_name ?: $firstName, 0, 1)
-    . mb_substr($user->last_name ?: '', 0, 1)
+    . mb_substr($user->last_name ?: '', 0, 1),
 ) ?: '?';
 ?>
 
@@ -38,12 +38,14 @@ $initials = strtoupper(
     <!-- Primary Navigation -->
     <nav class="space-y-0.5">
         <?php foreach ($primary_nav as $slug => $item) :
-            if (empty($item['visible'])) continue;
+            if (empty($item['visible'])) {
+                continue;
+            }
 
             $is_active = ($current_tab === $slug);
             $url = ($slug === 'home') ? $base_url : add_query_arg('tab', $slug, $base_url);
             $active_class = $is_active ? ' sidebar-nav-item-active' : '';
-        ?>
+            ?>
             <a href="<?php echo esc_url($url); ?>"
                class="sidebar-nav-item<?php echo $active_class; ?>"
                <?php echo $is_active ? 'aria-current="page"' : ''; ?>>
@@ -59,12 +61,14 @@ $initials = strtoupper(
     <!-- Utility Navigation -->
     <nav class="space-y-0.5">
         <?php foreach ($utility_nav as $slug => $item) :
-            if (empty($item['visible'])) continue;
+            if (empty($item['visible'])) {
+                continue;
+            }
 
             $is_active = ($current_tab === $slug);
             $url = add_query_arg('tab', $slug, $base_url);
             $active_class = $is_active ? ' sidebar-nav-item-active' : '';
-        ?>
+            ?>
             <a href="<?php echo esc_url($url); ?>"
                class="sidebar-nav-item<?php echo $active_class; ?>"
                <?php echo $is_active ? 'aria-current="page"' : ''; ?>>
@@ -84,9 +88,9 @@ $initials = strtoupper(
     <div class="border-t border-border pt-3 mt-3 space-y-1">
         <!-- Profiel link -->
         <?php
-            $profiel_active = ($current_tab === 'profiel');
-            $profiel_class = $profiel_active ? ' sidebar-nav-item-active' : '';
-        ?>
+                $profiel_active = ($current_tab === 'profiel');
+$profiel_class = $profiel_active ? ' sidebar-nav-item-active' : '';
+?>
         <a href="<?php echo esc_url(add_query_arg('tab', 'profiel', $base_url)); ?>"
            class="sidebar-nav-item<?php echo $profiel_class; ?>"
            <?php echo $profiel_active ? 'aria-current="page"' : ''; ?>>

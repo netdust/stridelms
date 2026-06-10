@@ -105,9 +105,9 @@ $tabs = [
                         printf(
                             /* translators: %s: enrollment date */
                             esc_html__('Ingeschreven sinds %s', 'stridence'),
-                            esc_html(date_i18n('j F Y', strtotime($enrollment->registered_at)))
+                            esc_html(date_i18n('j F Y', strtotime($enrollment->registered_at))),
                         );
-                        ?>
+?>
                     </p>
                 </div>
             </div>
@@ -125,7 +125,7 @@ $tabs = [
                     $classes = $is_active
                         ? 'flex items-center gap-2 px-4 py-3 text-sm font-medium text-primary border-b-2 border-primary whitespace-nowrap'
                         : 'flex items-center gap-2 px-4 py-3 text-sm font-medium text-text-muted hover:text-text border-b-2 border-transparent whitespace-nowrap';
-                ?>
+                    ?>
                     <a href="<?php echo esc_url($url); ?>"
                        class="<?php echo esc_attr($classes); ?>"
                        <?php echo $is_active ? 'aria-current="page"' : ''; ?>>
@@ -146,6 +146,6 @@ $tabs = [
             'user' => $user,
             'dashboard_service' => $dashboardService,
         ]);
-        ?>
+?>
     </div>
 </div>

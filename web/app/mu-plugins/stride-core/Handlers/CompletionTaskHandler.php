@@ -121,7 +121,7 @@ final class CompletionTaskHandler
         if ($fileCount > self::MAX_FILE_COUNT) {
             return new WP_Error('too_many_files', sprintf(
                 __('Maximaal %d bestanden per upload.', 'stride'),
-                self::MAX_FILE_COUNT
+                self::MAX_FILE_COUNT,
             ));
         }
 
@@ -133,7 +133,7 @@ final class CompletionTaskHandler
             if ($size > self::MAX_FILE_SIZE) {
                 return new WP_Error('file_too_large', sprintf(
                     __('%s is te groot. Maximum is 10 MB.', 'stride'),
-                    $name
+                    $name,
                 ));
             }
 
@@ -144,7 +144,7 @@ final class CompletionTaskHandler
             if (!in_array($mimeType, self::ALLOWED_MIME_TYPES, true)) {
                 return new WP_Error('invalid_file_type', sprintf(
                     __('%s: ongeldig bestandstype. Toegestaan: PDF, JPG, PNG.', 'stride'),
-                    $name
+                    $name,
                 ));
             }
         }

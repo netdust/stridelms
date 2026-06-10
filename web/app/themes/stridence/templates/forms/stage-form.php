@@ -16,13 +16,17 @@ $stage = $args['stage'] ?? '';
 $title = $args['title'] ?? '';
 $description = $args['description'] ?? '';
 
-if (!is_user_logged_in() || !$edition_id || !$stage) return;
+if (!is_user_logged_in() || !$edition_id || !$stage) {
+    return;
+}
 
 $userId = get_current_user_id();
 $registrations = ntdst_get(RegistrationRepository::class);
 $registration = $registrations->findByUserAndEdition($userId, $edition_id);
 
-if (!$registration) return;
+if (!$registration) {
+    return;
+}
 
 // Check registration status matches expected state
 $expectedStatus = match ($stage) {
@@ -30,7 +34,9 @@ $expectedStatus = match ($stage) {
     'evaluation' => RegistrationStatus::Completed->value,
     default => null,
 };
-if ($expectedStatus && $registration->status !== $expectedStatus) return;
+if ($expectedStatus && $registration->status !== $expectedStatus) {
+    return;
+}
 
 // Check if already completed
 $enrollmentData = json_decode($registration->enrollment_data ?? '{}', true) ?: [];
@@ -46,7 +52,9 @@ if (isset($enrollmentData[$stage])) {
 $questionnaireRepo = ntdst_get(QuestionnaireRepository::class);
 $field_groups = $questionnaireRepo->getGroupsForStage($edition_id, $stage);
 
-if (empty($field_groups)) return;
+if (empty($field_groups)) {
+    return;
+}
 
 $alpine_config = json_encode([
     'editionId' => $edition_id,

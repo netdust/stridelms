@@ -33,7 +33,7 @@ if ($is_online && LearnDashHelper::hasPrerequisites($course_id)) :
     $all_met = !$user_id ? false : LearnDashHelper::arePrerequisitesMet($course_id, $user_id);
 
     if (!empty($prerequisites) && !$all_met) :
-?>
+        ?>
 <div class="mb-8 p-4 rounded-lg border border-status-warning bg-status-warning-subtle">
     <div class="flex items-start gap-3">
         <?php echo stridence_icon('alert-circle', 'w-5 h-5 text-status-warning mt-0.5 shrink-0'); ?>
@@ -63,14 +63,14 @@ if ($is_online && LearnDashHelper::hasPrerequisites($course_id)) :
     </div>
 </div>
 <?php
-    endif;
+endif;
 endif;
 
 // Points requirement notice
 if ($is_online && LearnDashHelper::hasPointsRequirement($course_id)) :
     $points_required = LearnDashHelper::getPointsRequired($course_id);
     if ($points_required > 0) :
-?>
+        ?>
 <div class="mb-8 p-4 rounded-lg border border-blue-200 bg-blue-50">
     <div class="flex items-start gap-3">
         <?php echo stridence_icon('info', 'w-5 h-5 text-blue-600 mt-0.5 shrink-0'); ?>
@@ -81,7 +81,7 @@ if ($is_online && LearnDashHelper::hasPointsRequirement($course_id)) :
             <p class="text-sm text-blue-700">
                 <?php echo esc_html(sprintf(
                     __('Je hebt %d punten nodig om deze cursus te volgen.', 'stridence'),
-                    $points_required
+                    $points_required,
                 )); ?>
             </p>
         </div>
@@ -120,14 +120,14 @@ endif;
 
     <?php
     $current_user_id = get_current_user_id();
-    $has_drip = $is_online && $current_user_id && LearnDashHelper::hasAccess($course_id, $current_user_id) && LearnDashHelper::hasDripFeed($course_id);
+$has_drip = $is_online && $current_user_id && LearnDashHelper::hasAccess($course_id, $current_user_id) && LearnDashHelper::hasDripFeed($course_id);
 
-    if ($has_drip) :
-        $lessons_with_dates = LearnDashHelper::getLessonsWithAvailability($course_id, $current_user_id);
-        $locked_lessons = array_filter($lessons_with_dates, fn($l) => !$l['is_available']);
+if ($has_drip) :
+    $lessons_with_dates = LearnDashHelper::getLessonsWithAvailability($course_id, $current_user_id);
+    $locked_lessons = array_filter($lessons_with_dates, fn($l) => !$l['is_available']);
 
-        if (!empty($locked_lessons)) :
-    ?>
+    if (!empty($locked_lessons)) :
+        ?>
         <div class="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800 flex items-start gap-2">
             <?php echo stridence_icon('info', 'w-4 h-4 mt-0.5 shrink-0 text-blue-600'); ?>
             <span>
@@ -162,7 +162,7 @@ endif;
                         <span class="text-xs text-text-muted whitespace-nowrap">
                             <?php echo esc_html(sprintf(
                                 __('Beschikbaar %s', 'stridence'),
-                                stride_format_date(date('Y-m-d', $lesson['available_from']))
+                                stride_format_date(date('Y-m-d', $lesson['available_from'])),
                             )); ?>
                         </span>
                     <?php elseif ($lesson['completed']) : ?>
@@ -175,13 +175,13 @@ endif;
         </div>
     <?php
         endif;
-    endif;
-    ?>
+endif;
+?>
 
     <div class="learndash-course-content">
         <?php
-        echo do_shortcode('[course_content course_id="' . esc_attr($course_id) . '"]');
-        ?>
+    echo do_shortcode('[course_content course_id="' . esc_attr($course_id) . '"]');
+?>
     </div>
 </section>
 
@@ -248,7 +248,7 @@ endif;
 
     <?php
     $materials = LearnDashHelper::getCourseMaterials($course_id);
-    if (!empty($materials)) :
+if (!empty($materials)) :
     ?>
         <div class="card-bordered p-5 mt-6">
             <h3 class="font-semibold text-text mb-3 flex items-center gap-2">

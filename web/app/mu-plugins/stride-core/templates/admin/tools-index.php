@@ -15,9 +15,9 @@ $items = $items ?? [];
     <?php
     stride_tool_header(
         'Stride Tools',
-        'Beheer cross-cutting tools: mail, audit, autorisatie, LTI en meer.'
+        'Beheer cross-cutting tools: mail, audit, autorisatie, LTI en meer.',
     );
-    ?>
+?>
 
     <?php if (empty($items)): ?>
         <p class="stride-tools-empty">

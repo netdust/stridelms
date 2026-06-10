@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 /**
@@ -391,7 +392,7 @@ final class NTDST_SectorRegistry
     {
         return array_filter(
             array_keys($this->sectors),
-            fn($key) => $this->isEnabled($key)
+            fn($key) => $this->isEnabled($key),
         );
     }
 

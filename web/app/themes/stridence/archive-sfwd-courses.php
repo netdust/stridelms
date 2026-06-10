@@ -191,7 +191,7 @@ if ($remaining > 0 && !empty($online_course_ids)) {
          WHERE pm.meta_key = '_ntdst_course_id'
            AND p.post_type = 'vad_edition'
            AND pm.meta_value IN ($in_placeholders)",
-        ...$online_course_ids
+        ...$online_course_ids,
     ));
     $any_edition_course_ids = array_map('intval', $any_edition_course_ids);
     $pure_ld_ids = array_diff($online_course_ids, $any_edition_course_ids);

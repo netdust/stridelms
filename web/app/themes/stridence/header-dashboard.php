@@ -19,7 +19,7 @@ defined('ABSPATH') || exit;
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <?php
     $stridence_font_url = apply_filters('stridence_font_url', 'https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..800;1,6..72,300..800&family=Plus+Jakarta+Sans:wght@300..800&family=Manrope:wght@400;500;600;700&display=swap');
-    if ($stridence_font_url) :
+if ($stridence_font_url) :
     ?>
     <link href="<?php echo esc_url($stridence_font_url); ?>" rel="stylesheet">
     <?php endif; ?>

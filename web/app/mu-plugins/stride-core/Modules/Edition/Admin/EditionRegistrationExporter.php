@@ -227,7 +227,7 @@ final class EditionRegistrationExporter
         // Batch-fetch quote data for registrations that have a quote_id
         $quotes = [];
         $quoteIds = array_unique(array_filter(
-            array_map(fn($r) => (int) ($r['quote_id'] ?? 0), $registrations)
+            array_map(fn($r) => (int) ($r['quote_id'] ?? 0), $registrations),
         ));
         if (!empty($quoteIds)) {
             $quoteModel = ntdst_data()->get('vad_quote');
@@ -290,7 +290,7 @@ final class EditionRegistrationExporter
             $titleText .= ' — ' . $data['courseTitle'];
         }
         $writer->addRow(new Row([Cell::fromValue($titleText)], $this->titleStyle));
-        $writer->addRow(new Row([Cell::fromValue('Geëxporteerd ' . date_i18n('j F Y H:i'))],$this->subtitleStyle));
+        $writer->addRow(new Row([Cell::fromValue('Geëxporteerd ' . date_i18n('j F Y H:i'))], $this->subtitleStyle));
         $writer->addRow(new Row([Cell::fromValue('')]));
 
         // Edition details section
@@ -377,7 +377,7 @@ final class EditionRegistrationExporter
 
         $writer->addRow(new Row(
             array_map(fn($h) => Cell::fromValue($h), $headers),
-            $this->headerStyle
+            $this->headerStyle,
         ));
 
         // Build session lookup for selections display
@@ -484,7 +484,7 @@ final class EditionRegistrationExporter
 
         $writer->addRow(new Row(
             array_map(fn($h) => Cell::fromValue($h), $headers),
-            $this->headerStyle
+            $this->headerStyle,
         ));
 
         foreach ($data['registrations'] as $index => $registration) {
@@ -685,7 +685,7 @@ final class EditionRegistrationExporter
         $headers = ['Naam', 'Taak', 'Status', 'Voltooid op', 'Details'];
         $writer->addRow(new Row(
             array_map(fn($h) => Cell::fromValue($h), $headers),
-            $this->headerStyle
+            $this->headerStyle,
         ));
 
         $rowIndex = 0;
@@ -863,9 +863,9 @@ final class EditionRegistrationExporter
         $stagesToShow = ['enrollment_personal', 'enrollment_billing', 'intake', 'evaluation'];
         // Fields already present in their own columns — don't repeat them.
         $skipKeys = ['name', 'email', 'phone', 'first_name', 'last_name',
-                     'company', 'billing_company', 'billing_vat', 'billing_address_1',
-                     'billing_postcode', 'billing_city', 'invoice_email', 'gln_number',
-                     'organisation', 'department'];
+            'company', 'billing_company', 'billing_vat', 'billing_address_1',
+            'billing_postcode', 'billing_city', 'invoice_email', 'gln_number',
+            'organisation', 'department'];
         $lines = [];
         foreach ($stagesToShow as $stage) {
             $stageEnvelope = $enrollmentData[$stage] ?? null;
@@ -885,8 +885,8 @@ final class EditionRegistrationExporter
     }
 
     // =========================================================================
-     // Sheets 6/7: Interesse / Wachtlijst (shared layout)
-     // =========================================================================
+    // Sheets 6/7: Interesse / Wachtlijst (shared layout)
+    // =========================================================================
 
     /**
      * Write a stage-specific sheet (interest or waitlist).
@@ -908,7 +908,7 @@ final class EditionRegistrationExporter
 
         $writer->addRow(new Row(
             array_map(fn($h) => Cell::fromValue($h), $headers),
-            $this->headerStyle
+            $this->headerStyle,
         ));
 
         foreach ($rows as $index => $registration) {
@@ -949,7 +949,7 @@ final class EditionRegistrationExporter
 
         return $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$table} WHERE edition_id = %d ORDER BY registered_at DESC",
-            $editionId
+            $editionId,
         ), ARRAY_A) ?: [];
     }
 
@@ -973,7 +973,7 @@ final class EditionRegistrationExporter
         $results = $wpdb->get_results($wpdb->prepare(
             "SELECT user_id, meta_key, meta_value FROM {$wpdb->usermeta}
              WHERE user_id IN ({$userPlaceholders}) AND meta_key IN ({$keyPlaceholders})",
-            ...array_merge($userIds, $metaKeys)
+            ...array_merge($userIds, $metaKeys),
         ));
 
         $meta = [];

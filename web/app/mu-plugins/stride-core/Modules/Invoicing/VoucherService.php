@@ -26,8 +26,7 @@ final class VoucherService
         private readonly VoucherScopeValidator $scopeValidator,
         private readonly VoucherProrater $prorater,
         private readonly SessionService $sessionService,
-    ) {
-    }
+    ) {}
 
     /**
      * Create a voucher.
@@ -165,7 +164,7 @@ final class VoucherService
             DiscountType::Full => $effectiveSubtotal,
             DiscountType::Fixed => Money::cents(min($voucher['discount_value'], $effectiveSubtotal->inCents())),
             DiscountType::Percentage => Money::cents(
-                (int) round($effectiveSubtotal->inCents() * ($voucher['discount_value'] / 100))
+                (int) round($effectiveSubtotal->inCents() * ($voucher['discount_value'] / 100)),
             ),
         };
     }
@@ -207,7 +206,7 @@ final class VoucherService
             // Lock the voucher row
             $wpdb->get_row($wpdb->prepare(
                 "SELECT ID FROM {$wpdb->posts} WHERE ID = %d FOR UPDATE",
-                $voucherId
+                $voucherId,
             ));
 
             // Re-fetch after lock to get current state
@@ -245,7 +244,7 @@ final class VoucherService
                 $voucherId,
                 $redemption,
                 $newUsedCount,
-                $newStatus
+                $newStatus,
             );
 
             if (!$success) {
@@ -297,7 +296,7 @@ final class VoucherService
 
             $wpdb->get_row($wpdb->prepare(
                 "SELECT ID FROM {$wpdb->posts} WHERE ID = %d FOR UPDATE",
-                $voucherId
+                $voucherId,
             ));
 
             $voucher = $this->getVoucher($voucherId);

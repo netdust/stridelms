@@ -8,7 +8,6 @@ use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\SimpleType\Jc;
 use PhpOffice\PhpWord\SimpleType\TblWidth;
-use PhpOffice\PhpWord\Style\Cell as CellStyle;
 use PhpOffice\PhpWord\Writer\WriterInterface;
 use Stride\Infrastructure\BatchQueryHelper;
 use Stride\Modules\Edition\EditionRepository;
@@ -70,7 +69,7 @@ final class EditionAttendanceExporter
         $registrations = $this->getConfirmedRegistrations($editionId);
 
         $userIds = array_unique(array_filter(
-            array_map(fn($r) => (int) $r['user_id'], $registrations)
+            array_map(fn($r) => (int) $r['user_id'], $registrations),
         ));
         $users = BatchQueryHelper::batchGetUsers($userIds);
         $userMeta = $this->batchGetOrgMeta($userIds);
@@ -126,7 +125,7 @@ final class EditionAttendanceExporter
             $section->addText(
                 htmlspecialchars($editionTitle),
                 ['size' => 14, 'bold' => true, 'color' => '2271B1'],
-                ['spaceAfter' => 40]
+                ['spaceAfter' => 40],
             );
 
             // Session info line
@@ -153,14 +152,14 @@ final class EditionAttendanceExporter
                 $section->addText(
                     htmlspecialchars(implode('  ·  ', $sessionInfo)),
                     ['size' => 10, 'color' => '646970'],
-                    ['spaceAfter' => 200]
+                    ['spaceAfter' => 200],
                 );
             }
 
             $section->addText(
                 'PRESENTIELIJST',
                 ['size' => 11, 'bold' => true, 'color' => $headerColor, 'allCaps' => true],
-                ['spaceAfter' => 120]
+                ['spaceAfter' => 120],
             );
 
             // Attendance table
@@ -223,7 +222,7 @@ final class EditionAttendanceExporter
             $section->addText(
                 sprintf('Totaal deelnemers: %d  ·  Geëxporteerd %s', count($attendees), date_i18n('j M Y H:i')),
                 ['size' => 8, 'color' => 'A0A5AA', 'italic' => true],
-                ['alignment' => Jc::END]
+                ['alignment' => Jc::END],
             );
         }
 
@@ -239,7 +238,7 @@ final class EditionAttendanceExporter
             "SELECT user_id, status FROM {$table}
              WHERE edition_id = %d AND status IN ('confirmed', 'completed')
              ORDER BY registered_at ASC",
-            $editionId
+            $editionId,
         ), ARRAY_A) ?: [];
     }
 
@@ -259,7 +258,7 @@ final class EditionAttendanceExporter
         $results = $wpdb->get_results($wpdb->prepare(
             "SELECT user_id, meta_key, meta_value FROM {$wpdb->usermeta}
              WHERE user_id IN ({$userPlaceholders}) AND meta_key IN ({$keyPlaceholders})",
-            ...array_merge($userIds, $metaKeys)
+            ...array_merge($userIds, $metaKeys),
         ));
 
         $meta = [];

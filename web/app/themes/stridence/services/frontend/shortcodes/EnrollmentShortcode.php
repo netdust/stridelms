@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace stridence\services\frontend\shortcodes;
@@ -38,7 +39,7 @@ final class EnrollmentShortcode
         $atts = shortcode_atts(
             ['edition' => '', 'trajectory' => ''],
             is_array($atts) ? $atts : [],
-            'stride_enrollment'
+            'stride_enrollment',
         );
 
         [$item, $type] = $this->resolveTarget($atts);
@@ -48,7 +49,7 @@ final class EnrollmentShortcode
                 __('Geen aanbod geselecteerd', 'stridence'),
                 __('Selecteer eerst een editie of traject via de cursuspagina.', 'stridence'),
                 __('Naar aanbod', 'stridence'),
-                get_post_type_archive_link('sfwd-courses')
+                get_post_type_archive_link('sfwd-courses'),
             );
         }
 
@@ -58,7 +59,7 @@ final class EnrollmentShortcode
                 __('Log in om je inschrijving te starten.', 'stridence'),
                 __('Inloggen', 'stridence'),
                 wp_login_url(get_permalink()),
-                'lock'
+                'lock',
             );
         }
 
@@ -71,7 +72,7 @@ final class EnrollmentShortcode
                 __('Je hebt al een actieve inschrijving voor dit aanbod.', 'stridence'),
                 __('Naar mijn opleidingen', 'stridence'),
                 home_url('/dashboard/opleidingen/'),
-                'check-circle'
+                'check-circle',
             );
         }
 
@@ -80,7 +81,7 @@ final class EnrollmentShortcode
                 __('Inschrijving niet mogelijk', 'stridence'),
                 __('Inschrijvingen voor dit aanbod zijn momenteel gesloten.', 'stridence'),
                 __('Terug', 'stridence'),
-                get_permalink($item->ID)
+                get_permalink($item->ID),
             );
         }
 
@@ -94,7 +95,7 @@ final class EnrollmentShortcode
                 __('Niet beschikbaar via shortcode', 'stridence'),
                 __('Dit aanbod gebruikt directe inschrijving. Gebruik de standaard inschrijflink.', 'stridence'),
                 __('Naar aanbod', 'stridence'),
-                get_permalink($item->ID)
+                get_permalink($item->ID),
             );
         }
 
@@ -172,7 +173,7 @@ final class EnrollmentShortcode
         string $message,
         string $action,
         string $url,
-        string $icon = 'alert-circle'
+        string $icon = 'alert-circle',
     ): string {
         return stridence_render_error_state($icon, $title, $message, $action, $url);
     }

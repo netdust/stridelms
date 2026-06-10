@@ -9,7 +9,6 @@ use Stride\Contracts\LMSAdapterInterface;
 use Stride\Domain\RegistrationStatus;
 use Stride\Infrastructure\AbstractService;
 use Stride\Modules\Edition\SessionSelection;
-use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\User\CompanyAffiliation;
 use WP_Error;
 
@@ -256,7 +255,7 @@ final class EnrollmentService extends AbstractService
                         $userId,
                         $initialStatus->value,
                         $options['enrollment_path'] ?? RegistrationRepository::PATH_INDIVIDUAL,
-                        $mergedData
+                        $mergedData,
                     );
 
                     $upgradedRegistrationId = (int) $existingInterest->id;
@@ -736,7 +735,7 @@ final class EnrollmentService extends AbstractService
             $participantId = $this->resolveParticipant(
                 $data['email'],
                 $data['first_name'],
-                $data['last_name']
+                $data['last_name'],
             );
 
             if (is_wp_error($participantId)) {
@@ -848,13 +847,13 @@ final class EnrollmentService extends AbstractService
                     'phase'       => 'enrollment',
                     'session_ids' => array_map('intval', $selectedSessions),
                 ],
-                'edition'
+                'edition',
             );
         } else {
             $this->registrations->appendInitialSelectionPhase(
                 $registrationId,
                 ['phase' => 'enrollment'],
-                'none'
+                'none',
             );
         }
 

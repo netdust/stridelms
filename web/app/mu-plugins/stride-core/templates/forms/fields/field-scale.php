@@ -5,7 +5,9 @@
  * @var array $field Field definition with keys: label, name, min, max, required
  */
 $field = $args['field'] ?? $field ?? null;
-if (empty($field) || empty($field['name'])) return;
+if (empty($field) || empty($field['name'])) {
+    return;
+}
 
 $label = $field['label'] ?? '';
 $name = $field['name'] ?? '';

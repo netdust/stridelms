@@ -169,7 +169,7 @@ get_header();
             stridence_template_part('partials/breadcrumb', null, [
                 'items' => $breadcrumbs,
             ]);
-            ?>
+?>
 
             <!-- Format badge -->
             <div class="flex items-center gap-2 mb-4">
@@ -189,10 +189,10 @@ get_header();
                     </span>
                 <?php else : ?>
                     <?php
-                    stridence_template_part('partials/badge-status', null, [
-                        'status' => $status->value,
-                        'spots'  => $spots,
-                    ]);
+        stridence_template_part('partials/badge-status', null, [
+            'status' => $status->value,
+            'spots'  => $spots,
+        ]);
                     ?>
                 <?php endif; ?>
             </div>
@@ -227,7 +227,7 @@ get_header();
     stridence_template_part('templates/edition/tabs', null, [
         'has_sessions' => $has_sessions,
     ]);
-    ?>
+?>
 
     <!-- Two Column Layout -->
     <div class="container py-8 lg:py-12">
@@ -272,13 +272,13 @@ get_header();
                                     <div class="card divide-y divide-border">
                                         <?php foreach ($mandatory as $session) :
                                             $isSelected = in_array((int) $session['id'], $selected_session_ids, true);
-                                        ?>
+                                            ?>
                                             <?php stridence_template_part('partials/session-row', null, [
-                                                'session'    => (object) $session,
-                                                'attendance' => null,
-                                                'selected'   => $isSelected,
-                                                'not_chosen' => false,
-                                            ]); ?>
+                                                    'session'    => (object) $session,
+                                                    'attendance' => null,
+                                                    'selected'   => $isSelected,
+                                                    'not_chosen' => false,
+                                                ]); ?>
                                         <?php endforeach; ?>
                                     </div>
                                 </div>
@@ -310,23 +310,23 @@ get_header();
                                                 /* translators: 1: how many to pick, 2: total alternatives */
                                                 printf(esc_html__('Kies %1$d uit %2$d', 'stridence'), $maxSelections, $available);
                                             }
-                                            if (!$required) {
-                                                echo ' <span class="text-text-muted font-normal">' . esc_html__('(optioneel)', 'stridence') . '</span>';
-                                            }
-                                            ?>
+                                if (!$required) {
+                                    echo ' <span class="text-text-muted font-normal">' . esc_html__('(optioneel)', 'stridence') . '</span>';
+                                }
+                                ?>
                                         </span>
                                     </div>
                                     <div class="card divide-y divide-border">
                                         <?php foreach ($slotSessions as $session) :
                                             $isSelected = in_array((int) $session['id'], $selected_session_ids, true);
                                             $notChosen = $hasSelections && !$isSelected;
-                                        ?>
+                                            ?>
                                             <?php stridence_template_part('partials/session-row', null, [
-                                                'session'    => (object) $session,
-                                                'attendance' => null,
-                                                'selected'   => $isSelected,
-                                                'not_chosen' => $notChosen,
-                                            ]); ?>
+                                                    'session'    => (object) $session,
+                                                    'attendance' => null,
+                                                    'selected'   => $isSelected,
+                                                    'not_chosen' => $notChosen,
+                                                ]); ?>
                                         <?php endforeach; ?>
                                     </div>
                                 </div>
@@ -337,13 +337,13 @@ get_header();
                             <div class="card divide-y divide-border">
                                 <?php foreach ($scheduled_sessions as $session) :
                                     $isSelected = in_array((int) $session['id'], $selected_session_ids, true);
-                                ?>
+                                    ?>
                                     <?php stridence_template_part('partials/session-row', null, [
-                                        'session'    => (object) $session,
-                                        'attendance' => null,
-                                        'selected'   => $isSelected,
-                                        'not_chosen' => false,
-                                    ]); ?>
+                                            'session'    => (object) $session,
+                                            'attendance' => null,
+                                            'selected'   => $isSelected,
+                                            'not_chosen' => false,
+                                        ]); ?>
                                 <?php endforeach; ?>
                             </div>
                         <?php endif; ?>
@@ -367,14 +367,14 @@ get_header();
                             <?php foreach ($online_sessions as $session) :
                                 $isSelected = in_array((int) $session['id'], $selected_session_ids, true);
                                 $notChosen = $hasSelections && !$isSelected && !empty($session['slot']);
-                            ?>
+                                ?>
                                 <?php
-                                stridence_template_part('partials/session-row', null, [
-                                    'session'    => (object) $session,
-                                    'attendance' => null,
-                                    'selected'   => $isSelected,
-                                    'not_chosen' => $notChosen,
-                                ]);
+                                    stridence_template_part('partials/session-row', null, [
+                                        'session'    => (object) $session,
+                                        'attendance' => null,
+                                        'selected'   => $isSelected,
+                                        'not_chosen' => $notChosen,
+                                    ]);
                                 ?>
                             <?php endforeach; ?>
                         </div>
@@ -459,7 +459,7 @@ get_header();
                             };
                             echo esc_html($sidebar_header);
                         }
-                        ?>
+?>
                     </h3>
 
                     <div class="space-y-3 mb-6">
@@ -467,12 +467,12 @@ get_header();
                             <span class="text-text-muted"><?php esc_html_e('Prijs', 'stridence'); ?></span>
                             <span class="font-semibold">
                                 <?php
-                                if (!$price->isZero()) {
-                                    echo esc_html($price->format());
-                                } else {
-                                    esc_html_e('Op aanvraag', 'stridence');
-                                }
-                                ?>
+        if (!$price->isZero()) {
+            echo esc_html($price->format());
+        } else {
+            esc_html_e('Op aanvraag', 'stridence');
+        }
+?>
                             </span>
                         </div>
                         <div class="flex justify-between">
@@ -488,11 +488,11 @@ get_header();
                                 <span class="text-text-muted"><?php esc_html_e('Beschikbaar', 'stridence'); ?></span>
                                 <span>
                                     <?php
-                                    printf(
-                                        esc_html(_n('%d plaats', '%d plaatsen', (int) $spots, 'stridence')),
-                                        (int) $spots
-                                    );
-                                    ?>
+    printf(
+        esc_html(_n('%d plaats', '%d plaatsen', (int) $spots, 'stridence')),
+        (int) $spots,
+    );
+                            ?>
                                 </span>
                             </div>
                         <?php endif; ?>

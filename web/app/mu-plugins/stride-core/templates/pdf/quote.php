@@ -408,7 +408,9 @@ $companyEmail = $company['email'] ?? '';
                     </tr>
                     <?php else: ?>
                     <?php foreach ($items as $item): ?>
-                    <?php if (!is_array($item)) continue; ?>
+                    <?php if (!is_array($item)) {
+                        continue;
+                    } ?>
                     <tr>
                         <td class="item-description"><?php echo esc_html($item['title'] ?? ''); ?></td>
                         <td class="amount"><?php echo esc_html($item['quantity'] ?? 1); ?></td>
@@ -480,12 +482,12 @@ $companyEmail = $company['email'] ?? '';
                 <?php echo esc_html(sprintf(
                     __('Deze offerte is geldig tot %s. Bij vragen kunt u contact met ons opnemen via %s.', 'stride'),
                     $validUntilDate,
-                    $companyEmail
+                    $companyEmail,
                 )); ?>
                 <?php elseif (!empty($validUntilDate)): ?>
                 <?php echo esc_html(sprintf(
                     __('Deze offerte is geldig tot %s.', 'stride'),
-                    $validUntilDate
+                    $validUntilDate,
                 )); ?>
                 <?php endif; ?>
             </p>

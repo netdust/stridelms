@@ -120,7 +120,7 @@ final class QuoteRepository extends AbstractRepository
                  AND p.post_type = %s",
                 strlen($prefix) + 1,
                 $prefix . '%',
-                QuoteCPT::POST_TYPE
+                QuoteCPT::POST_TYPE,
             ));
 
             $lastNumber = (int) $lastNumber;

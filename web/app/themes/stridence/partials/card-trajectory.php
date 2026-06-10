@@ -90,9 +90,9 @@ $badge_status = $badge_status_map[$status] ?? 'open';
                         echo esc_html(sprintf(
                             /* translators: %d: number of courses */
                             _n('%d cursus', '%d cursussen', $course_count, 'stridence'),
-                            $course_count
+                            $course_count,
                         ));
-                        ?>
+                ?>
                     </span>
                 </div>
             <?php endif; ?>

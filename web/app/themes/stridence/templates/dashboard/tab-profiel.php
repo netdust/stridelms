@@ -170,8 +170,8 @@ $notifications = [
                  profileTypes: <?php echo esc_attr(json_encode(
                      array_combine(
                          array_column($profileTypes, 'slug'),
-                         array_map(fn($t) => ['label' => $t['label'], 'color' => $t['color']], $profileTypes)
-                     )
+                         array_map(fn($t) => ['label' => $t['label'], 'color' => $t['color']], $profileTypes),
+                     ),
                  )); ?>,
                  get currentType() { return this.profileTypes[this.fields.profile_type] ?? null; },
              }">

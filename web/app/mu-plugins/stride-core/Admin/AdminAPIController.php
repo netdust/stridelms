@@ -432,14 +432,14 @@ final class AdminAPIController
              AND pm.meta_value >= %s",
             '_ntdst_start_date',
             EditionCPT::POST_TYPE,
-            $today
+            $today,
         ));
 
         // Total active registrations
         $totalRegistrations = 0;
         if ($registrationTableExists) {
             $totalRegistrations = (int) $wpdb->get_var(
-                "SELECT COUNT(*) FROM {$registrationTable} WHERE status = 'confirmed'"
+                "SELECT COUNT(*) FROM {$registrationTable} WHERE status = 'confirmed'",
             );
         }
 
@@ -451,14 +451,14 @@ final class AdminAPIController
              AND pm.meta_value = %s",
             'status',
             QuoteCPT::POST_TYPE,
-            QuoteStatus::Draft->value
+            QuoteStatus::Draft->value,
         ));
 
         // Pending registrations (for actionCount)
         $pendingRegistrations = 0;
         if ($registrationTableExists) {
             $pendingRegistrations = (int) $wpdb->get_var(
-                "SELECT COUNT(*) FROM {$registrationTable} WHERE status = 'pending'"
+                "SELECT COUNT(*) FROM {$registrationTable} WHERE status = 'pending'",
             );
         }
 
@@ -470,7 +470,7 @@ final class AdminAPIController
              AND pm.meta_value = %s",
             '_ntdst_date',
             SessionCPT::POST_TYPE,
-            $today
+            $today,
         ));
 
         // Open trajectories (status = 'open')
@@ -481,7 +481,7 @@ final class AdminAPIController
              AND pm.meta_value = %s",
             '_ntdst_status',
             TrajectoryCPT::POST_TYPE,
-            'open'
+            'open',
         ));
 
         // === TODAY'S SESSIONS WITH DETAILS (batch fetch) ===
@@ -499,7 +499,7 @@ final class AdminAPIController
              AND pm_date.meta_value = %s
              ORDER BY pm_time.meta_value ASC",
             SessionCPT::POST_TYPE,
-            $today
+            $today,
         ));
 
         if (!empty($sessions)) {
@@ -549,7 +549,7 @@ final class AdminAPIController
              ORDER BY pm_date.meta_value ASC
              LIMIT 5",
             EditionCPT::POST_TYPE,
-            $today
+            $today,
         ));
 
         if (!empty($upcomingList)) {
@@ -589,7 +589,7 @@ final class AdminAPIController
                  WHERE r.registered_at >= %s
                  ORDER BY r.registered_at DESC
                  LIMIT 10",
-                $weekAgo
+                $weekAgo,
             ));
 
             if (!empty($recentRegs)) {
@@ -633,12 +633,12 @@ final class AdminAPIController
         if ($registrationTableExists) {
             $registrationsThisWeek = (int) $wpdb->get_var($wpdb->prepare(
                 "SELECT COUNT(*) FROM {$registrationTable} WHERE registered_at >= %s",
-                $thisWeekStart
+                $thisWeekStart,
             ));
             $registrationsLastWeek = (int) $wpdb->get_var($wpdb->prepare(
                 "SELECT COUNT(*) FROM {$registrationTable} WHERE registered_at >= %s AND registered_at < %s",
                 $lastWeekStart,
-                $thisWeekStart
+                $thisWeekStart,
             ));
         }
 
@@ -657,7 +657,7 @@ final class AdminAPIController
              ORDER BY pm_date.meta_value ASC",
             EditionCPT::POST_TYPE,
             $today,
-            $twoWeeksFromNow
+            $twoWeeksFromNow,
         ));
 
         if (!empty($alertEditions)) {
@@ -788,7 +788,7 @@ final class AdminAPIController
         $tagJoin = $this->buildCourseTaxonomyJoin(
             ['theme' => $themeId, 'format' => $formatId, 'tag' => $tagId],
             $where,
-            $params
+            $params,
         );
 
         $whereClause = implode(' AND ', $where);
@@ -800,7 +800,7 @@ final class AdminAPIController
              INNER JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
              {$tagJoin}
              WHERE {$whereClause}",
-            ...$countParams
+            ...$countParams,
         ));
 
         // Get editions - ordered by start date ASC (nearest first)
@@ -815,7 +815,7 @@ final class AdminAPIController
              WHERE {$whereClause}
              ORDER BY pm_start.meta_value ASC
              LIMIT %d OFFSET %d",
-            ...$params
+            ...$params,
         ));
 
         // Format editions with meta
@@ -959,7 +959,7 @@ final class AdminAPIController
             ['theme' => $themeId, 'format' => $formatId, 'tag' => $tagId],
             $where,
             $params,
-            'e.ID'
+            'e.ID',
         );
 
         $whereClause = implode(' AND ', $where);
@@ -974,7 +974,7 @@ final class AdminAPIController
              INNER JOIN {$wpdb->postmeta} pm_date ON s.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_date'
              {$tagJoin}
              WHERE {$whereClause}",
-            ...$countParams
+            ...$countParams,
         ));
 
         // Get sessions ordered by date
@@ -993,7 +993,7 @@ final class AdminAPIController
              WHERE {$whereClause}
              ORDER BY pm_date.meta_value ASC, pm_edition.meta_value ASC
              LIMIT %d OFFSET %d",
-            ...$params
+            ...$params,
         ));
 
         // Format items
@@ -1224,7 +1224,7 @@ final class AdminAPIController
         if (RegistrationTable::exists()) {
             $registeredCount = (int) $wpdb->get_var($wpdb->prepare(
                 "SELECT COUNT(*) FROM {$registrationTable} WHERE edition_id = %d AND status = 'confirmed'",
-                $editionId
+                $editionId,
             ));
         }
 
@@ -1296,7 +1296,7 @@ final class AdminAPIController
              WHERE p.post_type = %s AND p.post_status = 'publish' AND pm.meta_value = %d
              ORDER BY p.ID ASC",
             SessionCPT::POST_TYPE,
-            $editionId
+            $editionId,
         ));
 
         $sessionIds = array_map(fn($s) => (int) $s->ID, $sessions);
@@ -1318,7 +1318,7 @@ final class AdminAPIController
         $registrationTable = RegistrationTable::getTableName();
         $registrations = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$registrationTable} WHERE edition_id = %d ORDER BY registered_at ASC",
-            $editionId
+            $editionId,
         ));
 
         // Collect user IDs for batch fetch
@@ -1488,7 +1488,7 @@ final class AdminAPIController
                  WHERE display_name LIKE %s OR user_email LIKE %s
                  LIMIT 500",
                 $searchPattern,
-                $searchPattern
+                $searchPattern,
             ));
 
             if (empty($matchedUserIds)) {
@@ -1531,7 +1531,7 @@ final class AdminAPIController
         // Get total count
         $total = (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM {$wpdb->posts} p WHERE {$whereClause}",
-            ...$params
+            ...$params,
         ));
 
         // Get quotes
@@ -1543,7 +1543,7 @@ final class AdminAPIController
              WHERE {$whereClause}
              ORDER BY p.post_date DESC
              LIMIT %d OFFSET %d",
-            ...$params
+            ...$params,
         ));
 
         // Collect quote IDs for batch queries
@@ -1634,7 +1634,7 @@ final class AdminAPIController
                     'title' => $editionTitle,
                 ],
                 'lineItems' => $this->lineItemsToEuros(
-                    is_array($quoteItems) ? $quoteItems : (json_decode($quoteItems, true) ?: [])
+                    is_array($quoteItems) ? $quoteItems : (json_decode($quoteItems, true) ?: []),
                 ),
                 'billing' => is_array($billing) ? $billing : (json_decode($billing, true) ?: []),
                 'editUrl' => admin_url("post.php?post={$quoteId}&action=edit"),
@@ -1685,7 +1685,7 @@ final class AdminAPIController
         // Get total count
         $total = (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM {$wpdb->posts} p WHERE {$whereClause}",
-            ...$params
+            ...$params,
         ));
 
         // Get trajectories
@@ -1697,7 +1697,7 @@ final class AdminAPIController
              WHERE {$whereClause}
              ORDER BY p.post_date DESC
              LIMIT %d OFFSET %d",
-            ...$params
+            ...$params,
         ));
 
         if (empty($trajectories)) {
@@ -1971,7 +1971,7 @@ final class AdminAPIController
             "SELECT * FROM {$table}
              WHERE status = 'pending'
                AND completion_tasks IS NOT NULL
-             ORDER BY registered_at ASC"
+             ORDER BY registered_at ASC",
         );
 
         // Post-course phase: confirmed registrations with post_approval task
@@ -1980,7 +1980,7 @@ final class AdminAPIController
              WHERE status = 'confirmed'
                AND completion_tasks IS NOT NULL
                AND completion_tasks LIKE '%post_approval%'
-             ORDER BY registered_at ASC"
+             ORDER BY registered_at ASC",
         );
 
         $completionService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
@@ -2152,7 +2152,7 @@ final class AdminAPIController
                      AND pm_date.meta_value >= %s
                      AND pm_cap.meta_value > 0",
                     EditionCPT::POST_TYPE,
-                    $today
+                    $today,
                 ), ARRAY_A);
                 $data['editions'] = $editions ?: [];
             }
@@ -2161,7 +2161,7 @@ final class AdminAPIController
             if (!empty($rules['pending_approval']['enabled']) && $registrationTableExists) {
                 $pending = $wpdb->get_results(
                     "SELECT id FROM {$registrationTable} WHERE status = 'pending'",
-                    ARRAY_A
+                    ARRAY_A,
                 );
                 $data['pending_approvals'] = $pending ?: [];
             }
@@ -2180,7 +2180,7 @@ final class AdminAPIController
                      AND p.post_date < %s",
                     QuoteCPT::POST_TYPE,
                     QuoteStatus::Draft->value,
-                    $cutoff
+                    $cutoff,
                 ), ARRAY_A);
                 $data['stale_quotes'] = $staleQuotes ?: [];
             }
@@ -2202,7 +2202,7 @@ final class AdminAPIController
                      AND pm_date.meta_value >= %s AND pm_date.meta_value <= %s",
                     SessionCPT::POST_TYPE,
                     $today,
-                    $approachDate
+                    $approachDate,
                 ), ARRAY_A);
                 $data['approaching_sessions'] = $approachingSessions ?: [];
             }
@@ -2220,7 +2220,7 @@ final class AdminAPIController
                      AND pm_date.meta_value >= %s AND pm_date.meta_value <= %s",
                     EditionCPT::POST_TYPE,
                     $today,
-                    $startDate
+                    $startDate,
                 ), ARRAY_A);
                 $data['starting_soon'] = $startingSoon ?: [];
             }
@@ -2237,7 +2237,7 @@ final class AdminAPIController
                      AND r.tasks LIKE %s
                      AND r.registered_at < %s",
                     '%"completed":false%',
-                    $taskCutoff
+                    $taskCutoff,
                 ), ARRAY_A);
                 $data['incomplete_tasks'] = $incompleteTasks ?: [];
             }
@@ -2316,7 +2316,7 @@ final class AdminAPIController
         $lastRegistration = 0;
         if ($registrationTableExists) {
             $lastRegDate = $wpdb->get_var(
-                "SELECT MAX(registered_at) FROM {$registrationTable}"
+                "SELECT MAX(registered_at) FROM {$registrationTable}",
             );
             if ($lastRegDate) {
                 $lastRegistration = (int) strtotime($lastRegDate);
@@ -2329,7 +2329,7 @@ final class AdminAPIController
             $auditTable = AuditTable::getTableName();
             $lastMailDate = $wpdb->get_var($wpdb->prepare(
                 "SELECT MAX(created_at) FROM {$auditTable} WHERE action = %s",
-                'quote.sent'
+                'quote.sent',
             ));
             if ($lastMailDate) {
                 $lastMailSend = (int) strtotime($lastMailDate);
@@ -2346,7 +2346,7 @@ final class AdminAPIController
              AND pm_date.meta_value >= %s
              LIMIT 1",
             EditionCPT::POST_TYPE,
-            $today
+            $today,
         ));
 
         $service = new HealthCheckService();
@@ -2376,7 +2376,7 @@ final class AdminAPIController
         $auditTable = AuditTable::getTableName();
         $entries = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$auditTable} ORDER BY created_at DESC LIMIT %d",
-            $limit
+            $limit,
         ));
 
         if (empty($entries)) {
@@ -2521,7 +2521,7 @@ final class AdminAPIController
         if (!$isAnonymised && current_user_can('edit_user', $userId) && $userId !== get_current_user_id()) {
             $anonymiseUrl = wp_nonce_url(
                 admin_url('admin-post.php?action=stride_anonymise_user&user=' . $userId),
-                'stride_anonymise_user_' . $userId
+                'stride_anonymise_user_' . $userId,
             );
         }
 
@@ -2575,7 +2575,7 @@ final class AdminAPIController
         if (RegistrationTable::exists()) {
             $registrationsTotal = (int) $wpdb->get_var($wpdb->prepare(
                 "SELECT COUNT(*) FROM {$registrationTable} WHERE user_id = %d",
-                $userId
+                $userId,
             ));
 
             $regOffset = ($regPage - 1) * $regPerPage;
@@ -2589,7 +2589,7 @@ final class AdminAPIController
                  LIMIT %d OFFSET %d",
                 $userId,
                 $regPerPage,
-                $regOffset
+                $regOffset,
             ));
 
             // Pre-fetch attendance stats + total session counts for all loaded editions,
@@ -2655,7 +2655,7 @@ final class AdminAPIController
              LIMIT 20",
             QuoteCPT::POST_TYPE,
             (string) $userId,
-            $userData->user_email
+            $userData->user_email,
         ));
 
         $quoteIds = array_map(static fn($q) => (int) $q->ID, $quotePosts);
@@ -2666,7 +2666,7 @@ final class AdminAPIController
 
         $quoteEditionIds = array_values(array_unique(array_filter(array_map(
             static fn($id) => (int) ($quoteMeta[$id]['edition_id'] ?? 0),
-            $quoteIds
+            $quoteIds,
         ))));
         $quoteEditions = BatchQueryHelper::batchGetPosts($quoteEditionIds, EditionCPT::POST_TYPE);
 
@@ -2707,7 +2707,7 @@ final class AdminAPIController
                  WHERE a.user_id = %d
                  GROUP BY a.edition_id, a.status
                  ORDER BY a.edition_id DESC",
-                $userId
+                $userId,
             ));
 
             // Group by edition
@@ -2755,7 +2755,7 @@ final class AdminAPIController
                 "SELECT COUNT(*) FROM {$auditTable}
                  WHERE actor_id = %d OR (entity_type = 'user' AND entity_id = %d)",
                 $userId,
-                $userId
+                $userId,
             ));
 
             $auditEntries = $wpdb->get_results($wpdb->prepare(
@@ -2764,7 +2764,7 @@ final class AdminAPIController
                  ORDER BY created_at DESC
                  LIMIT 50",
                 $userId,
-                $userId
+                $userId,
             ));
 
             // Collect actor IDs AND target user IDs for batch fetch
@@ -2855,7 +2855,7 @@ final class AdminAPIController
             $coreUpdate['display_name'] = trim(
                 ($coreUpdate['first_name'] ?? $userData->first_name ?? '')
                 . ' '
-                . ($coreUpdate['last_name'] ?? $userData->last_name ?? '')
+                . ($coreUpdate['last_name'] ?? $userData->last_name ?? ''),
             );
         }
 
@@ -2911,7 +2911,7 @@ final class AdminAPIController
                 [
                     'target_user_id' => $userId,
                     'fields' => array_keys($profileData) + ($hasCoreChange ? ['core'] : []),
-                ]
+                ],
             );
         }
 
@@ -3018,7 +3018,7 @@ final class AdminAPIController
         // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT ID, post_title FROM {$wpdb->posts} WHERE ID IN ({$placeholders})",
-            ...$postIds
+            ...$postIds,
         ));
         $titles = [];
         foreach ($rows as $row) {
@@ -3043,7 +3043,7 @@ final class AdminAPIController
         }
         return (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM {$table} WHERE user_id = %d",
-            $userId
+            $userId,
         ));
     }
 
@@ -3068,7 +3068,7 @@ final class AdminAPIController
             "SELECT user_id, COUNT(*) AS cnt FROM {$table}
              WHERE user_id IN ({$placeholders})
              GROUP BY user_id",
-            ...$userIds
+            ...$userIds,
         ));
 
         $counts = [];
@@ -3105,7 +3105,7 @@ final class AdminAPIController
                AND p.post_status = 'publish'
                AND pm.meta_value IN ({$placeholders})
              GROUP BY pm.meta_value",
-            ...$params
+            ...$params,
         ));
 
         $map = [];
@@ -3142,7 +3142,7 @@ final class AdminAPIController
              WHERE user_id = %d
                AND edition_id IN ({$placeholders})
              GROUP BY edition_id, status",
-            ...$params
+            ...$params,
         ));
 
         $map = [];
@@ -3256,7 +3256,7 @@ final class AdminAPIController
                 [
                     'target_name'  => $targetUser->display_name,
                     'target_email' => $targetUser->user_email,
-                ]
+                ],
             );
         }
 
@@ -3324,7 +3324,7 @@ final class AdminAPIController
                 [
                     'target_name'  => $targetUser?->display_name,
                     'target_email' => $targetUser?->user_email,
-                ]
+                ],
             );
         }
 
@@ -3431,7 +3431,7 @@ final class AdminAPIController
              WHERE r.status = 'confirmed'
              AND (pm_date.meta_value >= %s OR pm_date.meta_value IS NULL)
              ORDER BY pm_date.meta_value ASC, r.created_at ASC",
-            $today
+            $today,
         ));
 
         // Set download headers
@@ -3463,7 +3463,7 @@ final class AdminAPIController
                      AND pm.meta_key = 'registration_id' AND pm.meta_value = %s
                      LIMIT 1",
                     QuoteCPT::POST_TYPE,
-                    $reg->id
+                    $reg->id,
                 ));
                 if ($quotePost) {
                     $quoteNumber = get_post_meta((int) $quotePost, 'quote_number', true) ?: 'Q-' . $quotePost;

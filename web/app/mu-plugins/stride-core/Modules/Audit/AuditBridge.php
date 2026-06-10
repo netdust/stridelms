@@ -99,7 +99,7 @@ final class AuditBridge extends AbstractService
                 'user_id' => $data['user_id'] ?? null,
                 'edition_id' => $data['edition_id'] ?? null,
                 'enrollment_path' => $data['enrollment_path'] ?? 'individual',
-            ]
+            ],
         );
     }
 
@@ -113,7 +113,7 @@ final class AuditBridge extends AbstractService
             [
                 'user_id' => $data['user_id'] ?? null,
                 'edition_id' => $data['edition_id'] ?? null,
-            ]
+            ],
         );
     }
 
@@ -136,7 +136,7 @@ final class AuditBridge extends AbstractService
                 'user_id' => $data['user_id'] ?? null,
                 'edition_id' => $data['edition_id'] ?? null,
                 'status' => $data['status'] ?? null,
-            ]
+            ],
         );
     }
 
@@ -150,7 +150,7 @@ final class AuditBridge extends AbstractService
             [
                 'session_id' => $data['session_id'] ?? null,
                 'edition_id' => $data['edition_id'] ?? null,
-            ]
+            ],
         );
     }
 
@@ -166,7 +166,7 @@ final class AuditBridge extends AbstractService
                 'input'    => $input,
                 'readonly' => $meta['readonly'] ?? false,
                 'success'  => !is_wp_error($result),
-            ]
+            ],
         );
     }
 
@@ -185,7 +185,7 @@ final class AuditBridge extends AbstractService
             [
                 'course_id' => $courseId,
                 'course_title' => $courseTitle,
-            ]
+            ],
         );
 
         // Check if course has a certificate
@@ -201,7 +201,7 @@ final class AuditBridge extends AbstractService
                         'course_id' => $courseId,
                         'course_title' => $courseTitle,
                         'certificate_link' => $certificateLink,
-                    ]
+                    ],
                 );
             }
         }
@@ -219,7 +219,7 @@ final class AuditBridge extends AbstractService
             [
                 'user_id' => $data['user_id'] ?? null,
                 'edition_id' => $data['edition_id'] ?? null,
-            ]
+            ],
         );
     }
 
@@ -234,7 +234,7 @@ final class AuditBridge extends AbstractService
                 'user_id' => $data['user_id'] ?? null,
                 'edition_id' => $data['edition_id'] ?? null,
                 'trajectory_id' => $data['trajectory_id'] ?? null,
-            ]
+            ],
         );
     }
 
@@ -249,7 +249,7 @@ final class AuditBridge extends AbstractService
                 'user_id' => $data['user_id'] ?? null,
                 'edition_id' => $data['edition_id'] ?? null,
                 'trajectory_id' => $data['trajectory_id'] ?? null,
-            ]
+            ],
         );
     }
 
@@ -262,7 +262,7 @@ final class AuditBridge extends AbstractService
             isset($data['actor_id']) ? (int) $data['actor_id'] : null,
             [
                 'diff' => $data['diff'] ?? [],
-            ]
+            ],
         );
     }
 
@@ -275,7 +275,7 @@ final class AuditBridge extends AbstractService
             null,
             [
                 'task_type' => $data['task_type'] ?? null,
-            ]
+            ],
         );
     }
 
@@ -290,7 +290,7 @@ final class AuditBridge extends AbstractService
             null,
             [
                 'code' => $data['code'] ?? null,
-            ]
+            ],
         );
     }
 
@@ -304,7 +304,7 @@ final class AuditBridge extends AbstractService
             [
                 'user_id' => $data['user_id'] ?? null,
                 'quote_id' => $data['quote_id'] ?? null,
-            ]
+            ],
         );
     }
 
@@ -318,7 +318,7 @@ final class AuditBridge extends AbstractService
             [
                 'user_id' => $data['user_id'] ?? null,
                 'quote_id' => $data['quote_id'] ?? null,
-            ]
+            ],
         );
     }
 
@@ -331,7 +331,7 @@ final class AuditBridge extends AbstractService
             (int) ($data['quote_id'] ?? 0),
             'quote.cancelled',
             null,
-            []
+            [],
         );
     }
 
@@ -345,7 +345,7 @@ final class AuditBridge extends AbstractService
             [
                 'to' => $sendTo,
                 'cc' => $sendCc ?: null,
-            ]
+            ],
         );
     }
 
@@ -356,7 +356,7 @@ final class AuditBridge extends AbstractService
             $quoteId,
             'quote.pdf_regenerated',
             null,
-            []
+            [],
         );
     }
 
@@ -370,7 +370,7 @@ final class AuditBridge extends AbstractService
             [
                 'registration_id' => $data['registration_id'] ?? null,
                 'user_id' => $data['user_id'] ?? null,
-            ]
+            ],
         );
     }
 
@@ -383,7 +383,7 @@ final class AuditBridge extends AbstractService
             (int) ($data['trajectory_id'] ?? 0),
             'trajectory.created',
             null,
-            []
+            [],
         );
     }
 
@@ -394,7 +394,7 @@ final class AuditBridge extends AbstractService
             (int) ($data['trajectory_id'] ?? 0),
             'trajectory.updated',
             null,
-            []
+            [],
         );
     }
 
@@ -408,7 +408,7 @@ final class AuditBridge extends AbstractService
             [
                 'registration_id' => $data['registration_id'] ?? null,
                 'user_id' => $data['user_id'] ?? null,
-            ]
+            ],
         );
     }
 
@@ -422,7 +422,7 @@ final class AuditBridge extends AbstractService
             [
                 'registration_id' => $data['registration_id'] ?? null,
                 'edition_ids' => $data['edition_ids'] ?? [],
-            ]
+            ],
         );
     }
 
@@ -437,7 +437,7 @@ final class AuditBridge extends AbstractService
             null,
             [
                 'edition_id' => $data['edition_id'] ?? null,
-            ]
+            ],
         );
     }
 
@@ -452,7 +452,7 @@ final class AuditBridge extends AbstractService
                 'registration_id' => $data['registration_id'] ?? null,
                 'edition_id' => $data['edition_id'] ?? null,
                 'session_ids' => $data['session_ids'] ?? [],
-            ]
+            ],
         );
     }
 
@@ -468,7 +468,7 @@ final class AuditBridge extends AbstractService
             [
                 'user_id' => $data['user_id'] ?? null,
                 'edition_id' => $data['edition_id'] ?? null,
-            ]
+            ],
         );
     }
 
@@ -483,7 +483,7 @@ final class AuditBridge extends AbstractService
                 'user_id' => $data['user_id'] ?? null,
                 'edition_id' => $data['edition_id'] ?? null,
                 'course_id' => $data['course_id'] ?? null,
-            ]
+            ],
         );
     }
 
@@ -496,7 +496,7 @@ final class AuditBridge extends AbstractService
             $userId,
             'user.anonymised',
             null,
-            []
+            [],
         );
     }
 
@@ -510,7 +510,7 @@ final class AuditBridge extends AbstractService
             [
                 'email' => $data['email'] ?? null,
                 'reason' => $data['reason'] ?? null,
-            ]
+            ],
         );
     }
 
@@ -537,7 +537,7 @@ final class AuditBridge extends AbstractService
                 'registration_id' => $context['registration_id'] ?? null,
                 'edition_id' => $context['edition_id'] ?? null,
                 'quote_id' => $context['quote_id'] ?? null,
-            ]
+            ],
         );
     }
 }

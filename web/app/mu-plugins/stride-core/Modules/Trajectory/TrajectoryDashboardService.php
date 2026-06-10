@@ -26,8 +26,7 @@ final class TrajectoryDashboardService
         private readonly RegistrationRepository $registrationRepo,
         private readonly EditionService $editionService,
         private readonly LMSAdapterInterface $lmsAdapter,
-    ) {
-    }
+    ) {}
 
     /**
      * Get trajectory by slug.
@@ -97,7 +96,7 @@ final class TrajectoryDashboardService
                 $editionRegs,
                 $editionCourseMap,
                 $completedCourses,
-                $inProgressCourses
+                $inProgressCourses,
             );
         }
 
@@ -109,7 +108,7 @@ final class TrajectoryDashboardService
                     $editionRegs,
                     $editionCourseMap,
                     $completedCourses,
-                    $inProgressCourses
+                    $inProgressCourses,
                 );
             }
         }
@@ -136,7 +135,7 @@ final class TrajectoryDashboardService
         array $editionRegs,
         array $editionCourseMap,
         array &$completedCourses,
-        array &$inProgressCourses
+        array &$inProgressCourses,
     ): void {
         if ($this->lmsAdapter->isComplete($userId, $courseId)) {
             $completedCourses[] = $courseId;

@@ -152,7 +152,7 @@ class StrideSettingsService
             'Instellingen',
             self::CAPABILITY,
             self::SETTINGS_SLUG,
-            [$this, 'renderSettingsPage']
+            [$this, 'renderSettingsPage'],
         );
     }
 
@@ -177,7 +177,7 @@ class StrideSettingsService
             'https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js',
             [],
             '3',
-            ['strategy' => 'defer']
+            ['strategy' => 'defer'],
         );
 
         $basePath = dirname(__DIR__);
@@ -189,7 +189,7 @@ class StrideSettingsService
                 'stride-settings',
                 plugins_url('assets/css/admin/settings.css', $basePath . '/stride-core.php'),
                 [],
-                (string) filemtime($cssFile)
+                (string) filemtime($cssFile),
             );
         }
 
@@ -200,7 +200,7 @@ class StrideSettingsService
                 plugins_url('assets/js/admin/settings.js', $basePath . '/stride-core.php'),
                 ['ntdst-api'],
                 (string) filemtime($jsFile),
-                false // in <head>, not footer
+                false, // in <head>, not footer
             );
         }
 
@@ -450,7 +450,7 @@ class StrideSettingsService
             if ($files) {
                 $availableIcons = array_map(
                     fn(string $file) => basename($file, '.svg'),
-                    $files
+                    $files,
                 );
                 sort($availableIcons);
             }
