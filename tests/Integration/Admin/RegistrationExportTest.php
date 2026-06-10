@@ -248,6 +248,63 @@ final class RegistrationExportTest extends IntegrationTestCase
     }
 
     /**
+     * CR-E3 pin: when TWO published quotes link to one registration —
+     * production CAN produce this (open M2 trajectory quote race) —
+     * findQuoteIdsByRegistrations' MIN(p.ID) must deterministically export
+     * the lower-ID quote's number. Not RED-first: the behavior is already
+     * correct; this characterizes the only case where MIN(p.ID) differs
+     * from an arbitrary LIMIT 1 so the determinism cannot silently regress.
+     */
+    public function testDuplicateQuotesOnOneRegistrationExportLowerIdQuoteNumber(): void
+    {
+        $suffix = wp_generate_password(6, false, false);
+        $startDate = wp_date('Y-m-d', strtotime('+10 days'));
+        $editionId = $this->createTestEdition([
+            'post_title' => 'DupeEdition' . $suffix,
+            'meta' => ['_ntdst_start_date' => $startDate],
+        ]);
+
+        $userId = $this->createExportUser('dupe_' . $suffix, 'DupeOrg ' . $suffix);
+        wp_update_user(['ID' => $userId, 'display_name' => 'Dupe User ' . $suffix]);
+        $regId = $this->createConfirmedRegistration($userId, $editionId);
+
+        // Two published quotes on ONE registration; auto-increment makes the
+        // first the lower post ID.
+        $lowerQuoteId = $this->createTestQuote($userId, $editionId, [
+            'meta' => ['registration_id' => $regId, 'quote_number' => 'OFF-DUPE-LOW-' . $suffix],
+        ]);
+        $higherQuoteId = $this->createTestQuote($userId, $editionId, [
+            'meta' => ['registration_id' => $regId, 'quote_number' => 'OFF-DUPE-HIGH-' . $suffix],
+        ]);
+        $this->assertLessThan($higherQuoteId, $lowerQuoteId, 'Fixture assumption: first quote has the lower post ID');
+
+        $output = $this->runExportInChildProcess();
+
+        $user = get_userdata($userId);
+        $this->assertNotFalse($user);
+        $this->assertStringContainsString(
+            $this->csvLine([
+                'Dupe User ' . $suffix,
+                $user->user_email,
+                'DupeOrg ' . $suffix,
+                'DupeEdition' . $suffix,
+                $startDate,
+                'confirmed',
+                'OFF-DUPE-LOW-' . $suffix,
+            ]),
+            $output,
+            'Two quotes on one registration must deterministically export the lower-ID quote. Output: '
+            . $this->snippet($output)
+        );
+        $this->assertStringNotContainsString(
+            'OFF-DUPE-HIGH-' . $suffix,
+            $output,
+            'The higher-ID duplicate quote leaked into the export — MIN(p.ID) determinism broken. Output: '
+            . $this->snippet($output)
+        );
+    }
+
+    /**
      * AF-5 mid-flow edge: a registration whose user was deleted yields blank
      * user cells ('Onbekend' name, empty email/organisation) and the export
      * stream continues — subsequent rows still render.

@@ -128,7 +128,8 @@ final class QuoteRepository extends AbstractRepository
 
         $registrationIds = array_values(array_unique(array_map('intval', $registrationIds)));
         // String placeholders: registration_id meta is stored as a string,
-        // matching the previous per-row `pm.meta_value = %s` comparison.
+        // matching the previous per-row `pm.meta_value = %s` comparison
+        // (prepare's %s stringifies the int args).
         $placeholders = implode(',', array_fill(0, count($registrationIds), '%s'));
 
         $rows = $wpdb->get_results($wpdb->prepare(
@@ -139,7 +140,7 @@ final class QuoteRepository extends AbstractRepository
              AND pm.meta_key = 'registration_id' AND pm.meta_value IN ({$placeholders})
              GROUP BY pm.meta_value",
             QuoteCPT::POST_TYPE,
-            ...array_map('strval', $registrationIds),
+            ...$registrationIds,
         ));
 
         $map = [];
@@ -232,13 +233,7 @@ final class QuoteRepository extends AbstractRepository
             $data['sent_at'] = current_time('mysql');
         }
 
-        $result = $this->model()->updateMetaBatch($quoteId, $data);
-
-        if ($result) {
-            $this->flagDataChanged();
-        }
-
-        return $result;
+        return $this->updateMeta($quoteId, $data);
     }
 
     /**
