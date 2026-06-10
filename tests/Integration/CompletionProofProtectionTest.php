@@ -216,6 +216,87 @@ final class CompletionProofProtectionTest extends IntegrationTestCase
     }
 
     // -------------------------------------------------------------------
+    // M1 / attack 1 ("or attachment page") — existence, filename and count
+    // must not be enumerable by anonymous visitors (panel SF-1 + NTH-3).
+    // Bytes were already protected (nginx 403); these pin the METADATA leak:
+    // proofs carried post_status 'inherit', so anonymous /wp/v2/media listed
+    // them (source_url + user-chosen filename, which can carry PII) and the
+    // attachment permalink served a 200 page.
+    // -------------------------------------------------------------------
+
+    /** @test */
+    public function anonymousRestMediaQueryDoesNotListProofs(): void
+    {
+        $regId = $this->createRegistrationWithDocumentsTask();
+        [$attachmentId] = $this->createProtectedProofAttachment($regId);
+
+        wp_set_current_user(0);
+
+        $request = new \WP_REST_Request('GET', '/wp/v2/media');
+        $request->set_param('per_page', 100);
+        $response = rest_do_request($request);
+
+        $this->assertSame(200, $response->get_status(), 'Anonymous media listing itself must keep working');
+        $listedIds = array_column((array) $response->get_data(), 'id');
+        $this->assertNotContains(
+            $attachmentId,
+            $listedIds,
+            'Proof attachment is enumerable via anonymous /wp/v2/media — '
+                . 'source_url (protected path) + user-chosen filename leak (SF-1/NTH-3)',
+        );
+    }
+
+    /** @test */
+    public function attachmentPermalinkIsNotServedToAnonymousVisitors(): void
+    {
+        $regId = $this->createRegistrationWithDocumentsTask();
+        [$attachmentId] = $this->createProtectedProofAttachment($regId);
+
+        $permalink = get_permalink($attachmentId);
+        $this->assertNotFalse($permalink, 'Sanity: attachment must have a permalink to probe');
+
+        // Cookie-less request = logged-out visitor, real HTTP (same transport
+        // as the nginx deny assertion above).
+        $response = wp_remote_get((string) $permalink, ['sslverify' => false, 'redirection' => 0]);
+        $this->assertFalse(is_wp_error($response), 'HTTP request itself must not error');
+        $this->assertNotSame(
+            200,
+            wp_remote_retrieve_response_code($response),
+            "Anonymous fetch of a proof's attachment permalink must 404/redirect, not render a page "
+                . "(threat-model attack 1 names the attachment page) — URL: {$permalink}",
+        );
+    }
+
+    /** @test */
+    public function migrationRestampsExistingProofsToPrivate(): void
+    {
+        $regId = $this->createRegistrationWithDocumentsTask();
+        [$attachmentId] = $this->createProtectedProofAttachment($regId);
+
+        // Simulate a pre-v2 install: proof already in the protected dir
+        // (storage v1 ran) but still publicly enumerable via 'inherit'.
+        wp_update_post(['ID' => $attachmentId, 'post_status' => 'inherit']);
+        $this->repo->updateCompletionTasks($regId, [
+            'documents' => ['status' => 'completed', 'data' => ['files' => [$attachmentId]]],
+        ]);
+        update_option('stride_proof_storage_version', CompletionProofStorage::VERSION - 1);
+        delete_transient('stride_proof_migration_backoff');
+
+        CompletionProofStorage::migrate();
+
+        $this->assertSame(
+            'private',
+            get_post_status($attachmentId),
+            'Version-gated migration must re-stamp pre-existing proofs to post_status private',
+        );
+        $this->assertSame(
+            CompletionProofStorage::VERSION,
+            (int) get_option('stride_proof_storage_version'),
+            'Migration must stamp the storage version after a clean run',
+        );
+    }
+
+    // -------------------------------------------------------------------
     // M9 — the download surface is the framework api_data filter
     // -------------------------------------------------------------------
 

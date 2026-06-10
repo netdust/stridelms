@@ -138,4 +138,69 @@ class RegistrationModalIntegrationTest extends IntegrationTestCase
         self::assertStringContainsString('Voltooiing', $payload['title']);
         self::assertStringContainsString('Vragenlijst', $payload['html']);
     }
+
+    /**
+     * Proof storage v2 regression: proofs carry post_status 'private'
+     * (anti-enumeration, SF-1/NTH-3) — the admin modal's documents list
+     * (buildDocuments) reads via get_attached_file/get_post_field, which are
+     * status-independent, so the doc must still render for admins.
+     */
+    public function testEnrollmentModalListsPrivateProtectedProofDocument(): void
+    {
+        \Stride\Modules\Enrollment\CompletionProofStorage::ensureProtectedDir();
+        $dir = \Stride\Modules\Enrollment\CompletionProofStorage::getProtectedDir();
+        $filename = wp_unique_filename($dir, 'modal-proof-' . wp_generate_password(6, false) . '.pdf');
+        $path = trailingslashit($dir) . $filename;
+        file_put_contents($path, '%PDF-1.4 modal proof fixture');
+
+        $attachmentId = (int) wp_insert_attachment(
+            ['post_mime_type' => 'application/pdf', 'post_title' => 'Modal proof', 'post_status' => 'inherit'],
+            $path,
+        );
+        self::assertGreaterThan(0, $attachmentId);
+
+        global $wpdb;
+        $wpdb->insert($wpdb->prefix . 'vad_registrations', [
+            'user_id'          => $this->userId,
+            'edition_id'       => $this->editionId,
+            'status'           => 'confirmed',
+            'enrollment_data'  => '{}',
+            'completion_tasks' => wp_json_encode([
+                'documents' => [
+                    'status' => 'completed',
+                    'data'   => ['files' => [$attachmentId]],
+                ],
+            ]),
+            'registered_at'    => current_time('mysql'),
+        ]);
+        $registrationId = (int) $wpdb->insert_id;
+        $this->registrationIds[] = $registrationId;
+
+        \Stride\Modules\Enrollment\CompletionProofStorage::markProtected($attachmentId, $registrationId);
+        self::assertSame('private', get_post_status($attachmentId), 'v2 contract: proofs are private');
+
+        try {
+            $controller = new RegistrationModalController(
+                ntdst_get(EditionService::class),
+                ntdst_get(EditionRepository::class),
+                ntdst_get(SessionService::class),
+                ntdst_get(SessionSelection::class),
+                ntdst_get(RegistrationRepository::class),
+            );
+
+            $payload = $controller->buildPayload($registrationId, 'enrollment');
+
+            self::assertIsArray($payload);
+            self::assertStringContainsString(
+                $filename,
+                $payload['html'],
+                'Admin modal must still list the (now private) proof document',
+            );
+        } finally {
+            wp_delete_attachment($attachmentId, true);
+            if (file_exists($path)) {
+                @unlink($path);
+            }
+        }
+    }
 }

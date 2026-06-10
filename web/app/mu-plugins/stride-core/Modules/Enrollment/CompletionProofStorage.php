@@ -34,8 +34,13 @@ final class CompletionProofStorage
     /**
      * Version-gated one-off migration of pre-existing public proofs.
      * Pattern: RegistrationTable::SCHEMA_VERSION.
+     *
+     * v2 (panel SF-1 + NTH-3): re-stamp existing proofs to post_status
+     * 'private' — bytes were already deny-ruled, but 'inherit' left the
+     * attachment enumerable (anonymous /wp/v2/media listed source_url +
+     * user-chosen filename; the attachment permalink served a 200 page).
      */
-    public const VERSION = 1;
+    public const VERSION = 2;
 
     private const VERSION_OPTION = 'stride_proof_storage_version';
 
@@ -121,11 +126,35 @@ final class CompletionProofStorage
     /**
      * Stamp the meta that marks an attachment as a protected proof and links
      * it to its registration (the download handler's authorization anchor).
+     *
+     * Also sets post_status 'private' (SF-1/NTH-3): bytes are deny-ruled at
+     * the web server, but 'inherit' leaves the proof's EXISTENCE enumerable —
+     * anonymous /wp/v2/media listed source_url + the user-chosen filename
+     * (which can carry PII, e.g. "diploma-jan-jansens.pdf"), and the
+     * attachment permalink rendered a 200 page. 'private' hides it from
+     * anonymous REST, the permalink and sitemaps in one move; the download
+     * handler, get_attached_file() and the admin modal documents query are
+     * post_status-independent.
      */
     public static function markProtected(int $attachmentId, int $registrationId): void
     {
         update_post_meta($attachmentId, self::META_REGISTRATION, $registrationId);
         update_post_meta($attachmentId, self::META_PROTECTED, 1);
+
+        if (get_post_status($attachmentId) !== 'private') {
+            $updated = wp_update_post([
+                'ID' => $attachmentId,
+                'post_status' => 'private',
+            ], true);
+
+            if (is_wp_error($updated)) {
+                ntdst_log('enrollment')->warning('proof attachment could not be set private', [
+                    'attachment_id' => $attachmentId,
+                    'registration_id' => $registrationId,
+                    'error' => $updated->get_error_message(),
+                ]);
+            }
+        }
     }
 
     /**
