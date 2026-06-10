@@ -56,7 +56,9 @@ $past     = [];
 
 foreach ($editions as $edition) {
     $edition_id = (int) ($edition['id'] ?? $edition['ID'] ?? 0);
-    if (!$edition_id || !isset($statuses[$edition_id])) {
+    // getEffectiveStatuses() returns an entry for EVERY non-zero id passed in
+    // (S10) — only the zero-id guard is live.
+    if (!$edition_id) {
         continue;
     }
 

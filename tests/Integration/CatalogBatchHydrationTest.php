@@ -123,6 +123,15 @@ final class CatalogBatchHydrationTest extends IntegrationTestCase
                 '_ntdst_start_date' => $future,
                 '_ntdst_end_date' => $future,
             ]]),
+            // CR-G2 mirror: in-progress multi-week edition (start past, end
+            // FUTURE) — end_date precedence keeps it Open; the survived
+            // mutant (start-date precedence) would flip it to Completed.
+            'open in-progress multi-week' => $this->createTestEdition(['meta' => [
+                '_ntdst_status' => 'open',
+                '_ntdst_course_id' => $classroomCourse,
+                '_ntdst_start_date' => $past,
+                '_ntdst_end_date' => $future,
+            ]]),
             'open online no sessions' => $this->createTestEdition(['meta' => [
                 '_ntdst_status' => 'open',
                 '_ntdst_course_id' => $onlineCourse,
@@ -135,6 +144,7 @@ final class CatalogBatchHydrationTest extends IntegrationTestCase
         ];
 
         $this->createSession($matrix['open classroom with session']);
+        $this->createSession($matrix['open in-progress multi-week']);
 
         $batch = $this->editions->getEffectiveStatuses(array_values($matrix));
 
@@ -153,6 +163,7 @@ final class CatalogBatchHydrationTest extends IntegrationTestCase
         $this->assertSame(OfferingStatus::Completed, $batch[$matrix['open past end-date']]);
         $this->assertSame(OfferingStatus::Announcement, $batch[$matrix['open classroom no sessions']]);
         $this->assertSame(OfferingStatus::Open, $batch[$matrix['open classroom with session']]);
+        $this->assertSame(OfferingStatus::Open, $batch[$matrix['open in-progress multi-week']]);
         $this->assertSame(OfferingStatus::Open, $batch[$matrix['open online no sessions']]);
     }
 

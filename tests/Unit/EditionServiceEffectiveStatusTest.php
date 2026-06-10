@@ -65,6 +65,18 @@ class EditionServiceEffectiveStatusTest extends TestCase
             'full with past end-date reads completed' => [OfferingStatus::Full, $past, $past, false, 0, OfferingStatus::Completed],
             'past start-date fallback when end missing' => [OfferingStatus::Open, null, $past, false, 0, OfferingStatus::Completed],
 
+            // CR-G2 mutant kill: end_date has PRECEDENCE over start_date.
+            // An in-progress multi-week edition (start past, END FUTURE) must
+            // stay Open — the survived mutant ($startDate ?: $endDate) would
+            // flip it to Completed and vanish it from the catalog.
+            'in-progress multi-week edition stays open' => [OfferingStatus::Open, $future, $past, true, 3, OfferingStatus::Open],
+            // Rule priority: past dates (rule 2) win over classroom-no-sessions
+            // Announcement (rule 3) — a past sessionless edition is Completed.
+            'past classroom without sessions reads completed' => [OfferingStatus::Open, $past, $past, true, 0, OfferingStatus::Completed],
+            // Boundary pin: end_date === today is NOT past (strict <, not <=) —
+            // the stored status stands on the last course day.
+            'edition ending today is not yet completed' => [OfferingStatus::Open, date('Y-m-d'), $past, true, 2, OfferingStatus::Open],
+
             // Classroom with zero published sessions → Announcement (effective ≠ stored).
             'open classroom without sessions reads announcement' => [OfferingStatus::Open, $future, $future, true, 0, OfferingStatus::Announcement],
             'in_progress classroom without sessions reads announcement' => [OfferingStatus::InProgress, $future, $future, true, 0, OfferingStatus::Announcement],
