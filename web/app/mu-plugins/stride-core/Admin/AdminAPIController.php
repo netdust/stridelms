@@ -33,6 +33,12 @@ final class AdminAPIController
 {
     private const NAMESPACE = 'stride/v1';
 
+    /**
+     * Hard upper bound on rows fetched per pending-approvals query (H-8).
+     * Bounds JSON-decode work per poll; bucket counts clip silently beyond it.
+     */
+    private const APPROVALS_SCAN_CAP = 500;
+
     public function __construct(
         private readonly AttendanceRepository $attendance,
         private readonly EditionRepository $editionRepository,
@@ -241,6 +247,24 @@ final class AdminAPIController
             'methods' => 'GET',
             'callback' => [$this, 'getPendingApprovals'],
             'permission_callback' => [$this, 'canViewAdmin'],
+            'args' => [
+                'stale_days' => [
+                    'type' => 'integer',
+                    'default' => 7,
+                    'minimum' => 1,
+                ],
+                'page' => [
+                    'type' => 'integer',
+                    'default' => 1,
+                    'minimum' => 1,
+                ],
+                'per_page' => [
+                    'type' => 'integer',
+                    'default' => 20,
+                    'minimum' => 1,
+                    'maximum' => 100,
+                ],
+            ],
         ]);
 
         // Approve registration (enrollment phase)
@@ -1953,6 +1977,19 @@ final class AdminAPIController
      * Query params:
      * - stale_days (int, default 7): how many days of inactivity before a user-side
      *   pending registration is considered "stale".
+     * - page / per_page (int, defaults 1/20): paginate `items` like the other
+     *   list endpoints (total/page/perPage/totalPages in the response).
+     *   `counts` stays GLOBAL — the dashboard tab pills read it.
+     *
+     * Bounded (audit H-8): both queries are column-trimmed, pre-filtered with
+     * JSON predicates on the FIXED task keys (approval / post_approval /
+     * post_evaluation / post_documents) and LIMIT-capped. The arbitrary-key
+     * scans (areUserTasksComplete / getFirstOpenUserTask) stay in PHP —
+     * EnrollmentCompletion owns those semantics, so the SQL filter is shaped
+     * to only ever OVER-fetch (PHP re-checks remain authoritative). Note the
+     * SQL status comparison is collation-(case-)insensitive where PHP is
+     * strict; task statuses are machine-written lowercase (markTaskComplete).
+     * Bucket counts clip silently beyond APPROVALS_SCAN_CAP rows per query.
      */
     public function getPendingApprovals(WP_REST_Request $request): WP_REST_Response
     {
@@ -1960,32 +1997,63 @@ final class AdminAPIController
 
         $table = RegistrationTable::getTableName();
 
+        $staleDays = max(1, (int) ($request->get_param('stale_days') ?? 7));
+        $page = max(1, (int) ($request->get_param('page') ?: 1));
+        $perPage = max(1, (int) ($request->get_param('per_page') ?: 20));
+
         if (!RegistrationTable::exists()) {
-            return new WP_REST_Response(['items' => [], 'counts' => ['approval' => 0, 'post_approval' => 0, 'stale_user' => 0]]);
+            return new WP_REST_Response([
+                'items' => [],
+                'counts' => ['approval' => 0, 'post_approval' => 0, 'stale_user' => 0],
+                'stale_threshold_days' => $staleDays,
+                'total' => 0,
+                'page' => $page,
+                'perPage' => $perPage,
+                'totalPages' => 0,
+            ]);
         }
 
-        $staleDays = max(1, (int) ($request->get_param('stale_days') ?? 7));
         $staleThreshold = gmdate('Y-m-d H:i:s', time() - ($staleDays * DAY_IN_SECONDS));
 
-        // Enrollment phase: pending registrations with completion_tasks
-        $pendingRows = $wpdb->get_results(
-            "SELECT * FROM {$table}
+        // Enrollment phase: pending registrations that can still yield an item —
+        // an open admin-approval task (bucket 1) or stale-aged (bucket 3 candidate).
+        $pendingRows = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, user_id, edition_id, registered_at, completion_tasks
+             FROM {$table}
              WHERE status = 'pending'
                AND completion_tasks IS NOT NULL
-             ORDER BY registered_at ASC",
-        );
+               AND (
+                   (JSON_EXTRACT(completion_tasks, '$.approval') IS NOT NULL
+                    AND COALESCE(JSON_VALUE(completion_tasks, '$.approval.status'), 'pending') <> 'completed')
+                   OR registered_at <= %s
+               )
+             ORDER BY registered_at ASC
+             LIMIT %d",
+            $staleThreshold,
+            self::APPROVALS_SCAN_CAP,
+        ));
 
-        // Post-course phase: confirmed registrations with post_approval task
-        $confirmedRows = $wpdb->get_results(
-            "SELECT * FROM {$table}
+        // Post-course phase: confirmed registrations with an open post_approval
+        // task whose post-course user tasks (fixed keys) are absent-or-completed.
+        $confirmedRows = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, user_id, edition_id, registered_at, completion_tasks
+             FROM {$table}
              WHERE status = 'confirmed'
                AND completion_tasks IS NOT NULL
-               AND completion_tasks LIKE '%post_approval%'
-             ORDER BY registered_at ASC",
-        );
+               AND JSON_EXTRACT(completion_tasks, '$.post_approval') IS NOT NULL
+               AND COALESCE(JSON_VALUE(completion_tasks, '$.post_approval.status'), 'pending') <> 'completed'
+               AND (JSON_EXTRACT(completion_tasks, '$.post_evaluation') IS NULL
+                    OR JSON_VALUE(completion_tasks, '$.post_evaluation.status') = 'completed')
+               AND (JSON_EXTRACT(completion_tasks, '$.post_documents') IS NULL
+                    OR JSON_VALUE(completion_tasks, '$.post_documents.status') = 'completed')
+             ORDER BY registered_at ASC
+             LIMIT %d",
+            self::APPROVALS_SCAN_CAP,
+        ));
 
         $completionService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
-        $items = [];
+        /** @var list<array{0: object, 1: array, 2: string, 3: array}> $matches */
+        $matches = [];
         $counts = ['approval' => 0, 'post_approval' => 0, 'stale_user' => 0];
 
         foreach ($pendingRows as $row) {
@@ -1998,7 +2066,7 @@ final class AdminAPIController
                 && isset($tasks['approval'])
                 && ($tasks['approval']['status'] ?? 'pending') !== 'completed'
             ) {
-                $items[] = $this->buildApprovalItem($row, $tasks, 'approval');
+                $matches[] = [$row, $tasks, 'approval', []];
                 $counts['approval']++;
                 continue;
             }
@@ -2008,18 +2076,19 @@ final class AdminAPIController
             // contacts the user or cancels.
             if (!$userTasksDone && $row->registered_at && $row->registered_at <= $staleThreshold) {
                 $openTask = $completionService->getFirstOpenUserTask($tasks);
-                $items[] = $this->buildApprovalItem($row, $tasks, 'stale_user', [
+                $matches[] = [$row, $tasks, 'stale_user', [
                     'open_task' => $openTask,
                     'open_task_label' => $openTask
                         ? \Stride\Modules\Enrollment\EnrollmentCompletion::taskTypeLabel($openTask)
                         : null,
                     'days_idle' => (int) floor((time() - strtotime($row->registered_at)) / DAY_IN_SECONDS),
-                ]);
+                ]];
                 $counts['stale_user']++;
             }
         }
 
-        // Bucket 2: post-course approval
+        // Bucket 2: post-course approval. SQL already filtered on the fixed
+        // keys; the PHP re-check stays authoritative (the filter may over-fetch).
         foreach ($confirmedRows as $row) {
             $tasks = json_decode($row->completion_tasks ?? '{}', true) ?: [];
 
@@ -2037,14 +2106,25 @@ final class AdminAPIController
                 continue;
             }
 
-            $items[] = $this->buildApprovalItem($row, $tasks, 'post_approval');
+            $matches[] = [$row, $tasks, 'post_approval', []];
             $counts['post_approval']++;
         }
+
+        // Hydrate (get_userdata/get_post) only the requested page.
+        $total = count($matches);
+        $items = array_map(
+            fn(array $match): array => $this->buildApprovalItem(...$match),
+            array_slice($matches, ($page - 1) * $perPage, $perPage),
+        );
 
         return new WP_REST_Response([
             'items' => $items,
             'counts' => $counts,
             'stale_threshold_days' => $staleDays,
+            'total' => $total,
+            'page' => $page,
+            'perPage' => $perPage,
+            'totalPages' => (int) ceil($total / $perPage),
         ]);
     }
 
