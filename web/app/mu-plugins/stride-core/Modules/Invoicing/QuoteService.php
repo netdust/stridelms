@@ -647,8 +647,11 @@ final class QuoteService extends AbstractService
         $subtotal = Money::cents($subtotalCents);
         $discount = $voucherService->calculateDiscount($voucher, $subtotal, $editionId > 0 ? $editionId : null);
 
-        // Recalculate totals (voucher discounts are capped at the subtotal
-        // by VoucherService::calculateDiscount, so the clamp is a no-op here)
+        // Recalculate totals. Fixed/Full/Percentage discounts are pre-capped
+        // by VoucherService::calculateDiscount, but the clamp inside
+        // deriveTotalsFromCents is NOT a removable no-op: it independently
+        // guards misconfigured >100% Percentage vouchers (pre-2026-06 code
+        // persisted negative tax/total on that edge).
         $totals = QuoteCalculator::deriveTotalsFromCents($subtotalCents, $discount->inCents());
 
         // Update quote

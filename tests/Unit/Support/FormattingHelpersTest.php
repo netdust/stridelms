@@ -18,7 +18,6 @@ use Stride\Tests\TestCase;
  */
 class FormattingHelpersTest extends TestCase
 {
-    /** @test */
     public function testDefinitionIsOwnedByStrideCoreNotThemeOrStub(): void
     {
         $this->assertTrue(
@@ -35,27 +34,23 @@ class FormattingHelpersTest extends TestCase
         );
     }
 
-    /** @test */
     public function testFormatsDateWithDutchMonthName(): void
     {
         $this->assertSame('10 juni 2026', stride_format_date('2026-06-10'));
         $this->assertSame('1 maart 2025', stride_format_date('2025-03-01'));
     }
 
-    /** @test */
     public function testFormatsDateWithDutchDayName(): void
     {
         // 2026-06-10 is a Wednesday.
         $this->assertSame('woensdag 10 juni 2026', stride_format_date('2026-06-10', 'l j F Y'));
     }
 
-    /** @test */
     public function testRespectsCustomFormat(): void
     {
         $this->assertSame('10/06/2026', stride_format_date('2026-06-10', 'd/m/Y'));
     }
 
-    /** @test */
     public function testReturnsEmptyStringForUnparseableDate(): void
     {
         $this->assertSame('', stride_format_date('not-a-date'));

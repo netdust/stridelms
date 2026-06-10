@@ -696,7 +696,7 @@ curl -u "partner_user:xxxx xxxx xxxx xxxx" \
 5. **Simplified Admin**: Unified user profile view instead of 6+ tools
 6. **Journey UX**: Trajectories shown as visual learning paths, not course grids
 7. **Edition/Session Model**: LearnDash courses are content only; editions are scheduled offerings with dates, pricing, capacity; sessions are individual meeting days
-8. **LearnDash as Content Engine**: Only 4 integration points: `grantAccess`, `revokeAccess`, `isComplete`, `getCertificateLink`
+8. **LearnDash as Content Engine**: 5 adapter operations (`Contracts/LMSAdapterInterface`): `grantAccess`, `revokeAccess`, `isComplete`, `markComplete`, `isOpenCourse` — read-only presentation (e.g. `getCertificateLink`) via `LearnDashHelper`
 9. **Plugin Architecture**: Business logic in mu-plugin (`stride-core`), presentation in theme (`stridence`)
 
 ---

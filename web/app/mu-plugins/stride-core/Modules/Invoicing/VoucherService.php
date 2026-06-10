@@ -163,9 +163,13 @@ final class VoucherService
         return match ($discountType) {
             DiscountType::Full => $effectiveSubtotal,
             DiscountType::Fixed => Money::cents(min($voucher['discount_value'], $effectiveSubtotal->inCents())),
-            DiscountType::Percentage => Money::cents(
+            // Capped at the effective subtotal, matching Fixed: nothing
+            // validates discount_value <= 100 at creation, so a misconfigured
+            // 150% voucher must not produce a discount the quote can't absorb.
+            DiscountType::Percentage => Money::cents(min(
                 (int) round($effectiveSubtotal->inCents() * ($voucher['discount_value'] / 100)),
-            ),
+                $effectiveSubtotal->inCents(),
+            )),
         };
     }
 

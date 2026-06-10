@@ -8,6 +8,7 @@ use IntegrationTestCase;
 use Stride\Domain\DiscountType;
 use Stride\Domain\Money;
 use Stride\Domain\VoucherStatus;
+use Stride\Modules\Invoicing\Helpers\QuoteCalculator;
 use Stride\Modules\Invoicing\VoucherService;
 
 /**
@@ -181,6 +182,49 @@ class VoucherServiceIntegrationTest extends IntegrationTestCase
         $discount = $this->voucherService->calculateDiscount($voucher, $subtotal);
 
         $this->assertEquals(10000, $discount->inCents());
+    }
+
+    /**
+     * @test
+     */
+    public function percentageDiscountOverHundredIsCappedAtSubtotal(): void
+    {
+        // Admin-misconfiguration edge (CR-C1): nothing validates
+        // discount_value <= 100 at creation, so a 150% voucher is storable.
+        // The calculated discount must never exceed the (effective) subtotal —
+        // same semantics as Fixed's existing min() cap.
+        $voucher = [
+            'discount_type' => DiscountType::Percentage->value,
+            'discount_value' => 150,
+        ];
+        $subtotal = Money::cents(10000);
+
+        $discount = $this->voucherService->calculateDiscount($voucher, $subtotal);
+
+        $this->assertEquals(10000, $discount->inCents());
+    }
+
+    /**
+     * @test
+     */
+    public function overHundredPercentVoucherChainNeverYieldsNegativeTotals(): void
+    {
+        // Full 150%-voucher chain: calculateDiscount -> deriveTotalsFromCents
+        // (the applyVoucher derivation). Pre-2026-06 code persisted negative
+        // tax/total on this edge; deriveTotalsFromCents' clamp guards it even
+        // independently of the calculateDiscount cap above.
+        $voucher = [
+            'discount_type' => DiscountType::Percentage->value,
+            'discount_value' => 150,
+        ];
+        $subtotalCents = 10000;
+        $discount = $this->voucherService->calculateDiscount($voucher, Money::cents($subtotalCents));
+
+        $totals = QuoteCalculator::deriveTotalsFromCents($subtotalCents, $discount->inCents());
+
+        $this->assertGreaterThanOrEqual(0, $totals['discount']);
+        $this->assertSame(0, $totals['tax']);
+        $this->assertSame(0, $totals['total']);
     }
 
     // =========================================================================
