@@ -88,6 +88,39 @@ final class NotificationCacheIntegrationTest extends IntegrationTestCase
     }
 
     /** @test */
+    public function completionEventInvalidatesActorBadgeCache(): void
+    {
+        $before = $this->freshService()->getUnreadCount(self::$testUserId);
+
+        $this->assertNotFalse(
+            get_transient($this->transientKey()),
+            'getUnreadCount() must prime the per-user transient',
+        );
+
+        // CR-F2: completion.* events carry NO context.user_id — the subject
+        // user surfaces via the badge query's ACTOR branch (actor_id = X AND
+        // action LIKE 'completion.%'). The listener must mirror that branch
+        // and invalidate the ACTOR's cache, or a fresh certificate leaves the
+        // badge stale until the TTL lapses.
+        $id = $this->audit->record('completion', 123, 'completion.course_completed', self::$testUserId, [
+            'course_id' => 123,
+            'course_title' => 'PHPUnit cursus',
+        ]);
+
+        $this->assertIsInt($id, 'Audit record must succeed');
+        $this->auditRowIds[] = $id;
+
+        $this->assertFalse(
+            get_transient($this->transientKey()),
+            'CR-F2 denial path: a completion event must invalidate the actor\'s cached badge count',
+        );
+
+        $after = $this->freshService()->getUnreadCount(self::$testUserId);
+
+        $this->assertSame($before + 1, $after, 'A fresh completion must bump the unread badge');
+    }
+
+    /** @test */
     public function mailSentDoesNotIncrementUnread(): void
     {
         $before = $this->freshService()->getUnreadCount(self::$testUserId);

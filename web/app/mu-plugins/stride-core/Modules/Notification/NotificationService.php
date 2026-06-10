@@ -67,8 +67,9 @@ final class NotificationService implements \NTDST_Service_Meta
 
         // Event-driven cache invalidation: every new subject-targeted audit
         // entry (fired by ntdst-audit's AuditService::record) busts that
-        // user's cached unread count.
-        add_action('ntdst/audit/recorded', [$this, 'onAuditRecorded'], 10, 4);
+        // user's cached unread count. 5 args: the 5th ($actorId) is required
+        // for completion.* events, whose subject IS the actor (CR-F2).
+        add_action('ntdst/audit/recorded', [$this, 'onAuditRecorded'], 10, 5);
     }
 
     /**
@@ -148,14 +149,27 @@ final class NotificationService implements \NTDST_Service_Meta
 
     /**
      * Audit listener: a new event targeting a subject user invalidates that
-     * user's cached count — a stale badge never survives a new event.
+     * user's cached count — busts it for events recorded before the next
+     * read (the delete-then-set race means an event landing between a
+     * delete and the subsequent re-prime can still be cached stale for one
+     * TTL; accepted tradeoff).
+     *
+     * Two subject shapes, mirroring findBySubjectUser()'s two UNION branches:
+     *  - context.user_id → the explicit subject (admin acts on a user);
+     *  - completion.* events carry no context.user_id — their subject IS the
+     *    actor (LearnDash records the completing user as actor), so the
+     *    actor's cache is invalidated for those (CR-F2).
      */
-    public function onAuditRecorded(string $action, string $entityType, int $entityId, array $context): void
+    public function onAuditRecorded(string $action, string $entityType, int $entityId, array $context, ?int $actorId = null): void
     {
         $subjectId = $context['user_id'] ?? null;
 
         if (is_numeric($subjectId) && (int) $subjectId > 0) {
             $this->invalidateCountCache((int) $subjectId);
+        }
+
+        if ($actorId !== null && $actorId > 0 && str_starts_with($action, 'completion.')) {
+            $this->invalidateCountCache($actorId);
         }
     }
 

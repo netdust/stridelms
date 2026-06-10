@@ -169,9 +169,10 @@ namespace NTDST\Audit {
             /**
              * Get audit entries where user is the subject (not actor).
              *
+             * @param string[] $excludeActions
              * @return array<object>
              */
-            public function getForSubjectUser(int $userId, int $limit = 50, int $daysBack = 30): array
+            public function getForSubjectUser(int $userId, int $limit = 50, int $daysBack = 30, array $excludeActions = []): array
             {
                 return [];
             }
