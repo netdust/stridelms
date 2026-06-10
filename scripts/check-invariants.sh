@@ -11,7 +11,7 @@
 #   INV-5  Plugin calling theme helpers (stridence_* / stride_format_money /
 #          stride_enrollment_url) — flipped BLOCKING by Task C2
 #          (stride_format_date is now core-owned: stride-core/Support/formatting.php)
-#   INV-8  Hardcoded 0.21 VAT literal outside QuoteCalculator (audit H-5)
+#   INV-8  Hardcoded VAT literal (0.21 / 1.21 / 21/100) outside QuoteCalculator (audit H-5)
 #
 # ADVISORY (reported, never blocks — humans triage):
 #   INV-2  Raw wp_ajax_* handler (must hand-roll its own nonce)
@@ -148,7 +148,7 @@ echo "${BLUE}▸ INV-8  VAT/totals derivation lives only in QuoteCalculator ${DI
 # taxRate mirror for the live admin preview — the server recomputes on save,
 # so it cannot diverge the persisted money. Consolidate (wp_localize_script
 # the rate) when that file is next touched; do NOT add new exceptions.
-INV8=$(grep -rn '0\.21' --include="*.php" --include="*.js" "$CORE" 2>/dev/null \
+INV8=$(grep -rnE '0\.21|1\.21|21[[:space:]]*/[[:space:]]*100' --include="*.php" --include="*.js" "$CORE" 2>/dev/null \
   | grep -v "Modules/Invoicing/Helpers/QuoteCalculator\.php" \
   | grep -v "assets/js/admin/quote-admin\.js")
 if [ -n "$INV8" ]; then
@@ -157,14 +157,14 @@ if [ -n "$INV8" ]; then
   echo "  ${DIM}Derive subtotal->discount->tax->total via QuoteCalculator::deriveTotalsFromCents().${RESET}"
   FAIL=1
 else
-  echo "  ${GREEN}✓ No hardcoded 0.21 VAT literal outside QuoteCalculator.${RESET}"
+  echo "  ${GREEN}✓ No hardcoded VAT literal (0.21 / 1.21 / 21/100) outside QuoteCalculator.${RESET}"
 fi
 echo
 
 # ─── Summary ───────────────────────────────────────────────────────────────
 echo "═══════════════════════════════════════════════════════════════"
 if [ "$FAIL" -ne 0 ]; then
-  echo "  ${RED}FAIL — a blocking invariant (INV-1/INV-8) is violated. See above.${RESET}"
+  echo "  ${RED}FAIL — a blocking invariant (INV-1/INV-5/INV-8) is violated. See above.${RESET}"
   echo "  Advisory (YELLOW) items are reported but do not fail CI."
   echo "═══════════════════════════════════════════════════════════════"
   exit 1

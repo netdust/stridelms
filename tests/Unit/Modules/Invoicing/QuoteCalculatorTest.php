@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stride\Tests\Unit\Modules\Invoicing;
 
+use Stride\Domain\Money;
 use Stride\Modules\Invoicing\Helpers\QuoteCalculator;
 use Stride\Tests\TestCase;
 
@@ -88,5 +89,54 @@ final class QuoteCalculatorTest extends TestCase
         $this->assertSame(0, $totals['discount']);
         $this->assertSame(0, $totals['tax']);
         $this->assertSame(0, $totals['total']);
+    }
+
+    // =========================================================================
+    // calculateTotals (Money-based, quote creation path) — CR-C2: must be a
+    // thin wrapper over deriveTotalsFromCents, not a second derivation chain.
+    // =========================================================================
+
+    public function testCalculateTotalsAgreesWithCentsDerivation(): void
+    {
+        $items = [
+            ['title' => 'Edition', 'quantity' => 2, 'unit_price' => Money::cents(20000)],
+            ['title' => 'Modifier', 'quantity' => 1, 'unit_price' => Money::cents(10000)],
+        ];
+
+        $totals = QuoteCalculator::calculateTotals($items, Money::cents(10000));
+        $expected = QuoteCalculator::deriveTotalsFromCents(50000, 10000);
+
+        $this->assertSame($expected['subtotal'], $totals['subtotal']->inCents());
+        $this->assertSame($expected['discount'], $totals['discount']->inCents());
+        $this->assertSame($expected['tax'], $totals['tax']->inCents());
+        $this->assertSame($expected['total'], $totals['total']->inCents());
+    }
+
+    public function testCalculateTotalsClampsDiscountLargerThanSubtotal(): void
+    {
+        // Pre-CR-C2 this path threw (Money::subtract refuses negative results)
+        // instead of clamping like every other quote write path. It must share
+        // deriveTotalsFromCents' semantics: discount clamped to subtotal,
+        // tax/total zero — never an exception, never negative money.
+        $items = [
+            ['title' => 'Edition', 'quantity' => 1, 'unit_price' => Money::cents(5000)],
+        ];
+
+        $totals = QuoteCalculator::calculateTotals($items, Money::cents(10000));
+
+        $this->assertSame(5000, $totals['subtotal']->inCents());
+        $this->assertSame(5000, $totals['discount']->inCents());
+        $this->assertSame(0, $totals['tax']->inCents());
+        $this->assertSame(0, $totals['total']->inCents());
+    }
+
+    public function testCalculateTotalsClampsDiscountOnZeroSubtotal(): void
+    {
+        $totals = QuoteCalculator::calculateTotals([], Money::cents(10000));
+
+        $this->assertSame(0, $totals['subtotal']->inCents());
+        $this->assertSame(0, $totals['discount']->inCents());
+        $this->assertSame(0, $totals['tax']->inCents());
+        $this->assertSame(0, $totals['total']->inCents());
     }
 }

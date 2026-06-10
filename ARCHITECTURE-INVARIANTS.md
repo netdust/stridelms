@@ -191,12 +191,13 @@ grep -rn "getStatus(\|->status\b\|'status'" --include="*.php" web/app/mu-plugins
 
 **Convergence point:** `Modules/Invoicing/Helpers/QuoteCalculator` — `TAX_RATE` (21% BTW) plus the cents-level derivation `deriveTotalsFromCents(int $subtotalCents, int $discountCents = 0): array{subtotal, discount, tax, total}`.
 
-**The rule.** Every quote write path (admin save, manual discount, discount removal, new-quote creation, voucher application, session-modifier recompute) derives subtotal→discount→tax→total through `QuoteCalculator`. A hardcoded `0.21` (or a re-implemented `round($x * rate)` chain) outside that helper is a bypass — six such literals drifted apart before Task C1 consolidated them (audit finding H-5). The discount is clamped to `[0, subtotal]` and the taxable base never goes below zero; the contract is pinned by `tests/Unit/Modules/Invoicing/QuoteCalculatorTest.php` and `tests/Integration/QuoteTotalsCharacterizationTest.php`.
+**The rule.** Every quote write path (admin save, manual discount, discount removal, new-quote creation, voucher application, session-modifier recompute) derives subtotal→discount→tax→total through `deriveTotalsFromCents()` — the Money-based `calculateTotals()` (new-quote creation) is a thin wrapper that delegates to it (CR-C2), not a second chain. A hardcoded VAT literal (`0.21`, `1.21`, `21 / 100`) or a re-implemented `round($x * rate)` chain outside the helper is a bypass — six such literals drifted apart before Task C1 consolidated them (audit finding H-5). The discount is clamped to `[0, subtotal]` and the taxable base never goes below zero; the contract is pinned by `tests/Unit/Modules/Invoicing/QuoteCalculatorTest.php` and `tests/Integration/QuoteTotalsCharacterizationTest.php`.
 
 **Audit move:**
 ```bash
-# Hardcoded VAT literal outside the convergence point (must be empty — BLOCKING in check-invariants.sh):
-grep -rn '0\.21' --include="*.php" web/app/mu-plugins/stride-core \
+# Hardcoded VAT literal outside the convergence point (must be empty — BLOCKING in check-invariants.sh,
+# which additionally scans *.js and carries the documented display-only quote-admin.js exception):
+grep -rnE '0\.21|1\.21|21[[:space:]]*/[[:space:]]*100' --include="*.php" web/app/mu-plugins/stride-core \
   | grep -v "Modules/Invoicing/Helpers/QuoteCalculator.php"
 ```
 
