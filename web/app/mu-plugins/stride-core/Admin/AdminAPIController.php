@@ -3550,27 +3550,43 @@ final class AdminAPIController
         // Header row (semicolons for Dutch Excel)
         fputcsv($output, ['Naam', 'E-mail', 'Organisatie', 'Editie', 'Datum', 'Status', 'Offerte #'], ';');
 
+        // Batch-prime all per-row lookups so the export's query count stays
+        // constant regardless of row count (audit 2.6): one user fetch + one
+        // user-meta prime + one quote map + one quote-meta fetch replace the
+        // previous ~4 queries per row. A missing user (deleted account) maps
+        // to null and renders as blank cells, same as get_userdata() === false.
+        $userIds = array_values(array_unique(array_filter(array_map(
+            static fn($reg) => (int) ($reg->user_id ?? 0),
+            $registrations,
+        ))));
+        $users = BatchQueryHelper::batchGetUsers($userIds);
+        if ($userIds !== []) {
+            update_meta_cache('user', $userIds);
+        }
+
+        $registrationIds = array_values(array_filter(array_map(
+            static fn($reg) => (int) ($reg->id ?? 0),
+            $registrations,
+        )));
+        $quoteIdsByRegistration = ntdst_get(\Stride\Modules\Invoicing\QuoteRepository::class)
+            ->findQuoteIdsByRegistrations($registrationIds);
+        $quoteMeta = BatchQueryHelper::batchGetPostMeta(
+            array_values($quoteIdsByRegistration),
+            ['quote_number'],
+        );
+
         foreach ($registrations as $reg) {
-            $user = get_userdata((int) ($reg->user_id ?? 0));
+            $user = $users[(int) ($reg->user_id ?? 0)] ?? null;
             $name = $user ? $user->display_name : 'Onbekend';
             $email = $user ? $user->user_email : '';
             $org = $user ? (get_user_meta($user->ID, 'organisation', true) ?: '') : '';
 
-            // Find linked quote number
+            // Linked quote number from the batched map (fallback mirrors the
+            // old per-row behaviour: 'Q-' . post ID when the meta is empty).
             $quoteNumber = '';
-            if (!empty($reg->id)) {
-                $quotePost = $wpdb->get_var($wpdb->prepare(
-                    "SELECT p.ID FROM {$wpdb->posts} p
-                     INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
-                     WHERE p.post_type = %s AND p.post_status = 'publish'
-                     AND pm.meta_key = 'registration_id' AND pm.meta_value = %s
-                     LIMIT 1",
-                    QuoteCPT::POST_TYPE,
-                    $reg->id,
-                ));
-                if ($quotePost) {
-                    $quoteNumber = get_post_meta((int) $quotePost, 'quote_number', true) ?: 'Q-' . $quotePost;
-                }
+            $quoteId = $quoteIdsByRegistration[(int) ($reg->id ?? 0)] ?? 0;
+            if ($quoteId) {
+                $quoteNumber = (string) ($quoteMeta[$quoteId]['quote_number'] ?? '') ?: 'Q-' . $quoteId;
             }
 
             fputcsv($output, array_map([self::class, 'sanitizeCsvCell'], [
