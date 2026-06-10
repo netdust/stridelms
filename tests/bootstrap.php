@@ -50,6 +50,10 @@ require_once __DIR__ . '/Stubs/wordpress-stubs.php';
 // Load Stride Infrastructure stubs for testing (must be before mocks)
 require_once __DIR__ . '/Stubs/stride-infrastructure-stubs.php';
 
+// Real core procedural helpers (NOT stubbed — the unit suite must exercise
+// the same formatter production uses; stride_format_date lives in stride-core)
+require_once dirname(__DIR__) . '/web/app/mu-plugins/stride-core/Support/formatting.php';
+
 // Base test case
 require_once __DIR__ . '/TestCase.php';
 

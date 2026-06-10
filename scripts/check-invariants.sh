@@ -8,13 +8,14 @@
 #
 # BLOCKING (exit 1, fails CI):
 #   INV-1  REST route with no permission_callback — fails open. Zero tolerance.
+#   INV-5  Plugin calling theme helpers (stridence_* / stride_format_money /
+#          stride_enrollment_url) — flipped BLOCKING by Task C2
+#          (stride_format_date is now core-owned: stride-core/Support/formatting.php)
 #   INV-8  Hardcoded 0.21 VAT literal outside QuoteCalculator (audit H-5)
 #
 # ADVISORY (reported, never blocks — humans triage):
 #   INV-2  Raw wp_ajax_* handler (must hand-roll its own nonce)
 #   INV-3  $wpdb outside a repository (+ the four justified exceptions)
-#   INV-5  Plugin calling theme helpers (stridence_* / stride_format_* /
-#          stride_enrollment_url) — must be empty; flips BLOCKING after Task C2
 #   INV-6  Direct LearnDash calls outside the adapter + helper
 #
 # Usage: bash scripts/check-invariants.sh
@@ -100,25 +101,22 @@ else
 fi
 echo
 
-# ─── INV-5 (advisory but should be empty): plugin → theme calls ────────────
+# ─── INV-5 (BLOCKING): plugin → theme calls ────────────────────────────────
 # Pattern covers ALL procedural helpers the theme defines (sibling-sweep
 # 2026-06-10 over themes/stridence/helpers/*.php + functions.php + templates):
 #   stridence_*           — theme namespace prefix (incl. template-local helpers)
-#   stride_format_*       — stride_format_date / stride_format_money (helpers/formatting.php)
+#   stride_format_money   — helpers/formatting.php
 #   stride_enrollment_url — helpers/formatting.php
+# stride_format_date is NOT in the pattern: Task C2 (audit H-6) moved it into
+# stride-core/Support/formatting.php — it is core-owned now and core may call it.
 # Re-run that sweep and extend this pattern whenever a theme helper is added.
-#
-# KNOWN VIOLATIONS (4): stride_format_date called from NotificationMapper:139
-# and StrideMailBridge:223,759,760 (audit finding H-6). ADVISORY until Task C2
-# moves stride_format_date into stride-core — then this section flips to
-# BLOCKING (set FAIL=1 on hits).
-echo "${BLUE}▸ INV-5  Plugin must not call theme helpers ${DIM}(advisory — flips BLOCKING after Task C2)${RESET}"
-INV5=$(grep -rn "stride_format_\|stride_enrollment_url\|stridence_" --include="*.php" "$CORE" 2>/dev/null)
+echo "${BLUE}▸ INV-5  Plugin must not call theme helpers ${DIM}(BLOCKING since Task C2)${RESET}"
+INV5=$(grep -rn "stride_format_money\|stride_enrollment_url\|stridence_" --include="*.php" "$CORE" 2>/dev/null)
 if [ -n "$INV5" ]; then
-  echo "$INV5" | sed "s/^/  ${YELLOW}•${RESET} /"
+  echo "$INV5" | sed "s/^/  ${RED}•${RESET} /"
   echo "  ${DIM}stride-core must never call theme helpers — inverts the dependency arrow.${RESET}"
   echo "  ${DIM}Move the helper/partial into stride-core and render via ntdst_response()->html().${RESET}"
-  echo "  ${DIM}Known 4 stride_format_date sites are scheduled for Task C2; advisory until then.${RESET}"
+  FAIL=1
 else
   echo "  ${GREEN}✓ stride-core calls no theme helpers.${RESET}"
 fi

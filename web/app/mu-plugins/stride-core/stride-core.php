@@ -17,6 +17,10 @@ require_once __DIR__ . '/autoload.php';
 // Load shared admin chrome helpers (stride_tool_header, stride_load_tool_chrome).
 require_once __DIR__ . '/templates/admin/_tool-header.php';
 
+// Load core formatting helpers (stride_format_date) — mail/notification
+// rendering must not depend on the active theme (INV-5, audit H-6).
+require_once __DIR__ . '/Support/formatting.php';
+
 // Load config
 $config = require __DIR__ . '/plugin-config.php';
 

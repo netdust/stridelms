@@ -752,16 +752,9 @@ if (!function_exists('get_permalink')) {
     }
 }
 
-if (!function_exists('stride_format_date')) {
-    function stride_format_date(string $date, string $format = 'j F Y'): string
-    {
-        $timestamp = strtotime($date);
-        if ($timestamp === false) {
-            return '';
-        }
-        return date($format, $timestamp);
-    }
-}
+// stride_format_date is NOT stubbed: the real definition is core-owned
+// (stride-core/Support/formatting.php, loaded by tests/bootstrap.php). The
+// old stub here returned English month names — a silent format fork.
 
 if (!function_exists('get_stylesheet_directory')) {
     function get_stylesheet_directory(): string

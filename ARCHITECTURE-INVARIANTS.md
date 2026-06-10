@@ -131,17 +131,19 @@ grep -rn "return false;\|return null;" --include="*Repository.php" web/app/mu-pl
 
 **Convergence point:** templates resolve through `NTDST_Template_Loader`. `stride-core` registers its own tree at `stride-core.php:27` — `NTDST_Template_Loader::addPath(__DIR__ . '/templates')` — and renders nested templates via `ntdst_response()->html('...')` (e.g. `templates/forms/fields/field-group.php`). Direct `include $templatePath;` of a path *inside* `stride-core/templates/` is the accepted simple form for top-level admin pages.
 
-**The rule (the dependency arrow).** `stride-core` (mu-plugin) MUST NEVER call theme helpers — `stridence_template_part`, `stridence_template_html`, any `stridence_*`, **or the non-prefixed theme helpers** `stride_format_date`, `stride_format_money`, `stride_enrollment_url` (defined in `themes/stridence/helpers/formatting.php`). Plugin→theme inverts the dependency. Plugin-owned partials live in `stride-core/templates/` and render through the loader / `ntdst_response()->html()`. (This is the `gotcha_mu_plugin_no_theme_calls` memory, codified. The original "verified clean" claim covered only the `stridence_` prefix — a grep blind spot, audit finding H-6: 4 `stride_format_date` calls exist in `NotificationMapper.php:139` and `StrideMailBridge.php:223,759,760`. Task C2 moves `stride_format_date` into stride-core; until then the check is advisory, after C2 it flips blocking.)
+**The rule (the dependency arrow).** `stride-core` (mu-plugin) MUST NEVER call theme helpers — `stridence_template_part`, `stridence_template_html`, any `stridence_*`, **or the non-prefixed theme helpers** `stride_format_money`, `stride_enrollment_url` (defined in `themes/stridence/helpers/formatting.php`). Plugin→theme inverts the dependency. Plugin-owned partials live in `stride-core/templates/` and render through the loader / `ntdst_response()->html()`. (This is the `gotcha_mu_plugin_no_theme_calls` memory, codified. The original "verified clean" claim covered only the `stridence_` prefix — a grep blind spot, audit finding H-6: 4 `stride_format_date` calls existed in `NotificationMapper` and `StrideMailBridge`. Task C2 — 2026-06-10 — resolved H-6 by moving `stride_format_date` into `stride-core/Support/formatting.php`: it is **core-owned** now, core and theme may both call it, and the check is BLOCKING. The unit-suite contract test is `tests/Unit/Support/FormattingHelpersTest.php` — it pins both the core ownership and the Dutch output.)
 
 **Output escaping (sub-invariant).** Dynamic output is escaped at the sink: `esc_html` (text), `esc_attr` (attributes), `esc_url` (URLs). Alpine `x-text` bindings are intentionally unescaped data (Alpine HTML-escapes on insertion — safe; `x-html` would not be). The one deliberate raw echo (`_tool-header.php` `$attrs`, "caller is trusted") is marked inline — new raw `echo $var` of dynamic data without an `esc_*` is a bypass.
 
 **Audit move:**
 ```bash
 # The forbidden plugin→theme call — pattern covers ALL theme-defined procedural
-# helpers (stridence_* prefix + the non-prefixed formatting helpers). Re-sweep
-# themes/stridence/helpers/*.php + functions.php for new helpers when extending:
-grep -rn "stride_format_\|stride_enrollment_url\|stridence_" --include="*.php" web/app/mu-plugins/stride-core
-# must be empty — 4 known stride_format_date hits remain advisory until Task C2 lands, then blocking
+# helpers (stridence_* prefix + the non-prefixed formatting helpers). Note:
+# stride_format_date is core-owned since Task C2 and deliberately NOT in the
+# pattern. Re-sweep themes/stridence/helpers/*.php + functions.php for new
+# helpers when extending:
+grep -rn "stride_format_money\|stride_enrollment_url\|stridence_" --include="*.php" web/app/mu-plugins/stride-core
+# must be empty — BLOCKING since Task C2 (2026-06-10)
 # Unescaped dynamic echo in templates:
 grep -rn "echo \$" --include="*.php" web/app/mu-plugins/stride-core/templates | grep -v "esc_\|(int)\|(float)\|x-text\|wp_kses\|ntdst_response"
 ```
