@@ -188,4 +188,51 @@ final class UserDashboardMemoizationTest extends IntegrationTestCase
             "non-home tab render used {$delta} queries; budget is " . self::NON_HOME_TAB_QUERY_BUDGET,
         );
     }
+
+    /**
+     * @test
+     *
+     * Bulk-path seam (deferred at the E-cluster gate, closed by the Step-0
+     * test-effectiveness audit): edition trash/delete bulk-removes
+     * registrations via raw $wpdb (justified INV-3 bypass) — the ONE
+     * registration write that does not go through a repository method. It
+     * must still hit the clearCache() invalidation convergence point, or a
+     * request that trashes an edition and then reads the dashboard serves
+     * the deleted registration from the stale memo.
+     *
+     * Drives the full mounted chain, no mocks: wp_trash_post() ->
+     * wp_trash_post action -> EditionService::onEditionTrashed() -> bulk
+     * DELETE -> RegistrationRepository::clearCache() ->
+     * stride/registration/cache_cleared -> memo drop -> fresh SQL read.
+     * Goes RED if the clearCache() call in deleteEditionRegistrations()
+     * is removed (mutation-probed at authoring time).
+     */
+    public function editionTrashBulkDeleteInvalidatesMemoWithinRequest(): void
+    {
+        $course  = $this->createTestCourse();
+        $edition = $this->createTestEdition(['meta' => ['_ntdst_course_id' => $course]]);
+        $regId   = $this->repo->create([
+            'user_id'    => self::$testUserId,
+            'edition_id' => $edition,
+        ]);
+        $this->createdRegistrationIds[] = $regId;
+
+        // Prime the memo with the registration present.
+        $before = $this->dashboard->getEnrollmentData(self::$testUserId);
+        $this->assertContains(
+            $edition,
+            array_column($before['active_editions'], 'edition_id'),
+            'precondition: the registration must be visible before the trash',
+        );
+
+        // Bulk write path: trash fires onEditionTrashed -> raw $wpdb delete.
+        wp_trash_post($edition);
+
+        $after = $this->dashboard->getEnrollmentData(self::$testUserId);
+        $this->assertNotContains(
+            $edition,
+            array_column($after['active_editions'], 'edition_id'),
+            'bulk edition-delete must invalidate the memo — a stale memo resurrects deleted registrations (CR audit, bulk-path seam)',
+        );
+    }
 }
