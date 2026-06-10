@@ -1,0 +1,31 @@
+# PHPStan static analysis — audit task 0.3 (finding M-7).
+#
+# Level 1 with a generated baseline: every pre-existing finding is absorbed
+# by phpstan-baseline.neon; NEW violations fail CI (composer lint:stan).
+# Regenerate the baseline ONLY with explicit sign-off:
+#   vendor/bin/phpstan analyse --memory-limit=1G --generate-baseline
+#
+# Known limitation (recorded in the audit plan): level-1 PHPStan cannot see
+# inside $wpdb SQL strings, so dead-column queries (H-1 class, e.g.
+# AdminAPIController r.tasks / r.created_at) are NOT caught here — task 0.5's
+# integration tests are the net for that class.
+
+includes:
+    - vendor/szepeviktor/phpstan-wordpress/extension.neon
+    - phpstan-baseline.neon
+
+parameters:
+    level: 1
+    paths:
+        - web/app/mu-plugins/stride-core
+        - web/app/themes/stridence
+    excludePaths:
+        - web/app/themes/stridence/node_modules
+        - web/app/themes/stridence/dist
+        - web/app/themes/stridence/test-results
+    scanDirectories:
+        # Symbol discovery only (not analyzed): NTDST framework + LearnDash,
+        # so calls into them from stride-core/stridence resolve instead of
+        # producing unknown-symbol noise on new code.
+        - web/app/mu-plugins/ntdst-core
+        - web/app/plugins/sfwd-lms

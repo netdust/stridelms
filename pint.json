@@ -1,9 +1,15 @@
 {
   "preset": "per",
   "exclude": [
+    "bck",
+    "marketing",
+    "tests/manual",
+    "web/app/languages",
+    "web/app/uploads",
     "web/wp",
     "web/app/mu-plugins/bedrock-disallow-indexing",
     "web/app/plugins",
-    "web/app/themes/twentytwentyfive"
+    "web/app/themes/twentytwentyfive",
+    "web/app/themes/stridence/node_modules"
   ]
 }

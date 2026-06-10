@@ -5,9 +5,9 @@ on: [push, pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        php-version: ['8.1', '8.2', '8.3']
+    # Single PHP version: composer.lock pins openspout/openspout v4.32 (~8.3),
+    # and the platform runs 8.3 (.ddev). The old 8.1/8.2 matrix legs failed
+    # composer install on every run since ~2026-05-18.
 
     steps:
     - uses: actions/checkout@v4
@@ -17,13 +17,12 @@ jobs:
     # printed but do not fail. Pure bash/grep — runs once, before Composer.
     # See ARCHITECTURE-INVARIANTS.md.
     - name: Check architecture invariants
-      if: matrix.php-version == '8.3'
       run: bash scripts/check-invariants.sh
 
     - name: Setup PHP
       uses: shivammathur/setup-php@v2
       with:
-        php-version: ${{ matrix.php-version }}
+        php-version: '8.3'
 
     - name: Cache Composer dependencies
       id: composer-cache
@@ -41,6 +40,9 @@ jobs:
     - name: Install Composer dependencies
       run: composer install --no-progress --prefer-dist --optimize-autoloader
 
+    # Pint is scoped (composer.json) to the shipping trees: stride-core,
+    # ntdst-core, stridence. bck/, tests/manual, marketing etc. are excluded
+    # via pint.json — they are not shipping code.
     - name: Run Pint
       run: composer lint
 
@@ -72,3 +74,8 @@ jobs:
 
     - name: Run unit tests
       run: composer test:unit
+
+    # PHPStan level 1 + baseline (audit 0.3 / finding M-7). All pre-existing
+    # findings live in phpstan-baseline.neon; NEW violations fail this step.
+    - name: Run PHPStan
+      run: composer lint:stan
