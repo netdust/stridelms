@@ -2233,8 +2233,8 @@ final class AdminAPIController
                     "SELECT r.id
                      FROM {$registrationTable} r
                      WHERE r.status = 'confirmed'
-                     AND r.tasks IS NOT NULL
-                     AND r.tasks LIKE %s
+                     AND r.completion_tasks IS NOT NULL
+                     AND r.completion_tasks LIKE %s
                      AND r.registered_at < %s",
                     '%"completed":false%',
                     $taskCutoff,
@@ -3430,7 +3430,7 @@ final class AdminAPIController
              LEFT JOIN {$wpdb->postmeta} pm_date ON r.edition_id = pm_date.post_id AND pm_date.meta_key = '_ntdst_start_date'
              WHERE r.status = 'confirmed'
              AND (pm_date.meta_value >= %s OR pm_date.meta_value IS NULL)
-             ORDER BY pm_date.meta_value ASC, r.created_at ASC",
+             ORDER BY pm_date.meta_value ASC, r.registered_at ASC",
             $today,
         ));
 
