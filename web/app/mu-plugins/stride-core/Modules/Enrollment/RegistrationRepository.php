@@ -1160,6 +1160,33 @@ final class RegistrationRepository
         return $result !== false;
     }
 
+    /**
+     * Migration support (CR-D3 / INV-3): every registration that carries
+     * completion_tasks, as minimal {id, completion_tasks} pairs. The table
+     * is repository-owned, so table-wide scans read through here — not via
+     * raw $wpdb in the caller (CompletionProofStorage::migrate()).
+     *
+     * @return array<object> rows with ->id (int) and ->completion_tasks
+     *                       (array|null — JSON-decoded, repo convention)
+     */
+    public function idsWithCompletionTasks(): array
+    {
+        global $wpdb;
+
+        $rows = $wpdb->get_results(
+            "SELECT id, completion_tasks FROM {$this->table()} WHERE completion_tasks IS NOT NULL",
+        );
+
+        foreach ($rows as $row) {
+            $row->id = (int) $row->id;
+            $row->completion_tasks = is_string($row->completion_tasks)
+                ? json_decode($row->completion_tasks, true)
+                : null;
+        }
+
+        return $rows;
+    }
+
     // === Status updates ===
 
     /**

@@ -39,6 +39,14 @@ final class CompletionProofStorage
 
     private const VERSION_OPTION = 'stride_proof_storage_version';
 
+    /**
+     * Set after a failed run (drift D-2): while it lives, migrate() bails
+     * before the table scan so a persistently failing file move does not
+     * cost a full scan + log spam on every request. The version option
+     * stays unstamped, so the retry semantics are unchanged once it lapses.
+     */
+    private const RETRY_TRANSIENT = 'stride_proof_migration_backoff';
+
     public static function getProtectedDir(): string
     {
         $uploads = wp_upload_dir();
@@ -135,6 +143,11 @@ final class CompletionProofStorage
             return;
         }
 
+        if (get_transient(self::RETRY_TRANSIENT) !== false) {
+            // A recent run failed — back off until the transient lapses (D-2).
+            return;
+        }
+
         if (!RegistrationTable::exists()) {
             // Fresh install: nothing to migrate, all future uploads are protected.
             update_option(self::VERSION_OPTION, self::VERSION);
@@ -148,25 +161,21 @@ final class CompletionProofStorage
                 'step' => 'ensure_protected_dir',
                 'error' => $dirReady->get_error_message(),
             ]);
+            set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
 
             return;
         }
 
-        global $wpdb;
-
-        // Migration-context read (mirrors RegistrationTable::migrate()'s raw
-        // SQL precedent); proofs are referenced from completion_tasks JSON.
-        $table = RegistrationTable::getTableName();
-        $rows = $wpdb->get_results(
-            "SELECT id, completion_tasks FROM {$table} WHERE completion_tasks IS NOT NULL",
-        );
+        // INV-3 (CR-D3): the registrations table is repository-owned — the
+        // table-wide scan reads through RegistrationRepository, never raw SQL.
+        $rows = ntdst_get(RegistrationRepository::class)->idsWithCompletionTasks();
 
         $found = 0;
         $moved = 0;
         $failures = 0;
 
         foreach ($rows as $row) {
-            $tasks = json_decode((string) $row->completion_tasks, true);
+            $tasks = $row->completion_tasks;
             if (!is_array($tasks)) {
                 continue;
             }
@@ -201,7 +210,10 @@ final class CompletionProofStorage
         }
 
         if ($failures > 0) {
-            // Don't stamp — the next init request retries the failed moves.
+            // Don't stamp — a later request retries the failed moves once
+            // the backoff transient lapses (D-2).
+            set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
+
             return;
         }
 

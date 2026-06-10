@@ -64,8 +64,9 @@ final class CompletionProofMigrationTest extends IntegrationTestCase
         $this->createdFiles = [];
 
         // Leave the install stamped at the current version regardless of
-        // forced re-runs inside tests.
+        // forced re-runs inside tests, and clear any retry backoff.
         update_option('stride_proof_storage_version', CompletionProofStorage::VERSION);
+        delete_transient('stride_proof_migration_backoff');
 
         parent::tearDown();
     }
@@ -195,6 +196,41 @@ final class CompletionProofMigrationTest extends IntegrationTestCase
             (int) get_option('stride_proof_storage_version'),
             'Version option must be stamped after a successful run',
         );
+    }
+
+    /** @test */
+    public function migrationBailsWhileRetryBackoffTransientLives(): void
+    {
+        // Drift D-2: a failed run sets a short backoff transient so a
+        // persistently failing move does not trigger a full table scan +
+        // log spam on EVERY request. While it lives, migrate() bails early;
+        // once it lapses the unstamped version retries as before.
+        [, $attachmentId, $publicPath] = $this->seedLegacyPublicProof();
+
+        set_transient('stride_proof_migration_backoff', 1, 5 * MINUTE_IN_SECONDS);
+        $this->forceMigration();
+
+        $this->assertSame(
+            $publicPath,
+            (string) get_attached_file($attachmentId),
+            'While the backoff transient lives, migrate() must bail before scanning/moving',
+        );
+        $this->assertFileExists($publicPath);
+        $this->assertSame(
+            0,
+            (int) get_option('stride_proof_storage_version', 0),
+            'Backoff bail must not stamp the version (retry semantics stay unstamped)',
+        );
+
+        // Backoff lapsed → the very next run migrates normally.
+        delete_transient('stride_proof_migration_backoff');
+        CompletionProofStorage::migrate();
+
+        $newPath = (string) get_attached_file($attachmentId);
+        $this->createdFiles[] = $newPath;
+        $this->assertNotSame($publicPath, $newPath, 'After the backoff lapses the proof must migrate');
+        $this->assertFileExists($newPath);
+        $this->assertSame(CompletionProofStorage::VERSION, (int) get_option('stride_proof_storage_version'));
     }
 
     // === Helpers ===
