@@ -106,6 +106,49 @@ final class SessionRepository extends AbstractRepository
     }
 
     /**
+     * Batch-count published sessions for multiple editions in one GROUP BY query.
+     *
+     * The N-independent equivalent of calling countByEdition() per id —
+     * added for the catalog batch pre-pass (Task G1 / audit 2.2). Same
+     * relationship semantics as countByEdition() (meta-based edition_id
+     * link, published sessions). The meta prefix comes from the model so
+     * a config change can't silently break the join (INV-3 vocabulary).
+     *
+     * @param array<int> $editionIds
+     * @return array<int, int> Map of edition_id => count (all input ids present, defaulting to 0)
+     */
+    public function countByEditions(array $editionIds): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $editionIds)));
+        if (empty($ids)) {
+            return [];
+        }
+
+        global $wpdb;
+
+        $editionKey   = $this->getMetaPrefix() . 'edition_id';
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT pm.meta_value AS edition_id, COUNT(*) AS c
+             FROM {$wpdb->posts} p
+             INNER JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID AND pm.meta_key = %s
+             WHERE p.post_type = %s
+               AND p.post_status = 'publish'
+               AND pm.meta_value IN ({$placeholders})
+             GROUP BY pm.meta_value",
+            array_merge([$editionKey, $this->postType], $ids),
+        ));
+
+        $out = array_fill_keys($ids, 0);
+        foreach ($rows as $row) {
+            $out[(int) $row->edition_id] = (int) $row->c;
+        }
+
+        return $out;
+    }
+
+    /**
      * Sum total duration (hours) across a batch of sessions in a single query.
      *
      * Performance-driven: the alternative would be N find() round-trips through

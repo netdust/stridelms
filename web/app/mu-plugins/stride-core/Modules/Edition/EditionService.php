@@ -265,10 +265,22 @@ class EditionService extends AbstractService implements EditionQueryInterface
     {
         $endDate   = (string) $this->repository->getField($editionId, 'end_date', '');
         $startDate = (string) $this->repository->getField($editionId, 'start_date', '');
+
+        return self::isPastDates($endDate ?: null, $startDate ?: null);
+    }
+
+    /**
+     * The calendar predicate behind isPast(), on prefetched date values.
+     *
+     * end_date wins; start_date is the fallback; no dates at all → not past.
+     */
+    private static function isPastDates(?string $endDate, ?string $startDate): bool
+    {
         $reference = $endDate ?: $startDate;
         if (!$reference) {
             return false;
         }
+
         return strtotime($reference) < strtotime(date('Y-m-d'));
     }
 
@@ -298,17 +310,101 @@ class EditionService extends AbstractService implements EditionQueryInterface
      */
     public function getEffectiveStatus(int $editionId): OfferingStatus
     {
-        $stored = $this->getStatus($editionId);
+        return $this->getEffectiveStatusFromPrefetched(
+            $this->getStatus($editionId),
+            ((string) $this->repository->getField($editionId, 'end_date', '')) ?: null,
+            ((string) $this->repository->getField($editionId, 'start_date', '')) ?: null,
+            $this->isClassroom($editionId),
+            $this->sessions->countByEdition($editionId),
+        );
+    }
+
+    /**
+     * The effective-status DECISION ENGINE, operating on prefetched inputs.
+     *
+     * INV-7: this is the single place where the display-status rules live.
+     * `getEffectiveStatus()` (single edition) and `getEffectiveStatuses()`
+     * (batch, catalog pre-pass) both delegate here — never re-implement
+     * these rules anywhere else, and never call this with partial data
+     * (a wrong session count or classroom flag changes the decision).
+     *
+     * Rules, in priority order (see getEffectiveStatus() docblock):
+     *  1. Terminal stored statuses (Cancelled/Completed/Archived) win.
+     *  2. Past end_date (start_date fallback) → Completed.
+     *  3. Classroom edition with zero published sessions → Announcement.
+     *  4. Otherwise: the stored admin intent.
+     */
+    public function getEffectiveStatusFromPrefetched(
+        OfferingStatus $stored,
+        ?string $endDate,
+        ?string $startDate,
+        bool $isClassroom,
+        int $publishedSessionCount,
+    ): OfferingStatus {
         if ($stored->isTerminal()) {
             return $stored;
         }
-        if ($this->isPast($editionId)) {
+        if (self::isPastDates($endDate, $startDate)) {
             return OfferingStatus::Completed;
         }
-        if ($this->isClassroom($editionId) && !$this->hasPublishedSessions($editionId)) {
+        if ($isClassroom && $publishedSessionCount === 0) {
             return OfferingStatus::Announcement;
         }
+
         return $stored;
+    }
+
+    /**
+     * Batch variant of getEffectiveStatus() for catalog/list surfaces.
+     *
+     * Primes the WP post/meta/term caches and batches the session count
+     * (SessionRepository::countByEditions, one GROUP BY) so the cost is
+     * independent of the number of editions. The DECISION for every id
+     * still goes through getEffectiveStatusFromPrefetched() — one INV-7
+     * decision point, never forked.
+     *
+     * Per-request only: nothing here is cached across requests, so a
+     * status change is reflected on the next page load.
+     *
+     * @param array<int> $editionIds
+     * @return array<int, OfferingStatus> Map of edition_id => effective status
+     */
+    public function getEffectiveStatuses(array $editionIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $editionIds))));
+        if (empty($ids)) {
+            return [];
+        }
+
+        // Prime posts + meta for the editions, then posts + meta + terms for
+        // their courses (isClassroom reads the course's stride_format terms).
+        _prime_post_caches($ids, false, true);
+
+        $courseIds = [];
+        foreach ($ids as $id) {
+            $courseId = $this->getCourseId($id);
+            if ($courseId) {
+                $courseIds[$courseId] = $courseId;
+            }
+        }
+        if (!empty($courseIds)) {
+            _prime_post_caches(array_values($courseIds), true, true);
+        }
+
+        $sessionCounts = $this->sessions->countByEditions($ids);
+
+        $out = [];
+        foreach ($ids as $id) {
+            $out[$id] = $this->getEffectiveStatusFromPrefetched(
+                $this->getStatus($id),
+                ((string) $this->repository->getField($id, 'end_date', '')) ?: null,
+                ((string) $this->repository->getField($id, 'start_date', '')) ?: null,
+                $this->isClassroom($id),
+                $sessionCounts[$id] ?? 0,
+            );
+        }
+
+        return $out;
     }
 
     /**
@@ -335,17 +431,6 @@ class EditionService extends AbstractService implements EditionQueryInterface
             }
         }
         return false;
-    }
-
-    /**
-     * True when the edition has at least one published session row.
-     *
-     * Online editions (e-learning, webinars) don't need session rows —
-     * the LD content IS the schedule. Only meaningful for klassikaal.
-     */
-    private function hasPublishedSessions(int $editionId): bool
-    {
-        return $this->sessions->countByEdition($editionId) > 0;
     }
 
     // === Event Handlers ===

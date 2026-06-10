@@ -680,6 +680,33 @@ final class EnrollmentService extends AbstractService
     }
 
     /**
+     * Edition ids where the user has a confirmed registration.
+     *
+     * The batch equivalent of isEnrolled() for catalog surfaces (Task G1 /
+     * audit 2.2): one per-request-cached query via
+     * RegistrationRepository::findByUser() instead of a lookup per card.
+     * Same contract as isEnrolled(): confirmed status only.
+     *
+     * @return list<int>
+     */
+    public function getEnrolledEditionIds(int $userId): array
+    {
+        if ($userId <= 0) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($this->registrations->findByUser($userId) as $row) {
+            $editionId = (int) ($row->edition_id ?? 0);
+            if ($editionId > 0 && ($row->status ?? '') === RegistrationStatus::Confirmed->value) {
+                $out[$editionId] = $editionId;
+            }
+        }
+
+        return array_values($out);
+    }
+
+    /**
      * Check if user has any active registration (blocks duplicate submissions).
      *
      * Active = anything except cancelled (uses RegistrationStatus::blocksDuplicate).
