@@ -187,13 +187,13 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                                                          action: 'stride_update_quote',
                                                          params: { quote_id: <?php echo (int) $quote['id']; ?> },
                                                          fields: <?php echo esc_attr(json_encode([
-                                                                 'company'     => $quote['billing']['company'] ?? '',
-                                                                 'email'       => $quote['billing']['email'] ?? '',
-                                                                 'address'     => $quote['billing']['address'] ?? '',
-                                                                 'postal_code' => $quote['billing']['postal_code'] ?? '',
-                                                                 'city'        => $quote['billing']['city'] ?? '',
-                                                                 'vat_number'  => $quote['billing']['vat_number'] ?? '',
-                                                             ])); ?>
+                                                             'company'     => $quote['billing']['company'] ?? '',
+                                                             'email'       => $quote['billing']['email'] ?? '',
+                                                             'address'     => $quote['billing']['address'] ?? '',
+                                                             'postal_code' => $quote['billing']['postal_code'] ?? '',
+                                                             'city'        => $quote['billing']['city'] ?? '',
+                                                             'vat_number'  => $quote['billing']['vat_number'] ?? '',
+                                                         ])); ?>
                                                      })"
                                                      x-init="startEdit()">
                                                     <p class="text-xs font-medium text-text-muted uppercase tracking-wide mb-3">
@@ -296,11 +296,11 @@ function stridence_quote_status_classes(QuoteStatus $status): string
         <?php else : ?>
             <?php
             stridence_template_part('partials/empty-state', null, [
-                    'icon'    => 'file-text',
-                    'title'   => __('Geen offertes', 'stridence'),
-                    'message' => __('Je hebt nog geen offertes. Offertes worden automatisch aangemaakt wanneer je je inschrijft voor een opleiding.', 'stridence'),
-                    'action'  => __('Bekijk opleidingen', 'stridence'),
-                    'url'     => get_post_type_archive_link('sfwd-courses'),
+                'icon'    => 'file-text',
+                'title'   => __('Geen offertes', 'stridence'),
+                'message' => __('Je hebt nog geen offertes. Offertes worden automatisch aangemaakt wanneer je je inschrijft voor een opleiding.', 'stridence'),
+                'action'  => __('Bekijk opleidingen', 'stridence'),
+                'url'     => get_post_type_archive_link('sfwd-courses'),
             ]);
             ?>
         <?php endif; ?>

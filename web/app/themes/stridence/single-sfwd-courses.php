@@ -121,9 +121,9 @@ stridence_template_part('templates/course/tabs', null, [
             <div class="max-w-3xl space-y-12">
                 <?php
                 stridence_template_part('templates/course/content', null, [
-            'course_id' => $course_id,
-            'is_online' => $is_online,
-            'editions'  => $editions,
+                    'course_id' => $course_id,
+                    'is_online' => $is_online,
+                    'editions'  => $editions,
                 ]);
             ?>
 

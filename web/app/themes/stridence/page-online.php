@@ -266,12 +266,12 @@ get_header();
                     <div data-themes="<?php echo esc_attr(implode(',', $item['themes'])); ?>">
                         <?php if ($item['kind'] === 'edition') : ?>
                             <?php stridence_template_part('partials/card-edition', null, [
-                                    'edition' => $item['edition'],
-                                ]); ?>
+                                'edition' => $item['edition'],
+                            ]); ?>
                         <?php else : ?>
                             <?php stridence_template_part('partials/card-course', null, [
-                                    'course' => $item['course'],
-                                ]); ?>
+                                'course' => $item['course'],
+                            ]); ?>
                         <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
@@ -316,9 +316,9 @@ get_header();
         <?php else : ?>
             <?php
             stridence_template_part('partials/empty-state', null, [
-'icon'    => 'monitor',
-'title'   => __('Geen opleidingen gevonden', 'stridence'),
-'message' => __('Er zijn momenteel geen online opleidingen beschikbaar.', 'stridence'),
+                'icon'    => 'monitor',
+                'title'   => __('Geen opleidingen gevonden', 'stridence'),
+                'message' => __('Er zijn momenteel geen online opleidingen beschikbaar.', 'stridence'),
             ]);
             ?>
         <?php endif; ?>

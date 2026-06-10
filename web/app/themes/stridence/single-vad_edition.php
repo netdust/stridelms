@@ -274,11 +274,11 @@ get_header();
                                             $isSelected = in_array((int) $session['id'], $selected_session_ids, true);
                                             ?>
                                             <?php stridence_template_part('partials/session-row', null, [
-                                                    'session'    => (object) $session,
-                                                    'attendance' => null,
-                                                    'selected'   => $isSelected,
-                                                    'not_chosen' => false,
-                                                ]); ?>
+                                                'session'    => (object) $session,
+                                                'attendance' => null,
+                                                'selected'   => $isSelected,
+                                                'not_chosen' => false,
+                                            ]); ?>
                                         <?php endforeach; ?>
                                     </div>
                                 </div>
@@ -322,11 +322,11 @@ get_header();
                                             $notChosen = $hasSelections && !$isSelected;
                                             ?>
                                             <?php stridence_template_part('partials/session-row', null, [
-                                                    'session'    => (object) $session,
-                                                    'attendance' => null,
-                                                    'selected'   => $isSelected,
-                                                    'not_chosen' => $notChosen,
-                                                ]); ?>
+                                                'session'    => (object) $session,
+                                                'attendance' => null,
+                                                'selected'   => $isSelected,
+                                                'not_chosen' => $notChosen,
+                                            ]); ?>
                                         <?php endforeach; ?>
                                     </div>
                                 </div>
@@ -339,11 +339,11 @@ get_header();
                                     $isSelected = in_array((int) $session['id'], $selected_session_ids, true);
                                     ?>
                                     <?php stridence_template_part('partials/session-row', null, [
-                                            'session'    => (object) $session,
-                                            'attendance' => null,
-                                            'selected'   => $isSelected,
-                                            'not_chosen' => false,
-                                        ]); ?>
+                                        'session'    => (object) $session,
+                                        'attendance' => null,
+                                        'selected'   => $isSelected,
+                                        'not_chosen' => false,
+                                    ]); ?>
                                 <?php endforeach; ?>
                             </div>
                         <?php endif; ?>
