@@ -103,15 +103,38 @@ final class RegistrationTable
         // Purely additive — existing values are untouched. Pre-v2, inserts using
         // RegistrationRepository::PATH_PARTNER were coerced to '' under
         // non-strict SQL mode; backfill those rows when they are company-scoped.
-        $wpdb->query(
+        // Rollback posture: ENUM values can't be dropped while 'partner' rows
+        // exist — rollback is "leave the value in place", which is safe.
+        $altered = $wpdb->query(
             "ALTER TABLE {$table}
             MODIFY enrollment_path ENUM('individual','colleague','trajectory','partner') DEFAULT 'individual'",
         );
-        $wpdb->query(
+
+        if ($altered === false) {
+            ntdst_log('enrollment')->error('registrations schema v2 migration failed', [
+                'step' => 'alter_enrollment_path_enum',
+                'error' => $wpdb->last_error,
+            ]);
+
+            // Don't stamp the version: the next init request retries (steps are idempotent).
+            return;
+        }
+
+        // Note: 0 affected rows is int 0, not false — only false signals a DB error.
+        $backfilled = $wpdb->query(
             "UPDATE {$table}
             SET enrollment_path = 'partner'
             WHERE enrollment_path = '' AND company_id IS NOT NULL",
         );
+
+        if ($backfilled === false) {
+            ntdst_log('enrollment')->error('registrations schema v2 migration failed', [
+                'step' => 'backfill_partner_path',
+                'error' => $wpdb->last_error,
+            ]);
+
+            return;
+        }
 
         update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION);
     }

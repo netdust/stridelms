@@ -40,7 +40,7 @@ abstract class TestCase extends BaseTestCase
         global $_test_user_meta, $_test_post_meta, $_test_actions, $_test_filters;
         global $_test_action_calls, $_test_options, $_test_transients, $_test_container;
         global $_test_users, $_test_posts, $_test_data_manager_meta;
-        global $_test_abilities, $_test_ability_categories;
+        global $_test_abilities, $_test_ability_categories, $_test_log_entries;
 
         $_test_user_meta = [];
         $_test_post_meta = [];
@@ -55,6 +55,7 @@ abstract class TestCase extends BaseTestCase
         $_test_data_manager_meta = [];
         $_test_abilities = [];
         $_test_ability_categories = [];
+        $_test_log_entries = [];
     }
 
     /**

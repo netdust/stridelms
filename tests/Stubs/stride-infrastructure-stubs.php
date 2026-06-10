@@ -210,14 +210,47 @@ namespace NTDST\Audit {
 
 // Global namespace for ntdst_log function
 namespace {
+    // Captured log calls so unit tests can assert logging behavior.
+    // Shape: ['channel' => string, 'level' => string, 'message' => string, 'context' => array]
+    global $_test_log_entries;
+    $_test_log_entries = [];
+
     if (!function_exists('ntdst_log')) {
         function ntdst_log(string $channel = 'default'): object
         {
-            return new class {
-                public function info(string $message, array $context = []): void {}
-                public function debug(string $message, array $context = []): void {}
-                public function warning(string $message, array $context = []): void {}
-                public function error(string $message, array $context = []): void {}
+            return new class ($channel) {
+                public function __construct(private string $channel) {}
+
+                public function info(string $message, array $context = []): void
+                {
+                    $this->record('info', $message, $context);
+                }
+
+                public function debug(string $message, array $context = []): void
+                {
+                    $this->record('debug', $message, $context);
+                }
+
+                public function warning(string $message, array $context = []): void
+                {
+                    $this->record('warning', $message, $context);
+                }
+
+                public function error(string $message, array $context = []): void
+                {
+                    $this->record('error', $message, $context);
+                }
+
+                private function record(string $level, string $message, array $context): void
+                {
+                    global $_test_log_entries;
+                    $_test_log_entries[] = [
+                        'channel' => $this->channel,
+                        'level' => $level,
+                        'message' => $message,
+                        'context' => $context,
+                    ];
+                }
             };
         }
     }
