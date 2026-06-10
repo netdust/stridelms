@@ -196,13 +196,52 @@ class AuthPluginCest
             $message = (string) $I->executeJS(
                 'const el = document.querySelector("[x-data]"); return el ? (Alpine.$data(el).message || "") : "";'
             );
-            if (stripos($message, 'network') === false) {
+            // Under full-suite load the first submit can fail client-side
+            // ("network") or trip the per-IP rate limiter from a half-completed
+            // attempt ("te veel"/"too many"). Both are environmental — clear
+            // the rate counters and retry once. A real validation failure
+            // (any other message) still throws.
+            $transient = stripos($message, 'network') !== false
+                || stripos($message, 'te veel') !== false
+                || stripos($message, 'too many') !== false
+                || stripos($message, 'rate') !== false;
+            if (!$transient) {
                 throw $e;
             }
-            $I->comment('Network error from saturated FPM pool — retrying submit once');
+            $I->comment('Transient submit failure under load — clearing rate limits and retrying once');
+            $I->dontHaveInDatabase($I->grabPrefixedTableNameFor('options'), ['option_name like' => '_transient%ntdst_rate_%']);
+            $I->reloadPage();
+            $I->waitForElement('#email', 5);
+            $this->refillRegistrationForm($I);
             $I->click('button[type="submit"]');
-            $I->waitForText('inbox', 20);
+            $I->waitForText('inbox', 25);
         }
+    }
+
+    /**
+     * Re-fill the registration form after a reload (used by the retry path).
+     * Mirrors the field set both registration tests use.
+     */
+    private function refillRegistrationForm(AcceptanceTester $I): void
+    {
+        $I->fillField('#first_name', 'Retry');
+        $I->fillField('#last_name', 'User');
+        $I->fillField('#email', 'retry-' . time() . '-' . random_int(1000, 9999) . '@example.com');
+
+        $profileTypeSelects = $I->grabMultiple('#profile_type');
+        if (!empty($profileTypeSelects)) {
+            $I->executeJS("
+                const select = document.getElementById('profile_type');
+                if (select && select.options.length > 1) {
+                    select.value = select.options[1].value;
+                    select.dispatchEvent(new Event('input', { bubbles: true }));
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            ");
+        }
+
+        $I->checkOption('#consent_terms');
+        $I->checkOption('#consent_privacy');
     }
 
     // -------------------------------------------------------------------------

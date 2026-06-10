@@ -319,7 +319,24 @@ class AdminEditionCest
     {
         $I->wantTo('add a session to an edition via the admin UI');
 
-        $editionId = $this->editionWithSessions($I);
+        // Use a DEDICATED edition so the test owns its session count — pointing
+        // at the shared seed-max edition let earlier runs accrete sessions until
+        // the metabox row-render cap (10) defeated the before<after assertion.
+        $stamp = time() . '_' . substr(md5((string) microtime(true)), 0, 4);
+        $editionId = $I->havePostInDatabase([
+            'post_type' => 'vad_edition',
+            'post_title' => 'AddSession Edition ' . $stamp,
+            'post_status' => 'publish',
+        ]);
+        $courseId = $I->havePostInDatabase([
+            'post_type' => 'sfwd-courses',
+            'post_title' => 'AddSession Course ' . $stamp,
+            'post_status' => 'publish',
+        ]);
+        $I->havePostmetaInDatabase($editionId, '_ntdst_course_id', $courseId);
+        $I->havePostmetaInDatabase($editionId, '_ntdst_status', 'open');
+        $I->havePostmetaInDatabase($editionId, '_ntdst_start_date', date('Y-m-d', strtotime('+20 days')));
+
         $I->amOnPage('/wp/wp-admin/post.php?post=' . $editionId . '&action=edit');
         $I->dontSee('Fatal error');
 
