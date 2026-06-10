@@ -90,9 +90,9 @@ final class AuditService implements \NTDST_Service_Meta
             /**
              * Fires after an audit entry is recorded.
              *
-             * Lets consumers react to new events without polling — e.g.
-             * Stride invalidates its cached unread-notification count for
-             * the subject user (context.user_id).
+             * Lets consumers react to new events without polling — e.g. a
+             * notification layer invalidating a cached unread count for the
+             * subject user (context.user_id) or the actor.
              *
              * @param string   $action     Recorded action slug.
              * @param string   $entityType Entity type.
@@ -127,7 +127,8 @@ final class AuditService implements \NTDST_Service_Meta
      *
      * @param string[] $excludeActions Action slugs that must never count as
      *                                 subject-targeted (consumer policy, e.g.
-     *                                 Stride excludes 'mail.sent').
+     *                                 excluding operational send-logs like
+     *                                 'mail.sent').
      */
     public function getForSubjectUser(int $userId, int $limit = 50, int $daysBack = 30, array $excludeActions = []): array
     {

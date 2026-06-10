@@ -34,8 +34,19 @@ final class AuditTableMigrationTest extends IntegrationTestCase
 {
     private const SCHEMA_OPTION = 'ntdst_audit_schema_version';
 
+    private const BACKOFF_TRANSIENT = 'ntdst_audit_migration_backoff';
+
     /** @var array<int> */
     private array $seededIds = [];
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // A lingering failure-backoff (I1b) would make migrate() silently
+        // no-op and turn every assertion below into a false negative.
+        delete_transient(self::BACKOFF_TRANSIENT);
+    }
 
     protected function tearDown(): void
     {
@@ -48,7 +59,9 @@ final class AuditTableMigrationTest extends IntegrationTestCase
         }
 
         // Re-run the migration so the dev table always ends at the latest
-        // schema, even if a forced-rerun test failed mid-way.
+        // schema, even if a forced-rerun test failed mid-way. The backoff
+        // transient must go first or migrate() bails.
+        delete_transient(self::BACKOFF_TRANSIENT);
         AuditTable::migrate();
         update_option(self::SCHEMA_OPTION, AuditTable::SCHEMA_VERSION);
 
@@ -130,7 +143,7 @@ final class AuditTableMigrationTest extends IntegrationTestCase
               WHERE subject_user_id = %d
                 AND (actor_id IS NULL OR actor_id != %d)
                 AND created_at >= %s)
-            UNION
+            UNION ALL
             (SELECT * FROM {$this->table()}
               WHERE actor_id = %d
                 AND action LIKE 'completion.%%'
@@ -201,6 +214,111 @@ final class AuditTableMigrationTest extends IntegrationTestCase
         $this->assertSame(AuditTable::SCHEMA_VERSION, (int) get_option(self::SCHEMA_OPTION));
     }
 
+    /** @test */
+    public function freshInstallCreatesLatestSchemaWithoutAlter(): void
+    {
+        global $wpdb;
+
+        // Route the whole AuditTable API at a scratch table (I1a): create()
+        // must build the LATEST schema in one statement — column + both v2
+        // indexes — and stamp the version, with ZERO ALTER needed after.
+        $scratch = static fn(): string => 'phpunit_audit_fresh';
+        add_filter('ntdst/audit/table_name', $scratch);
+
+        $savedVersion = get_option(self::SCHEMA_OPTION);
+
+        try {
+            $wpdb->query("DROP TABLE IF EXISTS {$this->table()}");
+            delete_option(self::SCHEMA_OPTION);
+
+            AuditTable::create();
+
+            $this->assertTrue(AuditTable::exists(), 'create() must build the table');
+            $this->assertTrue($this->columnExists('subject_user_id'), 'I1a: fresh CREATE must include subject_user_id');
+            $this->assertTrue($this->indexExists('idx_subject_user'), 'I1a: fresh CREATE must include idx_subject_user');
+            $this->assertTrue($this->indexExists('idx_action'), 'I1a: fresh CREATE must include idx_action');
+            $this->assertTrue($this->indexExists('idx_entity'), 'base index must survive');
+
+            $this->assertSame(
+                AuditTable::SCHEMA_VERSION,
+                (int) get_option(self::SCHEMA_OPTION),
+                'I1a: create() must stamp SCHEMA_VERSION (fresh installs never re-run historical steps)',
+            );
+
+            // The generated column must compute on the fresh path too
+            // (doubles as the dbDelta-mangling check).
+            $validId = $this->seedRow('{"user_id": 777000114}');
+            $overflowId = $this->seedRow('{"user_id": "99999999999999999999999"}');
+            $this->assertSame(777000114, $this->subjectOf($validId));
+            $this->assertNull($this->subjectOf($overflowId));
+            $this->seededIds = []; // scratch table is dropped whole below
+
+            $alters = $this->captureAlters(static fn() => AuditTable::migrate());
+            $this->assertSame([], $alters, 'I1a: migrate() after a fresh create() must issue ZERO ALTERs');
+        } finally {
+            $wpdb->query("DROP TABLE IF EXISTS {$this->table()}");
+            remove_filter('ntdst/audit/table_name', $scratch);
+
+            if ($savedVersion !== false) {
+                update_option(self::SCHEMA_OPTION, $savedVersion);
+            }
+        }
+    }
+
+    /** @test */
+    public function failedMigrationSetsBackoffAndSkipsRetryWhileItLives(): void
+    {
+        global $wpdb;
+
+        // Scratch table WITHOUT a context column: the v2 ALTER (generated
+        // column referencing `context`) fails deterministically.
+        $scratch = static fn(): string => 'phpunit_audit_backoff';
+        add_filter('ntdst/audit/table_name', $scratch);
+
+        $savedVersion = get_option(self::SCHEMA_OPTION);
+
+        // The failing ALTERs below are the point of the test — keep wpdb's
+        // error echo out of the output (failOnRisky).
+        $suppressed = $wpdb->suppress_errors();
+
+        try {
+            $wpdb->query("DROP TABLE IF EXISTS {$this->table()}");
+            $wpdb->query("CREATE TABLE {$this->table()} (
+                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                action VARCHAR(50) NOT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )");
+            update_option(self::SCHEMA_OPTION, 1);
+
+            $alters = $this->captureAlters(static fn() => AuditTable::migrate());
+            $this->assertNotSame([], $alters, 'Precondition: the failing run must attempt the ALTER');
+
+            $this->assertNotFalse(
+                get_transient(self::BACKOFF_TRANSIENT),
+                'I1b: a failed migration must set the 5-min backoff transient',
+            );
+            $this->assertSame(1, (int) get_option(self::SCHEMA_OPTION), 'Failed run must not stamp the version');
+
+            // While the backoff lives, migrate() must bail BEFORE any DDL.
+            $alters = $this->captureAlters(static fn() => AuditTable::migrate());
+            $this->assertSame([], $alters, 'I1b: migrate() must not retry while the backoff transient lives');
+
+            // Once it lapses, the retry semantics are unchanged.
+            delete_transient(self::BACKOFF_TRANSIENT);
+            $alters = $this->captureAlters(static fn() => AuditTable::migrate());
+            $this->assertNotSame([], $alters, 'I1b: lapsed backoff must restore the retry');
+        } finally {
+            $wpdb->suppress_errors($suppressed);
+            delete_transient(self::BACKOFF_TRANSIENT);
+            $wpdb->query("DROP TABLE IF EXISTS {$this->table()}");
+            remove_filter('ntdst/audit/table_name', $scratch);
+
+            if ($savedVersion !== false) {
+                update_option(self::SCHEMA_OPTION, $savedVersion);
+            }
+        }
+    }
+
     // === Helpers ===
 
     private function table(): string
@@ -265,13 +383,71 @@ final class AuditTableMigrationTest extends IntegrationTestCase
     /**
      * Drop the v2 artifacts so migrate() exercises the real ALTER every run
      * (indexes first — dropping the column would silently shrink them).
+     * Existence-checked instead of "DROP ... IF EXISTS" (MariaDB-only; C1).
      */
     private function dropMigrationArtifacts(): void
     {
         global $wpdb;
 
-        $wpdb->query("ALTER TABLE {$this->table()} DROP INDEX IF EXISTS idx_subject_user");
-        $wpdb->query("ALTER TABLE {$this->table()} DROP INDEX IF EXISTS idx_action");
-        $wpdb->query("ALTER TABLE {$this->table()} DROP COLUMN IF EXISTS subject_user_id");
+        if ($this->indexExists('idx_subject_user')) {
+            $wpdb->query("ALTER TABLE {$this->table()} DROP INDEX idx_subject_user");
+        }
+        if ($this->indexExists('idx_action')) {
+            $wpdb->query("ALTER TABLE {$this->table()} DROP INDEX idx_action");
+        }
+        if ($this->columnExists('subject_user_id')) {
+            $wpdb->query("ALTER TABLE {$this->table()} DROP COLUMN subject_user_id");
+        }
+    }
+
+    private function columnExists(string $column): bool
+    {
+        global $wpdb;
+
+        return (bool) $wpdb->get_var($wpdb->prepare(
+            'SELECT 1 FROM information_schema.COLUMNS
+              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND COLUMN_NAME = %s',
+            $this->table(),
+            $column,
+        ));
+    }
+
+    private function indexExists(string $index): bool
+    {
+        global $wpdb;
+
+        return (bool) $wpdb->get_var($wpdb->prepare(
+            'SELECT 1 FROM information_schema.STATISTICS
+              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND INDEX_NAME = %s',
+            $this->table(),
+            $index,
+        ));
+    }
+
+    /**
+     * Run $fn while capturing every ALTER TABLE statement wpdb issues.
+     *
+     * @return string[]
+     */
+    private function captureAlters(callable $fn): array
+    {
+        $alters = [];
+        $collector = static function (string $query) use (&$alters): string {
+            if (stripos(ltrim($query), 'ALTER TABLE') === 0) {
+                $alters[] = $query;
+            }
+
+            return $query;
+        };
+
+        add_filter('query', $collector);
+
+        try {
+            $fn();
+        } finally {
+            remove_filter('query', $collector);
+        }
+
+        return $alters;
     }
 }

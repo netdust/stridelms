@@ -5,6 +5,7 @@
  * Version: 1.1.0
  * Requires at least: 6.0
  * Requires PHP: 8.1
+ * Requires DB: MariaDB 10.2.3+ or MySQL 8.0.21+ (JSON_VALUE inside a generated column)
  * Author: NTDST
  * Text Domain: ntdst-audit
  */

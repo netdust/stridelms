@@ -177,7 +177,10 @@ class AuditRepository
      * (schema v2) — indexable, unlike a raw JSON_EXTRACT predicate. The two
      * patterns are UNIONed instead of ORed: with an OR the optimizer falls
      * back to an idx_created range scan; as a UNION each branch uses its own
-     * index (idx_subject_user / idx_actor).
+     * index (idx_subject_user / idx_actor). UNION ALL, not UNION: the
+     * branches are mutually exclusive on actor_id (branch 1 requires
+     * actor_id IS NULL OR != user, branch 2 requires actor_id = user), so
+     * the dedup pass UNION would add is pure waste.
      *
      * @param string[] $excludeActions Action slugs to exclude entirely.
      */
@@ -200,7 +203,7 @@ class AuditRepository
                   WHERE subject_user_id = %d
                     AND (actor_id IS NULL OR actor_id != %d)
                     AND created_at >= %s{$exclude})
-                UNION
+                UNION ALL
                 (SELECT * FROM {$this->table()}
                   WHERE actor_id = %d
                     AND action LIKE 'completion.%%'
