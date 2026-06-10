@@ -20,7 +20,7 @@ Operational config (hosting, deploy, SSH): `site.yml`. Memory: `memory/`. Tasks:
 Stride follows WordPress mu-plugin architecture with clear separation:
 
 - **stride-core** (mu-plugin): All business logic, services, data models
-- **stride** (theme): Presentation only - templates, assets, frontend services
+- **stridence** (theme): Presentation only - templates, assets, frontend services
 
 ### Namespace Structure
 
@@ -236,17 +236,22 @@ stride/
 │   │   │       │   ├── Attendance/     # AttendanceService, AttendanceRepository
 │   │   │       │   ├── Questionnaire/  # QuestionnaireService
 │   │   │       │   ├── Notification/   # NotificationService
-│   │   │       │   ├── User/           # ProfileTypeService
+│   │   │       │   ├── User/           # ProfileTypeService, UserLifecycleService
+│   │   │       │   ├── Membership/     # MembershipService
+│   │   │       │   ├── Reporting/      # AnnualReportService, AnnualReportPdfGenerator
 │   │   │       │   ├── Mail/           # StrideMailBridge
 │   │   │       │   ├── Audit/          # AuditBridge
 │   │   │       │   ├── Assistant/      # ReadAbilityRegistrar, WriteAbilityRegistrar
 │   │   │       │   └── PartnerAPI/     # REST API for partner organizations
-│   │   │       ├── Admin/              # AdminDashboardService
-│   │   │       ├── Handlers/           # AJAX handlers (ProfileHandler, ICalHandler, etc.)
+│   │   │       ├── Admin/              # AdminDashboardService, StrideToolsService, AdminAPIController, ...
+│   │   │       ├── Handlers/           # AJAX handlers: AnnualReportHandler, CompletionTaskHandler,
+│   │   │       │                       #   EnrollmentFormHandler, EnrollmentQuoteHandler, ICalHandler,
+│   │   │       │                       #   ProfileHandler, QuoteUpdateHandler
 │   │   │       ├── Integrations/       # LearnDashService, LearnDashHelper
 │   │   │       ├── Contracts/          # Interfaces (LMSAdapterInterface, etc.)
 │   │   │       ├── Domain/             # Value objects (Money, EditionStatus, etc.)
 │   │   │       ├── Infrastructure/     # AbstractRepository, AbstractService, BatchQueryHelper
+│   │   │       ├── Support/            # formatting.php (stride_format_date — shared, usable by PDFs/emails)
 │   │   │       ├── assets/
 │   │   │       │   ├── css/            # Admin CSS + per-module CSS
 │   │   │       │   └── js/             # Admin JS + per-module JS
@@ -294,7 +299,11 @@ return [
     'services' => [
         \Stride\Integrations\LearnDash\LearnDashService::class,
         \Stride\Admin\AdminDashboardService::class,
+        \Stride\Admin\StrideToolsService::class,
+        \Stride\Modules\Membership\MembershipService::class,
         \Stride\Modules\Edition\EditionService::class,
+        \Stride\Modules\Edition\EditionDuplicator::class,
+        \Stride\Modules\Edition\CourseEnrollHandler::class,
         \Stride\Modules\Enrollment\EnrollmentService::class,
         \Stride\Modules\Questionnaire\QuestionnaireService::class,
         \Stride\Modules\Trajectory\TrajectoryService::class,
@@ -305,8 +314,12 @@ return [
         \Stride\Modules\Mail\StrideMailBridge::class,
         \Stride\Modules\PartnerAPI\PartnerAPIController::class,
         \Stride\Modules\User\ProfileTypeService::class,
+        \Stride\Modules\User\UserLifecycleService::class,
         \Stride\Modules\Assistant\ReadAbilityRegistrar::class,
         \Stride\Modules\Assistant\WriteAbilityRegistrar::class,
+        \Stride\Modules\Reporting\AnnualReportService::class,
+        \Stride\Modules\Reporting\AnnualReportPdfGenerator::class,
+        \Stride\Modules\Reporting\Admin\AnnualReportPage::class,
     ],
 ];
 ```
@@ -612,14 +625,17 @@ ddev exec wp eval "echo class_exists('\Stride\Modules\Edition\EditionService') ?
 # Run all unit tests (fast, uses stubs)
 ddev exec vendor/bin/phpunit --testsuite Unit
 
-# Run all integration tests (slower, uses real WordPress)
-ddev exec vendor/bin/phpunit --testsuite Integration
+# Run all integration tests (slower, uses real WordPress — own config + bootstrap)
+ddev exec vendor/bin/phpunit -c phpunit-integration.xml.dist
 
 # Run specific test file
 ddev exec vendor/bin/phpunit --filter PartnerAPIController --testsuite Unit
 
 # Run with coverage (if xdebug enabled)
 ddev exec vendor/bin/phpunit --testsuite Unit --coverage-text
+
+# Static analysis (PHPStan)
+ddev exec composer lint:stan
 ```
 
 **Test structure:**
@@ -681,7 +697,7 @@ curl -u "partner_user:xxxx xxxx xxxx xxxx" \
 6. **Journey UX**: Trajectories shown as visual learning paths, not course grids
 7. **Edition/Session Model**: LearnDash courses are content only; editions are scheduled offerings with dates, pricing, capacity; sessions are individual meeting days
 8. **LearnDash as Content Engine**: Only 4 integration points: `grantAccess`, `revokeAccess`, `isComplete`, `getCertificateLink`
-9. **Plugin Architecture**: Business logic in mu-plugin (`stride-core`), presentation in theme (`stride`)
+9. **Plugin Architecture**: Business logic in mu-plugin (`stride-core`), presentation in theme (`stridence`)
 
 ---
 
@@ -715,7 +731,7 @@ npm run build   # Production build
 ### Helper Functions
 
 ```php
-stride_format_date($date)      // Dutch formatted date
+stride_format_date($date)      // Dutch formatted date — lives in stride-core (Support/formatting.php), not the theme
 stride_format_money($cents)    // "€ 45,00"
 stride_enrollment_url($id)     // Enrollment page URL
 stridence_icon($name, $class)  // Inline SVG icon
