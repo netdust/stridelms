@@ -6,6 +6,8 @@ namespace Stride\Modules\Invoicing;
 
 use Stride\Domain\QuoteStatus;
 use Stride\Infrastructure\AbstractRepository;
+use WP_Error;
+use WP_Post;
 
 /**
  * Repository for quote data access.
@@ -13,6 +15,50 @@ use Stride\Infrastructure\AbstractRepository;
 final class QuoteRepository extends AbstractRepository
 {
     protected string $postType = QuoteCPT::POST_TYPE;
+
+    /**
+     * Quote writes are spread across QuoteService, QuoteAdminController,
+     * QuoteUpdateHandler and QuotePDFGenerator, but they ALL converge on this
+     * repository's write methods. Fire one signal here so per-request memos
+     * (UserDashboardService) invalidate on every quote write path.
+     */
+    private function flagDataChanged(): void
+    {
+        do_action('stride/quote/data_changed');
+    }
+
+    public function create(array $data): WP_Post|WP_Error
+    {
+        $result = parent::create($data);
+
+        if (!is_wp_error($result)) {
+            $this->flagDataChanged();
+        }
+
+        return $result;
+    }
+
+    public function update(int $id, array $data): WP_Post|WP_Error
+    {
+        $result = parent::update($id, $data);
+
+        if (!is_wp_error($result)) {
+            $this->flagDataChanged();
+        }
+
+        return $result;
+    }
+
+    public function delete(int $id, bool $force = false): bool|WP_Error
+    {
+        $result = parent::delete($id, $force);
+
+        if ($result === true) {
+            $this->flagDataChanged();
+        }
+
+        return $result;
+    }
 
     /**
      * Find quotes for a user.
@@ -145,7 +191,13 @@ final class QuoteRepository extends AbstractRepository
             $data['sent_at'] = current_time('mysql');
         }
 
-        return $this->model()->updateMetaBatch($quoteId, $data);
+        $result = $this->model()->updateMetaBatch($quoteId, $data);
+
+        if ($result) {
+            $this->flagDataChanged();
+        }
+
+        return $result;
     }
 
     /**
@@ -161,6 +213,12 @@ final class QuoteRepository extends AbstractRepository
      */
     public function updateMeta(int $quoteId, array $data): bool
     {
-        return $this->model()->updateMetaBatch($quoteId, $data);
+        $result = $this->model()->updateMetaBatch($quoteId, $data);
+
+        if ($result) {
+            $this->flagDataChanged();
+        }
+
+        return $result;
     }
 }

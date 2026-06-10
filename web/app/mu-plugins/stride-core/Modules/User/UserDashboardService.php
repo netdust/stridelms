@@ -31,6 +31,25 @@ use WP_User;
  */
 final class UserDashboardService
 {
+    /**
+     * Per-request memo of the ASSEMBLED getEnrollmentData() array, keyed by
+     * user id. Instance property on purpose (never static): the container
+     * gives one instance per request, so the memo can never leak between
+     * users across PHP-FPM requests. Mirrors
+     * RegistrationRepository::$findByUserCache including its invalidation
+     * point (see clearMemo()).
+     *
+     * @var array<int, array>
+     */
+    private array $enrollmentDataCache = [];
+
+    /**
+     * Per-request memo of the assembled getQuoteData() array, keyed by user id.
+     *
+     * @var array<int, array>
+     */
+    private array $quoteDataCache = [];
+
     public function __construct(
         private readonly RegistrationRepository $registrationRepo,
         private readonly EditionService $editionService,
@@ -38,7 +57,25 @@ final class UserDashboardService
         private readonly SessionService $sessionService,
         private readonly AttendanceService $attendanceService,
         private readonly EditionCompletion $completionService,
-    ) {}
+    ) {
+        // Invalidation: every registration write path funnels through
+        // RegistrationRepository::clearCache() (which fires the first action);
+        // every quote write path funnels through QuoteRepository's write
+        // methods (which fire the second). Either write drops the whole memo
+        // — conservative and per-request cheap.
+        add_action('stride/registration/cache_cleared', [$this, 'clearMemo']);
+        add_action('stride/quote/data_changed', [$this, 'clearMemo']);
+    }
+
+    /**
+     * Drop the per-request memo. Hooked to the repository write signals;
+     * callable directly in tests.
+     */
+    public function clearMemo(): void
+    {
+        $this->enrollmentDataCache = [];
+        $this->quoteDataCache = [];
+    }
 
     /**
      * Get aggregated data for the dashboard home screen.
@@ -91,26 +128,6 @@ final class UserDashboardService
             'recent_certificates'  => $certificates,
             'nav_items'            => $this->buildNavItems($enrollmentData, $quoteData, $trajectories),
         ];
-    }
-
-    /**
-     * Get navigation visibility flags for non-home dashboard tabs.
-     *
-     * Derives from the SAME data as getHomeData()'s nav_items. A previous
-     * version used separate existence queries with different semantics
-     * (e.g. certificaten gated on having registrations instead of having
-     * completed items), which made sidebar items appear on the home tab and
-     * vanish on every other tab.
-     *
-     * @return array{opleidingen: bool, trajecten: bool, agenda: bool, offertes: bool, certificaten: bool}
-     */
-    public function getNavData(int $userId): array
-    {
-        return $this->buildNavItems(
-            $this->getEnrollmentData($userId),
-            $this->getQuoteData($userId),
-            $this->buildActiveTrajectories($userId),
-        );
     }
 
     /**
@@ -271,6 +288,12 @@ final class UserDashboardService
      */
     public function getEnrollmentData(int $userId): array
     {
+        // Per-request memo of the assembled array (INV-6: the LD helper
+        // calls inside stay un-forked — only the final result is cached).
+        if (isset($this->enrollmentDataCache[$userId])) {
+            return $this->enrollmentDataCache[$userId];
+        }
+
         // Fetch registrations once for the entire method
         $allRegistrations = $this->registrationRepo->findByUser($userId);
 
@@ -280,7 +303,7 @@ final class UserDashboardService
         $completedItems = array_merge($completedEditions, $completedOnline);
         usort($completedItems, fn($a, $b) => strcmp($b['completed_at'] ?? '', $a['completed_at'] ?? ''));
 
-        return [
+        return $this->enrollmentDataCache[$userId] = [
             'active_editions'    => $activeEditions,
             'active_online'      => $activeOnline,
             'completed_items'    => $completedItems,
@@ -782,17 +805,20 @@ final class UserDashboardService
             }
         }
 
-        // Start from user's enrolled courses, filter to online formats
-        $onlineCourseIds = get_posts([
+        // Start from user's enrolled courses, filter to online formats.
+        // Fetch full posts (not ids): WP_Query then batch-primes the post,
+        // meta and term caches, so the per-course get_post()/get_the_terms()
+        // calls below stop issuing one query each (Task E1).
+        $onlineCoursePosts = get_posts([
             'post_type'      => 'sfwd-courses',
             'posts_per_page' => -1,
             'post_status'    => 'publish',
-            'fields'         => 'ids',
             'post__in'       => $enrolledIds,
             'tax_query'      => [
                 ['taxonomy' => 'stride_format', 'field' => 'slug', 'terms' => ['online', 'e-learning', 'webinar']],
             ],
         ]);
+        $onlineCourseIds = array_map(static fn($p) => $p->ID, $onlineCoursePosts);
 
         $active = $completed = [];
 
@@ -927,6 +953,10 @@ final class UserDashboardService
      */
     public function getQuoteData(int $userId): array
     {
+        if (isset($this->quoteDataCache[$userId])) {
+            return $this->quoteDataCache[$userId];
+        }
+
         $quoteService = ntdst_get(\Stride\Modules\Invoicing\QuoteService::class);
         $quotes = $quoteService->getUserQuotes($userId);
 
@@ -968,6 +998,6 @@ final class UserDashboardService
 
         usort($active, fn($a, $b) => strcmp($a['created_at'], $b['created_at']));
 
-        return ['active' => $active, 'cancelled' => $cancelled];
+        return $this->quoteDataCache[$userId] = ['active' => $active, 'cancelled' => $cancelled];
     }
 }

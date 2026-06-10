@@ -545,32 +545,145 @@ class UserDashboardServiceTest extends TestCase
     }
 
     // ================================================================
-    // getNavData() — must derive from the same data as home nav_items
+    // Per-request memoization (audit CR-2 / Task E1)
+    //
+    // getEnrollmentData() + getQuoteData() memoize the ASSEMBLED array per
+    // user id (instance property — per-request only, never static), mirroring
+    // RegistrationRepository::$findByUserCache including its invalidation
+    // point. nav consistency is now structural: page-mijn-account.php builds
+    // a static sidebar and getNavData() was deleted with its last consumer
+    // (the orphaned nav-dock.php template was the only nav_items reader).
     // ================================================================
 
-    /**
-     * @test
-     *
-     * Regression: bug_dashboard_nav_inconsistent. Home computed nav flags
-     * from the full enrollment/quote data while getNavData() used separate
-     * existence queries (hasActiveRegistrations etc.) with DIFFERENT
-     * semantics — sidebar items appeared on the home tab and vanished on
-     * every other tab. The two surfaces must derive from one source.
-     */
-    public function getNavDataMatchesHomeNavItemsForSameUser(): void
+    /** @test */
+    public function testGetEnrollmentDataIsMemoizedWithinRequest(): void
     {
-        global $_test_users;
-        $_test_users[1] = new WP_User(['ID' => 1, 'first_name' => 'Jan', 'last_name' => 'Peeters', 'user_email' => 'jan@example.com', 'display_name' => 'Jan Peeters']);
+        $this->regRepo = $this->createMock(RegistrationRepository::class);
+        $this->regRepo->expects($this->once())
+            ->method('findByUser')
+            ->with(1)
+            ->willReturn([]);
 
-        // Make the legacy existence queries disagree with the (empty) full
-        // data set: a single-source implementation is immune to this skew.
-        $this->regRepo->method('hasActiveRegistrations')->willReturn(true);
-        $this->regRepo->method('hasTrajectoryEnrollments')->willReturn(true);
+        $this->service = new UserDashboardService(
+            $this->regRepo,
+            $this->editionService,
+            $this->editionRepository,
+            $this->sessionService,
+            $this->attendanceService,
+            $this->completionService,
+        );
 
-        $home = $this->service->getHomeData(1);
-        $nav = $this->service->getNavData(1);
+        $first  = $this->service->getEnrollmentData(1);
+        $second = $this->service->getEnrollmentData(1);
 
-        $this->assertSame($home['nav_items'], $nav);
+        $this->assertSame($first, $second, 'second call must return the memoized assembled array');
+    }
+
+    /** @test */
+    public function testGetQuoteDataIsMemoizedWithinRequest(): void
+    {
+        $quoteService = $this->makeCountingQuoteService();
+        $this->registerService(\Stride\Modules\Invoicing\QuoteService::class, $quoteService);
+
+        $first  = $this->service->getQuoteData(1);
+        $second = $this->service->getQuoteData(1);
+
+        $this->assertSame([1], $quoteService->calls, 'QuoteService must be hit exactly once for one user');
+        $this->assertSame($first, $second);
+    }
+
+    /** @test */
+    public function testMemoIsIsolatedPerUser(): void
+    {
+        $quoteService = $this->makeCountingQuoteService();
+        $this->registerService(\Stride\Modules\Invoicing\QuoteService::class, $quoteService);
+
+        $userA = $this->service->getQuoteData(1);
+        $userB = $this->service->getQuoteData(2);
+        $userARepeat = $this->service->getQuoteData(1);
+
+        // User A's memo is never returned for user B and vice versa.
+        $this->assertSame('Q-1', $userA['active'][0]['quote_number']);
+        $this->assertSame('Q-2', $userB['active'][0]['quote_number']);
+        $this->assertSame($userA, $userARepeat, 'user A memo survives an interleaved user B read');
+        $this->assertSame([1, 2], $quoteService->calls, 'one fetch per user, no cross-user reuse');
+    }
+
+    /** @test */
+    public function testRegistrationCacheClearedActionInvalidatesEnrollmentMemo(): void
+    {
+        $this->regRepo = $this->createMock(RegistrationRepository::class);
+        $this->regRepo->expects($this->exactly(2))
+            ->method('findByUser')
+            ->with(1)
+            ->willReturn([]);
+
+        $this->service = new UserDashboardService(
+            $this->regRepo,
+            $this->editionService,
+            $this->editionRepository,
+            $this->sessionService,
+            $this->attendanceService,
+            $this->completionService,
+        );
+
+        // Fill memo (two calls = one fetch), then a registration write path
+        // fires RegistrationRepository::clearCache()'s action — the memo must
+        // be dropped so the next read sees fresh data.
+        $this->service->getEnrollmentData(1);
+        $this->service->getEnrollmentData(1);
+
+        do_action('stride/registration/cache_cleared');
+
+        $this->service->getEnrollmentData(1);
+    }
+
+    /** @test */
+    public function testQuoteDataChangedActionInvalidatesQuoteMemo(): void
+    {
+        $quoteService = $this->makeCountingQuoteService();
+        $this->registerService(\Stride\Modules\Invoicing\QuoteService::class, $quoteService);
+
+        $this->service->getQuoteData(1);
+        $this->service->getQuoteData(1);
+
+        do_action('stride/quote/data_changed');
+
+        $this->service->getQuoteData(1);
+
+        $this->assertSame([1, 1], $quoteService->calls, 'quote write must invalidate the memo within the request');
+    }
+
+    /**
+     * QuoteService stub that records which user ids were fetched and returns
+     * a distinct quote per user (so cross-user leaks are observable).
+     */
+    private function makeCountingQuoteService(): object
+    {
+        return new class {
+            /** @var array<int> */
+            public array $calls = [];
+
+            public function getUserQuotes(int $userId): array
+            {
+                $this->calls[] = $userId;
+
+                return [[
+                    'ID'             => 100 + $userId,
+                    'quote_number'   => 'Q-' . $userId,
+                    'post_title'     => 'Offerte ' . $userId,
+                    'status_enum'    => QuoteStatus::Draft,
+                    'total_money'    => null,
+                    'subtotal_money' => null,
+                    'discount_money' => null,
+                    'tax_money'      => null,
+                    'items'          => [],
+                    'valid_until'    => '',
+                    'post_date'      => '2026-01-01',
+                    'voucher_code'   => '',
+                ]];
+            }
+        };
     }
 
     // ================================================================

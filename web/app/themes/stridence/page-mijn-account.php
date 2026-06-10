@@ -29,16 +29,13 @@ if (!in_array($current_tab, $valid_tabs, true)) {
     $current_tab = 'home';
 }
 
-// Only fetch full home data on home tab; other tabs just need nav items
+// Only fetch full home data on the home tab. Non-home tabs hydrate nothing
+// here: the sidebar/bottom nav are static (built below) and each tab template
+// fetches its own data through UserDashboardService's per-request memo.
+// (Audit CR-2: getNavData() full hydration on non-home tabs had zero
+// consumers — nav-mobile.php hardcodes its tabs — so the call was deleted.)
 $dashboardService = ntdst_get(\Stride\Modules\User\UserDashboardService::class);
-
-if ($current_tab === 'home') {
-    $home_data = $dashboardService->getHomeData($user->ID);
-    $nav_items = $home_data['nav_items'] ?? [];
-} else {
-    $home_data = null;
-    $nav_items = $dashboardService->getNavData($user->ID);
-}
+$home_data = $current_tab === 'home' ? $dashboardService->getHomeData($user->ID) : null;
 
 // Compute greeting variables (needed by $page_titles below)
 $firstName = explode(' ', trim($user->display_name))[0];
@@ -137,7 +134,6 @@ get_header();
     <div class="lg:hidden">
         <?php stridence_template_part('templates/dashboard/nav-mobile', null, [
             'current_tab'  => $current_tab,
-            'nav_items'    => $nav_items,
             'unread_count' => $unread_count,
         ]); ?>
     </div>

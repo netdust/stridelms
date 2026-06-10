@@ -1121,11 +1121,19 @@ final class RegistrationRepository
     {
         global $wpdb;
 
-        return $wpdb->update(
+        $result = $wpdb->update(
             $this->table(),
             ['selections_locked_at' => current_time('mysql')],
             ['id' => $registrationId],
         ) !== false;
+
+        if ($result) {
+            // Write path was missing its invalidation (selections_locked_at
+            // is part of the rows findByUser caches) — found during Task E1.
+            $this->clearCache();
+        }
+
+        return $result;
     }
 
     /**
@@ -1310,10 +1318,16 @@ final class RegistrationRepository
 
     /**
      * Clear per-request memoization cache.
+     *
+     * Fires `stride/registration/cache_cleared` so downstream per-request
+     * memos (e.g. UserDashboardService) invalidate at the same single point
+     * every registration write path already funnels through.
      */
     public function clearCache(): void
     {
         $this->findByUserCache = [];
+
+        do_action('stride/registration/cache_cleared');
     }
 
     // === Legacy aliases ===
