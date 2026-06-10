@@ -237,4 +237,57 @@ final class CatalogBatchHydrationTest extends IntegrationTestCase
         $this->assertNotContains($pendingEdition, $enrolledIds);
         $this->assertSame([], $enrollment->getEnrolledEditionIds(0), 'anonymous visitor has no enrolled set');
     }
+
+    /**
+     * @test
+     *
+     * CR-G4 — duplicate-rows parity pin. The table has NO unique key on
+     * (user_id, edition_id); duplicates are reachable via raw $wpdb writes
+     * (AdminAPIController), v3 data ports, or the racy app-level duplicate
+     * check. Under a cancelled+confirmed pair (cancelled inserted FIRST, so
+     * an unordered scan returns it), isEnrolled() must still agree with the
+     * batch set: the user IS enrolled — any confirmed row counts.
+     */
+    public function duplicateRowsKeepIsEnrolledAndBatchInParity(): void
+    {
+        global $wpdb;
+        $enrollment = ntdst_get(EnrollmentService::class);
+
+        $editionId = $this->createTestEdition();
+
+        // Raw inserts on purpose: RegistrationRepository::create() reactivates
+        // instead of duplicating, so the duplicate shape must be seeded the
+        // way it actually arrives — outside the repository.
+        $wpdb->insert($wpdb->prefix . 'vad_registrations', [
+            'user_id'    => self::$testUserId,
+            'edition_id' => $editionId,
+            'status'     => 'cancelled',
+            'cancelled_at' => date('Y-m-d H:i:s', strtotime('-2 days')),
+        ]);
+        $this->createdRegistrationIds[] = (int) $wpdb->insert_id;
+
+        $wpdb->insert($wpdb->prefix . 'vad_registrations', [
+            'user_id'    => self::$testUserId,
+            'edition_id' => $editionId,
+            'status'     => 'confirmed',
+        ]);
+        $this->createdRegistrationIds[] = (int) $wpdb->insert_id;
+
+        $this->registrations->clearCache();
+
+        $isEnrolled = $enrollment->isEnrolled(self::$testUserId, $editionId);
+        $inBatch = in_array($editionId, $enrollment->getEnrolledEditionIds(self::$testUserId), true);
+
+        $this->assertTrue($inBatch, 'batch set must contain the edition — a confirmed row exists');
+        $this->assertTrue(
+            $isEnrolled,
+            'isEnrolled() must see the confirmed row even when a duplicate cancelled row sorts first physically (CR-G4)',
+        );
+        $this->assertSame($isEnrolled, $inBatch, 'single and batch enrolled answers must never diverge');
+
+        // Deterministic single-row read: findByUserAndEdition must return the
+        // confirmed row, not whichever row the storage engine scans first.
+        $row = $this->registrations->findByUserAndEdition(self::$testUserId, $editionId);
+        $this->assertSame('confirmed', $row->status ?? null, 'findByUserAndEdition must prefer the active row under duplicates');
+    }
 }

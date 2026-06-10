@@ -356,15 +356,34 @@ final class RegistrationRepository
 
     /**
      * Find registration by user and edition.
+     *
+     * The table has NO unique key on (user_id, edition_id) — duplicates are
+     * reachable via raw $wpdb writes, v3 data ports, or the racy app-level
+     * duplicate check. The ORDER BY makes the picked row DETERMINISTIC and
+     * aligned with every call site's intent (CR-G4): the row representing
+     * the user's CURRENT relationship wins — confirmed first (matching the
+     * batch contract in EnrollmentService::getEnrolledEditionIds(), which
+     * treats ANY confirmed row as enrolled), then the other active states,
+     * cancelled last; latest row breaks ties.
      */
     public function findByUserAndEdition(int $userId, int $editionId): ?object
     {
         global $wpdb;
 
         $row = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM {$this->table()} WHERE user_id = %d AND edition_id = %d",
+            "SELECT * FROM {$this->table()}
+             WHERE user_id = %d AND edition_id = %d
+             ORDER BY FIELD(status, %s, %s, %s, %s, %s, %s) DESC, id DESC
+             LIMIT 1",
             $userId,
             $editionId,
+            // Lowest priority first — FIELD() DESC puts the last arg on top.
+            RegistrationStatus::Cancelled->value,
+            RegistrationStatus::Waitlist->value,
+            RegistrationStatus::Interest->value,
+            RegistrationStatus::Pending->value,
+            RegistrationStatus::Completed->value,
+            RegistrationStatus::Confirmed->value,
         ));
 
         if ($row && $row->selections) {
