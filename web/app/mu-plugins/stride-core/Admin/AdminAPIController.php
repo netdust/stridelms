@@ -1986,9 +1986,12 @@ final class AdminAPIController
      * post_evaluation / post_documents) and LIMIT-capped. The arbitrary-key
      * scans (areUserTasksComplete / getFirstOpenUserTask) stay in PHP —
      * EnrollmentCompletion owns those semantics, so the SQL filter is shaped
-     * to only ever OVER-fetch (PHP re-checks remain authoritative). Note the
-     * SQL status comparison is collation-(case-)insensitive where PHP is
-     * strict; task statuses are machine-written lowercase (markTaskComplete).
+     * to only ever OVER-fetch (PHP re-checks remain authoritative). The task
+     * status comparisons carry an explicit COLLATE utf8mb4_bin so SQL matches
+     * PHP's strict ===/!== exactly (CR-E1): MariaDB's JSON column type already
+     * pins completion_tasks to utf8mb4_bin (live-probed), but the explicit
+     * collation keeps the over-fetch property even if the column type drifts
+     * to the table's case-insensitive collation.
      * Bucket counts clip silently beyond APPROVALS_SCAN_CAP rows per query.
      */
     public function getPendingApprovals(WP_REST_Request $request): WP_REST_Response
@@ -2024,7 +2027,7 @@ final class AdminAPIController
                AND completion_tasks IS NOT NULL
                AND (
                    (JSON_EXTRACT(completion_tasks, '$.approval') IS NOT NULL
-                    AND COALESCE(JSON_VALUE(completion_tasks, '$.approval.status'), 'pending') <> 'completed')
+                    AND COALESCE(JSON_VALUE(completion_tasks, '$.approval.status'), 'pending') COLLATE utf8mb4_bin <> 'completed')
                    OR registered_at <= %s
                )
              ORDER BY registered_at ASC
@@ -2041,11 +2044,11 @@ final class AdminAPIController
              WHERE status = 'confirmed'
                AND completion_tasks IS NOT NULL
                AND JSON_EXTRACT(completion_tasks, '$.post_approval') IS NOT NULL
-               AND COALESCE(JSON_VALUE(completion_tasks, '$.post_approval.status'), 'pending') <> 'completed'
+               AND COALESCE(JSON_VALUE(completion_tasks, '$.post_approval.status'), 'pending') COLLATE utf8mb4_bin <> 'completed'
                AND (JSON_EXTRACT(completion_tasks, '$.post_evaluation') IS NULL
-                    OR JSON_VALUE(completion_tasks, '$.post_evaluation.status') = 'completed')
+                    OR JSON_VALUE(completion_tasks, '$.post_evaluation.status') COLLATE utf8mb4_bin = 'completed')
                AND (JSON_EXTRACT(completion_tasks, '$.post_documents') IS NULL
-                    OR JSON_VALUE(completion_tasks, '$.post_documents.status') = 'completed')
+                    OR JSON_VALUE(completion_tasks, '$.post_documents.status') COLLATE utf8mb4_bin = 'completed')
              ORDER BY registered_at ASC
              LIMIT %d",
             self::APPROVALS_SCAN_CAP,

@@ -123,6 +123,48 @@ final class PendingApprovalsBoundedTest extends IntegrationTestCase
     }
 
     /**
+     * CR-E1 characterization: a task status stored with unexpected case
+     * ('Completed') is NOT 'completed' to PHP's strict !== recheck, so the
+     * SQL pre-filter must keep the row too — SQL may only ever OVER-fetch.
+     *
+     * Live-probed (MariaDB 10.11): the JSON column type pins completion_tasks
+     * to utf8mb4_bin, so JSON_VALUE comparisons are already case-sensitive.
+     * The explicit COLLATE utf8mb4_bin in the bucketing SQL plus this test
+     * pin that property against column-type drift (e.g. a rebuild as plain
+     * longtext under the table's ci collation would silently flip the
+     * comparison to case-insensitive and drop this row before PHP sees it).
+     *
+     * @test
+     */
+    public function caseVariantTaskStatusIsNotDroppedBySqlPrefilter(): void
+    {
+        global $wpdb;
+        $wpdb->insert($wpdb->prefix . 'vad_registrations', [
+            'user_id' => self::$testUserId,
+            'edition_id' => $this->editionId,
+            'status' => 'pending',
+            'enrollment_path' => 'individual',
+            'registered_at' => gmdate('Y-m-d H:i:s', time() - DAY_IN_SECONDS),
+            'completion_tasks' => wp_json_encode([
+                'documents' => ['status' => 'completed'],
+                'approval' => ['status' => 'Completed'], // capital C: open to PHP's strict !==
+            ]),
+        ]);
+        $regId = (int) $wpdb->insert_id;
+        $this->regIds[] = $regId;
+
+        $data = $this->request(1, 50);
+
+        $this->assertGreaterThanOrEqual(1, $data['counts']['approval']);
+        $this->assertContains(
+            $regId,
+            array_column($data['items'], 'id'),
+            'Row with approval.status "Completed" was dropped by the SQL pre-filter — '
+            . 'SQL bucketing is case-insensitive where the PHP recheck is strict (CR-E1 under-fetch).'
+        );
+    }
+
+    /**
      * @test
      */
     public function outOfRangePageReturnsEmptyItemsButKeepsTotals(): void
