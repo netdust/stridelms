@@ -363,7 +363,11 @@ final class RegistrationModalController
     }
 
     /**
-     * @return array<int, array{id:int, filename:string, url:string, uploaded_at:?string}>
+     * Proofs live in protected storage (CompletionProofStorage) — their raw
+     * attachment URLs are deny-ruled, so the admin affordance downloads
+     * through the authenticated stride_download_proof handler instead.
+     *
+     * @return array<int, array{id:int, filename:string, uploaded_at:?string}>
      */
     private function buildDocuments(array $tasks): array
     {
@@ -382,7 +386,6 @@ final class RegistrationModalController
                 $docs[] = [
                     'id' => $id,
                     'filename' => $path ? basename((string) $path) : sprintf(__('Bestand #%d', 'stride'), $id),
-                    'url' => (string) wp_get_attachment_url($id),
                     'uploaded_at' => get_post_field('post_date', $id) ?: null,
                 ];
             }

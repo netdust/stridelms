@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stride\Handlers;
 
+use Stride\Modules\Enrollment\CompletionProofStorage;
 use Stride\Modules\Enrollment\EnrollmentCompletion;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use WP_Error;
@@ -35,6 +36,7 @@ final class CompletionTaskHandler
     {
         add_filter('ntdst/api_data/stride_complete_task', [$this, 'handleCompleteTask'], 10, 2);
         add_filter('ntdst/api_data/stride_upload_completion_documents', [$this, 'handleUploadDocuments'], 10, 2);
+        add_filter('ntdst/api_data/stride_download_proof', [$this, 'handleDownloadProof'], 10, 2);
         add_action('stride/enrollment/task_completed', [$this, 'onTaskCompleted']);
     }
 
@@ -153,27 +155,56 @@ final class CompletionTaskHandler
         require_once ABSPATH . 'wp-admin/includes/media.php';
         require_once ABSPATH . 'wp-admin/includes/image.php';
 
+        // M1: proofs may contain certificates bearing national IDs — store
+        // them in the deny-ruled protected dir, never the public library.
+        $dirReady = CompletionProofStorage::ensureProtectedDir();
+        if (is_wp_error($dirReady)) {
+            ntdst_log('enrollment')->error('proof upload: protected dir unavailable', [
+                'registration_id' => $registrationId,
+                'error' => $dirReady->get_error_message(),
+            ]);
+
+            return $dirReady;
+        }
+
         $attachmentIds = [];
 
         $errors = [];
 
-        for ($i = 0; $i < $fileCount; $i++) {
-            $_FILES['upload_file'] = [
-                'name'     => is_array($files['name']) ? $files['name'][$i] : $files['name'],
-                'type'     => is_array($files['type']) ? $files['type'][$i] : $files['type'],
-                'tmp_name' => is_array($files['tmp_name']) ? $files['tmp_name'][$i] : $files['tmp_name'],
-                'error'    => is_array($files['error']) ? $files['error'][$i] : $files['error'],
-                'size'     => is_array($files['size']) ? $files['size'][$i] : $files['size'],
-            ];
+        // Proofs need no derivative image sizes — thumbnails would duplicate
+        // sensitive content and nothing renders them.
+        add_filter('upload_dir', [CompletionProofStorage::class, 'uploadDirFilter']);
+        add_filter('intermediate_image_sizes_advanced', '__return_empty_array');
 
-            $attachmentId = media_handle_upload('upload_file', 0);
+        try {
+            for ($i = 0; $i < $fileCount; $i++) {
+                $_FILES['upload_file'] = [
+                    'name'     => is_array($files['name']) ? $files['name'][$i] : $files['name'],
+                    'type'     => is_array($files['type']) ? $files['type'][$i] : $files['type'],
+                    'tmp_name' => is_array($files['tmp_name']) ? $files['tmp_name'][$i] : $files['tmp_name'],
+                    'error'    => is_array($files['error']) ? $files['error'][$i] : $files['error'],
+                    'size'     => is_array($files['size']) ? $files['size'][$i] : $files['size'],
+                ];
 
-            if (is_wp_error($attachmentId)) {
-                $fileName = is_array($files['name']) ? $files['name'][$i] : $files['name'];
-                $errors[] = sprintf('%s: %s', $fileName, $attachmentId->get_error_message());
-            } else {
-                $attachmentIds[] = $attachmentId;
+                $attachmentId = media_handle_upload('upload_file', 0, [], $this->uploadOverrides());
+
+                if (is_wp_error($attachmentId)) {
+                    $fileName = is_array($files['name']) ? $files['name'][$i] : $files['name'];
+                    $errors[] = sprintf('%s: %s', $fileName, $attachmentId->get_error_message());
+                } else {
+                    $attachmentIds[] = $attachmentId;
+                }
             }
+        } finally {
+            remove_filter('upload_dir', [CompletionProofStorage::class, 'uploadDirFilter']);
+            remove_filter('intermediate_image_sizes_advanced', '__return_empty_array');
+        }
+
+        // M3 anchor: link each proof to its registration server-side so the
+        // download handler authorizes against the stored link, never a
+        // caller-supplied registration id.
+        foreach ($attachmentIds as $attachmentId) {
+            CompletionProofStorage::markProtected((int) $attachmentId, $registrationId);
         }
 
         if (empty($attachmentIds)) {
@@ -198,6 +229,140 @@ final class CompletionTaskHandler
             'completed' => true,
             'attachment_ids' => $attachmentIds,
         ];
+    }
+
+    /**
+     * Download a completion proof (threat-model M2–M4, M9).
+     *
+     * The framework nonce is already verified by NTDST_Endpoints before this
+     * filter runs (INV-2 — MUST NOT re-verify here). Authorization happens
+     * inside this handler (INV-1): registration owner or stride_manage.
+     *
+     * Uses Response->download() which outputs the file and exits,
+     * bypassing the normal JSON response (ICalHandler convergence point).
+     *
+     * @param mixed $data Existing data (unused)
+     * @param array<string, mixed> $params Request parameters
+     * @return never|WP_Error
+     */
+    public function handleDownloadProof(mixed $data, array $params): WP_Error
+    {
+        $resolved = $this->resolveProofDownload(absint($params['attachment_id'] ?? 0));
+
+        if (is_wp_error($resolved)) {
+            return $resolved;
+        }
+
+        $contents = file_get_contents($resolved['path']);
+        if ($contents === false) {
+            ntdst_log('enrollment')->error('proof download: file unreadable', [
+                'path' => $resolved['path'],
+            ]);
+
+            return new WP_Error('proof_unavailable', __('Bestand niet beschikbaar.', 'stride'));
+        }
+
+        // This exits - never returns. Sets Content-Type from the stored
+        // validated MIME + Content-Disposition: attachment + nosniff (M4).
+        ntdst_response()->download($contents, $resolved['filename'], $resolved['mime']);
+    }
+
+    /**
+     * Resolve + authorize a proof download (separated from the byte-serving
+     * exit so the contract is integration-testable).
+     *
+     * M3: accepts an attachment ID only. The registration link was stamped
+     * server-side at upload/migration time; no user string ever reaches a
+     * path, and the resolved file must live inside the protected dir.
+     *
+     * @return array{path: string, filename: string, mime: string}|WP_Error
+     */
+    public function resolveProofDownload(int $attachmentId): array|WP_Error
+    {
+        $userId = get_current_user_id();
+        if (!$userId) {
+            return new WP_Error('not_logged_in', __('Je moet ingelogd zijn.', 'stride'));
+        }
+
+        if (!$attachmentId) {
+            return new WP_Error('invalid_input', __('Ongeldige gegevens.', 'stride'));
+        }
+
+        $registrationId = (int) get_post_meta($attachmentId, CompletionProofStorage::META_REGISTRATION, true);
+        if ($registrationId <= 0) {
+            // Not a completion proof — deny without detail (id iteration probe).
+            return new WP_Error('forbidden', __('Geen toegang.', 'stride'));
+        }
+
+        $repo = ntdst_get(RegistrationRepository::class);
+        $reg = $repo->find($registrationId);
+
+        if (!$reg) {
+            return new WP_Error('forbidden', __('Geen toegang.', 'stride'));
+        }
+
+        // M2: registration owner or stride_manage, decided here (INV-1).
+        if ((int) $reg->user_id !== $userId && !current_user_can('stride_manage')) {
+            ntdst_log('enrollment')->warning('proof download denied: not owner', [
+                'attachment_id' => $attachmentId,
+                'registration_id' => $registrationId,
+                'requested_by' => $userId,
+            ]);
+
+            return new WP_Error('forbidden', __('Geen toegang.', 'stride'));
+        }
+
+        $path = (string) get_attached_file($attachmentId);
+        if ($path === '' || !file_exists($path)) {
+            ntdst_log('enrollment')->error('proof download: file missing on disk', [
+                'attachment_id' => $attachmentId,
+                'registration_id' => $registrationId,
+                'path' => $path,
+            ]);
+
+            return new WP_Error('proof_unavailable', __('Bestand niet beschikbaar.', 'stride'));
+        }
+
+        // M3: only files physically inside the protected dir are servable.
+        if (!CompletionProofStorage::isProtectedPath($path)) {
+            ntdst_log('enrollment')->warning('proof download denied: path outside protected dir', [
+                'attachment_id' => $attachmentId,
+                'registration_id' => $registrationId,
+                'path' => $path,
+            ]);
+
+            return new WP_Error('forbidden', __('Geen toegang.', 'stride'));
+        }
+
+        $mime = (string) get_post_mime_type($attachmentId);
+
+        return [
+            'path' => $path,
+            'filename' => basename($path),
+            'mime' => $mime !== '' ? $mime : 'application/octet-stream',
+        ];
+    }
+
+    /**
+     * Overrides for media_handle_upload().
+     *
+     * PHPUnit cannot fabricate a genuine PHP upload: is_uploaded_file() only
+     * passes for files received by the SAPI in this request's POST. The
+     * integration bootstrap defines STRIDE_INTEGRATION_TESTING; production
+     * never does, so real requests keep the strict
+     * is_uploaded_file()/move_uploaded_file() path.
+     *
+     * @return array<string, mixed>
+     */
+    private function uploadOverrides(): array
+    {
+        $overrides = ['test_form' => false];
+
+        if (defined('STRIDE_INTEGRATION_TESTING') && STRIDE_INTEGRATION_TESTING) {
+            $overrides['action'] = 'wp_handle_sideload';
+        }
+
+        return $overrides;
     }
 
     /**

@@ -3,7 +3,7 @@
  * @var array $enrollmentData        Raw enrollment_data (for backward compat; prefer $stages / $initialSelection).
  * @var array $sessionSelections     [['slot_label' => ?string, 'session' => ?array]]
  * @var array $questionnaireAnswers  [question stem => answer]
- * @var array $documents             [['filename', 'size', 'uploaded_at', 'url']]
+ * @var array $documents             [['id', 'filename', 'uploaded_at']] — downloads go through the authenticated stride_download_proof handler (protected storage)
  * @var array $initialSelection      Built by RegistrationModalController::buildInitialSelection().
  * @var array $stages                Built by RegistrationModalController::buildStagesForDisplay().
  */
@@ -174,14 +174,28 @@ if (!defined('ABSPATH')) {
         <?php if (empty($documents)): ?>
             <p class="stride-modal-empty"><?php esc_html_e('Geen documenten geüpload.', 'stride'); ?></p>
         <?php else: ?>
+            <?php
+            // Proofs are in protected storage — download via the authenticated
+            // handler. The framework nonce is verified by NTDST_Endpoints;
+            // _wpnonce (wp_rest) authenticates the admin's cookie for REST.
+            $proofActionUrl = rest_url('ntdst/v1/action');
+            $proofNonce = wp_create_nonce('stride_download_proof');
+            $proofRestNonce = wp_create_nonce('wp_rest');
+            ?>
             <ul class="stride-modal-docs">
                 <?php foreach ($documents as $doc): ?>
                     <li class="stride-modal-doc">
-                        <?php if (!empty($doc['url'])): ?>
-                            <a href="<?php echo esc_url($doc['url']); ?>" target="_blank" rel="noopener">
-                                <span class="dashicons dashicons-media-default"></span>
-                                <?php echo esc_html($doc['filename']); ?>
-                            </a>
+                        <?php if (!empty($doc['id'])): ?>
+                            <form method="post" action="<?php echo esc_url($proofActionUrl); ?>" class="stride-modal-doc-download">
+                                <input type="hidden" name="action" value="stride_download_proof">
+                                <input type="hidden" name="nonce" value="<?php echo esc_attr($proofNonce); ?>">
+                                <input type="hidden" name="_wpnonce" value="<?php echo esc_attr($proofRestNonce); ?>">
+                                <input type="hidden" name="attachment_id" value="<?php echo esc_attr((string) $doc['id']); ?>">
+                                <button type="submit" class="button-link">
+                                    <span class="dashicons dashicons-media-default"></span>
+                                    <?php echo esc_html($doc['filename']); ?>
+                                </button>
+                            </form>
                         <?php else: ?>
                             <span><?php echo esc_html($doc['filename']); ?></span>
                         <?php endif; ?>

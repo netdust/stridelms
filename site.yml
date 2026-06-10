@@ -32,6 +32,7 @@ local:
   url: https://stride.ddev.site
 
 notes:
+  - "Completion proofs live in web/app/uploads/stride-proofs/ — MUST be deny-ruled in nginx on every environment (Ploi): add `location ^~ /app/uploads/stride-proofs/ { deny all; }` to the site's nginx config. The bundled .htaccess only covers Apache and is inert under nginx; downloads go exclusively through the authenticated stride_download_proof handler. Verify after deploy: curl an uploaded proof's direct URL unauthenticated → expect 403."
   - "Redis cache exclusions must be verified before any wp cache flush"
   - "Never push directly to main without staging validation"
   - "LMS data (LearnDash, Tin Canny) excluded from object cache"

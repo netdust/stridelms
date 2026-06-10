@@ -43,6 +43,10 @@ add_action('init', function (): void {
     // Versioned schema upgrades for installs whose table predates a change
     // (gated internally on stride_registrations_schema_version).
     \Stride\Modules\Enrollment\RegistrationTable::migrate();
+
+    // One-off relocation of completion proofs into protected storage
+    // (gated internally on stride_proof_storage_version; audit M-2).
+    \Stride\Modules\Enrollment\CompletionProofStorage::migrate();
 }, 1);
 
 // Create attendance table if missing
