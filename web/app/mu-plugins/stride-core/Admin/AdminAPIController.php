@@ -3508,10 +3508,14 @@ final class AdminAPIController
             wp_die('Registration table not found.');
         }
 
-        // Get confirmed registrations for upcoming editions
+        // Get confirmed registrations for upcoming editions. Columns are
+        // enumerated (panel perf SF-1): r.* dragged the completion_tasks +
+        // enrollment_data JSON blobs into memory for every row while the CSV
+        // reads five scalars — O(rows x blob) at production scale.
         $today = current_time('Y-m-d');
         $registrations = $wpdb->get_results($wpdb->prepare(
-            "SELECT r.*, p.post_title as edition_title,
+            "SELECT r.id, r.user_id, r.status,
+                    p.post_title as edition_title,
                     pm_date.meta_value as edition_date
              FROM {$table} r
              LEFT JOIN {$wpdb->posts} p ON r.edition_id = p.ID
@@ -3522,9 +3526,12 @@ final class AdminAPIController
             $today,
         ));
 
-        // Set download headers
+        // Set download headers. nosniff mirrors the universal file-response
+        // posture (NTDST_Response::fileHeaders / M4): a browser must never
+        // content-sniff an attacker-influenced CSV into HTML.
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="inschrijvingen-' . date('Y-m-d') . '.csv"');
+        header('X-Content-Type-Options: nosniff');
         header('Pragma: no-cache');
         header('Expires: 0');
 
