@@ -362,6 +362,53 @@ final class RegistrationExportTest extends IntegrationTestCase
     }
 
     /**
+     * Shake-out F5 / AF-5 empty edge: zero matching rows must produce a
+     * header-only CSV — not a 500, not a fatal, not a body-less stream.
+     * The zero-row state is created inside the child process via an
+     * uncommitted transaction (see the runner), so no fixture scoping or
+     * parent-DB mutation is involved.
+     */
+    public function testEmptyResultProducesHeaderOnlyCsvWithoutErrors(): void
+    {
+        $output = $this->runExportInChildProcess(emptyRegistrations: true);
+
+        // Header row present — the stream opened and wrote the header even
+        // with nothing to export.
+        $this->assertStringContainsString(
+            'Naam;E-mail;Organisatie',
+            $output,
+            'Empty export must still emit the CSV header row. Output: ' . $this->snippet($output)
+        );
+
+        // No PHP error / DB error leaked into the stream (the child runs
+        // with $wpdb->show_errors(), so any DB error would be visible here).
+        foreach (['Fatal error', 'Warning:', 'WordPress database error'] as $needle) {
+            $this->assertStringNotContainsString(
+                $needle,
+                $output,
+                "Empty export leaked '{$needle}' into the CSV stream. Output: " . $this->snippet($output)
+            );
+        }
+
+        // The shutdown marker proves the child exited through the normal
+        // export path (fclose + exit), not a fatal/wp_die mid-stream.
+        $this->extractQueryDelta($output);
+
+        // Zero data rows: after stripping the BOM, the header line and the
+        // query-delta marker, NOTHING else may remain in the stream.
+        $body = str_replace(chr(0xEF) . chr(0xBB) . chr(0xBF), '', $output);
+        $body = (string) preg_replace('/#STRIDE_EXPORT_QUERY_DELTA=\d+#/', '', $body);
+        $lines = array_values(array_filter(array_map('trim', explode("\n", $body)), static fn(string $l): bool => $l !== ''));
+
+        $expectedHeader = trim($this->csvLine(['Naam', 'E-mail', 'Organisatie', 'Editie', 'Datum', 'Status', 'Offerte #']));
+        $this->assertSame(
+            [$expectedHeader],
+            $lines,
+            'Empty export must be EXACTLY the header line — found extra rows/output. Output: ' . $this->snippet($output)
+        );
+    }
+
+    /**
      * Seed $count confirmed registrations, each with its OWN user (so user
      * caches cannot mask per-row get_userdata queries), an organisation meta
      * value, and a linked quote (so the quote-number path is exercised).
@@ -408,7 +455,7 @@ final class RegistrationExportTest extends IntegrationTestCase
      * PHPUnit process — so run it in a child PHP process against the same
      * (committed) database state and capture stdout.
      */
-    private function runExportInChildProcess(): string
+    private function runExportInChildProcess(bool $emptyRegistrations = false): string
     {
         $projectRoot = dirname(__DIR__, 3);
 
@@ -423,6 +470,17 @@ global $wpdb;
 // Echo DB errors into stdout so a failing assertion is attributable to the
 // real cause (e.g. an unknown-column error) instead of a silent empty body.
 $wpdb->show_errors();
+
+// Empty-state mode (AF-5 empty edge): make the export's predicate match
+// ZERO rows by deleting all registrations inside an UNCOMMITTED
+// transaction. exportRegistrations() ends with exit → the connection
+// closes → InnoDB rolls the delete back, so the parent process' DB state
+// (and everyone else's fixtures) is untouched. The export's own SELECT
+// runs on this same connection and sees the empty table.
+if (in_array('--empty-registrations', $argv, true)) {
+    $wpdb->query('START TRANSACTION');
+    $wpdb->query('DELETE FROM ' . \Stride\Modules\Enrollment\RegistrationTable::getTableName());
+}
 
 // exportRegistrations() ends with exit, so a shutdown function is the only
 // way to emit the query count AFTER the CSV body. Registered post-bootstrap,
@@ -453,6 +511,7 @@ RUNNER;
         $cmd = escapeshellarg(PHP_BINARY)
             . ' ' . escapeshellarg($this->runnerPath)
             . ' ' . escapeshellarg($projectRoot)
+            . ($emptyRegistrations ? ' --empty-registrations' : '')
             . ' 2>&1';
 
         $output = shell_exec($cmd);
