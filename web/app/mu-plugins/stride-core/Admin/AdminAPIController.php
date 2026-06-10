@@ -1992,7 +1992,9 @@ final class AdminAPIController
      * pins completion_tasks to utf8mb4_bin (live-probed), but the explicit
      * collation keeps the over-fetch property even if the column type drifts
      * to the table's case-insensitive collation.
-     * Bucket counts clip silently beyond APPROVALS_SCAN_CAP rows per query.
+     * Bucket counts clip beyond APPROVALS_SCAN_CAP rows per query; the
+     * response carries `clipped` so the consumer can surface the truncation
+     * instead of presenting capped counts as the whole queue (CR-E2).
      */
     public function getPendingApprovals(WP_REST_Request $request): WP_REST_Response
     {
@@ -2008,6 +2010,7 @@ final class AdminAPIController
             return new WP_REST_Response([
                 'items' => [],
                 'counts' => ['approval' => 0, 'post_approval' => 0, 'stale_user' => 0],
+                'clipped' => false,
                 'stale_threshold_days' => $staleDays,
                 'total' => 0,
                 'page' => $page,
@@ -2120,9 +2123,15 @@ final class AdminAPIController
             array_slice($matches, ($page - 1) * $perPage, $perPage),
         );
 
+        // CR-E2: a scan query that fills the cap may have left qualifying
+        // rows unscanned — counts/items are then lower bounds, not the queue.
+        $clipped = count($pendingRows) >= self::APPROVALS_SCAN_CAP
+            || count($confirmedRows) >= self::APPROVALS_SCAN_CAP;
+
         return new WP_REST_Response([
             'items' => $items,
             'counts' => $counts,
+            'clipped' => $clipped,
             'stale_threshold_days' => $staleDays,
             'total' => $total,
             'page' => $page,

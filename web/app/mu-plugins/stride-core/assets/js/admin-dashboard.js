@@ -229,7 +229,7 @@ document.addEventListener('alpine:init', () => {
                     this.api('/admin/activity?limit=10'),
                     this.api('/admin/health-checks'),
                     this.api('/admin/notifications'),
-                    this.api('/admin/pending-approvals?stale_days=7'),
+                    this.api('/admin/pending-approvals?stale_days=7&per_page=100'),
                 ]);
                 if (stats.status === 'rejected') {
                     this.errors.dashboard = 'Kon dashboard-data niet laden.';
@@ -262,6 +262,10 @@ document.addEventListener('alpine:init', () => {
                 }
                 if (approvals.status === 'fulfilled') {
                     this.pendingApprovals = approvals.value;
+                    // CR-E2: surface truncation instead of silently rendering fewer rows than the tab pills claim.
+                    if (approvals.value.clipped || (approvals.value.total ?? 0) > (approvals.value.items || []).length) {
+                        console.warn(`Stride: goedkeuringslijst afgekapt — ${(approvals.value.items || []).length} van ${approvals.value.total} items geladen.`);
+                    }
                     // Default-active tab priority: approval/post_approval (admin-action) > stale_user > notifications
                     // approval + post_approval are merged under the "Wacht op mij" tab (key: 'approval')
                     const c = approvals.value.counts || {};

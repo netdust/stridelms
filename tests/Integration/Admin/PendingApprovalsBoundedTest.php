@@ -109,6 +109,9 @@ final class PendingApprovalsBoundedTest extends IntegrationTestCase
         $this->assertArrayHasKey('stale_threshold_days', $data);
         $this->assertGreaterThanOrEqual(7, $data['counts']['approval'], 'counts must reflect the whole queue, not the page');
 
+        // CR-E2: under the scan cap the response must say it is NOT clipped.
+        $this->assertFalse($data['clipped'], 'clipped must be false while the scan cap is not hit');
+
         // Walking all pages yields every seeded row exactly once.
         $seen = [];
         for ($page = 1; $page <= $data['totalPages']; $page++) {
@@ -119,6 +122,67 @@ final class PendingApprovalsBoundedTest extends IntegrationTestCase
         }
         foreach ($seeded as $regId) {
             $this->assertArrayHasKey($regId, $seen, "Seeded registration {$regId} must be reachable via pagination");
+        }
+    }
+
+    /**
+     * CR-E2: when a scan query hits APPROVALS_SCAN_CAP the counts are
+     * silently incomplete — the response must flag it via `clipped` so the
+     * dashboard can surface the truncation instead of presenting capped
+     * counts as the whole queue.
+     *
+     * @test
+     */
+    public function responseFlagsClippedWhenScanCapIsHit(): void
+    {
+        global $wpdb;
+
+        // One row past the cap (APPROVALS_SCAN_CAP = 500), bulk-seeded in a
+        // single multi-row INSERT to keep the test fast.
+        $cap = 500;
+        $tasksJson = wp_json_encode([
+            'documents' => ['status' => 'completed'],
+            'approval' => ['status' => 'pending'],
+        ]);
+        $registeredAt = gmdate('Y-m-d H:i:s', time() - DAY_IN_SECONDS);
+        $values = [];
+        for ($i = 0; $i <= $cap; $i++) {
+            $values[] = $wpdb->prepare(
+                '(%d, %d, %s, %s, %s, %s)',
+                self::$testUserId,
+                $this->editionId,
+                'pending',
+                'individual',
+                $registeredAt,
+                $tasksJson,
+            );
+        }
+
+        try {
+            $wpdb->query(
+                "INSERT INTO {$wpdb->prefix}vad_registrations
+                 (user_id, edition_id, status, enrollment_path, registered_at, completion_tasks)
+                 VALUES " . implode(',', $values)
+            );
+
+            $data = $this->request(1, 5);
+
+            $this->assertTrue(
+                $data['clipped'],
+                'Scan cap hit (cap+1 qualifying rows) but the response does not flag clipped — '
+                . 'the dashboard would present capped counts as the whole queue (CR-E2).'
+            );
+            // Both pending-derived buckets together can never exceed the scan
+            // cap, and must come in below the 501-row seeded queue — exact
+            // numbers depend on pre-existing rows in the shared dev DB.
+            $this->assertLessThanOrEqual(
+                $cap,
+                $data['counts']['approval'] + $data['counts']['stale_user'],
+                'pending-scan buckets must clip at the scan cap'
+            );
+            $this->assertLessThan($cap + 1, $data['counts']['approval'], 'counts must clip below the seeded queue size');
+        } finally {
+            $wpdb->delete($wpdb->prefix . 'vad_registrations', ['edition_id' => $this->editionId]);
         }
     }
 
