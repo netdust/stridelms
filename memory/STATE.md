@@ -3,15 +3,17 @@
 Current state of the project for session continuity. Updated after meaningful work.
 **For "what's left to launch" see `docs/LAUNCH-CHECKLIST.md` (single source of truth).**
 
-Last refresh: 2026-06-10 (hardening sprint, phases 0–2 done)
+Last refresh: 2026-06-10 (hardening sprint, phases 0–3 done)
 
 ---
 
-## Hardening sprint — 2026-06-10 (phases 0–2 DONE, 3–4 open)
+## Hardening sprint — 2026-06-10 (phases 0–3 DONE, 4 open)
 
-Plan approved by Stefan (saved at `~/.claude/plans/glowing-roaming-wozniak.md`; tracked in `tasks/todo.md` top block). Decisions: **VAD = launch brand**, Phase-3 test depth = targeted P0 flows. ~10 commits, `7f2ddce9..1304ed0a`.
+Plan approved by Stefan (saved at `~/.claude/plans/glowing-roaming-wozniak.md`; tracked in `tasks/todo.md` top block). Decisions: **VAD = launch brand**, Phase-3 test depth = targeted P0 flows. ~16 commits, `7f2ddce9..8c938819`.
 
-**Suites: 924 unit + 369 integration + 108 acceptance — all green** (acceptance verified 108/108 on the 2026-06-10 final run).
+**Suites: 924 unit + 369 integration + 121 acceptance — all green** (final clean full-suite run 2026-06-10).
+
+**Phase 3 (targeted P0 edge-testing) DONE:** 13 new edge tests through the real browser — `EnrollmentEdgeCest` (6), `AttendanceCest` (4, was zero-coverage), `DashboardQuoteGdprEdgeCest` (3). Matrix + pass/fail manifest at `docs/architecture/acceptance-flows/p0-hardening-phase3.md`. 6 FEATURE-STATUS rows flipped to ✅ edge-tested (now 7 of 19 clear the strict bar, was 1). No product bugs surfaced — failures hit were test-fixture fidelity (quote meta = bare keys; Data API prefixes on read) + faithful-layer choices. Also deflaked 2 pre-existing tests (canAddSession seed-accretion → dedicated edition; registration retry now clears rate-limits). F5 cert + F6 expired-access left unit/integration-covered per the targeted scope.
 
 Highlights (full detail in todo.md + FEATURE-STATUS addendum):
 - **Acceptance suite was structurally unrunnable since authoring** (hardcoded `stride_` prefixes vs `ckqp_`, `/vormingen/` URLs, nonexistent `admin` login, `$I->fail()`). Repaired prefix-agnostic; 23/108 → 108/108. The "126 tests" previously cited as evidence had never run.
@@ -21,7 +23,7 @@ Highlights (full detail in todo.md + FEATURE-STATUS addendum):
 - **Audit truth-up:** H4/M1/M3/M4/M5/M6 were already fixed in code (report said deferred). Open: M2 (trajectory quote race) + C2/L2 (Partner API) — both post-launch modules. See report's two Status sections.
 - **Env gotchas fixed:** stale v3 `upload_path` option in dev DB (broke all uploads — also a migration risk for prod DB ports!); voucher test TZ flake (site clock vs UTC near midnight).
 
-**Open:** Phase 3 (targeted P0 edge-testing: enrollment edges, attendance — zero acceptance coverage, completion→certificate, dashboard empty states, quote locking, anonymise flow) + Phase 4 (deploy readiness — ⚠ **no Makefile exists** though site.yml declares `make deploy-staging`; prod .env must NOT set STRIDE_TEST_LOGIN_SECRET).
+**Open:** Phase 4 (deploy readiness — ⚠ **no Makefile exists** though site.yml declares `make deploy-staging`; prod .env must NOT set STRIDE_TEST_LOGIN_SECRET; standing list = LTI off / SMTP / stride_admin_email / replay footer pages).
 
 ---
 

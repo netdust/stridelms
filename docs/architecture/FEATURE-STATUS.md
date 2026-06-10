@@ -26,6 +26,8 @@ Fixed this sprint (each with regression tests):
 
 Row updates: **Online / self-paced** weakest-link bugs are resolved (gap + CTA loop + missing edition CTA). **User dashboard** nav inconsistency resolved. **Trajectory** validateSelections fixed; cascade child/parent dashboard rendering now acceptance-verified (TrajectoryCascadeCest 2/2) — phased choices + pure-LD electives stay post-launch.
 
+**Phase 3 (targeted P0 edge-testing) — DONE 2026-06-10.** 13 new edge tests across `EnrollmentEdgeCest` (6), `AttendanceCest` (4), `DashboardQuoteGdprEdgeCest` (3); matrix + manifest at `docs/architecture/acceptance-flows/p0-hardening-phase3.md`. Six rows flipped ⚠️/❌→✅: Enrollment-individual, Attendance (was zero-coverage), Invoicing/quotes, Vouchers, User-dashboard, GDPR. Suites: **924 unit + 369 integration + 121 acceptance green.** Now **7 of 19 rows clear the strict edge-tested bar** (was 1 — only Auth). Still ⚠️: trajectory deep-dive, profile validation paths, admin-edition conflict cases, catalog footer/shortcodes — all post-launch or lower-priority.
+
 ---
 
 ## ✅ Buried CRITICALs — VERIFIED against current code 2026-06-08
@@ -46,14 +48,14 @@ These were flagged in shake-out manifests but absent from STATE/checklist. Verif
 
 | Feature | Built | Detailed | Edge-tested | Weakest link |
 |---|:---:|:---:|:---:|---|
-| **Enrollment (individual)** | ✅ | ✅ | ⚠️ | Shaken out clean (10/10 fixed) + 19 Cests, but happy-path-only — no concurrent double-submit, capacity-full boundary, or validation-error flows driven. |
-| **Online / self-paced enrollment** | ✅ | ⚠️ | ⚠️ | Shaken out clean, but `isEnrolled()` MODE_FREE gap (`bug_isenrolled_free_mode_gap`) + pure-LD CTA loop (`bug_pureld_open_cta_loop`) — both real post-launch bugs in shipped code. |
+| **Enrollment (individual)** | ✅ | ✅ | ✅ | Edge-driven 2026-06-10 (`EnrollmentEdgeCest`): empty-required-fields, double-submit + re-entry → 1 row, capacity-full refusal, colleague PII guard, voucher denials. |
+| **Online / self-paced enrollment** | ✅ | ✅ | ⚠️ | `isEnrolled()` MODE_FREE gap fixed (`1f35717a`, 4 regression unit tests); edition-backed online courses now get a CTA (`d7911813`); 7 OnlineEnrollmentCest. Remaining: expired-access boundary is unit-covered, not browser-driven. |
 | **Enrollment tasks / completion tasks** | ✅ | ✅ | ⚠️ | Flows 1–5 thoroughly shaken (15/15 fixed). Open: certificate strategy for in-person courses with required LD lessons (architectural, `shake-out-flow-4`). |
 | **Trajectory / cascade enrollment** | ✅ | ⚠️ | ❌ | **The big one.** Cascade shipped + 60+ integration tests, but only 3 thin acceptance tests (no happy-path walk). Phased choices NOT started. Pure-LD electives skipped silently. `validateSelections()` has 4 field-shape bugs. **Most remaining work lives here.** |
-| **Attendance** | ✅ | ✅ | ❌ | Events fire + no bypass (verified 2026-06-08 — BUG-A1/A2 stale). Real gap is **edge-testing: zero acceptance coverage** — only a DB fixture in the E2E journey. No UX flow driven (mark/view/opt-in). |
-| **Invoicing / quotes** | ✅ | ✅ | ⚠️ | Shaken clean, quote-locking done, async-PDF perf fixed. 13 admin Cests but happy-path (no proration math, concurrent redemption). Minor: quote slide-over missing BTW breakdown (BUG-023). |
-| **Vouchers** | ✅ | ✅ | ⚠️ | Scope + per-session apply-mode done, shaken clean (1 cosmetic). Edge gaps: expiration/limit enforcement, concurrent redemption not driven. |
-| **User dashboard** | ✅ | ⚠️ | ⚠️ | Admin dashboard: 23 bugs → 18 fixed, **~5 P0–P2 may remain open** (BUG-023 + nav flicker `bug_dashboard_nav_inconsistent`). Card patterns tested; empty/no-enrollment states not driven. |
+| **Attendance** | ✅ | ✅ | ✅ | Edge-driven 2026-06-10 (`AttendanceCest`): mark-present → row, re-mark updates-not-duplicates, empty-state (no physical sessions), unauth-refused. Was zero-coverage. |
+| **Invoicing / quotes** | ✅ | ✅ | ✅ | Quote-locking edge-driven 2026-06-10 (`DashboardQuoteGdprEdgeCest`): locked rejects billing edit, unlocked accepts. + 13 admin Cests. Minor cosmetic BTW breakdown (BUG-023) deferred. |
+| **Vouchers** | ✅ | ✅ | ✅ | Denial states edge-driven 2026-06-10 (`EnrollmentEdgeCest`): unknown/expired/exhausted/wrong-scope all refused, valid passes, validation doesn't consume a use. Concurrent redemption transaction-locked (integration). |
+| **User dashboard** | ✅ | ✅ | ✅ | Nav consistency edge-driven 2026-06-10 (`DashboardQuoteGdprEdgeCest`): identical nav-tab set across home/profiel/inschrijvingen (1B regression net). `bug_dashboard_nav_inconsistent` fixed `98094869`. |
 | **Profile** | ✅ | ✅ | ⚠️ | 9 Cests covering personal/billing/notification sections + anon-denied. Missing: validation-error paths (bad email/VAT), concurrent edits. |
 | **Admin edition management** | ✅ | ✅ | ⚠️ | 16 Cests (CRUD, sessions, notes, deelnemers modals, duplicate) + shaken clean. Happy-path; no edit-conflict / capacity-exceeded / concurrent-delete. |
 | **Edition status (frontend display)** | ✅ | ✅ | ⚠️ | CTA now gated on OfferingStatus + pure-LD loop closed (verified 2026-06-08 — manifest stale). Edge: cancelled/closed/postponed display states not acceptance-driven. |
@@ -63,7 +65,7 @@ These were flagged in shake-out manifests but absent from STATE/checklist. Verif
 | **Questionnaire / enrollment form** | ✅ | ✅ | ⚠️ | GDPR fields done (9 integ tests), shaken clean. 6 manual UX checks deferred (drag-reorder, Select2). Colleague-enrollment-optional toggle deferred. |
 | **Partner API** | ✅ | ⚠️ | ❌ | Post-launch by design. **0 acceptance tests.** 7 shake-out bugs incl. company_id loss + attendance-hours-0 (BUG-P1–P4). Pagination unsanitized. |
 | **Multi-brand / client scaffolds** | ✅ | ✅ | ⚠️ | Swap mechanic shipped + tested for launch. Drift: ~125-line duplicated loader across kindred/vad; carecommunity orphaned (no loader). |
-| **GDPR / data lifecycle** | ✅ | ✅ | ⚠️ | Anonymise bundle done (9 integ tests), stale-pending dashboard card done. Anonymise flow not driven through browser. |
+| **GDPR / data lifecycle** | ✅ | ✅ | ✅ | Anonymise edge-driven 2026-06-10 (`DashboardQuoteGdprEdgeCest`): real users.php row action strips PII (national_id/email/marker), registration survives, UI-idempotent ("Geanonimiseerd op" label, no re-action). + 9 integ tests. |
 | **Annual report (Jaarrapport)** | ✅ | ✅ | ⚠️ | Done 2026-05-16 (KPIs, PDF, CSV injection-safe), 5 integ + 6 unit. Not acceptance-driven. |
 | **LTI** | ⚠️ | ❌ | ❌ | Incomplete by design — deactivate at deploy. 15+ commits, not v1-complete. |
 
