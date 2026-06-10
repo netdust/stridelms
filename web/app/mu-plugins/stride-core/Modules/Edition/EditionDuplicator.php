@@ -212,6 +212,12 @@ final class EditionDuplicator implements NTDST_Service_Meta
 
             $sessionPost = $this->sessions->find($sessionId);
             if (is_wp_error($sessionPost)) {
+                ntdst_log('edition')->warning('Session skipped during edition duplicate: lookup failed', [
+                    'source_session' => $sessionId,
+                    'target_edition' => $newEditionId,
+                    'error'          => $sessionPost->get_error_code() . ': ' . $sessionPost->get_error_message(),
+                ]);
+
                 continue;
             }
 

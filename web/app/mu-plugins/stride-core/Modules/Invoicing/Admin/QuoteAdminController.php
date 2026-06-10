@@ -540,6 +540,11 @@ final class QuoteAdminController
     {
         $quote = $this->quoteService->getQuote($postId, true);
         if (is_wp_error($quote)) {
+            ntdst_log('invoicing')->warning('Manual discount skipped: quote lookup failed', [
+                'quote_id' => $postId,
+                'error'    => $quote->get_error_code() . ': ' . $quote->get_error_message(),
+            ]);
+
             return;
         }
 
@@ -559,6 +564,11 @@ final class QuoteAdminController
     {
         $quote = $this->quoteService->getQuote($postId, true);
         if (is_wp_error($quote)) {
+            ntdst_log('invoicing')->warning('Discount removal skipped: quote lookup failed', [
+                'quote_id' => $postId,
+                'error'    => $quote->get_error_code() . ': ' . $quote->get_error_message(),
+            ]);
+
             return;
         }
 

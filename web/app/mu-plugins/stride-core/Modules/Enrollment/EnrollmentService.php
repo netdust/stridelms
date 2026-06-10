@@ -142,7 +142,13 @@ final class EnrollmentService extends AbstractService
         }
 
         // Enroll the user via LearnDash
-        $this->lms->grantAccess($userId, $courseId);
+        if (!$this->lms->grantAccess($userId, $courseId)) {
+            ntdst_log('enrollment')->warning('Open-course auto-enroll: grantAccess returned false', [
+                'user_id' => $userId,
+                'course_id' => $courseId,
+                'lesson_id' => $postId,
+            ]);
+        }
 
         ntdst_log('enrollment')->info('Auto-enrolled user in open course on lesson access', [
             'user_id' => $userId,
@@ -326,8 +332,13 @@ final class EnrollmentService extends AbstractService
         // Grant LMS access only for confirmed registrations
         if ($initialStatus === RegistrationStatus::Confirmed) {
             $courseId = $this->editions->getCourseId($editionId);
-            if ($courseId) {
-                $this->lms->grantAccess($userId, $courseId);
+            if ($courseId && !$this->lms->grantAccess($userId, $courseId)) {
+                ntdst_log('enrollment')->warning('Enrollment created but grantAccess returned false', [
+                    'registration_id' => $registrationId,
+                    'user_id' => $userId,
+                    'edition_id' => $editionId,
+                    'course_id' => $courseId,
+                ]);
             }
         }
 
@@ -567,8 +578,13 @@ final class EnrollmentService extends AbstractService
         $editionId = (int) $registration->edition_id;
         if ($editionId) {
             $courseId = $this->editions->getCourseId($editionId);
-            if ($courseId) {
-                $this->lms->grantAccess((int) $registration->user_id, $courseId);
+            if ($courseId && !$this->lms->grantAccess((int) $registration->user_id, $courseId)) {
+                ntdst_log('enrollment')->warning('Registration confirmed but grantAccess returned false', [
+                    'registration_id' => $registrationId,
+                    'user_id' => (int) $registration->user_id,
+                    'edition_id' => $editionId,
+                    'course_id' => $courseId,
+                ]);
             }
         }
 
