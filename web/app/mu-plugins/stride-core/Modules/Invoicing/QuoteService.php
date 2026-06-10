@@ -232,16 +232,15 @@ final class QuoteService extends AbstractService
         }
 
         $discountCents = (int) ($quote['discount'] ?? 0);
-        $taxableCents = max(0, $subtotalCents - $discountCents);
-        $taxCents = (int) round($taxableCents * 0.21);
-        $totalCents = $taxableCents + $taxCents;
+        $totals = QuoteCalculator::deriveTotalsFromCents($subtotalCents, $discountCents);
 
-        // Update quote
+        // Update quote (stored discount stays untouched — only re-derived
+        // tax/total are written; characterization-pinned behavior)
         $this->repository->updateMeta($quoteId, [
             'items' => $updatedItems,
             'subtotal' => $subtotalCents,
-            'tax' => $taxCents,
-            'total' => $totalCents,
+            'tax' => $totals['tax'],
+            'total' => $totals['total'],
         ]);
 
         ntdst_log('invoicing')->info('Quote updated with session modifiers', [
@@ -249,7 +248,7 @@ final class QuoteService extends AbstractService
             'registration_id' => $registrationId,
             'modifier_count' => count($modifierItems),
             'new_subtotal' => $subtotalCents,
-            'new_total' => $totalCents,
+            'new_total' => $totals['total'],
         ]);
 
         $this->dispatch('quote/modifiers_applied', [
@@ -257,7 +256,7 @@ final class QuoteService extends AbstractService
             'registration_id' => $registrationId,
             'modifier_count' => count($modifierItems),
             'subtotal' => $subtotalCents,
-            'total' => $totalCents,
+            'total' => $totals['total'],
         ]);
     }
 
@@ -648,18 +647,16 @@ final class QuoteService extends AbstractService
         $subtotal = Money::cents($subtotalCents);
         $discount = $voucherService->calculateDiscount($voucher, $subtotal, $editionId > 0 ? $editionId : null);
 
-        // Recalculate totals
-        $newSubtotal = $subtotal;
-        $newDiscount = $discount;
-        $newTax = Money::cents((int) round(($newSubtotal->inCents() - $newDiscount->inCents()) * 0.21));
-        $newTotal = Money::cents($newSubtotal->inCents() - $newDiscount->inCents() + $newTax->inCents());
+        // Recalculate totals (voucher discounts are capped at the subtotal
+        // by VoucherService::calculateDiscount, so the clamp is a no-op here)
+        $totals = QuoteCalculator::deriveTotalsFromCents($subtotalCents, $discount->inCents());
 
         // Update quote
         $result = $this->repository->updateMeta($quoteId, [
             'voucher_code' => $voucherCode,
-            'discount' => $newDiscount->inCents(),
-            'tax' => $newTax->inCents(),
-            'total' => $newTotal->inCents(),
+            'discount' => $totals['discount'],
+            'tax' => $totals['tax'],
+            'total' => $totals['total'],
         ]);
 
         if (!$result) {
@@ -687,13 +684,13 @@ final class QuoteService extends AbstractService
         ntdst_log('invoicing')->info('Voucher applied to quote', [
             'quote_id' => $quoteId,
             'voucher_code' => $voucherCode,
-            'discount' => $newDiscount->inCents(),
+            'discount' => $totals['discount'],
         ]);
 
         $this->dispatch('quote/voucher_applied', [
             'quote_id' => $quoteId,
             'voucher_code' => $voucherCode,
-            'discount' => $newDiscount->inCents(),
+            'discount' => $totals['discount'],
         ]);
 
         return true;

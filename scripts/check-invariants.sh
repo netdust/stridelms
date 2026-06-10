@@ -8,6 +8,7 @@
 #
 # BLOCKING (exit 1, fails CI):
 #   INV-1  REST route with no permission_callback — fails open. Zero tolerance.
+#   INV-8  Hardcoded 0.21 VAT literal outside QuoteCalculator (audit H-5)
 #
 # ADVISORY (reported, never blocks — humans triage):
 #   INV-2  Raw wp_ajax_* handler (must hand-roll its own nonce)
@@ -139,10 +140,33 @@ else
 fi
 echo
 
+# ─── INV-8 (BLOCKING): VAT/totals math lives only in QuoteCalculator ────────
+# Six 0.21 literals drifted apart across the quote write paths before Task C1
+# (audit finding H-5) consolidated them into QuoteCalculator::TAX_RATE +
+# deriveTotalsFromCents(). Any new literal is a re-divergence of financial
+# math — hard-block it.
+echo "${BLUE}▸ INV-8  VAT/totals derivation lives only in QuoteCalculator ${DIM}(BLOCKING)${RESET}"
+# Known exception: assets/js/admin/quote-admin.js carries a display-only
+# taxRate mirror for the live admin preview — the server recomputes on save,
+# so it cannot diverge the persisted money. Consolidate (wp_localize_script
+# the rate) when that file is next touched; do NOT add new exceptions.
+INV8=$(grep -rn '0\.21' --include="*.php" --include="*.js" "$CORE" 2>/dev/null \
+  | grep -v "Modules/Invoicing/Helpers/QuoteCalculator\.php" \
+  | grep -v "assets/js/admin/quote-admin\.js")
+if [ -n "$INV8" ]; then
+  echo "$INV8" | sed "s/^/  ${RED}✗${RESET} /"
+  echo "  ${DIM}Audit H-5: the 21% BTW rate is decided once, in QuoteCalculator::TAX_RATE.${RESET}"
+  echo "  ${DIM}Derive subtotal->discount->tax->total via QuoteCalculator::deriveTotalsFromCents().${RESET}"
+  FAIL=1
+else
+  echo "  ${GREEN}✓ No hardcoded 0.21 VAT literal outside QuoteCalculator.${RESET}"
+fi
+echo
+
 # ─── Summary ───────────────────────────────────────────────────────────────
 echo "═══════════════════════════════════════════════════════════════"
 if [ "$FAIL" -ne 0 ]; then
-  echo "  ${RED}FAIL — a blocking invariant (INV-1) is violated. See above.${RESET}"
+  echo "  ${RED}FAIL — a blocking invariant (INV-1/INV-8) is violated. See above.${RESET}"
   echo "  Advisory (YELLOW) items are reported but do not fail CI."
   echo "═══════════════════════════════════════════════════════════════"
   exit 1

@@ -7,6 +7,7 @@ namespace Stride\Modules\Invoicing\Admin;
 use Stride\Domain\Money;
 use Stride\Domain\QuoteStatus;
 use Stride\Modules\Edition\EditionRepository;
+use Stride\Modules\Invoicing\Helpers\QuoteCalculator;
 use Stride\Modules\Invoicing\QuoteCPT;
 use Stride\Modules\Invoicing\QuoteRepository;
 use Stride\Modules\Invoicing\QuoteService;
@@ -503,14 +504,13 @@ final class QuoteAdminController
             $subtotal += $total;
         }
 
-        $tax = (int) round($subtotal * 0.21);
-        $total = $subtotal + $tax;
+        $totals = QuoteCalculator::deriveTotalsFromCents($subtotal);
 
         return [
             'items' => $processedItems,
-            'subtotal' => $subtotal,
-            'tax' => $tax,
-            'total' => $total,
+            'subtotal' => $totals['subtotal'],
+            'tax' => $totals['tax'],
+            'total' => $totals['total'],
         ];
     }
 
@@ -544,18 +544,14 @@ final class QuoteAdminController
         }
 
         $subtotal = (int) ($quote['subtotal'] ?? 0);
-        $discountCents = (int) round($amount * 100);
-        $discountCents = min($discountCents, $subtotal); // Can't discount more than subtotal
-
-        $taxableAmount = $subtotal - $discountCents;
-        $tax = (int) round($taxableAmount * 0.21);
-        $total = $taxableAmount + $tax;
+        // Discount is clamped to the subtotal by the derivation
+        $totals = QuoteCalculator::deriveTotalsFromCents($subtotal, (int) round($amount * 100));
 
         $this->repository->updateMeta($postId, [
             'voucher_code' => '',
-            'discount' => $discountCents,
-            'tax' => $tax,
-            'total' => $total,
+            'discount' => $totals['discount'],
+            'tax' => $totals['tax'],
+            'total' => $totals['total'],
         ]);
     }
 
@@ -567,14 +563,13 @@ final class QuoteAdminController
         }
 
         $subtotal = (int) ($quote['subtotal'] ?? 0);
-        $tax = (int) round($subtotal * 0.21);
-        $total = $subtotal + $tax;
+        $totals = QuoteCalculator::deriveTotalsFromCents($subtotal);
 
         $this->repository->updateMeta($postId, [
             'voucher_code' => '',
             'discount' => 0,
-            'tax' => $tax,
-            'total' => $total,
+            'tax' => $totals['tax'],
+            'total' => $totals['total'],
         ]);
     }
 
@@ -612,9 +607,7 @@ final class QuoteAdminController
         ]];
 
         // Calculate totals
-        $subtotal = $unitPriceCents;
-        $tax = (int) round($subtotal * 0.21);
-        $total = $subtotal + $tax;
+        $totals = QuoteCalculator::deriveTotalsFromCents($unitPriceCents);
 
         // Generate quote number
         $quoteNumber = $this->repository->generateQuoteNumber();
@@ -641,10 +634,10 @@ final class QuoteAdminController
             'quote_number' => $quoteNumber,
             'status' => 'draft',
             'items' => $items,
-            'subtotal' => $subtotal,
+            'subtotal' => $totals['subtotal'],
             'discount' => 0,
-            'tax' => $tax,
-            'total' => $total,
+            'tax' => $totals['tax'],
+            'total' => $totals['total'],
             'billing' => $billing,
             'voucher_code' => '',
             'valid_until' => $validUntil,
