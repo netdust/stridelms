@@ -196,7 +196,11 @@ final class EditionRepository extends AbstractRepository
      * (never had an edition) apart from courses whose editions all expired —
      * the latter go off-catalog until a new edition is scheduled. Matches
      * the relationship semantics the theme templates previously inlined as
-     * raw SQL: any edition post, any non-deleted status.
+     * raw SQL: ANY edition post row counts, in ANY post_status (publish,
+     * draft, trash, …) — deliberately no post_status filter (INF-3): an
+     * edition row, even drafted or trashed, signals admin intent to run
+     * editions for the course, so the course is not "pure LD". Kept as-is
+     * for parity with the pre-refactor inline SQL (ship-mode).
      *
      * @param array<int> $courseIds
      * @return list<int>

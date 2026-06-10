@@ -129,7 +129,10 @@ if (!empty($online_course_ids)) {
                     ],
                 ],
                 [
-                    // Self-paced online edition (no dates at all) — always show
+                    // DEAD BRANCH: unreachable — the orderby meta_key below
+                    // forces start_date EXISTS, contradicting NOT EXISTS.
+                    // Dateless (self-paced) editions are currently excluded;
+                    // pre-existing parity, latent — see helpers/catalog.php.
                     'relation' => 'AND',
                     [
                         'key'     => $meta_prefix . 'end_date',

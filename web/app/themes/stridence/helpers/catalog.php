@@ -123,8 +123,14 @@ function stridence_catalog_klassikaal_items(): array
 
 /**
  * Eligible items for /online: one card per enrollable — (a) active editions
- * of online-format courses (date window incl. self-paced/dateless), plus
- * (b) pure-LD online courses that never had an edition.
+ * of online-format courses inside the date window, plus (b) pure-LD online
+ * courses that never had an edition.
+ *
+ * NOTE: dateless (self-paced) editions are currently EXCLUDED — the
+ * `orderby => meta_value` + `meta_key => start_date` pair forces an EXISTS
+ * AND-clause on start_date, which makes the dateless OR-branch below
+ * unreachable (runtime-proven: a published open dateless edition does not
+ * list). Pre-existing parity with the old pages — latent; see follow-up.
  */
 function stridence_catalog_online_items(): array
 {
@@ -193,7 +199,8 @@ function stridence_catalog_online_items(): array
                     ],
                 ],
                 [
-                    // Self-paced online edition (no dates at all) — always show
+                    // DEAD BRANCH: unreachable — the orderby meta_key forces
+                    // start_date EXISTS, contradicting NOT EXISTS (see docblock).
                     'relation' => 'AND',
                     [
                         'key'     => $prefix . 'end_date',
