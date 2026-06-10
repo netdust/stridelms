@@ -21,10 +21,12 @@ use WP_Error;
  * ntdst_response()->download() which exits the process; the M4 headers are
  * unit-asserted on NTDST_Response::fileHeaders (ResponseTest).
  *
- * NOTE (honest layering, recorded per plan D1): DDEV runs nginx-fpm, so the
- * .htaccess deny is inert locally and a real unauthenticated HTTP 403 cannot
- * be asserted here. We assert file location + .htaccess presence + handler
- * authz; the production nginx deny rule is a deploy-time step (site.yml notes).
+ * The M1 acceptance ("unauthenticated fetch of direct URL → 403/404") is
+ * asserted for REAL over HTTP: DDEV's nginx config is taken over
+ * (.ddev/nginx_full/nginx-site.conf) and carries the same
+ * `location ^~ /app/uploads/stride-proofs/ { deny all; }` rule production
+ * (Ploi nginx) must carry — see site.yml notes. The bundled .htaccess remains
+ * Apache-only defense-in-depth.
  *
  * Run: ddev exec "vendor/bin/phpunit -c phpunit-integration.xml.dist --filter CompletionProofProtection"
  */
@@ -137,6 +139,79 @@ final class CompletionProofProtectionTest extends IntegrationTestCase
             1,
             (int) get_post_meta($attachmentId, '_stride_protected_proof', true),
             'Attachment must carry the protected-proof marker meta (M1)',
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // M1 — the web server actually denies the direct URL (CR-D1).
+    // Real un-mocked HTTP against the running nginx: this is the assertion
+    // the threat model names ("unauthenticated fetch of direct URL → 403/404").
+    // -------------------------------------------------------------------
+
+    /** @test */
+    public function unauthenticatedHttpFetchOfProofDirectUrlIsDeniedByWebServer(): void
+    {
+        $regId = $this->createRegistrationWithDocumentsTask();
+        $this->actingAs(self::$testUserId);
+
+        $tmp = (string) tempnam(sys_get_temp_dir(), 'proof');
+        file_put_contents($tmp, "%PDF-1.4\n%fake stride test proof\n");
+        $this->createdFiles[] = $tmp;
+
+        $result = apply_filters('ntdst/api_data/stride_upload_completion_documents', [], [
+            'registration_id' => $regId,
+            'task_type' => 'documents',
+            '_files' => [
+                'documents' => [
+                    'name' => 'certificate.pdf',
+                    'type' => 'application/pdf',
+                    'tmp_name' => $tmp,
+                    'error' => 0,
+                    'size' => (int) filesize($tmp),
+                ],
+            ],
+        ]);
+
+        $this->assertFalse(
+            is_wp_error($result),
+            'Upload must succeed — got: ' . (is_wp_error($result) ? $result->get_error_message() : ''),
+        );
+        $attachmentId = (int) ($result['attachment_ids'][0] ?? 0);
+        $this->assertGreaterThan(0, $attachmentId);
+        $this->createdAttachmentIds[] = $attachmentId;
+
+        // Positive control FIRST: a normal public uploads file must serve 200,
+        // proving HTTP from this test reaches the real web server (and that
+        // the deny rule did not break regular uploads).
+        $control = wp_upload_bits('nginx-control-' . wp_generate_password(6, false) . '.txt', null, 'public control');
+        $this->assertEmpty($control['error'] ?? '', 'Control upload must succeed');
+        $this->createdFiles[] = $control['file'];
+
+        $controlResponse = wp_remote_get($control['url'], ['sslverify' => false, 'redirection' => 0]);
+        $this->assertFalse(is_wp_error($controlResponse), 'HTTP to own site must work for this assertion to mean anything');
+        $this->assertSame(
+            200,
+            wp_remote_retrieve_response_code($controlResponse),
+            'Public uploads must still serve 200 — the deny rule must not over-match',
+        );
+
+        // The actual M1 acceptance: unauthenticated (cookie-less) fetch of the
+        // proof's direct URL must be denied by the web server itself.
+        $proofUrl = (string) wp_get_attachment_url($attachmentId);
+        $this->assertStringContainsString('/stride-proofs/', $proofUrl, 'Sanity: the URL under test is the protected path');
+
+        $proofResponse = wp_remote_get($proofUrl, ['sslverify' => false, 'redirection' => 0]);
+        $this->assertFalse(is_wp_error($proofResponse), 'HTTP request itself must not error');
+        $this->assertContains(
+            wp_remote_retrieve_response_code($proofResponse),
+            [403, 404],
+            "Unauthenticated direct URL of a proof must be denied by nginx (M1) — got HTTP "
+                . wp_remote_retrieve_response_code($proofResponse) . " for {$proofUrl}",
+        );
+        $this->assertStringNotContainsString(
+            '%PDF',
+            (string) wp_remote_retrieve_body($proofResponse),
+            'Proof bytes must never leak on the direct URL',
         );
     }
 
