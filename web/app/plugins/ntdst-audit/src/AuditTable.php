@@ -64,10 +64,11 @@ final class AuditTable
      *    DDL only — no UPDATE touches row data. MariaDB rebuilds the table on
      *    disk for a STORED column (measured ~1s at 64k rows on MariaDB
      *    10.11); deploy off-peak. Rollback = DROP the column + indexes.
-     *  - The expression guards every context shape: absent key, NULL context,
-     *    JSON null and non-numeric values all yield NULL. A bare
-     *    CAST(JSON_UNQUOTE(JSON_EXTRACT(...))) aborts the whole ALTER under
-     *    strict mode when any row holds JSON null ('null' string → CAST error).
+     *  - The expression guards every context shape — absent key, NULL
+     *    context, JSON null, booleans, non-numeric garbage and numbers wider
+     *    than BIGINT UNSIGNED all yield NULL. See subjectUserIdExpression()
+     *    for the per-guard rationale (an unguarded CAST aborts the ALTER
+     *    under strict mode).
      *  - idx_subject_user (subject_user_id, created_at) serves the
      *    subject-targeted notification queries; idx_action serves
      *    action-filtered scans (e.g. session.note_updated).
@@ -91,11 +92,7 @@ final class AuditTable
         $altered = $wpdb->query(
             "ALTER TABLE {$table}
             ADD COLUMN IF NOT EXISTS subject_user_id BIGINT UNSIGNED
-                GENERATED ALWAYS AS (
-                    CASE WHEN JSON_VALUE(context, '$.user_id') RLIKE '^[0-9]+$'
-                         THEN CAST(JSON_VALUE(context, '$.user_id') AS UNSIGNED)
-                    END
-                ) STORED,
+                GENERATED ALWAYS AS (" . self::subjectUserIdExpression() . ") STORED,
             ADD INDEX IF NOT EXISTS idx_subject_user (subject_user_id, created_at),
             ADD INDEX IF NOT EXISTS idx_action (action)"
         );
@@ -111,6 +108,31 @@ final class AuditTable
         }
 
         update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION);
+    }
+
+    /**
+     * Generated-column expression deriving subject_user_id from
+     * context.user_id. Single source for create() and migrate() — the two
+     * must stay byte-identical or fresh installs and migrated installs drift.
+     *
+     * Guards (each probed live on a scratch table, strict and non-strict):
+     *  - JSON_TYPE pre-check: only INTEGER and STRING JSON values qualify —
+     *    JSON true/false (JSON_VALUE stringifies to '1'/'0', which would
+     *    misattribute to user 1) and JSON null are excluded by type.
+     *  - Bounded digit count {1,19}: a bare '^[0-9]+$' admits numeric strings
+     *    longer than BIGINT UNSIGNED — under STRICT_TRANS_TABLES the CAST
+     *    then aborts the whole ALTER (error 1292) and, post-migration, makes
+     *    any INSERT carrying such a value fail, losing the audit row; under
+     *    non-strict mode it saturates to 18446744073709551615. 19 digits is
+     *    the longest length that can never overflow (max is 20 digits).
+     *  - Absent key / NULL context: JSON_TYPE returns NULL → CASE yields NULL.
+     */
+    private static function subjectUserIdExpression(): string
+    {
+        return "CASE WHEN JSON_TYPE(JSON_EXTRACT(context, '$.user_id')) IN ('INTEGER','STRING')
+                      AND JSON_VALUE(context, '$.user_id') RLIKE '^[0-9]{1,19}$'
+                     THEN CAST(JSON_VALUE(context, '$.user_id') AS UNSIGNED)
+                END";
     }
 
     public static function exists(): bool

@@ -15,6 +15,15 @@ use NTDST\Audit\AuditTable;
  *  - subject_user_id is a STORED generated column populated from context.user_id:
  *    int and numeric-string values populate; absent key, NULL context, JSON null
  *    and non-numeric garbage all yield NULL (the strict-mode CAST trap).
+ *  - CR-F1: numeric values that overflow BIGINT UNSIGNED and JSON booleans
+ *    also yield NULL. Under STRICT_TRANS_TABLES (MySQL 8 default — probed
+ *    live) an unguarded CAST makes the ALTER abort with error 1292 and, post
+ *    migration, makes any INSERT carrying such a value fail — losing the
+ *    audit row (the M5 detection mechanism, the worst failure mode). Under
+ *    non-strict mode (local DDEV) the same bug shows as misattribution
+ *    instead: overflow saturates to 18446744073709551615, JSON true → user 1.
+ *    Malformed-JSON is not constructible: the JSON column type rejects it at
+ *    INSERT on both flavors.
  *  - The rewritten badge query uses indexes: EXPLAIN shows no full table scan
  *    (type != ALL, key non-null) on each UNION branch.
  *  - Running the migration twice is a no-op (idempotent, IF NOT EXISTS DDL).
@@ -63,6 +72,13 @@ final class AuditTableMigrationTest extends IntegrationTestCase
         $jsonNullId = $this->seedRow('{"user_id": null}');
         $garbageId = $this->seedRow('{"user_id": "abc"}');
 
+        // CR-F1 edges: values the bare RLIKE '^[0-9]+$' guard wrongly admits.
+        $overflowStringId = $this->seedRow('{"user_id": "99999999999999999999999"}');
+        $overflowIntId = $this->seedRow('{"user_id": 99999999999999999999999}');
+        $twentyDigitId = $this->seedRow('{"user_id": "99999999999999999999"}');
+        $jsonTrueId = $this->seedRow('{"user_id": true}');
+        $nineteenDigitId = $this->seedRow('{"user_id": "9999999999999999999"}');
+
         $before = $this->rowCount();
 
         delete_option(self::SCHEMA_OPTION);
@@ -76,6 +92,20 @@ final class AuditTableMigrationTest extends IntegrationTestCase
         $this->assertNull($this->subjectOf($nullCtxId), 'NULL context must yield NULL');
         $this->assertNull($this->subjectOf($jsonNullId), 'JSON null user_id must yield NULL (not CAST error)');
         $this->assertNull($this->subjectOf($garbageId), 'non-numeric user_id must yield NULL (not CAST error)');
+
+        // CR-F1: overflow + boolean must yield NULL — never abort the ALTER
+        // (strict mode) or misattribute (non-strict saturation / true → 1).
+        $this->assertNull($this->subjectOf($overflowStringId), 'CR-F1: >BIGINT UNSIGNED numeric string must yield NULL, not saturate/abort');
+        $this->assertNull($this->subjectOf($overflowIntId), 'CR-F1: >BIGINT UNSIGNED JSON integer must yield NULL, not saturate/abort');
+        $this->assertNull($this->subjectOf($twentyDigitId), 'CR-F1: 20-digit value must yield NULL (digit bound is 19)');
+        $this->assertNull($this->subjectOf($jsonTrueId), 'CR-F1: JSON true must yield NULL, not misattribute to user 1');
+
+        // 19-digit boundary stays populated (exceeds PHP_INT_MAX — compare as string).
+        $this->assertSame(
+            '9999999999999999999',
+            $this->subjectRawOf($nineteenDigitId),
+            'CR-F1: 19-digit value within BIGINT UNSIGNED must populate',
+        );
 
         $this->assertSame(
             AuditTable::SCHEMA_VERSION,
@@ -122,6 +152,30 @@ final class AuditTableMigrationTest extends IntegrationTestCase
             $this->assertNotSame('ALL', $row->type, 'H-4: badge query branch must not full-scan the audit table');
             $this->assertNotNull($row->key, 'H-4: badge query branch must use an index');
         }
+    }
+
+    /** @test */
+    public function postMigrationInsertsWithUnsafeSubjectValuesSucceed(): void
+    {
+        // Rebuild the column from the current expression — IF-NOT-EXISTS /
+        // existence-checked DDL would otherwise keep a stale column from an
+        // earlier code version (exactly the local-dev drift this PR fixes).
+        $this->dropMigrationArtifacts();
+
+        delete_option(self::SCHEMA_OPTION);
+        AuditTable::migrate();
+
+        // CR-F1 worst failure mode: with an unguarded CAST, a post-migration
+        // INSERT carrying an overflow value fails under strict mode — the
+        // audit row (the M5 detection mechanism) is silently lost. seedRow()
+        // asserts the insert itself succeeded.
+        $overflowId = $this->seedRow('{"user_id": "99999999999999999999999"}');
+        $trueId = $this->seedRow('{"user_id": true}');
+        $validId = $this->seedRow('{"user_id": 777000113}');
+
+        $this->assertNull($this->subjectOf($overflowId), 'CR-F1: overflow insert must persist with NULL subject');
+        $this->assertNull($this->subjectOf($trueId), 'CR-F1: JSON-true insert must persist with NULL subject');
+        $this->assertSame(777000113, $this->subjectOf($validId), 'valid subject must still populate on insert');
     }
 
     /** @test */
@@ -192,6 +246,20 @@ final class AuditTableMigrationTest extends IntegrationTestCase
         ));
 
         return $value === null ? null : (int) $value;
+    }
+
+    /**
+     * Raw string form — for values exceeding PHP_INT_MAX where an (int) cast
+     * would itself corrupt the comparison.
+     */
+    private function subjectRawOf(int $id): ?string
+    {
+        global $wpdb;
+
+        return $wpdb->get_var($wpdb->prepare(
+            "SELECT subject_user_id FROM {$this->table()} WHERE id = %d",
+            $id,
+        ));
     }
 
     /**
