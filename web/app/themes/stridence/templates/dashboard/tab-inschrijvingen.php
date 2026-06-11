@@ -70,7 +70,7 @@ $cancelled_editions = $data['cancelled_editions'];
                     $venue     = $reg['venue'] ?? null;
                     $progress  = $reg['progress'] ?? null;
                     ?>
-                    <div class="bg-white rounded-[16px] shadow-card p-[22px] px-6 flex flex-wrap justify-between gap-4">
+                    <div class="bg-surface-card rounded-[16px] shadow-card p-[22px] px-6 flex flex-wrap justify-between gap-4">
                         <!-- LEFT: badge + title + meta -->
                         <div class="flex-1 min-w-[240px]">
                             <!-- Badge row: type pill (inline) + enrolled pill -->
@@ -156,7 +156,7 @@ $cancelled_editions = $data['cancelled_editions'];
                         ];
                     }
                     ?>
-                    <div class="bg-white rounded-[16px] shadow-card p-[22px] px-6 flex flex-wrap justify-between gap-4">
+                    <div class="bg-surface-card rounded-[16px] shadow-card p-[22px] px-6 flex flex-wrap justify-between gap-4">
                         <!-- LEFT: badge + title + progress bar -->
                         <div class="flex-1 min-w-[240px]">
                             <!-- Badge row -->
@@ -258,7 +258,7 @@ $cancelled_editions = $data['cancelled_editions'];
                         $courseId     = (int) ($reg['course_id'] ?? 0);
                         $altUrl       = $courseId ? home_url('/edities/' . get_post_field('post_name', $courseId) . '/') : home_url('/klassikaal/');
                     ?>
-                        <div class="bg-white rounded-[16px] shadow-card p-[22px] px-6 flex flex-wrap justify-between gap-4 opacity-80">
+                        <div class="bg-surface-card rounded-[16px] shadow-card p-[22px] px-6 flex flex-wrap justify-between gap-4 opacity-80">
                             <!-- LEFT: badge + title (muted) + date -->
                             <div class="flex-1 min-w-[240px]">
                                 <div class="flex flex-wrap gap-[6px] mb-[10px]">

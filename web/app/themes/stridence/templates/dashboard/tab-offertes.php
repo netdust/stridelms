@@ -50,7 +50,7 @@ function stridence_quote_status_classes(QuoteStatus $status): string
             $canCancel      = $quote['status'] !== QuoteStatus::Exported;
             $hasSecondClick = $canEditBilling || $canApplyVoucher;
             ?>
-            <div class="bg-white rounded-[16px] shadow-card" x-data="expandable(<?php echo $i === 0 ? 'true' : 'false'; ?>)">
+            <div class="bg-surface-card rounded-[16px] shadow-card" x-data="expandable(<?php echo $i === 0 ? 'true' : 'false'; ?>)">
                 <!-- Header -->
                 <button type="button"
                         class="w-full p-[22px] px-6 flex items-center gap-4 text-left"

@@ -151,13 +151,13 @@ $benefit_rows = [
 
             <?php $cert_link = LearnDashHelper::getCertificateLink($course_id, $user_id); ?>
             <?php if ($cert_link) : ?>
-                <a href="<?php echo esc_url($cert_link); ?>" target="_blank" class="btn btn-primary w-full text-center flex items-center justify-center gap-2">
+                <a href="<?php echo esc_url($cert_link); ?>" target="_blank" class="btn-primary w-full text-center flex items-center justify-center gap-2">
                     <?php echo stridence_icon('download', 'w-4 h-4'); ?>
                     Certificaat downloaden
                 </a>
             <?php endif; ?>
 
-            <a href="<?php echo esc_url(LearnDashHelper::getResumeUrl($course_id, $user_id)); ?>" class="btn btn-ghost w-full text-center">
+            <a href="<?php echo esc_url(LearnDashHelper::getResumeUrl($course_id, $user_id)); ?>" class="btn-ghost w-full text-center">
                 Cursus bekijken
             </a>
         </div>
@@ -240,7 +240,7 @@ $benefit_rows = [
         <?php endif; ?>
 
         <div class="mt-[22px]">
-            <a href="<?php echo esc_url($course_action['url']); ?>" class="btn btn-primary w-full text-center">
+            <a href="<?php echo esc_url($course_action['url']); ?>" class="btn-primary w-full text-center">
                 <?php echo esc_html($cta_label); ?>
             </a>
         </div>
@@ -296,33 +296,33 @@ $benefit_rows = [
             $pureLdEnrollUrl = add_query_arg('enroll', '1', get_permalink($course_id));
 ?>
             <?php if ($is_open && $has_access) : ?>
-                <a href="<?php echo esc_url(LearnDashHelper::getFirstLessonUrl($course_id)); ?>" class="btn btn-primary w-full text-center">
+                <a href="<?php echo esc_url(LearnDashHelper::getFirstLessonUrl($course_id)); ?>" class="btn-primary w-full text-center">
                     <?php esc_html_e('Direct starten', 'stridence'); ?>
                 </a>
             <?php elseif ($enrollment_url) : ?>
-                <a href="<?php echo esc_url($enrollment_url); ?>" class="btn btn-primary w-full text-center">
+                <a href="<?php echo esc_url($enrollment_url); ?>" class="btn-primary w-full text-center">
                     <?php esc_html_e('Inschrijven', 'stridence'); ?>
                 </a>
             <?php elseif ($has_edition && $primary_edition_status->allowsInterest()) : ?>
-                <a href="<?php echo esc_url(home_url('/interesse/?editie=' . $primary_edition_id)); ?>" class="btn btn-primary w-full text-center block">
+                <a href="<?php echo esc_url(home_url('/interesse/?editie=' . $primary_edition_id)); ?>" class="btn-primary w-full text-center block">
                     <?php esc_html_e('Interesse melden', 'stridence'); ?>
                 </a>
                 <p class="text-xs text-text-muted mt-3 text-center">
                     <?php esc_html_e('Deze editie is nog in voorbereiding. Meld je interesse en we houden je op de hoogte.', 'stridence'); ?>
                 </p>
             <?php elseif ($has_edition && $primary_edition_status->allowsWaitlist()) : ?>
-                <a href="<?php echo esc_url(home_url('/wachtlijst/?editie=' . $primary_edition_id)); ?>" class="btn btn-primary w-full text-center block">
+                <a href="<?php echo esc_url(home_url('/wachtlijst/?editie=' . $primary_edition_id)); ?>" class="btn-primary w-full text-center block">
                     <?php esc_html_e('Op wachtlijst plaatsen', 'stridence'); ?>
                 </a>
                 <p class="text-xs text-text-muted mt-3 text-center">
                     <?php esc_html_e('Deze editie is volzet. Laat je gegevens achter en we nemen contact op als er een plaats vrijkomt.', 'stridence'); ?>
                 </p>
             <?php elseif ($has_edition) : ?>
-                <button type="button" class="btn btn-secondary w-full text-center opacity-50 cursor-not-allowed" disabled>
+                <button type="button" class="btn-secondary w-full text-center opacity-50 cursor-not-allowed" disabled>
                     <?php esc_html_e('Niet beschikbaar', 'stridence'); ?>
                 </button>
             <?php elseif ($price_type === 'open' || $price_type === 'free') : ?>
-                <a href="<?php echo esc_url($pureLdEnrollUrl); ?>" class="btn btn-primary w-full text-center">
+                <a href="<?php echo esc_url($pureLdEnrollUrl); ?>" class="btn-primary w-full text-center">
                     <?php echo esc_html($cta_label); ?>
                 </a>
             <?php elseif ($ld_buttons) : ?>
@@ -330,7 +330,7 @@ $benefit_rows = [
                     <?php echo $ld_buttons; ?>
                 </div>
             <?php else : ?>
-                <a href="<?php echo esc_url($pureLdEnrollUrl); ?>" class="btn btn-primary w-full text-center">
+                <a href="<?php echo esc_url($pureLdEnrollUrl); ?>" class="btn-primary w-full text-center">
                     <?php echo esc_html($cta_label); ?>
                 </a>
             <?php endif; ?>

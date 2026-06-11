@@ -73,7 +73,7 @@ get_header();
             </div>
 
             <!-- Info card -->
-            <div class="bg-white rounded-[16px] shadow-card divide-y divide-border-soft">
+            <div class="bg-surface-card rounded-[16px] shadow-card divide-y divide-border-soft">
                 <!-- Bezoek ons -->
                 <div class="py-4 first:pt-0">
                     <?php
@@ -159,7 +159,7 @@ get_header();
              the_content() is the form seam — FluentForms shortcode or
              block content renders here; its handler is unchanged.
              ───────────────────────────── -->
-        <div class="contact-form-card flex-1 min-w-[320px] bg-white rounded-[16px] shadow-elevated p-7 flex flex-col gap-[18px]">
+        <div class="contact-form-card flex-1 min-w-[320px] bg-surface-card rounded-[16px] shadow-elevated p-7 flex flex-col gap-[18px]">
             <h2 class="text-[17px] font-bold text-text m-0">
                 <?php esc_html_e('Stuur ons een bericht', 'stridence'); ?>
             </h2>

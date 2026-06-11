@@ -529,21 +529,21 @@ get_header();
                 <section id="praktisch" role="tabpanel" aria-labelledby="tab-praktisch"
                          x-show="isActive('praktisch')" class="pt-7">
                     <div class="grid gap-[14px] sm:grid-cols-2 lg:grid-cols-3">
-                        <div class="bg-white rounded-[14px] shadow-card p-5">
+                        <div class="bg-surface-card rounded-[14px] shadow-card p-5">
                             <h3 class="text-[11px] font-bold text-primary uppercase tracking-[0.08em]"><?php esc_html_e('Locatie', 'stridence'); ?></h3>
                             <p class="text-[14px] text-text-muted leading-relaxed mt-2">
                                 <?php echo $venue ? esc_html($venue) : esc_html__('Wordt nog bekendgemaakt', 'stridence'); ?>
                             </p>
                         </div>
                         <?php // PLACEHOLDER: "Inbegrepen" card — no inclusions field exists yet. ?>
-                        <div class="bg-white rounded-[14px] shadow-card p-5">
+                        <div class="bg-surface-card rounded-[14px] shadow-card p-5">
                             <h3 class="text-[11px] font-bold text-primary uppercase tracking-[0.08em]"><?php esc_html_e('Inbegrepen', 'stridence'); ?></h3>
                             <p class="text-[14px] text-text-muted leading-relaxed mt-2">
                                 <?php esc_html_e('Lunch, koffie en cursusmateriaal. Je ontvangt achteraf een attest van deelname.', 'stridence'); ?>
                             </p>
                         </div>
                         <?php // PLACEHOLDER: "Annuleren" card — no cancellation-policy field exists yet. ?>
-                        <div class="bg-white rounded-[14px] shadow-card p-5">
+                        <div class="bg-surface-card rounded-[14px] shadow-card p-5">
                             <h3 class="text-[11px] font-bold text-primary uppercase tracking-[0.08em]"><?php esc_html_e('Annuleren', 'stridence'); ?></h3>
                             <p class="text-[14px] text-text-muted leading-relaxed mt-2">
                                 <?php esc_html_e('Kosteloos tot 14 dagen vóór de eerste sessie. Daarna kan een collega je plaats overnemen.', 'stridence'); ?>
@@ -555,7 +555,7 @@ get_header();
                 <!-- Panel: Lesgever -->
                 <section id="lesgever" role="tabpanel" aria-labelledby="tab-lesgever"
                          x-show="isActive('lesgever')" class="pt-7">
-                    <div class="bg-white rounded-[14px] shadow-card p-6 flex gap-5 items-start flex-wrap">
+                    <div class="bg-surface-card rounded-[14px] shadow-card p-6 flex gap-5 items-start flex-wrap">
                         <span class="w-14 h-14 rounded-full bg-accent-subtle text-accent-hover font-bold text-[18px] grid place-items-center shrink-0" aria-hidden="true"><?php echo $has_speaker ? esc_html($lesgever_initials) : stridence_icon('user', 'w-6 h-6'); ?></span>
                         <div class="flex-1 min-w-[240px]">
                             <div class="text-[17px] font-bold text-text"><?php echo esc_html($lesgever_name); ?></div>

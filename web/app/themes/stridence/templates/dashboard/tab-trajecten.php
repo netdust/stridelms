@@ -207,7 +207,7 @@ foreach ($enrollments as $enrollment) {
                         }
                     }
                     ?>
-                    <div class="bg-white rounded-[16px] shadow-card p-6">
+                    <div class="bg-surface-card rounded-[16px] shadow-card p-6">
                         <!-- Header row: ring + title/meta + CTA -->
                         <div class="flex gap-5 items-start flex-wrap mb-5">
                             <!-- 72px progress ring -->
@@ -324,7 +324,7 @@ foreach ($enrollments as $enrollment) {
                                         <?php else : ?>
                                             <!-- Upcoming row: plain bg-surface -->
                                             <div class="bg-surface rounded-[12px] px-4 py-[13px] flex gap-3 items-center">
-                                                <span class="w-[22px] h-[22px] rounded-full bg-white shadow-[inset_0_0_0_1.5px_theme(colors.border)] shrink-0"></span>
+                                                <span class="w-[22px] h-[22px] rounded-full bg-white shadow-[inset_0_0_0_1.5px_rgb(var(--color-border))] shrink-0"></span>
                                                 <span class="text-[14px] font-semibold text-text flex-1"><?php echo $cTitle; ?></span>
                                             </div>
                                         <?php endif; ?>
@@ -353,11 +353,11 @@ foreach ($enrollments as $enrollment) {
                                             </div>
                                         <?php else : ?>
                                             <!-- Elective pending row: outlined + mini-CTA -->
-                                            <div class="bg-surface rounded-[12px] shadow-[inset_0_0_0_1.5px_theme(colors.border)] px-4 py-[13px] flex flex-wrap gap-3 items-center">
-                                                <span class="w-[22px] h-[22px] rounded-full bg-white shadow-[inset_0_0_0_1.5px_theme(colors.border)] shrink-0"></span>
+                                            <div class="bg-surface rounded-[12px] shadow-[inset_0_0_0_1.5px_rgb(var(--color-border))] px-4 py-[13px] flex flex-wrap gap-3 items-center">
+                                                <span class="w-[22px] h-[22px] rounded-full bg-white shadow-[inset_0_0_0_1.5px_rgb(var(--color-border))] shrink-0"></span>
                                                 <span class="text-[14px] font-semibold text-text flex-1 min-w-[180px]">
                                                     <?php echo esc_html(sprintf(
-                                                        /* translators: %1$d required choices, %2$d total options */
+                                                        /* translators: %1$s: group name, %2$d: required choices, %3$d: total options */
                                                         __('Keuze %1$s — kies %2$d van %3$d', 'stridence'),
                                                         $groupName,
                                                         $requiredCount,
