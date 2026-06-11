@@ -22,8 +22,10 @@ $online_items     = stridence_catalog_items('online');
 $klassikaal_total = count($klassikaal_items);
 $online_total     = count($online_items);
 
-$trajectory_counts = wp_count_posts('vad_trajectory');
-$trajectory_total  = isset($trajectory_counts->publish) ? (int) $trajectory_counts->publish : 0;
+// Trajectory count through the repository (INV-3: the CPT's repository is
+// the single data-access point — no direct wp_count_posts on vad_trajectory).
+$trajectory_total = ntdst_get(\Stride\Modules\Trajectory\TrajectoryRepository::class)
+    ->count(['post_status' => 'publish']);
 
 // "Binnenkort van start": the 3 soonest klassikaal items (the list is
 // already start_date ASC), rendered through the same prefetch + card

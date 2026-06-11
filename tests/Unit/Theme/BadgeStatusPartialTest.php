@@ -76,6 +76,7 @@ namespace Stride\Tests\Unit\Theme {
             $this->assertStringContainsString('bg-badge-online-bg', $html);
             $this->assertStringContainsString('text-badge-online-text', $html);
             $this->assertStringContainsString('Ingeschreven', $html);
+            $this->assertStringContainsString('✓', $html, 'enrolled badge must render checkmark prefix');
         }
 
         public function testUnknownStatusFallsBackToNeutralVariantWithoutPhpNotice(): void
