@@ -2,7 +2,8 @@
 /**
  * Notification Item Partial
  *
- * Renders a single notification row with unread indicator, icon, title, body, and time.
+ * Renders a single notification row: unread accent dot, title, body, and time.
+ * Unread rows get a tinted accent background; read rows a soft-bordered card.
  *
  * @param array $args {
  *     @type array $notification {
@@ -35,16 +36,6 @@ $url       = $notification['url'] ?? '#';
 $timestamp = (int) ($notification['timestamp'] ?? 0);
 $read      = (bool) ($notification['read'] ?? false);
 
-// Icon and color per type
-[$icon, $iconColor, $iconBg] = match ($type) {
-    'enrollment'  => ['check-circle', 'text-status-success', 'bg-status-success-subtle'],
-    'attendance'  => ['check', 'text-blue-600', 'bg-blue-50'],
-    'completion'  => ['award', 'text-status-success', 'bg-status-success-subtle'],
-    'certificate' => ['file-text', 'text-status-success', 'bg-status-success-subtle'],
-    'session'     => ['info', 'text-blue-600', 'bg-blue-50'],
-    default       => ['bell', 'text-primary', 'bg-primary/10'],
-};
-
 // Relative time in Dutch
 $timeAgo = '';
 if ($timestamp > 0) {
@@ -52,29 +43,22 @@ if ($timestamp > 0) {
 }
 ?>
 <a href="<?php echo esc_url($url); ?>"
-   class="flex items-center gap-3 px-4 py-3 rounded-lg border border-border/60 bg-surface-card hover:border-primary/25 transition-colors cursor-pointer">
+   class="flex items-start gap-3 p-4 rounded-[12px] transition-colors cursor-pointer <?php echo esc_attr($read ? 'bg-surface-card border border-border-soft hover:bg-surface-alt' : 'bg-accent-subtle/60 hover:bg-accent-subtle'); ?>">
 
-    <!-- Unread dot + icon -->
-    <div class="relative shrink-0">
-        <span class="w-8 h-8 rounded-lg <?php echo esc_attr($iconBg); ?> flex items-center justify-center">
-            <?php echo stridence_icon($icon, 'w-4 h-4 ' . $iconColor); ?>
-        </span>
-        <?php if (!$read) : ?>
-            <span class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-primary ring-2 ring-surface-card"></span>
-        <?php endif; ?>
-    </div>
+    <!-- Unread dot (transparent placeholder on read rows keeps text aligned) -->
+    <span class="w-2 h-2 rounded-full mt-[6px] shrink-0 <?php echo esc_attr($read ? 'bg-transparent' : 'bg-accent'); ?>"></span>
 
     <!-- Content -->
     <div class="flex-1 min-w-0">
-        <p class="text-sm font-medium text-text truncate m-0"><?php echo esc_html($title); ?></p>
+        <p class="text-[14px] m-0 <?php echo esc_attr($read ? 'font-semibold text-text-muted' : 'font-bold text-text'); ?>"><?php echo esc_html($title); ?></p>
         <?php if ($body !== '') : ?>
-            <p class="text-xs text-text-muted truncate mt-0.5"><?php echo esc_html($body); ?></p>
+            <p class="text-[13px] text-text-muted mt-0.5 m-0"><?php echo esc_html($body); ?></p>
         <?php endif; ?>
     </div>
 
     <!-- Timestamp -->
     <?php if ($timeAgo !== '') : ?>
-        <span class="text-xs text-text-muted whitespace-nowrap shrink-0">
+        <span class="text-[12px] text-text-faint whitespace-nowrap shrink-0">
             <?php echo esc_html($timeAgo); ?>
         </span>
     <?php endif; ?>

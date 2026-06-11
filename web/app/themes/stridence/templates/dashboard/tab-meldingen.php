@@ -41,9 +41,9 @@ foreach ($notifications as $n) {
         <?php if ($unreadCount > 0) : ?>
             <div class="flex justify-end">
                 <button type="button"
-                        class="text-sm text-primary hover:underline"
+                        class="text-[13px] font-bold text-primary hover:text-primary-hover transition-colors"
                         onclick="(async () => { await ntdstAPI.call('stride_mark_notifications_read'); window.location.reload(); })()">
-                    <?php esc_html_e('Alles gelezen', 'stridence'); ?>
+                    <?php esc_html_e('Alles als gelezen markeren', 'stridence'); ?>
                 </button>
             </div>
         <?php endif; ?>
@@ -54,7 +54,7 @@ foreach ($notifications as $n) {
                 <h3 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">
                     <?php esc_html_e('Vandaag', 'stridence'); ?>
                 </h3>
-                <div class="space-y-1">
+                <div class="space-y-2">
                     <?php foreach ($groups['today'] as $notification) : ?>
                         <?php stridence_template_part('templates/dashboard/partials/notification-item', null, [
                             'notification' => $notification,
@@ -70,7 +70,7 @@ foreach ($notifications as $n) {
                 <h3 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">
                     <?php esc_html_e('Eerder', 'stridence'); ?>
                 </h3>
-                <div class="space-y-1">
+                <div class="space-y-2">
                     <?php foreach ($groups['earlier'] as $notification) : ?>
                         <?php stridence_template_part('templates/dashboard/partials/notification-item', null, [
                             'notification' => $notification,

@@ -51,7 +51,7 @@ $notifications = [
 ];
 ?>
 
-<div class="space-y-8">
+<div class="max-w-[720px] space-y-5">
 
     <!-- Personal Information -->
     <section x-data="inlineEditSection({
@@ -65,22 +65,22 @@ $notifications = [
                      'department'   => $department,
                  ])); ?>
              })">
-        <div class="flex items-center justify-between mb-3">
-            <h3 class="dash-subheading flex items-center gap-2">
-                <?php echo stridence_icon('user', 'w-4 h-4 text-primary'); ?>
-                <?php esc_html_e('Persoonlijke gegevens', 'stridence'); ?>
-            </h3>
+        <div class="bg-surface-card rounded-[16px] shadow-card p-6 lg:p-7">
+            <div class="flex items-start justify-between gap-4 mb-5">
+                <div>
+                    <h3 class="text-[16px] font-bold text-text m-0"><?php esc_html_e('Persoonlijke gegevens', 'stridence'); ?></h3>
+                    <p class="text-[13px] text-text-muted mt-0.5 m-0"><?php esc_html_e('Zichtbaar op je attesten en certificaten.', 'stridence'); ?></p>
+                </div>
             <template x-if="!editing">
                 <button type="button" @click="startEdit()" class="text-sm text-primary hover:underline">
                     <?php echo stridence_icon('edit-2', 'w-3.5 h-3.5 inline mr-1'); ?>
                     <?php esc_html_e('Bewerken', 'stridence'); ?>
                 </button>
             </template>
-        </div>
+            </div>
 
-        <div class="bg-surface-card rounded-xl border border-border shadow-sm p-4">
             <!-- Display mode -->
-            <dl x-show="!editing" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <dl x-show="!editing" class="grid gap-4 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
                 <div>
                     <dt class="text-xs text-text-muted mb-0.5"><?php esc_html_e('Naam', 'stridence'); ?></dt>
                     <dd class="text-sm font-medium text-text" x-text="fields.first_name + ' ' + fields.last_name"></dd>
@@ -105,7 +105,7 @@ $notifications = [
 
             <!-- Edit mode -->
             <div x-show="editing" x-transition class="space-y-4">
-                <div class="grid gap-4 sm:grid-cols-2">
+                <div class="grid gap-4 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
                     <div>
                         <label class="input-label"><?php esc_html_e('Voornaam', 'stridence'); ?></label>
                         <input type="text" x-model="fields.first_name" class="input-text" required>
@@ -115,7 +115,7 @@ $notifications = [
                         <input type="text" x-model="fields.last_name" class="input-text" required>
                     </div>
                 </div>
-                <div class="grid gap-4 sm:grid-cols-2">
+                <div class="grid gap-4 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
                     <div>
                         <label class="input-label"><?php esc_html_e('E-mailadres', 'stridence'); ?></label>
                         <input type="email" value="<?php echo esc_attr($email); ?>" class="input-text bg-surface-alt cursor-not-allowed" disabled>
@@ -126,7 +126,7 @@ $notifications = [
                         <input type="tel" x-model="fields.phone" class="input-text" placeholder="+32 ...">
                     </div>
                 </div>
-                <div class="grid gap-4 sm:grid-cols-2">
+                <div class="grid gap-4 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
                     <div>
                         <label class="input-label"><?php esc_html_e('Organisatie', 'stridence'); ?></label>
                         <input type="text" x-model="fields.organisation" class="input-text" placeholder="<?php esc_attr_e('Naam van je werkgever', 'stridence'); ?>">
@@ -142,10 +142,10 @@ $notifications = [
 
                 <!-- Actions -->
                 <div class="flex justify-end gap-2 pt-2">
-                    <button type="button" @click="cancelEdit()" class="btn-secondary btn-sm">
+                    <button type="button" @click="cancelEdit()" class="btn-secondary">
                         <?php esc_html_e('Annuleren', 'stridence'); ?>
                     </button>
-                    <button type="button" @click="saveEdit()" :disabled="saving" class="btn-primary btn-sm">
+                    <button type="button" @click="saveEdit()" :disabled="saving" class="btn-primary">
                         <span x-show="!saving"><?php esc_html_e('Opslaan', 'stridence'); ?></span>
                         <span x-show="saving" class="flex items-center gap-1">
                             <span class="spinner w-3 h-3"></span>
@@ -175,20 +175,17 @@ $notifications = [
                  )); ?>,
                  get currentType() { return this.profileTypes[this.fields.profile_type] ?? null; },
              }">
-        <div class="flex items-center justify-between mb-3">
-            <h3 class="dash-subheading flex items-center gap-2">
-                <?php echo stridence_icon('users', 'w-4 h-4 text-primary'); ?>
-                <?php esc_html_e('Profieltype', 'stridence'); ?>
-            </h3>
+        <div class="bg-surface-card rounded-[16px] shadow-card p-6 lg:p-7">
+            <div class="flex items-start justify-between gap-4 mb-5">
+                <h3 class="text-[16px] font-bold text-text m-0"><?php esc_html_e('Profieltype', 'stridence'); ?></h3>
             <template x-if="!editing">
                 <button type="button" @click="startEdit()" class="text-sm text-primary hover:underline">
                     <?php echo stridence_icon('edit-2', 'w-3.5 h-3.5 inline mr-1'); ?>
                     <?php esc_html_e('Bewerken', 'stridence'); ?>
                 </button>
             </template>
-        </div>
+            </div>
 
-        <div class="bg-surface-card rounded-xl border border-border shadow-sm p-4">
             <!-- Display mode -->
             <dl x-show="!editing" class="grid grid-cols-1 gap-4">
                 <div>
@@ -227,10 +224,10 @@ $notifications = [
 
                 <!-- Actions -->
                 <div class="flex justify-end gap-2 pt-2">
-                    <button type="button" @click="cancelEdit()" class="btn-secondary btn-sm">
+                    <button type="button" @click="cancelEdit()" class="btn-secondary">
                         <?php esc_html_e('Annuleren', 'stridence'); ?>
                     </button>
-                    <button type="button" @click="saveEdit()" :disabled="saving" class="btn-primary btn-sm">
+                    <button type="button" @click="saveEdit()" :disabled="saving" class="btn-primary">
                         <span x-show="!saving"><?php esc_html_e('Opslaan', 'stridence'); ?></span>
                         <span x-show="saving" class="flex items-center gap-1">
                             <span class="spinner w-3 h-3"></span>
@@ -257,27 +254,22 @@ $notifications = [
                      'gln_number'    => $billing['gln_number'],
                  ])); ?>
              })">
-        <div class="flex items-center justify-between mb-3">
-            <div>
-                <h3 class="dash-subheading flex items-center gap-2">
-                    <?php echo stridence_icon('file-text', 'w-4 h-4 text-primary'); ?>
-                    <?php esc_html_e('Facturatiegegevens', 'stridence'); ?>
-                </h3>
-                <span class="text-xs text-text-muted mt-1 block">
-                    <?php esc_html_e('Deze gegevens worden gebruikt voor offertes en facturen.', 'stridence'); ?>
-                </span>
-            </div>
+        <div class="bg-surface-card rounded-[16px] shadow-card p-6 lg:p-7">
+            <div class="flex items-start justify-between gap-4 mb-5">
+                <div>
+                    <h3 class="text-[16px] font-bold text-text m-0"><?php esc_html_e('Facturatiegegevens', 'stridence'); ?></h3>
+                    <p class="text-[13px] text-text-muted mt-0.5 m-0"><?php esc_html_e('Deze gegevens worden gebruikt voor offertes en facturen.', 'stridence'); ?></p>
+                </div>
             <template x-if="!editing">
                 <button type="button" @click="startEdit()" class="text-sm text-primary hover:underline shrink-0">
                     <?php echo stridence_icon('edit-2', 'w-3.5 h-3.5 inline mr-1'); ?>
                     <?php esc_html_e('Bewerken', 'stridence'); ?>
                 </button>
             </template>
-        </div>
+            </div>
 
-        <div class="bg-surface-card rounded-xl border border-border shadow-sm p-4">
             <!-- Display mode -->
-            <dl x-show="!editing" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <dl x-show="!editing" class="grid gap-4 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
                 <div>
                     <dt class="text-xs text-text-muted mb-0.5"><?php esc_html_e('Organisatie', 'stridence'); ?></dt>
                     <dd class="text-sm font-medium text-text" x-text="fields.company || '-'"></dd>
@@ -286,7 +278,7 @@ $notifications = [
                     <dt class="text-xs text-text-muted mb-0.5"><?php esc_html_e('BTW-nummer', 'stridence'); ?></dt>
                     <dd class="text-sm font-medium text-text" x-text="fields.vat_number || '-'"></dd>
                 </div>
-                <div class="sm:col-span-2">
+                <div class="col-span-full">
                     <dt class="text-xs text-text-muted mb-0.5"><?php esc_html_e('Adres', 'stridence'); ?></dt>
                     <dd class="text-sm font-medium text-text">
                         <template x-if="fields.address">
@@ -313,7 +305,7 @@ $notifications = [
 
             <!-- Edit mode -->
             <div x-show="editing" x-transition class="space-y-4">
-                <div class="grid gap-4 sm:grid-cols-2">
+                <div class="grid gap-4 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
                     <div>
                         <label class="input-label"><?php esc_html_e('Organisatie', 'stridence'); ?></label>
                         <input type="text" x-model="fields.company" class="input-text">
@@ -340,7 +332,7 @@ $notifications = [
                     </div>
                 </div>
 
-                <div class="grid gap-4 sm:grid-cols-2">
+                <div class="grid gap-4 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
                     <div>
                         <label class="input-label"><?php esc_html_e('Facturatie e-mail', 'stridence'); ?></label>
                         <input type="email" x-model="fields.invoice_email" class="input-text" placeholder="<?php echo esc_attr($email); ?>">
@@ -360,10 +352,10 @@ $notifications = [
 
                 <!-- Actions -->
                 <div class="flex justify-end gap-2 pt-2">
-                    <button type="button" @click="cancelEdit()" class="btn-secondary btn-sm">
+                    <button type="button" @click="cancelEdit()" class="btn-secondary">
                         <?php esc_html_e('Annuleren', 'stridence'); ?>
                     </button>
-                    <button type="button" @click="saveEdit()" :disabled="saving" class="btn-primary btn-sm">
+                    <button type="button" @click="saveEdit()" :disabled="saving" class="btn-primary">
                         <span x-show="!saving"><?php esc_html_e('Opslaan', 'stridence'); ?></span>
                         <span x-show="saving" class="flex items-center gap-1">
                             <span class="spinner w-3 h-3"></span>
@@ -377,17 +369,11 @@ $notifications = [
 
     <!-- Privacy & GDPR -->
     <section x-data="{ exportRequested: false, deleteRequested: false, deleteConfirm: false, error: '', saving: false }">
-        <div class="mb-3">
-            <h3 class="dash-subheading flex items-center gap-2">
-                <?php echo stridence_icon('shield', 'w-4 h-4 text-primary'); ?>
-                <?php esc_html_e('Privacy & GDPR', 'stridence'); ?>
-            </h3>
-            <span class="text-xs text-text-muted mt-1 block">
-                <?php esc_html_e('Beheer je persoonsgegevens conform de AVG/GDPR-wetgeving.', 'stridence'); ?>
-            </span>
-        </div>
-
-        <div class="bg-surface-card rounded-xl border border-border shadow-sm p-4 space-y-4">
+        <div class="bg-surface-card rounded-[16px] shadow-card p-6 lg:p-7 space-y-4">
+            <div>
+                <h3 class="text-[16px] font-bold text-text m-0"><?php esc_html_e('Privacy & GDPR', 'stridence'); ?></h3>
+                <p class="text-[13px] text-text-muted mt-0.5 m-0"><?php esc_html_e('Beheer je persoonsgegevens conform de AVG/GDPR-wetgeving.', 'stridence'); ?></p>
+            </div>
             <!-- Export personal data -->
             <div class="flex items-start justify-between gap-4">
                 <div>
@@ -467,20 +453,17 @@ $notifications = [
                      'communication_language'  => $notifications['language'],
                  ])); ?>
              })">
-        <div class="flex items-center justify-between mb-3">
-            <h3 class="dash-subheading flex items-center gap-2">
-                <?php echo stridence_icon('bell', 'w-4 h-4 text-primary'); ?>
-                <?php esc_html_e('Meldingsvoorkeuren', 'stridence'); ?>
-            </h3>
+        <div class="bg-surface-card rounded-[16px] shadow-card p-6 lg:p-7">
+            <div class="flex items-start justify-between gap-4 mb-5">
+                <h3 class="text-[16px] font-bold text-text m-0"><?php esc_html_e('Meldingsvoorkeuren', 'stridence'); ?></h3>
             <template x-if="!editing">
                 <button type="button" @click="startEdit()" class="text-sm text-primary hover:underline">
                     <?php echo stridence_icon('edit-2', 'w-3.5 h-3.5 inline mr-1'); ?>
                     <?php esc_html_e('Bewerken', 'stridence'); ?>
                 </button>
             </template>
-        </div>
+            </div>
 
-        <div class="bg-surface-card rounded-xl border border-border shadow-sm p-4">
             <!-- Display mode -->
             <dl x-show="!editing" class="space-y-3">
                 <div class="flex items-center justify-between">
@@ -556,10 +539,10 @@ $notifications = [
 
                 <!-- Actions -->
                 <div class="flex justify-end gap-2 pt-2">
-                    <button type="button" @click="cancelEdit()" class="btn-secondary btn-sm">
+                    <button type="button" @click="cancelEdit()" class="btn-secondary">
                         <?php esc_html_e('Annuleren', 'stridence'); ?>
                     </button>
-                    <button type="button" @click="saveEdit()" :disabled="saving" class="btn-primary btn-sm">
+                    <button type="button" @click="saveEdit()" :disabled="saving" class="btn-primary">
                         <span x-show="!saving"><?php esc_html_e('Opslaan', 'stridence'); ?></span>
                         <span x-show="saving" class="flex items-center gap-1">
                             <span class="spinner w-3 h-3"></span>
@@ -570,4 +553,13 @@ $notifications = [
             </div>
         </div>
     </section>
+
+    <!-- Uitloggen — the sidebar is lg-only, so this is the only logout surface on mobile -->
+    <div class="border-t border-border-soft pt-6 mt-2">
+        <a href="<?php echo esc_url(wp_logout_url(home_url('/'))); ?>"
+           class="btn-ghost text-error/70 hover:text-error hover:bg-error/5">
+            <?php echo stridence_icon('log-out', 'w-4 h-4 shrink-0'); ?>
+            <?php esc_html_e('Uitloggen', 'stridence'); ?>
+        </a>
+    </div>
 </div>
