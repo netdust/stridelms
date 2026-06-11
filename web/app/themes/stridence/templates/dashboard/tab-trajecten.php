@@ -177,11 +177,22 @@ foreach ($enrollments as $enrollment) {
                         ? home_url('/mijn-account/trajecten/' . $trajectory_slug . '/')
                         : get_permalink($traj['trajectory_id']);
 
-                    // Elective choice status text
-                    $has_electives       = !empty($traj['elective_groups']);
-                    $electives_chosen    = !empty($traj['selections']) && is_array($traj['selections']);
+                    // Elective choice status — selections are keyed by elective
+                    // group INDEX (same shape as trajectory/tab-keuzes.php and
+                    // tab-voortgang.php), so the chosen-state is per group, and
+                    // the header line only says "keuze gemaakt" when EVERY
+                    // group has a selection.
+                    $has_electives = !empty($traj['elective_groups']);
+                    $selections    = is_array($traj['selections']) ? $traj['selections'] : [];
+                    $all_groups_chosen = $has_electives;
+                    foreach (array_keys($traj['elective_groups']) as $groupIndex) {
+                        if (empty($selections[$groupIndex])) {
+                            $all_groups_chosen = false;
+                            break;
+                        }
+                    }
                     $elective_status_txt = $has_electives
-                        ? ($electives_chosen
+                        ? ($all_groups_chosen
                             ? __('keuze gemaakt', 'stridence')
                             : __('keuzemodule nog te kiezen', 'stridence'))
                         : '';
@@ -256,11 +267,11 @@ foreach ($enrollments as $enrollment) {
                             ];
                         }
 
-                        // Elective groups
-                        foreach ($traj['elective_groups'] as $group) {
+                        // Elective groups — chosen-state derived per group index
+                        foreach ($traj['elective_groups'] as $groupIndex => $group) {
                             $groupName     = $group['name'] ?? __('Keuzemodule', 'stridence');
                             $requiredCount = (int) ($group['required'] ?? 1);
-                            $groupChosen   = $electives_chosen;
+                            $groupChosen   = !empty($selections[$groupIndex]);
 
                             $allParts[] = [
                                 'type'          => 'elective',
