@@ -42,7 +42,7 @@ if ($stridence_font_url) :
                     <?php if (has_custom_logo()) : ?>
                         <?php the_custom_logo(); ?>
                     <?php else : ?>
-                        <span class="text-xl font-extrabold tracking-tight text-text"><?php bloginfo('name'); ?><span class="text-primary">.</span></span>
+                        <span class="text-xl font-extrabold tracking-tight text-text"><?php echo esc_html(get_bloginfo('name')); ?><span class="text-primary">.</span></span>
                     <?php endif; ?>
                 </a>
 

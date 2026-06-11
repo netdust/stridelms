@@ -24,7 +24,7 @@ defined('ABSPATH') || exit;
                     </div>
                     <!-- Address / contact info from site description -->
                     <div class="text-[13px] text-text-faint leading-relaxed">
-                        <?php bloginfo('description'); ?>
+                        <?php echo esc_html(get_bloginfo('description')); ?>
                     </div>
                 </div>
 
