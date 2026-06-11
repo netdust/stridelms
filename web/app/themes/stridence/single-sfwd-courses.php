@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
+use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
@@ -36,6 +37,13 @@ $editions = $editionRepository->findByCourse($course_id);
 $active_edition_ids = $editionRepository->findActiveIdsByCourse($course_id);
 $has_active_edition = !empty($active_edition_ids);
 
+// Course lessons fetched ONCE and passed down (mirrors $editions) — content,
+// sidebar-online and mobile-cta each used to call LearnDashHelper::getLessons
+// themselves (up to 3x per request). Only online pages render lesson data.
+$lessons = $is_online
+    ? LearnDashHelper::getLessons($course_id, get_current_user_id() ?: null)
+    : [];
+
 // Online courses always get the CTA sidebar. Pure-LD courses self-enroll;
 // edition-backed online courses route to the primary edition (previously
 // this case rendered NO CTA at all — info page with no path to enroll).
@@ -43,6 +51,7 @@ $show_online_sidebar = $is_online;
 
 $online_sidebar_args = [
     'course_id'              => $course_id,
+    'lessons'                => $lessons,
     'enrollment_url'         => '',
     'user_enrolled'          => false,
     'edition_price'          => null,
@@ -62,6 +71,7 @@ if ($is_online && $has_active_edition) {
 
     $online_sidebar_args = [
         'course_id'              => $course_id,
+        'lessons'                => $lessons,
         'enrollment_url'         => $primaryStatus->allowsEnrollment()
             ? stride_enrollment_url($primaryEditionId)
             : '',
@@ -111,6 +121,7 @@ get_header();
                     'course_id'     => $course_id,
                     'is_online'     => true,
                     'editions'      => $editions,
+                    'lessons'       => $lessons,
                     'show_editions' => $has_active_edition,
                 ]);
             ?>
@@ -128,6 +139,7 @@ get_header();
                     'course_id' => $course_id,
                     'is_online' => $is_online,
                     'editions'  => $editions,
+                    'lessons'   => $lessons,
                 ]);
             ?>
 

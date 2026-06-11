@@ -12,6 +12,8 @@
  *     @type bool   $is_online      Whether course is online
  *     @type string $enrollment_url Enrollment URL (for in-person courses)
  *     @type bool   $user_enrolled  Whether user is enrolled in an edition (klassikaal)
+ *     @type array  $lessons        Course lessons (LearnDashHelper::getLessons),
+ *                                  fetched once in single-sfwd-courses.php
  * }
  */
 
@@ -21,6 +23,7 @@ use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Domain\OfferingStatus;
 
 $course_id              = $args['course_id'] ?? get_the_ID();
+$lessons                = $args['lessons'] ?? [];
 $is_online              = $args['is_online'] ?? false;
 $enrollment_url         = $args['enrollment_url'] ?? '';
 $user_enrolled          = $args['user_enrolled'] ?? false;
@@ -59,7 +62,7 @@ $is_open     = $is_online && LearnDashHelper::getAccessMode($course_id) === Lear
             <!-- Online enrolled, in progress: progress left, continue right
                  (Helder Tij). Same resume/first-lesson URL logic as before. -->
             <?php
-            $m_lessons   = LearnDashHelper::getLessons($course_id, $user_id);
+            $m_lessons   = $lessons;
             $m_total     = count($m_lessons);
             $m_done      = count(array_filter($m_lessons, static fn(array $l): bool => !empty($l['completed'])));
             $m_remaining = max(0, $m_total - $m_done);

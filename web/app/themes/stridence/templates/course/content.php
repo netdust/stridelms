@@ -8,6 +8,8 @@
  *     @type int   $course_id Course post ID
  *     @type bool  $is_online Whether course is online
  *     @type array $editions  Scheduled editions for in-person courses (optional)
+ *     @type array $lessons   Course lessons (LearnDashHelper::getLessons), fetched
+ *                            once in single-sfwd-courses.php
  * }
  */
 
@@ -18,6 +20,7 @@ use Stride\Integrations\LearnDash\LearnDashHelper;
 $course_id    = $args['course_id'] ?? get_the_ID();
 $is_online    = $args['is_online'] ?? false;
 $editions     = $args['editions'] ?? [];
+$lessons      = $args['lessons'] ?? [];
 // When rendered on /edities/<course-slug>/ (the enrollment surface itself),
 // we don't repeat the editions list — the visitor is already past discovery.
 $show_editions = $args['show_editions'] ?? true;
@@ -115,17 +118,14 @@ endif;
 <!-- Programma Section -->
 <section id="programma" class="scroll-mt-32">
     <?php
-    $current_user_id = get_current_user_id();
-
 if ($is_online) :
     // Helder Tij: heading row with progress label ("X van Y modules afgerond")
-    // from existing LearnDashHelper data — only when the visitor has access.
-    $course_lessons = LearnDashHelper::getLessons($course_id, $current_user_id ?: null);
-    $lesson_total   = count($course_lessons);
-    $lessons_done   = count(array_filter($course_lessons, static fn(array $l): bool => !empty($l['completed'])));
-    $show_lesson_progress = $current_user_id
+    // from the hoisted $lessons arg — only when the visitor has access.
+    $lesson_total   = count($lessons);
+    $lessons_done   = count(array_filter($lessons, static fn(array $l): bool => !empty($l['completed'])));
+    $show_lesson_progress = $user_id
         && $lesson_total > 0
-        && LearnDashHelper::hasAccess($course_id, $current_user_id);
+        && LearnDashHelper::hasAccess($course_id, $user_id);
     ?>
     <div class="flex justify-between items-baseline gap-3.5 flex-wrap mb-3">
         <h2 class="text-[18px] font-bold text-text">
@@ -147,10 +147,10 @@ if ($is_online) :
     <?php endif; ?>
 
     <?php
-$has_drip = $is_online && $current_user_id && LearnDashHelper::hasAccess($course_id, $current_user_id) && LearnDashHelper::hasDripFeed($course_id);
+$has_drip = $is_online && $user_id && LearnDashHelper::hasAccess($course_id, $user_id) && LearnDashHelper::hasDripFeed($course_id);
 
 if ($has_drip) :
-    $lessons_with_dates = LearnDashHelper::getLessonsWithAvailability($course_id, $current_user_id);
+    $lessons_with_dates = LearnDashHelper::getLessonsWithAvailability($course_id, $user_id);
     $locked_lessons = array_filter($lessons_with_dates, fn($l) => !$l['is_available']);
 
     if (!empty($locked_lessons)) :

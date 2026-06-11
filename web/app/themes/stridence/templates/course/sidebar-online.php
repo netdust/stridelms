@@ -12,6 +12,8 @@
  * @param array $args {
  *     @type int    $course_id      Course post ID
  *     @type string $enrollment_url Stride enrollment URL (edition-based)
+ *     @type array  $lessons        Course lessons (LearnDashHelper::getLessons),
+ *                                  fetched once in single-sfwd-courses.php
  * }
  */
 
@@ -22,6 +24,7 @@ use Stride\Domain\Money;
 use Stride\Domain\OfferingStatus;
 
 $course_id              = $args['course_id'] ?? get_the_ID();
+$lessons                = $args['lessons'] ?? [];
 $enrollment_url         = $args['enrollment_url'] ?? '';
 $stride_enrolled        = $args['user_enrolled'] ?? false;
 $edition_price          = $args['edition_price'] ?? null; // Money object from edition
@@ -165,9 +168,9 @@ $benefit_rows = [
         $viewer      = wp_get_current_user();
         $viewer_name = $viewer->first_name !== '' ? $viewer->first_name : $viewer->display_name;
 
-        // Modules remaining from existing LearnDashHelper data. The mockup's
+        // Modules remaining from the hoisted $lessons arg. The mockup's
         // "± Y min" estimate has no live data source — omitted (no fake data).
-        $sb_lessons   = LearnDashHelper::getLessons($course_id, $user_id);
+        $sb_lessons   = $lessons;
         $sb_total     = count($sb_lessons);
         $sb_done      = count(array_filter($sb_lessons, static fn(array $l): bool => !empty($l['completed'])));
         $sb_remaining = max(0, $sb_total - $sb_done);
