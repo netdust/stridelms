@@ -66,9 +66,12 @@
     @apply text-primary hover:text-primary-dark transition-colors duration-fast;
   }
 
-  /* ── Focus Styles ── */
+  /* ── Focus Styles ──
+     One visible focus style everywhere (see tokens.css v2):
+     2px ring in the focus token color, offset from the element. */
   :focus-visible {
-    @apply outline-none ring-2 ring-primary/50 ring-offset-2;
+    outline: 2px solid rgb(var(--color-focus));
+    outline-offset: 2px;
   }
 
   /* ── Selection ── */
@@ -99,8 +102,21 @@
     pointer-events: none;
   }
 
-  /* Focus ring offset for glass backgrounds */
+  /* Focus ring offset for glass backgrounds.
+     Only affects components still using Tailwind ring-based focus
+     (buttons/fields until their reskin task); the global outline-based
+     focus above ignores ring offsets. */
   .glass-nav :focus-visible {
     --tw-ring-offset-color: rgb(var(--color-surface));
+  }
+}
+
+/* ── Spinner Keyframes ──
+   Rotation used by loading buttons/spinners (design component sheet:
+   `animation: st-spin 700ms linear infinite`). Defined outside @layer
+   so the keyframes always ship regardless of utility tree-shaking. */
+@keyframes st-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
