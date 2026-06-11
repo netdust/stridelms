@@ -229,6 +229,7 @@ stridence_template_part('partials/badge-status', null, [
                 'enrollment' => $enrollment,
                 'user' => $user,
                 'dashboard_service' => $dashboardService,
+                'progress' => $progress,
             ]);
 ?>
         </div>

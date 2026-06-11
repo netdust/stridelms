@@ -40,8 +40,9 @@ $enrollment = $args['enrollment'];
 $user = $args['user'];
 $dashboardService = $args['dashboard_service'];
 
-// Get progress data
-$progress = $dashboardService->getProgressData($user->ID, $trajectory->ID);
+// Get progress data — prefer the pre-fetched value passed by dashboard.php
+// (single DB call); fall back to a direct fetch for isolated-render testability.
+$progress = $args['progress'] ?? $dashboardService->getProgressData($user->ID, $trajectory->ID);
 
 $completedIds = array_map('intval', $progress['completed_courses']);
 $inProgressIds = array_map('intval', $progress['in_progress_courses']);
@@ -112,7 +113,7 @@ foreach ($progress['elective_groups'] as $groupIndex => $group) {
         'type' => 'elective',
         'state' => 'choice',
         'name' => (string) ($group['name'] ?? ''),
-        'required' => max(1, $required),
+        'required' => max(1, $required), // clamp: required=0 is invalid schema data; render defensively as 1
         'total' => count($courses),
         'confirmed' => $confirmed,
         'chosen_titles' => $chosenTitles,
@@ -142,6 +143,7 @@ $pillSm = 'text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex item
 
             // Rail segment below this row: primary through completed rows,
             // soft below the current/upcoming ones.
+            // elective rows keep the soft rail even when confirmed — pending visual decision, see /shakeout F8
             $lineClass = $row['state'] === 'done' ? 'bg-primary' : 'bg-border-soft';
             ?>
             <div class="flex gap-[18px]">
