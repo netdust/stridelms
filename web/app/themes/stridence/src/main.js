@@ -118,32 +118,11 @@ Alpine.data('courseDetailTabs', createDetailTabs(['overzicht', 'programma', 'spr
 Alpine.data('trajectoryDetailTabs', createDetailTabs(['overzicht', 'cursussen', 'praktisch', 'faq']));
 
 /**
- * Dashboard home with enrollment side panel
+ * Dashboard home
  * Usage: x-data="dashboardHome()"
  */
 Alpine.data('dashboardHome', () => ({
-  panelOpen: false,
-  activeEnrollment: null,
   icalLoading: false,
-
-  init() {
-    this.$watch('panelOpen', (open) => {
-      document.body.style.overflow = open ? 'hidden' : '';
-    });
-  },
-
-  openPanel(enrollment) {
-    this.activeEnrollment = enrollment;
-    this.panelOpen = true;
-  },
-
-  closePanel() {
-    this.panelOpen = false;
-    // Clear data after transition completes
-    setTimeout(() => {
-      if (!this.panelOpen) this.activeEnrollment = null;
-    }, 300);
-  },
 
   async downloadIcal(editionId = null) {
     this.icalLoading = true;

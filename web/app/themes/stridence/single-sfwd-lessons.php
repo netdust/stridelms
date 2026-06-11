@@ -19,16 +19,16 @@ defined('ABSPATH') || exit;
 get_header();
 ?>
 
-<article <?php post_class('pb-12'); ?>>
-    <div class="container py-8">
+<article <?php post_class('bg-surface min-h-screen pb-16'); ?>>
+    <div class="container py-8 lg:py-12">
         <?php
         while (have_posts()) :
             the_post();
-            // LearnDash hooks into the_content() to render lesson content
-            // This includes Focus Mode when enabled
+            // LearnDash hooks into the_content() to render lesson content.
+            // Do not re-implement LD rendering — wrapper styling only (INV-6).
             the_content();
         endwhile;
-?>
+        ?>
     </div>
 </article>
 

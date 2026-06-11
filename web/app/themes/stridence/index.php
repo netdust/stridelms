@@ -10,7 +10,23 @@
 get_header();
 ?>
 
-<div class="container py-12">
+<div class="bg-surface-alt border-b border-border">
+    <div class="container py-8 lg:py-12">
+        <h1 class="font-heading text-3xl lg:text-4xl font-bold text-text">
+            <?php
+            if (is_home()) {
+                esc_html_e('Blog', 'stridence');
+            } elseif (is_archive()) {
+                the_archive_title();
+            } else {
+                esc_html_e('Berichten', 'stridence');
+            }
+            ?>
+        </h1>
+    </div>
+</div>
+
+<div class="container py-8 lg:py-12">
     <?php if (have_posts()) : ?>
         <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             <?php while (have_posts()) : the_post(); ?>
@@ -45,11 +61,13 @@ get_header();
         ]); ?>
 
     <?php else : ?>
-        <div class="text-center py-16">
-            <p class="text-text-muted text-lg">
-                <?php esc_html_e('Geen berichten gevonden.', 'stridence'); ?>
-            </p>
-        </div>
+        <?php
+        stridence_template_part('partials/empty-state', null, [
+            'icon'    => 'file-text',
+            'title'   => __('Geen berichten gevonden', 'stridence'),
+            'message' => __('Er zijn momenteel geen berichten beschikbaar.', 'stridence'),
+        ]);
+        ?>
     <?php endif; ?>
 </div>
 
