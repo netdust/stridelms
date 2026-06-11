@@ -7,36 +7,41 @@
 
 @layer components {
   /* ══════════════════════════════════════
-     BUTTONS
+     BUTTONS (Helder Tij component sheet)
+
+     Focus: buttons rely on the GLOBAL :focus-visible outline
+     (base.css) — no per-button ring overrides.
+     Vertical rhythm: leading-tight + the sheet's 12px (filled) /
+     11px (1px-bordered ghost) padding nets ~43px md controls,
+     aligned with .input-text.
      ══════════════════════════════════════ */
 
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2
-           bg-primary text-text-inverse font-medium
-           px-5 py-2.5 rounded-full cursor-pointer
+           bg-primary text-text-inverse text-[15px] font-bold leading-tight
+           px-[22px] py-3 rounded-[10px] cursor-pointer
            hover:bg-primary-hover hover:text-text-inverse
-           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2
-           disabled:opacity-50 disabled:cursor-not-allowed
+           active:bg-primary-dark
+           disabled:bg-surface-container-highest disabled:text-text-faint disabled:cursor-not-allowed
            transition-colors duration-fast;
   }
 
-  .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2
-           bg-surface-card text-text font-medium
-           px-5 py-2.5 rounded-full border-0 cursor-pointer
-           hover:bg-surface-alt hover:text-text
-           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2
-           disabled:opacity-50 disabled:cursor-not-allowed
-           transition-colors duration-fast;
-  }
-
+  /* Ghost / outline button — the sheet's secondary action style. */
   .btn-ghost {
     @apply inline-flex items-center justify-center gap-2
-           text-primary font-medium
-           px-5 py-2.5 rounded-lg cursor-pointer
-           hover:bg-primary/5 hover:text-primary
-           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50
+           bg-transparent text-text text-[15px] font-bold leading-tight
+           border border-border
+           px-[22px] py-[11px] rounded-[10px] cursor-pointer
+           hover:bg-surface-alt hover:text-text
+           disabled:bg-transparent disabled:border-border-soft disabled:text-text-faint disabled:cursor-not-allowed
            transition-colors duration-fast;
+  }
+
+  /* Secondary maps to the ghost recipe — the sheet defines exactly
+     two button styles (primary filled, ghost outline). Templates
+     keep the .btn-secondary name. */
+  .btn-secondary {
+    @apply btn-ghost;
   }
 
   .btn-danger {
@@ -47,28 +52,57 @@
            transition-colors duration-fast;
   }
 
+  /* Size modifiers — radii per sheet: sm 8px, lg 12px.
+     (Theme radius scale: rounded-sm = 8px, rounded-md = 12px.) */
   .btn-sm {
-    @apply px-3.5 py-2 text-sm;
+    @apply text-[13px] px-3.5 py-2 rounded-sm;
   }
 
   .btn-lg {
-    @apply px-6 py-3 text-lg;
+    @apply text-base px-[30px] py-[15px] rounded-md;
+  }
+
+  /* Loading state — pair with .spinner inside the button. */
+  .btn-loading {
+    @apply inline-flex items-center justify-center gap-2.5 cursor-wait;
+  }
+
+  /* Full-width "Toon meer" button (catalog pagination). */
+  .btn-load-more {
+    @apply btn-ghost w-full;
+  }
+
+  .btn-load-more.btn-loading {
+    @apply bg-surface-alt border-border-soft text-text-muted;
   }
 
   /* ══════════════════════════════════════
-     FORM INPUTS
+     FORM INPUTS (Helder Tij component sheet)
+
+     Focus: inputs replace the global outline with the design's
+     visible border + soft shadow ring (a11y-safe: the replacement
+     is clearly visible). Checkbox/radio keep the global outline.
      ══════════════════════════════════════ */
 
   .input-text {
-    @apply w-full px-3.5 py-2.5 rounded-lg
+    @apply w-full px-3.5 py-[11px] rounded-[10px] text-[15px] leading-tight
            border border-border bg-surface-card text-text
-           placeholder:text-text-muted/60
-           focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary
+           placeholder:text-text-faint
+           focus:outline-none focus:border-primary
+           focus:shadow-[0_0_0_3px_rgb(var(--color-primary)/0.14)]
+           disabled:bg-surface-alt disabled:text-text-faint disabled:border-border-soft disabled:cursor-not-allowed
            transition-all duration-fast;
+  }
+
+  /* Error state — set aria-invalid="true" on the input.
+     Declared after .input-text so it also wins while focused. */
+  .input-text[aria-invalid="true"] {
+    @apply border-error shadow-[0_0_0_3px_rgb(var(--color-error)/0.12)];
   }
 
   .input-select {
     @apply input-text appearance-none cursor-pointer
+           hover:border-border-strong
            bg-no-repeat bg-[length:1.25rem] bg-[right_0.75rem_center];
     /* Chevron stroke is a literal hex (data-URIs can't resolve var());
        mirrors --color-text-muted (#585C63) — keep in sync with tokens.css. */
@@ -77,17 +111,47 @@
   }
 
   .input-checkbox {
-    @apply w-4 h-4 rounded border-border text-primary
-           focus:ring-2 focus:ring-primary/50 focus:ring-offset-2
-           cursor-pointer;
+    @apply appearance-none shrink-0 w-[22px] h-[22px] rounded-[6px]
+           border border-border bg-surface-card cursor-pointer
+           checked:bg-primary checked:border-primary
+           transition-colors duration-fast;
+  }
+
+  .input-checkbox:hover:not(:checked) {
+    @apply border-border-strong;
+  }
+
+  .input-checkbox:checked {
+    /* Check stroke is a literal hex (data-URIs can't resolve var());
+       mirrors --color-text-inverse (#FFFFFF) — keep in sync with tokens.css. */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 16 16'%3E%3Cpath stroke='%23FFFFFF' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5' d='m3.5 8.5 3 3 6-6.5'/%3E%3C/svg%3E");
+    background-size: 14px 14px;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+
+  .input-radio {
+    @apply appearance-none shrink-0 w-[22px] h-[22px] rounded-full
+           border border-border bg-surface-card cursor-pointer
+           checked:border-[6.5px] checked:border-primary
+           transition-colors duration-fast;
+  }
+
+  .input-radio:hover:not(:checked) {
+    @apply border-border-strong;
+  }
+
+  /* Touch row wrapping a checkbox/radio + its label (44px target). */
+  .choice-row {
+    @apply flex items-center gap-3 min-h-[44px] cursor-pointer;
   }
 
   .input-label {
-    @apply block text-sm font-medium text-text mb-1.5;
+    @apply block text-[13px] font-semibold text-text mb-1.5;
   }
 
   .input-error {
-    @apply text-xs text-error mt-1;
+    @apply text-xs font-semibold text-error mt-1;
   }
 
   .input-hint {
@@ -449,9 +513,19 @@
     overflow: hidden;
   }
 
-  /* Loading spinner */
+  /* Loading spinner — white on filled (primary) buttons by default;
+     st-spin keyframes live in base.css (sheet: 700ms linear). */
   .spinner {
-    @apply animate-spin h-5 w-5 border-2 border-current border-t-transparent rounded-full;
+    @apply inline-block w-4 h-4 rounded-full
+           border-2 border-white/40 border-t-white
+           animate-[st-spin_700ms_linear_infinite];
+  }
+
+  /* Dark spinner inside ghost/outline buttons (light backgrounds). */
+  .btn-ghost .spinner,
+  .btn-secondary .spinner,
+  .btn-load-more .spinner {
+    @apply border-border/40 border-t-text-muted;
   }
 
   /* Skeleton loading */
