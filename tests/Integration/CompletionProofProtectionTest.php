@@ -151,6 +151,8 @@ final class CompletionProofProtectionTest extends IntegrationTestCase
     /** @test */
     public function unauthenticatedHttpFetchOfProofDirectUrlIsDeniedByWebServer(): void
     {
+        $this->requireNginxFrontend();
+
         $regId = $this->createRegistrationWithDocumentsTask();
         $this->actingAs(self::$testUserId);
 
@@ -455,6 +457,30 @@ final class CompletionProofProtectionTest extends IntegrationTestCase
     }
 
     // === Helpers ===
+
+    /**
+     * The deny rule under test lives in nginx config (DDEV's
+     * .ddev/nginx_full/nginx-site.conf locally, Ploi nginx in production).
+     * CI serves WP via PHP's built-in server (scripts/ci/router.php), which
+     * cannot enforce nginx config — asserting the 403 there would test
+     * nothing, and php -S would happily serve the proof bytes. Skip —
+     * visibly, never silently pass — whenever the responding front server
+     * is not nginx (or nothing responds at all); the rule is verified in
+     * DDEV and by the post-deploy curl noted in site.yml.
+     */
+    private function requireNginxFrontend(): void
+    {
+        $probe = wp_remote_get(home_url('/'), ['sslverify' => false, 'redirection' => 0]);
+        $server = is_wp_error($probe)
+            ? ''
+            : strtolower((string) wp_remote_retrieve_header($probe, 'server'));
+
+        if (is_wp_error($probe) || !str_contains($server, 'nginx')) {
+            $this->markTestSkipped(
+                'requires a serving web server with the repo nginx config — verified in DDEV + post-deploy curl'
+            );
+        }
+    }
 
     private function createRegistrationWithDocumentsTask(): int
     {

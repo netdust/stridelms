@@ -89,5 +89,21 @@ jobs:
     - name: Install WordPress + Stride stack
       run: bash scripts/ci/install-wp.sh
 
+    # The suite's real-HTTP seam tests (guest catalog wire path, attachment
+    # permalink denial) need a listener on WP_HOME. PHP's built-in server +
+    # the Bedrock router serves WordPress for real — those tests genuinely
+    # run here. The nginx-deny 403 test skips itself when the responding
+    # server is not nginx (verified in DDEV + post-deploy curl instead).
+    - name: Serve WordPress over HTTP (php -S)
+      run: |
+        PHP_CLI_SERVER_WORKERS=4 php -S 127.0.0.1:8080 -t web scripts/ci/router.php >/tmp/php-server.log 2>&1 &
+        for i in $(seq 1 30); do
+          if curl -fso /dev/null "http://localhost:8080/index.php?rest_route=/"; then
+            echo "server up after ${i}s"; exit 0
+          fi
+          sleep 1
+        done
+        echo "PHP built-in server failed to come up"; cat /tmp/php-server.log; exit 1
+
     - name: Run integration tests
       run: composer test:integration
