@@ -61,6 +61,23 @@ describe('contentTabs', () => {
     expect(explicit.activeTab).toBe('lesgever');
   });
 
+  it('setTab reflects the active tab in the URL hash', () => {
+    const tabs = contentTabs(TABS);
+
+    tabs.setTab('praktisch');
+
+    expect(window.location.hash).toBe('#praktisch');
+  });
+
+  it('setTab with an unknown id does NOT change the hash', () => {
+    const tabs = contentTabs(TABS);
+    tabs.setTab('praktisch');
+
+    tabs.setTab('bogus');
+
+    expect(window.location.hash).toBe('#praktisch');
+  });
+
   it('handles an empty tabs array: activeTab is "" and setTab never throws', () => {
     const tabs = contentTabs([]);
 
