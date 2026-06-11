@@ -1,9 +1,9 @@
 <?php
 /**
- * Edition Detail Template
+ * Edition Detail Template — Helder Tij
  *
  * Single template for scheduled course editions (vad_edition post type).
- * Two-column layout with session list and sticky enrollment card.
+ * Header band + content-tabbed main column with sticky enrollment card.
  *
  * @package stridence
  */
@@ -88,6 +88,7 @@ if ($has_pending_tasks) {
 $editionModel = ntdst_data()->get('vad_edition');
 $start_date   = $editionModel->getMeta($edition_id, 'start_date', '');
 $venue        = $editionModel->getMeta($edition_id, 'venue', '');
+$speakers     = trim((string) $editionModel->getMeta($edition_id, 'speakers', ''));
 
 // Spots remaining: derived from capacity minus current registrations.
 // `capacity = 0` means unlimited — there's nothing meaningful to count down.
@@ -99,6 +100,7 @@ if ($capacity > 0) {
 // Get sessions via SessionService and group by type
 $all_sessions = $sessionService->getSessionsForEdition($edition_id);
 $has_sessions = !empty($all_sessions);
+$session_count = count($all_sessions);
 
 // Split into scheduled (in_person, webinar) and online (online, assignment)
 $scheduled_sessions = [];
@@ -149,6 +151,41 @@ if ($course) {
 
 $breadcrumbs[] = ['label' => $start_date ? stride_format_date($start_date) : get_the_title()];
 
+// Header meta dot-row — only segments with data (dates strong · venue · N sessies · price)
+$meta_segments = [];
+if ($start_date) {
+    $meta_segments[] = ['text' => stride_format_date($start_date), 'strong' => true];
+}
+if ($venue) {
+    $meta_segments[] = ['text' => $venue, 'strong' => false];
+}
+if ($session_count > 0) {
+    /* translators: %d: number of sessions */
+    $meta_segments[] = ['text' => sprintf(_n('%d sessie', '%d sessies', $session_count, 'stridence'), $session_count), 'strong' => false];
+}
+if (!$price->isZero()) {
+    $meta_segments[] = ['text' => $price->format(), 'strong' => true];
+}
+
+// Content tabs (Helder Tij) — ids double as URL hash deep-links (#praktisch)
+$content_tabs = [
+    'omschrijving' => __('Omschrijving', 'stridence'),
+    'programma'    => __('Programma', 'stridence'),
+    'praktisch'    => __('Praktisch', 'stridence'),
+    'lesgever'     => __('Lesgever', 'stridence'),
+];
+
+// Lesgever card: speakers meta when present, i18n'd placeholder otherwise.
+$lesgever_name = $speakers !== '' ? $speakers : __('Lesgever nog te bevestigen', 'stridence');
+$lesgever_initials = '';
+foreach (preg_split('/[\s,]+/u', $lesgever_name, -1, PREG_SPLIT_NO_EMPTY) as $name_part) {
+    $lesgever_initials .= mb_substr($name_part, 0, 1);
+    if (mb_strlen($lesgever_initials) >= 2) {
+        break;
+    }
+}
+$lesgever_initials = mb_strtoupper($lesgever_initials);
+
 get_header();
 ?>
 
@@ -162,80 +199,93 @@ get_header();
         </div>
     <?php endif; ?>
 
-    <!-- Header Section -->
-    <div class="bg-surface-alt border-b border-border">
-        <div class="container py-8 lg:py-12">
+    <!-- Header band -->
+    <div class="bg-surface-alt">
+        <div class="container py-[clamp(24px,4vw,40px)]">
             <?php
             stridence_template_part('partials/breadcrumb', null, [
                 'items' => $breadcrumbs,
             ]);
-?>
+            ?>
 
-            <!-- Format badge -->
-            <div class="flex items-center gap-2 mb-4">
-                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-primary text-text-inverse">
-                    <?php echo stridence_icon('map-pin', 'w-3 h-3'); ?>
-                    <?php esc_html_e('Klassikaal', 'stridence'); ?>
+            <!-- Badge row: format + effective status -->
+            <div class="flex flex-wrap gap-2">
+                <span class="text-[12px] font-bold px-[11px] py-1 rounded-full inline-flex items-center gap-1 <?php echo $is_online ? 'bg-badge-online-bg text-badge-online-text' : 'bg-badge-open-bg text-badge-open-text'; ?>">
+                    <?php $is_online ? esc_html_e('Online', 'stridence') : esc_html_e('Klassikaal', 'stridence'); ?>
                 </span>
-            </div>
-
-            <div class="flex flex-wrap items-start gap-4 mb-4">
-                <h1 class="font-heading text-3xl lg:text-4xl font-bold text-text flex-1">
-                    <?php echo $course ? esc_html(get_the_title($course)) : the_title(); ?>
-                </h1>
                 <?php if ($is_past) : ?>
-                    <span class="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-surface-alt text-text-muted">
+                    <span class="text-[12px] font-bold px-[11px] py-1 rounded-full inline-flex items-center gap-1 bg-badge-cancelled-bg text-badge-cancelled-text">
                         <?php esc_html_e('Afgelopen', 'stridence'); ?>
                     </span>
                 <?php else : ?>
                     <?php
-        stridence_template_part('partials/badge-status', null, [
-            'status' => $status->value,
-            'spots'  => $spots,
-        ]);
+                    stridence_template_part('partials/badge-status', null, [
+                        'status' => $status->value,
+                        'spots'  => $spots,
+                    ]);
                     ?>
                 <?php endif; ?>
             </div>
 
-            <div class="flex flex-wrap gap-6 text-text-muted">
-                <?php if ($start_date) : ?>
-                    <span class="flex items-center gap-2">
-                        <?php echo stridence_icon('calendar', 'w-5 h-5'); ?>
-                        <?php echo esc_html(stride_format_date($start_date)); ?>
-                    </span>
-                <?php endif; ?>
+            <h1 class="font-serif font-normal text-[clamp(30px,4.5vw,44px)] leading-[1.12] text-text max-w-[760px] mt-3.5 mb-3">
+                <?php echo $course ? esc_html(get_the_title($course)) : esc_html(get_the_title()); ?>
+            </h1>
 
-                <?php if ($venue) : ?>
-                    <span class="flex items-center gap-2">
-                        <?php echo stridence_icon('map-pin', 'w-5 h-5'); ?>
-                        <?php echo esc_html($venue); ?>
-                    </span>
-                <?php endif; ?>
+            <?php if (!empty($meta_segments)) : ?>
+                <div class="flex flex-wrap items-center gap-[10px] text-[15px] text-text-muted">
+                    <?php foreach ($meta_segments as $i => $segment) : ?>
+                        <?php if ($i > 0) : ?>
+                            <span class="text-border-strong" aria-hidden="true">&middot;</span>
+                        <?php endif; ?>
+                        <span<?php echo $segment['strong'] ? ' class="font-semibold text-text"' : ''; ?>><?php echo esc_html($segment['text']); ?></span>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
 
-                <?php if (!$price->isZero()) : ?>
-                    <span class="flex items-center gap-2 font-semibold text-text">
-                        <?php echo stridence_icon('receipt', 'w-5 h-5 text-text-muted'); ?>
-                        <?php echo esc_html($price->format()); ?>
-                    </span>
-                <?php endif; ?>
-            </div>
+            <?php if ($course) : ?>
+                <div class="text-[13px] text-text-faint mt-2">
+                    <?php esc_html_e('Onderdeel van de opleiding', 'stridence'); ?>
+                    <a href="<?php echo esc_url(get_permalink($course)); ?>" class="text-accent font-semibold hover:text-accent-hover transition-colors">
+                        <?php echo esc_html(get_the_title($course)); ?> &mdash; <?php esc_html_e('bekijk alle edities', 'stridence'); ?> &rarr;
+                    </a>
+                </div>
+            <?php endif; ?>
         </div>
     </div>
-
-    <!-- Sticky Tab Bar -->
-    <?php
-    stridence_template_part('templates/edition/tabs', null, [
-        'has_sessions' => $has_sessions,
-    ]);
-?>
 
     <!-- Two Column Layout -->
     <div class="container py-8 lg:py-12">
         <div class="grid lg:grid-cols-3 gap-8 lg:gap-12">
-            <!-- Main Content (2/3) -->
-            <div class="lg:col-span-2 space-y-12">
-                <!-- Overzicht Section -->
-                <section id="overzicht" class="scroll-mt-32">
+            <!-- Main Content (2/3): content tabs -->
+            <div class="lg:col-span-2"
+                 x-data="contentTabs(<?php echo esc_attr(wp_json_encode(array_keys($content_tabs))); ?>)">
+
+                <!-- Underline tabs -->
+                <nav class="border-b border-border-soft flex gap-6 overflow-x-auto scrollbar-hide" role="tablist"
+                     aria-label="<?php esc_attr_e('Editie informatie', 'stridence'); ?>">
+                    <?php foreach ($content_tabs as $tab_id => $tab_label) : ?>
+                        <button type="button" role="tab"
+                                id="tab-<?php echo esc_attr($tab_id); ?>"
+                                aria-controls="<?php echo esc_attr($tab_id); ?>"
+                                class="text-[15px] font-bold pb-3 px-0.5 whitespace-nowrap transition-colors"
+                                :class="isActive('<?php echo esc_attr($tab_id); ?>')
+                                    ? 'text-primary shadow-[inset_0_-2px_0_0] shadow-primary'
+                                    : 'text-text-faint hover:text-text'"
+                                :aria-selected="isActive('<?php echo esc_attr($tab_id); ?>')"
+                                @click="setTab('<?php echo esc_attr($tab_id); ?>')">
+                            <?php echo esc_html($tab_label); ?>
+                        </button>
+                    <?php endforeach; ?>
+                </nav>
+
+                <?php /* Server-render-first: all four panels are in the DOM; x-show toggles.
+                         Deliberately NO x-cloak on panels — base.css hides [x-cloak], which
+                         would blank the page for non-JS visitors. Without JS, the panels
+                         render stacked. */ ?>
+
+                <!-- Panel: Omschrijving -->
+                <section id="omschrijving" role="tabpanel" aria-labelledby="tab-omschrijving"
+                         x-show="isActive('omschrijving')" class="pt-7 flex flex-col gap-7">
                     <?php if ($course) : ?>
                         <div class="prose-stride max-w-none">
                             <?php echo apply_filters('the_content', $course->post_content); ?>
@@ -245,196 +295,220 @@ get_header();
                             <?php esc_html_e('Beschrijving wordt binnenkort toegevoegd.', 'stridence'); ?>
                         </p>
                     <?php endif; ?>
+
+                    <?php
+                    // PLACEHOLDER (see docs/plans/2026-06-11-helder-tij-field-inventory.md):
+                    // "Wat je leert" sample items — no learning-outcomes field exists yet.
+                    $learning_items = [
+                        __('Spanning en escalatie vroegtijdig herkennen', 'stridence'),
+                        __('De-escalerend communiceren in moeilijke gesprekken', 'stridence'),
+                        __('Grenzen stellen met behoud van de zorgrelatie', 'stridence'),
+                    ];
+                    ?>
+                    <div class="flex flex-col gap-3.5">
+                        <h2 class="text-[18px] font-bold text-text"><?php esc_html_e('Wat je leert', 'stridence'); ?></h2>
+                        <ul class="grid gap-2.5">
+                            <?php foreach ($learning_items as $learning_item) : ?>
+                                <li class="flex items-center gap-3">
+                                    <span class="w-[22px] h-[22px] rounded-full bg-badge-open-bg text-badge-open-text text-[13px] font-extrabold grid place-items-center shrink-0" aria-hidden="true">&check;</span>
+                                    <span class="text-[15px] text-text-muted"><?php echo esc_html($learning_item); ?></span>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+
+                    <?php // PLACEHOLDER: "Voor wie?" well — no audience field exists yet. ?>
+                    <div class="bg-surface-alt rounded-[14px] p-5 text-[14px] text-text-muted leading-relaxed">
+                        <strong class="text-text"><?php esc_html_e('Voor wie?', 'stridence'); ?></strong>
+                        <?php esc_html_e('Begeleiders, verpleegkundigen en onthaalmedewerkers in zorg en welzijn. Geen voorkennis nodig.', 'stridence'); ?>
+                    </div>
                 </section>
 
-                <!-- Sessies Section -->
-                <?php if ($has_sessions) : ?>
-                <section id="sessies" class="scroll-mt-32">
-                    <h2 class="font-heading text-2xl font-bold text-text mb-6">
-                        <?php esc_html_e('Sessies', 'stridence'); ?>
-                    </h2>
-
-                    <?php if (!empty($scheduled_sessions)) :
-                        $hasSelections = !empty($selected_session_ids);
-                        $mandatory = $scheduled_by_slot['__mandatory__'] ?? [];
+                <!-- Panel: Programma -->
+                <section id="programma" role="tabpanel" aria-labelledby="tab-programma"
+                         x-show="isActive('programma')" class="pt-7">
+                    <?php if (!$has_sessions) : ?>
+                        <?php
+                        stridence_template_part('partials/empty-state', null, [
+                            'icon'    => 'calendar',
+                            'title'   => __('Nog geen sessies gepland', 'stridence'),
+                            'message' => __('Het programma van deze editie wordt binnenkort bekendgemaakt.', 'stridence'),
+                        ]);
                         ?>
+                    <?php else : ?>
+                        <?php $hasSelections = !empty($selected_session_ids); ?>
+                        <?php if (!empty($scheduled_sessions)) :
+                            $mandatory = $scheduled_by_slot['__mandatory__'] ?? [];
+                            ?>
 
-                        <?php if ($has_slots) : ?>
-                            <!-- Mandatory sessions block (only shown when slots also exist) -->
-                            <?php if (!empty($mandatory)) : ?>
-                                <div class="mb-6">
-                                    <h3 class="font-heading text-base font-semibold text-text mb-3">
-                                        <?php esc_html_e('Verplichte sessies', 'stridence'); ?>
-                                        <span class="text-sm font-normal text-text-muted">
-                                            — <?php esc_html_e('iedereen woont deze bij', 'stridence'); ?>
-                                        </span>
-                                    </h3>
-                                    <div class="card divide-y divide-border">
-                                        <?php foreach ($mandatory as $session) :
-                                            $isSelected = in_array((int) $session['id'], $selected_session_ids, true);
-                                            ?>
-                                            <?php stridence_template_part('partials/session-row', null, [
-                                                'session'    => (object) $session,
-                                                'attendance' => null,
-                                                'selected'   => $isSelected,
-                                                'not_chosen' => false,
-                                            ]); ?>
-                                        <?php endforeach; ?>
+                            <?php if ($has_slots) : ?>
+                                <!-- Mandatory sessions block (only shown when slots also exist) -->
+                                <?php if (!empty($mandatory)) : ?>
+                                    <div class="mb-6">
+                                        <h3 class="font-heading text-base font-semibold text-text mb-3">
+                                            <?php esc_html_e('Verplichte sessies', 'stridence'); ?>
+                                            <span class="text-sm font-normal text-text-muted">
+                                                — <?php esc_html_e('iedereen woont deze bij', 'stridence'); ?>
+                                            </span>
+                                        </h3>
+                                        <div class="flex flex-col gap-2">
+                                            <?php foreach ($mandatory as $session) :
+                                                $isSelected = in_array((int) $session['id'], $selected_session_ids, true);
+                                                ?>
+                                                <?php stridence_template_part('partials/session-row', null, [
+                                                    'session'    => (object) $session,
+                                                    'attendance' => null,
+                                                    'selected'   => $isSelected,
+                                                    'not_chosen' => false,
+                                                ]); ?>
+                                            <?php endforeach; ?>
+                                        </div>
                                     </div>
+                                <?php endif; ?>
+
+                                <!-- One block per slot -->
+                                <?php foreach ($slot_config as $sc) :
+                                    $slotName       = $sc['slot'] ?? '';
+                                    $slotLabel      = $sc['label'] ?? $slotName;
+                                    $maxSelections  = (int) ($sc['max_selections'] ?? 1);
+                                    $required       = !empty($sc['required']);
+                                    $slotSessions   = $scheduled_by_slot[$slotName] ?? [];
+                                    if ($slotName === '' || empty($slotSessions)) {
+                                        continue;
+                                    }
+                                    $available = count($slotSessions);
+                                    ?>
+                                    <div class="mb-6">
+                                        <div class="flex items-baseline justify-between mb-3">
+                                            <h3 class="font-heading text-base font-semibold text-text">
+                                                <?php echo esc_html($slotLabel); ?>
+                                            </h3>
+                                            <span class="text-sm text-primary font-medium">
+                                                <?php
+                                                if ($maxSelections === 1) {
+                                                    /* translators: %d = total available alternatives */
+                                                    printf(esc_html__('Kies 1 uit %d', 'stridence'), $available);
+                                                } else {
+                                                    /* translators: 1: how many to pick, 2: total alternatives */
+                                                    printf(esc_html__('Kies %1$d uit %2$d', 'stridence'), $maxSelections, $available);
+                                                }
+                                                if (!$required) {
+                                                    echo ' <span class="text-text-muted font-normal">' . esc_html__('(optioneel)', 'stridence') . '</span>';
+                                                }
+                                                ?>
+                                            </span>
+                                        </div>
+                                        <div class="flex flex-col gap-2">
+                                            <?php foreach ($slotSessions as $session) :
+                                                $isSelected = in_array((int) $session['id'], $selected_session_ids, true);
+                                                $notChosen = $hasSelections && !$isSelected;
+                                                ?>
+                                                <?php stridence_template_part('partials/session-row', null, [
+                                                    'session'    => (object) $session,
+                                                    'attendance' => null,
+                                                    'selected'   => $isSelected,
+                                                    'not_chosen' => $notChosen,
+                                                ]); ?>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+
+                            <?php else : ?>
+                                <!-- No slots configured: flat list (all sessions mandatory) -->
+                                <div class="flex flex-col gap-2">
+                                    <?php foreach ($scheduled_sessions as $session) :
+                                        $isSelected = in_array((int) $session['id'], $selected_session_ids, true);
+                                        ?>
+                                        <?php stridence_template_part('partials/session-row', null, [
+                                            'session'    => (object) $session,
+                                            'attendance' => null,
+                                            'selected'   => $isSelected,
+                                            'not_chosen' => false,
+                                        ]); ?>
+                                    <?php endforeach; ?>
                                 </div>
                             <?php endif; ?>
 
-                            <!-- One block per slot -->
-                            <?php foreach ($slot_config as $sc) :
-                                $slotName       = $sc['slot'] ?? '';
-                                $slotLabel      = $sc['label'] ?? $slotName;
-                                $maxSelections  = (int) ($sc['max_selections'] ?? 1);
-                                $required       = !empty($sc['required']);
-                                $slotSessions   = $scheduled_by_slot[$slotName] ?? [];
-                                if ($slotName === '' || empty($slotSessions)) {
-                                    continue;
-                                }
-                                $available = count($slotSessions);
-                                ?>
-                                <div class="mb-6">
-                                    <div class="flex items-baseline justify-between mb-3">
-                                        <h3 class="font-heading text-base font-semibold text-text">
-                                            <?php echo esc_html($slotLabel); ?>
-                                        </h3>
-                                        <span class="text-sm text-primary font-medium">
-                                            <?php
-                                            if ($maxSelections === 1) {
-                                                /* translators: %d = total available alternatives */
-                                                printf(esc_html__('Kies 1 uit %d', 'stridence'), $available);
-                                            } else {
-                                                /* translators: 1: how many to pick, 2: total alternatives */
-                                                printf(esc_html__('Kies %1$d uit %2$d', 'stridence'), $maxSelections, $available);
-                                            }
-                                if (!$required) {
-                                    echo ' <span class="text-text-muted font-normal">' . esc_html__('(optioneel)', 'stridence') . '</span>';
-                                }
-                                ?>
-                                        </span>
-                                    </div>
-                                    <div class="card divide-y divide-border">
-                                        <?php foreach ($slotSessions as $session) :
-                                            $isSelected = in_array((int) $session['id'], $selected_session_ids, true);
-                                            $notChosen = $hasSelections && !$isSelected;
-                                            ?>
-                                            <?php stridence_template_part('partials/session-row', null, [
-                                                'session'    => (object) $session,
-                                                'attendance' => null,
-                                                'selected'   => $isSelected,
-                                                'not_chosen' => $notChosen,
-                                            ]); ?>
-                                        <?php endforeach; ?>
-                                    </div>
+                            <?php if (!empty($selected_session_ids) && $complete_url) : ?>
+                                <div class="mt-2 text-right">
+                                    <a href="<?php echo esc_url($complete_url); ?>"
+                                       class="text-sm text-primary hover:underline inline-flex items-center gap-1">
+                                        <?php echo stridence_icon('edit-2', 'w-3.5 h-3.5'); ?>
+                                        <?php esc_html_e('Sessiekeuze wijzigen', 'stridence'); ?>
+                                    </a>
                                 </div>
-                            <?php endforeach; ?>
+                            <?php endif; ?>
+                        <?php endif; ?>
 
-                        <?php else : ?>
-                            <!-- No slots configured: flat list (all sessions mandatory) -->
-                            <div class="card divide-y divide-border">
-                                <?php foreach ($scheduled_sessions as $session) :
+                        <?php if (!empty($online_sessions)) : ?>
+                            <h3 class="font-heading text-lg font-semibold text-text mt-8 mb-4">
+                                <?php esc_html_e('Online modules', 'stridence'); ?>
+                            </h3>
+                            <div class="flex flex-col gap-2">
+                                <?php foreach ($online_sessions as $session) :
                                     $isSelected = in_array((int) $session['id'], $selected_session_ids, true);
+                                    $notChosen = $hasSelections && !$isSelected && !empty($session['slot']);
                                     ?>
-                                    <?php stridence_template_part('partials/session-row', null, [
-                                        'session'    => (object) $session,
-                                        'attendance' => null,
-                                        'selected'   => $isSelected,
-                                        'not_chosen' => false,
-                                    ]); ?>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php endif; ?>
-
-                        <?php if (!empty($selected_session_ids) && $complete_url) : ?>
-                            <div class="mt-2 text-right">
-                                <a href="<?php echo esc_url($complete_url); ?>"
-                                   class="text-sm text-primary hover:underline inline-flex items-center gap-1">
-                                    <?php echo stridence_icon('edit-2', 'w-3.5 h-3.5'); ?>
-                                    <?php esc_html_e('Sessiekeuze wijzigen', 'stridence'); ?>
-                                </a>
-                            </div>
-                        <?php endif; ?>
-                    <?php endif; ?>
-
-                    <?php if (!empty($online_sessions)) : ?>
-                        <h3 class="font-heading text-lg font-semibold text-text mt-8 mb-4">
-                            <?php esc_html_e('Online modules', 'stridence'); ?>
-                        </h3>
-                        <div class="card divide-y divide-border">
-                            <?php foreach ($online_sessions as $session) :
-                                $isSelected = in_array((int) $session['id'], $selected_session_ids, true);
-                                $notChosen = $hasSelections && !$isSelected && !empty($session['slot']);
-                                ?>
-                                <?php
+                                    <?php
                                     stridence_template_part('partials/session-row', null, [
                                         'session'    => (object) $session,
                                         'attendance' => null,
                                         'selected'   => $isSelected,
                                         'not_chosen' => $notChosen,
                                     ]);
-                                ?>
-                            <?php endforeach; ?>
-                        </div>
+                                    ?>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($session_count > 1) : ?>
+                            <p class="text-[13px] text-text-faint mt-3 px-0.5">
+                                <?php esc_html_e('Alle sessies horen bij dezelfde inschrijving — je hoeft maar één keer in te schrijven.', 'stridence'); ?>
+                            </p>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </section>
-                <?php endif; ?>
 
-                <!-- Sprekers Section -->
-                <?php $speakers = $editionModel->getMeta($edition_id, 'speakers', ''); ?>
-                <?php if ($speakers) : ?>
-                <section id="sprekers" class="scroll-mt-32">
-                    <h2 class="font-heading text-2xl font-bold text-text mb-6">
-                        <?php esc_html_e('Sprekers', 'stridence'); ?>
-                    </h2>
-                    <p class="text-text-muted">
-                        <?php echo esc_html($speakers); ?>
-                    </p>
-                </section>
-                <?php endif; ?>
-
-                <!-- Praktisch Section -->
-                <section id="praktisch" class="scroll-mt-32">
-                    <h2 class="font-heading text-2xl font-bold text-text mb-6">
-                        <?php esc_html_e('Praktische informatie', 'stridence'); ?>
-                    </h2>
-                    <div class="grid sm:grid-cols-2 gap-4">
-                        <div class="card-bordered p-5">
-                            <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
-                                <?php echo stridence_icon('users', 'w-5 h-5 text-primary'); ?>
-                                <?php esc_html_e('Doelgroep', 'stridence'); ?>
-                            </h3>
-                            <p class="text-text-muted text-sm">
-                                <?php esc_html_e('Zorgprofessionals', 'stridence'); ?>
-                            </p>
-                        </div>
-                        <div class="card-bordered p-5">
-                            <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
-                                <?php echo stridence_icon('award', 'w-5 h-5 text-primary'); ?>
-                                <?php esc_html_e('Accreditatie', 'stridence'); ?>
-                            </h3>
-                            <p class="text-text-muted text-sm">
-                                <?php esc_html_e('In aanvraag', 'stridence'); ?>
-                            </p>
-                        </div>
-                        <div class="card-bordered p-5">
-                            <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
-                                <?php echo stridence_icon('map-pin', 'w-5 h-5 text-primary'); ?>
-                                <?php esc_html_e('Locatie', 'stridence'); ?>
-                            </h3>
-                            <p class="text-text-muted text-sm">
+                <!-- Panel: Praktisch -->
+                <section id="praktisch" role="tabpanel" aria-labelledby="tab-praktisch"
+                         x-show="isActive('praktisch')" class="pt-7">
+                    <div class="grid gap-[14px] sm:grid-cols-2 lg:grid-cols-3">
+                        <div class="bg-white rounded-[14px] shadow-card p-5">
+                            <h3 class="text-[11px] font-bold text-primary uppercase tracking-[0.08em]"><?php esc_html_e('Locatie', 'stridence'); ?></h3>
+                            <p class="text-[14px] text-text-muted leading-relaxed mt-2">
                                 <?php echo $venue ? esc_html($venue) : esc_html__('Wordt nog bekendgemaakt', 'stridence'); ?>
                             </p>
                         </div>
-                        <div class="card-bordered p-5">
-                            <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
-                                <?php echo stridence_icon('calendar', 'w-5 h-5 text-primary'); ?>
-                                <?php esc_html_e('Startdatum', 'stridence'); ?>
-                            </h3>
-                            <p class="text-text-muted text-sm">
-                                <?php echo $start_date ? esc_html(stride_format_date($start_date)) : esc_html__('Wordt nog bekendgemaakt', 'stridence'); ?>
+                        <?php // PLACEHOLDER: "Inbegrepen" card — no inclusions field exists yet. ?>
+                        <div class="bg-white rounded-[14px] shadow-card p-5">
+                            <h3 class="text-[11px] font-bold text-primary uppercase tracking-[0.08em]"><?php esc_html_e('Inbegrepen', 'stridence'); ?></h3>
+                            <p class="text-[14px] text-text-muted leading-relaxed mt-2">
+                                <?php esc_html_e('Lunch, koffie en cursusmateriaal. Je ontvangt achteraf een attest van deelname.', 'stridence'); ?>
+                            </p>
+                        </div>
+                        <?php // PLACEHOLDER: "Annuleren" card — no cancellation-policy field exists yet. ?>
+                        <div class="bg-white rounded-[14px] shadow-card p-5">
+                            <h3 class="text-[11px] font-bold text-primary uppercase tracking-[0.08em]"><?php esc_html_e('Annuleren', 'stridence'); ?></h3>
+                            <p class="text-[14px] text-text-muted leading-relaxed mt-2">
+                                <?php esc_html_e('Kosteloos tot 14 dagen vóór de eerste sessie. Daarna kan een collega je plaats overnemen.', 'stridence'); ?>
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Panel: Lesgever -->
+                <section id="lesgever" role="tabpanel" aria-labelledby="tab-lesgever"
+                         x-show="isActive('lesgever')" class="pt-7">
+                    <div class="bg-white rounded-[14px] shadow-card p-6 flex gap-5 items-start flex-wrap">
+                        <span class="w-14 h-14 rounded-full bg-accent-subtle text-accent-hover font-bold text-[18px] grid place-items-center shrink-0" aria-hidden="true"><?php echo esc_html($lesgever_initials); ?></span>
+                        <div class="flex-1 min-w-[240px]">
+                            <div class="text-[17px] font-bold text-text"><?php echo esc_html($lesgever_name); ?></div>
+                            <?php // PLACEHOLDER: role line — no speaker-role field exists yet. ?>
+                            <div class="text-[13px] text-accent font-semibold mt-0.5"><?php esc_html_e('Lesgever', 'stridence'); ?></div>
+                            <?php // PLACEHOLDER: bio — no speaker-bio field exists yet. ?>
+                            <p class="text-[14px] text-text-muted leading-relaxed mt-3">
+                                <?php esc_html_e('Meer informatie over de lesgever volgt binnenkort.', 'stridence'); ?>
                             </p>
                         </div>
                     </div>

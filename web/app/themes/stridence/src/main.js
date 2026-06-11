@@ -13,6 +13,7 @@ import collapse from '@alpinejs/collapse';
 
 // Component factories (extracted so Vitest can import them without booting Alpine)
 import { createToastStore } from './js/toast-store.js';
+import { contentTabs } from './js/content-tabs.js';
 
 // Register Alpine plugins
 Alpine.plugin(collapse);
@@ -29,6 +30,12 @@ window.Alpine = Alpine;
  * Usage: this.$dispatch('toast', { message: 'Success!', type: 'success' })
  */
 Alpine.data('toastStore', createToastStore);
+
+/**
+ * Content tabs — Helder Tij detail pages (factory in src/js/content-tabs.js)
+ * Usage: x-data="contentTabs(['omschrijving','programma','praktisch','lesgever'])"
+ */
+Alpine.data('contentTabs', contentTabs);
 
 /**
  * Dashboard tabs with URL state
@@ -100,7 +107,7 @@ function createDetailTabs(sections) {
 }
 
 Alpine.data('courseDetailTabs', createDetailTabs(['overzicht', 'programma', 'sprekers', 'praktisch']));
-Alpine.data('editionDetailTabs', createDetailTabs(['overzicht', 'sessies', 'sprekers', 'praktisch']));
+// editionDetailTabs removed (SSA-6): the edition detail page now uses contentTabs.
 Alpine.data('trajectoryDetailTabs', createDetailTabs(['overzicht', 'cursussen', 'praktisch', 'faq']));
 
 /**

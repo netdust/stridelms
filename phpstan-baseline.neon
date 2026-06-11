@@ -193,18 +193,6 @@ parameters:
 			path: web/app/themes/stridence/services/frontend/hooks/AssetHooks.php
 
 		-
-			message: '#^Result of function the_title \(void\) is used\.$#'
-			identifier: function.void
-			count: 1
-			path: web/app/themes/stridence/single-vad_edition.php
-
-		-
-			message: '#^Variable \$hasSelections might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: web/app/themes/stridence/single-vad_edition.php
-
-		-
 			message: '#^Variable \$args might not be defined\.$#'
 			identifier: variable.undefined
 			count: 2
