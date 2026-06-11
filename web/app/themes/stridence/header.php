@@ -33,7 +33,7 @@ if ($stridence_font_url) :
     </a>
 
     <!-- Header -->
-    <header class="sticky top-0 z-40 glass-nav" x-data="mobileMenu()">
+    <header class="sticky top-0 z-30 bg-surface/90 backdrop-blur border-b border-border-soft" x-data="mobileMenu()">
         <div class="container">
             <div class="flex items-center justify-between h-16 lg:h-20">
 
@@ -42,9 +42,7 @@ if ($stridence_font_url) :
                     <?php if (has_custom_logo()) : ?>
                         <?php the_custom_logo(); ?>
                     <?php else : ?>
-                        <span class="text-xl font-serif italic font-semibold text-accent">
-                            <?php bloginfo('name'); ?>
-                        </span>
+                        <span class="text-xl font-extrabold tracking-tight text-text"><?php bloginfo('name'); ?><span class="text-primary">.</span></span>
                     <?php endif; ?>
                 </a>
 
@@ -75,7 +73,7 @@ if ($stridence_font_url) :
                         ?>
 
                         <div x-data="dropdown()" class="relative">
-                            <button @click="toggle()" class="flex items-center gap-2 nav-link">
+                            <button @click="toggle()" class="flex items-center gap-2 text-sm font-bold text-text border border-border-soft rounded-[10px] px-[18px] py-[9px] hover:bg-surface-alt transition-colors duration-150">
                                 <span class="relative w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm">
                                     <?php echo esc_html(strtoupper(substr($current_user->display_name, 0, 1))); ?>
                                     <?php if ($notif_count > 0) : ?>
@@ -93,7 +91,7 @@ if ($stridence_font_url) :
                                  x-transition:leave-start="opacity-100 translate-y-0"
                                  x-transition:leave-end="opacity-0 translate-y-1"
                                  @click.outside="close()"
-                                 class="absolute right-0 mt-2 w-48 bg-surface-card rounded-xl shadow-overlay z-50 overflow-hidden">
+                                 class="absolute right-0 mt-2 w-48 bg-surface-card border border-border-soft rounded-xl shadow-elevated z-50 overflow-hidden">
                                 <a href="<?php echo esc_url(home_url('/mijn-account/')); ?>" class="block px-4 py-2 text-sm hover:bg-surface-alt">
                                     <?php esc_html_e('Mijn account', 'stridence'); ?>
                                 </a>
@@ -115,11 +113,8 @@ if ($stridence_font_url) :
                             </div>
                         </div>
                     <?php else : ?>
-                        <a href="<?php echo esc_url(wp_login_url()); ?>" class="btn-secondary btn-sm">
-                            <?php esc_html_e('Inloggen', 'stridence'); ?>
-                        </a>
-                        <a href="<?php echo esc_url(wp_registration_url()); ?>" class="btn-primary btn-sm">
-                            <?php esc_html_e('Registreren', 'stridence'); ?>
+                        <a href="<?php echo esc_url(wp_login_url()); ?>" class="text-sm font-bold text-text border border-border-soft rounded-[10px] px-[18px] py-[9px] hover:bg-surface-alt transition-colors duration-150 no-underline">
+                            <?php esc_html_e('Mijn account', 'stridence'); ?>
                         </a>
                     <?php endif; ?>
                 </div>
@@ -141,7 +136,7 @@ if ($stridence_font_url) :
              x-transition:leave-start="opacity-100 translate-y-0"
              x-transition:leave-end="opacity-0 -translate-y-2"
              x-cloak
-             class="lg:hidden border-t border-border bg-surface-card">
+             class="lg:hidden border-t border-border-soft bg-surface-card">
             <div class="container py-4">
                 <nav class="space-y-1">
                     <?php
