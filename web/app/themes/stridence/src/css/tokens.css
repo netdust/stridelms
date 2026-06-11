@@ -1,57 +1,87 @@
 /**
- * Stride Design Tokens
+ * Stride Design Tokens — "Helder Tij" reskin (v2 proposal)
  *
- * Single source of truth for all design values.
- * These CSS custom properties are consumed by Tailwind config.
+ * Direction: teal + korenbloem on cool "IJs" surfaces.
+ * Same consumption model as v1: RGB triples consumed by Tailwind
+ * (e.g. `rgb(var(--color-primary) / <alpha-value>)`).
+ *
+ * What changed vs. v1, per group, in one line:
+ *  - Brand: teal sharpened; terracotta replaced by korenbloem (cool blue accent)
+ *  - Neutrals: the warm-paper yellow cast is removed everywhere; surfaces now
+ *    carry a barely-there blue cast that matches the accent
+ *  - Status/badges: same six semantic pairs, recolored on the cool axis;
+ *    warning moved from ochre-brown to clear gold
+ *  - Type: Manrope and Plus Jakarta Sans retired; Hanken Grotesk covers all UI,
+ *    Newsreader stays as the editorial serif voice
+ *  - Shadows: tint switched from warm near-black to cool ink
+ *  - Radius / spacing / layout / motion: unchanged (reskin, not re-layout)
  */
 
 :root {
-  /* ── Brand Colors ── */
-  --color-primary: 8 106 105;          /* #086a69 deep teal */
-  --color-primary-hover: 0 93 92;      /* #005d5c */
-  --color-primary-subtle: 232 248 247; /* #e8f8f7 very subtle teal */
-  --color-primary-light: 142 220 218;  /* #8edcda */
-  --color-primary-dark: 0 88 87;       /* #005857 */
-  --color-accent: 152 72 45;          /* #98482d terracotta */
-  --color-accent-light: 244 145 113;  /* #f49171 */
+  /* ── Brand Colors ─────────────────────────────────────────────
+     Primary stays in the trust register (deep teal, slightly
+     brighter than v1 for crisper buttons). Accent is korenbloem:
+     a cool blue reserved for eyebrows, links, link-chips and small
+     highlights — never for primary actions. */
+  --color-primary: 14 110 107;          /* #0E6E6B deep teal */
+  --color-primary-hover: 10 94 91;      /* #0A5E5B */
+  --color-primary-subtle: 226 240 238;  /* #E2F0EE tinted chip/fill */
+  --color-primary-light: 138 206 201;   /* #8ACEC9 decorative only */
+  --color-primary-dark: 9 79 77;        /* #094F4D pressed / emphasis */
+  --color-accent: 74 95 190;            /* #4A5FBE korenbloem */
+  --color-accent-hover: 54 69 156;      /* #36459C */
+  --color-accent-subtle: 235 238 249;   /* #EBEEF9 link-chips, soft fills */
+  --color-accent-light: 165 178 230;    /* #A5B2E6 decorative only */
 
-  /* ── Neutral Colors (warm paper) ── */
-  --color-surface: 251 250 242;        /* #fbfaf2 */
-  --color-surface-alt: 244 244 235;    /* #f4f4eb */
-  --color-surface-card: 255 255 255;   /* #ffffff */
-  --color-border: 177 179 167;         /* #b1b3a7 ghost borders */
-  --color-border-strong: 121 124 113;  /* #797c71 */
-  --color-text: 49 51 43;             /* #31332b never pure black */
-  --color-text-muted: 94 96 86;       /* #5e6056 */
+  /* ── Neutral Colors (cool "IJs" surfaces) ─────────────────────
+     Page background carries a light blue cast that harmonises with
+     korenbloem; cards stay pure white. Text is cool near-black —
+     never pure black. */
+  --color-surface: 249 250 252;         /* #F9FAFC page */
+  --color-surface-alt: 238 241 245;     /* #EEF1F5 bands, wells, rails */
+  --color-surface-card: 255 255 255;    /* #FFFFFF */
+  --color-border: 210 214 221;          /* #D2D6DD ghost borders, inputs */
+  --color-border-soft: 227 230 235;     /* #E3E6EB hairlines, dividers */
+  --color-border-strong: 144 149 158;   /* #90959E */
+  --color-text: 41 44 49;               /* #292C31 cool near-black */
+  --color-text-muted: 88 92 99;         /* #585C63 */
+  --color-text-faint: 118 122 130;      /* #767A82 timestamps, captions */
   --color-text-inverse: 255 255 255;
 
-  /* ── Status Colors ── */
-  --color-success: 22 163 74;
-  --color-warning: 217 119 6;
-  --color-error: 172 52 52;            /* #ac3434 warmer red */
-  --color-info: 8 106 105;
+  /* ── Status Colors ────────────────────────────────────────────
+     All AA on white. Warning is clear gold (no ochre/brown);
+     error is a cool red, clearly distinct from the accent. */
+  --color-success: 23 104 61;           /* #17683D */
+  --color-warning: 113 97 14;           /* #71610E */
+  --color-error: 178 56 56;             /* #B23838 */
+  --color-info: 74 95 190;              /* korenbloem doubles as info */
 
-  /* ── Badge Colors (token-driven) ── */
-  --color-badge-open-bg: 240 253 244;
-  --color-badge-open-text: 21 128 61;
-  --color-badge-few-bg: 254 252 232;
-  --color-badge-few-text: 161 98 7;
-  --color-badge-full-bg: 254 242 242;
-  --color-badge-full-text: 153 27 27;
-  --color-badge-cancelled-bg: 249 250 251;
-  --color-badge-cancelled-text: 107 114 128;
-  --color-badge-online-bg: 232 248 247;
-  --color-badge-online-text: 8 106 105;
-  --color-badge-free-bg: 236 253 245;
-  --color-badge-free-text: 4 120 87;
+  /* ── Badge Colors (6 semantic pairs, AA text-on-bg) ───────────
+     Status is never conveyed by color alone — always paired with
+     the Dutch label. */
+  --color-badge-open-bg: 226 242 232;       /* #E2F2E8 */
+  --color-badge-open-text: 23 104 61;       /* #17683D */
+  --color-badge-few-bg: 250 243 211;        /* #FAF3D3 */
+  --color-badge-few-text: 113 97 14;        /* #71610E */
+  --color-badge-full-bg: 250 232 230;       /* #FAE8E6 */
+  --color-badge-full-text: 154 47 43;       /* #9A2F2B */
+  --color-badge-cancelled-bg: 238 240 243;  /* #EEF0F3 */
+  --color-badge-cancelled-text: 95 99 106;  /* #5F636A */
+  --color-badge-online-bg: 226 240 238;     /* #E2F0EE */
+  --color-badge-online-text: 11 95 92;      /* #0B5F5C */
+  --color-badge-free-bg: 223 243 233;       /* #DFF3E9 */
+  --color-badge-free-text: 22 111 84;       /* #166F54 */
 
-  /* ── Typography ── */
-  --font-sans: 'Plus Jakarta Sans', 'Manrope', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-heading: 'Plus Jakarta Sans', system-ui, sans-serif;
+  /* ── Typography ───────────────────────────────────────────────
+     Two families total. Hanken Grotesk replaces both Plus Jakarta
+     Sans and Manrope (UI, headings, labels). Newsreader remains
+     the editorial serif: page titles, homepage hero, long-read. */
+  --font-sans: 'Hanken Grotesk', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-heading: 'Hanken Grotesk', system-ui, sans-serif;
   --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
-  --font-label: 'Manrope', system-ui, sans-serif;
+  --font-label: 'Hanken Grotesk', system-ui, sans-serif;
 
-  /* ── Spacing ── */
+  /* ── Spacing (unchanged) ── */
   --space-section: 6rem;
   --space-block: 3.5rem;
   --space-element: 1.5rem;
@@ -62,35 +92,43 @@
   --sidebar-width: 240px;
   --sidebar-collapsed: 56px;
 
-  /* ── Border Radius ── */
+  /* ── Border Radius (unchanged) ── */
   --radius-sm: 0.5rem;
   --radius-md: 0.75rem;
   --radius-lg: 1rem;
   --radius-xl: 1.5rem;
 
-  /* ── Shadows (warm-tinted) ── */
-  --shadow-xs: 0 1px 2px rgba(49, 51, 43, 0.03);
-  --shadow-sm: 0 2px 6px rgba(49, 51, 43, 0.04);
-  --shadow-md: 0 8px 16px -4px rgba(49, 51, 43, 0.06);
-  --shadow-lg: 0 20px 40px rgba(49, 51, 43, 0.06);
-  --shadow-overlay: 0 24px 48px -12px rgba(49, 51, 43, 0.12);
+  /* ── Shadows (cool ink tint, was warm) ── */
+  --shadow-xs: 0 1px 2px rgba(41, 44, 49, 0.04);
+  --shadow-sm: 0 2px 6px rgba(41, 44, 49, 0.05);
+  --shadow-md: 0 8px 16px -4px rgba(41, 44, 49, 0.07);
+  --shadow-lg: 0 20px 40px rgba(41, 44, 49, 0.07);
+  --shadow-overlay: 0 24px 48px -12px rgba(41, 44, 49, 0.14);
 
   /* Tailwind-mapped aliases */
   --shadow-card: var(--shadow-xs);
   --shadow-elevated: var(--shadow-md);
+
+  /* ── Focus ───────────────────────────────────────────────────
+     One visible focus style everywhere: 2px primary ring offset
+     from the element. `outline: 2px solid rgb(var(--color-focus));
+     outline-offset: 2px;` */
+  --color-focus: 14 110 107;
 
   /* ── Transitions (unchanged) ── */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --duration-fast: 150ms;
   --duration-normal: 250ms;
 
-  /* ── Editorial Surface Containers ── */
-  --color-tertiary: 129 82 0;
-  --color-tertiary-light: 255 185 92;
-  --color-secondary-container: 221 246 239;
-  --color-surface-container: 238 238 228;
-  --color-surface-container-high: 232 233 222;
-  --color-surface-container-highest: 226 228 215;
+  /* ── Editorial Surface Containers (cooled) ───────────────────
+     The stepped wells used by marketing/editorial blocks. Tertiary
+     (was warm gold) now points at the korenbloem family. */
+  --color-tertiary: 74 95 190;
+  --color-tertiary-light: 165 178 230;
+  --color-secondary-container: 226 240 238;
+  --color-surface-container: 236 239 243;
+  --color-surface-container-high: 230 233 238;
+  --color-surface-container-highest: 223 227 233;
 }
 
 /* ── Reduced Motion ── */
