@@ -186,10 +186,60 @@ foreach (preg_split('/[\s,]+/u', $lesgever_name, -1, PREG_SPLIT_NO_EMPTY) as $na
 }
 $lesgever_initials = mb_strtoupper($lesgever_initials);
 
+// ── Sidebar / CTA state (Helder Tij) ──
+
+// Status context line above the price block — only for non-open states.
+// Same strings/conditions as before the redesign; the default-state card
+// leads with the price block instead of an "Inschrijven" title (mockup).
+if ($is_past) {
+    $sidebar_status_header = __('Deze editie is afgelopen', 'stridence');
+} else {
+    $sidebar_status_header = match (true) {
+        $status === \Stride\Domain\OfferingStatus::Cancelled  => __('Editie geannuleerd', 'stridence'),
+        $status === \Stride\Domain\OfferingStatus::Postponed  => __('Editie uitgesteld', 'stridence'),
+        $status === \Stride\Domain\OfferingStatus::InProgress => __('Editie is bezig', 'stridence'),
+        $status === \Stride\Domain\OfferingStatus::Completed  => __('Deze editie is afgelopen', 'stridence'),
+        $status === \Stride\Domain\OfferingStatus::Archived   => __('Editie gearchiveerd', 'stridence'),
+        default => null,
+    };
+}
+
+// Capacity bar: fill = occupancy (taken / capacity); the mockup shows 75%
+// filled at "Nog 3 van 12". Rendered only when capacity data exists AND the
+// edition is enrollable (reuses $spots/$can_enroll — no status re-derivation).
+$show_capacity_bar = $spots !== null && $can_enroll;
+$capacity_fill     = $show_capacity_bar
+    ? max(0, min(100, (int) round((($capacity - $spots) / $capacity) * 100)))
+    : 0;
+// Warning colour mirrors the badge partial's few-threshold (spots 1-5).
+$spots_few = $spots !== null && $spots > 0 && $spots <= 5;
+
+// Mobile sticky CTA — SAME branch logic/order as before the redesign
+// (enrolled → past:none → enroll → interest → waitlist), hoisted so the
+// article wrapper only reserves bottom padding when a bar actually renders.
+$mobile_cta = null;
+if ($enrolled_cta) {
+    $mobile_cta = $enrolled_cta;
+} elseif ($is_past) {
+    $mobile_cta = null; // Past editions show no sticky CTA.
+} elseif ($can_enroll) {
+    $mobile_cta = ['label' => __('Schrijf je in', 'stridence'), 'url' => stride_enrollment_url($edition_id)];
+} elseif ($status->allowsInterest()) {
+    $mobile_cta = ['label' => __('Interesse melden', 'stridence'), 'url' => home_url('/interesse/?editie=' . $edition_id)];
+} elseif ($status->allowsWaitlist()) {
+    $mobile_cta = ['label' => __('Op wachtlijst plaatsen', 'stridence'), 'url' => home_url('/wachtlijst/?editie=' . $edition_id)];
+}
+
+// Benefits checklist — PLACEHOLDER copy (cta_benefits, see field inventory).
+$cta_benefits = [
+    __('Attest van deelname', 'stridence'),
+    __('Kosteloos annuleren tot 14 dagen vooraf', 'stridence'),
+];
+
 get_header();
 ?>
 
-<article <?php post_class('pb-12 lg:pb-16'); ?>>
+<article <?php post_class($mobile_cta ? 'pb-24 lg:pb-16' : 'pb-12 lg:pb-16'); ?>>
     <?php if (!empty($_GET['enrolled'])) : ?>
         <div class="container mt-6">
             <div class="flex items-center gap-3 p-4 rounded-lg bg-status-success/10 text-status-success-dark border border-status-success/20">
@@ -255,9 +305,9 @@ get_header();
 
     <!-- Two Column Layout -->
     <div class="container py-8 lg:py-12">
-        <div class="grid lg:grid-cols-3 gap-8 lg:gap-12">
-            <!-- Main Content (2/3): content tabs -->
-            <div class="lg:col-span-2"
+        <div class="flex flex-col lg:flex-row gap-8 lg:gap-12">
+            <!-- Main Content: content tabs -->
+            <div class="flex-1 min-w-0"
                  x-data="contentTabs(<?php echo esc_attr(wp_json_encode(array_keys($content_tabs))); ?>)">
 
                 <!-- Underline tabs -->
@@ -515,129 +565,135 @@ get_header();
                 </section>
             </div>
 
-            <!-- Sidebar (1/3) - Enrollment Card -->
-            <div class="lg:col-span-1">
-                <div class="card p-6 sticky top-24">
-                    <h3 class="font-heading font-semibold text-lg mb-4">
-                        <?php
-                        if ($is_past) {
-                            esc_html_e('Deze editie is afgelopen', 'stridence');
-                        } else {
-                            $sidebar_header = match (true) {
-                                $status === \Stride\Domain\OfferingStatus::Cancelled  => __('Editie geannuleerd', 'stridence'),
-                                $status === \Stride\Domain\OfferingStatus::Postponed  => __('Editie uitgesteld', 'stridence'),
-                                $status === \Stride\Domain\OfferingStatus::InProgress => __('Editie is bezig', 'stridence'),
-                                $status === \Stride\Domain\OfferingStatus::Completed  => __('Deze editie is afgelopen', 'stridence'),
-                                $status === \Stride\Domain\OfferingStatus::Archived   => __('Editie gearchiveerd', 'stridence'),
-                                default => __('Inschrijven', 'stridence'),
-                            };
-                            echo esc_html($sidebar_header);
-                        }
-?>
-                    </h3>
+            <!-- Sidebar: sticky CTA panel (desktop only — mobile gets the sticky bottom bar) -->
+            <div class="hidden lg:block flex-[0_1_360px] min-w-[300px]">
+                <div class="sticky top-24 space-y-3.5">
+                    <aside class="bg-surface-card rounded-[16px] shadow-elevated p-7">
+                        <?php if ($sidebar_status_header !== null) : ?>
+                            <h3 class="text-[15px] font-bold text-text mb-3">
+                                <?php echo esc_html($sidebar_status_header); ?>
+                            </h3>
+                        <?php endif; ?>
 
-                    <div class="space-y-3 mb-6">
-                        <div class="flex justify-between">
-                            <span class="text-text-muted"><?php esc_html_e('Prijs', 'stridence'); ?></span>
-                            <span class="font-semibold">
-                                <?php
-        if (!$price->isZero()) {
-            echo esc_html($price->format());
-        } else {
-            esc_html_e('Op aanvraag', 'stridence');
-        }
-?>
-                            </span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-text-muted"><?php esc_html_e('Locatie', 'stridence'); ?></span>
-                            <span><?php echo $venue ? esc_html($venue) : '-'; ?></span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-text-muted"><?php esc_html_e('Startdatum', 'stridence'); ?></span>
-                            <span><?php echo $start_date ? esc_html(stride_format_date($start_date)) : '-'; ?></span>
-                        </div>
-                        <?php if ($spots !== null && $spots !== '' && $can_enroll) : ?>
-                            <div class="flex justify-between">
-                                <span class="text-text-muted"><?php esc_html_e('Beschikbaar', 'stridence'); ?></span>
-                                <span>
+                        <!-- Price block -->
+                        <?php if (!$price->isZero()) : ?>
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-[32px] font-extrabold tracking-[-0.01em] text-text"><?php echo esc_html(stride_format_money($price->inCents())); ?></span>
+                                <span class="text-[13px] text-text-faint"><?php esc_html_e('per deelnemer', 'stridence'); ?></span>
+                            </div>
+                            <?php // PLACEHOLDER: price-includes line (cta_price_includes) — see field inventory. ?>
+                            <div class="text-[13px] text-text-muted mt-1"><?php esc_html_e('incl. lunch en cursusmateriaal', 'stridence'); ?></div>
+                        <?php else : ?>
+                            <div class="text-[32px] font-extrabold tracking-[-0.01em] text-text"><?php esc_html_e('Op aanvraag', 'stridence'); ?></div>
+                        <?php endif; ?>
+
+                        <!-- Capacity bar -->
+                        <?php if ($show_capacity_bar) : ?>
+                            <div class="mt-5">
+                                <div class="h-2 rounded-full bg-surface-alt overflow-hidden">
+                                    <div class="h-full rounded-full bg-primary" style="width: <?php echo esc_attr((string) $capacity_fill); ?>%"></div>
+                                </div>
+                                <div class="text-[13px] font-bold mt-2 <?php echo $spots_few ? 'text-badge-few-text' : 'text-text-muted'; ?>">
                                     <?php
-    printf(
-        esc_html(_n('%d plaats', '%d plaatsen', (int) $spots, 'stridence')),
-        (int) $spots,
-    );
-                            ?>
-                                </span>
+                                    /* translators: 1: spots remaining, 2: total capacity */
+                                    echo esc_html(sprintf(__('Nog %1$d van %2$d plaatsen vrij', 'stridence'), (int) $spots, (int) $capacity));
+                                    ?>
+                                </div>
                             </div>
                         <?php endif; ?>
-                    </div>
 
-                    <?php if ($enrolled_cta) : ?>
-                        <a href="<?php echo esc_url($enrolled_cta['url']); ?>" class="btn-primary w-full text-center">
-                            <?php echo esc_html($enrolled_cta['label']); ?>
+                        <!-- CTAs: action branches preserved from the pre-redesign card -->
+                        <div class="flex flex-col gap-2.5 mt-[22px]">
+                            <?php if ($enrolled_cta) : ?>
+                                <a href="<?php echo esc_url($enrolled_cta['url']); ?>" class="btn-primary w-full text-center">
+                                    <?php echo esc_html($enrolled_cta['label']); ?>
+                                </a>
+                            <?php elseif ($is_enrolled) : ?>
+                                <span class="btn-secondary w-full text-center block">
+                                    <?php esc_html_e('Ingeschreven', 'stridence'); ?>
+                                </span>
+                            <?php elseif ($is_past) : ?>
+                                <button type="button" class="btn-primary w-full text-center" disabled>
+                                    <?php esc_html_e('Editie is afgelopen', 'stridence'); ?>
+                                </button>
+                            <?php elseif ($can_enroll) : ?>
+                                <a href="<?php echo esc_url(stride_enrollment_url($edition_id)); ?>" class="btn-primary w-full text-center">
+                                    <?php esc_html_e('Schrijf je in', 'stridence'); ?>
+                                </a>
+                            <?php elseif ($status->allowsInterest()) : ?>
+                                <a href="<?php echo esc_url(home_url('/interesse/?editie=' . $edition_id)); ?>" class="btn-primary w-full text-center block">
+                                    <?php esc_html_e('Interesse melden', 'stridence'); ?>
+                                </a>
+                                <p class="text-xs text-text-muted text-center">
+                                    <?php esc_html_e('Deze editie is nog in voorbereiding. Meld je interesse en we houden je op de hoogte.', 'stridence'); ?>
+                                </p>
+                            <?php elseif ($status->allowsWaitlist()) : ?>
+                                <a href="<?php echo esc_url(home_url('/wachtlijst/?editie=' . $edition_id)); ?>" class="btn-primary w-full text-center block">
+                                    <?php esc_html_e('Op wachtlijst plaatsen', 'stridence'); ?>
+                                </a>
+                                <p class="text-xs text-text-muted text-center">
+                                    <?php esc_html_e('Deze editie is volzet. Laat je gegevens achter en we nemen contact op als er een plaats vrijkomt.', 'stridence'); ?>
+                                </p>
+                            <?php else : ?>
+                                <button type="button" class="btn-primary w-full text-center" disabled>
+                                    <?php esc_html_e('Niet beschikbaar', 'stridence'); ?>
+                                </button>
+                            <?php endif; ?>
+
+                            <?php // PLACEHOLDER: quote-request URL (cta_quote_url) — no quote-request page exists yet. ?>
+                            <a href="<?php echo esc_url(home_url('/contact/')); ?>" class="btn-ghost w-full text-center">
+                                <?php esc_html_e('Offerte voor je team', 'stridence'); ?>
+                            </a>
+                        </div>
+
+                        <!-- Benefits checklist -->
+                        <div class="border-t border-border-soft mt-5 pt-4">
+                            <ul class="flex flex-col gap-2 text-[13px] text-text-muted">
+                                <?php foreach ($cta_benefits as $benefit) : ?>
+                                    <li class="flex items-center gap-2">
+                                        <span class="text-badge-open-text font-extrabold" aria-hidden="true">&check;</span>
+                                        <?php echo esc_html($benefit); ?>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
+                    </aside>
+
+                    <?php if ($course) : ?>
+                        <!-- Accent chip: link to the course page (all editions) -->
+                        <a href="<?php echo esc_url(get_permalink($course)); ?>"
+                           class="bg-accent-subtle rounded-[12px] p-4 flex items-center justify-between gap-3 text-[13px] text-accent-hover transition-shadow hover:shadow-card">
+                            <span class="font-bold"><?php esc_html_e('Liever een andere datum?', 'stridence'); ?></span>
+                            <span class="font-bold whitespace-nowrap"><?php esc_html_e('Alle edities', 'stridence'); ?> &rarr;</span>
                         </a>
-                    <?php elseif ($is_enrolled) : ?>
-                        <span class="btn-secondary w-full text-center block">
-                            <?php esc_html_e('Ingeschreven', 'stridence'); ?>
-                        </span>
-                    <?php elseif ($is_past) : ?>
-                        <button type="button" class="btn-secondary w-full text-center opacity-50 cursor-not-allowed" disabled>
-                            <?php esc_html_e('Editie is afgelopen', 'stridence'); ?>
-                        </button>
-                    <?php elseif ($can_enroll) : ?>
-                        <a href="<?php echo esc_url(stride_enrollment_url($edition_id)); ?>" class="btn-primary w-full text-center">
-                            <?php esc_html_e('Nu inschrijven', 'stridence'); ?>
-                        </a>
-                    <?php elseif ($status->allowsInterest()) : ?>
-                        <a href="<?php echo esc_url(home_url('/interesse/?editie=' . $edition_id)); ?>" class="btn-primary w-full text-center block">
-                            <?php esc_html_e('Interesse melden', 'stridence'); ?>
-                        </a>
-                        <p class="text-xs text-text-muted mt-3 text-center">
-                            <?php esc_html_e('Deze editie is nog in voorbereiding. Meld je interesse en we houden je op de hoogte.', 'stridence'); ?>
-                        </p>
-                    <?php elseif ($status->allowsWaitlist()) : ?>
-                        <a href="<?php echo esc_url(home_url('/wachtlijst/?editie=' . $edition_id)); ?>" class="btn-primary w-full text-center block">
-                            <?php esc_html_e('Op wachtlijst plaatsen', 'stridence'); ?>
-                        </a>
-                        <p class="text-xs text-text-muted mt-3 text-center">
-                            <?php esc_html_e('Deze editie is volzet. Laat je gegevens achter en we nemen contact op als er een plaats vrijkomt.', 'stridence'); ?>
-                        </p>
-                    <?php else : ?>
-                        <button type="button" class="btn-secondary w-full text-center opacity-50 cursor-not-allowed" disabled>
-                            <?php esc_html_e('Niet beschikbaar', 'stridence'); ?>
-                        </button>
                     <?php endif; ?>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Mobile Sticky CTA (hidden on lg+). Past editions show no CTA. -->
-    <?php if ($enrolled_cta) : ?>
-        <div class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 lg:hidden z-40 safe-area-bottom">
-            <a href="<?php echo esc_url($enrolled_cta['url']); ?>" class="btn-primary w-full text-center">
-                <?php echo esc_html($enrolled_cta['label']); ?>
-            </a>
-        </div>
-    <?php elseif ($is_past) : ?>
-        <?php /* No sticky CTA for past editions. */ ?>
-    <?php elseif ($can_enroll) : ?>
-        <div class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 lg:hidden z-40 safe-area-bottom">
-            <a href="<?php echo esc_url(stride_enrollment_url($edition_id)); ?>" class="btn-primary w-full text-center">
-                <?php esc_html_e('Nu inschrijven', 'stridence'); ?>
-            </a>
-        </div>
-    <?php elseif ($status->allowsInterest()) : ?>
-        <div class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 lg:hidden z-40 safe-area-bottom">
-            <a href="<?php echo esc_url(home_url('/interesse/?editie=' . $edition_id)); ?>" class="btn-primary w-full text-center">
-                <?php esc_html_e('Interesse melden', 'stridence'); ?>
-            </a>
-        </div>
-    <?php elseif ($status->allowsWaitlist()) : ?>
-        <div class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 lg:hidden z-40 safe-area-bottom">
-            <a href="<?php echo esc_url(home_url('/wachtlijst/?editie=' . $edition_id)); ?>" class="btn-primary w-full text-center">
-                <?php esc_html_e('Op wachtlijst plaatsen', 'stridence'); ?>
-            </a>
+    <!-- Mobile Sticky CTA (hidden on lg+). Past editions show no CTA;
+         branch logic lives in the $mobile_cta prep above the markup. -->
+    <?php if ($mobile_cta) : ?>
+        <div class="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-surface-card shadow-[0_-4px_16px_rgba(41,44,49,0.08)] px-5 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+            <div class="flex items-center gap-3.5">
+                <div class="flex-1 min-w-0">
+                    <div class="text-[17px] font-extrabold text-text">
+                        <?php echo !$price->isZero() ? esc_html(stride_format_money($price->inCents())) : esc_html__('Op aanvraag', 'stridence'); ?>
+                    </div>
+                    <?php if ($show_capacity_bar) : ?>
+                        <div class="text-[12px] font-bold <?php echo $spots_few ? 'text-badge-few-text' : 'text-text-muted'; ?>">
+                            <?php
+                            /* translators: %d: spots remaining */
+                            echo esc_html(sprintf(_n('Nog %d plaats vrij', 'Nog %d plaatsen vrij', (int) $spots, 'stridence'), (int) $spots));
+                            ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+                <a href="<?php echo esc_url($mobile_cta['url']); ?>" class="btn-primary shrink-0 text-center">
+                    <?php echo esc_html($mobile_cta['label']); ?>
+                </a>
+            </div>
         </div>
     <?php endif; ?>
 </article>
