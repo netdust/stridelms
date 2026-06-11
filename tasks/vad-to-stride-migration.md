@@ -10,6 +10,7 @@ Discovered while running Stride against VAD's production DB (`~/Sites/vad-vormin
 - [x] Import VAD prod-db-clean.sql into Stride DDEV
 - [x] Set `DB_PREFIX=ckqp_` in Stride's `.env` (Bedrock reads via `env()` in `config/application.php:96`)
 - [x] Confirm Stride's mu-plugins (`stride-core`, `ntdst-core`) load against VAD prefix without changes
+- [x] **Immediately after any v3 DB import, run `wp option delete upload_path upload_url_path`.** The v3 DB carries `upload_path = /data/sites/web/vad-vormingenbe/www/content/uploads` (old Combell host path) — WordPress prefers a non-empty `upload_path` over the default, so every media upload and the edition ZIP/XLSX exporters fail (OpenSpout IOException). Discovered 2026-06-10 on the dev DB (this dry-run had imported it silently); applies equally to the staging/prod user-data ports at launch. See memory `gotcha_v3_db_upload_path.md`.
 
 **Rollback:** `ddev snapshot restore pre-vad-test-2026-05-19` + revert `.env` to `DB_PREFIX=wp_`.
 
