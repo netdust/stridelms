@@ -81,14 +81,15 @@ get_header();
 
             <!-- Format badge -->
             <div class="flex items-center gap-2 mb-4">
-                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-accent text-text-inverse">
-                    <?php echo stridence_icon('layers', 'w-3 h-3'); ?>
-                    <?php esc_html_e('Leertraject', 'stridence'); ?>
-                </span>
+                <?php
+                stridence_template_part('partials/badge-status', null, [
+                    'status' => 'trajectory',
+                ]);
+                ?>
             </div>
 
             <div class="flex flex-wrap items-start gap-4 mb-4">
-                <h1 class="font-heading text-3xl lg:text-4xl font-bold text-text flex-1">
+                <h1 class="font-serif font-normal text-[clamp(1.75rem,3.5vw,2.5rem)] leading-[1.12] text-text flex-1">
                     <?php the_title(); ?>
                 </h1>
                 <?php
@@ -98,7 +99,7 @@ get_header();
 ?>
             </div>
 
-            <div class="flex flex-wrap gap-6 text-text-muted">
+            <div class="flex flex-wrap gap-6 text-sm text-text-muted">
                 <?php if ($deadline) : ?>
                     <span class="flex items-center gap-2">
                         <?php echo stridence_icon('calendar', 'w-5 h-5'); ?>
@@ -156,7 +157,7 @@ get_header();
 
             <!-- Sidebar (1/3) - Enrollment Card -->
             <div class="lg:col-span-1">
-                <div class="card p-6 sticky top-24">
+                <div class="bg-surface-card rounded-[16px] shadow-card p-6 sticky top-24">
                     <h3 class="font-heading font-semibold text-lg mb-4">
                         <?php esc_html_e('Inschrijven', 'stridence'); ?>
                     </h3>

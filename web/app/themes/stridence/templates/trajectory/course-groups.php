@@ -17,14 +17,22 @@ $electiveGroups  = $args['elective_groups'] ?? [];
 ?>
 
 <?php if (!empty($requiredCourses)) : ?>
-<div class="mb-8">
-    <h3 class="font-heading font-semibold text-lg mb-4 flex items-center gap-2">
-        <?php echo stridence_icon('check-circle', 'w-5 h-5 text-primary'); ?>
-        <?php esc_html_e('Verplichte cursussen', 'stridence'); ?>
-        <span class="text-sm font-normal text-text-muted">
+<div class="mb-6">
+    <div class="flex items-center gap-2 mb-3">
+        <?php echo stridence_icon('check-circle', 'w-4.5 h-4.5 text-primary'); ?>
+        <span class="text-[13px] font-semibold text-text-muted uppercase tracking-wider">
+            <?php esc_html_e('Verplichte cursussen', 'stridence'); ?>
+        </span>
+        <?php
+        stridence_template_part('partials/badge-status', null, [
+            'status' => 'confirmed',
+            'size'   => 'sm',
+        ]);
+        ?>
+        <span class="text-[12px] font-normal text-text-faint ml-1">
             (<?php echo count($requiredCourses); ?>)
         </span>
-    </h3>
+    </div>
     <div class="space-y-3">
         <?php foreach ($requiredCourses as $course) :
             $args = stridence_build_course_card_args_from_trajectory_course(
@@ -46,16 +54,18 @@ $electiveGroups  = $args['elective_groups'] ?? [];
             continue;
         }
         ?>
-    <div class="mb-8 last:mb-0">
-        <h3 class="font-heading font-semibold text-lg mb-4 flex items-center gap-2">
-            <?php echo stridence_icon('list', 'w-5 h-5 text-accent'); ?>
-            <?php echo esc_html($groupName); ?>
+    <div class="mb-6 last:mb-0">
+        <div class="flex items-center gap-2 mb-3">
+            <?php echo stridence_icon('list', 'w-4.5 h-4.5 text-accent'); ?>
+            <span class="text-[13px] font-semibold text-text-muted uppercase tracking-wider">
+                <?php echo esc_html($groupName); ?>
+            </span>
             <?php if ($required > 0) : ?>
-                <span class="text-sm font-normal text-text-muted">
-                    (<?php printf(esc_html__('kies er %d van %d', 'stridence'), $required, count($courses)); ?>)
+                <span class="text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex items-center bg-accent-subtle text-accent-hover">
+                    <?php printf(esc_html__('kies %d van %d', 'stridence'), $required, count($courses)); ?>
                 </span>
             <?php endif; ?>
-        </h3>
+        </div>
         <div class="space-y-3">
             <?php foreach ($courses as $course) :
                 $args = stridence_build_course_card_args_from_trajectory_course(

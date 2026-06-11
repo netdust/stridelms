@@ -24,15 +24,17 @@ $has_courses = !empty($required_courses) || !empty($elective_groups);
 ?>
 <!-- Overzicht Section -->
 <section id="overzicht" class="scroll-mt-32">
-    <div class="prose-stride max-w-none">
-        <?php echo apply_filters('the_content', get_post_field('post_content', $trajectory_id)); ?>
+    <div class="bg-surface-card rounded-[16px] shadow-card p-6 lg:p-8">
+        <div class="prose-stride max-w-none">
+            <?php echo apply_filters('the_content', get_post_field('post_content', $trajectory_id)); ?>
+        </div>
     </div>
 </section>
 
 <!-- Cursussen Section -->
 <?php if ($has_courses) : ?>
 <section id="cursussen" class="scroll-mt-32">
-    <h2 class="font-heading text-2xl font-bold text-text mb-6">
+    <h2 class="font-heading text-xl font-semibold text-text mb-4">
         <?php esc_html_e('Cursussen in dit traject', 'stridence'); ?>
     </h2>
 
@@ -47,11 +49,11 @@ $has_courses = !empty($required_courses) || !empty($elective_groups);
 
 <!-- Praktisch Section -->
 <section id="praktisch" class="scroll-mt-32">
-    <h2 class="font-heading text-2xl font-bold text-text mb-6">
+    <h2 class="font-heading text-xl font-semibold text-text mb-4">
         <?php esc_html_e('Praktische informatie', 'stridence'); ?>
     </h2>
     <div class="grid sm:grid-cols-2 gap-4">
-        <div class="card-bordered p-5">
+        <div class="bg-surface-card rounded-[14px] shadow-card p-5">
             <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
                 <?php echo stridence_icon('users', 'w-5 h-5 text-primary'); ?>
                 <?php esc_html_e('Doelgroep', 'stridence'); ?>
@@ -60,7 +62,7 @@ $has_courses = !empty($required_courses) || !empty($elective_groups);
                 <?php esc_html_e('Zorgprofessionals', 'stridence'); ?>
             </p>
         </div>
-        <div class="card-bordered p-5">
+        <div class="bg-surface-card rounded-[14px] shadow-card p-5">
             <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
                 <?php echo stridence_icon('award', 'w-5 h-5 text-primary'); ?>
                 <?php esc_html_e('Certificaat', 'stridence'); ?>
@@ -69,7 +71,7 @@ $has_courses = !empty($required_courses) || !empty($elective_groups);
                 <?php esc_html_e('VAD Certificaat na afronding', 'stridence'); ?>
             </p>
         </div>
-        <div class="card-bordered p-5">
+        <div class="bg-surface-card rounded-[14px] shadow-card p-5">
             <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
                 <?php echo stridence_icon('book-open', 'w-5 h-5 text-primary'); ?>
                 <?php esc_html_e('Cursussen', 'stridence'); ?>
@@ -87,7 +89,7 @@ printf(
 ?>
             </p>
         </div>
-        <div class="card-bordered p-5">
+        <div class="bg-surface-card rounded-[14px] shadow-card p-5">
             <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
                 <?php echo stridence_icon('clock', 'w-5 h-5 text-primary'); ?>
                 <?php esc_html_e('Doorlooptijd', 'stridence'); ?>
@@ -108,13 +110,13 @@ if ($mode === 'self_paced') {
 
 <!-- FAQ Section -->
 <section id="faq" class="scroll-mt-32">
-    <h2 class="font-heading text-2xl font-bold text-text mb-6">
+    <h2 class="font-heading text-xl font-semibold text-text mb-4">
         <?php esc_html_e('Veelgestelde vragen', 'stridence'); ?>
     </h2>
 
-    <div class="space-y-4">
+    <div class="space-y-3">
         <!-- FAQ Item 1 -->
-        <div class="card-bordered" x-data="expandable()">
+        <div class="bg-surface-card rounded-[14px] shadow-card border border-border-soft" x-data="expandable()">
             <button type="button"
                     class="w-full p-5 text-left flex items-center justify-between gap-4"
                     @click="toggle()">
@@ -133,7 +135,7 @@ if ($mode === 'self_paced') {
         </div>
 
         <!-- FAQ Item 2 -->
-        <div class="card-bordered" x-data="expandable()">
+        <div class="bg-surface-card rounded-[14px] shadow-card border border-border-soft" x-data="expandable()">
             <button type="button"
                     class="w-full p-5 text-left flex items-center justify-between gap-4"
                     @click="toggle()">
@@ -152,7 +154,7 @@ if ($mode === 'self_paced') {
         </div>
 
         <!-- FAQ Item 3 -->
-        <div class="card-bordered" x-data="expandable()">
+        <div class="bg-surface-card rounded-[14px] shadow-card border border-border-soft" x-data="expandable()">
             <button type="button"
                     class="w-full p-5 text-left flex items-center justify-between gap-4"
                     @click="toggle()">
@@ -183,7 +185,7 @@ if ($choice_date && $choice_deadline) {
         </div>
 
         <!-- FAQ Item 4 -->
-        <div class="card-bordered" x-data="expandable()">
+        <div class="bg-surface-card rounded-[14px] shadow-card border border-border-soft" x-data="expandable()">
             <button type="button"
                     class="w-full p-5 text-left flex items-center justify-between gap-4"
                     @click="toggle()">
@@ -202,7 +204,7 @@ if ($choice_date && $choice_deadline) {
         </div>
 
         <!-- FAQ Item 5 -->
-        <div class="card-bordered" x-data="expandable()">
+        <div class="bg-surface-card rounded-[14px] shadow-card border border-border-soft" x-data="expandable()">
             <button type="button"
                     class="w-full p-5 text-left flex items-center justify-between gap-4"
                     @click="toggle()">
