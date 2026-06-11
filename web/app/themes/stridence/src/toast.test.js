@@ -76,6 +76,12 @@ describe('toastStore', () => {
     // Re-show at t+2000 (new timer fires at t+6000). If close() failed to
     // clear the first timer, it would fire at t+4000 and kill this toast.
     store.show({ message: 'Opnieuw' });
+
+    // Pin the content after close + re-show (review I-4): the re-shown toast
+    // must carry the NEW payload, not stale content from before close().
+    expect(store.title).toBe('Opnieuw');
+    expect(store.sub).toBe('');
+
     vi.advanceTimersByTime(3000); // t+5000
     expect(store.visible).toBe(true);
   });
