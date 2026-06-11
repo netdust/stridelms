@@ -32,6 +32,14 @@ proposals only — no new data flow was added by the redesign tasks.
 | `contact_kmo` | `page-contact.php` — info card "Facturatie" block | `Contact.dc.html` line 70 | Stride site settings or ACF option | "Erkend dienstverlener KMO-portefeuille" |
 | `map_embed` | `page-contact.php` — map slot placeholder | `Contact.dc.html` line 75-76 | Site option (Google Maps embed URL or iframe) | Striped placeholder with caption "kaart: locatie Schaarbeek" |
 
+## Homepage (`front-page.php`) — Task 9.1
+
+| Field | Surface (template:line) | Mockup source | Suggested source | Placeholder used |
+|---|---|---|---|---|
+| `stats_trio` — "Waarom Stride" stats trio (value + label ×3) | `front-page.php:186` — Waarom Stride section (`$stats_trio`) | `Homepage.dc.html` lines 125-129 | Site-wide setting (Stride settings, about/stats group) | "15 jaar ervaring" / "3.200+ deelnemers per jaar" / "9,1 gemiddelde score" |
+| `waarom_foto` — "Waarom Stride" photo + caption | `front-page.php:201-207` — Waarom Stride photo slot | `Homepage.dc.html` lines 131-133 | Media field (site-wide setting or front-page meta); caption replaced by a real photo + `alt` once one exists | repeating-gradient pattern div + i18n'd caption "foto: lesgever met groep, warm licht" |
+| `cta_team_copy` — closing CTA heading + copy (in-company offer) | `front-page.php:215-220` — closing CTA band | `Homepage.dc.html` lines 141-142 | Site copy decision (static template copy or site-wide setting) | "Een opleiding voor je hele team?" / "We komen naar jouw organisatie, stemmen de inhoud af op jullie praktijk en regelen alles — van offerte tot attesten." |
+
 ## Over ons page (`page-over-ons.php`) — Task 9.3
 
 | Field | Surface (template:line) | Mockup source | Suggested source | Placeholder used |
