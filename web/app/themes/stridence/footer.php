@@ -66,7 +66,11 @@ defined('ABSPATH') || exit;
 
 </div><!-- #page -->
 
-<!-- Toast Notification (design card, back-compatible payload) -->
+<?php if (!is_page_template('page-mijn-account.php')) : ?>
+<!-- Toast Notification (design card, back-compatible payload).
+     Skipped on dashboard pages: page-mijn-account.php renders its own
+     container (templates/dashboard/partials/toast.php) — exactly ONE live
+     toast container per page. -->
 <div x-data="toastStore()"
      @toast.window="show($event.detail)"
      x-show="visible"
@@ -92,6 +96,7 @@ defined('ABSPATH') || exit;
             class="text-base leading-none text-text-faint hover:text-text cursor-pointer shrink-0"
             aria-label="<?php esc_attr_e('Melding sluiten', 'stridence'); ?>">&times;</button>
 </div>
+<?php endif; ?>
 
 <?php wp_footer(); ?>
 </body>

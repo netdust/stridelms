@@ -4,13 +4,15 @@ defined('ABSPATH') || exit;
 
 /**
  * Dashboard toast — same card recipe as the footer toast (one recipe everywhere).
- * Reuses the global toastStore() factory from main.js; keeps its own
- * `stride-toast` window event as the dispatch contract.
+ * Reuses the global toastStore() factory from main.js and listens on the
+ * shared `toast` window event (the contract every dispatcher fires).
+ * This is the ONLY toast container on dashboard pages — footer.php skips
+ * its container on the mijn-account template.
  */
 ?>
 
 <div x-data="toastStore()"
-     x-on:stride-toast.window="show($event.detail)"
+     x-on:toast.window="show($event.detail)"
      x-show="visible"
      x-cloak
      x-transition:enter="transition ease-out duration-normal"
