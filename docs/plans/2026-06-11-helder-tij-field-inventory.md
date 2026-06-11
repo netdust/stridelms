@@ -21,3 +21,7 @@ proposals only — no new data flow was added by the redesign tasks.
 | `cta_price_includes` — price-includes line under the sidebar price | `single-vad_edition.php` — sidebar CTA card (price block) | `Detail - Editie.dc.html` line 133 | New edition meta `price_includes` (or derive from the same `included` meta as the "Inbegrepen" card) | "incl. lunch en cursusmateriaal" |
 | `cta_quote_url` — "Offerte voor je team" ghost CTA target | `single-vad_edition.php` — sidebar CTA card (secondary button) | `Detail - Editie.dc.html` line 140 | Site-wide setting (Stride settings) pointing at a quote-request page/flow; no quote-request page exists today | links to `/contact/` |
 | `cta_benefits` — edition benefits checklist ("Attest van deelname" / "Kosteloos annuleren tot 14 dagen vooraf") | `single-vad_edition.php` — sidebar CTA card (`$cta_benefits`) | `Detail - Editie.dc.html` lines 144-145 | Site-wide setting with per-edition override (cancellation copy must stay in sync with the "Annuleren" card) | "Attest van deelname" / "Kosteloos annuleren tot 14 dagen vooraf" |
+
+## Follow-ups
+
+- Herinner werkgever action (mockup Dashboard :241) — needs a stride-core handler (`stride_remind_employer`); button omitted until it exists.
