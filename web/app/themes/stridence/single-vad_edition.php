@@ -176,15 +176,20 @@ $content_tabs = [
 ];
 
 // Lesgever card: speakers meta when present, i18n'd placeholder otherwise.
-$lesgever_name = $speakers !== '' ? $speakers : __('Lesgever nog te bevestigen', 'stridence');
+// Initials are only derived from a REAL speaker name — the placeholder text
+// would yield a fake monogram ("LN"); it gets a generic user icon instead.
+$has_speaker   = $speakers !== '';
+$lesgever_name = $has_speaker ? $speakers : __('Lesgever nog te bevestigen', 'stridence');
 $lesgever_initials = '';
-foreach (preg_split('/[\s,]+/u', $lesgever_name, -1, PREG_SPLIT_NO_EMPTY) as $name_part) {
-    $lesgever_initials .= mb_substr($name_part, 0, 1);
-    if (mb_strlen($lesgever_initials) >= 2) {
-        break;
+if ($has_speaker) {
+    foreach (preg_split('/[\s,]+/u', $lesgever_name, -1, PREG_SPLIT_NO_EMPTY) as $name_part) {
+        $lesgever_initials .= mb_substr($name_part, 0, 1);
+        if (mb_strlen($lesgever_initials) >= 2) {
+            break;
+        }
     }
+    $lesgever_initials = mb_strtoupper($lesgever_initials);
 }
-$lesgever_initials = mb_strtoupper($lesgever_initials);
 
 // ── Sidebar / CTA state (Helder Tij) ──
 
@@ -551,7 +556,7 @@ get_header();
                 <section id="lesgever" role="tabpanel" aria-labelledby="tab-lesgever"
                          x-show="isActive('lesgever')" class="pt-7">
                     <div class="bg-white rounded-[14px] shadow-card p-6 flex gap-5 items-start flex-wrap">
-                        <span class="w-14 h-14 rounded-full bg-accent-subtle text-accent-hover font-bold text-[18px] grid place-items-center shrink-0" aria-hidden="true"><?php echo esc_html($lesgever_initials); ?></span>
+                        <span class="w-14 h-14 rounded-full bg-accent-subtle text-accent-hover font-bold text-[18px] grid place-items-center shrink-0" aria-hidden="true"><?php echo $has_speaker ? esc_html($lesgever_initials) : stridence_icon('user', 'w-6 h-6'); ?></span>
                         <div class="flex-1 min-w-[240px]">
                             <div class="text-[17px] font-bold text-text"><?php echo esc_html($lesgever_name); ?></div>
                             <?php // PLACEHOLDER: role line — no speaker-role field exists yet. ?>
