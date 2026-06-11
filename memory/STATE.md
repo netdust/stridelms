@@ -651,3 +651,9 @@ Inventory only — left in place per user instruction:
 [2026-06-09] — session ended (no significant changes captured)
 [2026-06-10] — session ended (no significant changes captured)
 [2026-06-11] — session ended (no significant changes captured)
+
+---
+### 2026-06-11 — tagged capture
+
+**Decisions**
+- Helder Tij is the stock theme look; VAD/client plugins keep their own skins via the verified override chain.
