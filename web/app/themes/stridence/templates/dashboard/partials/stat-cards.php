@@ -1,9 +1,15 @@
 <?php
 /**
- * Dashboard stat cards — compact metrics with colored icon accents.
+ * Dashboard stat cards — Helder Tij metric cards.
+ *
+ * White card per stat: 13px/600 muted label, 30px/800 tabular value,
+ * optional 12px context line. Context keeps the success/warning colour
+ * pair when the stat encodes one ('color' key).
  *
  * @var array $args {
- *     @type array $stats Array of stat items with 'value', 'label', 'icon', 'color'.
+ *     @type array $stats Array of stat items with 'label', 'value',
+ *                        optional 'context' and optional 'color'
+ *                        ('success'|'warning').
  * }
  * @package stridence
  */
@@ -17,29 +23,30 @@ if (empty($stats)) {
     return;
 }
 
-$colorMap = [
-    'primary' => ['bg' => 'bg-primary/10', 'text' => 'text-primary'],
-    'warning' => ['bg' => 'bg-status-warning-subtle', 'text' => 'text-status-warning'],
-    'success' => ['bg' => 'bg-status-success-subtle', 'text' => 'text-status-success'],
+// Context-line colour per encoded stat colour (success/warning pairs).
+$contextColorMap = [
+    'success' => 'text-badge-free-text font-bold',
+    'warning' => 'text-badge-few-text font-bold',
 ];
 ?>
 
-<div class="grid grid-cols-2 sm:grid-cols-<?php echo esc_attr((string) min(count($stats), 3)); ?> gap-3">
+<div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-[14px]">
     <?php foreach ($stats as $stat) :
-        $color = $stat['color'] ?? 'primary';
-        $icon  = $stat['icon'] ?? 'info';
-        $c     = $colorMap[$color] ?? $colorMap['primary'];
+        $context  = (string) ($stat['context'] ?? '');
+        $ctxClass = $contextColorMap[$stat['color'] ?? ''] ?? 'text-text-faint';
         ?>
-        <div class="px-4 py-3.5 rounded-xl bg-surface-card border border-border/50">
-            <div class="flex items-center gap-3">
-                <span class="w-9 h-9 rounded-lg <?php echo esc_attr($c['bg']); ?> flex items-center justify-center shrink-0">
-                    <?php echo stridence_icon($icon, 'w-[18px] h-[18px] ' . $c['text']); ?>
-                </span>
-                <div>
-                    <div class="text-xl font-bold text-text leading-tight"><?php echo esc_html((string) $stat['value']); ?></div>
-                    <div class="text-xs text-text-muted"><?php echo esc_html($stat['label']); ?></div>
-                </div>
+        <div class="bg-surface-card rounded-[14px] shadow-card py-[18px] px-5">
+            <div class="text-[13px] font-semibold text-text-muted">
+                <?php echo esc_html((string) ($stat['label'] ?? '')); ?>
             </div>
+            <div class="text-[30px] font-extrabold text-text tabular-nums leading-tight mt-1.5">
+                <?php echo esc_html((string) ($stat['value'] ?? '')); ?>
+            </div>
+            <?php if ($context !== '') : ?>
+                <div class="text-[12px] mt-0.5 <?php echo esc_attr($ctxClass); ?>">
+                    <?php echo esc_html($context); ?>
+                </div>
+            <?php endif; ?>
         </div>
     <?php endforeach; ?>
 </div>

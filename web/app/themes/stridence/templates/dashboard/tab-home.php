@@ -1,13 +1,17 @@
 <?php
 /**
- * Dashboard Tab: Home
+ * Dashboard Tab: Home — Helder Tij.
  *
- * Layout: actions → agenda → active courses → recent certificates.
- * All sections adaptive — only render when data exists.
+ * Layout: greeting → hero next-step band → stat cards → "Acties nodig" card
+ *         → agenda → enrollment panels grid → recent certificates.
+ * All sections adaptive — only render when data exists. Stat values are
+ * derived from the data already passed in (no extra service calls).
  *
  * @param array $args {
  *     @type WP_User $user      Current user object
  *     @type array   $home_data Aggregated data from UserDashboardService::getHomeData()
+ *     @type string  $greeting  Time-of-day greeting
+ *     @type string  $firstName User first name
  * }
  * @package stridence
  */
@@ -21,111 +25,83 @@ $home_data = $args['home_data'] ?? [];
 $greeting  = $args['greeting'] ?? '';
 $firstName = $args['firstName'] ?? '';
 
-$actions    = $home_data['actions'] ?? [];
-$sessions   = $home_data['upcoming_sessions'] ?? [];
+$hero         = $home_data['hero'] ?? null;
+$actions      = $home_data['actions'] ?? [];
+$sessions     = $home_data['upcoming_sessions'] ?? [];
 $enrollments  = $home_data['active_enrollments'] ?? [];
 $certificates = $home_data['recent_certificates'] ?? [];
 $permalink    = get_permalink();
 
 $hasContent = !empty($actions) || !empty($sessions) || !empty($enrollments) || !empty($certificates);
 
-// Prepare enrollment data as JSON for Alpine panel
-$enrollmentsJson = [];
-foreach ($enrollments as $enrollment) {
-    $item = $enrollment;
-    if (!empty($item['start_date'])) {
-        $item['start_date_formatted'] = stride_format_date($item['start_date']);
-    }
-    if (!empty($item['sessions']) && is_array($item['sessions'])) {
-        foreach ($item['sessions'] as &$session) {
-            if (!empty($session['date'])) {
-                $session['date_formatted'] = stride_format_date($session['date']);
-            }
-        }
-        unset($session);
-    }
-    $enrollmentsJson[] = $item;
-}
+// Stat cards — derived from the home payload itself (no new data flow).
+$stats = [];
+if ($hasContent) {
+    $taskActionCount = count(array_filter($actions, fn($a) => ($a['type'] ?? '') !== 'online_lesson'));
 
+    $stats[] = [
+        'label'   => __('Actieve inschrijvingen', 'stridence'),
+        'value'   => count($enrollments),
+        'context' => $taskActionCount > 0
+            ? sprintf(
+                /* translators: %d: number of enrollments awaiting an action */
+                _n('waarvan %d wacht op actie', 'waarvan %d wachten op actie', $taskActionCount, 'stridence'),
+                $taskActionCount,
+            )
+            : '',
+        'color'   => $taskActionCount > 0 ? 'warning' : '',
+    ];
+    $stats[] = [
+        'label'   => __('Komende sessies', 'stridence'),
+        'value'   => count($sessions),
+        'context' => !empty($sessions[0]['date'])
+            ? sprintf(
+                /* translators: %s: date of the next session */
+                __('eerstvolgende op %s', 'stridence'),
+                stride_format_date($sessions[0]['date']),
+            )
+            : '',
+    ];
+    $stats[] = [
+        'label'   => __('Recent behaald', 'stridence'),
+        'value'   => count($certificates),
+        'context' => !empty($certificates[0]['completed_at'])
+            ? sprintf(
+                /* translators: %s: date of the most recent certificate */
+                __('laatste op %s', 'stridence'),
+                stride_format_date($certificates[0]['completed_at']),
+            )
+            : '',
+        'color'   => count($certificates) > 0 ? 'success' : '',
+    ];
+}
 ?>
 
-<div class="space-y-8" x-data="dashboardHome()">
+<div class="flex flex-col gap-6" x-data="dashboardHome()">
     <?php if ($hasContent) : ?>
 
-        <!-- Greeting + Acties (elevated panel) -->
-        <?php
-            $visibleCount = 3;
-        $hasMore = !empty($actions) && count($actions) > $visibleCount;
-        ?>
-        <section class="rounded-xl bg-primary-subtle shadow-lg ring-1 ring-primary/10 p-6 sm:p-8"
-                 <?php echo $hasMore ? 'x-data="{ expanded: false }"' : ''; ?>>
-
-            <?php if ($greeting && $firstName) : ?>
-                <div class="flex items-baseline justify-between mb-6">
-                    <h1 class="text-xl font-semibold text-text tracking-tight">
-                        <?php echo esc_html($greeting . ', ' . $firstName); ?>
-                    </h1>
-                    <?php if (!empty($actions)) : ?>
-                        <span class="text-xs font-medium text-text-muted">
-                            <?php echo esc_html(sprintf(_n('%d actie nodig', '%d acties nodig', count($actions), 'stridence'), count($actions))); ?>
-                        </span>
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
-
-            <?php if (!empty($actions)) : ?>
-            <div class="space-y-2">
-                <?php foreach ($actions as $i => $action) :
-                    $total      = (int) ($action['total_tasks'] ?? 0);
-                    $done       = (int) ($action['done_tasks'] ?? 0);
-                    $actionType = $action['type'] ?? '';
-                    $hidden     = $hasMore && $i >= $visibleCount;
-                    $xAttr      = $hidden ? 'x-show="expanded" x-cloak' : '';
-                    ?>
-                    <?php if ($actionType === 'online_lesson') : ?>
-                        <a href="<?php echo esc_url($action['url']); ?>"
-                           class="flex items-center gap-2.5 rounded-lg border border-blue-200 bg-blue-50/50 px-3 py-2 hover:border-blue-300 hover:bg-blue-50 transition-colors"
-                           <?php echo $xAttr; ?>>
-                            <?php echo stridence_icon('play', 'w-4 h-4 text-blue-500 shrink-0'); ?>
-                            <span class="text-sm font-medium text-text truncate"><?php echo esc_html($action['course_title']); ?></span>
-                            <span class="text-xs text-text-muted shrink-0 ml-auto"><?php echo esc_html($action['label']); ?></span>
-                            <?php echo stridence_icon('chevron-right', 'w-4 h-4 text-blue-400 shrink-0'); ?>
-                        </a>
-                    <?php elseif ($actionType === 'session_selection') : ?>
-                        <a href="<?php echo esc_url($action['url']); ?>"
-                           class="flex items-center gap-2.5 rounded-lg border border-violet-200 bg-violet-50/50 px-3 py-2 hover:border-violet-300 hover:bg-violet-50 transition-colors"
-                           <?php echo $xAttr; ?>>
-                            <?php echo stridence_icon('list', 'w-4 h-4 text-violet-500 shrink-0'); ?>
-                            <span class="text-sm font-medium text-text truncate"><?php echo esc_html($action['course_title']); ?></span>
-                            <span class="text-xs text-text-muted shrink-0 ml-auto"><?php echo esc_html($action['label']); ?></span>
-                            <?php echo stridence_icon('chevron-right', 'w-4 h-4 text-violet-400 shrink-0'); ?>
-                        </a>
-                    <?php else : ?>
-                        <a href="<?php echo esc_url($action['url']); ?>"
-                           class="flex items-center gap-2.5 rounded-lg border border-status-warning bg-status-warning-subtle px-3 py-2 hover:border-status-warning hover:bg-status-warning-subtle transition-colors"
-                           <?php echo $xAttr; ?>>
-                            <?php echo stridence_icon('alert-circle', 'w-4 h-4 text-status-warning shrink-0'); ?>
-                            <span class="text-sm font-medium text-text truncate"><?php echo esc_html($action['course_title']); ?></span>
-                            <span class="text-xs text-text-muted shrink-0 ml-auto">
-                                <?php echo esc_html($action['label']); ?>
-                                <?php if ($total > 0) : ?>
-                                    · <?php echo esc_html($done . '/' . $total); ?>
-                                <?php endif; ?>
-                            </span>
-                            <?php echo stridence_icon('chevron-right', 'w-4 h-4 text-status-warning shrink-0'); ?>
-                        </a>
-                    <?php endif; ?>
-                <?php endforeach; ?>
-                <?php if ($hasMore) : ?>
-                    <button @click="expanded = !expanded"
-                            class="text-sm text-primary hover:underline cursor-pointer">
-                        <span x-show="!expanded"><?php echo esc_html(sprintf(__('Toon alle %d acties', 'stridence'), count($actions))); ?></span>
-                        <span x-show="expanded" x-cloak><?php esc_html_e('Minder tonen', 'stridence'); ?></span>
-                    </button>
+        <!-- Greeting -->
+        <?php if ($greeting && $firstName) : ?>
+            <header>
+                <h1 class="font-serif font-normal text-[clamp(26px,3.5vw,34px)] leading-[1.1] text-text">
+                    <?php echo esc_html($greeting . ', ' . $firstName); ?>
+                </h1>
+                <?php if (!empty($actions)) : ?>
+                    <p class="text-sm text-text-muted mt-1.5">
+                        <?php echo esc_html(sprintf(_n('%d actie nodig', '%d acties nodig', count($actions), 'stridence'), count($actions))); ?>
+                    </p>
                 <?php endif; ?>
-            </div>
-            <?php endif; ?>
-        </section>
+            </header>
+        <?php endif; ?>
+
+        <!-- Hero next-step band -->
+        <?php stridence_template_part('templates/dashboard/partials/hero-action', null, ['hero' => $hero]); ?>
+
+        <!-- Stat cards -->
+        <?php stridence_template_part('templates/dashboard/partials/stat-cards', null, ['stats' => $stats]); ?>
+
+        <!-- Acties nodig -->
+        <?php stridence_template_part('templates/dashboard/partials/action-items', null, ['items' => $actions]); ?>
 
         <!-- Agenda -->
         <?php if (!empty($sessions)) : ?>
@@ -143,7 +119,7 @@ foreach ($enrollments as $enrollment) {
                         <span><?php esc_html_e('Exporteer', 'stridence'); ?></span>
                     </button>
                 </div>
-                <div class="space-y-1.5">
+                <div class="flex flex-col gap-2">
                     <?php foreach ($sessions as $session) :
                         $isToday    = ($session['date'] ?? '') === date('Y-m-d');
                         $isTomorrow = ($session['date'] ?? '') === date('Y-m-d', strtotime('+1 day'));
@@ -151,21 +127,21 @@ foreach ($enrollments as $enrollment) {
                         $detailUrl   = $editionSlug ? home_url('/edities/' . $editionSlug . '/') : '';
                         ?>
                         <a href="<?php echo esc_url($detailUrl); ?>"
-                           class="flex items-center gap-3 rounded-lg border border-border/60 bg-surface-card pl-1.5 pr-3 py-2 hover:border-border transition-colors">
+                           class="flex items-center gap-3 bg-surface-card rounded-[12px] shadow-card pl-2 pr-4 py-2.5 hover:bg-surface transition-colors">
                             <?php if ($isToday || $isTomorrow) : ?>
-                                <span class="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
-                                    <span class="text-[10px] font-bold text-primary leading-none"><?php echo $isToday ? esc_html__('Vandaag', 'stridence') : esc_html__('Morgen', 'stridence'); ?></span>
+                                <span class="w-10 h-10 rounded-[8px] bg-badge-online-bg flex items-center justify-center shrink-0">
+                                    <span class="text-[10px] font-bold text-badge-online-text leading-none"><?php echo $isToday ? esc_html__('Vandaag', 'stridence') : esc_html__('Morgen', 'stridence'); ?></span>
                                 </span>
                             <?php else : ?>
-                                <span class="w-10 h-10 rounded-md bg-surface-alt flex flex-col items-center justify-center shrink-0">
+                                <span class="w-10 h-10 rounded-[8px] bg-surface-alt flex flex-col items-center justify-center shrink-0">
                                     <span class="text-[9px] uppercase font-semibold text-text-muted leading-none"><?php echo esc_html(date_i18n('M', strtotime($session['date']))); ?></span>
                                     <span class="text-sm font-bold text-text leading-none mt-0.5"><?php echo esc_html(date('j', strtotime($session['date']))); ?></span>
                                 </span>
                             <?php endif; ?>
-                            <span class="flex-1 min-w-0 text-sm leading-snug">
-                                <span class="font-medium text-text"><?php echo esc_html($session['course_title'] ?? ''); ?></span>
+                            <span class="flex-1 min-w-0 leading-snug">
+                                <span class="text-[14px] font-bold text-text"><?php echo esc_html($session['course_title'] ?? ''); ?></span>
                                 <br>
-                                <span class="text-xs text-text-muted"><?php
+                                <span class="text-[13px] text-text-muted"><?php
                                         if (!empty($session['start_time'])) {
                                             echo esc_html($session['start_time']);
                                             if (!empty($session['end_time'])) {
@@ -177,14 +153,14 @@ foreach ($enrollments as $enrollment) {
                         }
                         ?></span>
                             </span>
-                            <?php echo stridence_icon('chevron-right', 'w-4 h-4 text-text-muted shrink-0'); ?>
+                            <?php echo stridence_icon('chevron-right', 'w-4 h-4 text-text-faint shrink-0'); ?>
                         </a>
                     <?php endforeach; ?>
                 </div>
             </section>
         <?php endif; ?>
 
-        <!-- Opleidingen -->
+        <!-- Opleidingen — enrollment panels grid -->
         <?php if (!empty($enrollments)) : ?>
             <section>
                 <div class="flex items-center justify-between mb-3">
@@ -196,11 +172,11 @@ foreach ($enrollments as $enrollment) {
                         <?php esc_html_e('Alles bekijken', 'stridence'); ?>
                     </a>
                 </div>
-                <div class="space-y-4">
-                    <?php foreach (array_slice($enrollmentsJson, 0, 4) as $i => $enrollment) :
-                        $args = stridence_build_course_card_args_from_enrollment($enrollment);
-                        $args['initial_open'] = ($i === 0);
-                        get_template_part('templates/components/course-card', null, $args);
+                <div class="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-[18px]">
+                    <?php foreach (array_slice($enrollments, 0, 4) as $enrollment) :
+                        stridence_template_part('templates/dashboard/partials/panel-enrollment', null, [
+                            'enrollment' => $enrollment,
+                        ]);
                     endforeach; ?>
                 </div>
             </section>
@@ -218,26 +194,32 @@ foreach ($enrollments as $enrollment) {
                         <?php esc_html_e('Alle certificaten', 'stridence'); ?>
                     </a>
                 </div>
-                <div class="space-y-1">
+                <div class="flex flex-col gap-2">
                     <?php foreach (array_slice($certificates, 0, 3) as $cert) : ?>
-                        <div class="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border/60 bg-surface-card">
-                            <span class="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center shrink-0">
-                                <?php echo stridence_icon('award', 'w-4 h-4 text-success'); ?>
+                        <div class="flex items-center gap-3.5 bg-surface-card rounded-[12px] shadow-card p-4">
+                            <span class="w-[38px] h-[38px] rounded-[10px] bg-badge-online-bg text-badge-online-text flex items-center justify-center shrink-0 text-[14px] font-extrabold">
+                                ✓
                             </span>
                             <div class="flex-1 min-w-0">
-                                <span class="text-sm font-medium text-text truncate block">
+                                <span class="text-[14px] font-bold text-text truncate block">
                                     <?php echo esc_html($cert['course_title'] ?? ''); ?>
                                 </span>
                                 <?php if (!empty($cert['completed_at'])) : ?>
-                                    <span class="text-xs text-text-muted">
-                                        <?php echo esc_html(stride_format_date($cert['completed_at'])); ?>
+                                    <span class="text-[12px] text-text-faint">
+                                        <?php
+                                        printf(
+                                            /* translators: %s: completion date */
+                                            esc_html__('behaald op %s', 'stridence'),
+                                            esc_html(stride_format_date($cert['completed_at'])),
+                                        );
+                                    ?>
                                     </span>
                                 <?php endif; ?>
                             </div>
                             <?php $certUrl = $cert['certificate_url'] ?? ''; ?>
                             <?php if ($certUrl) : ?>
                                 <a href="<?php echo esc_url($certUrl); ?>"
-                                   class="text-sm text-primary hover:underline shrink-0"
+                                   class="text-primary hover:text-primary-hover shrink-0"
                                    target="_blank"
                                    rel="noopener">
                                     <?php echo stridence_icon('download', 'w-4 h-4'); ?>
@@ -252,25 +234,15 @@ foreach ($enrollments as $enrollment) {
     <?php else : ?>
 
         <!-- Welcome empty state -->
-        <div class="text-center py-16 px-4">
-            <div class="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-5">
-                <?php echo stridence_icon('book-open', 'w-8 h-8 text-primary'); ?>
-            </div>
-            <h2 class="text-lg font-semibold text-text mb-2">
-                <?php esc_html_e('Welkom bij Stride!', 'stridence'); ?>
-            </h2>
-            <p class="text-sm text-text-muted max-w-md mx-auto mb-6">
-                <?php esc_html_e('Je hebt nog geen actieve opleidingen. Ontdek ons aanbod en schrijf je in voor je eerste opleiding.', 'stridence'); ?>
-            </p>
-            <a href="<?php echo esc_url(home_url('/klassikaal/')); ?>" class="btn-primary">
-                <?php esc_html_e('Bekijk opleidingen', 'stridence'); ?>
-            </a>
-        </div>
+        <?php
+        stridence_template_part('partials/empty-state', null, [
+            'icon'    => 'book-open',
+            'title'   => __('Welkom bij Stride!', 'stridence'),
+            'message' => __('Je hebt nog geen actieve opleidingen. Ontdek ons aanbod en schrijf je in voor je eerste opleiding.', 'stridence'),
+            'action'  => __('Bekijk opleidingen', 'stridence'),
+            'url'     => home_url('/klassikaal/'),
+        ]);
+        ?>
 
-    <?php endif; ?>
-
-    <!-- Enrollment Side Panel -->
-    <?php if (!empty($enrollments)) : ?>
-        <?php stridence_template_part('templates/dashboard/partials/panel-enrollment'); ?>
     <?php endif; ?>
 </div>

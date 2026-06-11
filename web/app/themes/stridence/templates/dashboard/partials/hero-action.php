@@ -1,9 +1,11 @@
 <?php
 /**
- * Hero Action Partial
+ * Hero Action Partial — Helder Tij next-step band.
  *
- * Context-dependent hero card for the dashboard home screen.
- * Renders different content based on the hero type resolved by UserDashboardService.
+ * Single most important next step for the dashboard home screen, rendered
+ * as the tinted band from the design sheet: uppercase eyebrow, bold title,
+ * muted sub line, primary CTA. Content branches per hero type resolved by
+ * UserDashboardService::resolveHero() — data shape unchanged.
  *
  * @param array $args {
  *     @type array $hero {
@@ -26,169 +28,99 @@ if (!$hero || empty($hero['type']) || empty($hero['data'])) {
 $type = $hero['type'];
 $data = $hero['data'];
 
-// Hero badge config per type
-$badge_config = match ($type) {
-    'upcoming_session' => [
-        'icon' => 'calendar',
-        'bg'   => 'bg-info/10',
-        'text' => 'text-info',
-    ],
-    'action_required' => [
-        'icon' => 'alert-circle',
-        'bg'   => 'bg-warning/10',
-        'text' => 'text-warning',
-    ],
-    'continue_course' => [
-        'icon' => 'trending-up',
-        'bg'   => 'bg-primary/10',
-        'text' => 'text-primary',
-    ],
-    'active_enrollment' => [
-        'icon' => 'book-open',
-        'bg'   => 'bg-primary/10',
-        'text' => 'text-primary',
-    ],
-    'certificate_ready' => [
-        'icon' => 'award',
-        'bg'   => 'bg-success/10',
-        'text' => 'text-success',
-    ],
-    default => ['icon' => 'info', 'bg' => 'bg-primary/10', 'text' => 'text-primary'],
-};
+$title    = (string) ($data['course_title'] ?? '');
+$subParts = [];
+$cta      = null; // ['url' => string, 'label' => string, 'external' => bool]
+
+switch ($type) {
+    case 'upcoming_session':
+        $isToday = ($data['date'] ?? '') === date('Y-m-d');
+        $eyebrow = $isToday ? __('Vandaag', 'stridence') : __('Binnenkort', 'stridence');
+        if (!empty($data['date'])) {
+            $subParts[] = stride_format_date($data['date']);
+        }
+        if (!empty($data['start_time'])) {
+            $time = $data['start_time'];
+            if (!empty($data['end_time'])) {
+                $time .= ' – ' . $data['end_time'];
+            }
+            $subParts[] = $time;
+        }
+        if (!empty($data['venue'])) {
+            $subParts[] = $data['venue'];
+        }
+        break;
+
+    case 'action_required':
+        $eyebrow = __('Actie vereist', 'stridence');
+        if (!empty($data['label'])) {
+            $subParts[] = $data['label'];
+        }
+        if (!empty($data['url'])) {
+            $cta = [
+                'url'   => $data['url'],
+                'label' => !empty($data['label']) ? $data['label'] : __('Voltooien', 'stridence'),
+            ];
+        }
+        break;
+
+    case 'continue_course':
+        $eyebrow    = __('Ga verder', 'stridence');
+        $subParts[] = $data['format_label'] ?? __('Online', 'stridence');
+        if (($data['total_lessons'] ?? 0) > 0) {
+            $subParts[] = sprintf(
+                __('%d van %d lessen', 'stridence'),
+                (int) ($data['completed_lessons'] ?? 0),
+                (int) $data['total_lessons'],
+            );
+        }
+        if (!empty($data['course_url'])) {
+            $cta = ['url' => $data['course_url'], 'label' => __('Verder leren', 'stridence')];
+        }
+        break;
+
+    case 'active_enrollment':
+        $eyebrow = __('Actieve opleiding', 'stridence');
+        if (!empty($data['start_date'])) {
+            $subParts[] = stride_format_date($data['start_date']);
+        }
+        break;
+
+    case 'certificate_ready':
+        $eyebrow = __('Gefeliciteerd!', 'stridence');
+        if (!empty($data['certificate_url'])) {
+            $cta = [
+                'url'      => $data['certificate_url'],
+                'label'    => __('Download certificaat', 'stridence'),
+                'external' => true,
+            ];
+        }
+        break;
+
+    default:
+        return;
+}
 ?>
 
-<?php if ($type === 'upcoming_session') : ?>
-    <?php
-    $isToday = ($data['date'] ?? '') === date('Y-m-d');
-    $label   = $isToday ? __('Vandaag', 'stridence') : __('Binnenkort', 'stridence');
-    ?>
-    <div class="dash-card-hero">
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold <?php echo esc_attr($badge_config['bg'] . ' ' . $badge_config['text']); ?> mb-3">
-            <?php echo stridence_icon($badge_config['icon'], 'w-3.5 h-3.5'); ?>
-            <?php echo esc_html($label); ?>
-        </span>
-        <h3 class="font-heading text-lg font-bold text-text mb-2">
-            <?php echo esc_html($data['course_title'] ?? ''); ?>
-        </h3>
-        <div class="flex flex-wrap gap-4 text-sm text-text-muted">
-            <?php if (!empty($data['date'])) : ?>
-                <span class="flex items-center gap-1.5">
-                    <?php echo stridence_icon('calendar', 'w-4 h-4'); ?>
-                    <?php echo esc_html(stride_format_date($data['date'])); ?>
-                </span>
-            <?php endif; ?>
-            <?php if (!empty($data['start_time'])) : ?>
-                <span class="flex items-center gap-1.5">
-                    <?php echo stridence_icon('clock', 'w-4 h-4'); ?>
-                    <?php echo esc_html($data['start_time']); ?>
-                    <?php if (!empty($data['end_time'])) : ?>
-                        – <?php echo esc_html($data['end_time']); ?>
-                    <?php endif; ?>
-                </span>
-            <?php endif; ?>
-            <?php if (!empty($data['venue'])) : ?>
-                <span class="flex items-center gap-1.5">
-                    <?php echo stridence_icon('map-pin', 'w-4 h-4'); ?>
-                    <?php echo esc_html($data['venue']); ?>
-                </span>
-            <?php endif; ?>
+<div class="bg-badge-online-bg rounded-[16px] p-6 lg:p-7 flex flex-wrap items-center justify-between gap-5">
+    <div class="flex-1 min-w-[240px]">
+        <div class="text-[12px] font-bold uppercase tracking-wide text-badge-online-text">
+            <?php echo esc_html($eyebrow); ?>
         </div>
-    </div>
-
-<?php elseif ($type === 'action_required') : ?>
-    <div class="dash-card-hero">
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold <?php echo esc_attr($badge_config['bg'] . ' ' . $badge_config['text']); ?> mb-3">
-            <?php echo stridence_icon($badge_config['icon'], 'w-3.5 h-3.5'); ?>
-            <?php esc_html_e('Actie vereist', 'stridence'); ?>
-        </span>
-        <h3 class="font-heading text-lg font-bold text-text mb-1">
-            <?php echo esc_html($data['course_title'] ?? ''); ?>
+        <h3 class="text-[19px] font-bold text-text leading-snug mt-2">
+            <?php echo esc_html($title); ?>
         </h3>
-        <p class="text-sm text-text-muted mb-4">
-            <?php echo esc_html($data['label'] ?? ''); ?>
-        </p>
-        <?php if (!empty($data['url'])) : ?>
-            <a href="<?php echo esc_url($data['url']); ?>" class="btn-primary btn-sm">
-                <?php echo esc_html($data['label'] ?? __('Voltooien', 'stridence')); ?>
-            </a>
-        <?php endif; ?>
-    </div>
-
-<?php elseif ($type === 'continue_course') : ?>
-    <?php $progress = (int) ($data['progress'] ?? 0); ?>
-    <div class="dash-card-hero">
-        <div class="flex items-start justify-between gap-4">
-            <div class="flex-1 min-w-0">
-                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold <?php echo esc_attr($badge_config['bg'] . ' ' . $badge_config['text']); ?> mb-3">
-                    <?php echo stridence_icon($badge_config['icon'], 'w-3.5 h-3.5'); ?>
-                    <?php esc_html_e('Ga verder', 'stridence'); ?>
-                </span>
-                <h3 class="font-heading text-lg font-bold text-text mb-1">
-                    <?php echo esc_html($data['course_title'] ?? ''); ?>
-                </h3>
-                <p class="text-sm text-text-muted mb-4">
-                    <?php echo esc_html($data['format_label'] ?? __('Online', 'stridence')); ?>
-                    <?php if (($data['total_lessons'] ?? 0) > 0) : ?>
-                        — <?php echo esc_html(sprintf(
-                            __('%d van %d lessen', 'stridence'),
-                            $data['completed_lessons'] ?? 0,
-                            $data['total_lessons'],
-                        )); ?>
-                    <?php endif; ?>
-                </p>
-                <?php if (!empty($data['course_url'])) : ?>
-                    <a href="<?php echo esc_url($data['course_url']); ?>" class="btn-primary btn-sm">
-                        <?php esc_html_e('Verder leren', 'stridence'); ?>
-                    </a>
-                <?php endif; ?>
-            </div>
-            <?php if ($progress > 0) : ?>
-                <?php
-                stridence_template_part('templates/dashboard/partials/progress-ring', null, [
-                    'progress' => $progress,
-                    'size'     => 64,
-                ]);
-                ?>
-            <?php endif; ?>
-        </div>
-    </div>
-
-<?php elseif ($type === 'active_enrollment') : ?>
-    <div class="dash-card-hero">
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold <?php echo esc_attr($badge_config['bg'] . ' ' . $badge_config['text']); ?> mb-3">
-            <?php echo stridence_icon($badge_config['icon'], 'w-3.5 h-3.5'); ?>
-            <?php esc_html_e('Actieve opleiding', 'stridence'); ?>
-        </span>
-        <h3 class="font-heading text-lg font-bold text-text mb-2">
-            <?php echo esc_html($data['course_title'] ?? ''); ?>
-        </h3>
-        <?php if (!empty($data['start_date'])) : ?>
-            <p class="text-sm text-text-muted flex items-center gap-1.5">
-                <?php echo stridence_icon('calendar', 'w-4 h-4'); ?>
-                <?php echo esc_html(stride_format_date($data['start_date'])); ?>
+        <?php if (!empty($subParts)) : ?>
+            <p class="text-[14px] text-text-muted mt-1">
+                <?php echo esc_html(implode(' · ', $subParts)); ?>
             </p>
         <?php endif; ?>
     </div>
-
-<?php elseif ($type === 'certificate_ready') : ?>
-    <div class="dash-card-hero">
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold <?php echo esc_attr($badge_config['bg'] . ' ' . $badge_config['text']); ?> mb-3">
-            <?php echo stridence_icon($badge_config['icon'], 'w-3.5 h-3.5'); ?>
-            <?php esc_html_e('Gefeliciteerd!', 'stridence'); ?>
-        </span>
-        <h3 class="font-heading text-lg font-bold text-text mb-2">
-            <?php echo esc_html($data['course_title'] ?? ''); ?>
-        </h3>
-        <?php $certUrl = $data['certificate_url'] ?? ''; ?>
-        <?php if ($certUrl) : ?>
-            <a href="<?php echo esc_url($certUrl); ?>"
-               class="btn-primary btn-sm"
-               target="_blank"
-               rel="noopener">
-                <?php echo stridence_icon('download', 'w-4 h-4 mr-1'); ?>
-                <?php esc_html_e('Download certificaat', 'stridence'); ?>
-            </a>
-        <?php endif; ?>
-    </div>
-
-<?php endif; ?>
+    <?php if ($cta) : ?>
+        <a href="<?php echo esc_url($cta['url']); ?>"
+           class="btn-primary shrink-0"
+           <?php echo !empty($cta['external']) ? 'target="_blank" rel="noopener"' : ''; ?>>
+            <?php echo esc_html($cta['label']); ?>
+        </a>
+    <?php endif; ?>
+</div>

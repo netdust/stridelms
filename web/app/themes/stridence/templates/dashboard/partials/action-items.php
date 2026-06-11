@@ -1,9 +1,16 @@
 <?php
 /**
- * Dashboard action items — pending enrollment and post-course tasks.
+ * Dashboard "Acties nodig" card — Helder Tij.
  *
- * Matches the home tab action item pattern: colored border + background
- * with inline Tailwind utilities.
+ * White card with 17px/700 title and one row per pending action:
+ * 14px/700 title + 13px muted sub + small primary CTA. Existing
+ * action URLs/labels/types are unchanged; rows beyond the first three
+ * stay behind the existing expand/collapse Alpine state.
+ *
+ * Note: the design sheet's segmented control ("Wacht op …"/"Meldingen")
+ * is not rendered here — the home payload carries a single flat action
+ * list (no meldingen/wachten buckets), and adding those would be new
+ * data flow. The admin dashboard owns that tabbed variant.
  *
  * @var array $args {
  *     @type array $items Action items from UserDashboardService::buildActionItems()
@@ -19,46 +26,62 @@ $items = $args['items'] ?? [];
 if (empty($items)) {
     return;
 }
-?>
-<section class="mb-6">
-    <div class="space-y-2">
-        <?php foreach ($items as $item) :
-            $type = $item['type'] ?? '';
 
-            // Match home tab action styling per type
-            if ($type === 'online_lesson') {
-                $borderClass = 'border-blue-200 bg-blue-50/50 hover:border-blue-300 hover:bg-blue-50';
-                $iconColor = 'text-blue-500';
-                $chevronColor = 'text-blue-400';
-                $icon = 'play';
-            } elseif ($type === 'session_selection') {
-                $borderClass = 'border-violet-200 bg-violet-50/50 hover:border-violet-300 hover:bg-violet-50';
-                $iconColor = 'text-violet-500';
-                $chevronColor = 'text-violet-400';
-                $icon = 'list';
-            } else {
-                $borderClass = 'border-status-warning bg-status-warning-subtle hover:border-status-warning hover:bg-status-warning-subtle';
-                $iconColor = 'text-status-warning';
-                $chevronColor = 'text-status-warning';
-                $icon = 'alert-circle';
+$visibleCount = 3;
+$hasMore      = count($items) > $visibleCount;
+
+// CTA copy per existing action type — reuses the labels the edition CTA
+// and online rows already use elsewhere on the dashboard.
+$ctaLabels = [
+    'session_selection' => __('Sessiekeuze maken', 'stridence'),
+    'post_course'       => __('Vorming afronden', 'stridence'),
+    'enrollment'        => __('Inschrijving voltooien', 'stridence'),
+    'online_lesson'     => __('Ga verder', 'stridence'),
+];
+?>
+
+<section class="bg-surface-card rounded-[16px] shadow-card p-6 flex flex-col gap-4"
+         <?php echo $hasMore ? 'x-data="{ expanded: false }"' : ''; ?>>
+    <h3 class="text-[17px] font-bold text-text">
+        <?php esc_html_e('Acties nodig', 'stridence'); ?>
+    </h3>
+
+    <div class="flex flex-col gap-2">
+        <?php foreach ($items as $i => $item) :
+            $type   = $item['type'] ?? '';
+            $hidden = $hasMore && $i >= $visibleCount;
+            $xAttr  = $hidden ? 'x-show="expanded" x-cloak' : '';
+
+            $sub   = (string) ($item['label'] ?? '');
+            $total = (int) ($item['total_tasks'] ?? 0);
+            $done  = (int) ($item['done_tasks'] ?? 0);
+            if ($total > 0) {
+                $sub .= ' · ' . $done . '/' . $total;
             }
             ?>
-            <a href="<?php echo esc_url($item['url']); ?>"
-               class="flex items-center gap-2.5 rounded-lg border <?php echo $borderClass; ?> px-3 py-2 transition-colors">
-                <?php echo stridence_icon($icon, 'w-4 h-4 ' . $iconColor . ' shrink-0'); ?>
-                <span class="text-sm font-medium text-text truncate"><?php echo esc_html($item['course_title']); ?></span>
-                <span class="text-xs text-text-muted shrink-0 ml-auto">
-                    <?php echo esc_html($item['label']); ?>
-                    <?php
-                        $total = (int) ($item['total_tasks'] ?? 0);
-            $done  = (int) ($item['done_tasks'] ?? 0);
-            if ($total > 0) :
-                ?>
-                        &middot; <?php echo esc_html($done . '/' . $total); ?>
+            <div class="bg-surface rounded-[12px] p-4 flex justify-between items-center gap-3.5 flex-wrap" <?php echo $xAttr; ?>>
+                <div class="flex-1 min-w-[200px]">
+                    <div class="text-[14px] font-bold text-text leading-snug">
+                        <?php echo esc_html($item['course_title'] ?? ''); ?>
+                    </div>
+                    <?php if ($sub !== '') : ?>
+                        <div class="text-[13px] text-text-muted mt-0.5">
+                            <?php echo esc_html($sub); ?>
+                        </div>
                     <?php endif; ?>
-                </span>
-                <?php echo stridence_icon('chevron-right', 'w-4 h-4 ' . $chevronColor . ' shrink-0'); ?>
-            </a>
+                </div>
+                <a href="<?php echo esc_url($item['url'] ?? ''); ?>" class="btn-primary btn-sm shrink-0">
+                    <?php echo esc_html($ctaLabels[$type] ?? __('Voltooien', 'stridence')); ?>
+                </a>
+            </div>
         <?php endforeach; ?>
     </div>
+
+    <?php if ($hasMore) : ?>
+        <button @click="expanded = !expanded"
+                class="text-sm text-primary hover:underline cursor-pointer self-start">
+            <span x-show="!expanded"><?php echo esc_html(sprintf(__('Toon alle %d acties', 'stridence'), count($items))); ?></span>
+            <span x-show="expanded" x-cloak><?php esc_html_e('Minder tonen', 'stridence'); ?></span>
+        </button>
+    <?php endif; ?>
 </section>
