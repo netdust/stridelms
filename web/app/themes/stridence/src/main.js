@@ -14,6 +14,7 @@ import collapse from '@alpinejs/collapse';
 // Component factories (extracted so Vitest can import them without booting Alpine)
 import { createToastStore } from './js/toast-store.js';
 import { contentTabs } from './js/content-tabs.js';
+import { sidebarRail } from './js/sidebar-rail.js';
 
 // Register Alpine plugins
 Alpine.plugin(collapse);
@@ -36,6 +37,12 @@ Alpine.data('toastStore', createToastStore);
  * Usage: x-data="contentTabs(['omschrijving','programma','praktisch','lesgever'])"
  */
 Alpine.data('contentTabs', contentTabs);
+
+/**
+ * Dashboard sidebar with collapsible rail (factory in src/js/sidebar-rail.js)
+ * Usage: x-data="sidebarRail()"
+ */
+Alpine.data('sidebarRail', sidebarRail);
 
 /**
  * Dashboard tabs with URL state
