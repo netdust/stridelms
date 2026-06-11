@@ -21,8 +21,8 @@ if ($percentage <= 0) {
 $percentage = min(100, $percentage);
 ?>
 <div class="mt-3">
-    <div class="h-1 bg-surface-alt rounded-full overflow-hidden">
-        <div class="h-full <?php echo $percentage >= 100 ? 'bg-success' : 'bg-primary'; ?> rounded-full transition-all duration-500"
+    <div class="h-2 rounded-full bg-surface-alt overflow-hidden">
+        <div class="h-full <?php echo $percentage >= 100 ? 'bg-success' : 'bg-primary'; ?> rounded-full transition-[width] duration-[700ms]"
              style="width: <?php echo esc_attr((string) $percentage); ?>%"></div>
     </div>
 </div>

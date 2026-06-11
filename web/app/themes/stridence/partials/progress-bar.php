@@ -26,19 +26,19 @@ $text_color = $is_complete ? 'text-success' : 'text-text';
 $bar_color  = $is_complete ? 'bg-success' : 'bg-primary';
 
 ?>
-<div class="space-y-1">
-    <div class="flex justify-between text-sm">
-        <span class="text-text-muted"><?php echo esc_html($label); ?></span>
-        <span class="font-medium <?php echo esc_attr($text_color); ?>">
+<div class="space-y-1.5">
+    <div class="flex justify-between items-center">
+        <span class="text-[12px] font-bold text-text-muted"><?php echo esc_html($label); ?></span>
+        <span class="text-[12px] font-bold tabular-nums <?php echo esc_attr($text_color); ?>">
             <?php echo esc_html($attended); ?>/<?php echo esc_html($required); ?>
             <?php if ($is_complete): ?>
                 <?php echo stridence_icon('check-circle', 'w-4 h-4 inline-block ml-1'); ?>
             <?php endif; ?>
         </span>
     </div>
-    <div class="h-2 bg-border rounded-full overflow-hidden">
+    <div class="h-2 rounded-full bg-surface-alt overflow-hidden">
         <div
-            class="h-full rounded-full <?php echo esc_attr($bar_color); ?>"
+            class="h-full <?php echo esc_attr($bar_color); ?> rounded-full transition-[width] duration-[700ms]"
             style="width: <?php echo esc_attr($percentage); ?>%"
         ></div>
     </div>
