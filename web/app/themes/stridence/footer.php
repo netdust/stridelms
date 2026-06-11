@@ -20,7 +20,7 @@ defined('ABSPATH') || exit;
                 <div class="flex flex-col gap-2.5">
                     <!-- Wordmark -->
                     <div class="text-lg font-extrabold tracking-tight text-text">
-                        <?php bloginfo('name'); ?><span class="text-primary">.</span>
+                        <?php echo esc_html(get_bloginfo('name')); ?><span class="text-primary">.</span>
                     </div>
                     <!-- Address / contact info from site description -->
                     <div class="text-[13px] text-text-faint leading-relaxed">
@@ -54,7 +54,7 @@ defined('ABSPATH') || exit;
 
             <!-- Bottom bar: copyright + legal links -->
             <div class="mt-8 pt-6 border-t border-border-soft flex flex-wrap items-center justify-between gap-3 text-[13px] text-text-faint">
-                <span>&copy; <?php echo esc_html(date('Y')); ?> <?php bloginfo('name'); ?></span>
+                <span>&copy; <?php echo esc_html(date('Y')); ?> <?php echo esc_html(get_bloginfo('name')); ?></span>
                 <div class="flex flex-wrap gap-4">
                     <a href="<?php echo esc_url(home_url('/privacy/')); ?>" class="hover:text-text"><?php esc_html_e('Privacybeleid', 'stridence'); ?></a>
                     <a href="<?php echo esc_url(home_url('/voorwaarden/')); ?>" class="hover:text-text"><?php esc_html_e('Algemene voorwaarden', 'stridence'); ?></a>
