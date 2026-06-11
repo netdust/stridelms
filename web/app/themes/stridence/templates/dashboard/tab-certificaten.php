@@ -150,93 +150,58 @@ foreach ($enrolled_course_ids as $courseId) {
 usort($certificates, fn($a, $b) => strcmp($b['completed_at'], $a['completed_at']));
 ?>
 
-<div class="space-y-8">
-    <section>
-        <?php if (!empty($certificates)) : ?>
-            <div class="grid gap-4 sm:grid-cols-2">
-                <?php foreach ($certificates as $cert) : ?>
-                    <div class="bg-surface-card rounded-xl border border-border shadow-sm overflow-hidden">
-                        <!-- Certificate Header -->
-                        <div class="p-4 bg-gradient-to-r from-primary/8 to-primary/3">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                                    <?php echo stridence_icon('award', 'w-5 h-5 text-primary'); ?>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <h4 class="font-medium text-text text-sm truncate">
-                                        <?php echo esc_html($cert['course_title']); ?>
-                                    </h4>
-                                    <span class="text-xs text-text-muted truncate block">
-                                        <?php echo esc_html($cert['edition_title']); ?>
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Certificate Details -->
-                        <div class="p-4 space-y-3">
-                            <?php if ($cert['completed_at']) : ?>
-                                <div class="flex items-center gap-2 text-xs text-text-muted">
-                                    <?php echo stridence_icon('check-circle', 'w-3.5 h-3.5 text-success'); ?>
-                                    <span>
-                                        <?php
-                                        printf(
-                                            /* translators: %s: completion date */
-                                            esc_html__('Behaald op %s', 'stridence'),
-                                            esc_html(stride_format_date($cert['completed_at'])),
-                                        );
-                                ?>
-                                    </span>
-                                </div>
-                            <?php endif; ?>
-
-                            <?php if ($cert['has_certificate']) : ?>
-                                <a href="<?php echo esc_url($cert['certificate_url']); ?>"
-                                   class="btn-ghost btn-sm w-full"
-                                   target="_blank"
-                                   rel="noopener">
-                                    <?php echo stridence_icon('download', 'w-4 h-4 mr-1'); ?>
-                                    <?php esc_html_e('Download certificaat', 'stridence'); ?>
-                                </a>
-                            <?php else : ?>
-                                <div class="flex items-center gap-2 text-xs text-status-warning bg-status-warning-subtle rounded-lg px-3 py-2">
-                                    <?php echo stridence_icon('clock', 'w-3.5 h-3.5'); ?>
-                                    <span><?php esc_html_e('Certificaat wordt gegenereerd...', 'stridence'); ?></span>
-                                </div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-        <?php else : ?>
-            <?php
-            stridence_template_part('partials/empty-state', null, [
-                'icon'    => 'award',
-                'title'   => __('Nog geen certificaten', 'stridence'),
-                'message' => __('Je hebt nog geen certificaten behaald. Rond een opleiding succesvol af om je eerste certificaat te verdienen.', 'stridence'),
-                'action'  => __('Bekijk mijn inschrijvingen', 'stridence'),
-                'url'     => add_query_arg('tab', 'inschrijvingen', get_permalink()),
-            ]);
-            ?>
-        <?php endif; ?>
-    </section>
-
-    <!-- Certificate Info -->
+<div class="space-y-3">
     <?php if (!empty($certificates)) : ?>
-        <section class="bg-surface-card rounded-xl border border-border shadow-sm p-4">
-            <div class="flex items-start gap-3">
-                <div class="shrink-0 mt-0.5">
-                    <?php echo stridence_icon('info', 'w-5 h-5 text-primary'); ?>
+        <?php foreach ($certificates as $cert) : ?>
+            <div class="flex items-center gap-3.5 bg-surface-card rounded-[12px] shadow-card p-4 flex-wrap">
+                <!-- ✓ tile: 38×38, badge-online palette, rounded-[10px] -->
+                <span class="w-[38px] h-[38px] rounded-[10px] bg-badge-online-bg text-badge-online-text flex items-center justify-center shrink-0 text-[14px] font-extrabold">
+                    ✓
+                </span>
+
+                <!-- Title + date -->
+                <div class="flex-1 min-w-[200px]">
+                    <div class="text-[14px] font-bold text-text leading-snug">
+                        <?php echo esc_html($cert['course_title']); ?>
+                    </div>
+                    <?php if ($cert['completed_at']) : ?>
+                        <div class="text-[12px] text-text-faint mt-[2px]">
+                            <?php
+                            printf(
+                                /* translators: %s: completion date */
+                                esc_html__('behaald op %s', 'stridence'),
+                                esc_html(stride_format_date($cert['completed_at'])),
+                            );
+                            ?>
+                        </div>
+                    <?php endif; ?>
                 </div>
-                <div class="text-sm text-text-muted space-y-1">
-                    <span class="font-medium text-text block">
-                        <?php esc_html_e('Over je certificaten', 'stridence'); ?>
+
+                <!-- Download PDF button (existing link mechanism) -->
+                <?php if ($cert['has_certificate']) : ?>
+                    <a href="<?php echo esc_url($cert['certificate_url']); ?>"
+                       class="btn-ghost btn-sm shrink-0"
+                       target="_blank"
+                       rel="noopener">
+                        <?php esc_html_e('Download PDF', 'stridence'); ?>
+                    </a>
+                <?php else : ?>
+                    <span class="text-[12px] text-text-muted shrink-0">
+                        <?php esc_html_e('Certificaat wordt gegenereerd...', 'stridence'); ?>
                     </span>
-                    <span class="block">
-                        <?php esc_html_e('Certificaten worden automatisch gegenereerd zodra je een opleiding hebt afgerond. Je kunt ze hier downloaden en gebruiken als bewijs van je behaalde competenties.', 'stridence'); ?>
-                    </span>
-                </div>
+                <?php endif; ?>
             </div>
-        </section>
+        <?php endforeach; ?>
+
+    <?php else : ?>
+        <?php
+        stridence_template_part('partials/empty-state', null, [
+            'icon'    => 'award',
+            'title'   => __('Nog geen certificaten', 'stridence'),
+            'message' => __('Je hebt nog geen certificaten behaald. Rond een opleiding succesvol af om je eerste certificaat te verdienen.', 'stridence'),
+            'action'  => __('Bekijk mijn inschrijvingen', 'stridence'),
+            'url'     => add_query_arg('tab', 'inschrijvingen', get_permalink()),
+        ]);
+        ?>
     <?php endif; ?>
 </div>

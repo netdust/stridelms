@@ -144,72 +144,90 @@ $all_quotes = array_merge($quoteData['active'], $quoteData['cancelled']);
 
 <div class="space-y-8">
     <!-- Certificaten -->
-    <div>
-        <h3 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
+    <section>
+        <h3 class="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-3">
             <?php esc_html_e('Certificaten', 'stridence'); ?>
         </h3>
+
         <?php if (!empty($certificates)) : ?>
-            <div class="bg-surface-card rounded-xl border border-border shadow-sm">
+            <div class="space-y-[10px]">
                 <?php foreach ($certificates as $cert) : ?>
-                    <div class="flex items-center gap-4 px-4 py-3.5 border-b border-border/60 last:border-b-0 transition-colors">
-                        <?php echo stridence_icon('award', 'w-5 h-5 text-accent shrink-0'); ?>
-                        <div class="flex-1 min-w-0">
-                            <span class="text-sm font-medium text-text truncate block">
+                    <div class="flex items-center gap-3.5 bg-surface-card rounded-[12px] shadow-card p-4 flex-wrap">
+                        <!-- ✓ tile: badge-online palette -->
+                        <span class="w-[38px] h-[38px] rounded-[10px] bg-badge-online-bg text-badge-online-text flex items-center justify-center shrink-0 text-[14px] font-extrabold">
+                            ✓
+                        </span>
+
+                        <div class="flex-1 min-w-[200px]">
+                            <div class="text-[14px] font-bold text-text leading-snug">
                                 <?php echo esc_html($cert['course_title']); ?>
-                            </span>
+                            </div>
                             <?php if ($cert['completed_at']) : ?>
-                                <span class="text-xs text-text-muted block">
+                                <div class="text-[12px] text-text-faint mt-[2px]">
                                     <?php
                                     printf(
+                                        /* translators: %s: completion date */
                                         esc_html__('Behaald op %s', 'stridence'),
                                         esc_html(stride_format_date($cert['completed_at'])),
                                     );
-                                ?>
-                                </span>
+                                    ?>
+                                </div>
                             <?php endif; ?>
                         </div>
+
                         <a href="<?php echo esc_url($cert['certificate_url']); ?>"
                            target="_blank"
                            rel="noopener"
-                           class="btn-ghost btn-sm">
-                            <?php echo stridence_icon('download', 'w-4 h-4'); ?>
-                            PDF
+                           class="btn-ghost btn-sm shrink-0">
+                            <?php esc_html_e('Download', 'stridence'); ?>
                         </a>
                     </div>
                 <?php endforeach; ?>
             </div>
         <?php else : ?>
-            <div class="text-sm text-text-muted px-4 py-6 text-center bg-surface-card rounded-xl border border-border">
-                <?php esc_html_e('Nog geen certificaten beschikbaar', 'stridence'); ?>
-            </div>
+            <?php
+            stridence_template_part('partials/empty-state', null, [
+                'icon'    => 'award',
+                'title'   => __('Nog geen certificaten', 'stridence'),
+                'message' => __('Rond een opleiding af om je certificaten hier te zien.', 'stridence'),
+            ]);
+            ?>
         <?php endif; ?>
-    </div>
+    </section>
 
     <!-- Offertes -->
-    <div>
-        <h3 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
+    <section>
+        <h3 class="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-3">
             <?php esc_html_e('Offertes', 'stridence'); ?>
         </h3>
+
         <?php if (!empty($all_quotes)) : ?>
-            <div class="bg-surface-card rounded-xl border border-border shadow-sm">
+            <div class="space-y-[10px]">
                 <?php foreach ($all_quotes as $quote) : ?>
-                    <div class="flex items-center gap-4 px-4 py-3.5 border-b border-border/60 last:border-b-0 transition-colors">
-                        <?php echo stridence_icon('file-text', 'w-5 h-5 text-text-muted shrink-0'); ?>
-                        <div class="flex-1 min-w-0">
-                            <span class="text-sm font-medium text-text truncate block">
+                    <div class="flex items-center gap-3.5 bg-surface-card rounded-[12px] shadow-card p-4 flex-wrap">
+                        <!-- PDF tile: surface-alt + file icon -->
+                        <span class="w-[38px] h-[38px] rounded-[10px] bg-surface-alt text-text-muted flex items-center justify-center shrink-0 text-[10px] font-extrabold">
+                            PDF
+                        </span>
+
+                        <div class="flex-1 min-w-[200px]">
+                            <div class="text-[14px] font-bold text-text leading-snug">
                                 <?php
                                 printf(
+                                    /* translators: %s: quote number */
                                     esc_html__('Offerte #%s', 'stridence'),
                                     esc_html($quote['quote_number']),
                                 );
-                    ?>
-                            </span>
-                            <?php if ($quote['created_at']) : ?>
-                                <span class="text-xs text-text-muted block">
-                                    <?php echo esc_html(stride_format_date($quote['created_at'])); ?>
-                                </span>
-                            <?php endif; ?>
+                                ?>
+                            </div>
+                            <div class="text-[12px] text-text-faint mt-[2px]">
+                                <?php echo esc_html($quote['title']); ?>
+                                <?php if ($quote['created_at']) : ?>
+                                    · <?php echo esc_html(stride_format_date($quote['created_at'])); ?>
+                                <?php endif; ?>
+                            </div>
                         </div>
+
                         <a href="<?php echo esc_url(add_query_arg([
                             'action'   => 'stride_quote_pdf',
                             'quote_id' => $quote['id'],
@@ -217,27 +235,34 @@ $all_quotes = array_merge($quoteData['active'], $quoteData['cancelled']);
                         ], admin_url('admin-ajax.php'))); ?>"
                            target="_blank"
                            rel="noopener"
-                           class="btn-ghost btn-sm">
-                            <?php echo stridence_icon('download', 'w-4 h-4'); ?>
-                            PDF
+                           class="btn-ghost btn-sm shrink-0">
+                            <?php esc_html_e('Download', 'stridence'); ?>
                         </a>
                     </div>
                 <?php endforeach; ?>
             </div>
         <?php else : ?>
-            <div class="text-sm text-text-muted px-4 py-6 text-center bg-surface-card rounded-xl border border-border">
-                <?php esc_html_e('Nog geen offertes beschikbaar', 'stridence'); ?>
-            </div>
+            <?php
+            stridence_template_part('partials/empty-state', null, [
+                'icon'    => 'file-text',
+                'title'   => __('Nog geen offertes', 'stridence'),
+                'message' => __('Je offertes verschijnen hier zodra ze beschikbaar zijn.', 'stridence'),
+            ]);
+            ?>
         <?php endif; ?>
-    </div>
+    </section>
 
     <!-- Facturen (future placeholder) -->
-    <div>
-        <h3 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
+    <section>
+        <h3 class="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-3">
             <?php esc_html_e('Facturen', 'stridence'); ?>
         </h3>
-        <div class="text-sm text-text-muted px-4 py-6 text-center bg-surface-card rounded-xl border border-border">
-            <?php esc_html_e('Nog geen facturen beschikbaar', 'stridence'); ?>
-        </div>
-    </div>
+        <?php
+        stridence_template_part('partials/empty-state', null, [
+            'icon'    => 'file',
+            'title'   => __('Nog geen facturen', 'stridence'),
+            'message' => __('Facturen worden hier weergegeven zodra ze beschikbaar zijn.', 'stridence'),
+        ]);
+        ?>
+    </section>
 </div>
