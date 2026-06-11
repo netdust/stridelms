@@ -19,7 +19,7 @@ use Stride\Domain\SessionType;
 $session    = $args['session'] ?? null;
 $attendance = $args['attendance'] ?? null;
 $selected   = $args['selected'] ?? false;
-$not_chosen = $args['not_chosen'] ?? false;
+// Call sites (single-vad_edition.php) still pass 'not_chosen' — intentionally unrendered pending Phase 5.
 
 if (!$session) {
     return;
@@ -66,8 +66,8 @@ $row_id = 'session-' . ($session->id ?? wp_unique_id());
 $type_config = match ($type) {
     SessionType::InPerson  => ['icon' => 'map-pin',   'badge' => 'Fysiek',      'badge_class' => 'bg-blue-100 text-blue-700'],
     SessionType::Webinar   => ['icon' => 'wifi',       'badge' => 'Webinar',     'badge_class' => 'bg-purple-100 text-purple-700'],
-    SessionType::Online    => ['icon' => 'book-open',  'badge' => 'Online',      'badge_class' => 'bg-status-success-subtle text-status-success'],
-    SessionType::Assignment => ['icon' => 'file-text', 'badge' => 'Opdracht',    'badge_class' => 'bg-status-warning-subtle text-status-warning'],
+    SessionType::Online    => ['icon' => 'book-open',  'badge' => 'Online',      'badge_class' => 'bg-badge-online-bg text-badge-online-text'],
+    SessionType::Assignment => ['icon' => 'file-text', 'badge' => 'Opdracht',    'badge_class' => 'bg-badge-few-bg text-badge-few-text'],
 };
 
 ?>
@@ -130,16 +130,14 @@ $type_config = match ($type) {
                 <?php if ($title) : ?>
                     <div class="text-[14px] font-bold text-text truncate mb-0.5"><?php echo esc_html($title); ?></div>
                 <?php endif; ?>
-                <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                    <?php if ($type === SessionType::Webinar) : ?>
+                <?php // Date is shown in the day/month block — no redundant formatted-date sub-line (review I-2). ?>
+                <?php if ($type === SessionType::Webinar) : ?>
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5">
                         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium <?php echo esc_attr($type_config['badge_class']); ?> shrink-0">
                             <?php echo esc_html($type_config['badge']); ?>
                         </span>
-                    <?php endif; ?>
-                    <?php if ($formatted_date) : ?>
-                        <span class="text-[13px] text-text-muted"><?php echo esc_html($formatted_date); ?></span>
-                    <?php endif; ?>
-                </div>
+                    </div>
+                <?php endif; ?>
             </div>
             <!-- Right: time + location -->
             <div class="text-right shrink-0">
