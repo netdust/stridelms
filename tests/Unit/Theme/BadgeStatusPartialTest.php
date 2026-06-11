@@ -155,6 +155,37 @@ namespace Stride\Tests\Unit\Theme {
             $this->assertStringContainsString('Voltooi inschrijving', $html);
         }
 
+        public function testCompletingKeepsAlertIconAndFewVariant(): void
+        {
+            $html = $this->renderBadge(['status' => 'completing']);
+
+            $this->assertStringContainsString('alert-circle', $html);
+            $this->assertStringContainsString('bg-badge-few-bg', $html);
+            $this->assertStringContainsString('Rond af', $html);
+        }
+
+        public function testOpenWithZeroSpotsStaysOpenVariantNotFew(): void
+        {
+            // Boundary pin: spots=0 means "no spots data worth flagging" —
+            // the few-spots auto-detect only fires for 1..5, never 0.
+            $html = $this->renderBadge(['status' => 'open', 'spots' => 0]);
+
+            $this->assertStringContainsString('bg-badge-open-bg', $html);
+            $this->assertStringNotContainsString('bg-badge-few-bg', $html);
+            $this->assertStringNotContainsString('Nog ', $html);
+            $this->assertStringContainsString('Open voor inschrijving', $html);
+        }
+
+        public function testOpenWithSixSpotsStaysOpenVariantNotFew(): void
+        {
+            // Boundary pin: 5 is the last "few" value; 6 renders plain open.
+            $html = $this->renderBadge(['status' => 'open', 'spots' => 6]);
+
+            $this->assertStringContainsString('bg-badge-open-bg', $html);
+            $this->assertStringNotContainsString('bg-badge-few-bg', $html);
+            $this->assertStringNotContainsString('Nog ', $html);
+        }
+
         public function testOpenWithFewSpotsAutoDetectsFewVariantWithSpotCount(): void
         {
             $html = $this->renderBadge(['status' => 'open', 'spots' => 3]);
