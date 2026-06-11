@@ -34,7 +34,7 @@ $cta      = null; // ['url' => string, 'label' => string, 'external' => bool]
 
 switch ($type) {
     case 'upcoming_session':
-        $isToday = ($data['date'] ?? '') === date('Y-m-d');
+        $isToday = ($data['date'] ?? '') === wp_date('Y-m-d');
         $eyebrow = $isToday ? __('Vandaag', 'stridence') : __('Binnenkort', 'stridence');
         if (!empty($data['date'])) {
             $subParts[] = stride_format_date($data['date']);

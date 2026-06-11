@@ -144,7 +144,7 @@ $benefit_rows = [
                 <p class="text-xs text-text-muted">
                     <?php echo esc_html(sprintf(
                         __('Toegang tot %s', 'stridence'),
-                        stride_format_date(date('Y-m-d', $expiration_ts)),
+                        stride_format_date(wp_date('Y-m-d', $expiration_ts)),
                     )); ?>
                 </p>
             <?php endif; ?>
@@ -231,7 +231,7 @@ $benefit_rows = [
                         <span class="block text-xs mt-0.5">
                             <?php echo esc_html(sprintf(
                                 __('Vervalt op %s', 'stridence'),
-                                stride_format_date(date('Y-m-d', $expiration_ts)),
+                                stride_format_date(wp_date('Y-m-d', $expiration_ts)),
                             )); ?>
                         </span>
                     <?php endif; ?>
@@ -399,7 +399,7 @@ if ($has_info) :
                     <div class="flex justify-between">
                         <dt class="text-text-muted"><?php esc_html_e('Beschikbaar vanaf', 'stridence'); ?></dt>
                         <dd class="font-medium text-text">
-                            <?php echo esc_html(stride_format_date(date('Y-m-d', $start_date))); ?>
+                            <?php echo esc_html(stride_format_date(wp_date('Y-m-d', $start_date))); ?>
                         </dd>
                     </div>
                 <?php endif; ?>
@@ -408,7 +408,7 @@ if ($has_info) :
                     <div class="flex justify-between">
                         <dt class="text-text-muted"><?php esc_html_e('Beschikbaar tot', 'stridence'); ?></dt>
                         <dd class="font-medium text-text">
-                            <?php echo esc_html(stride_format_date(date('Y-m-d', $end_date))); ?>
+                            <?php echo esc_html(stride_format_date(wp_date('Y-m-d', $end_date))); ?>
                         </dd>
                     </div>
                 <?php endif; ?>
