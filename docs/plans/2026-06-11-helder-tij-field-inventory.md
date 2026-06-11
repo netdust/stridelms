@@ -61,3 +61,25 @@ proposals only — no new data flow was added by the redesign tasks.
 - Progress-ring omitted from continue_course hero — mockup hero band shows no ring; baseline had one (confirm at shakeout).
 - Hero band uniform teal (bg-badge-online-bg) for ALL hero types incl. action_required — per mockup; baseline used warning-orange for action_required (confirm at shakeout).
 - Phase 10 cleanup list: dead `dashboardHome` openPanel/closePanel/panelOpen/activeEnrollment state in `src/main.js`; dead `.dash-card-hero` + `.safe-area-bottom` CSS in `components.css`.
+
+### Post-deploy template assignment (run on staging/prod after deploy)
+
+These commands assign the correct page templates to the Contact and Over ons pages. Local page IDs are fixed; run these via WP-CLI on each environment after deploying the branch (page IDs may differ on staging/prod — verify first with `wp post list --post_type=page --name=contact --field=ID`).
+
+```bash
+# Local (DDEV) IDs — confirmed 2026-06-11:
+#   contact  → 14543
+#   over-ons → 14545
+wp post meta update 14543 _wp_page_template page-contact.php
+wp post meta update 14545 _wp_page_template page-over-ons.php
+```
+
+### Dropped homepage content (design-intentional — confirm at shakeout)
+
+The following blocks were present in the previous homepage but are absent from the Helder Tij `front-page.php`. Removal is intentional per the mockup. Confirm with Stefan at shakeout that each omission is deliberate before closing Phase 10.
+
+| Removed block | Previous location | Suggested destination |
+|---|---|---|
+| Sarah Janssens testimonial blockquote | Homepage — social proof / testimonials section | Could move to `page-over-ons.php` alongside the pull-quote if a real testimonials section is wanted |
+| Dr. Els Van den Broeck mission quote card | Homepage — mission/vision statement section | Could move to `page-over-ons.php` as a second pull-quote or values-section context |
+| "Klaar om te starten?" CTA band | Homepage — closing CTA (bottom of page) | Replaced by the new in-company offer CTA band (`cta_team_copy`); restore if Stefan wants a second CTA |

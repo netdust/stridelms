@@ -26,7 +26,7 @@ get_header();
 <div class="bg-surface-alt">
     <div class="container py-[clamp(28px,5vw,48px)]">
         <h1 class="font-serif font-normal text-[clamp(32px,4.5vw,44px)] leading-[1.1] text-text mb-[10px]">
-            <?php the_title(); ?>
+            <?php echo esc_html(get_the_title()); ?>
         </h1>
         <?php
         /*
@@ -108,8 +108,10 @@ get_header();
                             <?php esc_html_e('Bel of mail', 'stridence'); ?>
                         </p>
                         <p class="text-[14px] text-[#43454C] leading-[1.6]">
+                            <?php // TODO at wiring time: esc_url('tel:' . get_option('stride_contact_phone')) ?>
                             <a href="tel:+3221234567" class="text-primary font-bold no-underline">+32 2 123 45 67</a>
                             — <?php esc_html_e('werkdagen 9:00 – 17:00', 'stridence'); ?><br>
+                            <?php // TODO at wiring time: esc_url('mailto:' . get_option('stride_contact_email')) ?>
                             <a href="mailto:info@stride.be" class="text-primary font-bold no-underline">info@stride.be</a>
                         </p>
                     </div>
