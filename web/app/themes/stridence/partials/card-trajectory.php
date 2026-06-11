@@ -1,9 +1,15 @@
 <?php
 /**
- * Trajectory Card Partial
+ * Trajectory Card Partial — Helder Tij.
  *
- * Renders a trajectory card with title, status badge, excerpt, course count, and deadline.
- * All data must be passed via $args - no service calls or meta lookups inside partials.
+ * Renders a trajectory card per the sheet: badge row ([Traject] + status),
+ * 17px title, journey dots strip, 13px meta block, footer with arrow CTA.
+ * The whole card is the link — hover lift lives on this wrapper.
+ *
+ * All data must be passed via $args — no service calls or meta lookups
+ * inside partials. The dots strip renders one dot per course; without
+ * per-user progress data (not passed by any caller today) every dot uses
+ * the "upcoming" treatment from the sheet.
  *
  * @param array $args {
  *     @type array|WP_Post $trajectory Trajectory data array or WP_Post (legacy support)
@@ -27,10 +33,6 @@ if (is_array($trajectory)) {
     $id        = (int) ($trajectory['id'] ?? $trajectory['ID'] ?? 0);
     $permalink = get_permalink($id);
     $title     = $trajectory['title'] ?? $trajectory['post_title'] ?? '';
-    $content   = $trajectory['content'] ?? $trajectory['post_content'] ?? '';
-    $excerpt   = !empty($trajectory['excerpt'])
-        ? $trajectory['excerpt']
-        : wp_trim_words(wp_strip_all_tags($content), 20, '...');
 
     // Meta fields from Data Manager (nested under 'meta' key with possible prefix)
     $meta         = $trajectory['meta'] ?? [];
@@ -42,9 +44,6 @@ if (is_array($trajectory)) {
     $id        = $trajectory->ID;
     $permalink = get_permalink($trajectory);
     $title     = get_the_title($trajectory);
-    $excerpt   = !empty($trajectory->post_excerpt)
-        ? $trajectory->post_excerpt
-        : wp_trim_words(wp_strip_all_tags($trajectory->post_content), 20, '...');
 
     // Use args for meta if provided, otherwise empty
     $course_count = (int) ($args['course_count'] ?? 0);
@@ -66,47 +65,72 @@ $badge_status_map = [
 $badge_status = $badge_status_map[$status] ?? 'open';
 
 ?>
-<article class="card p-5 flex flex-col h-full">
-    <div class="flex items-start justify-between gap-3 mb-3">
-        <h3 class="font-heading font-semibold text-lg line-clamp-2 flex-1">
-            <a href="<?php echo esc_url($permalink); ?>" class="text-text hover:text-primary transition-colors">
-                <?php echo esc_html($title); ?>
-            </a>
-        </h3>
-        <?php stridence_template_part('partials/badge-status', null, ['status' => $badge_status]); ?>
+<a href="<?php echo esc_url($permalink); ?>"
+   class="bg-surface-card rounded-[14px] shadow-card p-6 flex flex-col gap-3.5 h-full text-text transition-all duration-normal ease-out hover:shadow-elevated hover:-translate-y-0.5">
+
+    <!-- Badge row -->
+    <div class="flex gap-1.5 flex-wrap">
+        <?php stridence_template_part('partials/badge-status', null, [
+            'status' => 'trajectory',
+            'size'   => 'sm',
+        ]); ?>
+        <?php stridence_template_part('partials/badge-status', null, [
+            'status' => $badge_status,
+            'size'   => 'sm',
+        ]); ?>
     </div>
 
-    <p class="text-sm text-text-muted line-clamp-2 mb-4 flex-1">
-        <?php echo esc_html($excerpt); ?>
-    </p>
+    <!-- Title -->
+    <h3 class="text-[17px] font-bold leading-snug text-pretty text-text line-clamp-2">
+        <?php echo esc_html($title); ?>
+    </h3>
 
-    <?php if ($course_count > 0 || $deadline): ?>
-        <div class="space-y-2 mb-4">
-            <?php if ($course_count > 0): ?>
-                <div class="flex items-center gap-2 text-sm text-text-muted">
-                    <?php echo stridence_icon('book-open', 'w-4 h-4 shrink-0'); ?>
-                    <span>
+    <!-- Journey dots strip (sheet: 12px dots, 2px lines; no per-user
+         progress data is passed, so every step renders "upcoming") -->
+    <?php if ($course_count > 0) : ?>
+        <div class="flex items-center" aria-hidden="true">
+            <?php for ($i = 0; $i < $course_count; $i++) : ?>
+                <?php if ($i > 0) : ?>
+                    <span class="h-0.5 flex-1 bg-border"></span>
+                <?php endif; ?>
+                <span class="w-3 h-3 rounded-full bg-surface-card shadow-[inset_0_0_0_2px_rgb(var(--color-border))] shrink-0"></span>
+            <?php endfor; ?>
+        </div>
+    <?php endif; ?>
+
+    <!-- Meta block -->
+    <?php if ($course_count > 0 || $deadline) : ?>
+        <div class="flex flex-col gap-1.5 text-[13px] text-text-muted">
+            <?php if ($course_count > 0) : ?>
+                <div>
+                    <strong class="text-text font-semibold">
                         <?php
                         echo esc_html(sprintf(
                             /* translators: %d: number of courses */
-                            _n('%d cursus', '%d cursussen', $course_count, 'stridence'),
+                            _n('%d opleiding', '%d opleidingen', $course_count, 'stridence'),
                             $course_count,
                         ));
-                ?>
-                    </span>
+                        ?>
+                    </strong>
                 </div>
             <?php endif; ?>
 
-            <?php if ($deadline): ?>
-                <div class="flex items-center gap-2 text-sm text-text-muted">
-                    <?php echo stridence_icon('clock', 'w-4 h-4 shrink-0'); ?>
-                    <span>Deadline: <?php echo esc_html(stride_format_date($deadline)); ?></span>
+            <?php if ($deadline) : ?>
+                <div>
+                    <?php
+                    echo esc_html(sprintf(
+                        /* translators: %s: enrollment deadline date */
+                        __('Inschrijven tot %s', 'stridence'),
+                        stride_format_date($deadline),
+                    ));
+                    ?>
                 </div>
             <?php endif; ?>
         </div>
     <?php endif; ?>
 
-    <a href="<?php echo esc_url($permalink); ?>" class="btn-ghost w-full text-center">
-        Bekijk traject
-    </a>
-</article>
+    <!-- Footer row -->
+    <div class="mt-auto pt-1 flex items-center justify-end gap-3">
+        <span class="text-sm font-bold text-primary"><?php esc_html_e('Bekijk traject', 'stridence'); ?> &rarr;</span>
+    </div>
+</a>

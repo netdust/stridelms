@@ -54,7 +54,7 @@ $pillToneClasses = [
 ];
 $pillClass = $statusPill ? ($pillToneClasses[$statusPill['tone'] ?? 'muted'] ?? $pillToneClasses['muted']) : '';
 ?>
-<div class="card"
+<div class="bg-surface-card rounded-[14px] shadow-card"
      x-data="expandable(<?php echo $initialOpen ? 'true' : 'false'; ?>)"
      <?php if ($courseId) : ?>data-course-id="<?php echo (int) $courseId; ?>"<?php endif; ?>
      <?php if ($editionId) : ?>data-edition-id="<?php echo (int) $editionId; ?>"<?php endif; ?>>
@@ -82,19 +82,19 @@ $pillClass = $statusPill ? ($pillToneClasses[$statusPill['tone'] ?? 'muted'] ?? 
 
         <!-- Title + meta line -->
         <div class="flex-1 min-w-0">
-            <h4 class="font-semibold text-text truncate">
+            <h4 class="font-bold text-text truncate">
                 <?php echo esc_html($courseTitle); ?>
             </h4>
-            <div class="flex flex-wrap gap-3 mt-1 text-sm text-text-muted">
+            <div class="flex flex-wrap gap-3 mt-1 text-[13px] text-text-muted">
                 <?php if ($statusPill) : ?>
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium <?php echo esc_attr($pillClass); ?>">
+                    <span class="text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex items-center gap-1 <?php echo esc_attr($pillClass); ?>">
                         <?php echo esc_html($statusPill['label']); ?>
                     </span>
                 <?php endif; ?>
                 <?php if ($startDate) : ?>
                     <span class="flex items-center gap-1">
                         <?php echo stridence_icon('calendar', 'w-3.5 h-3.5'); ?>
-                        <?php echo esc_html(stride_format_date($startDate)); ?>
+                        <strong class="text-text font-semibold"><?php echo esc_html(stride_format_date($startDate)); ?></strong>
                     </span>
                 <?php endif; ?>
                 <?php if ($venue) : ?>
@@ -144,15 +144,15 @@ $pillClass = $statusPill ? ($pillToneClasses[$statusPill['tone'] ?? 'muted'] ?? 
                   // per-session via the attendance badge in the session list below.
                   if ($progressPct !== null && $type === 'online') : ?>
                 <div>
-                    <div class="flex items-center justify-between text-xs text-text-muted mb-1">
+                    <div class="flex items-center justify-between text-[12px] font-bold text-text-muted mb-1.5">
                         <?php if ($progressLabel) : ?>
                             <span><?php echo esc_html($progressLabel); ?></span>
                         <?php else : ?>
                             <span><?php esc_html_e('Voortgang', 'stridence'); ?></span>
                         <?php endif; ?>
-                        <span><?php echo (int) $progressPct; ?>%</span>
+                        <span class="tabular-nums"><?php echo (int) $progressPct; ?>%</span>
                     </div>
-                    <div class="h-1.5 rounded-full bg-surface-alt overflow-hidden">
+                    <div class="h-[7px] rounded-full bg-surface-alt overflow-hidden">
                         <div class="h-full bg-primary rounded-full" style="width: <?php echo (int) $progressPct; ?>%"></div>
                     </div>
                 </div>
@@ -171,7 +171,7 @@ $pillClass = $statusPill ? ($pillToneClasses[$statusPill['tone'] ?? 'muted'] ?? 
                     <p class="text-xs font-medium text-text-muted uppercase tracking-wide">
                         <?php esc_html_e('Sessies', 'stridence'); ?>
                     </p>
-                    <div class="divide-y divide-border rounded-lg border border-border">
+                    <div class="divide-y divide-border rounded-[12px] border border-border">
                         <?php foreach ($sessions as $s) :
                             $sDate       = $s['date'] ?? '';
                             $sStart      = $s['start_time'] ?? '';
@@ -209,7 +209,7 @@ $pillClass = $statusPill ? ($pillToneClasses[$statusPill['tone'] ?? 'muted'] ?? 
                     <p class="text-xs font-medium text-text-muted uppercase tracking-wide">
                         <?php esc_html_e('Beschikbare edities', 'stridence'); ?>
                     </p>
-                    <div class="divide-y divide-border rounded-lg border border-border">
+                    <div class="divide-y divide-border rounded-[12px] border border-border">
                         <?php foreach ($upcomingEditions as $ed) : ?>
                             <div class="p-3 flex items-center gap-3 text-sm text-text-muted">
                                 <?php if (!empty($ed['start_date'])) : ?>

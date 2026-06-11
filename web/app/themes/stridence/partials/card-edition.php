@@ -1,9 +1,10 @@
 <?php
 /**
- * Edition Card Partial — PURE RENDERER (Task G1 / audit 2.2).
+ * Edition Card Partial — PURE RENDERER (Task G1 / audit 2.2 — Helder Tij).
  *
- * Renders an edition card with course context, including thumbnail with status badge,
- * course title, date, venue, price, and enrollment CTA.
+ * Renders an edition card per the Helder Tij sheet: badge row, 17px title,
+ * 13px meta block with strong dates, footer with price + arrow CTA. The
+ * whole card is the link — hover lift lives on this wrapper.
  *
  * All per-card lookups are data-in: callers run the catalog batch pre-pass
  * (helpers/catalog.php — stridence_catalog_render_cards()) and pass the
@@ -11,9 +12,14 @@
  * is what made the catalog N+1 (CR-3). When prefetched keys are absent
  * (mid-flow fallback), the card renders from the stored edition values.
  *
+ * Variants (driven ONLY by existing args):
+ * - enrolled:  ✓ Ingeschreven badge + "Volgende sessie" meta + own CTA
+ * - cancelled: opacity-85, muted title, alternatives CTA
+ * - free:      Gratis badge + green "Gratis" footer price (price == 0)
+ *
  * @param array $args {
  *     @type object|array $edition         Edition object/array with id/ID, start_date, venue/location, price, capacity, status
- *     @type WP_Post      $course          Optional course post for title and thumbnail
+ *     @type WP_Post      $course          Optional course post for title
  *     @type string       $status          Prefetched EFFECTIVE status value (INV-7 — from EditionService::getEffectiveStatuses())
  *     @type int|null     $spots_remaining Prefetched spots remaining (null = unlimited/unknown)
  *     @type bool         $is_enrolled     Prefetched: current user has a confirmed registration
@@ -69,9 +75,9 @@ if ($course_id && get_post_status($course_id) !== 'publish') {
 
 // Fetch course if not provided but course_id available. Cache-hit: the
 // pre-pass primed all course posts. Only a PUBLISHED course may leak its
-// title/thumbnail into a public card (INF-1 — draft/private/trashed
-// courses must not disclose); otherwise the card falls back to the
-// edition title (no fatal).
+// title into a public card (INF-1 — draft/private/trashed courses must
+// not disclose); otherwise the card falls back to the edition title
+// (no fatal).
 if (!$course && $course_id && get_post_status($course_id) === 'publish') {
     $course = get_post($course_id);
 }
@@ -80,95 +86,109 @@ if (!$course && $course_id && get_post_status($course_id) === 'publish') {
 $edition_link = $edition_id ? get_permalink($edition_id) : '#';
 $course_title = ($course instanceof WP_Post ? get_the_title($course) : null) ?: $edition_title ?: 'Cursus';
 
-// Get thumbnail
-$thumbnail = null;
-if ($course instanceof WP_Post) {
-    $thumbnail = get_the_post_thumbnail(
-        $course,
-        'stride_course_card',
-        ['class' => 'w-full h-full object-cover transition-transform hover:scale-105'],
-    );
-}
-
 // Enrolled state + progress come prefetched (one enrolled-set read + LD
 // progress per enrolled card in the pre-pass — never a lookup per card).
 $is_enrolled = (bool) ($args['is_enrolled'] ?? false);
 $progress    = isset($args['progress']) ? (int) $args['progress'] : null;
 
-$enrolled_badge = null;
-if ($is_enrolled) {
-    if ($progress !== null && $progress >= 100) {
-        $enrolled_badge = ['class' => 'bg-success text-text-inverse', 'label' => __('Afgerond', 'stridence'), 'icon' => 'check'];
-    } elseif ($progress !== null && $progress > 0) {
-        $enrolled_badge = ['class' => 'bg-accent text-text-inverse', 'label' => sprintf(__('%d%% voltooid', 'stridence'), $progress), 'icon' => 'clock'];
-    } else {
-        $enrolled_badge = ['class' => 'bg-primary text-text-inverse', 'label' => __('Ingeschreven', 'stridence'), 'icon' => 'check'];
-    }
+// Variant flags — all derived from args already passed, no new data flow.
+$is_cancelled = ($status === 'cancelled');
+$is_free      = ($price !== null && (float) $price <= 0);
+
+// Sheet pill recipe (card size 'sm') for the enrolled-progress badges the
+// badge-status partial has no variant for — exact recipe classes inline.
+$pill_sm = 'text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex items-center gap-1';
+
+// CTA label per variant.
+if ($is_cancelled) {
+    $cta_label = __('Bekijk alternatieven', 'stridence');
+} elseif ($is_enrolled) {
+    $cta_label = __('Bekijk je inschrijving', 'stridence');
+} else {
+    $cta_label = __('Bekijk editie', 'stridence');
 }
 
 ?>
-<article class="card overflow-hidden flex flex-col h-full">
-    <!-- Thumbnail with badge overlay -->
-    <a href="<?php echo esc_url($edition_link); ?>" class="block aspect-video overflow-hidden relative bg-surface-alt">
-        <?php if ($thumbnail): ?>
-            <?php echo $thumbnail; ?>
-        <?php else: ?>
-            <div class="w-full h-full flex items-center justify-center">
-                <?php echo stridence_icon('book-open', 'w-12 h-12 text-text-muted'); ?>
-            </div>
+<a href="<?php echo esc_url($edition_link); ?>"
+   class="bg-surface-card rounded-[14px] shadow-card p-6 flex flex-col gap-3.5 h-full text-text transition-all duration-normal ease-out hover:shadow-elevated hover:-translate-y-0.5<?php echo $is_cancelled ? ' opacity-85' : ''; ?>">
+
+    <!-- Badge row -->
+    <div class="flex gap-1.5 flex-wrap">
+        <?php stridence_template_part('partials/badge-status', null, [
+            'status' => $status,
+            'spots'  => $spots_remaining,
+            'size'   => 'sm',
+        ]); ?>
+
+        <?php if ($is_free && !$is_cancelled) : ?>
+            <?php stridence_template_part('partials/badge-status', null, [
+                'status' => 'free',
+                'size'   => 'sm',
+            ]); ?>
         <?php endif; ?>
-        <!-- Status badge -->
-        <div class="absolute top-3 right-3">
-            <?php if ($enrolled_badge) : ?>
-                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium <?php echo esc_attr($enrolled_badge['class']); ?>">
-                    <?php echo stridence_icon($enrolled_badge['icon'], 'w-3 h-3'); ?>
-                    <?php echo esc_html($enrolled_badge['label']); ?>
-                </span>
+
+        <?php if ($is_enrolled && !$is_cancelled) : ?>
+            <?php if ($progress !== null && $progress >= 100) : ?>
+                <span class="<?php echo esc_attr($pill_sm); ?> bg-badge-free-bg text-badge-free-text"><?php esc_html_e('Afgerond', 'stridence'); ?></span>
+            <?php elseif ($progress !== null && $progress > 0) : ?>
+                <span class="<?php echo esc_attr($pill_sm); ?> bg-badge-free-bg text-badge-free-text"><?php
+                    /* translators: %d: completion percentage */
+                    echo esc_html(sprintf(__('%d%% voltooid', 'stridence'), $progress));
+                ?></span>
             <?php else : ?>
                 <?php stridence_template_part('partials/badge-status', null, [
-                    'status' => $status,
-                    'spots'  => $spots_remaining,
+                    'status' => 'enrolled',
+                    'size'   => 'sm',
                 ]); ?>
             <?php endif; ?>
-        </div>
-    </a>
-
-    <div class="p-5 flex-1 flex flex-col">
-        <h3 class="font-heading font-semibold text-lg mb-3 line-clamp-2">
-            <a href="<?php echo esc_url($edition_link); ?>" class="text-text hover:text-primary transition-colors">
-                <?php echo esc_html($course_title); ?>
-            </a>
-        </h3>
-
-        <div class="space-y-2 mb-4 flex-1">
-            <?php if ($start_date): ?>
-                <!-- Date -->
-                <div class="flex items-center gap-2 text-sm text-text-muted">
-                    <?php echo stridence_icon('calendar', 'w-4 h-4 shrink-0'); ?>
-                    <span><?php echo esc_html(stride_format_date($start_date)); ?></span>
-                </div>
-            <?php endif; ?>
-
-            <?php if ($venue): ?>
-                <!-- Venue -->
-                <div class="flex items-center gap-2 text-sm text-text-muted">
-                    <?php echo stridence_icon('map-pin', 'w-4 h-4 shrink-0'); ?>
-                    <span><?php echo esc_html($venue); ?></span>
-                </div>
-            <?php endif; ?>
-
-            <?php if ($price !== null): ?>
-                <!-- Price -->
-                <div class="flex items-center gap-2 text-sm font-semibold text-text">
-                    <?php echo stridence_icon('receipt', 'w-4 h-4 shrink-0 text-text-muted'); ?>
-                    <span><?php echo esc_html(stride_format_money((int) ($price * 100))); ?></span>
-                </div>
-            <?php endif; ?>
-        </div>
-
-        <!-- CTA button -->
-        <a href="<?php echo esc_url($edition_link); ?>" class="btn-primary w-full text-center">
-            <?php esc_html_e('Meer info', 'stridence'); ?>
-        </a>
+        <?php endif; ?>
     </div>
-</article>
+
+    <!-- Title -->
+    <h3 class="text-[17px] font-bold leading-snug text-pretty line-clamp-2 <?php echo $is_cancelled ? 'text-text-muted' : 'text-text'; ?>">
+        <?php echo esc_html($course_title); ?>
+    </h3>
+
+    <!-- Meta block -->
+    <div class="flex flex-col gap-1.5 text-[13px] text-text-muted">
+        <?php if ($is_cancelled) : ?>
+            <div>
+                <?php
+                echo esc_html(
+                    $is_enrolled
+                        ? __('Deze editie werd geannuleerd. Je werd per e-mail verwittigd.', 'stridence')
+                        : __('Deze editie werd geannuleerd.', 'stridence'),
+                );
+                ?>
+            </div>
+        <?php else : ?>
+            <?php if ($start_date) : ?>
+                <div>
+                    <?php if ($is_enrolled) : ?>
+                        <strong class="text-text font-semibold"><?php esc_html_e('Volgende sessie:', 'stridence'); ?></strong>
+                        <?php echo esc_html(stride_format_date($start_date)); ?>
+                    <?php else : ?>
+                        <strong class="text-text font-semibold"><?php echo esc_html(stride_format_date($start_date)); ?></strong>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($venue) : ?>
+                <div><?php echo esc_html($venue); ?></div>
+            <?php endif; ?>
+        <?php endif; ?>
+    </div>
+
+    <!-- Footer row -->
+    <?php $show_price = !$is_cancelled && !$is_enrolled && $price !== null; ?>
+    <div class="mt-auto pt-1 flex items-center gap-3 <?php echo $show_price ? 'justify-between' : 'justify-end'; ?>">
+        <?php if ($show_price) : ?>
+            <?php if ($is_free) : ?>
+                <span class="text-[16px] font-extrabold text-badge-free-text"><?php esc_html_e('Gratis', 'stridence'); ?></span>
+            <?php else : ?>
+                <span class="text-[16px] font-extrabold"><?php echo esc_html(stride_format_money((int) ($price * 100))); ?></span>
+            <?php endif; ?>
+        <?php endif; ?>
+        <span class="text-sm font-bold text-primary"><?php echo esc_html($cta_label); ?> &rarr;</span>
+    </div>
+</a>
