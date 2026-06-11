@@ -112,3 +112,13 @@
     transform: rotate(360deg);
   }
 }
+
+/* scrollbar-hide: used by tab bars (edition, course, trajectory, dashboard) —
+   Tailwind has no native utility for this. Defined outside @layer so it
+   always ships regardless of utility tree-shaking (same precedent as st-spin). */
+.scrollbar-hide {
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
