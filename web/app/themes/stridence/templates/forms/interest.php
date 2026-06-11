@@ -25,7 +25,7 @@ $alpine_config = json_encode([
 ?>
 
 <div class="container py-8 lg:py-12" x-data="strideInterestForm(<?= esc_attr($alpine_config) ?>)">
-    <div class="card p-6 lg:p-8 max-w-lg mx-auto">
+    <div class="bg-surface-card rounded-[16px] shadow-card p-6 lg:p-8 max-w-lg mx-auto">
         <h2 class="text-xl font-bold mb-2"><?= esc_html__('Interesse melden', 'stridence') ?></h2>
         <p class="text-text-muted text-sm mb-6">
             <?= sprintf(esc_html__('Meld je interesse aan voor %s. We nemen contact op zodra er data gepland zijn.', 'stridence'), '<strong>' . esc_html($course_title) . '</strong>') ?>
@@ -61,7 +61,7 @@ $alpine_config = json_encode([
 
             <p x-show="error" x-text="error" class="text-error text-sm mt-4"></p>
 
-            <button type="submit" class="btn btn-primary w-full mt-6" :disabled="loading">
+            <button type="submit" class="btn-primary w-full mt-6" :disabled="loading">
                 <span x-show="!loading"><?= esc_html__('Interesse melden', 'stridence') ?></span>
                 <span x-show="loading"><?= esc_html__('Bezig...', 'stridence') ?></span>
             </button>

@@ -78,12 +78,12 @@ $taskType = $args['task_type'] ?? 'documents';
     <template x-if="files.length > 0">
         <div class="mt-3 space-y-2">
             <template x-for="(file, index) in files" :key="index">
-                <div class="flex items-center gap-2 text-sm p-2 bg-surface-alt rounded">
+                <div class="flex items-center gap-2 text-sm p-2 bg-surface-alt rounded-sm">
                     <?= stridence_icon('file-text', 'w-4 h-4 text-text-muted shrink-0') ?>
                     <span class="flex-1 truncate" x-text="file.name"></span>
                     <span class="text-xs text-text-muted" x-text="(file.size / 1024 / 1024).toFixed(1) + ' MB'"></span>
                     <button type="button" @click="removeFile(index)"
-                            class="text-status-error hover:text-status-error/80 text-xs">
+                            class="text-error hover:bg-error/10 text-xs">
                         &times;
                     </button>
                 </div>
@@ -93,7 +93,7 @@ $taskType = $args['task_type'] ?? 'documents';
 
     <!-- Error message -->
     <template x-if="uploadError">
-        <div class="mt-3 p-3 bg-status-error-subtle border border-status-error rounded-lg text-sm text-status-error" x-text="uploadError"></div>
+        <div class="mt-3 p-3 bg-status-error-subtle border border-status-error rounded-[12px] text-sm text-status-error" x-text="uploadError"></div>
     </template>
 
     <!-- Submit -->

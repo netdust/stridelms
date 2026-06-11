@@ -11,7 +11,7 @@
 $edition_data = $args['edition_data'] ?? [];
 $course_data  = $args['course_data'] ?? [];
 ?>
-<aside class="card p-6 sticky top-24">
+<aside class="bg-surface-card rounded-[16px] shadow-card p-6 sticky top-24">
     <h3 class="font-heading font-semibold text-lg mb-4">Samenvatting</h3>
 
     <?php if (!empty($edition_data['title'])) : ?>

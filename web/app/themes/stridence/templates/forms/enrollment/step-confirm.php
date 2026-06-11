@@ -79,7 +79,7 @@
     </div>
 
     <!-- Error message -->
-    <div x-show="submitError" class="mb-4 p-3 bg-error/10 border border-error/20 rounded-lg">
+    <div x-show="submitError" class="mb-4 p-3 bg-error/10 border border-error/20 rounded-[12px]">
         <p class="text-sm text-error" x-text="submitError"></p>
     </div>
 

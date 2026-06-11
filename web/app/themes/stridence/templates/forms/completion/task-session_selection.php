@@ -99,7 +99,7 @@ $renderOption = function (array $session) {
            @click.prevent="toggleSession(<?= $sessionId ?>)">
         <input type="checkbox"
                :checked="selected.includes(<?= $sessionId ?>)"
-               class="accent-primary">
+               class="input-checkbox">
         <div class="flex-1 min-w-0">
             <?php if ($title): ?>
                 <span class="text-sm font-medium text-text block">

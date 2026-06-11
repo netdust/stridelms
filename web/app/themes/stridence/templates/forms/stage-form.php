@@ -42,7 +42,7 @@ if ($expectedStatus && $registration->status !== $expectedStatus) {
 $enrollmentData = json_decode($registration->enrollment_data ?? '{}', true) ?: [];
 if (isset($enrollmentData[$stage])) {
     ?>
-    <div class="card p-6 text-center">
+    <div class="bg-surface-card rounded-[16px] shadow-card p-6 text-center">
         <p class="text-success font-medium"><?= esc_html__('Je hebt dit formulier al ingevuld. Bedankt!', 'stridence') ?></p>
     </div>
     <?php
@@ -64,7 +64,7 @@ $alpine_config = json_encode([
 ]);
 ?>
 
-<div class="card p-6 lg:p-8" x-data="strideStageForm(<?= esc_attr($alpine_config) ?>)">
+<div class="bg-surface-card rounded-[16px] shadow-card p-6 lg:p-8" x-data="strideStageForm(<?= esc_attr($alpine_config) ?>)">
     <h3 class="text-lg font-bold mb-2"><?= esc_html($title) ?></h3>
     <?php if ($description) : ?>
         <p class="text-text-muted text-sm mb-6"><?= esc_html($description) ?></p>
@@ -85,7 +85,7 @@ $alpine_config = json_encode([
 
         <p x-show="error" x-text="error" class="text-error text-sm mt-4"></p>
 
-        <button type="submit" class="btn btn-primary w-full mt-6" :disabled="loading">
+        <button type="submit" class="btn-primary w-full mt-6" :disabled="loading">
             <span x-show="!loading"><?= esc_html__('Versturen', 'stridence') ?></span>
             <span x-show="loading"><?= esc_html__('Bezig...', 'stridence') ?></span>
         </button>

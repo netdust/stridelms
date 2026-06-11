@@ -154,7 +154,7 @@ $enrollment_js_ver = file_exists($enrollment_js) ? filemtime($enrollment_js) : '
         <!-- Main Form Column (2/3) -->
         <div class="lg:col-span-2">
             <?php $is_minimal = $form_type === 'minimal'; ?>
-            <form @submit.prevent="submitForm" novalidate class="card p-6 md:p-8">
+            <form @submit.prevent="submitForm" novalidate class="bg-surface-card rounded-[16px] shadow-card p-6 md:p-8">
                 <?php if (!$is_online && !$is_minimal) : ?>
                     <?php stridence_template_part('templates/forms/enrollment/step-type'); ?>
                 <?php endif; ?>
