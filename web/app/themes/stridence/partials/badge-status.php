@@ -10,8 +10,9 @@
  * The pill recipe lives inline here — NOT in components.css.
  *
  * Edition statuses (draft, announcement, open, full, in_progress, postponed,
- * cancelled, completed, archived) source from Stride\Domain\OfferingStatus;
- * its legacy `badge-*` class is translated to a variant below.
+ * cancelled, completed, archived) source from Stride\Domain\OfferingStatus and
+ * map directly to a variant below. Cancelled deliberately renders the neutral
+ * pair per the Helder Tij sheet (frontendBadgeClass() would say badge-full).
  *
  * Registration / UI statuses (confirmed, pending, enrolled, action_required,
  * awaiting_approval, completing) plus the design variants (online, free,
@@ -49,16 +50,6 @@ $variant_classes = [
     'trajectory' => 'bg-accent-subtle text-accent-hover',
 ];
 
-// Legacy class from OfferingStatus::frontendBadgeClass() → variant key.
-$legacy_to_variant = [
-    'badge-open'      => 'open',
-    'badge-few'       => 'few',
-    'badge-full'      => 'full',
-    'badge-cancelled' => 'cancelled',
-    'badge-online'    => 'online',
-    'badge-free'      => 'free',
-];
-
 $prefix = '';
 
 // Auto-detect few_spots when status is open and spots are low (1-5)
@@ -67,12 +58,15 @@ if ($status === 'open' && $spots !== null && $spots > 0 && $spots <= 5) {
     /* translators: %d: number of spots remaining */
     $label = sprintf(_n('Nog %d plaats', 'Nog %d plaatsen', $spots, 'stridence'), $spots);
 } elseif ($offeringStatus = OfferingStatus::tryFrom($status)) {
-    // Design override: the Helder Tij sheet renders Geannuleerd on the
-    // neutral cancelled pair; frontendBadgeClass() still says badge-full.
-    $variant = $offeringStatus === OfferingStatus::Cancelled
-        ? 'cancelled'
-        : ($legacy_to_variant[$offeringStatus->frontendBadgeClass()] ?? 'cancelled');
-    $label   = $offeringStatus->label();
+    $variant = match ($offeringStatus) {
+        OfferingStatus::Open       => 'open',
+        OfferingStatus::Full       => 'full',
+        OfferingStatus::InProgress => 'online',
+        OfferingStatus::Announcement,
+        OfferingStatus::Postponed  => 'few',
+        default                    => 'cancelled', // Draft, Cancelled, Completed, Archived
+    };
+    $label = $offeringStatus->label();
 } else {
     // Registration / UI statuses outside OfferingStatus + design variants
     $registration_config = [
