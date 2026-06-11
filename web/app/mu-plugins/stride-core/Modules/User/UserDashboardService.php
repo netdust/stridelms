@@ -65,6 +65,13 @@ final class UserDashboardService
         // — conservative and per-request cheap.
         add_action('stride/registration/cache_cleared', [$this, 'clearMemo']);
         add_action('stride/quote/data_changed', [$this, 'clearMemo']);
+
+        // LD course-access changes alter active_online/completed WITHOUT
+        // touching any Stride repository (LMSAdapter grant/revoke, manual
+        // grants in the LD admin). ld_update_course_access() fires this on
+        // every grant AND removal — without it, a same-request dashboard
+        // read after a grant serves the stale pre-grant snapshot.
+        add_action('learndash_update_course_access', [$this, 'clearMemo']);
     }
 
     /**

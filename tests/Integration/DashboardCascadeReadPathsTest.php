@@ -130,6 +130,15 @@ final class DashboardCascadeReadPathsTest extends IntegrationTestCase
         $courseId = $this->createTestCourse();
         wp_set_object_terms($courseId, 'online', 'stride_format');
 
+        // Prime the per-request dashboard memo (E1 / CR-2) BEFORE the LD
+        // grant. An LD access change must invalidate the memo via
+        // learndash_update_course_access — without that hook this read-back
+        // returns the stale pre-grant snapshot. Regression for the CI
+        // failure where pureLd...'s getEnrollmentData() call populated the
+        // memo and this test read it back (the pair is order-dependent;
+        // this prime makes the staleness deterministic standalone).
+        $this->dashboard->getEnrollmentData(self::$testUserId);
+
         ntdst_get(\Stride\Contracts\LMSAdapterInterface::class)
             ->grantAccess(self::$testUserId, $courseId);
 
