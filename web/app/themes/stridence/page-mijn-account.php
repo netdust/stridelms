@@ -80,62 +80,81 @@ $page_titles = [
     'downloads'      => __('Downloads', 'stridence'),
 ];
 
-get_header();
+// Per-tab sub lines under the serif page title (Helder Tij mockup titles map).
+// Home has no entry: the home tab renders its own greeting block.
+$page_subs = [
+    'inschrijvingen' => __('Alle inschrijvingen voor klassikale en online opleidingen.', 'stridence'),
+    'trajecten'      => __('Meerdelige leertrajecten en je voortgang.', 'stridence'),
+    'offertes'       => __('Aanvragen voor jou of je team.', 'stridence'),
+    'certificaten'   => __('Behaalde attesten en certificaten.', 'stridence'),
+    'profiel'        => __('Persoonlijke gegevens en facturatie.', 'stridence'),
+    'meldingen'      => __('Updates over je inschrijvingen en trajecten.', 'stridence'),
+    'downloads'      => __('Cursusmateriaal en documenten.', 'stridence'),
+];
+
+get_header('dashboard');
 ?>
 
-<div class="min-h-screen bg-surface">
-    <div class="max-w-container mx-auto px-4 md:px-6 lg:px-8">
-        <div class="lg:flex lg:gap-8 py-6 lg:py-8">
+<div class="min-h-screen flex bg-surface">
 
-            <!-- Sidebar (desktop only) -->
-            <div class="hidden lg:block">
-                <?php stridence_template_part('templates/dashboard/nav-sidebar', null, [
-                    'current_tab'   => $current_tab,
-                    'primary_nav'   => $primary_nav,
-                    'utility_nav'   => $utility_nav,
-                    'user'          => $user,
-                    'unread_count'  => $unread_count,
-                ]); ?>
-            </div>
-
-            <!-- Main Content Area -->
-            <main class="flex-1 min-w-0">
-                <!-- Page Header (home tab renders its own greeting inside the actions panel) -->
-                <?php $pageTitle = $page_titles[$current_tab] ?? ''; ?>
-                <?php if ($pageTitle && $current_tab !== 'home') : ?>
-                    <div class="mb-6">
-                        <h1 class="text-lg font-semibold text-text tracking-tight">
-                            <?php echo esc_html($pageTitle); ?>
-                        </h1>
-                    </div>
-                <?php endif; ?>
-
-                <!-- Page Content -->
-                <?php
-                if ($current_tab === 'home') {
-                    stridence_template_part('templates/dashboard/tab-home', null, [
-                        'user'      => $user,
-                        'home_data' => $home_data,
-                        'greeting'  => $greeting,
-                        'firstName' => $firstName,
-                    ]);
-                } else {
-                    stridence_template_part("templates/dashboard/tab-{$current_tab}", null, [
-                        'user' => $user,
-                    ]);
-                }
-?>
-            </main>
-
-        </div>
+    <!-- Sidebar (desktop only — internals owned by nav-sidebar.php) -->
+    <div class="hidden lg:block">
+        <?php stridence_template_part('templates/dashboard/nav-sidebar', null, [
+            'current_tab'   => $current_tab,
+            'primary_nav'   => $primary_nav,
+            'utility_nav'   => $utility_nav,
+            'user'          => $user,
+            'unread_count'  => $unread_count,
+        ]); ?>
     </div>
 
-    <!-- Mobile Bottom Navigation -->
-    <div class="lg:hidden">
-        <?php stridence_template_part('templates/dashboard/nav-mobile', null, [
-            'current_tab'  => $current_tab,
-            'unread_count' => $unread_count,
-        ]); ?>
+    <!-- Main Column -->
+    <div class="flex-1 min-w-0 flex flex-col">
+
+        <!-- Mobile Navigation (internals owned by nav-mobile.php) -->
+        <div class="lg:hidden">
+            <?php stridence_template_part('templates/dashboard/nav-mobile', null, [
+                'current_tab'  => $current_tab,
+                'unread_count' => $unread_count,
+            ]); ?>
+        </div>
+
+        <!-- Content -->
+        <main class="max-w-[1080px] mx-auto w-full px-5 py-6 lg:px-10 lg:py-10 flex flex-col gap-6">
+
+            <!-- Page Header (home tab renders its own greeting inside the actions panel) -->
+            <?php $pageTitle = $page_titles[$current_tab] ?? ''; ?>
+            <?php if ($pageTitle && $current_tab !== 'home') : ?>
+                <header class="flex flex-wrap items-end justify-between gap-4">
+                    <div>
+                        <h1 class="font-serif font-normal text-[clamp(26px,3.5vw,34px)] leading-[1.1] text-text">
+                            <?php echo esc_html($pageTitle); ?>
+                        </h1>
+                        <?php if (!empty($page_subs[$current_tab])) : ?>
+                            <p class="text-sm text-text-muted mt-1.5">
+                                <?php echo esc_html($page_subs[$current_tab]); ?>
+                            </p>
+                        <?php endif; ?>
+                    </div>
+                </header>
+            <?php endif; ?>
+
+            <!-- Page Content -->
+            <?php
+            if ($current_tab === 'home') {
+                stridence_template_part('templates/dashboard/tab-home', null, [
+                    'user'      => $user,
+                    'home_data' => $home_data,
+                    'greeting'  => $greeting,
+                    'firstName' => $firstName,
+                ]);
+            } else {
+                stridence_template_part("templates/dashboard/tab-{$current_tab}", null, [
+                    'user' => $user,
+                ]);
+            }
+?>
+        </main>
     </div>
 
     <?php stridence_template_part('templates/dashboard/partials/toast'); ?>
