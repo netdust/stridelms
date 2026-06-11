@@ -59,7 +59,7 @@ $pillClass = $statusPill ? ($pillToneClasses[$statusPill['tone'] ?? 'muted'] ?? 
      <?php if ($courseId) : ?>data-course-id="<?php echo (int) $courseId; ?>"<?php endif; ?>
      <?php if ($editionId) : ?>data-edition-id="<?php echo (int) $editionId; ?>"<?php endif; ?>>
     <button type="button"
-            class="w-full p-4 flex items-center gap-4 text-left"
+            class="w-full p-4 flex items-center gap-4 text-left cursor-pointer"
             @click="toggle()">
         <!-- Thumbnail / imminence badge -->
         <?php if ($imminence === 'today' || $imminence === 'tomorrow') : ?>

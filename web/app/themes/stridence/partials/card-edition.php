@@ -18,7 +18,7 @@
  * - free:      Gratis badge + green "Gratis" footer price (price == 0)
  *
  * @param array $args {
- *     @type object|array $edition         Edition object/array with id/ID, start_date, venue/location, price, capacity, status
+ *     @type array        $edition         Edition data array with id/ID, start_date, venue/location, price, capacity, status
  *     @type WP_Post      $course          Optional course post for title
  *     @type string       $status          Prefetched EFFECTIVE status value (INV-7 — from EditionService::getEffectiveStatuses())
  *     @type int|null     $spots_remaining Prefetched spots remaining (null = unlimited/unknown)
@@ -32,36 +32,27 @@ defined('ABSPATH') || exit;
 $edition = $args['edition'] ?? null;
 $course  = $args['course'] ?? null;
 
-// Early return if no edition
-if (!$edition) {
+// Early return if no edition array (all call sites pass arrays — catalog.php
+// builds them; the guard keeps a stray non-array degraded, never fatal).
+if (!is_array($edition) || !$edition) {
     return;
 }
 
-// Helper to access edition properties (supports both object and array)
-$get = function (string $key, $default = null) use ($edition) {
-    if (is_object($edition)) {
-        return $edition->{$key} ?? $default;
-    }
-    if (is_array($edition)) {
-        return $edition[$key] ?? $default;
-    }
-    return $default;
-};
-
-// Get edition data
-$edition_id      = $get('id') ?? $get('ID');
-$edition_title   = $get('title');
-$start_date      = $get('start_date');
-$venue           = $get('venue') ?? $get('location');
-$price           = $get('price');
-$course_id       = $get('course_id');
+// Get edition data — direct array access, key fallbacks preserved from the
+// old object/array accessor.
+$edition_id      = $edition['id'] ?? $edition['ID'] ?? 0;
+$edition_title   = $edition['title'] ?? null;
+$start_date      = $edition['start_date'] ?? null;
+$venue           = $edition['venue'] ?? $edition['location'] ?? null;
+$price           = $edition['price'] ?? null;
+$course_id       = $edition['course_id'] ?? null;
 
 // Status + spots come prefetched from the catalog pre-pass: the EFFECTIVE
 // status (incl. the past-date override that flips stored "open" → Afgelopen)
 // is decided once, in EditionService (INV-7), never per card here.
 // Mid-flow fallback: a card whose prefetch data is missing renders from the
 // stored array value — degraded but never fatal, never a per-card query.
-$status          = isset($args['status']) ? (string) $args['status'] : (string) $get('status', 'open');
+$status          = isset($args['status']) ? (string) $args['status'] : (string) ($edition['status'] ?? 'open');
 $spots_remaining = isset($args['spots_remaining']) ? (int) $args['spots_remaining'] : null;
 
 // Defensive mirror of the eligible-items builder filter (shake-out F2):
