@@ -109,14 +109,16 @@ get_header();
 
             <!-- "Alles" chip with total count -->
             <button @click="setFilter('')" type="button"
+                class="rounded-full px-4 py-2 min-h-[36px] border text-[13px] font-bold transition-colors"
                 :class="filter === ''
-                    ? 'rounded-full px-4 py-2 min-h-[36px] border text-[13px] font-bold transition-colors bg-primary text-white border-primary'
-                    : 'rounded-full px-4 py-2 min-h-[36px] border text-[13px] font-bold transition-colors bg-surface-card border-border text-text-muted'"
+                    ? 'bg-primary text-white border-primary'
+                    : 'bg-surface-card border-border text-text-muted'"
                 :aria-pressed="filter === ''">
                 <?php esc_html_e('Alles', 'stridence'); ?>
-                <span :class="filter === ''
-                    ? 'text-[11px] font-bold tabular-nums rounded-full px-1.5 py-0.5 ml-1.5 bg-white/20 text-white'
-                    : 'text-[11px] font-bold tabular-nums rounded-full px-1.5 py-0.5 ml-1.5 bg-surface-alt text-text-faint'"
+                <span class="text-[11px] font-bold tabular-nums rounded-full px-1.5 py-0.5 ml-1.5"
+                    :class="filter === ''
+                        ? 'bg-white/20 text-white'
+                        : 'bg-surface-alt text-text-faint'"
                 ><?php echo esc_html((string) $total); ?></span>
             </button>
 
@@ -127,14 +129,16 @@ get_header();
                 }
                 ?>
                 <button @click="setFilter('<?php echo esc_attr($theme->slug); ?>')" type="button"
+                    class="rounded-full px-4 py-2 min-h-[36px] border text-[13px] font-bold transition-colors"
                     :class="filter === '<?php echo esc_attr($theme->slug); ?>'
-                        ? 'rounded-full px-4 py-2 min-h-[36px] border text-[13px] font-bold transition-colors bg-primary text-white border-primary'
-                        : 'rounded-full px-4 py-2 min-h-[36px] border text-[13px] font-bold transition-colors bg-surface-card border-border text-text-muted'"
+                        ? 'bg-primary text-white border-primary'
+                        : 'bg-surface-card border-border text-text-muted'"
                     :aria-pressed="filter === '<?php echo esc_attr($theme->slug); ?>'">
                     <?php echo esc_html($theme->name); ?>
-                    <span :class="filter === '<?php echo esc_attr($theme->slug); ?>'
-                        ? 'text-[11px] font-bold tabular-nums rounded-full px-1.5 py-0.5 ml-1.5 bg-white/20 text-white'
-                        : 'text-[11px] font-bold tabular-nums rounded-full px-1.5 py-0.5 ml-1.5 bg-surface-alt text-text-faint'"
+                    <span class="text-[11px] font-bold tabular-nums rounded-full px-1.5 py-0.5 ml-1.5"
+                        :class="filter === '<?php echo esc_attr($theme->slug); ?>'
+                            ? 'bg-white/20 text-white'
+                            : 'bg-surface-alt text-text-faint'"
                     ><?php echo esc_html((string) $count); ?></span>
                 </button>
             <?php endforeach; ?>
@@ -152,16 +156,15 @@ get_header();
 
             <!-- Empty state for filtered results -->
             <div x-show="filteredTotal === 0 && !loading" x-cloak>
-                <div class="bg-surface-alt rounded-[16px] py-16 px-6 flex flex-col items-center text-center">
-                    <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-surface-card shadow-card flex items-center justify-center">
-                        <?php echo stridence_icon('search', 'w-[22px] h-[22px] text-text-faint'); ?>
-                    </div>
-                    <h3 class="font-heading font-bold text-[16px] leading-snug text-text mb-2">
-                        <?php esc_html_e('Geen opleidingen gevonden', 'stridence'); ?>
-                    </h3>
-                    <p class="text-[13px] text-text-muted max-w-[420px] mx-auto mb-4 leading-relaxed">
-                        <?php esc_html_e('Er zijn geen klassikale opleidingen in dit thema.', 'stridence'); ?>
-                    </p>
+                <?php
+                stridence_template_part('partials/empty-state', null, [
+                    'icon'    => 'search',
+                    'title'   => __('Geen opleidingen gevonden', 'stridence'),
+                    'message' => __('Er zijn geen klassikale opleidingen in dit thema.', 'stridence'),
+                    'band'    => true,
+                ]);
+                ?>
+                <div class="mt-4 flex justify-center">
                     <button @click="setFilter('')" type="button" class="btn-ghost">
                         <?php esc_html_e('Toon alles', 'stridence'); ?>
                     </button>

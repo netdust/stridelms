@@ -43,7 +43,8 @@ get_header();
 
     <?php if (!empty($trajectories)) : ?>
 
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:18px;">
+        <?php // 320px min-width — wider trajectory cards vs 300px catalog grids ?>
+        <div class="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-[18px]">
             <?php foreach ($trajectories as $trajectory) :
                 stridence_template_part('partials/card-trajectory', null, [
                     'trajectory' => $trajectory,

@@ -112,14 +112,16 @@ get_header();
         <div class="flex gap-2 flex-wrap" role="group" aria-label="<?php esc_attr_e("Filter op thema", 'stridence'); ?>">
             <!-- "Alles" chip -->
             <button @click="setFilter('')" type="button"
+                class="inline-flex items-center gap-[7px] rounded-full px-4 py-2 min-h-[36px] border text-[13px] font-bold transition-colors duration-150"
                 :class="filter === ''
-                    ? 'inline-flex items-center gap-[7px] rounded-full px-4 py-2 min-h-[36px] border text-[13px] font-bold bg-primary text-white border-primary transition-colors duration-150'
-                    : 'inline-flex items-center gap-[7px] rounded-full px-4 py-2 min-h-[36px] border text-[13px] font-bold bg-surface-card border-border text-text-muted hover:border-primary/40 transition-colors duration-150'"
-                :aria-current="filter === '' ? 'true' : false">
+                    ? 'bg-primary text-white border-primary'
+                    : 'bg-surface-card border-border text-text-muted hover:border-primary/40'"
+                :aria-pressed="filter === ''">
                 <?php esc_html_e('Alles', 'stridence'); ?>
-                <span :class="filter === ''
-                    ? 'text-[11px] font-bold tabular-nums bg-white/20 text-white rounded-full px-[7px] py-px'
-                    : 'text-[11px] font-bold tabular-nums bg-surface-alt text-text-faint rounded-full px-[7px] py-px'">
+                <span class="text-[11px] font-bold tabular-nums rounded-full px-[7px] py-px"
+                    :class="filter === ''
+                        ? 'bg-white/20 text-white'
+                        : 'bg-surface-alt text-text-faint'">
                     <?php echo esc_html((string) $total); ?>
                 </span>
             </button>
@@ -131,14 +133,16 @@ get_header();
                 }
                 ?>
                 <button @click="setFilter('<?php echo esc_attr($theme->slug); ?>')" type="button"
+                    class="inline-flex items-center gap-[7px] rounded-full px-4 py-2 min-h-[36px] border text-[13px] font-bold transition-colors duration-150"
                     :class="filter === '<?php echo esc_attr($theme->slug); ?>'
-                        ? 'inline-flex items-center gap-[7px] rounded-full px-4 py-2 min-h-[36px] border text-[13px] font-bold bg-primary text-white border-primary transition-colors duration-150'
-                        : 'inline-flex items-center gap-[7px] rounded-full px-4 py-2 min-h-[36px] border text-[13px] font-bold bg-surface-card border-border text-text-muted hover:border-primary/40 transition-colors duration-150'"
-                    :aria-current="filter === '<?php echo esc_attr($theme->slug); ?>' ? 'true' : false">
+                        ? 'bg-primary text-white border-primary'
+                        : 'bg-surface-card border-border text-text-muted hover:border-primary/40'"
+                    :aria-pressed="filter === '<?php echo esc_attr($theme->slug); ?>'">
                     <?php echo esc_html($theme->name); ?>
-                    <span :class="filter === '<?php echo esc_attr($theme->slug); ?>'
-                        ? 'text-[11px] font-bold tabular-nums bg-white/20 text-white rounded-full px-[7px] py-px'
-                        : 'text-[11px] font-bold tabular-nums bg-surface-alt text-text-faint rounded-full px-[7px] py-px'">
+                    <span class="text-[11px] font-bold tabular-nums rounded-full px-[7px] py-px"
+                        :class="filter === '<?php echo esc_attr($theme->slug); ?>'
+                            ? 'bg-white/20 text-white'
+                            : 'bg-surface-alt text-text-faint'">
                         <?php echo esc_html((string) $count); ?>
                     </span>
                 </button>
@@ -148,9 +152,9 @@ get_header();
     <?php endif; ?>
 
     <!-- Enrollable Grid (one card per active edition + one per pure-LD course) -->
-    <div class="container py-6 pb-20">
+    <div class="container py-6 lg:py-8">
         <?php if ($total > 0) : ?>
-            <div class="grid gap-[18px]" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));" x-ref="grid">
+            <div class="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-[18px]" x-ref="grid">
                 <?php echo $initial_html; // Card HTML — escaped within the partials.?>
             </div>
 
@@ -180,7 +184,7 @@ get_header();
             <div x-show="hasMore" x-cloak class="mt-8 flex justify-center">
                 <button @click="loadMore()" :disabled="loading" type="button"
                     :class="loading ? 'btn-load-more btn-loading' : 'btn-load-more'">
-                    <span x-show="loading" class="spinner w-[15px] h-[15px] rounded-full border-2 border-border border-t-text-muted animate-spin inline-block mr-2"></span>
+                    <span x-show="loading" class="spinner" aria-hidden="true"></span>
                     <span x-show="!loading"><?php esc_html_e('Toon meer', 'stridence'); ?></span>
                     <span x-show="loading"><?php esc_html_e('Laden…', 'stridence'); ?></span>
                 </button>
