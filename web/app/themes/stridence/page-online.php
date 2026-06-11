@@ -43,13 +43,13 @@ get_header();
 ?>
 
 <!-- Page Header -->
-<div class="bg-surface-alt border-b border-border">
-    <div class="container py-8 lg:py-12">
-        <h1 class="text-3xl lg:text-4xl font-heading font-bold text-text mb-2">
+<div class="bg-surface-alt">
+    <div class="container py-[clamp(28px,5vw,44px)]">
+        <h1 class="font-serif font-normal text-[clamp(32px,4.5vw,44px)] leading-[1.1] text-text mb-[10px]">
             <?php esc_html_e('Online leren', 'stridence'); ?>
         </h1>
-        <p class="text-lg text-text-muted">
-            <?php esc_html_e('Leer op je eigen tempo met onze e-learning modules en webinars', 'stridence'); ?>
+        <p class="text-[16px] text-text-muted max-w-[560px]">
+            <?php esc_html_e('Leer op je eigen tempo met onze e-learningmodules en webinars — start wanneer het jou past.', 'stridence'); ?>
         </p>
     </div>
 </div>
@@ -106,56 +106,69 @@ get_header();
         }
     }">
 
-    <!-- Theme Filter Tabs -->
+    <!-- Filter Chips -->
     <?php if (!empty($themes)) : ?>
-    <div class="border-b border-border bg-surface">
-        <div class="container">
-            <nav class="flex overflow-x-auto -mb-px scrollbar-hide" aria-label="<?php esc_attr_e("Thema's", 'stridence'); ?>">
-                <button @click="setFilter('')" type="button"
-                    :class="filter === ''
-                        ? 'whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 border-primary text-primary'
-                        : 'whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 border-transparent text-text-muted hover:text-text hover:border-border'"
-                    :aria-current="filter === '' ? 'page' : false">
-                    <?php esc_html_e('Alle', 'stridence'); ?>
-                    <span class="ml-1 text-xs text-text-muted">(<?php echo esc_html((string) $total); ?>)</span>
-                </button>
+    <div class="container pt-6 pb-2">
+        <div class="flex gap-2 flex-wrap" role="group" aria-label="<?php esc_attr_e("Filter op thema", 'stridence'); ?>">
+            <!-- "Alles" chip -->
+            <button @click="setFilter('')" type="button"
+                :class="filter === ''
+                    ? 'inline-flex items-center gap-[7px] rounded-full px-4 py-2 min-h-[36px] border text-[13px] font-bold bg-primary text-white border-primary transition-colors duration-150'
+                    : 'inline-flex items-center gap-[7px] rounded-full px-4 py-2 min-h-[36px] border text-[13px] font-bold bg-surface-card border-border text-text-muted hover:border-primary/40 transition-colors duration-150'"
+                :aria-current="filter === '' ? 'true' : false">
+                <?php esc_html_e('Alles', 'stridence'); ?>
+                <span :class="filter === ''
+                    ? 'text-[11px] font-bold tabular-nums bg-white/20 text-white rounded-full px-[7px] py-px'
+                    : 'text-[11px] font-bold tabular-nums bg-surface-alt text-text-faint rounded-full px-[7px] py-px'">
+                    <?php echo esc_html((string) $total); ?>
+                </span>
+            </button>
 
-                <?php foreach ($themes as $theme) :
-                    $count = $theme_counts[$theme->slug] ?? 0;
-                    if ($count === 0) {
-                        continue;
-                    }
-                    ?>
-                    <button @click="setFilter('<?php echo esc_attr($theme->slug); ?>')" type="button"
-                        :class="filter === '<?php echo esc_attr($theme->slug); ?>'
-                            ? 'whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 border-primary text-primary'
-                            : 'whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 border-transparent text-text-muted hover:text-text hover:border-border'"
-                        :aria-current="filter === '<?php echo esc_attr($theme->slug); ?>' ? 'page' : false">
-                        <?php echo esc_html($theme->name); ?>
-                        <span class="ml-1 text-xs text-text-muted">(<?php echo esc_html((string) $count); ?>)</span>
-                    </button>
-                <?php endforeach; ?>
-            </nav>
+            <?php foreach ($themes as $theme) :
+                $count = $theme_counts[$theme->slug] ?? 0;
+                if ($count === 0) {
+                    continue;
+                }
+                ?>
+                <button @click="setFilter('<?php echo esc_attr($theme->slug); ?>')" type="button"
+                    :class="filter === '<?php echo esc_attr($theme->slug); ?>'
+                        ? 'inline-flex items-center gap-[7px] rounded-full px-4 py-2 min-h-[36px] border text-[13px] font-bold bg-primary text-white border-primary transition-colors duration-150'
+                        : 'inline-flex items-center gap-[7px] rounded-full px-4 py-2 min-h-[36px] border text-[13px] font-bold bg-surface-card border-border text-text-muted hover:border-primary/40 transition-colors duration-150'"
+                    :aria-current="filter === '<?php echo esc_attr($theme->slug); ?>' ? 'true' : false">
+                    <?php echo esc_html($theme->name); ?>
+                    <span :class="filter === '<?php echo esc_attr($theme->slug); ?>'
+                        ? 'text-[11px] font-bold tabular-nums bg-white/20 text-white rounded-full px-[7px] py-px'
+                        : 'text-[11px] font-bold tabular-nums bg-surface-alt text-text-faint rounded-full px-[7px] py-px'">
+                        <?php echo esc_html((string) $count); ?>
+                    </span>
+                </button>
+            <?php endforeach; ?>
         </div>
     </div>
     <?php endif; ?>
 
     <!-- Enrollable Grid (one card per active edition + one per pure-LD course) -->
-    <div class="container py-8 lg:py-12">
+    <div class="container py-6 pb-20">
         <?php if ($total > 0) : ?>
-            <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3" x-ref="grid">
+            <div class="grid gap-[18px]" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));" x-ref="grid">
                 <?php echo $initial_html; // Card HTML — escaped within the partials.?>
             </div>
 
             <!-- Empty state for filtered results -->
-            <div x-show="filteredTotal === 0 && !loading" x-cloak class="text-center py-12">
+            <div x-show="filteredTotal === 0 && !loading" x-cloak>
                 <?php
                 stridence_template_part('partials/empty-state', null, [
                     'icon'    => 'monitor',
-                    'title'   => __('Geen opleidingen gevonden', 'stridence'),
-                    'message' => __('Er zijn geen online opleidingen in dit thema.', 'stridence'),
+                    'title'   => __('Geen online opleidingen binnen dit thema', 'stridence'),
+                    'message' => __('We werken aan nieuwe modules rond dit thema. Bekijk intussen het volledige aanbod.', 'stridence'),
+                    'band'    => true,
                 ]);
-            ?>
+                ?>
+                <div class="mt-4 flex justify-center">
+                    <button @click="setFilter('')" type="button" class="btn-ghost">
+                        <?php esc_html_e('Toon alles', 'stridence'); ?>
+                    </button>
+                </div>
             </div>
 
             <!-- Load error -->
@@ -164,8 +177,10 @@ get_header();
             </p>
 
             <!-- Toon meer -->
-            <div x-show="hasMore" x-cloak class="mt-12 text-center">
-                <button @click="loadMore()" :disabled="loading" type="button" class="btn-primary">
+            <div x-show="hasMore" x-cloak class="mt-8 flex justify-center">
+                <button @click="loadMore()" :disabled="loading" type="button"
+                    :class="loading ? 'btn-load-more btn-loading' : 'btn-load-more'">
+                    <span x-show="loading" class="spinner w-[15px] h-[15px] rounded-full border-2 border-border border-t-text-muted animate-spin inline-block mr-2"></span>
                     <span x-show="!loading"><?php esc_html_e('Toon meer', 'stridence'); ?></span>
                     <span x-show="loading"><?php esc_html_e('Laden…', 'stridence'); ?></span>
                 </button>
