@@ -11,6 +11,9 @@ import './css/base.css';
 import Alpine from 'alpinejs';
 import collapse from '@alpinejs/collapse';
 
+// Component factories (extracted so Vitest can import them without booting Alpine)
+import { createToastStore } from './js/toast-store.js';
+
 // Register Alpine plugins
 Alpine.plugin(collapse);
 
@@ -22,31 +25,10 @@ window.Alpine = Alpine;
 // ══════════════════════════════════════
 
 /**
- * Toast notification store
+ * Toast notification store (factory in src/js/toast-store.js)
  * Usage: this.$dispatch('toast', { message: 'Success!', type: 'success' })
  */
-Alpine.data('toastStore', () => ({
-  visible: false,
-  message: '',
-  type: 'success',
-  timeout: null,
-
-  show({ message, type = 'success' }) {
-    clearTimeout(this.timeout);
-    this.message = message;
-    this.type = type;
-    this.visible = true;
-    this.timeout = setTimeout(() => (this.visible = false), 4000);
-  },
-
-  init() {
-    this.$watch('visible', (value) => {
-      if (!value) {
-        this.message = '';
-      }
-    });
-  },
-}));
+Alpine.data('toastStore', createToastStore);
 
 /**
  * Dashboard tabs with URL state
