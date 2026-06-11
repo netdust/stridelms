@@ -142,6 +142,18 @@ $item_idle   = $item_base . ' text-text-muted font-semibold hover:bg-surface-alt
                 <?php endif; ?>
             </span>
         </a>
+
+        <!-- Uitloggen -->
+        <div class="border-t border-border-soft/60 my-2"></div>
+        <a href="<?php echo esc_url(wp_logout_url(home_url('/'))); ?>"
+           class="<?php echo esc_attr($item_idle); ?> text-error/70 hover:text-error hover:bg-error/5"
+           :class="collapsed ? 'justify-center' : 'gap-3 pr-3'"
+           title="<?php esc_attr_e('Uitloggen', 'stridence'); ?>">
+            <span class="w-[38px] h-[38px] grid place-items-center shrink-0">
+                <?php echo stridence_icon('log-out', 'w-5 h-5 shrink-0'); ?>
+            </span>
+            <span x-show="!collapsed" class="text-sm whitespace-nowrap"><?php esc_html_e('Uitloggen', 'stridence'); ?></span>
+        </a>
     </div>
 
 </aside>
