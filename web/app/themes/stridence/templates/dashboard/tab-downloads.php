@@ -74,6 +74,7 @@ foreach ($registrations as $reg) {
 
     if (!empty($certificate_url)) {
         $certificates[] = [
+            'course_id'       => $course_id,
             'course_title'    => $course->post_title,
             'completed_at'    => $completed_at,
             'certificate_url' => $certificate_url,
@@ -87,7 +88,7 @@ $enrolled_course_ids = LearnDashHelper::getEnrolledCourses($user_id);
 foreach ($enrolled_course_ids as $courseId) {
     $already_covered = false;
     foreach ($certificates as $cert) {
-        if (($cert['course_id'] ?? 0) === $courseId) {
+        if ((int) ($cert['course_id'] ?? 0) === $courseId) {
             $already_covered = true;
             break;
         }
@@ -167,7 +168,7 @@ $all_quotes = array_merge($quoteData['active'], $quoteData['cancelled']);
                                     <?php
                                     printf(
                                         /* translators: %s: completion date */
-                                        esc_html__('Behaald op %s', 'stridence'),
+                                        esc_html__('behaald op %s', 'stridence'),
                                         esc_html(stride_format_date($cert['completed_at'])),
                                     );
                                     ?>

@@ -25,3 +25,7 @@ proposals only — no new data flow was added by the redesign tasks.
 ## Follow-ups
 
 - Herinner werkgever action (mockup Dashboard :241) — needs a stride-core handler (`stride_remind_employer`); button omitted until it exists.
+- Segmented control (Wacht op mij/gebruiker/Meldingen) on 'Acties nodig' — omitted: `buildActionList()` returns a flat list; needs a stride-core bucket extension (mockup Dashboard :118-141).
+- Progress-ring omitted from continue_course hero — mockup hero band shows no ring; baseline had one (confirm at shakeout).
+- Hero band uniform teal (bg-badge-online-bg) for ALL hero types incl. action_required — per mockup; baseline used warning-orange for action_required (confirm at shakeout).
+- Phase 10 cleanup list: dead `dashboardHome` openPanel/closePanel/panelOpen/activeEnrollment state in `src/main.js`; dead `.dash-card-hero` + `.safe-area-bottom` CSS in `components.css`.

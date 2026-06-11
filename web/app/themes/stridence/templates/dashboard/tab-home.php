@@ -121,8 +121,8 @@ if ($hasContent) {
                 </div>
                 <div class="flex flex-col gap-2">
                     <?php foreach ($sessions as $session) :
-                        $isToday    = ($session['date'] ?? '') === date('Y-m-d');
-                        $isTomorrow = ($session['date'] ?? '') === date('Y-m-d', strtotime('+1 day'));
+                        $isToday    = ($session['date'] ?? '') === wp_date('Y-m-d');
+                        $isTomorrow = ($session['date'] ?? '') === wp_date('Y-m-d', strtotime('+1 day'));
                         $editionSlug = get_post_field('post_name', (int) ($session['edition_id'] ?? 0));
                         $detailUrl   = $editionSlug ? home_url('/edities/' . $editionSlug . '/') : '';
                         ?>
@@ -135,7 +135,7 @@ if ($hasContent) {
                             <?php else : ?>
                                 <span class="w-10 h-10 rounded-[8px] bg-surface-alt flex flex-col items-center justify-center shrink-0">
                                     <span class="text-[9px] uppercase font-semibold text-text-muted leading-none"><?php echo esc_html(date_i18n('M', strtotime($session['date']))); ?></span>
-                                    <span class="text-sm font-bold text-text leading-none mt-0.5"><?php echo esc_html(date('j', strtotime($session['date']))); ?></span>
+                                    <span class="text-sm font-bold text-text leading-none mt-0.5"><?php echo esc_html(wp_date('j', strtotime($session['date']))); ?></span>
                                 </span>
                             <?php endif; ?>
                             <span class="flex-1 min-w-0 leading-snug">
