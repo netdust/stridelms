@@ -1,9 +1,15 @@
 <?php
 /**
- * Personal Trajectory Dashboard
+ * Personal Trajectory Dashboard — Helder Tij
  *
  * Main shell for user's enrolled trajectory view with tabbed navigation.
  * Validates enrollment and loads appropriate tab content.
+ *
+ * Header band: breadcrumb, Traject + Ingeschreven badges, serif title,
+ * meta dot-row and an 84px progress ring (white track on the tinted band).
+ * Tabs keep the existing ?tab= server-side switching (restyled to the
+ * underline recipe); the Keuzes tab shows an accent count badge while
+ * the elective choice window is open and selections are incomplete.
  *
  * @param array $args {
  *     @type string $trajectory_slug Trajectory post slug
@@ -17,6 +23,7 @@ declare(strict_types=1);
 defined('ABSPATH') || exit;
 
 use Stride\Modules\Trajectory\TrajectoryDashboardService;
+use Stride\Modules\Trajectory\TrajectoryService;
 
 $trajectory_slug = $args['trajectory_slug'] ?? '';
 $user = $args['user'] ?? wp_get_current_user();
@@ -60,92 +67,170 @@ if (!in_array($current_tab, $valid_tabs, true)) {
 $dashboard_url = get_permalink(get_page_by_path('mijn-account'));
 $trajecten_tab_url = add_query_arg('tab', 'trajecten', $dashboard_url);
 
+// Progress data for the header band (same source as tab-voortgang)
+$progress = $dashboardService->getProgressData($user->ID, $trajectory->ID);
+$completed_count = (int) $progress['completed_count'];
+$total_required = (int) $progress['total_required'];
+$progress_percent = $total_required > 0 ? (int) round(($completed_count / $total_required) * 100) : 0;
+
+// Open-choice count for the Keuzes tab badge (same window logic as tab-keuzes)
+$trajectory_data = ntdst_get(TrajectoryService::class)->getTrajectory($trajectory->ID);
+$choice_available = $trajectory_data['choice_available_date'] ?? '';
+$choice_deadline = $trajectory_data['choice_deadline'] ?? '';
+
+$open_choices = 0;
+if (!empty($choice_available) && !empty($choice_deadline)) {
+    $now = time();
+    if ($now >= strtotime($choice_available) && $now <= strtotime($choice_deadline)) {
+        // findByUserAndTrajectory() already decodes selections to an array;
+        // tolerate a raw JSON string for rows that skipped that path.
+        $raw_selections = $enrollment->selections ?? null;
+        if (is_array($raw_selections)) {
+            $selections = $raw_selections;
+        } elseif (is_string($raw_selections) && $raw_selections !== '') {
+            $selections = (array) json_decode($raw_selections, true);
+        } else {
+            $selections = [];
+        }
+
+        foreach ($progress['elective_groups'] as $group_index => $group) {
+            $required = (int) ($group['required'] ?? 0);
+            $chosen = count((array) ($selections[$group_index] ?? []));
+
+            if ($required > 0 && $chosen < $required) {
+                $open_choices++;
+            }
+        }
+    }
+}
+
+// Meta dot-row — only segments with existing data
+$meta_segments = [];
+
+if ($total_required > 0) {
+    $meta_segments[] = sprintf(
+        /* translators: %d: number of trajectory parts */
+        _n('%d onderdeel', '%d onderdelen', $total_required, 'stridence'),
+        $total_required,
+    );
+}
+
+if (!empty($enrollment->registered_at)) {
+    $meta_segments[] = sprintf(
+        /* translators: %s: enrollment month and year */
+        __('gestart %s', 'stridence'),
+        date_i18n('F Y', strtotime($enrollment->registered_at)),
+    );
+}
+
+// Breadcrumb items (Trajecten crumb links back to the account trajecten tab)
+$breadcrumbs = [
+    ['label' => __('Trajecten', 'stridence'), 'url' => $trajecten_tab_url],
+    ['label' => $trajectory->post_title],
+];
+
 // Tab definitions
 $tabs = [
-    'voortgang' => [
-        'label' => __('Voortgang', 'stridence'),
-        'icon' => 'trending-up',
-    ],
-    'keuzes' => [
-        'label' => __('Keuzes', 'stridence'),
-        'icon' => 'check-square',
-    ],
-    'materialen' => [
-        'label' => __('Materialen', 'stridence'),
-        'icon' => 'file-text',
-    ],
-    'berichten' => [
-        'label' => __('Berichten', 'stridence'),
-        'icon' => 'bell',
-    ],
+    'voortgang' => __('Voortgang', 'stridence'),
+    'keuzes' => __('Keuzes', 'stridence'),
+    'materialen' => __('Materialen', 'stridence'),
+    'berichten' => __('Berichten', 'stridence'),
 ];
 ?>
 
-<div class="min-h-screen bg-surface-alt pb-20 lg:pb-0">
-    <!-- Page Header -->
-    <div class="bg-surface border-b border-border">
-        <div class="container py-6 lg:py-8">
-            <!-- Back link -->
-            <a href="<?php echo esc_url($trajecten_tab_url); ?>"
-               class="inline-flex items-center gap-1 text-sm text-text-muted hover:text-primary mb-4">
-                <?php echo stridence_icon('chevron-left', 'w-4 h-4'); ?>
-                <?php esc_html_e('Terug naar trajecten', 'stridence'); ?>
-            </a>
+<div class="min-h-screen pb-20 lg:pb-0">
+    <!-- Header band -->
+    <div class="bg-surface-alt border-b border-border">
+        <div class="container py-8 lg:py-10">
+            <?php
+            stridence_template_part('partials/breadcrumb', null, [
+                'items' => $breadcrumbs,
+            ]);
+?>
 
-            <div class="flex items-start gap-4">
-                <div class="w-12 h-12 lg:w-16 lg:h-16 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <?php echo stridence_icon('layers', 'w-6 h-6 lg:w-8 lg:h-8 text-primary'); ?>
-                </div>
-                <div>
-                    <h1 class="font-heading text-xl lg:text-2xl font-bold text-text">
+            <div class="flex flex-wrap items-center gap-6 lg:gap-10">
+                <div class="flex-1 min-w-[280px]">
+                    <div class="flex items-center gap-2">
+                        <?php
+        stridence_template_part('partials/badge-status', null, [
+            'status' => 'trajectory',
+        ]);
+stridence_template_part('partials/badge-status', null, [
+    'status' => 'enrolled',
+]);
+?>
+                    </div>
+
+                    <h1 class="font-serif font-normal text-[clamp(30px,4.5vw,44px)] leading-[1.12] text-text max-w-[680px] mt-3.5 mb-2.5">
                         <?php echo esc_html($trajectory->post_title); ?>
                     </h1>
-                    <p class="text-sm text-text-muted mt-1">
-                        <?php
-                        printf(
-                            /* translators: %s: enrollment date */
-                            esc_html__('Ingeschreven sinds %s', 'stridence'),
-                            esc_html(date_i18n('j F Y', strtotime($enrollment->registered_at))),
-                        );
-?>
-                    </p>
+
+                    <?php if (!empty($meta_segments)) : ?>
+                        <div class="text-[15px] text-text-muted">
+                            <?php echo esc_html(implode(' · ', $meta_segments)); ?>
+                        </div>
+                    <?php endif; ?>
                 </div>
+
+                <?php if ($total_required > 0) : ?>
+                    <div class="flex items-center gap-4">
+                        <?php
+                        stridence_template_part('templates/dashboard/partials/progress-ring', null, [
+                            'progress' => $progress_percent,
+                            'size' => 84,
+                            'track' => 'white',
+                        ]);
+                    ?>
+                        <div class="text-[13px] text-text-muted leading-snug">
+                            <?php
+                    printf(
+                        /* translators: %1$d: completed parts, %2$d: total parts */
+                        esc_html__('%1$d van %2$d onderdelen afgerond', 'stridence'),
+                        $completed_count,
+                        $total_required,
+                    );
+                    ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
 
-    <!-- Tab Navigation -->
-    <div class="bg-surface border-b border-border sticky top-0 z-30">
-        <div class="container">
-            <nav class="flex gap-1 overflow-x-auto -mb-px" aria-label="<?php esc_attr_e('Traject navigatie', 'stridence'); ?>">
-                <?php foreach ($tabs as $slug => $tab) :
-                    $is_active = ($current_tab === $slug);
-                    $url = add_query_arg('tab', $slug);
+    <!-- Tabs + panel -->
+    <div class="container pt-6 lg:pt-9">
+        <nav class="border-b border-border-soft flex gap-6 overflow-x-auto scrollbar-hide" aria-label="<?php esc_attr_e('Traject navigatie', 'stridence'); ?>">
+            <?php foreach ($tabs as $slug => $label) :
+                $is_active = ($current_tab === $slug);
+                $url = add_query_arg('tab', $slug);
 
-                    $classes = $is_active
-                        ? 'flex items-center gap-2 px-4 py-3 text-sm font-medium text-primary border-b-2 border-primary whitespace-nowrap'
-                        : 'flex items-center gap-2 px-4 py-3 text-sm font-medium text-text-muted hover:text-text border-b-2 border-transparent whitespace-nowrap';
-                    ?>
-                    <a href="<?php echo esc_url($url); ?>"
-                       class="<?php echo esc_attr($classes); ?>"
-                       <?php echo $is_active ? 'aria-current="page"' : ''; ?>>
-                        <?php echo stridence_icon($tab['icon'], 'w-4 h-4'); ?>
-                        <?php echo esc_html($tab['label']); ?>
-                    </a>
-                <?php endforeach; ?>
-            </nav>
-        </div>
-    </div>
+                $classes = $is_active
+                    ? 'inline-flex items-center gap-1.5 text-[15px] font-bold pb-3 px-0.5 whitespace-nowrap transition-colors text-primary shadow-[inset_0_-2px_0_0] shadow-primary'
+                    : 'inline-flex items-center gap-1.5 text-[15px] font-bold pb-3 px-0.5 whitespace-nowrap transition-colors text-text-faint hover:text-text';
+                ?>
+                <a href="<?php echo esc_url($url); ?>"
+                   class="<?php echo esc_attr($classes); ?>"
+                   <?php echo $is_active ? 'aria-current="page"' : ''; ?>>
+                    <?php echo esc_html($label); ?>
+                    <?php if ($slug === 'keuzes' && $open_choices > 0) : ?>
+                        <span class="bg-accent text-white text-[11px] font-bold rounded-full px-1.5 py-px">
+                            <?php echo esc_html((string) $open_choices); ?>
+                        </span>
+                    <?php endif; ?>
+                </a>
+            <?php endforeach; ?>
+        </nav>
 
-    <!-- Tab Content -->
-    <div class="container py-6 lg:py-8">
-        <?php
-        stridence_template_part("templates/trajectory/tab-{$current_tab}", null, [
-            'trajectory' => $trajectory,
-            'enrollment' => $enrollment,
-            'user' => $user,
-            'dashboard_service' => $dashboardService,
-        ]);
+        <!-- Tab Content -->
+        <div class="pt-7 pb-12 lg:pb-16">
+            <?php
+            stridence_template_part("templates/trajectory/tab-{$current_tab}", null, [
+                'trajectory' => $trajectory,
+                'enrollment' => $enrollment,
+                'user' => $user,
+                'dashboard_service' => $dashboardService,
+            ]);
 ?>
+        </div>
     </div>
 </div>
