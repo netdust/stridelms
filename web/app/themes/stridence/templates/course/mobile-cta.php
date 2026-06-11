@@ -38,7 +38,7 @@ $is_complete = $has_access && $progress >= 100;
 $is_open     = $is_online && LearnDashHelper::getAccessMode($course_id) === LearnDashHelper::MODE_OPEN;
 
 ?>
-<div class="lg:hidden fixed bottom-0 inset-x-0 bg-surface border-t border-border p-4 z-40">
+<div class="lg:hidden fixed bottom-0 inset-x-0 bg-surface-card shadow-[0_-4px_16px_rgba(41,44,49,0.1)] px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] z-40">
     <div class="container">
         <?php if ($is_online && $is_complete) : ?>
             <!-- Online completed: certificate -->
@@ -56,10 +56,39 @@ $is_open     = $is_online && LearnDashHelper::getAccessMode($course_id) === Lear
             <?php endif; ?>
 
         <?php elseif ($is_online && $has_access && $is_enrolled) : ?>
-            <!-- Online enrolled, in progress: continue -->
-            <a href="<?php echo esc_url(LearnDashHelper::getResumeUrl($course_id, $user_id)); ?>" class="btn btn-primary w-full text-center">
-                <?php echo $progress > 0 ? 'Doorgaan' : 'Start cursus'; ?>
-            </a>
+            <!-- Online enrolled, in progress: progress left, continue right
+                 (Helder Tij). Same resume/first-lesson URL logic as before. -->
+            <?php
+            $m_lessons   = LearnDashHelper::getLessons($course_id, $user_id);
+            $m_total     = count($m_lessons);
+            $m_done      = count(array_filter($m_lessons, static fn(array $l): bool => !empty($l['completed'])));
+            $m_remaining = max(0, $m_total - $m_done);
+
+            $m_url = $progress > 0
+                ? LearnDashHelper::getResumeUrl($course_id, $user_id)
+                : LearnDashHelper::getFirstLessonUrl($course_id);
+            ?>
+            <div class="flex items-center gap-3.5">
+                <div class="flex-1 min-w-0">
+                    <div class="text-[14px] font-extrabold text-text">
+                        <?php
+                        /* translators: %d: completion percentage */
+                        echo esc_html(sprintf(__('%d%% voltooid', 'stridence'), $progress));
+            ?>
+                    </div>
+                    <?php if ($m_remaining > 0) : ?>
+                        <div class="text-[12px] text-text-muted">
+                            <?php
+                            /* translators: %d: number of modules left */
+                            echo esc_html(sprintf(_n('Nog %d module', 'Nog %d modules', $m_remaining, 'stridence'), $m_remaining));
+                        ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+                <a href="<?php echo esc_url($m_url); ?>" class="btn btn-primary shrink-0 text-center">
+                    <?php echo $progress > 0 ? esc_html__('Ga verder', 'stridence') : esc_html__('Start opleiding', 'stridence'); ?>
+                </a>
+            </div>
 
         <?php elseif ($is_online && $is_open && $has_access) : ?>
             <!-- Open course: direct start -->

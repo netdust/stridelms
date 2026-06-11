@@ -12,6 +12,7 @@
 
 defined('ABSPATH') || exit;
 
+use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\EditionRepository;
 
@@ -19,6 +20,18 @@ $course_id   = $args['course_id'] ?? get_the_ID();
 $breadcrumbs = $args['breadcrumbs'] ?? [];
 $is_online   = $args['is_online'] ?? false;
 $editions    = $args['editions'] ?? [];
+
+// Online meta (Helder Tij): only render segments whose data actually exists.
+// Duration and "afsluitende toets" have no live source yet — omitted, see
+// docs/plans/2026-06-11-helder-tij-field-inventory.md.
+$is_free_course = false;
+$module_count   = 0;
+
+if ($is_online) {
+    $access_mode    = LearnDashHelper::getAccessMode($course_id);
+    $is_free_course = in_array($access_mode, [LearnDashHelper::MODE_OPEN, LearnDashHelper::MODE_FREE], true);
+    $module_count   = count(LearnDashHelper::getLessons($course_id));
+}
 
 // For in-person courses, compute a header meta line: next upcoming edition date,
 // upcoming count, price range. This matches the visual weight of the edition page's
@@ -69,30 +82,13 @@ if (!$is_online && !empty($editions)) {
         ]);
 ?>
 
-        <!-- Format badge -->
-        <div class="flex items-center gap-2 mb-4">
-            <?php if ($is_online) :
-                // Distinguish e-learning vs webinar via stride_format taxonomy
-                $format_terms = get_the_terms($course_id, 'stride_format');
-                $format_slugs = (!empty($format_terms) && !is_wp_error($format_terms))
-                    ? wp_list_pluck($format_terms, 'slug')
-                    : [];
-
-                if (in_array('e-learning', $format_slugs, true)) {
-                    $format_label = __('E-learning', 'stridence');
-                    $format_icon = 'monitor';
-                } elseif (in_array('webinar', $format_slugs, true)) {
-                    $format_label = __('Webinar', 'stridence');
-                    $format_icon = 'video';
-                } else {
-                    $format_label = __('Online cursus', 'stridence');
-                    $format_icon = 'wifi';
-                }
-?>
-                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-accent text-text-inverse">
-                    <?php echo stridence_icon($format_icon, 'w-3 h-3'); ?>
-                    <?php echo esc_html($format_label); ?>
-                </span>
+        <!-- Badge row (Helder Tij) -->
+        <div class="flex flex-wrap items-center gap-2">
+            <?php if ($is_online) : ?>
+                <?php stridence_template_part('partials/badge-status', null, ['status' => 'online']); ?>
+                <?php if ($is_free_course) : ?>
+                    <?php stridence_template_part('partials/badge-status', null, ['status' => 'free']); ?>
+                <?php endif; ?>
             <?php else : ?>
                 <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-primary text-text-inverse">
                     <?php echo stridence_icon('map-pin', 'w-3 h-3'); ?>
@@ -101,14 +97,28 @@ if (!$is_online && !empty($editions)) {
             <?php endif; ?>
         </div>
 
-        <h1 class="font-heading text-3xl lg:text-4xl font-bold text-text mb-4">
+        <h1 class="font-serif font-normal text-[clamp(30px,4.5vw,44px)] leading-[1.12] text-text max-w-[760px] mt-3.5 mb-3">
             <?php echo get_the_title($course_id); ?>
         </h1>
 
         <?php if (has_excerpt($course_id)) : ?>
-            <p class="text-lg text-text-muted max-w-3xl mb-4">
+            <p class="text-lg text-text-muted max-w-3xl mb-3">
                 <?php echo esc_html(get_the_excerpt($course_id)); ?>
             </p>
+        <?php endif; ?>
+
+        <?php if ($is_online) : ?>
+            <!-- Meta dot-row — only segments with live data (no fake data) -->
+            <div class="flex flex-wrap items-center gap-[10px] text-[15px] text-text-muted">
+                <span><?php esc_html_e('Op eigen tempo', 'stridence'); ?></span>
+                <?php if ($module_count > 0) : ?>
+                    <span class="text-text-faint" aria-hidden="true">&middot;</span>
+                    <span><?php
+                        /* translators: %d: number of course modules/lessons */
+                        echo esc_html(sprintf(_n('%d module', '%d modules', $module_count, 'stridence'), $module_count));
+                    ?></span>
+                <?php endif; ?>
+            </div>
         <?php endif; ?>
 
         <?php if (!$is_online && ($next_edition_date || $upcoming_count > 0 || $price_min_cents !== null)) : ?>

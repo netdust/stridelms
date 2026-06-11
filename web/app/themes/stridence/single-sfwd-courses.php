@@ -80,7 +80,7 @@ $breadcrumbs = [
 get_header();
 ?>
 
-<article <?php post_class('pb-12 lg:pb-16'); ?>>
+<article <?php post_class($show_online_sidebar ? 'pb-24 lg:pb-0' : 'pb-12 lg:pb-16'); ?>>
     <?php
     stridence_template_part('templates/course/header', null, [
         'course_id'   => $course_id,
@@ -90,11 +90,15 @@ get_header();
     ]);
 ?>
 
-    <?php
-stridence_template_part('templates/course/tabs', null, [
-    'is_online' => $is_online,
-]);
-?>
+    <?php if (!$is_online) : ?>
+        <?php
+        // Helder Tij: the online detail page is a single focused scroll
+        // (intro + lesson list + sidebar) — no tab nav. Klassikaal keeps it.
+        stridence_template_part('templates/course/tabs', null, [
+            'is_online' => $is_online,
+        ]);
+        ?>
+    <?php endif; ?>
 
     <div class="container py-8 lg:py-12">
         <?php if ($show_online_sidebar) : ?>

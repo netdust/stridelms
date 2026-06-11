@@ -114,12 +114,39 @@ endif;
 
 <!-- Programma Section -->
 <section id="programma" class="scroll-mt-32">
+    <?php
+    $current_user_id = get_current_user_id();
+
+if ($is_online) :
+    // Helder Tij: heading row with progress label ("X van Y modules afgerond")
+    // from existing LearnDashHelper data — only when the visitor has access.
+    $course_lessons = LearnDashHelper::getLessons($course_id, $current_user_id ?: null);
+    $lesson_total   = count($course_lessons);
+    $lessons_done   = count(array_filter($course_lessons, static fn(array $l): bool => !empty($l['completed'])));
+    $show_lesson_progress = $current_user_id
+        && $lesson_total > 0
+        && LearnDashHelper::hasAccess($course_id, $current_user_id);
+    ?>
+    <div class="flex justify-between items-baseline gap-3.5 flex-wrap mb-3">
+        <h2 class="text-[18px] font-bold text-text">
+            <?php esc_html_e('Inhoud van de opleiding', 'stridence'); ?>
+        </h2>
+        <?php if ($show_lesson_progress) : ?>
+            <div class="text-[13px] font-bold text-text-muted">
+                <?php
+                /* translators: 1: completed modules, 2: total modules */
+                echo esc_html(sprintf(__('%1$d van %2$d modules afgerond', 'stridence'), $lessons_done, $lesson_total));
+            ?>
+            </div>
+        <?php endif; ?>
+    </div>
+    <?php else : ?>
     <h2 class="font-heading text-2xl font-bold text-text mb-6">
         <?php esc_html_e('Programma', 'stridence'); ?>
     </h2>
+    <?php endif; ?>
 
     <?php
-    $current_user_id = get_current_user_id();
 $has_drip = $is_online && $current_user_id && LearnDashHelper::hasAccess($course_id, $current_user_id) && LearnDashHelper::hasDripFeed($course_id);
 
 if ($has_drip) :
@@ -135,24 +162,43 @@ if ($has_drip) :
             </span>
         </div>
 
-        <div class="mb-6 space-y-2">
-            <?php foreach ($lessons_with_dates as $lesson) : ?>
-                <div class="flex items-center gap-3 p-3 rounded-lg <?php echo $lesson['is_available'] ? 'bg-surface' : 'bg-surface-alt'; ?>">
-                    <?php if ($lesson['completed']) : ?>
-                        <?php echo stridence_icon('check-circle', 'w-5 h-5 text-status-success shrink-0'); ?>
-                    <?php elseif (!$lesson['is_available']) : ?>
-                        <?php echo stridence_icon('clock', 'w-5 h-5 text-text-muted shrink-0'); ?>
+        <!-- Custom drip list — our own markup, restyled to the Helder Tij
+             lesson-list recipe (white card, divider rows, status circles). -->
+        <div class="mb-6 bg-surface-card rounded-[16px] shadow-card flex flex-col">
+            <?php
+            $current_marked = false;
+        foreach ($lessons_with_dates as $i => $lesson) :
+            $is_done    = !empty($lesson['completed']);
+            $is_locked  = empty($lesson['is_available']);
+            $is_current = !$current_marked && !$is_done && !$is_locked;
+            if ($is_current) {
+                $current_marked = true;
+            }
+            ?>
+                <?php if ($i > 0) : ?>
+                    <div class="h-px bg-surface-alt mx-5"></div>
+                <?php endif; ?>
+                <div class="px-5 py-4 flex items-center gap-3.5<?php echo $is_current ? ' bg-badge-online-bg/50' : ''; ?>">
+                    <?php if ($is_done) : ?>
+                        <span class="w-6 h-6 rounded-full bg-badge-open-bg text-badge-open-text text-[13px] font-extrabold grid place-items-center shrink-0" aria-hidden="true">&check;</span>
+                    <?php elseif ($is_current) : ?>
+                        <span class="w-6 h-6 rounded-full bg-primary grid place-items-center shrink-0" aria-hidden="true"><span class="w-2 h-2 rounded-full bg-white"></span></span>
                     <?php else : ?>
-                        <?php echo stridence_icon('circle', 'w-5 h-5 text-primary shrink-0'); ?>
+                        <span class="w-6 h-6 rounded-full border-2 border-border shrink-0" aria-hidden="true"></span>
                     <?php endif; ?>
 
                     <div class="flex-1 min-w-0">
-                        <?php if ($lesson['is_available']) : ?>
-                            <a href="<?php echo esc_url($lesson['url']); ?>" class="text-sm font-medium text-text hover:text-primary truncate block">
+                        <?php if (!$is_locked) : ?>
+                            <a href="<?php echo esc_url($lesson['url']); ?>" class="text-[15px] <?php echo $is_current ? 'font-bold text-text' : 'font-semibold ' . ($is_done ? 'text-text-muted' : 'text-text'); ?> hover:text-primary truncate block">
                                 <?php echo esc_html($lesson['title']); ?>
                             </a>
+                            <?php if ($is_current) : ?>
+                                <div class="text-[12px] font-bold text-badge-online-text mt-0.5">
+                                    <?php esc_html_e('Hier ben je gebleven', 'stridence'); ?>
+                                </div>
+                            <?php endif; ?>
                         <?php else : ?>
-                            <span class="text-sm font-medium text-text-muted truncate block">
+                            <span class="text-[15px] font-semibold text-text-muted truncate block">
                                 <?php echo esc_html($lesson['title']); ?>
                             </span>
                         <?php endif; ?>
@@ -165,8 +211,8 @@ if ($has_drip) :
                                 stride_format_date(date('Y-m-d', $lesson['available_from'])),
                             )); ?>
                         </span>
-                    <?php elseif ($lesson['completed']) : ?>
-                        <span class="text-xs text-status-success whitespace-nowrap">
+                    <?php elseif ($is_done) : ?>
+                        <span class="text-xs text-badge-open-text whitespace-nowrap">
                             <?php esc_html_e('Afgerond', 'stridence'); ?>
                         </span>
                     <?php endif; ?>

@@ -51,12 +51,12 @@ $price_info = function_exists('learndash_get_course_price')
 $price_type   = $has_edition_price ? 'paynow' : ($price_info['type'] ?? 'open');
 $course_price = $price_info['price'] ?? '';
 
-// Format price display
+// Format price display (Helder Tij: via stride_format_money, cents-based)
 if ($has_edition_price) {
-    $price_formatted = $edition_price->format();
+    $price_formatted = stride_format_money($edition_price->inCents());
 } else {
     $price_formatted = !empty($course_price)
-        ? '€ ' . number_format((float) $course_price, 2, ',', '.')
+        ? stride_format_money((int) round(((float) $course_price) * 100))
         : '';
 }
 
@@ -113,8 +113,18 @@ $days_remaining = ($has_access && $has_expiration)
 $expiration_ts = ($days_remaining !== null)
     ? LearnDashHelper::getAccessExpiration($course_id, $user_id) : null;
 
+// Benefits checklist — PLACEHOLDER copy (generic, true for online courses).
+// See docs/plans/2026-06-11-helder-tij-field-inventory.md for the mockup's
+// per-course copy that has no live data source yet.
+$benefit_rows = [
+    __('Direct toegang', 'stridence'),
+    __('Leer in je eigen tempo', 'stridence'),
+    __('Certificaat na afronding', 'stridence'),
+];
+
 ?>
-<aside class="card p-6 sticky top-24">
+<div class="sticky top-24 space-y-3.5">
+<aside class="bg-surface-card rounded-[16px] shadow-elevated p-7">
     <?php if ($is_complete) : ?>
         <!-- ── Completed ── -->
         <div class="flex items-center gap-2 mb-4">
@@ -150,68 +160,108 @@ $expiration_ts = ($days_remaining !== null)
         </div>
 
     <?php elseif ($has_access && $is_enrolled) : ?>
-        <!-- ── Enrolled, in progress ── -->
-        <div class="flex items-center gap-2 mb-4">
-            <?php echo stridence_icon('check-circle', 'w-5 h-5 text-primary'); ?>
-            <h3 class="font-heading font-semibold text-lg">Ingeschreven</h3>
+        <!-- ── Enrolled, in progress (Helder Tij: ring + greeting + CTA) ── -->
+        <?php
+        $viewer      = wp_get_current_user();
+        $viewer_name = $viewer->first_name !== '' ? $viewer->first_name : $viewer->display_name;
+
+        // Modules remaining from existing LearnDashHelper data. The mockup's
+        // "± Y min" estimate has no live data source — omitted (no fake data).
+        $sb_lessons   = LearnDashHelper::getLessons($course_id, $user_id);
+        $sb_total     = count($sb_lessons);
+        $sb_done      = count(array_filter($sb_lessons, static fn(array $l): bool => !empty($l['completed'])));
+        $sb_remaining = max(0, $sb_total - $sb_done);
+
+        // CTA from the existing course-action resolver. When Stride has the
+        // registration but LD access hasn't synced yet, getCourseAction()
+        // would return an enroll action — keep the original first-lesson
+        // fallback for that edge instead.
+        $course_action = LearnDashHelper::getCourseAction($course_id, $user_id);
+        if (!in_array($course_action['action'], ['start', 'continue', 'view'], true)) {
+            $course_action = [
+                'action' => 'start',
+                'url'    => LearnDashHelper::getFirstLessonUrl($course_id),
+            ];
+        }
+        $cta_label = match ($course_action['action']) {
+            'continue' => __('Ga verder', 'stridence'),
+            'view'     => __('Bekijk opleiding', 'stridence'),
+            default    => __('Start opleiding', 'stridence'),
+        };
+        ?>
+        <div class="flex items-center gap-[18px]">
+            <?php stridence_template_part('templates/dashboard/partials/progress-ring', null, [
+                'progress' => $progress,
+                'size'     => 64,
+            ]); ?>
+            <div class="min-w-0">
+                <div class="text-[15px] font-bold text-text">
+                    <?php
+                    /* translators: %s: the visitor's first name */
+                    echo esc_html(sprintf(__('Goed bezig, %s', 'stridence'), $viewer_name));
+        ?>
+                </div>
+                <?php if ($sb_remaining > 0) : ?>
+                    <div class="text-[13px] text-text-muted mt-0.5">
+                        <?php
+                        /* translators: %d: number of modules left */
+                        echo esc_html(sprintf(_n('Nog %d module', 'Nog %d modules', $sb_remaining, 'stridence'), $sb_remaining));
+                    ?>
+                    </div>
+                <?php endif; ?>
+            </div>
         </div>
 
-        <div class="space-y-4">
-            <div>
-                <div class="flex justify-between text-sm text-text-muted mb-1">
-                    <span>Voortgang</span>
-                    <span><?php echo esc_html($progress); ?>%</span>
-                </div>
-                <div class="w-full bg-surface-container rounded-full h-2">
-                    <div class="bg-primary rounded-full h-2 transition-all" style="width: <?php echo esc_attr($progress); ?>%"></div>
-                </div>
-            </div>
-
-            <?php if ($days_remaining !== null) :
-                $is_urgent = $days_remaining <= 14;
-                ?>
-                <div class="flex items-start gap-2 p-3 rounded-lg text-sm <?php echo $is_urgent ? 'bg-warning/10 text-warning-dark' : 'bg-surface-alt text-text-muted'; ?>">
-                    <?php echo stridence_icon($is_urgent ? 'alert-circle' : 'clock', 'w-4 h-4 mt-0.5 shrink-0'); ?>
-                    <div>
-                        <span class="font-medium">
+        <?php if ($days_remaining !== null) :
+            $is_urgent = $days_remaining <= 14;
+            ?>
+            <div class="flex items-start gap-2 p-3 mt-4 rounded-[12px] text-sm <?php echo $is_urgent ? 'bg-warning/10 text-warning-dark' : 'bg-surface-alt text-text-muted'; ?>">
+                <?php echo stridence_icon($is_urgent ? 'alert-circle' : 'clock', 'w-4 h-4 mt-0.5 shrink-0'); ?>
+                <div>
+                    <span class="font-medium">
+                        <?php echo esc_html(sprintf(
+                            _n('Nog %d dag toegang', 'Nog %d dagen toegang', $days_remaining, 'stridence'),
+                            $days_remaining,
+                        )); ?>
+                    </span>
+                    <?php if ($expiration_ts) : ?>
+                        <span class="block text-xs mt-0.5">
                             <?php echo esc_html(sprintf(
-                                _n('Nog %d dag toegang', 'Nog %d dagen toegang', $days_remaining, 'stridence'),
-                                $days_remaining,
+                                __('Vervalt op %s', 'stridence'),
+                                stride_format_date(date('Y-m-d', $expiration_ts)),
                             )); ?>
                         </span>
-                        <?php if ($expiration_ts) : ?>
-                            <span class="block text-xs mt-0.5">
-                                <?php echo esc_html(sprintf(
-                                    __('Vervalt op %s', 'stridence'),
-                                    stride_format_date(date('Y-m-d', $expiration_ts)),
-                                )); ?>
-                            </span>
-                        <?php endif; ?>
-                    </div>
+                    <?php endif; ?>
                 </div>
-            <?php endif; ?>
+            </div>
+        <?php endif; ?>
 
-            <?php if ($progress > 0) : ?>
-                <a href="<?php echo esc_url(LearnDashHelper::getResumeUrl($course_id, $user_id)); ?>" class="btn btn-primary w-full text-center">
-                    Doorgaan
-                </a>
-            <?php else : ?>
-                <a href="<?php echo esc_url(LearnDashHelper::getFirstLessonUrl($course_id)); ?>" class="btn btn-primary w-full text-center">
-                    Start cursus
-                </a>
-            <?php endif; ?>
+        <div class="mt-[22px]">
+            <a href="<?php echo esc_url($course_action['url']); ?>" class="btn btn-primary w-full text-center">
+                <?php echo esc_html($cta_label); ?>
+            </a>
         </div>
+
+        <div class="h-px bg-border-soft mt-5 mb-4"></div>
+        <ul class="flex flex-col gap-2 text-[13px] text-text-muted">
+            <?php foreach ($benefit_rows as $benefit) : ?>
+                <li class="flex items-center gap-2">
+                    <span class="text-primary font-extrabold" aria-hidden="true">&check;</span>
+                    <?php echo esc_html($benefit); ?>
+                </li>
+            <?php endforeach; ?>
+        </ul>
 
     <?php else : ?>
         <!-- ── Not enrolled ── -->
         <div class="space-y-4">
             <?php if ($price_type === 'open' || $price_type === 'free') : ?>
-                <div class="text-2xl font-bold text-text">
+                <div class="text-[24px] font-extrabold text-badge-free-text">
                     <?php esc_html_e('Gratis', 'stridence'); ?>
                 </div>
             <?php elseif ($price_formatted) : ?>
                 <div>
-                    <div class="text-2xl font-bold text-text">
+                    <div class="text-[24px] font-extrabold text-text">
                         <?php echo esc_html($price_formatted); ?>
                     </div>
                     <?php if ($billing_text) : ?>
@@ -225,19 +275,13 @@ $expiration_ts = ($days_remaining !== null)
                 </div>
             <?php endif; ?>
 
-            <ul class="text-sm text-text-muted space-y-2">
-                <li class="flex items-center gap-2">
-                    <?php echo stridence_icon('check', 'w-4 h-4 text-status-success'); ?>
-                    <?php esc_html_e('Direct toegang', 'stridence'); ?>
-                </li>
-                <li class="flex items-center gap-2">
-                    <?php echo stridence_icon('check', 'w-4 h-4 text-status-success'); ?>
-                    <?php esc_html_e('Leer in je eigen tempo', 'stridence'); ?>
-                </li>
-                <li class="flex items-center gap-2">
-                    <?php echo stridence_icon('check', 'w-4 h-4 text-status-success'); ?>
-                    <?php esc_html_e('Certificaat na afronding', 'stridence'); ?>
-                </li>
+            <ul class="flex flex-col gap-2 text-[13px] text-text-muted">
+                <?php foreach ($benefit_rows as $benefit) : ?>
+                    <li class="flex items-center gap-2">
+                        <span class="text-primary font-extrabold" aria-hidden="true">&check;</span>
+                        <?php echo esc_html($benefit); ?>
+                    </li>
+                <?php endforeach; ?>
             </ul>
 
             <?php
@@ -369,3 +413,14 @@ if ($has_info) :
         </div>
     <?php endif; ?>
 </aside>
+
+<?php if ($has_edition) : ?>
+    <!-- Accent-subtle chip — only when this course has an active edition
+         (same data condition that renders the #edities list in content). -->
+    <a href="#edities"
+       class="bg-accent-subtle rounded-[14px] px-[22px] py-[18px] text-sm text-accent-hover flex items-center justify-between gap-3 transition-shadow hover:shadow-card">
+        <span class="font-semibold"><?php esc_html_e('Liever klassikaal?', 'stridence'); ?></span>
+        <span class="font-bold"><?php esc_html_e('Bekijk de edities', 'stridence'); ?> &rarr;</span>
+    </a>
+<?php endif; ?>
+</div>
