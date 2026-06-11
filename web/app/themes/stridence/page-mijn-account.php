@@ -2,7 +2,8 @@
 /**
  * Template Name: Mijn Account
  *
- * Dashboard shell with sidebar navigation (desktop) and bottom nav (mobile).
+ * Dashboard shell with sidebar navigation (desktop) and a sticky top bar
+ * with nav chips (mobile).
  * Requires login - redirects to login page if not authenticated.
  * URL state via ?tab=xxx parameter. Default tab is home.
  *
@@ -30,10 +31,11 @@ if (!in_array($current_tab, $valid_tabs, true)) {
 }
 
 // Only fetch full home data on the home tab. Non-home tabs hydrate nothing
-// here: the sidebar/bottom nav are static (built below) and each tab template
-// fetches its own data through UserDashboardService's per-request memo.
-// (Audit CR-2: getNavData() full hydration on non-home tabs had zero
-// consumers — nav-mobile.php hardcodes its tabs — so the call was deleted.)
+// here: the sidebar/mobile top bar are static (built below) and each tab
+// template fetches its own data through UserDashboardService's per-request
+// memo. (Audit CR-2: getNavData() full hydration on non-home tabs had zero
+// consumers, so the call was deleted; nav-mobile.php renders the same
+// static nav arrays as the sidebar.)
 $dashboardService = ntdst_get(\Stride\Modules\User\UserDashboardService::class);
 $home_data = $current_tab === 'home' ? $dashboardService->getHomeData($user->ID) : null;
 
@@ -111,13 +113,16 @@ get_header('dashboard');
     <!-- Main Column -->
     <div class="flex-1 min-w-0 flex flex-col">
 
-        <!-- Mobile Navigation (internals owned by nav-mobile.php) -->
-        <div class="lg:hidden">
-            <?php stridence_template_part('templates/dashboard/nav-mobile', null, [
-                'current_tab'  => $current_tab,
-                'unread_count' => $unread_count,
-            ]); ?>
-        </div>
+        <!-- Mobile Navigation (internals owned by nav-mobile.php; rendered
+             directly in the main column so its sticky top-0 can stick — a
+             same-height wrapper div would pin it in place) -->
+        <?php stridence_template_part('templates/dashboard/nav-mobile', null, [
+            'current_tab'  => $current_tab,
+            'primary_nav'  => $primary_nav,
+            'utility_nav'  => $utility_nav,
+            'initials'     => $initials,
+            'unread_count' => $unread_count,
+        ]); ?>
 
         <!-- Content -->
         <main class="max-w-[1080px] mx-auto w-full px-5 py-6 lg:px-10 lg:py-10 flex flex-col gap-6">
