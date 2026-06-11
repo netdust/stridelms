@@ -464,6 +464,22 @@ final class RegistrationExportTest extends IntegrationTestCase
 
 declare(strict_types=1);
 
+// Env passthrough for CI: php.ini there omits E from variables_order, so
+// $_ENV starts EMPTY in this child. Bedrock's env() reads ONLY $_ENV
+// (Env\Env::$options has USE_ENV_ARRAY), and its IMMUTABLE Dotenv
+// repository refuses to write any var that already exists in getenv-space
+// — which every DB_* var does here, inherited from the parent's
+// PutenvAdapter writes. Net effect without this loop: DB_HOST resolves to
+// the 'localhost' fallback (unix socket, no server on the runner) and
+// wp-load dies with "Error establishing a database connection". Mirror
+// the inherited environment into $_ENV so the child resolves the same
+// credentials as the parent. DDEV is immune (variables_order=EGPCS).
+foreach (getenv() as $envKey => $envValue) {
+    if (!isset($_ENV[$envKey])) {
+        $_ENV[$envKey] = $envValue;
+    }
+}
+
 require $argv[1] . '/web/wp/wp-load.php';
 
 global $wpdb;
