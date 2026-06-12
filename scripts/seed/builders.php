@@ -15,6 +15,7 @@ use Stride\Modules\Invoicing\QuoteRepository;
 use Stride\Modules\Invoicing\VoucherService;
 use Stride\Modules\Invoicing\VoucherRepository;
 use Stride\Modules\Questionnaire\QuestionnaireRepository;
+use Stride\Modules\Trajectory\TrajectoryService;
 
 final class StrideSeedBuilders
 {
@@ -740,10 +741,99 @@ final class StrideSeedBuilders
         return [(int) $found->posts[0]];
     }
 
-    public function buildTrajectory(array $t, array $courseIds): ?int
+    /**
+     * Create one trajectory from a matrix entry. Course references are by
+     * TITLE, resolved here (replaces the old brittle index-position scheme).
+     * Idempotent by title — or by slug for the slug-pinned E2E fixture
+     * (`test-trajectory`), which keeps the old wp_insert_post path because
+     * the Data API create has no slug vocabulary.
+     */
+    public function buildTrajectory(array $t): ?int
     {
-        // Task 8 implement
-        return null;
+        // --- Slug-pinned E2E fixture path ---
+        if (!empty($t['slug'])) {
+            $existing = get_page_by_path($t['slug'], OBJECT, 'vad_trajectory');
+            if ($existing) {
+                echo "  - Trajectory '{$t['slug']}' exists (ID: {$existing->ID})\n";
+                return (int) $existing->ID;
+            }
+            $id = wp_insert_post([
+                'post_type' => 'vad_trajectory',
+                'post_title' => $t['title'],
+                'post_name' => $t['slug'],
+                'post_status' => 'publish',
+                'post_content' => $t['content'] ?? '',
+            ]);
+            if (is_wp_error($id)) {
+                echo "  ! Trajectory '{$t['slug']}' failed: {$id->get_error_message()}\n";
+                return null;
+            }
+            $model = function_exists('ntdst_data') ? ntdst_data()->get('vad_trajectory') : null;
+            if ($model) {
+                $model->updateMetaBatch($id, [
+                    'mode' => $t['mode'],
+                    'status' => $t['status'],
+                    'price' => $t['price'],
+                    'price_non_member' => $t['price_non_member'],
+                    'enrollment_deadline' => $t['enrollment_deadline'] ?? '',
+                    'capacity' => $t['capacity'] ?? 0,
+                ]);
+            }
+            update_post_meta($id, StrideSeedRunner::SEED_META_KEY, true);
+            echo "  + Trajectory: {$t['title']} [{$t['slug']}] (ID: {$id})\n";
+            return (int) $id;
+        }
+
+        // --- Regular path: idempotent by title ---
+        $existing = new WP_Query([
+            'post_type' => 'vad_trajectory', 'title' => $t['title'], 'post_status' => 'any',
+            'posts_per_page' => 1, 'fields' => 'ids', 'no_found_rows' => true,
+        ]);
+        if (!empty($existing->posts)) {
+            echo "  - Trajectory '{$t['title']}' exists (ID: {$existing->posts[0]})\n";
+            return (int) $existing->posts[0];
+        }
+
+        // Resolve course titles → IDs (JSON shape per TrajectoryService contract)
+        $courses = [];
+        foreach ($t['courses'] as $c) {
+            $found = new WP_Query([
+                'post_type' => 'sfwd-courses', 'title' => $c['course_title'], 'post_status' => 'any',
+                'posts_per_page' => 1, 'fields' => 'ids', 'no_found_rows' => true,
+            ]);
+            if (empty($found->posts)) {
+                echo "  ! Trajectory course not found: {$c['course_title']}\n";
+                continue;
+            }
+            $entry = ['course_id' => (int) $found->posts[0], 'required' => (bool) $c['required']];
+            foreach (['order', 'group', 'min_choices'] as $key) {
+                if (isset($c[$key])) { $entry[$key] = $c[$key]; }
+            }
+            $courses[] = $entry;
+        }
+
+        $service = ntdst_get(TrajectoryService::class);
+        $id = $service->createTrajectory([
+            'title' => $t['title'],
+            'content' => $t['content'] ?? '',   // Data API vocabulary: 'content', not 'post_content'
+            'post_status' => 'publish',
+            'mode' => $t['mode'],
+            'status' => $t['status'],
+            'enrollment_deadline' => $t['enrollment_deadline'] ?? '',
+            'choice_available_date' => $t['choice_available_date'] ?? '',
+            'choice_deadline' => $t['choice_deadline'] ?? '',
+            'capacity' => $t['capacity'] ?? 0,
+            'price' => $t['price'],
+            'price_non_member' => $t['price_non_member'],
+            'courses' => wp_json_encode($courses),
+        ]);
+        if (is_wp_error($id)) {
+            echo "  ! Trajectory '{$t['title']}' failed: {$id->get_error_message()}\n";
+            return null;
+        }
+        update_post_meta($id, StrideSeedRunner::SEED_META_KEY, true);
+        echo "  + Trajectory: {$t['title']} [{$t['mode']}] (ID: {$id}, " . count($courses) . " courses)\n";
+        return (int) $id;
     }
 
     /**

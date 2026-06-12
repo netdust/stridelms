@@ -46,7 +46,7 @@ final class StrideSeedRunner
             $this->covers["qgroup:{$g['id']}"] = $g['covers'] ?? [];
         }
         foreach ($this->matrix['trajectories'] as $t) {
-            $id = $this->builders->buildTrajectory($t, $this->created['courses']);
+            $id = $this->builders->buildTrajectory($t);
             if ($id) { $this->created['trajectories'][] = $id; $this->covers["trajectory:$id"] = $t['covers'] ?? []; }
         }
         foreach ($this->matrix['vouchers'] as $v) {
