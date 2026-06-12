@@ -606,6 +606,9 @@ ddev exec wp eval-file scripts/seed.php
 
 # Remove all seed data
 ddev exec bash -c 'FORCE_UNSEED=1 wp eval-file scripts/unseed.php'
+
+# Assert feature-dimension coverage of the seeded data (exit 1 on any gap)
+ddev exec wp eval-file scripts/seed-verify.php
 ```
 
 Test credentials after seeding:

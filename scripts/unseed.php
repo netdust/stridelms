@@ -44,6 +44,8 @@ class StrideSeedCleaner {
         'groups' => 0,
         'vouchers' => 0,
         'quotes' => 0,
+        'attendance' => 0,
+        'questionnaire_groups' => 0,
     ];
 
     private ?RegistrationRepository $regRepo = null;
@@ -88,6 +90,7 @@ class StrideSeedCleaner {
 
         $this->removeQuotes();
         $this->removeVouchers();
+        $this->removeAttendance();      // before removeRegistrations: scoped via manifest editions/users
         $this->removeRegistrations();
         $this->removeEnrollments();
         $this->removeTrajectories();
@@ -96,6 +99,7 @@ class StrideSeedCleaner {
         $this->removeLessons();
         $this->removeCourses();
         $this->removeGroups();
+        $this->removeQuestionnaireGroups();
         $this->removeUsers();
         $this->cleanupOptions();
 
@@ -111,6 +115,7 @@ class StrideSeedCleaner {
         $quotes = get_posts([
             'post_type' => 'vad_quote',
             'posts_per_page' => -1,
+            'post_status' => 'any',   // seed copies in draft/trash must not survive teardown
             'meta_key' => self::SEED_META_KEY,
             'meta_value' => '1',
             'fields' => 'ids',
@@ -134,6 +139,7 @@ class StrideSeedCleaner {
         $vouchers = get_posts([
             'post_type' => 'vad_voucher',
             'posts_per_page' => -1,
+            'post_status' => 'any',   // seed copies in draft/trash must not survive teardown
             'meta_key' => self::SEED_META_KEY,
             'meta_value' => '1',
             'fields' => 'ids',
@@ -168,6 +174,61 @@ class StrideSeedCleaner {
     }
 
     /**
+     * Remove attendance rows for seed editions and seed users.
+     *
+     * Scoped via the manifest (edition ids + user ids) — NOT via a join on
+     * the registrations table, so it must run BEFORE removeRegistrations().
+     */
+    private function removeAttendance(): void {
+        echo "Removing attendance...\n";
+        global $wpdb;
+        $table = $wpdb->prefix . 'vad_attendance';
+
+        $manifest = get_option('stride_seed_manifest', []);
+        $editionIds = array_map('intval', $manifest['editions'] ?? []);
+        $userIds = array_map('intval', $manifest['users'] ?? []);
+
+        // Fallback when the manifest is absent/empty: derive seed edition ids
+        // from the seed-meta post query (same pattern as removeRegistrations).
+        if (empty($editionIds)) {
+            $editionIds = array_map('intval', get_posts([
+                'post_type' => 'vad_edition',
+                'posts_per_page' => -1,
+                'post_status' => 'any',
+                'meta_key' => self::SEED_META_KEY,
+                'meta_value' => '1',
+                'fields' => 'ids',
+            ]));
+        }
+
+        if (!empty($editionIds)) {
+            $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
+            // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $count = $wpdb->query($wpdb->prepare(
+                "DELETE FROM {$table} WHERE edition_id IN ({$placeholders})",
+                $editionIds
+            ));
+            if ($count > 0) {
+                $this->removed['attendance'] += $count;
+            }
+        }
+
+        if (!empty($userIds)) {
+            $placeholders = implode(',', array_fill(0, count($userIds), '%d'));
+            // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $count = $wpdb->query($wpdb->prepare(
+                "DELETE FROM {$table} WHERE user_id IN ({$placeholders})",
+                $userIds
+            ));
+            if ($count > 0) {
+                $this->removed['attendance'] += $count;
+            }
+        }
+
+        echo "  - Removed {$this->removed['attendance']} attendance rows\n";
+    }
+
+    /**
      * Remove registrations from wp_vad_registrations table
      */
     private function removeRegistrations(): void {
@@ -195,6 +256,7 @@ class StrideSeedCleaner {
         $seedEditions = get_posts([
             'post_type' => 'vad_edition',
             'posts_per_page' => -1,
+            'post_status' => 'any',   // seed copies in draft/trash must not survive teardown
             'meta_key' => self::SEED_META_KEY,
             'meta_value' => '1',
             'fields' => 'ids',
@@ -239,6 +301,7 @@ class StrideSeedCleaner {
         $courses = get_posts([
             'post_type' => 'sfwd-courses',
             'posts_per_page' => -1,
+            'post_status' => 'any',   // seed copies in draft/trash must not survive teardown
             'meta_key' => self::SEED_META_KEY,
             'meta_value' => '1',
             'fields' => 'ids',
@@ -266,6 +329,7 @@ class StrideSeedCleaner {
         $trajectories = get_posts([
             'post_type' => 'vad_trajectory',
             'posts_per_page' => -1,
+            'post_status' => 'any',   // seed copies in draft/trash must not survive teardown
             'meta_key' => self::SEED_META_KEY,
             'meta_value' => '1',
             'fields' => 'ids',
@@ -288,6 +352,7 @@ class StrideSeedCleaner {
         $sessions = get_posts([
             'post_type' => 'vad_session',
             'posts_per_page' => -1,
+            'post_status' => 'any',   // seed copies in draft/trash must not survive teardown
             'meta_key' => self::SEED_META_KEY,
             'meta_value' => '1',
             'fields' => 'ids',
@@ -310,6 +375,7 @@ class StrideSeedCleaner {
         $editions = get_posts([
             'post_type' => 'vad_edition',
             'posts_per_page' => -1,
+            'post_status' => 'any',   // seed copies in draft/trash must not survive teardown
             'meta_key' => self::SEED_META_KEY,
             'meta_value' => '1',
             'fields' => 'ids',
@@ -332,6 +398,7 @@ class StrideSeedCleaner {
         $lessons = get_posts([
             'post_type' => 'sfwd-lessons',
             'posts_per_page' => -1,
+            'post_status' => 'any',   // seed copies in draft/trash must not survive teardown
             'meta_key' => self::SEED_META_KEY,
             'meta_value' => '1',
             'fields' => 'ids',
@@ -354,6 +421,7 @@ class StrideSeedCleaner {
         $courses = get_posts([
             'post_type' => 'sfwd-courses',
             'posts_per_page' => -1,
+            'post_status' => 'any',   // seed copies in draft/trash must not survive teardown
             'meta_key' => self::SEED_META_KEY,
             'meta_value' => '1',
             'fields' => 'ids',
@@ -376,6 +444,7 @@ class StrideSeedCleaner {
         $groups = get_posts([
             'post_type' => 'groups',
             'posts_per_page' => -1,
+            'post_status' => 'any',   // seed copies in draft/trash must not survive teardown
             'meta_key' => self::SEED_META_KEY,
             'meta_value' => '1',
             'fields' => 'ids',
@@ -387,6 +456,49 @@ class StrideSeedCleaner {
         }
 
         echo "  - Removed {$this->removed['groups']} groups\n";
+    }
+
+    /**
+     * Remove seed questionnaire groups (ids ending `_seed`) from the
+     * stride_questionnaire_field_groups option. Non-seed groups are kept;
+     * the option is deleted entirely if it ends up empty.
+     */
+    private function removeQuestionnaireGroups(): void {
+        echo "Removing questionnaire groups...\n";
+
+        $optionKey = 'stride_questionnaire_field_groups';
+        $groups = get_option($optionKey, []);
+
+        if (!is_array($groups) || empty($groups)) {
+            echo "  - No questionnaire groups found\n";
+            return;
+        }
+
+        // Primary: delete by exact ids recorded in the manifest. Fallback to the
+        // `_seed`-suffix heuristic only when the manifest is absent/empty.
+        $manifest = get_option('stride_seed_manifest', []);
+        $seedGroupIds = array_map('strval', (array) ($manifest['questionnaire_groups'] ?? []));
+
+        $kept = [];
+        foreach ($groups as $group) {
+            $id = (string) ($group['id'] ?? '');
+            $isSeed = !empty($seedGroupIds)
+                ? in_array($id, $seedGroupIds, true)
+                : ($id !== '' && str_ends_with($id, '_seed'));
+            if ($isSeed) {
+                $this->removed['questionnaire_groups']++;
+            } else {
+                $kept[] = $group;
+            }
+        }
+
+        if (empty($kept)) {
+            delete_option($optionKey);
+        } else {
+            update_option($optionKey, array_values($kept));
+        }
+
+        echo "  - Removed {$this->removed['questionnaire_groups']} questionnaire groups\n";
     }
 
     /**
@@ -418,6 +530,7 @@ class StrideSeedCleaner {
 
         delete_option('stride_seed_manifest');
         delete_option('stride_seed_timestamp');
+        delete_option('stride_seed_covers');
 
         echo "  - Removed seed manifest options\n";
     }
@@ -437,6 +550,8 @@ class StrideSeedCleaner {
         echo "  - Sessions: {$this->removed['sessions']}\n";
         echo "  - Trajectories: {$this->removed['trajectories']}\n";
         echo "  - Registrations: {$this->removed['registrations']}\n";
+        echo "  - Attendance: {$this->removed['attendance']}\n";
+        echo "  - Questionnaire groups: {$this->removed['questionnaire_groups']}\n";
         echo "  - Groups: {$this->removed['groups']}\n";
         echo "  - Vouchers: {$this->removed['vouchers']}\n";
         echo "  - Quotes: {$this->removed['quotes']}\n";
