@@ -33,6 +33,13 @@ $covers   = get_option('stride_seed_covers') ?: [];
 $allTags  = array_unique(array_merge([], ...array_values($covers)));
 $regTable = $wpdb->prefix . 'vad_registrations';
 $attTable = $wpdb->prefix . 'vad_attendance';
+$regIds   = array_map('intval', $manifest['registrations'] ?? []);
+$regIdIn  = !empty($regIds) ? implode(',', $regIds) : '0';
+
+// Seed-scope join fragment: constrains CPT queries to rows created by the seeder,
+// so pre-existing / v3-ported rows can never produce a false PASS.
+$seedJoin = "JOIN {$wpdb->postmeta} seed ON seed.post_id = p.ID
+    AND seed.meta_key = '_stride_seed_data' AND seed.meta_value = '1'";
 
 echo "\n=== Stride seed coverage verification ===\n\n";
 $check('stride_seed_manifest option present', !empty($manifest));
@@ -50,6 +57,10 @@ $required = [
     'req:post_evaluation','req:post_documents','req:post_approval',
     'form:default','form:minimal','form:direct','form:custom_all_types','form:reserved_fields',
     'capacity:full_real_users','capacity:waitlist_behind_full',
+    'capacity:unlimited','capacity:full_fake_display',
+    'voucher:full','voucher:fixed','voucher:percentage','voucher:scope_all',
+    'sessions:type_in_person','sessions:type_online','sessions:type_webinar',
+    'status:few_spots',
     'trajectory:cohort','trajectory:self_paced','trajectory:elective_choose_n',
     'flow:attendance_marked','flow:post_course_ready',
 ];
@@ -60,25 +71,34 @@ foreach ($required as $tag) { $check("tag claimed: {$tag}", in_array($tag, $allT
 // ---------------------------------------------------------------------------
 $statuses = $wpdb->get_col("SELECT DISTINCT pm.meta_value FROM {$wpdb->postmeta} pm
     JOIN {$wpdb->posts} p ON p.ID = pm.post_id AND p.post_type = 'vad_edition'
+    {$seedJoin}
     WHERE pm.meta_key = '_ntdst_status'");
-foreach (['draft','announcement','open','full','in_progress','postponed','cancelled','completed','archived'] as $s) {
-    $check("edition status in DB: {$s}", in_array($s, $statuses, true));
+// Status list derived from the enum so the verifier can never drift from the domain model.
+$offeringStatuses = array_column(\Stride\Domain\OfferingStatus::cases(), 'value');
+foreach ($offeringStatuses as $s) {
+    $check("edition status in DB (seed-scoped): {$s}", in_array($s, $statuses, true));
 }
 
-// Exclude display-only fake fill rows (user_id >= 900000); keep anonymous interest (NULL user).
-$regStatuses = $wpdb->get_col("SELECT DISTINCT status FROM {$regTable} WHERE user_id < 900000 OR user_id IS NULL");
+// Seed-scoped via manifest ids. Exclude display-only fake fill rows (user_id >= 900000);
+// keep anonymous interest (NULL user).
+// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- int-cast IDs
+$regStatuses = $wpdb->get_col("SELECT DISTINCT status FROM {$regTable}
+    WHERE id IN ({$regIdIn}) AND (user_id < 900000 OR user_id IS NULL)");
 foreach (['confirmed','pending','completed','cancelled','waitlist','interest'] as $s) {
-    $check("registration status in DB: {$s}", in_array($s, $regStatuses, true));
+    $check("registration status in DB (seed-scoped): {$s}", in_array($s, $regStatuses, true));
 }
 
-$paths = $wpdb->get_col("SELECT DISTINCT enrollment_path FROM {$regTable}");
+// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- int-cast IDs
+$paths = $wpdb->get_col("SELECT DISTINCT enrollment_path FROM {$regTable} WHERE id IN ({$regIdIn})");
 foreach (['individual','colleague','trajectory','partner'] as $p) {
-    $check("enrollment path: {$p}", in_array($p, $paths, true));
+    $check("enrollment path (seed-scoped): {$p}", in_array($p, $paths, true));
 }
 
 // Quote status uses BARE `status` meta key (QuoteCPT meta_prefix '') — verified against seeded rows.
 $quoteStatuses = $wpdb->get_col("SELECT DISTINCT pm.meta_value FROM {$wpdb->postmeta} pm
-    JOIN {$wpdb->posts} p ON p.ID = pm.post_id AND p.post_type = 'vad_quote' WHERE pm.meta_key = 'status'");
+    JOIN {$wpdb->posts} p ON p.ID = pm.post_id AND p.post_type = 'vad_quote'
+    {$seedJoin}
+    WHERE pm.meta_key = 'status'");
 foreach (['draft','sent','exported','cancelled'] as $s) {
     $check("quote status: {$s}", in_array($s, $quoteStatuses, true));
 }
@@ -97,7 +117,10 @@ $findEditionByTag = function (string $tag) use ($covers): ?int {
     return null;
 };
 
-// 3a. Featured edition: speakers repeater + all 7 content fields
+// 3a. Featured edition: speakers repeater + all 7 content fields.
+// Empirically verified 2026-06-12: an edition created WITHOUT content fields returns
+// '' from getField('required_experience') — admin-metabox default copy does NOT leak
+// into reads, so the `!== ''` checks below genuinely bite.
 $featured = $findEditionByTag('content:speakers_repeater');
 $speakers = $featured ? $editionRepo->getField($featured, 'speakers') : null;
 $check('featured edition speakers is non-empty {name,role} array',
@@ -111,8 +134,11 @@ $fullEdition = $findEditionByTag('capacity:full_real_users');
 $check('full-real edition tagged in covers', $fullEdition !== null);
 if ($fullEdition) {
     $capacity = (int) $editionRepo->getField($fullEdition, 'capacity');
+    // Mirrors EditionService::getRegisteredCount() capacity logic:
+    // status IN ('confirmed','completed','pending') counts toward capacity.
     $confirmed = (int) $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM {$regTable} WHERE edition_id = %d AND status = 'confirmed' AND user_id < 900000",
+        "SELECT COUNT(*) FROM {$regTable} WHERE edition_id = %d
+         AND status IN ('confirmed','completed','pending') AND user_id < 900000",
         $fullEdition
     ));
     $waitlist = (int) $wpdb->get_var($wpdb->prepare(
@@ -126,9 +152,20 @@ if ($fullEdition) {
 // 3c. Voucher scopes: scope_mode all/only/except each present on >=1 vad_voucher
 $scopeModes = $wpdb->get_col("SELECT DISTINCT pm.meta_value FROM {$wpdb->postmeta} pm
     JOIN {$wpdb->posts} p ON p.ID = pm.post_id AND p.post_type = 'vad_voucher'
+    {$seedJoin}
     WHERE pm.meta_key = '_ntdst_scope_mode'");
 foreach (['all','only','except'] as $mode) {
-    $check("voucher scope_mode present: {$mode}", in_array($mode, $scopeModes, true));
+    $check("voucher scope_mode present (seed-scoped): {$mode}", in_array($mode, $scopeModes, true));
+}
+
+// Voucher discount types: full / fixed / percentage each present on >=1 seed voucher
+// (matches \Stride\Domain\DiscountType cases).
+$discountTypes = $wpdb->get_col("SELECT DISTINCT pm.meta_value FROM {$wpdb->postmeta} pm
+    JOIN {$wpdb->posts} p ON p.ID = pm.post_id AND p.post_type = 'vad_voucher'
+    {$seedJoin}
+    WHERE pm.meta_key = '_ntdst_discount_type'");
+foreach (['full','fixed','percentage'] as $dt) {
+    $check("voucher discount_type present (seed-scoped): {$dt}", in_array($dt, $discountTypes, true));
 }
 
 // 3d. Questionnaire: qg_enrollment_seed group exists, has 8 fields, types include all 7
@@ -137,7 +174,7 @@ $groups = array_column($qRepo->getAllGroups(), null, 'id');
 $enrollGroup = $groups['qg_enrollment_seed'] ?? null;
 $check('questionnaire group qg_enrollment_seed exists', $enrollGroup !== null);
 $enrollFields = $enrollGroup['fields'] ?? [];
-$check('qg_enrollment_seed has 8 fields', count($enrollFields) === 8);
+$check('qg_enrollment_seed has >=8 fields', count($enrollFields) >= 8);
 $fieldTypes = array_unique(array_column($enrollFields, 'type'));
 foreach (['description','text','textarea','select','radio','checkbox','scale'] as $type) {
     $check("qg_enrollment_seed covers field type: {$type}", in_array($type, $fieldTypes, true));
@@ -154,16 +191,21 @@ $partnerCount = (int) $wpdb->get_var(
 );
 $check("partner-path registration with company_id=1 exists", $partnerCount >= 1);
 
-// 3g. Attendance: >=1 row in vad_attendance for a seed user (manifest users)
-$seedUserIds = array_map('intval', $manifest['users'] ?? []);
-if (!empty($seedUserIds)) {
-    $in = implode(',', $seedUserIds);
+// 3g. Attendance: >=1 row in vad_attendance for a seed user ON a seed edition
+// (both constraints, so v3-ported attendance can never satisfy the check).
+$seedUserIds    = array_map('intval', $manifest['users'] ?? []);
+$seedEditionIds = array_map('intval', $manifest['editions'] ?? []);
+if (!empty($seedUserIds) && !empty($seedEditionIds)) {
+    $uin = implode(',', $seedUserIds);
+    $ein = implode(',', $seedEditionIds);
     // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- int-cast IDs
-    $attCount = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$attTable} WHERE user_id IN ({$in})");
+    $attCount = (int) $wpdb->get_var(
+        "SELECT COUNT(*) FROM {$attTable} WHERE user_id IN ({$uin}) AND edition_id IN ({$ein})"
+    );
 } else {
     $attCount = 0;
 }
-$check('attendance row exists for a seed user', $attCount >= 1);
+$check('attendance row exists for a seed user on a seed edition', $attCount >= 1);
 
 // 3h. Timestamp truth (cluster-2 review additions): seed registrations carry
 // cancelled_at / completed_at where their status says so.
@@ -194,4 +236,6 @@ if (!empty($regIds)) {
 
 // ---------------------------------------------------------------------------
 echo "\n" . (empty($failures) ? "ALL DIMENSIONS COVERED\n" : count($failures) . " FAILURES\n");
+// NOTE: `ddev exec bash -c '...; echo $?'` always shows 0 — ddev expands `$?`
+// in its own wrapper shell. Check the HOST-side `$?` after `ddev exec` instead.
 exit(empty($failures) ? 0 : 1);

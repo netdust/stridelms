@@ -188,6 +188,19 @@ class StrideSeedCleaner {
         $editionIds = array_map('intval', $manifest['editions'] ?? []);
         $userIds = array_map('intval', $manifest['users'] ?? []);
 
+        // Fallback when the manifest is absent/empty: derive seed edition ids
+        // from the seed-meta post query (same pattern as removeRegistrations).
+        if (empty($editionIds)) {
+            $editionIds = array_map('intval', get_posts([
+                'post_type' => 'vad_edition',
+                'posts_per_page' => -1,
+                'post_status' => 'any',
+                'meta_key' => self::SEED_META_KEY,
+                'meta_value' => '1',
+                'fields' => 'ids',
+            ]));
+        }
+
         if (!empty($editionIds)) {
             $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
             // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
@@ -461,10 +474,18 @@ class StrideSeedCleaner {
             return;
         }
 
+        // Primary: delete by exact ids recorded in the manifest. Fallback to the
+        // `_seed`-suffix heuristic only when the manifest is absent/empty.
+        $manifest = get_option('stride_seed_manifest', []);
+        $seedGroupIds = array_map('strval', (array) ($manifest['questionnaire_groups'] ?? []));
+
         $kept = [];
         foreach ($groups as $group) {
             $id = (string) ($group['id'] ?? '');
-            if ($id !== '' && str_ends_with($id, '_seed')) {
+            $isSeed = !empty($seedGroupIds)
+                ? in_array($id, $seedGroupIds, true)
+                : ($id !== '' && str_ends_with($id, '_seed'));
+            if ($isSeed) {
                 $this->removed['questionnaire_groups']++;
             } else {
                 $kept[] = $group;

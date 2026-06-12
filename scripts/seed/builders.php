@@ -898,14 +898,14 @@ final class StrideSeedBuilders
         update_post_meta($id, StrideSeedRunner::SEED_META_KEY, true);
 
         // Scope: createVoucher() does not accept these — set via repository update.
+        // scope_mode is persisted explicitly even for 'all' so the seed-scoped
+        // verifier can assert it from DB truth (cluster-3 review finding).
         $scope = $v['scope'] ?? 'all';   // 'all' | 'only' | 'except'
-        if ($scope !== 'all') {
-            $repo = ntdst_get(VoucherRepository::class);
-            $update = ['scope_mode' => $scope];
-            if ($scope === 'only')   { $update['edition_id'] = $editionIds[0] ?? 0; }
-            if ($scope === 'except') { $update['excluded_edition_ids'] = array_slice($editionIds, 0, 2); }  // json field
-            $repo->update($id, $update);
-        }
+        $repo = ntdst_get(VoucherRepository::class);
+        $update = ['scope_mode' => $scope];
+        if ($scope === 'only')   { $update['edition_id'] = $editionIds[0] ?? 0; }
+        if ($scope === 'except') { $update['excluded_edition_ids'] = array_slice($editionIds, 0, 2); }  // json field
+        $repo->update($id, $update);
 
         echo "  + Voucher: {$v['code']} [{$v['discount_type']}/{$scope}] (ID: {$id})\n";
         return (int) $id;
