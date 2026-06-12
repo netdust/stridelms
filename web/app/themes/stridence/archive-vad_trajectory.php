@@ -15,13 +15,10 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
-// Query all published trajectories
-$model        = ntdst_data()->get('vad_trajectory');
-$trajectories = $model->where('post_status', 'publish')
-                      ->orderBy('menu_order', 'ASC')
-                      ->orderBy('post_title', 'ASC')
-                      ->withMeta()
-                      ->get();
+// Active (catalog-visible) trajectories through the repository (INV-3 — no
+// raw ntdst_data() query in the theme). findActive() = announcement / open /
+// in-progress, title-ordered.
+$trajectories = ntdst_get(\Stride\Modules\Trajectory\TrajectoryRepository::class)->findActive();
 
 get_header();
 ?>
@@ -46,9 +43,15 @@ get_header();
         <?php // 320px min-width — wider trajectory cards vs 300px catalog grids ?>
         <div class="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-[18px]">
             <?php foreach ($trajectories as $trajectory) :
-                stridence_template_part('partials/card-trajectory', null, [
-                    'trajectory' => $trajectory,
-                ]);
+                $trajectory_id = (int) ($trajectory['id'] ?? $trajectory['ID'] ?? 0);
+                if (!$trajectory_id) {
+                    continue;
+                }
+                stridence_template_part(
+                    'partials/card-trajectory',
+                    null,
+                    stridence_build_trajectory_card_args($trajectory_id) + ['mode' => 'catalog'],
+                );
             endforeach; ?>
         </div>
 

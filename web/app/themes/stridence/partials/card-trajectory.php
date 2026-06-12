@@ -1,83 +1,82 @@
 <?php
 /**
- * Trajectory Card Partial — Helder Tij.
+ * Trajectory Card Partial — shared by the public catalog AND the dashboard.
  *
- * Renders a trajectory card per the sheet: badge row ([Traject] + status),
- * 17px title, journey dots strip, 13px meta block, footer with arrow CTA.
- * The whole card is the link — hover lift lives on this wrapper.
- *
- * All data must be passed via $args — no service calls or meta lookups
- * inside partials. The dots strip renders one dot per course; without
- * per-user progress data (not passed by any caller today) every dot uses
- * the "upcoming" treatment from the sheet.
+ * Pure renderer: ALL data arrives via the normalized args contract built by
+ * stridence_build_trajectory_card_args() — no service calls or meta lookups
+ * here. Per-user state (progress/started_at/dashboard_url) is present only on
+ * the dashboard; its absence makes this a catalog card.
  *
  * @param array $args {
- *     @type array|WP_Post $trajectory Trajectory data array or WP_Post (legacy support)
- *         Array format (from Data Manager): id, title, content, meta[status, enrollment_deadline, course_count]
- *         WP_Post: Trajectory post object
+ *     @type int         $id             Trajectory post id (permalink base).
+ *     @type string      $title
+ *     @type string      $status         OfferingStatus value (badge).
+ *     @type int         $course_count
+ *     @type int         $elective_count Number of elective groups.
+ *     @type float       $price          Euros (0 → "Gratis").
+ *     @type string      $deadline       '' or Y-m-d.
+ *     @type int|null    $progress       0-100 when enrolled; null on catalog.
+ *     @type string      $started_at     '' or Y-m-d (enrollment date).
+ *     @type string      $dashboard_url  '' or the /mijn-account/trajecten/<slug>/ url.
+ *     @type string      $mode           'catalog' (default) | 'dashboard'.
  * }
+ * @package stridence
  */
 
 defined('ABSPATH') || exit;
 
-$trajectory = $args['trajectory'] ?? null;
-
-// Early return if no trajectory
-if (!$trajectory) {
+$id            = (int) ($args['id'] ?? 0);
+if (!$id) {
     return;
 }
+$title         = (string) ($args['title'] ?? '');
+$status        = (string) ($args['status'] ?? 'open');
+$course_count  = (int) ($args['course_count'] ?? 0);
+$elective_count = (int) ($args['elective_count'] ?? 0);
+$price         = (float) ($args['price'] ?? 0);
+$deadline      = (string) ($args['deadline'] ?? '');
+$progress      = $args['progress'] ?? null;
+$started_at    = (string) ($args['started_at'] ?? '');
+$mode          = ($args['mode'] ?? 'catalog') === 'dashboard' ? 'dashboard' : 'catalog';
+$enrolled      = $progress !== null;
 
-// Handle array format (Data Manager) vs WP_Post (legacy)
-if (is_array($trajectory)) {
-    // Data Manager array format - meta nested under 'meta' key
-    $id        = (int) ($trajectory['id'] ?? $trajectory['ID'] ?? 0);
-    $permalink = get_permalink($id);
-    $title     = $trajectory['title'] ?? $trajectory['post_title'] ?? '';
+$permalink     = get_permalink($id);
+$target_url    = ($mode === 'dashboard' && !empty($args['dashboard_url']))
+    ? (string) $args['dashboard_url']
+    : $permalink;
 
-    // Meta fields from Data Manager (nested under 'meta' key with possible prefix)
-    $meta         = $trajectory['meta'] ?? [];
-    $course_count = (int) ($meta['course_count'] ?? $meta['_ntdst_course_count'] ?? 0);
-    $deadline     = $meta['enrollment_deadline'] ?? $meta['_ntdst_enrollment_deadline'] ?? '';
-    $status       = $meta['status'] ?? $meta['_ntdst_status'] ?? 'open';
-} elseif ($trajectory instanceof WP_Post) {
-    // Legacy WP_Post support - still requires parent to pass meta via separate args
-    $id        = $trajectory->ID;
-    $permalink = get_permalink($trajectory);
-    $title     = get_the_title($trajectory);
-
-    // Use args for meta if provided, otherwise empty
-    $course_count = (int) ($args['course_count'] ?? 0);
-    $deadline     = $args['deadline'] ?? '';
-    $status       = $args['status'] ?? 'open';
-} else {
-    return;
-}
-
-// Map trajectory status to badge status
+// Map trajectory status to a frontend badge variant.
 $badge_status_map = [
     'open'         => 'open',
     'announcement' => 'announcement',
     'ongoing'      => 'pending',
+    'in_progress'  => 'pending',
     'completed'    => 'completed',
     'draft'        => 'pending',
     'closed'       => 'cancelled',
 ];
 $badge_status = $badge_status_map[$status] ?? 'open';
 
+// The card is a link only on the catalog (whole-card link); the dashboard
+// uses an explicit "Open traject" button so the card body can hold a CTA.
+$card_classes = 'bg-surface-card rounded-[14px] shadow-card p-6 flex flex-col gap-3.5 h-full text-text';
+$is_link      = $mode === 'catalog';
 ?>
-<a href="<?php echo esc_url($permalink); ?>"
-   class="bg-surface-card rounded-[14px] shadow-card p-6 flex flex-col gap-3.5 h-full text-text transition-all duration-normal ease-out hover:shadow-elevated hover:-translate-y-0.5">
+<<?php echo $is_link ? 'a href="' . esc_url($target_url) . '"' : 'div'; ?>
+   class="<?php echo esc_attr($card_classes); ?><?php echo $is_link ? ' transition-all duration-normal ease-out hover:shadow-elevated hover:-translate-y-0.5' : ''; ?>">
 
     <!-- Badge row -->
-    <div class="flex gap-1.5 flex-wrap">
-        <?php stridence_template_part('partials/badge-status', null, [
-            'status' => 'trajectory',
-            'size'   => 'sm',
-        ]); ?>
-        <?php stridence_template_part('partials/badge-status', null, [
-            'status' => $badge_status,
-            'size'   => 'sm',
-        ]); ?>
+    <div class="flex gap-1.5 flex-wrap items-center">
+        <?php stridence_template_part('partials/badge-status', null, ['status' => 'trajectory', 'size' => 'sm']); ?>
+        <?php stridence_template_part('partials/badge-status', null, ['status' => $badge_status, 'size' => 'sm']); ?>
+        <?php if ($enrolled) : ?>
+            <span class="text-[12px] font-bold px-[11px] py-1 rounded-full inline-flex items-center gap-1 bg-badge-online-bg text-badge-online-text">
+                <?php
+                /* translators: %d: completion percentage */
+                echo esc_html(sprintf(__('%d%% voltooid', 'stridence'), (int) $progress));
+                ?>
+            </span>
+        <?php endif; ?>
     </div>
 
     <!-- Title -->
@@ -85,52 +84,54 @@ $badge_status = $badge_status_map[$status] ?? 'open';
         <?php echo esc_html($title); ?>
     </h3>
 
-    <!-- Journey dots strip (sheet: 12px dots, 2px lines; no per-user
-         progress data is passed, so every step renders "upcoming") -->
-    <?php if ($course_count > 0) : ?>
-        <div class="flex items-center" aria-hidden="true">
-            <?php for ($i = 0; $i < $course_count; $i++) : ?>
-                <?php if ($i > 0) : ?>
-                    <span class="h-0.5 flex-1 bg-border"></span>
+    <!-- Meta block: course count (+ keuzemodules), then the date line -->
+    <div class="flex flex-col gap-1.5 text-[13px] text-text-muted">
+        <?php if ($course_count > 0) : ?>
+            <div>
+                <strong class="text-text font-semibold">
+                    <?php echo esc_html(sprintf(_n('%d opleiding', '%d opleidingen', $course_count, 'stridence'), $course_count)); ?>
+                </strong>
+                <?php if ($elective_count > 0) : ?>
+                    <span class="mx-1 opacity-40">&middot;</span>
+                    <?php echo esc_html(sprintf(
+                        /* translators: %d: number of elective (choice) modules */
+                        _n('waarvan %d keuzemodule', 'waarvan %d keuzemodules', $elective_count, 'stridence'),
+                        $elective_count,
+                    )); ?>
                 <?php endif; ?>
-                <span class="w-3 h-3 rounded-full bg-surface-card shadow-[inset_0_0_0_2px_rgb(var(--color-border))] shrink-0"></span>
-            <?php endfor; ?>
-        </div>
-    <?php endif; ?>
+            </div>
+        <?php endif; ?>
 
-    <!-- Meta block -->
-    <?php if ($course_count > 0 || $deadline) : ?>
-        <div class="flex flex-col gap-1.5 text-[13px] text-text-muted">
-            <?php if ($course_count > 0) : ?>
-                <div>
-                    <strong class="text-text font-semibold">
-                        <?php
-                        echo esc_html(sprintf(
-                            /* translators: %d: number of courses */
-                            _n('%d opleiding', '%d opleidingen', $course_count, 'stridence'),
-                            $course_count,
-                        ));
-                        ?>
-                    </strong>
-                </div>
-            <?php endif; ?>
-
-            <?php if ($deadline) : ?>
-                <div>
-                    <?php
-                    echo esc_html(sprintf(
-                        /* translators: %s: enrollment deadline date */
-                        __('Inschrijven tot %s', 'stridence'),
-                        stride_format_date($deadline),
-                    ));
-                    ?>
-                </div>
-            <?php endif; ?>
-        </div>
-    <?php endif; ?>
-
-    <!-- Footer row -->
-    <div class="mt-auto pt-1 flex items-center justify-end gap-3">
-        <span class="text-sm font-bold text-primary"><?php esc_html_e('Bekijk traject', 'stridence'); ?> &rarr;</span>
+        <?php if ($enrolled && $started_at !== '') : ?>
+            <div>
+                <?php
+                /* translators: %s: start month + year */
+                echo esc_html(sprintf(__('Gestart %s', 'stridence'), date_i18n('F Y', strtotime($started_at))));
+                ?>
+            </div>
+        <?php elseif (!$enrolled && $deadline !== '') : ?>
+            <div>
+                <?php
+                /* translators: %s: enrollment deadline date */
+                echo esc_html(sprintf(__('Inschrijven tot %s', 'stridence'), stride_format_date($deadline)));
+                ?>
+            </div>
+        <?php endif; ?>
     </div>
-</a>
+
+    <!-- Price -->
+    <div class="text-[18px] font-extrabold <?php echo $price > 0 ? 'text-text' : 'text-badge-free-text'; ?>">
+        <?php echo $price > 0 ? esc_html(stride_format_money((int) round($price * 100))) : esc_html__('Gratis', 'stridence'); ?>
+    </div>
+
+    <!-- Footer -->
+    <div class="mt-auto pt-1 flex items-center justify-end gap-3">
+        <?php if ($mode === 'dashboard') : ?>
+            <a href="<?php echo esc_url($target_url); ?>" class="btn-primary btn-sm">
+                <?php esc_html_e('Open traject', 'stridence'); ?>
+            </a>
+        <?php else : ?>
+            <span class="text-sm font-bold text-primary"><?php esc_html_e('Bekijk traject', 'stridence'); ?> &rarr;</span>
+        <?php endif; ?>
+    </div>
+</<?php echo $is_link ? 'a' : 'div'; ?>>
