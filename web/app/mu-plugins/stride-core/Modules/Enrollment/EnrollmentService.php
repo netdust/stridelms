@@ -844,10 +844,19 @@ final class EnrollmentService extends AbstractService
                 $this->updateUserProfile($participantId, $profileFields);
             }
             if (!empty($courseFields)) {
+                // Merge into any pre-wrapped envelope from the caller (the
+                // form handler pre-wraps the custom answers) instead of
+                // clobbering it — clobbering dropped the custom answers for
+                // existing-colleague enrollments where profileFields fold
+                // back into courseFields.
                 $actorId = get_current_user_id() ?: null;
-                $enrollOptions['enrollment_data'] = [
-                    'enrollment_personal' => RegistrationRepository::wrapStage($courseFields, $actorId),
-                ];
+                $preWrapped = is_array($data['enrollment_data'] ?? null) ? $data['enrollment_data'] : [];
+                $existingPersonal = $preWrapped['enrollment_personal']['data'] ?? [];
+                $preWrapped['enrollment_personal'] = RegistrationRepository::wrapStage(
+                    array_merge(is_array($existingPersonal) ? $existingPersonal : [], $courseFields),
+                    $actorId,
+                );
+                $enrollOptions['enrollment_data'] = $preWrapped;
             }
         }
 

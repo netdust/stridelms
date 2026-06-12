@@ -133,8 +133,25 @@ final class EnrollmentFormHandler
             return $billingResult;
         }
 
-        // Replace flat extra_fields with stage-keyed, wrapped enrollment_data
-        unset($enrollmentData['extra_fields']);
+        // CRM-reserved field names (EnrollmentService::getUserMetaMapping) must
+        // ALWAYS persist to the participant's usermeta, whichever stage the
+        // builder put them in. Pull them out of the stage data and pass them
+        // through as extra_fields — the service's split owns the usermeta
+        // write (including the existing-colleague profile guard).
+        $reservedKeys = array_keys(EnrollmentService::getUserMetaMapping());
+        $reservedFields = [];
+        foreach (['enrollment_personal', 'enrollment_billing'] as $stageKey) {
+            foreach ($stageData[$stageKey] ?? [] as $fieldName => $fieldValue) {
+                if (in_array($fieldName, $reservedKeys, true)) {
+                    $reservedFields[$fieldName] = $fieldValue;
+                    unset($stageData[$stageKey][$fieldName]);
+                }
+            }
+        }
+
+        // Replace flat extra_fields with stage-keyed, wrapped enrollment_data;
+        // only the reserved subset travels on as extra_fields.
+        $enrollmentData['extra_fields'] = $reservedFields;
         $actorId = get_current_user_id() ?: null;
         $enrollmentData['enrollment_data'] = [
             'enrollment_personal' => RegistrationRepository::wrapStage($stageData['enrollment_personal'] ?? [], $actorId),
