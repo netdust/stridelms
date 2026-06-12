@@ -155,7 +155,7 @@ grep -rn "echo \$" --include="*.php" web/app/mu-plugins/stride-core/templates | 
 
 **Convergence point:** `Contracts/LMSAdapterInterface` (impl `Integrations/LearnDash/LearnDashService`) for **business operations** — `grantAccess`, `revokeAccess`, `isComplete`, `markComplete`, `isOpenCourse`. Read-only presentation goes through the static `LearnDashHelper` (`getProgress`, `getCertificateLink`, `getCompletionDate`, `getCourseAction`, `getLessons`, …).
 
-**The rule.** No stride-core code calls LearnDash functions (`ld_update_course_access`, `learndash_*`, `sfwd_*`) directly. Mutations go through the injected `LMSAdapterInterface` (`ntdst_get(LMSAdapterInterface::class)`); reads go through `LearnDashHelper`. The only legitimate consumers of the write interface are `EnrollmentService` and `TrajectoryCascadeService`. A new `learndash_*` call anywhere else is a bypass — extend the adapter or the helper instead.
+**The rule.** No stride-core code calls LearnDash functions (`ld_update_course_access`, `learndash_*`, `sfwd_*`) directly. Mutations go through the injected `LMSAdapterInterface` (`ntdst_get(LMSAdapterInterface::class)`); reads go through `LearnDashHelper`. The only legitimate consumers of the write interface are `EnrollmentService`, `TrajectoryCascadeService` and `Modules/Trajectory/TrajectorySelection` (pure-LD elective grant/revoke, 2026-06-12). A new `learndash_*` call anywhere else is a bypass — extend the adapter or the helper instead.
 
 **Entity-model corollary (what LD owns vs. Stride owns).** Course (`sfwd-courses`) = LD content only. Edition (`vad_edition`) = scheduled offering (dates/price/venue/capacity). Session (`vad_session`) = meeting day. Registration (`wp_vad_registrations`) = enrollment. **LearnDash enforces course-completion rules** (lessons, quizzes); Stride defers to it via `isComplete` — attendance alone cannot complete a course that has required LD steps (the `lesson_ld_owns_completion` memory).
 
@@ -166,6 +166,21 @@ grep -rn "learndash_\|ld_update_course_access\|sfwd_" --include="*.php" web/app/
   | grep -vE "Integrations/LearnDash/(LearnDashService|LearnDashHelper)\.php" \
   | grep -vE "add_action\(|add_filter\(" \
   | grep -vE ":[0-9]+:\s*(\*|//|#)"
+```
+
+---
+
+## INV-6b — Trajectory selection state is read through `TrajectorySelection`, never the raw `selections` column
+
+**Convergence point:** `Modules/Trajectory/TrajectorySelection::getSelectedCourseIds(int): array` (+ `countChosenInGroup()` / `isGroupChosen()` for per-group thresholds).
+
+**The rule.** `wp_vad_registrations.selections` stores **flat edition ids** — never grouped, never course ids. Any surface rendering "which elective courses did this registration pick" reads through `getSelectedCourseIds()` (which folds in pure-LD picks from the `initial_selection` phase entries); per-group chosen state goes through `isGroupChosen()`. Re-deriving from the raw column re-introduces the 2026-06-12 bug class where four templates each invented a different (wrong) shape.
+
+**Audit move:**
+```bash
+# Raw selections reads outside the convergence point + repository:
+grep -rn "\->selections" --include="*.php" web/app/themes/stridence web/app/mu-plugins/stride-core \
+  | grep -vE "TrajectorySelection\.php|RegistrationRepository\.php|SessionSelection|session" 
 ```
 
 ---
