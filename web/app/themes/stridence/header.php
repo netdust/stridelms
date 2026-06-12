@@ -14,7 +14,12 @@ defined('ABSPATH') || exit;
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700&display=swap" rel="stylesheet">
+    <?php
+    $stridence_font_url = apply_filters('stridence_font_url', 'https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300;1,6..72,400&display=swap');
+if ($stridence_font_url) :
+    ?>
+    <link href="<?php echo esc_url($stridence_font_url); ?>" rel="stylesheet">
+    <?php endif; ?>
     <?php wp_head(); ?>
 </head>
 <body <?php body_class('bg-surface text-text'); ?>>
@@ -23,12 +28,12 @@ defined('ABSPATH') || exit;
 <div id="page" class="min-h-screen flex flex-col">
 
     <!-- Skip Link -->
-    <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-primary text-white px-4 py-2 rounded-lg z-50">
+    <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-primary text-text-inverse px-4 py-2 rounded-lg z-50">
         <?php esc_html_e('Naar hoofdinhoud', 'stridence'); ?>
     </a>
 
     <!-- Header -->
-    <header class="sticky top-0 z-40 bg-surface-card border-b border-border" x-data="mobileMenu()">
+    <header class="sticky top-0 z-30 bg-surface/90 backdrop-blur border-b border-border-soft" x-data="mobileMenu()">
         <div class="container">
             <div class="flex items-center justify-between h-16 lg:h-20">
 
@@ -37,9 +42,7 @@ defined('ABSPATH') || exit;
                     <?php if (has_custom_logo()) : ?>
                         <?php the_custom_logo(); ?>
                     <?php else : ?>
-                        <span class="text-xl font-heading font-bold text-primary">
-                            <?php bloginfo('name'); ?>
-                        </span>
+                        <span class="text-xl font-extrabold tracking-tight text-text"><?php echo esc_html(get_bloginfo('name')); ?><span class="text-primary">.</span></span>
                     <?php endif; ?>
                 </a>
 
@@ -53,23 +56,29 @@ defined('ABSPATH') || exit;
                         'fallback_cb' => 'stridence_fallback_menu',
                         'walker' => new Stridence_Nav_Walker(),
                     ]);
-                    ?>
+?>
                 </nav>
 
                 <!-- Desktop Right Section -->
                 <div class="hidden lg:flex items-center gap-3">
-                    <!-- Search Toggle -->
-                    <button type="button" class="nav-link p-2" aria-label="<?php esc_attr_e('Zoeken', 'stridence'); ?>">
-                        <?php echo stridence_icon('search', 'w-5 h-5'); ?>
-                    </button>
-
                     <!-- User Menu -->
                     <?php if (is_user_logged_in()) : ?>
-                        <?php $current_user = wp_get_current_user(); ?>
+                        <?php
+    $current_user = wp_get_current_user();
+                        $notif_count  = 0;
+                        if (class_exists(\Stride\Modules\Notification\NotificationService::class)) {
+                            $notif_count = ntdst_get(\Stride\Modules\Notification\NotificationService::class)
+                                ->getUnreadCount($current_user->ID);
+                        }
+                        ?>
+
                         <div x-data="dropdown()" class="relative">
-                            <button @click="toggle()" class="flex items-center gap-2 nav-link">
-                                <span class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm">
+                            <button @click="toggle()" class="flex items-center gap-2 text-sm font-bold text-text border border-border-soft rounded-[10px] px-[18px] py-[9px] hover:bg-surface-alt transition-colors duration-150">
+                                <span class="relative w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm">
                                     <?php echo esc_html(strtoupper(substr($current_user->display_name, 0, 1))); ?>
+                                    <?php if ($notif_count > 0) : ?>
+                                        <span class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-primary ring-2 ring-surface-card"></span>
+                                    <?php endif; ?>
                                 </span>
                                 <span class="hidden xl:inline"><?php echo esc_html($current_user->display_name); ?></span>
                                 <?php echo stridence_icon('chevron-down', 'w-4 h-4'); ?>
@@ -82,25 +91,30 @@ defined('ABSPATH') || exit;
                                  x-transition:leave-start="opacity-100 translate-y-0"
                                  x-transition:leave-end="opacity-0 translate-y-1"
                                  @click.outside="close()"
-                                 class="absolute right-0 mt-2 w-48 bg-surface-card rounded-lg shadow-overlay border border-border py-1 z-50">
+                                 class="absolute right-0 mt-2 w-48 bg-surface-card border border-border-soft rounded-xl shadow-elevated z-50 overflow-hidden">
                                 <a href="<?php echo esc_url(home_url('/mijn-account/')); ?>" class="block px-4 py-2 text-sm hover:bg-surface-alt">
                                     <?php esc_html_e('Mijn account', 'stridence'); ?>
+                                </a>
+                                <a href="<?php echo esc_url(home_url('/mijn-account/?tab=meldingen')); ?>" class="flex items-center justify-between px-4 py-2 text-sm hover:bg-surface-alt">
+                                    <span><?php esc_html_e('Meldingen', 'stridence'); ?></span>
+                                    <?php if ($notif_count > 0) : ?>
+                                        <span class="bg-primary text-text-inverse text-[10px] font-semibold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                                            <?php echo esc_html($notif_count); ?>
+                                        </span>
+                                    <?php endif; ?>
                                 </a>
                                 <a href="<?php echo esc_url(home_url('/mijn-account/?tab=offertes')); ?>" class="block px-4 py-2 text-sm hover:bg-surface-alt">
                                     <?php esc_html_e('Mijn offertes', 'stridence'); ?>
                                 </a>
                                 <hr class="my-1 border-border">
-                                <a href="<?php echo esc_url(wp_logout_url(home_url())); ?>" class="block px-4 py-2 text-sm text-text-muted hover:bg-surface-alt">
+                                <a href="<?php echo esc_url(home_url('/auth/logout')); ?>" class="block px-4 py-2 text-sm text-text-muted hover:bg-surface-alt">
                                     <?php esc_html_e('Uitloggen', 'stridence'); ?>
                                 </a>
                             </div>
                         </div>
                     <?php else : ?>
-                        <a href="<?php echo esc_url(wp_login_url()); ?>" class="btn-secondary btn-sm">
-                            <?php esc_html_e('Inloggen', 'stridence'); ?>
-                        </a>
-                        <a href="<?php echo esc_url(wp_registration_url()); ?>" class="btn-primary btn-sm">
-                            <?php esc_html_e('Registreren', 'stridence'); ?>
+                        <a href="<?php echo esc_url(wp_login_url()); ?>" class="text-sm font-bold text-text border border-border-soft rounded-[10px] px-[18px] py-[9px] hover:bg-surface-alt transition-colors duration-150 no-underline">
+                            <?php esc_html_e('Mijn account', 'stridence'); ?>
                         </a>
                     <?php endif; ?>
                 </div>
@@ -122,7 +136,7 @@ defined('ABSPATH') || exit;
              x-transition:leave-start="opacity-100 translate-y-0"
              x-transition:leave-end="opacity-0 -translate-y-2"
              x-cloak
-             class="lg:hidden border-t border-border bg-surface-card">
+             class="lg:hidden border-t border-border-soft bg-surface-card">
             <div class="container py-4">
                 <nav class="space-y-1">
                     <?php
@@ -133,15 +147,23 @@ defined('ABSPATH') || exit;
                         'fallback_cb' => 'stridence_fallback_menu_mobile',
                         'walker' => new Stridence_Mobile_Nav_Walker(),
                     ]);
-                    ?>
+?>
                 </nav>
-                <hr class="my-4 border-border">
+                <div class="py-3"></div>
                 <?php if (is_user_logged_in()) : ?>
                     <div class="space-y-1">
                         <a href="<?php echo esc_url(home_url('/mijn-account/')); ?>" class="block nav-link">
                             <?php esc_html_e('Mijn account', 'stridence'); ?>
                         </a>
-                        <a href="<?php echo esc_url(wp_logout_url(home_url())); ?>" class="block nav-link text-text-muted">
+                        <a href="<?php echo esc_url(home_url('/mijn-account/?tab=meldingen')); ?>" class="flex items-center justify-between nav-link">
+                            <span><?php esc_html_e('Meldingen', 'stridence'); ?></span>
+                            <?php if (!empty($notif_count)) : ?>
+                                <span class="bg-primary text-text-inverse text-[10px] font-semibold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                                    <?php echo esc_html($notif_count); ?>
+                                </span>
+                            <?php endif; ?>
+                        </a>
+                        <a href="<?php echo esc_url(home_url('/auth/logout')); ?>" class="block nav-link text-text-muted">
                             <?php esc_html_e('Uitloggen', 'stridence'); ?>
                         </a>
                     </div>

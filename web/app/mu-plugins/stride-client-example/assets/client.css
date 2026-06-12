@@ -1,0 +1,97 @@
+/**
+ * Stride Client — Branding Overrides
+ *
+ * Override CSS custom properties to change the look & feel.
+ * All tokens are defined in the theme's src/css/tokens.css.
+ *
+ * Colors use RGB triplets (no commas) for Tailwind alpha support:
+ *   --color-primary: 220 38 38;  (not #DC2626 or rgb(220, 38, 38))
+ *
+ * AVAILABLE TOKENS:
+ *
+ * Brand:
+ *   --color-primary, --color-primary-hover, --color-primary-subtle
+ *   --color-primary-light, --color-primary-dark
+ *   --color-accent, --color-accent-light
+ *
+ * Surfaces:
+ *   --color-surface, --color-surface-alt, --color-surface-card
+ *   --color-border, --color-border-strong
+ *
+ * Text:
+ *   --color-text, --color-text-muted, --color-text-inverse
+ *
+ * Status:
+ *   --color-success, --color-warning, --color-error, --color-info
+ *
+ * Typography:
+ *   --font-sans, --font-heading, --font-label
+ *
+ * Layout:
+ *   --container-max, --content-max, --sidebar-width
+ *   --space-section, --space-block, --space-element
+ *
+ * Borders:
+ *   --radius-sm, --radius-md, --radius-lg, --radius-xl
+ *
+ * Editorial:
+ *   --color-tertiary, --color-tertiary-light
+ *   --color-secondary-container
+ *   --color-surface-container, --color-surface-container-high, --color-surface-container-highest
+ *   --font-serif, --font-label
+ *
+ * Badges (per-variant bg/text):
+ *   --color-badge-open-bg, --color-badge-open-text
+ *   --color-badge-few-bg, --color-badge-few-text
+ *   --color-badge-full-bg, --color-badge-full-text
+ *   --color-badge-cancelled-bg, --color-badge-cancelled-text
+ *   --color-badge-online-bg, --color-badge-online-text
+ *   --color-badge-free-bg, --color-badge-free-text
+ *
+ * Shadows:
+ *   --shadow-card, --shadow-elevated, --shadow-overlay
+ */
+
+:root {
+    /* ─── Brand Colors ───────────────────────────────────────── */
+    /* Uncomment and adjust to your client's brand */
+
+    /*
+    --color-primary: 220 38 38;
+    --color-primary-hover: 185 28 28;
+    --color-primary-subtle: 254 242 242;
+    --color-primary-light: 239 68 68;
+    --color-primary-dark: 153 27 27;
+
+    --color-accent: 37 99 235;
+    --color-accent-light: 59 130 246;
+    */
+
+    /* ─── Typography ─────────────────────────────────────────── */
+    /*
+    --font-sans: 'Poppins', system-ui, sans-serif;
+    --font-heading: 'Playfair Display', Georgia, serif;
+    */
+
+    /* ─── Surfaces ───────────────────────────────────────────── */
+    /*
+    --color-surface: 255 255 255;
+    --color-surface-alt: 248 248 248;
+    */
+
+    /* ─── Border Radius ──────────────────────────────────────── */
+    /*
+    --radius-sm: 0.25rem;
+    --radius-md: 0.375rem;
+    --radius-lg: 0.5rem;
+    --radius-xl: 0.75rem;
+    */
+}
+
+/* ─── Client Logo ────────────────────────────────────────────── */
+/*
+.site-logo img {
+    content: url('../images/client-logo.svg');
+    max-height: 40px;
+}
+*/

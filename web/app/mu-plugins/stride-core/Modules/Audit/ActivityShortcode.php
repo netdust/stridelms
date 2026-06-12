@@ -1,16 +1,17 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Stride\Modules\Audit;
 
 use NTDST\Audit\AuditService;
-use Stride\Modules\Edition\EditionService;
+use Stride\Modules\Edition\EditionRepository;
 
 final class ActivityShortcode
 {
     public function __construct(
         private readonly AuditService $auditService,
-        private readonly EditionService $editionService,
+        private readonly EditionRepository $editions,
     ) {
         add_shortcode('stride_my_activity', [$this, 'renderMilestones']);
     }
@@ -51,7 +52,7 @@ final class ActivityShortcode
                 </div>',
                 esc_attr($icon),
                 esc_html($date),
-                wp_kses_post($label)
+                wp_kses_post($label),
             );
         }
 
@@ -83,7 +84,7 @@ final class ActivityShortcode
     private function getRegistrationLabel(array $context): string
     {
         $editionId = $context['edition_id'] ?? 0;
-        $edition = $editionId ? $this->editionService->getEdition($editionId) : null;
+        $edition = $editionId ? $this->editions->find($editionId) : null;
 
         if ($edition && !is_wp_error($edition)) {
             return sprintf('Je hebt je ingeschreven voor <strong>%s</strong>.', esc_html($edition->post_title));

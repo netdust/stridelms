@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Stride\Modules\User;
 
+use Stride\Domain\RegistrationStatus;
 use Stride\Modules\Edition\EditionRepository;
-use Stride\Modules\Edition\EditionService;
-use Stride\Modules\Enrollment\EnrollmentService;
+use Stride\Modules\Enrollment\RegistrationRepository;
 
 /**
  * Dashboard shortcode for displaying user enrollments.
@@ -14,8 +14,7 @@ use Stride\Modules\Enrollment\EnrollmentService;
 final class DashboardShortcode
 {
     public function __construct(
-        private readonly EnrollmentService $enrollment,
-        private readonly EditionService $editions,
+        private readonly RegistrationRepository $registrations,
         private readonly EditionRepository $editionRepository,
     ) {
         add_shortcode('stride_my_courses', [$this, 'renderMyCourses']);
@@ -31,7 +30,7 @@ final class DashboardShortcode
         }
 
         $userId = get_current_user_id();
-        $enrollments = $this->enrollment->getUserEnrollments($userId);
+        $enrollments = $this->registrations->findByUser($userId, RegistrationStatus::Confirmed->value);
 
         if (empty($enrollments)) {
             return '<div class="uk-alert uk-alert-primary">Je hebt nog geen inschrijvingen.</div>';
@@ -40,7 +39,7 @@ final class DashboardShortcode
         $output = '<div class="uk-grid uk-grid-small uk-child-width-1-1" uk-grid>';
 
         foreach ($enrollments as $registration) {
-            $edition = $this->editions->getEdition((int) $registration->edition_id);
+            $edition = $this->editionRepository->find((int) $registration->edition_id);
 
             if (is_wp_error($edition)) {
                 continue;
@@ -65,7 +64,7 @@ final class DashboardShortcode
                 esc_html($startDate ? date_i18n('j F Y', strtotime($startDate)) : 'Datum onbekend'),
                 $venue ? '<span uk-icon="location"></span> ' . esc_html($venue) : '',
                 $status === 'completed' ? 'uk-label-success' : 'uk-label-primary',
-                esc_html(ucfirst($status ?: 'ingeschreven'))
+                esc_html(ucfirst($status ?: 'ingeschreven')),
             );
         }
 

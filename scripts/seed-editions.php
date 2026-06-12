@@ -22,7 +22,7 @@ if (defined('WP_ENV') && WP_ENV === 'production') {
 // Load autoloader
 require_once ABSPATH . '../app/mu-plugins/stride-core/autoload.php';
 
-use Stride\Domain\EditionStatus;
+use Stride\Domain\OfferingStatus;
 use Stride\Domain\RegistrationStatus;
 use Stride\Modules\Edition\EditionCPT;
 use Stride\Modules\Enrollment\RegistrationTable;
@@ -85,7 +85,7 @@ $editions = [
         'price_non_member' => 350.00,
         'venue' => 'VAD Brussel',
         'speakers' => 'Jan De Trainer',
-        'status' => EditionStatus::Open->value,
+        'status' => OfferingStatus::Open->value,
     ],
     [
         'title' => 'Basisvorming - April 2026',
@@ -97,7 +97,7 @@ $editions = [
         'price_non_member' => 350.00,
         'venue' => 'VAD Gent',
         'speakers' => 'Marie Docent',
-        'status' => EditionStatus::Open->value,
+        'status' => OfferingStatus::Open->value,
     ],
     [
         'title' => 'Basisvorming - Mei 2026 (Volzet)',
@@ -109,7 +109,7 @@ $editions = [
         'price_non_member' => 350.00,
         'venue' => 'VAD Antwerpen',
         'speakers' => 'Prof. Veilig',
-        'status' => EditionStatus::Full->value,
+        'status' => OfferingStatus::Full->value,
     ],
     [
         'title' => 'Basisvorming - Juni 2026 (Geannuleerd)',
@@ -121,7 +121,7 @@ $editions = [
         'price_non_member' => 350.00,
         'venue' => 'VAD Rotterdam',
         'speakers' => '',
-        'status' => EditionStatus::Cancelled->value,
+        'status' => OfferingStatus::Cancelled->value,
     ],
 ];
 
@@ -195,7 +195,7 @@ if (!empty($testUsers) && !empty($createdEditions)) {
     // Filter to only open editions
     $openEditions = array_filter($createdEditions, function ($editionId) use ($model) {
         $status = $model->getMeta($editionId, 'status');
-        return $status === EditionStatus::Open->value;
+        return $status === OfferingStatus::Open->value;
     });
 
     if (!empty($openEditions)) {

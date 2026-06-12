@@ -17,16 +17,6 @@ final class SessionRepository extends AbstractRepository
     protected string $postType = SessionCPT::POST_TYPE;
 
     /**
-     * Get a single field value.
-     */
-    public function getField(int $id, string $field, mixed $default = null): mixed
-    {
-        $value = $this->model()->getMeta($id, $field);
-
-        return $value !== null ? $value : $default;
-    }
-
-    /**
      * Find sessions for an edition.
      *
      * @return array<array<string, mixed>>
@@ -38,21 +28,27 @@ final class SessionRepository extends AbstractRepository
             ->withMeta()
             ->get();
 
-        // Sort by date ASC, then start_time ASC
-        // Note: orderBy() doesn't work for meta fields, so we sort in PHP
-        usort($sessions, function ($a, $b) {
-            $dateA = $a['meta']['date'] ?? '';
-            $dateB = $b['meta']['date'] ?? '';
-            $dateCmp = strcmp($dateA, $dateB);
-            if ($dateCmp !== 0) {
-                return $dateCmp;
-            }
-            $timeA = $a['meta']['start_time'] ?? '';
-            $timeB = $b['meta']['start_time'] ?? '';
-            return strcmp($timeA, $timeB);
-        });
+        return $this->sortByDateThenStartTime($sessions);
+    }
 
-        return $sessions;
+    /**
+     * Find session IDs for an edition, any non-trash post_status.
+     *
+     * Used by cascade-delete paths that need just the IDs. Goes through
+     * `where('edition_id', ...)` so the relationship matches `findByEdition()`
+     * / `countByEdition()` (meta-based, not post_parent-based) — keeps cascade
+     * consistent with the find/count paths.
+     *
+     * @return list<int>
+     */
+    public function findIdsByEdition(int $editionId): array
+    {
+        $rows = $this->model()
+            ->where('edition_id', $editionId)
+            ->where('post_status', 'any')
+            ->get();
+
+        return array_map(static fn(array $row): int => (int) ($row['id'] ?? $row['ID'] ?? 0), $rows);
     }
 
     /**
@@ -68,17 +64,32 @@ final class SessionRepository extends AbstractRepository
             ->withMeta()
             ->get();
 
-        // Sort by date ASC, then start_time ASC
-        usort($sessions, function ($a, $b) {
-            $dateA = $a['meta']['date'] ?? '';
-            $dateB = $b['meta']['date'] ?? '';
-            $dateCmp = strcmp($dateA, $dateB);
+        return $this->sortByDateThenStartTime($sessions);
+    }
+
+    /**
+     * Sort getPostsFast() rows by date ASC, then start_time ASC.
+     *
+     * The query builder's orderBy() doesn't work for meta fields, so this sort
+     * happens in PHP. Reads prefixed meta keys (e.g. `_ntdst_date`) from the
+     * batch query's `meta` envelope; the prefix comes from the model so a
+     * config change can't silently break ordering.
+     *
+     * @param array<array<string, mixed>> $sessions
+     * @return array<array<string, mixed>>
+     */
+    private function sortByDateThenStartTime(array $sessions): array
+    {
+        $prefix    = $this->getMetaPrefix();
+        $dateKey   = $prefix . 'date';
+        $startKey  = $prefix . 'start_time';
+
+        usort($sessions, function ($a, $b) use ($dateKey, $startKey) {
+            $dateCmp = strcmp($a['meta'][$dateKey] ?? '', $b['meta'][$dateKey] ?? '');
             if ($dateCmp !== 0) {
                 return $dateCmp;
             }
-            $timeA = $a['meta']['start_time'] ?? '';
-            $timeB = $b['meta']['start_time'] ?? '';
-            return strcmp($timeA, $timeB);
+            return strcmp($a['meta'][$startKey] ?? '', $b['meta'][$startKey] ?? '');
         });
 
         return $sessions;
@@ -95,17 +106,95 @@ final class SessionRepository extends AbstractRepository
     }
 
     /**
-     * Get unique dates for an edition.
+     * Batch-count published sessions for multiple editions in one GROUP BY query.
      *
-     * @return array<string>
+     * The N-independent equivalent of calling countByEdition() per id —
+     * added for the catalog batch pre-pass (Task G1 / audit 2.2). Same
+     * relationship semantics as countByEdition() (meta-based edition_id
+     * link, published sessions). The meta prefix comes from the model so
+     * a config change can't silently break the join (INV-3 vocabulary).
+     *
+     * @param array<int> $editionIds
+     * @return array<int, int> Map of edition_id => count (all input ids present, defaulting to 0)
      */
-    public function getUniqueDates(int $editionId): array
+    public function countByEditions(array $editionIds): array
     {
-        $sessions = $this->findByEdition($editionId);
-        $dates = array_unique(array_column($sessions, 'date'));
-        sort($dates);
+        $ids = array_values(array_unique(array_map('intval', $editionIds)));
+        if (empty($ids)) {
+            return [];
+        }
 
-        return array_values($dates);
+        global $wpdb;
+
+        $editionKey   = $this->getMetaPrefix() . 'edition_id';
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT pm.meta_value AS edition_id, COUNT(*) AS c
+             FROM {$wpdb->posts} p
+             INNER JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID AND pm.meta_key = %s
+             WHERE p.post_type = %s
+               AND p.post_status = 'publish'
+               AND pm.meta_value IN ({$placeholders})
+             GROUP BY pm.meta_value",
+            array_merge([$editionKey, $this->postType], $ids),
+        ));
+
+        $out = array_fill_keys($ids, 0);
+        foreach ($rows as $row) {
+            $out[(int) $row->edition_id] = (int) $row->c;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Sum total duration (hours) across a batch of sessions in a single query.
+     *
+     * Performance-driven: the alternative would be N find() round-trips through
+     * the cache for callers that already know the IDs (e.g. selected slot sessions).
+     * The model's `meta_prefix` is honored so a future prefix change here can't
+     * silently break.
+     *
+     * @param list<int> $sessionIds
+     */
+    public function sumDurationHours(array $sessionIds): float
+    {
+        if (empty($sessionIds)) {
+            return 0.0;
+        }
+
+        global $wpdb;
+
+        $prefix       = $this->model()->getMetaPrefix();
+        $startKey     = $prefix . 'start_time';
+        $endKey       = $prefix . 'end_time';
+        $placeholders = implode(',', array_fill(0, count($sessionIds), '%d'));
+
+        $args = array_merge([$endKey], $sessionIds, [$startKey]);
+
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT pm_start.post_id, pm_start.meta_value AS start_time, pm_end.meta_value AS end_time
+             FROM {$wpdb->postmeta} pm_start
+             LEFT JOIN {$wpdb->postmeta} pm_end
+                ON pm_start.post_id = pm_end.post_id AND pm_end.meta_key = %s
+             WHERE pm_start.post_id IN ({$placeholders})
+               AND pm_start.meta_key = %s",
+            $args,
+        ));
+
+        $totalHours = 0.0;
+        foreach ($results as $row) {
+            if (!empty($row->start_time) && !empty($row->end_time)) {
+                $start = strtotime((string) $row->start_time);
+                $end   = strtotime((string) $row->end_time);
+                if ($end > $start) {
+                    $totalHours += ($end - $start) / 3600;
+                }
+            }
+        }
+
+        return $totalHours;
     }
 
     /**
@@ -150,12 +239,14 @@ final class SessionRepository extends AbstractRepository
             return $validation;
         }
 
-        // Set title from date + time
-        $title = $data['date'];
-        if (!empty($data['start_time'])) {
-            $title .= ' ' . $data['start_time'];
+        // Auto-generate title from date + time when none provided.
+        if (empty($data['title'])) {
+            $title = (string) ($data['date'] ?? '');
+            if (!empty($data['start_time'])) {
+                $title .= ' ' . $data['start_time'];
+            }
+            $data['title'] = $title;
         }
-        $data['post_title'] = $title;
 
         return parent::create($data);
     }
@@ -181,11 +272,13 @@ final class SessionRepository extends AbstractRepository
             return $validation;
         }
 
-        // Update title from date + time
-        if (isset($data['date']) || isset($data['start_time'])) {
-            $date = $data['date'] ?? $this->getField($id, 'date', '');
-            $startTime = $data['start_time'] ?? $this->getField($id, 'start_time', '');
-            $data['post_title'] = $date . ($startTime ? ' ' . $startTime : '');
+        // Auto-generate title from date + time only if not set by caller.
+        if (!isset($data['title'])) {
+            if (isset($data['date']) || isset($data['start_time'])) {
+                $date = $data['date'] ?? $this->getField($id, 'date', '');
+                $startTime = $data['start_time'] ?? $this->getField($id, 'start_time', '');
+                $data['title'] = $date . ($startTime ? ' ' . $startTime : '');
+            }
         }
 
         return parent::update($id, $data);

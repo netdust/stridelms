@@ -6,7 +6,7 @@ namespace Stride\Modules\Attendance;
 
 use Stride\Domain\AttendanceStatus;
 use Stride\Infrastructure\AbstractService;
-use Stride\Modules\Edition\SessionService;
+use Stride\Modules\Edition\SessionRepository;
 use WP_Error;
 
 /**
@@ -16,7 +16,7 @@ final class AttendanceService extends AbstractService
 {
     public function __construct(
         private readonly AttendanceRepository $repository,
-        private readonly SessionService $sessionService,
+        private readonly SessionRepository $sessions,
     ) {
         parent::__construct();
     }
@@ -37,7 +37,16 @@ final class AttendanceService extends AbstractService
 
     protected function init(): void
     {
-        // Future: hooks for attendance events
+        // Register repository as shared singleton
+        ntdst_set(AttendanceRepository::class, fn() => $this->repository);
+    }
+
+    /**
+     * Get the attendance repository for batch queries.
+     */
+    public function getRepository(): AttendanceRepository
+    {
+        return $this->repository;
     }
 
     // === Mark Attendance ===
@@ -47,31 +56,7 @@ final class AttendanceService extends AbstractService
      */
     public function markPresent(int $sessionId, int $userId, ?int $markedBy = null): int|WP_Error
     {
-        $session = $this->sessionService->getSession($sessionId);
-
-        if (!$session) {
-            return new WP_Error('invalid_session', 'Session not found');
-        }
-
-        $result = $this->repository->record(
-            $sessionId,
-            $userId,
-            AttendanceStatus::Present,
-            $session['edition_id'],
-            $markedBy ?? get_current_user_id()
-        );
-
-        if (!is_wp_error($result)) {
-            do_action('stride/attendance/marked', [
-                'attendance_id' => $result,
-                'session_id' => $sessionId,
-                'user_id' => $userId,
-                'status' => AttendanceStatus::Present->value,
-                'edition_id' => $session['edition_id'],
-            ]);
-        }
-
-        return $result;
+        return $this->mark($sessionId, $userId, AttendanceStatus::Present, $markedBy);
     }
 
     /**
@@ -79,31 +64,7 @@ final class AttendanceService extends AbstractService
      */
     public function markAbsent(int $sessionId, int $userId, ?int $markedBy = null): int|WP_Error
     {
-        $session = $this->sessionService->getSession($sessionId);
-
-        if (!$session) {
-            return new WP_Error('invalid_session', 'Session not found');
-        }
-
-        $result = $this->repository->record(
-            $sessionId,
-            $userId,
-            AttendanceStatus::Absent,
-            $session['edition_id'],
-            $markedBy ?? get_current_user_id()
-        );
-
-        if (!is_wp_error($result)) {
-            do_action('stride/attendance/marked', [
-                'attendance_id' => $result,
-                'session_id' => $sessionId,
-                'user_id' => $userId,
-                'status' => AttendanceStatus::Absent->value,
-                'edition_id' => $session['edition_id'],
-            ]);
-        }
-
-        return $result;
+        return $this->mark($sessionId, $userId, AttendanceStatus::Absent, $markedBy);
     }
 
     /**
@@ -111,18 +72,28 @@ final class AttendanceService extends AbstractService
      */
     public function markExcused(int $sessionId, int $userId, ?int $markedBy = null): int|WP_Error
     {
-        $session = $this->sessionService->getSession($sessionId);
+        return $this->mark($sessionId, $userId, AttendanceStatus::Excused, $markedBy);
+    }
 
-        if (!$session) {
-            return new WP_Error('invalid_session', 'Session not found');
+    /**
+     * Internal: record attendance and dispatch event.
+     */
+    private function mark(int $sessionId, int $userId, AttendanceStatus $status, ?int $markedBy = null): int|WP_Error
+    {
+        $editionId = (int) $this->sessions->getField($sessionId, 'edition_id', 0);
+
+        if ($editionId === 0) {
+            return new WP_Error('invalid_session', 'Session not found or has no edition');
         }
+
+        $actor = $markedBy ?? get_current_user_id();
 
         $result = $this->repository->record(
             $sessionId,
             $userId,
-            AttendanceStatus::Excused,
-            $session['edition_id'],
-            $markedBy ?? get_current_user_id()
+            $status,
+            $editionId,
+            $actor,
         );
 
         if (!is_wp_error($result)) {
@@ -130,8 +101,9 @@ final class AttendanceService extends AbstractService
                 'attendance_id' => $result,
                 'session_id' => $sessionId,
                 'user_id' => $userId,
-                'status' => AttendanceStatus::Excused->value,
-                'edition_id' => $session['edition_id'],
+                'status' => $status->value,
+                'edition_id' => $editionId,
+                'marked_by' => $actor,
             ]);
         }
 
@@ -139,14 +111,6 @@ final class AttendanceService extends AbstractService
     }
 
     // === Queries ===
-
-    /**
-     * Check if user is present for a session.
-     */
-    public function isPresent(int $sessionId, int $userId): bool
-    {
-        return $this->repository->isPresent($sessionId, $userId);
-    }
 
     /**
      * Get attendance status for user at session.
@@ -160,16 +124,6 @@ final class AttendanceService extends AbstractService
         }
 
         return AttendanceStatus::tryFrom($record->status);
-    }
-
-    /**
-     * Get all attendees for a session.
-     *
-     * @return array<int> User IDs
-     */
-    public function getAttendees(int $sessionId): array
-    {
-        return $this->repository->getPresentUserIds($sessionId);
     }
 
     /**
@@ -217,14 +171,6 @@ final class AttendanceService extends AbstractService
     // === Statistics ===
 
     /**
-     * Count sessions attended by user in edition.
-     */
-    public function countAttended(int $userId, int $editionId): int
-    {
-        return $this->repository->countAttended($userId, $editionId);
-    }
-
-    /**
      * Get hours attended by user in edition.
      */
     public function getHoursAttended(int $userId, int $editionId): float
@@ -249,7 +195,7 @@ final class AttendanceService extends AbstractService
         }
 
         // Batch fetch session durations using a single query
-        return $this->sessionService->getTotalDurationForSessions($sessionIds);
+        return $this->sessions->sumDurationHours($sessionIds);
     }
 
     /**
@@ -259,13 +205,13 @@ final class AttendanceService extends AbstractService
      */
     public function getAttendanceRate(int $userId, int $editionId): float
     {
-        $totalSessions = $this->sessionService->getSessionCount($editionId);
+        $totalSessions = $this->sessions->countByEdition($editionId);
 
         if ($totalSessions === 0) {
             return 0.0;
         }
 
-        $attended = $this->countAttended($userId, $editionId);
+        $attended = $this->repository->countAttended($userId, $editionId);
 
         return ($attended / $totalSessions) * 100;
     }

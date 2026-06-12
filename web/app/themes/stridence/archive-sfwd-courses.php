@@ -1,12 +1,9 @@
 <?php
 /**
- * Course Catalog Archive
+ * Course Archive Template
  *
- * Template for displaying LearnDash courses in a filterable grid.
- * Supports domain, format, and location filters.
- *
- * Note: Uses WP_Query for LearnDash courses as they are managed natively by LearnDash.
- * Stride services (EditionService) are used for edition-specific data when needed.
+ * SEO landing page showing all courses: classroom editions and online courses.
+ * Links visitors to the dedicated /klassikaal/ and /online/ catalog pages.
  *
  * @package stridence
  */
@@ -15,71 +12,128 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
-// Get filter values from URL
-$current_domain  = isset($_GET['domein']) ? sanitize_text_field($_GET['domein']) : '';
-$current_format  = isset($_GET['formaat']) ? sanitize_text_field($_GET['formaat']) : '';
-$current_locatie = isset($_GET['locatie']) ? sanitize_text_field($_GET['locatie']) : '';
+use Stride\Domain\OfferingStatus;
+use Stride\Modules\Edition\EditionRepository;
 
-// Get domain terms
-$domains = get_terms([
-    'taxonomy'   => 'stride_domain',
-    'hide_empty' => true,
+$editionRepository = ntdst_get(EditionRepository::class);
+$meta_prefix = $editionRepository->getMetaPrefix();
+$archive_user_id = get_current_user_id() ?: null;
+
+// --- Classroom editions ---
+// Get online course IDs to exclude their editions
+$online_course_ids = get_posts([
+    'post_type'      => 'sfwd-courses',
+    'posts_per_page' => 500,
+    'post_status'    => 'publish',
+    'fields'         => 'ids',
+    'tax_query'      => [
+        [
+            'taxonomy' => 'stride_format',
+            'field'    => 'slug',
+            'terms'    => ['online', 'e-learning', 'webinar'],
+        ],
+    ],
 ]);
 
-if (is_wp_error($domains)) {
-    $domains = [];
-}
-
-// Build query args
-$paged = get_query_var('paged') ? get_query_var('paged') : 1;
-
-$query_args = [
-    'post_type'      => 'sfwd-courses',
-    'posts_per_page' => 12,
-    'paged'          => $paged,
-    'orderby'        => 'title',
-    'order'          => 'ASC',
+// NOTE (pre-existing divergence, left as-is): unlike the online query below
+// and the /klassikaal page, this classroom teaser has NO date window — it
+// filters on active status only (stridence_catalog_date_window_meta_query
+// would add the end_date/start_date grace window). Convergence is a product
+// ruling, not a refactor — tracked with the dateless-catalog follow-up.
+$edition_meta_query = [
+    [
+        'key'     => $meta_prefix . 'status',
+        'value'   => OfferingStatus::activeValues(),
+        'compare' => 'IN',
+    ],
 ];
-
-// Apply domain filter via taxonomy query
-if (!empty($current_domain)) {
-    $query_args['tax_query'] = [
+// Exclude editions linked to online courses
+if (!empty($online_course_ids)) {
+    $edition_meta_query[] = [
+        'relation' => 'OR',
         [
-            'taxonomy' => 'stride_domain',
-            'field'    => 'slug',
-            'terms'    => $current_domain,
+            'key'     => $meta_prefix . 'course_id',
+            'value'   => $online_course_ids,
+            'compare' => 'NOT IN',
+        ],
+        [
+            'key'     => $meta_prefix . 'course_id',
+            'compare' => 'NOT EXISTS',
         ],
     ];
 }
 
-// Note: Format and location filters would typically query edition meta
-// For now, these are placeholders that could be extended with meta queries
-// when EditionService integration is complete
+$edition_query = new WP_Query([
+    'post_type'      => 'vad_edition',
+    'posts_per_page' => 6,
+    'post_status'    => 'publish',
+    'fields'         => 'ids',
+    'no_found_rows'  => true,
+    'meta_query'     => $edition_meta_query,
+    'orderby'        => 'meta_value',
+    'meta_key'       => $meta_prefix . 'start_date',
+    'order'          => 'ASC',
+]);
 
-$courses_query = new WP_Query($query_args);
+// Batch-hydrated card items (Task G1 / audit 2.2) — rendered through the
+// catalog pre-pass; the card partials are pure renderers.
+$classroom_items = stridence_catalog_edition_items_from_ids(array_map('intval', $edition_query->posts));
 
-// Check if any filter is active
-$has_filters = !empty($current_domain) || !empty($current_format) || !empty($current_locatie);
+// --- Trajectories ---
+$trajectory_model = ntdst_data()->get('vad_trajectory');
+$trajectories = $trajectory_model->where('post_status', 'publish')
+                                 ->orderBy('menu_order', 'ASC')
+                                 ->orderBy('post_title', 'ASC')
+                                 ->withMeta()
+                                 ->limit(3)
+                                 ->get();
 
-// Build base URL for filter links (preserves domain when clearing other filters)
-$base_url = get_post_type_archive_link('sfwd-courses');
+// --- Online enrollables (active editions + pure-LD courses) ---
+// Same rule as page-online.php: catalog list = the set of things a visitor
+// can enroll in. See [[lesson_url_role_split]].
+$online_items = [];
 
-// Format options
-$format_options = [
-    ''                   => __('Alle formaten', 'stridence'),
-    'meerdaagse'         => __('Meerdaagse opleiding', 'stridence'),
-    'studiedag'          => __('Studiedag', 'stridence'),
-    'webinar'            => __('Webinar', 'stridence'),
-];
+if (!empty($online_course_ids)) {
+    // Eligibility rule shared with /klassikaal and /online — single builder
+    // (dateless/self-paced exclusion documented there).
+    $online_meta_query = stridence_catalog_date_window_meta_query($meta_prefix);
+    $online_meta_query[] = [
+        'key'     => $meta_prefix . 'course_id',
+        'value'   => $online_course_ids,
+        'compare' => 'IN',
+    ];
+    $online_edition_query = new WP_Query([
+        'post_type'      => 'vad_edition',
+        'posts_per_page' => 6,
+        'post_status'    => 'publish',
+        'fields'         => 'ids',
+        'no_found_rows'  => true,
+        'meta_query'     => $online_meta_query,
+        'orderby'        => 'meta_value',
+        'meta_key'       => $meta_prefix . 'start_date',
+        'order'          => 'ASC',
+    ]);
+    $online_items = stridence_catalog_edition_items_from_ids(array_map('intval', $online_edition_query->posts));
+}
 
-// Location options
-$location_options = [
-    ''         => __('Alle locaties', 'stridence'),
-    'online'   => __('Online', 'stridence'),
-    'gent'     => __('Gent', 'stridence'),
-    'brussel'  => __('Brussel', 'stridence'),
-    'antwerpen'=> __('Antwerpen', 'stridence'),
-];
+// Top up with pure-LD courses (courses with NO edition at all — not "no
+// currently-visible edition"). A course with only past editions is off-catalog
+// until a new one is scheduled.
+$remaining = 6 - count($online_items);
+if ($remaining > 0 && !empty($online_course_ids)) {
+    $with_editions = $editionRepository->courseIdsWithAnyEdition(array_map('intval', $online_course_ids));
+    $pure_ld_ids = array_values(array_diff(array_map('intval', $online_course_ids), $with_editions));
+    foreach (array_slice($pure_ld_ids, 0, $remaining) as $course_id) {
+        if (!get_post($course_id)) {
+            continue;
+        }
+        $online_items[] = [
+            'kind'      => 'course',
+            'course_id' => $course_id,
+            'themes'    => [],
+        ];
+    }
+}
 
 get_header();
 ?>
@@ -88,193 +142,101 @@ get_header();
 <div class="bg-surface-alt border-b border-border">
     <div class="container py-8 lg:py-12">
         <h1 class="text-3xl lg:text-4xl font-heading font-bold text-text mb-2">
-            <?php esc_html_e('Opleidingen', 'stridence'); ?>
+            <?php esc_html_e('Ons opleidingsaanbod', 'stridence'); ?>
         </h1>
-        <p class="text-lg text-text-muted">
-            <?php esc_html_e('Ontdek ons volledig aanbod aan professionele trainingen', 'stridence'); ?>
+        <p class="text-lg text-text-muted max-w-2xl">
+            <?php esc_html_e('Ontdek ons volledige aanbod aan klassikale opleidingen, leertrajecten en online cursussen in de verslavingszorg.', 'stridence'); ?>
         </p>
     </div>
 </div>
 
-<!-- Domain Tabs -->
-<?php if (!empty($domains)) : ?>
-<div class="border-b border-border bg-surface">
-    <div class="container">
-        <nav class="flex overflow-x-auto -mb-px scrollbar-hide" aria-label="<?php esc_attr_e('Domeinen', 'stridence'); ?>">
-            <?php
-            // Build URL for "Alle" tab
-            $alle_url = $base_url;
-            if (!empty($current_format)) {
-                $alle_url = add_query_arg('formaat', $current_format, $alle_url);
-            }
-            if (!empty($current_locatie)) {
-                $alle_url = add_query_arg('locatie', $current_locatie, $alle_url);
-            }
+<div class="container py-8 lg:py-12 space-y-12">
 
-            $alle_active = empty($current_domain);
-            $alle_classes = $alle_active
-                ? 'whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 border-primary text-primary'
-                : 'whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 border-transparent text-text-muted hover:text-text hover:border-border';
-            ?>
-            <a href="<?php echo esc_url($alle_url); ?>"
-               class="<?php echo esc_attr($alle_classes); ?>"
-               <?php echo $alle_active ? 'aria-current="page"' : ''; ?>>
-                <?php esc_html_e('Alle', 'stridence'); ?>
+    <!-- Leertrajecten -->
+    <?php if (!empty($trajectories)) : ?>
+    <section>
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-2xl font-heading font-bold text-text">
+                <?php esc_html_e('Leertrajecten', 'stridence'); ?>
+            </h2>
+            <a href="<?php echo esc_url(get_post_type_archive_link('vad_trajectory')); ?>" class="text-sm font-medium text-primary hover:underline">
+                <?php esc_html_e('Bekijk alle', 'stridence'); ?> &rarr;
             </a>
+        </div>
+        <p class="text-text-muted mb-6">
+            <?php esc_html_e('Langlopende opleidingsprogramma\'s voor professionals die zich willen specialiseren.', 'stridence'); ?>
+        </p>
 
-            <?php foreach ($domains as $domain) :
-                // Build domain tab URL preserving other filters
-                $domain_url = add_query_arg('domein', $domain->slug, $base_url);
-                if (!empty($current_format)) {
-                    $domain_url = add_query_arg('formaat', $current_format, $domain_url);
-                }
-                if (!empty($current_locatie)) {
-                    $domain_url = add_query_arg('locatie', $current_locatie, $domain_url);
-                }
-
-                $is_active = ($current_domain === $domain->slug);
-                $tab_classes = $is_active
-                    ? 'whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 border-primary text-primary'
-                    : 'whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 border-transparent text-text-muted hover:text-text hover:border-border';
-            ?>
-                <a href="<?php echo esc_url($domain_url); ?>"
-                   class="<?php echo esc_attr($tab_classes); ?>"
-                   <?php echo $is_active ? 'aria-current="page"' : ''; ?>>
-                    <?php echo esc_html($domain->name); ?>
-                </a>
-            <?php endforeach; ?>
-        </nav>
-    </div>
-</div>
-<?php endif; ?>
-
-<!-- Filters -->
-<div class="container py-6">
-    <form method="get" action="<?php echo esc_url($base_url); ?>" class="flex flex-wrap gap-4 items-center">
-        <?php if (!empty($current_domain)) : ?>
-            <input type="hidden" name="domein" value="<?php echo esc_attr($current_domain); ?>">
-        <?php endif; ?>
-
-        <!-- Format Filter -->
-        <select name="formaat" class="input-select" onchange="this.form.submit()">
-            <?php foreach ($format_options as $value => $label) : ?>
-                <option value="<?php echo esc_attr($value); ?>" <?php selected($current_format, $value); ?>>
-                    <?php echo esc_html($label); ?>
-                </option>
-            <?php endforeach; ?>
-        </select>
-
-        <!-- Location Filter -->
-        <select name="locatie" class="input-select" onchange="this.form.submit()">
-            <?php foreach ($location_options as $value => $label) : ?>
-                <option value="<?php echo esc_attr($value); ?>" <?php selected($current_locatie, $value); ?>>
-                    <?php echo esc_html($label); ?>
-                </option>
-            <?php endforeach; ?>
-        </select>
-
-        <?php if ($has_filters) :
-            // Build clear URL that preserves domain filter
-            $clear_url = $base_url;
-            if (!empty($current_domain)) {
-                $clear_url = add_query_arg('domein', $current_domain, $clear_url);
-            }
-        ?>
-            <a href="<?php echo esc_url($clear_url); ?>" class="text-sm text-text-muted hover:text-text inline-flex items-center gap-1">
-                <?php echo stridence_icon('x', 'w-4 h-4'); ?>
-                <?php esc_html_e('Filters wissen', 'stridence'); ?>
-            </a>
-        <?php endif; ?>
-    </form>
-</div>
-
-<!-- Course Grid -->
-<div class="container pb-12">
-    <?php if ($courses_query->have_posts()) : ?>
         <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            <?php while ($courses_query->have_posts()) : $courses_query->the_post(); ?>
+            <?php foreach ($trajectories as $trajectory) : ?>
                 <?php
-                get_template_part('partials/card-course', null, [
-                    'course' => get_post(),
+                stridence_template_part('partials/card-trajectory', null, [
+                    'trajectory' => $trajectory,
                 ]);
                 ?>
-            <?php endwhile; ?>
+            <?php endforeach; ?>
         </div>
-
-        <!-- Pagination -->
-        <?php if ($courses_query->max_num_pages > 1) : ?>
-            <nav class="mt-12 flex justify-center" aria-label="<?php esc_attr_e('Paginatie', 'stridence'); ?>">
-                <?php
-                $pagination_args = [
-                    'total'     => $courses_query->max_num_pages,
-                    'current'   => $paged,
-                    'mid_size'  => 2,
-                    'prev_text' => '<span class="sr-only">' . __('Vorige', 'stridence') . '</span>' . stridence_icon('chevron-left', 'w-5 h-5'),
-                    'next_text' => '<span class="sr-only">' . __('Volgende', 'stridence') . '</span>' . stridence_icon('chevron-right', 'w-5 h-5'),
-                    'type'      => 'array',
-                ];
-
-                // Preserve filter params in pagination
-                if (!empty($current_domain)) {
-                    $pagination_args['add_args']['domein'] = $current_domain;
-                }
-                if (!empty($current_format)) {
-                    $pagination_args['add_args']['formaat'] = $current_format;
-                }
-                if (!empty($current_locatie)) {
-                    $pagination_args['add_args']['locatie'] = $current_locatie;
-                }
-
-                $pagination_links = paginate_links($pagination_args);
-
-                if ($pagination_links) :
-                ?>
-                    <ul class="flex items-center gap-1">
-                        <?php foreach ($pagination_links as $link) : ?>
-                            <li>
-                                <?php
-                                // Add styling classes to pagination links
-                                $link = str_replace(
-                                    'page-numbers',
-                                    'page-numbers inline-flex items-center justify-center min-w-[40px] h-10 px-3 rounded-lg text-sm font-medium transition-colors',
-                                    $link
-                                );
-                                $link = str_replace(
-                                    'current',
-                                    'current bg-primary text-white',
-                                    $link
-                                );
-                                // Non-current links
-                                if (strpos($link, 'current') === false && strpos($link, 'dots') === false) {
-                                    $link = str_replace(
-                                        'page-numbers',
-                                        'page-numbers hover:bg-surface-alt',
-                                        $link
-                                    );
-                                }
-                                echo $link;
-                                ?>
-                            </li>
-                        <?php endforeach; ?>
-                    </ul>
-                <?php endif; ?>
-            </nav>
-        <?php endif; ?>
-
-    <?php else : ?>
-        <!-- Empty State -->
-        <?php
-        get_template_part('partials/empty-state', null, [
-            'icon'    => 'search',
-            'title'   => __('Geen opleidingen gevonden', 'stridence'),
-            'message' => __('Er zijn geen opleidingen die voldoen aan je zoekcriteria. Probeer een andere filter of bekijk alle opleidingen.', 'stridence'),
-            'action'  => __('Bekijk alle opleidingen', 'stridence'),
-            'url'     => $base_url,
-        ]);
-        ?>
+    </section>
     <?php endif; ?>
+
+    <!-- Klassikale opleidingen -->
+    <section>
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-2xl font-heading font-bold text-text">
+                <?php esc_html_e('Klassikale opleidingen', 'stridence'); ?>
+            </h2>
+            <a href="<?php echo esc_url(home_url('/klassikaal/')); ?>" class="text-sm font-medium text-primary hover:underline">
+                <?php esc_html_e('Bekijk alle', 'stridence'); ?> &rarr;
+            </a>
+        </div>
+        <p class="text-text-muted mb-6">
+            <?php esc_html_e('Leer samen met anderen onder begeleiding van ervaren docenten.', 'stridence'); ?>
+        </p>
+
+        <?php if (!empty($classroom_items)) : ?>
+            <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                <?php echo stridence_catalog_render_cards($classroom_items, $archive_user_id); // Escaped within the partials.?>
+            </div>
+        <?php else : ?>
+            <?php
+            stridence_template_part('partials/empty-state', null, [
+                'icon'    => 'calendar',
+                'title'   => __('Geen geplande opleidingen', 'stridence'),
+                'message' => __('Er zijn momenteel geen klassikale opleidingen gepland.', 'stridence'),
+            ]);
+            ?>
+        <?php endif; ?>
+    </section>
+
+    <!-- Online cursussen -->
+    <section>
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-2xl font-heading font-bold text-text">
+                <?php esc_html_e('Online cursussen', 'stridence'); ?>
+            </h2>
+            <a href="<?php echo esc_url(home_url('/online/')); ?>" class="text-sm font-medium text-primary hover:underline">
+                <?php esc_html_e('Bekijk alle', 'stridence'); ?> &rarr;
+            </a>
+        </div>
+        <p class="text-text-muted mb-6">
+            <?php esc_html_e('Leer op je eigen tempo met onze e-learning modules en webinars.', 'stridence'); ?>
+        </p>
+
+        <?php if (!empty($online_items)) : ?>
+            <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                <?php echo stridence_catalog_render_cards($online_items, $archive_user_id); // Escaped within the partials.?>
+            </div>
+        <?php else : ?>
+            <?php
+            stridence_template_part('partials/empty-state', null, [
+                'icon'    => 'monitor',
+                'title'   => __('Geen online cursussen', 'stridence'),
+                'message' => __('Er zijn momenteel geen online cursussen beschikbaar.', 'stridence'),
+            ]);
+            ?>
+        <?php endif; ?>
+    </section>
+
 </div>
 
-<?php
-wp_reset_postdata();
-get_footer();
+<?php get_footer(); ?>

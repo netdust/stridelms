@@ -1,10 +1,29 @@
 <!DOCTYPE html>
 <html lang="nl-BE">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Stride — Opleidingsbeheer dat écht werkt</title>
-  <meta name="description" content="Het enige platform voor in-person, online én hybride trainingen. Van cursusplanning tot certificaten, zonder de enterprise-prijskaart.">
+  <title>Stride — Volledig beheerd leerplatform</title>
+  <meta name="description"
+    content="Een LMS dat voelt als SaaS, maar waar jouw data lokaal blijft. Wij beheren de techniek, jullie focussen op content en resultaten. Onbeperkt gebruikers, GDPR-compliant.">
+  <link rel="canonical" href="https://stridelms.be/">
+  <link rel="icon" href="/images/logo.svg" type="image/svg+xml">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="nl_BE">
+  <meta property="og:title" content="Stride — Volledig beheerd leerplatform">
+  <meta property="og:description" content="Een LMS dat voelt als SaaS, maar waar jouw data lokaal blijft. Wij beheren de techniek, jullie focussen op content en resultaten.">
+  <meta property="og:url" content="https://stridelms.be/">
+  <meta property="og:site_name" content="Stride">
+  <meta property="og:image" content="https://stridelms.be/images/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Stride — Volledig beheerd leerplatform">
+  <meta name="twitter:description" content="Een LMS dat voelt als SaaS, maar waar jouw data lokaal blijft. Wij beheren de techniek, jullie focussen op content en resultaten.">
+  <meta name="twitter:image" content="https://stridelms.be/images/og-image.png">
 
   <!-- Fonts -->
   <link rel="preconnect" href="https://api.fontshare.com" crossorigin>
@@ -17,52 +36,46 @@
   <!-- Alpine.js -->
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
+
 <body class="grain">
 
   <!-- Header -->
   <header class="fixed top-0 inset-x-0 z-40 bg-cream/80 backdrop-blur-md border-b border-navy/5"
-          x-data="{ open: false, scrolled: false }"
-          @scroll.window="scrolled = window.scrollY > 20"
-          :class="{ 'shadow-card': scrolled }">
+    x-data="{ open: false, scrolled: false }" @scroll.window="scrolled = window.scrollY > 20"
+    :class="{ 'shadow-card': scrolled }">
     <div class="container">
       <nav class="flex items-center justify-between h-16 lg:h-20">
         <!-- Logo -->
         <a href="/" class="flex items-center gap-2">
-<img src="images/logo.svg" alt="Stride" class="w-8 h-8">
+          <img src="images/logo.svg" alt="Stride" class="w-8 h-8">
           <span class="font-heading font-bold text-xl text-navy">Stride</span>
         </a>
 
         <!-- Desktop Nav -->
         <div class="hidden lg:flex items-center gap-8">
-          <a href="features.html" class="text-text hover:text-navy transition-colors">Functies</a>
-          <a href="#pricing" class="text-text hover:text-navy transition-colors">Prijzen</a>
-          <a href="#demo" class="btn-primary">Plan een demo</a>
+          <a href="/features" class="text-text hover:text-navy transition-colors">Functies</a>
+          <a href="/contact" class="btn-primary">Laten we praten</a>
         </div>
 
         <!-- Mobile Toggle -->
         <button @click="open = !open" class="lg:hidden p-2 -mr-2" aria-label="Menu">
           <svg x-show="!open" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
           </svg>
           <svg x-show="open" x-cloak class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </nav>
 
       <!-- Mobile Menu -->
-      <div x-show="open" x-cloak
-           x-transition:enter="transition ease-out duration-200"
-           x-transition:enter-start="opacity-0 -translate-y-2"
-           x-transition:enter-end="opacity-100 translate-y-0"
-           x-transition:leave="transition ease-in duration-150"
-           x-transition:leave-start="opacity-100 translate-y-0"
-           x-transition:leave-end="opacity-0 -translate-y-2"
-           class="lg:hidden py-4 border-t border-navy/5">
+      <div x-show="open" x-cloak x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="opacity-0 -translate-y-2" x-transition:enter-end="opacity-100 translate-y-0"
+        x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0"
+        x-transition:leave-end="opacity-0 -translate-y-2" class="lg:hidden py-4 border-t border-navy/5">
         <div class="flex flex-col gap-4">
-          <a href="features.html" class="text-text hover:text-navy py-2">Functies</a>
-          <a href="#pricing" class="text-text hover:text-navy py-2">Prijzen</a>
-          <a href="#demo" class="btn-primary text-center">Plan een demo</a>
+          <a href="/features" class="text-text hover:text-navy py-2">Functies</a>
+          <a href="/contact" class="btn-primary text-center">Laten we praten</a>
         </div>
       </div>
     </div>
@@ -70,125 +83,365 @@
 
   <main>
     <!-- Hero Section -->
-    <section class="pt-32 lg:pt-40 pb-20 lg:pb-28">
+    <section class="pt-32 lg:pt-40 pb-16 lg:pb-20 overflow-hidden">
       <div class="container">
-        <div class="max-w-3xl">
-          <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold text-navy text-balance reveal">
-            Opleidingsbeheer<br>
-            dat <span class="text-copper">écht</span> werkt.
-          </h1>
+        <div class="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+          <!-- Left: Copy -->
+          <div>
+            <div class="badge badge-copper mb-6 reveal">
+              <span class="w-2 h-2 bg-copper rounded-full animate-pulse-slow"></span>
+              Stoppen met betalen voor complexiteit.
+            </div>
 
-          <p class="mt-6 text-lg lg:text-xl text-text-muted max-w-2xl reveal delay-100">
-            Van cursusplanning tot certificaten — het enige platform voor in-person,
-            online én hybride trainingen. Zonder de enterprise-prijskaart.
-          </p>
+            <h1 class="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold text-navy text-balance reveal">
+              Een LMS dat<br>
+              <span class="text-copper">voor jou werkt.</span>
+            </h1>
 
-          <div class="mt-8 flex flex-wrap gap-4 reveal delay-200">
-            <a href="#demo" class="btn-primary">
-              Plan een demo
-              <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
-              </svg>
-            </a>
-            <a href="features.html" class="btn-ghost">
-              Bekijk functies
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-              </svg>
-            </a>
+            <p class="mt-6 text-lg lg:text-xl text-text-muted max-w-xl reveal delay-100">
+              De meeste platformen zijn te complex en te duur. Stride is anders:
+              Precies wat je nodig hebt om te groeien, zonder de enterprise-ballast.
+            </p>
+
+            <div class="mt-8 flex flex-wrap gap-4 reveal delay-200">
+              <a href="/features" class="btn-primary text-lg px-8 py-4">
+                Ontdek het platform
+                <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                </svg>
+              </a>
+              <a href="#pricing" class="btn-secondary text-lg px-8 py-4">
+                Bekijk de prijzen
+              </a>
+            </div>
+
+            <!-- Trust indicators -->
+            <div class="mt-6 flex flex-wrap gap-4 text-sm text-text-muted reveal delay-300">
+              <span class="flex items-center gap-1">
+                <svg class="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                    clip-rule="evenodd" />
+                </svg>
+                Belgische hosting
+              </span>
+              <span class="flex items-center gap-1">
+                <svg class="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                    clip-rule="evenodd" />
+                </svg>
+                GDPR-compliant
+              </span>
+              <span class="flex items-center gap-1">
+                <svg class="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                    clip-rule="evenodd" />
+                </svg>
+                Onbeperkt gebruikers
+              </span>
+            </div>
           </div>
-        </div>
 
-        <!-- Hero Visual -->
-        <div class="mt-16 lg:mt-20 reveal delay-300">
-          <div class="relative">
-            <!-- Dashboard mockup placeholder -->
-            <div class="bg-surface rounded-xl shadow-hover border border-navy/10 overflow-hidden">
+          <!-- Right: Visual -->
+          <div class="relative reveal delay-300">
+            <!-- Main dashboard mockup -->
+            <div class="bg-surface rounded-2xl shadow-hover border border-navy/10 overflow-hidden">
               <div class="bg-navy/5 px-4 py-3 flex items-center gap-2">
                 <div class="flex gap-1.5">
-                  <div class="w-3 h-3 rounded-full bg-copper/40"></div>
-                  <div class="w-3 h-3 rounded-full bg-navy/20"></div>
-                  <div class="w-3 h-3 rounded-full bg-navy/20"></div>
+                  <div class="w-3 h-3 rounded-full bg-red-400/60"></div>
+                  <div class="w-3 h-3 rounded-full bg-yellow-400/60"></div>
+                  <div class="w-3 h-3 rounded-full bg-green-400/60"></div>
                 </div>
                 <div class="flex-1 text-center">
                   <span class="text-xs text-text-muted">stride.app/dashboard</span>
                 </div>
               </div>
-              <div class="aspect-[16/9] bg-gradient-to-br from-cream to-navy/5 flex items-center justify-center">
-                <span class="text-text-muted">Dashboard Screenshot</span>
+              <div>
+                <img src="images/dashboard-preview.png" alt="Stride dashboard overzicht" class="w-full block">
               </div>
             </div>
 
-            <!-- Floating badge -->
-            <div class="absolute -bottom-4 -right-4 lg:-bottom-6 lg:-right-6 bg-surface rounded-lg shadow-card px-4 py-3 border border-navy/10">
-              <p class="text-sm font-medium text-navy">Gebouwd voor VAD</p>
-              <p class="text-xs text-text-muted">Beschikbaar voor jou</p>
+            <!-- Floating card: Certificate -->
+            <div class="absolute -top-4 -right-4 lg:-top-6 lg:-right-6 floating-card animate-float hidden sm:block">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center flex-shrink-0">
+                  <svg class="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <div>
+                  <p class="text-sm font-medium text-navy">Certificaat behaald</p>
+                  <p class="text-xs text-text-muted">Jan D. - EHBO Basis</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Floating card: Enrollment -->
+            <div
+              class="absolute -bottom-4 -left-4 lg:-bottom-6 lg:-left-6 floating-card animate-float-delayed hidden sm:block">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-copper/10 flex items-center justify-center flex-shrink-0">
+                  <svg class="w-5 h-5 text-copper" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                  </svg>
+                </div>
+                <div>
+                  <p class="text-sm font-medium text-navy">Nieuwe inschrijving</p>
+                  <p class="text-xs text-text-muted">Marie P. - Leidinggeven</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Problem Section -->
+    <!-- What it is: Three Pillars -->
+    <section class="pt-12 lg:pt-16 pb-20 lg:pb-28">
+      <div class="container">
+        <div class="text-center max-w-2xl mx-auto mb-16">
+          <h2 class="text-3xl lg:text-4xl font-bold text-navy reveal">
+            Drie pijlers. Eén platform.
+          </h2>
+          <p class="mt-4 text-lg text-text-muted reveal delay-100">
+            Alles wat je nodig hebt voor een succesvolle leeromgeving.
+          </p>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-8 lg:gap-12">
+          <!-- Cursussen -->
+          <div class="text-center reveal delay-100">
+            <div class="w-16 h-16 rounded-2xl bg-gradient-copper flex items-center justify-center mx-auto mb-6">
+              <svg class="w-8 h-8 text-copper" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                  d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+              </svg>
+            </div>
+            <h3 class="font-heading font-bold text-2xl text-navy mb-3">Cursussen</h3>
+            <p class="text-text-muted">Creëer en beheer content met gemak. Volledige ondersteuning voor SCORM, LTI en
+              interactieve video's.</p>
+          </div>
+
+          <!-- Inschrijvingen -->
+          <div class="text-center reveal delay-200">
+            <div class="w-16 h-16 rounded-2xl bg-navy/10 flex items-center justify-center mx-auto mb-6">
+              <svg class="w-8 h-8 text-navy" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                  d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+              </svg>
+            </div>
+            <h3 class="font-heading font-bold text-2xl text-navy mb-3">Inschrijvingen</h3>
+            <p class="text-text-muted">Onbeperkt aantal gebruikers. Automatische onboarding en groepsbeheer zonder
+              per-user licentiekosten.</p>
+          </div>
+
+          <!-- Certificaten -->
+          <div class="text-center reveal delay-300">
+            <div class="w-16 h-16 rounded-2xl bg-gradient-copper flex items-center justify-center mx-auto mb-6">
+              <svg class="w-8 h-8 text-copper" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                  d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+            </div>
+            <h3 class="font-heading font-bold text-2xl text-navy mb-3">Certificaten</h3>
+            <p class="text-text-muted">Automatische generatie van certificaten. Compliance-tracking en
+              geldigheidswaarschuwingen voor je team.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- How it grows: Tier Visualization -->
     <section class="section bg-surface">
       <div class="container">
-        <div class="text-center max-w-2xl mx-auto mb-12">
-          <h2 class="text-2xl lg:text-3xl font-bold text-navy reveal">
-            Herkenbaar?
+        <div class="text-center max-w-2xl mx-auto mb-16">
+          <h2 class="text-3xl lg:text-4xl font-bold text-navy reveal">
+            Jouw aanbod groeit. Het platform volgt.
           </h2>
+          <p class="mt-4 text-lg text-text-muted reveal delay-100">
+            Start met e-learning, voeg klassikale sessies toe, bouw uit naar volledige leertrajecten.
+          </p>
         </div>
 
-        <div class="grid md:grid-cols-3 gap-6 mb-16">
-          <div class="card border-l-4 border-copper/50 reveal delay-100">
-            <div class="w-10 h-10 rounded bg-copper/10 flex items-center justify-center mb-4">
-              <svg class="w-5 h-5 text-copper" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-              </svg>
-            </div>
-            <h3 class="font-heading font-bold text-navy mb-2">Excel-chaos</h3>
-            <p class="text-text-muted text-sm">Eindeloze spreadsheets voor planning, deelnemers en aanwezigheid.</p>
+        <div class="grid md:grid-cols-3 gap-8">
+          <!-- Basic -->
+          <div class="card bg-cream border border-navy/5 reveal delay-100">
+            <h3 class="font-heading font-bold text-xl text-navy mb-2">Online</h3>
+            <p class="text-text-muted text-sm mb-6">E-learning en SCORM-pakketten aanbieden en opvolgen.</p>
+            <ul class="space-y-3 mb-8">
+              <li class="flex items-center gap-2 text-sm text-text">
+                <svg class="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clip-rule="evenodd" />
+                </svg>
+                Onbeperkt online cursussen
+              </li>
+              <li class="flex items-center gap-2 text-sm text-text">
+                <svg class="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clip-rule="evenodd" />
+                </svg>
+                Onbeperkt gebruikers
+              </li>
+              <li class="flex items-center gap-2 text-sm text-text">
+                <svg class="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clip-rule="evenodd" />
+                </svg>
+                Standaard rapportage
+              </li>
+            </ul>
           </div>
 
-          <div class="card border-l-4 border-copper/50 reveal delay-200">
-            <div class="w-10 h-10 rounded bg-copper/10 flex items-center justify-center mb-4">
-              <svg class="w-5 h-5 text-copper" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-              </svg>
-            </div>
-            <h3 class="font-heading font-bold text-navy mb-2">Handmatige lijsten</h3>
-            <p class="text-text-muted text-sm">Papieren aanwezigheidslijsten die niemand op tijd invult.</p>
+          <!-- Pro -->
+          <div class="card bg-white border-2 border-copper shadow-hover relative z-10 reveal delay-200">
+            <div
+              class="absolute -top-4 left-1/2 -translate-x-1/2 bg-copper text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+              Online + klassikaal</div>
+            <h3 class="font-heading font-bold text-xl text-navy mb-2">Blended</h3>
+            <p class="text-text-muted text-sm mb-6">Combineer online met klassikale sessies, planning en facturatie.</p>
+            <ul class="space-y-3 mb-8">
+              <li class="flex items-center gap-2 text-sm text-text font-medium">
+                <svg class="w-4 h-4 text-copper" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clip-rule="evenodd" />
+                </svg>
+                Klassikale edities met sessies
+              </li>
+              <li class="flex items-center gap-2 text-sm text-text">
+                <svg class="w-4 h-4 text-copper" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clip-rule="evenodd" />
+                </svg>
+                Blended learning
+              </li>
+              <li class="flex items-center gap-2 text-sm text-text">
+                <svg class="w-4 h-4 text-copper" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clip-rule="evenodd" />
+                </svg>
+                Offertes & facturatie
+              </li>
+            </ul>
           </div>
 
-          <div class="card border-l-4 border-copper/50 reveal delay-300">
-            <div class="w-10 h-10 rounded bg-copper/10 flex items-center justify-center mb-4">
-              <svg class="w-5 h-5 text-copper" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              </svg>
-            </div>
-            <h3 class="font-heading font-bold text-navy mb-2">Geen overzicht</h3>
-            <p class="text-text-muted text-sm">Wie heeft welke opleiding gevolgd? Wanneer vervallen certificaten?</p>
+          <!-- Enterprise -->
+          <div class="card bg-cream border border-navy/5 reveal delay-300">
+            <h3 class="font-heading font-bold text-xl text-navy mb-2">Trajecten</h3>
+            <p class="text-text-muted text-sm mb-6">Volledige leertrajecten met koppelingen en begeleiding.</p>
+            <ul class="space-y-3 mb-8">
+              <li class="flex items-center gap-2 text-sm text-text">
+                <svg class="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clip-rule="evenodd" />
+                </svg>
+                Leertrajecten met keuzecursussen
+              </li>
+              <li class="flex items-center gap-2 text-sm text-text">
+                <svg class="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clip-rule="evenodd" />
+                </svg>
+                LTI & API-koppelingen
+              </li>
+              <li class="flex items-center gap-2 text-sm text-text">
+                <svg class="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clip-rule="evenodd" />
+                </svg>
+                Dedicated support
+              </li>
+            </ul>
           </div>
         </div>
+      </div>
+    </section>
 
-        <!-- Transition -->
-        <div class="text-center reveal">
-          <div class="inline-flex items-center gap-4 px-6 py-3 bg-navy rounded-full">
-            <span class="text-text-inverse font-medium">Eén platform. Alles geregeld.</span>
-            <svg class="w-5 h-5 text-copper" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
-            </svg>
+    <!-- Pricing Section -->
+    <section class="section" id="pricing">
+      <div class="container">
+        <div class="grid lg:grid-cols-2 gap-12 items-center">
+          <div>
+            <h2 class="text-3xl lg:text-4xl font-bold text-navy reveal">
+              Transparante prijzen.<br>
+              <span class="text-copper">Geen verrassingen.</span>
+            </h2>
+            <p class="mt-6 text-lg text-text-muted reveal delay-100">
+              De meeste LMS-platformen rekenen per gebruiker. Hoe meer mensen
+              leren, hoe meer je betaalt — en dat bedrag groeit mee.
+            </p>
+            <p class="mt-4 text-lg text-text-muted reveal delay-200">
+              Stride werkt anders. Eén vast bedrag voor het volledige platform,
+              ongeacht hoeveel mensen er leren. Groei zonder bijbetalen.
+            </p>
+          </div>
+
+          <div class="card bg-cream border border-navy/10 reveal delay-300">
+            <div class="badge badge-copper mb-6">Prijzen op aanvraag</div>
+
+            <h3 class="font-heading font-bold text-2xl text-navy mb-3">Wat je krijgt</h3>
+            <p class="text-text-muted mb-8">
+              Een vast maandelijks bedrag voor het volledige platform.
+              Geen per-user kosten, geen verrassingen.
+            </p>
+
+            <ul class="space-y-4 mb-8">
+              <li class="flex items-start gap-3 text-sm text-text">
+                <svg class="w-4 h-4 text-success flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                </svg>
+                Hosting, updates en support inbegrepen
+              </li>
+              <li class="flex items-start gap-3 text-sm text-text">
+                <svg class="w-4 h-4 text-success flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                </svg>
+                Onbeperkt gebruikers — altijd
+              </li>
+              <li class="flex items-start gap-3 text-sm text-text">
+                <svg class="w-4 h-4 text-success flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                </svg>
+                Nieuwe functies gratis meegeleverd
+              </li>
+              <li class="flex items-start gap-3 text-sm text-text">
+                <svg class="w-4 h-4 text-success flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                </svg>
+                GDPR-compliant met audit trail
+              </li>
+            </ul>
+
+            <a href="/contact" class="btn-primary w-full py-4 text-center">
+              Vraag gesprek aan
+            </a>
           </div>
         </div>
       </div>
     </section>
 
     <!-- Features Grid -->
-    <section class="section" id="features">
+    <section class="pt-12 lg:pt-16 pb-20 lg:pb-28 bg-surface" id="features">
       <div class="container">
         <div class="text-center max-w-2xl mx-auto mb-12">
           <h2 class="text-2xl lg:text-3xl font-bold text-navy reveal">
-            Wat Stride voor je regelt
+            Content beheren. Resultaten meten.
           </h2>
+          <p class="mt-4 text-text-muted reveal delay-100">
+            Precies de tools die jullie nodig hebben — zonder de rest.
+          </p>
         </div>
 
         <div class="grid md:grid-cols-2 gap-6 lg:gap-8">
@@ -196,12 +449,14 @@
             <div class="flex items-start gap-4">
               <div class="w-12 h-12 rounded-lg bg-navy flex items-center justify-center flex-shrink-0">
                 <svg class="w-6 h-6 text-text-inverse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
               </div>
               <div>
-                <h3 class="font-heading font-bold text-lg text-navy mb-2">Sessiebeheer</h3>
-                <p class="text-text-muted">Plan meerdaagse opleidingen met sessies, locaties en capaciteit. Automatische wachtlijsten wanneer vol.</p>
+                <h3 class="font-heading font-bold text-lg text-navy mb-2">Gedetailleerde rapportering</h3>
+                <p class="text-text-muted">Bekijk exact wat er binnen je e-learning pakketten gebeurt. Voortgang, scores
+                  en tijdsbesteding — tot op moduleniveau.</p>
               </div>
             </div>
           </div>
@@ -210,12 +465,14 @@
             <div class="flex items-start gap-4">
               <div class="w-12 h-12 rounded-lg bg-navy flex items-center justify-center flex-shrink-0">
                 <svg class="w-6 h-6 text-text-inverse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
               </div>
               <div>
-                <h3 class="font-heading font-bold text-lg text-navy mb-2">Voortgang & Certificaten</h3>
-                <p class="text-text-muted">Realtime zicht op aanwezigheid, voortgang en certificaten. Automatische herinneringen bij vervaldatum.</p>
+                <h3 class="font-heading font-bold text-lg text-navy mb-2">SCORM-pakketten</h3>
+                <p class="text-text-muted">Laad bestaande e-learning modules direct op. Volledige tracking van
+                  interacties en resultaten binnen elk pakket.</p>
               </div>
             </div>
           </div>
@@ -224,12 +481,14 @@
             <div class="flex items-start gap-4">
               <div class="w-12 h-12 rounded-lg bg-navy flex items-center justify-center flex-shrink-0">
                 <svg class="w-6 h-6 text-text-inverse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
               </div>
               <div>
-                <h3 class="font-heading font-bold text-lg text-navy mb-2">SCORM & Online</h3>
-                <p class="text-text-muted">Importeer bestaande e-learning of combineer online modules met klassikale sessies.</p>
+                <h3 class="font-heading font-bold text-lg text-navy mb-2">LTI-integratie</h3>
+                <p class="text-text-muted">Bied je modules ook aan op andere platformen. Eén plek beheren, overal
+                  beschikbaar maken.</p>
               </div>
             </div>
           </div>
@@ -238,125 +497,178 @@
             <div class="flex items-start gap-4">
               <div class="w-12 h-12 rounded-lg bg-navy flex items-center justify-center flex-shrink-0">
                 <svg class="w-6 h-6 text-text-inverse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
               </div>
               <div>
-                <h3 class="font-heading font-bold text-lg text-navy mb-2">Facturatie</h3>
-                <p class="text-text-muted">Automatische offertes, kortingscodes en export naar je boekhouding (Exact Online).</p>
+                <h3 class="font-heading font-bold text-lg text-navy mb-2">Certificaten & compliance</h3>
+                <p class="text-text-muted">Automatische certificaten na afronding. Herinneringen bij vervaldatum. Altijd
+                  aantoonbaar in orde.</p>
               </div>
             </div>
           </div>
         </div>
 
         <div class="text-center mt-10 reveal">
-          <a href="features.html" class="btn-ghost">
+          <a href="/features" class="btn-ghost">
             Alle functies bekijken
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
             </svg>
           </a>
         </div>
       </div>
     </section>
 
-    <!-- Social Proof -->
+    <!-- Built on Experience Section -->
     <section class="section bg-navy text-text-inverse">
       <div class="container">
-        <div class="max-w-3xl mx-auto text-center">
-          <blockquote class="reveal">
-            <p class="text-xl lg:text-2xl font-medium mb-6 text-balance">
-              "Stride vervangt onze Excel-chaos door een systeem waar onze 200+ medewerkers
-              zelf hun opleidingen kunnen boeken en hun voortgang volgen."
-            </p>
-            <footer class="flex items-center justify-center gap-4">
-              <div class="w-12 h-12 rounded-full bg-copper/20 flex items-center justify-center">
-                <span class="font-heading font-bold text-copper">VAD</span>
-              </div>
-              <div class="text-left">
-                <cite class="not-italic font-medium">VAD Vlaanderen</cite>
-                <p class="text-sm text-text-inverse/70">Vlaamse expertisecentrum</p>
-              </div>
-            </footer>
-          </blockquote>
+        <div class="max-w-3xl mx-auto text-center mb-12">
+          <h2 class="text-3xl lg:text-4xl font-bold mb-6 reveal">Gebouwd op ervaring</h2>
+          <p class="text-lg lg:text-xl text-text-inverse/80 reveal delay-100">
+            Stride is het resultaat van jarenlange hands-on ervaring met het cursusplatform van VAD —
+            een organisatie die jaarlijks duizenden professionals opleidt. Die kennis hebben we
+            gedestilleerd tot een lean, snel platform dat precies doet wat organisaties nodig hebben.
+          </p>
+        </div>
+
+        <div class="grid sm:grid-cols-3 gap-8 max-w-4xl mx-auto text-center reveal delay-300">
+          <div class="space-y-3">
+            <div class="w-10 h-10 rounded-lg bg-copper/20 flex items-center justify-center mx-auto">
+              <svg class="w-5 h-5 text-copper" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <h3 class="font-heading font-bold text-lg">Lean & snel</h3>
+            <p class="text-sm text-text-inverse/60">Geen overbodige lagen. Alleen de functies die er toe doen.</p>
+          </div>
+          <div class="space-y-3">
+            <div class="w-10 h-10 rounded-lg bg-copper/20 flex items-center justify-center mx-auto">
+              <svg class="w-5 h-5 text-copper" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h3 class="font-heading font-bold text-lg">Bewezen in de praktijk</h3>
+            <p class="text-sm text-text-inverse/60">Verfijnd door echte opleidingscoördinatoren en beheerders.</p>
+          </div>
+          <div class="space-y-3">
+            <div class="w-10 h-10 rounded-lg bg-copper/20 flex items-center justify-center mx-auto">
+              <svg class="w-5 h-5 text-copper" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            </div>
+            <h3 class="font-heading font-bold text-lg">Gericht op organisaties</h3>
+            <p class="text-sm text-text-inverse/60">Gebouwd voor teams die opleiden als kerntaak hebben.</p>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- Pricing / CTA -->
-    <section class="section" id="pricing">
+    <!-- Managed = Trust Section -->
+    <section class="section bg-surface overflow-hidden relative">
+      <div class="container">
+        <div class="text-center max-w-2xl mx-auto mb-12">
+          <h2 class="text-3xl lg:text-4xl font-bold text-navy reveal">
+            Wij beheren de techniek,<br>
+            <span class="text-copper">jij de resultaten.</span>
+          </h2>
+          <p class="mt-4 text-lg text-text-muted reveal delay-100">
+            Geen IT-kopzorgen meer. Wij zorgen ervoor dat je platform altijd veilig,
+            snel en up-to-date is, zodat jij je kunt focussen op wat echt telt: je content.
+          </p>
+        </div>
+
+        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-8 reveal delay-200">
+            <div class="space-y-4">
+              <div class="w-12 h-12 rounded-xl bg-navy/10 flex items-center justify-center">
+                <svg class="w-6 h-6 text-copper" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              </div>
+              <h3 class="text-xl font-bold text-navy">Zorgeloze Hosting</h3>
+              <p class="text-text-muted text-sm">Servers in België, 24/7 gemonitord. Wij garanderen een uptime van 99.9%.</p>
+            </div>
+
+            <div class="space-y-4">
+              <div class="w-12 h-12 rounded-xl bg-navy/10 flex items-center justify-center">
+                <svg class="w-6 h-6 text-copper" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </div>
+              <h3 class="text-xl font-bold text-navy">Automatische Updates</h3>
+              <p class="text-text-muted text-sm">Nieuwe functies en beveiligingspatches worden automatisch uitgerold
+                zonder downtime.</p>
+            </div>
+
+            <div class="space-y-4">
+              <div class="w-12 h-12 rounded-xl bg-navy/10 flex items-center justify-center">
+                <svg class="w-6 h-6 text-copper" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <h3 class="text-xl font-bold text-navy">GDPR-Compliant</h3>
+              <p class="text-text-muted text-sm">Je data blijft in Europa en voldoet aan de strengste privacyregels.</p>
+            </div>
+
+            <div class="space-y-4">
+              <div class="w-12 h-12 rounded-xl bg-navy/10 flex items-center justify-center">
+                <svg class="w-6 h-6 text-copper" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </div>
+              <h3 class="text-xl font-bold text-navy">Eenvoudig Beheer</h3>
+              <p class="text-text-muted text-sm">Een intuïtieve interface voor beheerders. Je hebt geen technische kennis
+                nodig.</p>
+            </div>
+
+            <div class="space-y-4">
+              <div class="w-12 h-12 rounded-xl bg-navy/10 flex items-center justify-center">
+                <svg class="w-6 h-6 text-copper" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h3 class="text-xl font-bold text-navy">SCORM-pakketten</h3>
+              <p class="text-text-muted text-sm">Upload je Storyline- of andere SCORM-modules en volg resultaten tot op interactieniveau.</p>
+            </div>
+
+            <div class="space-y-4">
+              <div class="w-12 h-12 rounded-xl bg-navy/10 flex items-center justify-center">
+                <svg class="w-6 h-6 text-copper" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h3 class="text-xl font-bold text-navy">LTI & API</h3>
+              <p class="text-text-muted text-sm">Koppel met externe LMS-platformen via LTI of API. Eén plek beheren, overal beschikbaar maken.</p>
+            </div>
+        </div>
+      </div>
+    </section>
+    <!-- CTA -->
+    <section class="section bg-navy text-text-inverse">
       <div class="container">
         <div class="max-w-2xl mx-auto text-center">
-          <h2 class="text-2xl lg:text-3xl font-bold text-navy mb-4 reveal">
-            Prijzen op maat
+          <h2 class="text-2xl lg:text-3xl font-bold mb-4 reveal">
+            Stap over op Stride
           </h2>
-          <p class="text-text-muted text-lg mb-8 reveal delay-100">
-            Elke organisatie is anders. We maken een voorstel op basis van
-            je aantal medewerkers en specifieke wensen.
+          <p class="text-text-inverse/70 mb-8 reveal delay-100">
+            Klaar om de complexiteit en hoge kosten achter je te laten?
+            Plan een vrijblijvend gesprek en ontdek hoe Stride jouw organisatie kan helpen.
           </p>
-          <div class="reveal delay-200">
-            <a href="#demo" class="btn-primary text-lg px-8 py-4">
-              Vraag een offerte aan
+          <div class="flex flex-wrap justify-center gap-4 reveal delay-200">
+            <a href="/contact" class="inline-flex items-center justify-center px-8 py-4 bg-copper text-white font-medium rounded shadow-button hover:bg-copper-light transition-all duration-200 hover:-translate-y-0.5 hover:shadow-hover text-lg">
+              Laten we praten
+            </a>
+            <a href="mailto:stefan@netdust.be" class="inline-flex items-center justify-center px-8 py-4 bg-transparent text-white font-medium rounded border-2 border-white/30 hover:bg-white/10 transition-all duration-200 text-lg">
+              Mail ons
             </a>
           </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Demo CTA -->
-    <section class="section bg-surface" id="demo">
-      <div class="container">
-        <div class="max-w-xl mx-auto">
-          <div class="text-center mb-10">
-            <h2 class="text-2xl lg:text-3xl font-bold text-navy mb-4 reveal">
-              Klaar om te starten?
-            </h2>
-            <p class="text-text-muted reveal delay-100">
-              Plan een vrijblijvend gesprek. We tonen je het platform en bespreken jouw situatie.
-            </p>
-          </div>
-
-          <form class="card reveal delay-200" action="#" method="POST">
-            <div class="space-y-4">
-              <div>
-                <label for="name" class="block text-sm font-medium text-navy mb-1">Naam *</label>
-                <input type="text" id="name" name="name" required
-                       class="w-full px-4 py-3 rounded border border-navy/20 focus:border-navy focus:ring-2 focus:ring-navy/10 outline-none transition-colors">
-              </div>
-
-              <div>
-                <label for="organization" class="block text-sm font-medium text-navy mb-1">Organisatie *</label>
-                <input type="text" id="organization" name="organization" required
-                       class="w-full px-4 py-3 rounded border border-navy/20 focus:border-navy focus:ring-2 focus:ring-navy/10 outline-none transition-colors">
-              </div>
-
-              <div>
-                <label for="email" class="block text-sm font-medium text-navy mb-1">E-mail *</label>
-                <input type="email" id="email" name="email" required
-                       class="w-full px-4 py-3 rounded border border-navy/20 focus:border-navy focus:ring-2 focus:ring-navy/10 outline-none transition-colors">
-              </div>
-
-              <div>
-                <label for="phone" class="block text-sm font-medium text-navy mb-1">Telefoon <span class="text-text-muted font-normal">(optioneel)</span></label>
-                <input type="tel" id="phone" name="phone"
-                       class="w-full px-4 py-3 rounded border border-navy/20 focus:border-navy focus:ring-2 focus:ring-navy/10 outline-none transition-colors">
-              </div>
-
-              <div>
-                <label for="message" class="block text-sm font-medium text-navy mb-1">Bericht <span class="text-text-muted font-normal">(optioneel)</span></label>
-                <textarea id="message" name="message" rows="3"
-                          class="w-full px-4 py-3 rounded border border-navy/20 focus:border-navy focus:ring-2 focus:ring-navy/10 outline-none transition-colors resize-none"></textarea>
-              </div>
-
-              <button type="submit" class="btn-primary w-full py-4">
-                Verstuur aanvraag
-              </button>
-            </div>
-          </form>
-
-          <p class="text-center text-sm text-text-muted mt-6 reveal delay-300">
-            Of mail direct: <a href="mailto:info@stride.be" class="text-navy hover:text-copper">info@stride.be</a>
-          </p>
         </div>
       </div>
     </section>
@@ -367,13 +679,13 @@
     <div class="container">
       <div class="flex flex-col md:flex-row items-center justify-between gap-6">
         <div class="flex items-center gap-2">
-<img src="images/logo.svg" alt="Stride" class="w-6 h-6">
+          <img src="images/logo.svg" alt="Stride" class="w-6 h-6">
           <span class="font-heading font-bold text-navy">Stride</span>
         </div>
 
         <nav class="flex items-center gap-6 text-sm">
-          <a href="features.html" class="text-text-muted hover:text-navy transition-colors">Functies</a>
-          <a href="#demo" class="text-text-muted hover:text-navy transition-colors">Contact</a>
+          <a href="/features" class="text-text-muted hover:text-navy transition-colors">Functies</a>
+          <a href="/contact" class="text-text-muted hover:text-navy transition-colors">Contact</a>
           <a href="#" class="text-text-muted hover:text-navy transition-colors">Privacy</a>
         </nav>
 
@@ -384,20 +696,70 @@
     </div>
   </footer>
 
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Stride",
+    "description": "Een volledig beheerd leerplatform voor cursussen, trajecten en certificaten. GDPR-compliant, onbeperkt gebruikers.",
+    "url": "https://stridelms.be",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "EUR",
+      "description": "Prijzen op aanvraag"
+    },
+    "provider": {
+      "@type": "Organization",
+      "name": "Netdust",
+      "url": "https://netdust.be",
+      "email": "stefan@netdust.be",
+      "telephone": "+32475238704",
+      "address": {
+        "@type": "PostalAddress",
+        "addressCountry": "BE"
+      }
+    }
+  }
+  </script>
+
   <!-- Scroll Reveal Script -->
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+      const els = document.querySelectorAll('.reveal');
+
+      if (!('IntersectionObserver' in window)) {
+        els.forEach(el => el.classList.add('visible'));
+        return;
+      }
+
       const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
           if (entry.isIntersecting) {
             entry.target.classList.add('visible');
+            observer.unobserve(entry.target);
           }
         });
-      }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+      }, { threshold: 0.05, rootMargin: '0px 0px -20px 0px' });
 
-      document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+      els.forEach(el => observer.observe(el));
+
+      // Reveal elements already in viewport on load
+      requestAnimationFrame(() => {
+        els.forEach(el => {
+          const rect = el.getBoundingClientRect();
+          if (rect.top < window.innerHeight && rect.bottom > 0) {
+            el.classList.add('visible');
+            observer.unobserve(el);
+          }
+        });
+      });
     });
   </script>
 
 </body>
+
 </html>

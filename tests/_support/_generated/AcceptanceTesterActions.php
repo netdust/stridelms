@@ -1,4 +1,4 @@
-<?php  //[STAMP] 1f07da27a3a8ad943f3cd80a50bf9973
+<?php  //[STAMP] 35a1eaf529ed61824879ff89a864570a
 // phpcs:ignoreFile
 namespace Tests\Support\_generated;
 
@@ -8407,6 +8407,50 @@ trait AcceptanceTesterActions
     /**
      * [!] Method is generated. Documentation taken from corresponding module.
      *
+     * Find a published vad_edition that has at least N sessions linked via
+     * `_ntdst_edition_id` postmeta. Returns 0 if none found.
+     *
+     * Avoids hardcoded edition IDs in tests — seed data changes and IDs drift.
+     * @see \Tests\Support\Helper\Acceptance::grabEditionWithMinSessions()
+     */
+    public function grabEditionWithMinSessions(int $minSessions = 2): int {
+        return $this->getScenario()->runStep(new \Codeception\Step\Action('grabEditionWithMinSessions', func_get_args()));
+    }
+
+ 
+    /**
+     * [!] Method is generated. Documentation taken from corresponding module.
+     *
+     * Find a published vad_edition that has at least one registration whose
+     * user still exists. Seed data can contain orphaned registrations
+     * (e.g. user_id 2220323 → no matching wp_users row) — those would hit
+     * the user_unavailable guard in RegistrationModalController and break
+     * tests that don't care about that branch.
+     * @see \Tests\Support\Helper\Acceptance::grabEditionWithRegistrations()
+     */
+    public function grabEditionWithRegistrations(): int {
+        return $this->getScenario()->runStep(new \Codeception\Step\Action('grabEditionWithRegistrations', func_get_args()));
+    }
+
+ 
+    /**
+     * [!] Method is generated. Documentation taken from corresponding module.
+     *
+     * Resolve a usable administrator account without assuming a login name.
+     *
+     * Prefers the seeded `seed_admin` (scripts/seed.php); falls back to the
+     * lowest-ID user holding the administrator capability. Returns 0 when the
+     * database has no administrator at all.
+     * @see \Tests\Support\Helper\Acceptance::grabAdminUserId()
+     */
+    public function grabAdminUserId(): int {
+        return $this->getScenario()->runStep(new \Codeception\Step\Action('grabAdminUserId', func_get_args()));
+    }
+
+ 
+    /**
+     * [!] Method is generated. Documentation taken from corresponding module.
+     *
      * Activate a user account using the test activation helper.
      *
      * This bypasses email verification by directly setting the activation
@@ -8418,7 +8462,7 @@ trait AcceptanceTesterActions
      * @param string $redirect Optional URL to redirect to after activation
      * @see \Tests\Support\Helper\Acceptance::activateUserById()
      */
-    public function activateUserById(int $userId, string $redirect = "\/login\/"): void {
+    public function activateUserById(int $userId, string $redirect = "\/aanmelden\/"): void {
         $this->getScenario()->runStep(new \Codeception\Step\Action('activateUserById', func_get_args()));
     }
 }

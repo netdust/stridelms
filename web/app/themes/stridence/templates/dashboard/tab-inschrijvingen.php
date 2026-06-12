@@ -1,9 +1,13 @@
 <?php
 /**
- * Dashboard Tab: Mijn opleidingen (My Courses)
+ * Dashboard Tab: Mijn inschrijvingen
  *
- * Shows user's classroom edition registrations AND online LearnDash courses.
- * Three main sections: Klassikale opleidingen, Online cursussen, Afgerond (merged).
+ * Helder Tij redesign — flat row cards per enrollment.
+ * Row card: badge row + 16px/700 title + 13px meta line (dates/venue/progress)
+ * Right column: action warning + ghost/primary CTAs per existing branches.
+ * Cancelled rows: opacity-80, muted title, ghost "Bekijk alternatieven".
+ * Online rows: progress bar (existing partial).
+ * Empty state via partials/empty-state.
  *
  * @param array $args {
  *     @type WP_User $user Current user object
@@ -15,485 +19,276 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
-use Stride\Domain\RegistrationStatus;
-use Stride\Modules\Enrollment\RegistrationRepository;
-use Stride\Modules\Edition\EditionService;
-use Stride\Modules\Edition\SessionService;
-use Stride\Modules\Attendance\AttendanceService;
-use Stride\Modules\Edition\EditionCompletion;
-use Stride\Modules\Enrollment\EnrollmentCompletion;
-use Stride\Contracts\LMSAdapterInterface;
+use Stride\Modules\User\UserDashboardService;
 
 $user    = $args['user'] ?? wp_get_current_user();
 $user_id = $user->ID;
 
-// Get services
-$registrationRepo    = ntdst_get(RegistrationRepository::class);
-$editionService      = ntdst_get(EditionService::class);
-$sessionService      = ntdst_get(SessionService::class);
-$attendanceService   = ntdst_get(AttendanceService::class);
-$completionService   = ntdst_get(EditionCompletion::class);
-$enrollmentCompletion = ntdst_get(EnrollmentCompletion::class);
-$lmsAdapter          = ntdst_get(LMSAdapterInterface::class);
+// Get all enrollment data from service
+$dashboardService = ntdst_get(UserDashboardService::class);
+$data = $dashboardService->getEnrollmentData($user_id);
 
-// Get all user registrations
-$registrations = $registrationRepo->findByUser($user_id);
-
-// Group registrations by status
-$active_editions   = [];
-$completed_items   = [];
-$cancelled_editions = [];
-$edition_course_ids = [];
-
-foreach ($registrations as $reg) {
-    // Skip trajectory-only enrollments (no edition_id)
-    if (empty($reg->edition_id)) {
-        continue;
-    }
-
-    $edition_id = (int) $reg->edition_id;
-    $edition    = $editionService->getEdition($edition_id);
-
-    if (is_wp_error($edition)) {
-        continue;
-    }
-
-    // Get edition data
-    $editionModel = ntdst_data()->get('vad_edition');
-    $course_id    = $editionService->getCourseId($edition_id);
-    $course       = $course_id ? get_post($course_id) : null;
-
-    // Track which courses are covered by edition registrations
-    if ($course_id) {
-        $edition_course_ids[] = $course_id;
-    }
-
-    $reg_data = [
-        'id'               => (int) $reg->id,
-        'edition_id'       => $edition_id,
-        'edition'          => $edition,
-        'course'           => $course,
-        'course_id'        => $course_id,
-        'course_title'     => $course ? $course->post_title : $edition->post_title,
-        'start_date'       => $editionModel->getMeta($edition_id, 'start_date', ''),
-        'venue'            => $editionModel->getMeta($edition_id, 'venue', ''),
-        'status'           => $reg->status,
-        'registered_at'    => $reg->registered_at,
-        'sessions'         => $sessionService->getSessionsForEdition($edition_id),
-        'progress'         => $completionService->getProgress($edition_id, $user_id),
-        'completion_tasks' => $reg->completion_tasks ?? null,
-        'type'             => 'edition',
-    ];
-
-    // Add attendance for each session
-    foreach ($reg_data['sessions'] as &$session) {
-        $attendance_status = $attendanceService->getStatus((int) $session['id'], $user_id);
-        $session['attendance'] = $attendance_status?->value;
-    }
-    unset($session);
-
-    $status = RegistrationStatus::tryFrom($reg->status) ?? RegistrationStatus::Confirmed;
-
-    switch ($status) {
-        case RegistrationStatus::Completed:
-            $reg_data['completed_at'] = $reg_data['start_date'];
-            $completed_items[] = $reg_data;
-            break;
-        case RegistrationStatus::Cancelled:
-            $cancelled_editions[] = $reg_data;
-            break;
-        default:
-            $active_editions[] = $reg_data;
-    }
-}
-
-// --- Online courses (not covered by an edition) ---
-$enrolled_course_ids = $lmsAdapter->getEnrolledCourses($user_id);
-$edition_course_ids  = array_unique($edition_course_ids);
-
-$active_online = [];
-
-foreach ($enrolled_course_ids as $course_id) {
-    // Skip courses already covered by an edition registration
-    if (in_array($course_id, $edition_course_ids, true)) {
-        continue;
-    }
-
-    $course = get_post($course_id);
-    if (!$course || $course->post_status !== 'publish') {
-        continue;
-    }
-
-    // Only show courses categorized as online/e-learning/webinar
-    $format_label = '';
-    $categories = get_the_terms($course_id, 'ld_course_category');
-    if ($categories && !is_wp_error($categories)) {
-        foreach ($categories as $cat) {
-            if ($cat->slug === 'online') {
-                $format_label = __('Online', 'stridence');
-            } elseif ($cat->slug === 'e-learning') {
-                $format_label = 'E-learning';
-            } elseif ($cat->slug === 'webinar') {
-                $format_label = 'Webinar';
-            }
-        }
-    }
-
-    // Skip classroom courses — they belong in the editions section
-    if ($format_label === '') {
-        continue;
-    }
-
-    $is_complete     = $lmsAdapter->isComplete($user_id, $course_id);
-    $progress        = $lmsAdapter->getProgress($user_id, $course_id);
-    $completion_date = $lmsAdapter->getCompletionDate($user_id, $course_id);
-
-    // Build resume URL: first incomplete step, or fall back to course permalink
-    $resume_url = get_permalink($course_id);
-    if (function_exists('learndash_user_progress_get_first_incomplete_step')) {
-        $step_id = learndash_user_progress_get_first_incomplete_step($user_id, $course_id);
-        if ($step_id) {
-            if (function_exists('learndash_user_progress_get_parent_incomplete_step')) {
-                $step_id = learndash_user_progress_get_parent_incomplete_step($user_id, $course_id, $step_id);
-            }
-            $step_url = function_exists('learndash_get_step_permalink')
-                ? learndash_get_step_permalink($step_id, $course_id)
-                : get_permalink($step_id);
-            if ($step_url) {
-                $resume_url = $step_url;
-            }
-        }
-    }
-
-    $course_data = [
-        'course_id'    => $course_id,
-        'course_title' => $course->post_title,
-        'course_url'   => $resume_url,
-        'progress'     => $progress,
-        'format_label' => $format_label,
-        'type'         => 'online',
-    ];
-
-    if ($is_complete) {
-        $course_data['completed_at'] = $completion_date ? date('Y-m-d', $completion_date) : '';
-        $course_data['certificate_url'] = $lmsAdapter->getCertificateLink($user_id, $course_id);
-        $completed_items[] = $course_data;
-    } else {
-        $active_online[] = $course_data;
-    }
-}
-
-// Sort completed items by date (newest first)
-usort($completed_items, function ($a, $b) {
-    $date_a = $a['completed_at'] ?? $a['start_date'] ?? '';
-    $date_b = $b['completed_at'] ?? $b['start_date'] ?? '';
-    return strcmp($date_b, $date_a);
-});
-
-// Get upcoming sessions from active edition registrations
-$upcoming_sessions = [];
-$today = date('Y-m-d');
-
-foreach ($active_editions as $reg) {
-    foreach ($reg['sessions'] as $session) {
-        if (!empty($session['date']) && $session['date'] >= $today) {
-            $upcoming_sessions[] = array_merge($session, [
-                'course_title' => $reg['course_title'],
-                'edition_id'   => $reg['edition_id'],
-            ]);
-        }
-    }
-}
-
-// Sort by date and take first 3
-usort($upcoming_sessions, fn($a, $b) => strcmp($a['date'] ?? '', $b['date'] ?? ''));
-$upcoming_sessions = array_slice($upcoming_sessions, 0, 3);
+$active_editions    = $data['active_editions'];
+$active_online      = $data['active_online'];
+$completed_items    = $data['completed_items'];
+$cancelled_editions = $data['cancelled_editions'];
 ?>
 
 <div class="space-y-8">
-    <!-- Upcoming Sessions -->
-    <?php if (!empty($upcoming_sessions)) : ?>
+
+    <?php if (empty($active_editions) && empty($active_online)) : ?>
+        <?php
+        stridence_template_part('partials/empty-state', null, [
+            'icon'    => 'book-open',
+            'title'   => __('Geen actieve opleidingen', 'stridence'),
+            'message' => __('Je hebt momenteel geen actieve inschrijvingen. Bekijk ons aanbod en schrijf je in voor een opleiding.', 'stridence'),
+            'action'  => __('Bekijk opleidingen', 'stridence'),
+            'url'     => home_url('/klassikaal/'),
+        ]);
+        ?>
+    <?php else : ?>
+
+        <!-- Active enrollments — flat row cards -->
         <section>
-            <h2 class="font-heading text-xl font-bold text-text mb-4">
-                <?php esc_html_e('Komende sessies', 'stridence'); ?>
-            </h2>
-            <div class="card divide-y divide-border">
-                <?php foreach ($upcoming_sessions as $session) : ?>
-                    <div class="p-4">
-                        <div class="flex items-start justify-between gap-4">
-                            <div class="flex-1">
-                                <?php
-                                get_template_part('partials/session-row', null, [
-                                    'session'    => (object) $session,
-                                    'attendance' => $session['attendance'] ?? null,
-                                ]);
-                                ?>
+            <div class="flex flex-col gap-[14px]">
+
+                <?php foreach ($active_editions as $reg) :
+                    // Calculate pending action count from task_summary
+                    $taskSummary = $reg['task_summary'] ?? null;
+                    $pendingCount = 0;
+                    if ($taskSummary) {
+                        $pendingCount = max(0, (int) ($taskSummary['total'] ?? 0) - (int) ($taskSummary['completed'] ?? 0));
+                    }
+
+                    // CTA branches: primary (Ga verder) or secondary (Bekijk details)
+                    $cta = $reg['cta'] ?? null;
+                    $editionId = (int) ($reg['edition_id'] ?? 0);
+                    $editionPermalink = $editionId ? get_permalink($editionId) : null;
+
+                    // Meta line: start date, venue, progress
+                    $startDate = $reg['start_date'] ?? null;
+                    $venue     = $reg['venue'] ?? null;
+                    $progress  = $reg['progress'] ?? null;
+                    ?>
+                    <div class="bg-surface-card rounded-[16px] shadow-card p-[22px] px-6 flex flex-wrap justify-between gap-4">
+                        <!-- LEFT: badge + title + meta -->
+                        <div class="flex-1 min-w-[240px]">
+                            <!-- Badge row: type pill (inline) + enrolled pill -->
+                            <div class="flex flex-wrap gap-[6px] mb-[10px]">
+                                <span class="text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex items-center gap-1 bg-badge-online-bg text-badge-online-text">
+                                    <?php esc_html_e('Klassikaal', 'stridence'); ?>
+                                </span>
+                                <?php stridence_template_part('partials/badge-status', null, ['status' => 'enrolled', 'size' => 'sm']); ?>
                             </div>
-                            <a href="<?php echo esc_url(get_permalink($session['edition_id'])); ?>"
-                               class="text-sm text-primary hover:underline shrink-0">
-                                <?php echo esc_html($session['course_title']); ?>
-                            </a>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-        </section>
-    <?php endif; ?>
 
-    <!-- Klassikale opleidingen (Classroom Editions) -->
-    <section>
-        <h2 class="font-heading text-xl font-bold text-text mb-4">
-            <?php esc_html_e('Klassikale opleidingen', 'stridence'); ?>
-        </h2>
+                            <!-- Title 16px/700 -->
+                            <div class="text-[16px] font-bold text-text leading-snug">
+                                <?php echo esc_html($reg['course_title'] ?? ''); ?>
+                            </div>
 
-        <?php if (!empty($active_editions)) : ?>
-            <div class="space-y-4">
-                <?php foreach ($active_editions as $reg) : ?>
-                    <div class="card" x-data="expandable()">
-                        <button type="button"
-                                class="w-full p-4 flex items-center justify-between gap-4 text-left"
-                                @click="toggle()">
-                            <div class="flex-1 min-w-0">
-                                <h3 class="font-semibold text-text truncate">
-                                    <?php echo esc_html($reg['course_title']); ?>
-                                </h3>
-                                <div class="flex flex-wrap gap-4 mt-1 text-sm text-text-muted">
-                                    <?php if ($reg['start_date']) : ?>
-                                        <span class="flex items-center gap-1">
-                                            <?php echo stridence_icon('calendar', 'w-4 h-4'); ?>
-                                            <?php echo esc_html(stride_format_date($reg['start_date'])); ?>
-                                        </span>
+                            <!-- Meta line 13px muted: dates strong / venue / progress -->
+                            <?php $hasMetaLine = $startDate || $venue || ($progress && is_array($progress)); ?>
+                            <?php if ($hasMetaLine) : ?>
+                                <div class="text-[13px] text-text-muted mt-1 flex flex-wrap gap-x-[10px] gap-y-0.5">
+                                    <?php if ($startDate) : ?>
+                                        <span><strong class="text-text font-semibold"><?php echo esc_html(stride_format_date($startDate)); ?></strong></span>
                                     <?php endif; ?>
-                                    <?php if ($reg['venue']) : ?>
-                                        <span class="flex items-center gap-1">
-                                            <?php echo stridence_icon('map-pin', 'w-4 h-4'); ?>
-                                            <?php echo esc_html($reg['venue']); ?>
-                                        </span>
+                                    <?php if ($venue) : ?>
+                                        <span><?php echo esc_html($venue); ?></span>
                                     <?php endif; ?>
-                                </div>
-                            </div>
-                            <?php
-                            get_template_part('partials/badge-status', null, [
-                                'status' => $reg['status'],
-                            ]);
-                            ?>
-                            <span class="shrink-0 text-text-muted transition-transform duration-200"
-                                  :class="{ 'rotate-180': open }">
-                                <?php echo stridence_icon('chevron-down', 'w-5 h-5'); ?>
-                            </span>
-                        </button>
-
-                        <div x-show="open" x-collapse class="border-t border-border">
-                            <div class="p-4 space-y-4">
-                                <?php if ($reg['status'] === 'pending' && !empty($reg['completion_tasks'])): ?>
-                                    <!-- Completion Checklist -->
-                                    <?php
-                                    $taskSummary = $enrollmentCompletion->getTaskSummary($reg['id']);
-                                    $edition_slug = get_post_field('post_name', $reg['edition_id']);
-                                    $complete_url = home_url('/vormingen/' . $edition_slug . '/voltooien/');
-
-                                    get_template_part('templates/dashboard/partials/completion-checklist', null, [
-                                        'task_summary' => $taskSummary,
-                                        'complete_url' => $complete_url,
-                                    ]);
+                                    <?php if (is_array($progress) && ($progress['required'] ?? 0) > 0) :
+                                        $attended = (int) ($progress['attended'] ?? 0);
+                                        $required = (int) $progress['required'];
                                     ?>
-                                <?php else: ?>
-                                    <!-- Progress -->
-                                    <?php
-                                    get_template_part('partials/progress-bar', null, [
-                                        'attended' => $reg['progress']['attended'],
-                                        'required' => $reg['progress']['required'],
-                                        'label'    => __('Aanwezigheid', 'stridence'),
-                                    ]);
-                                    ?>
-                                <?php endif; ?>
-
-                                <!-- Session List -->
-                                <?php if (!empty($reg['sessions'])) : ?>
-                                    <div class="divide-y divide-border rounded-lg border border-border">
-                                        <?php foreach ($reg['sessions'] as $session) : ?>
-                                            <?php
-                                            get_template_part('partials/session-row', null, [
-                                                'session'    => (object) $session,
-                                                'attendance' => $session['attendance'] ?? null,
-                                            ]);
-                                            ?>
-                                        <?php endforeach; ?>
-                                    </div>
-                                <?php endif; ?>
-
-                                <!-- Actions -->
-                                <div class="flex flex-wrap gap-3 pt-2">
-                                    <a href="<?php echo esc_url(get_permalink($reg['edition_id'])); ?>"
-                                       class="btn-ghost text-sm">
-                                        <?php esc_html_e('Bekijk details', 'stridence'); ?>
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-        <?php else : ?>
-            <?php
-            get_template_part('partials/empty-state', null, [
-                'icon'    => 'calendar',
-                'title'   => __('Geen klassikale inschrijvingen', 'stridence'),
-                'message' => __('Je hebt momenteel geen klassikale inschrijvingen. Bekijk ons aanbod en schrijf je in voor een opleiding.', 'stridence'),
-                'action'  => __('Bekijk opleidingen', 'stridence'),
-                'url'     => get_post_type_archive_link('sfwd-courses'),
-            ]);
-            ?>
-        <?php endif; ?>
-    </section>
-
-    <!-- Online cursussen -->
-    <?php if (!empty($active_online)) : ?>
-        <section>
-            <h2 class="font-heading text-xl font-bold text-text mb-4">
-                <?php esc_html_e('Online cursussen', 'stridence'); ?>
-            </h2>
-            <div class="space-y-3">
-                <?php foreach ($active_online as $course) : ?>
-                    <div class="card p-4">
-                        <div class="flex items-center justify-between gap-4">
-                            <div class="flex-1 min-w-0">
-                                <div class="flex items-center gap-2 mb-1">
-                                    <h3 class="font-semibold text-text truncate">
-                                        <?php echo esc_html($course['course_title']); ?>
-                                    </h3>
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-accent/10 text-accent">
-                                        <?php echo esc_html($course['format_label']); ?>
-                                    </span>
-                                </div>
-                                <div class="flex items-center gap-3 mt-2">
-                                    <div class="flex-1 h-2 bg-border rounded-full overflow-hidden">
-                                        <div class="h-full bg-accent rounded-full transition-all"
-                                             style="width: <?php echo esc_attr($course['progress']); ?>%"></div>
-                                    </div>
-                                    <span class="text-sm text-text-muted whitespace-nowrap">
-                                        <?php echo esc_html($course['progress']); ?>%
-                                    </span>
-                                </div>
-                            </div>
-                            <a href="<?php echo esc_url($course['course_url']); ?>"
-                               class="btn-primary text-sm shrink-0">
-                                <?php echo $course['progress'] > 0
-                                    ? esc_html__('Verder leren', 'stridence')
-                                    : esc_html__('Start cursus', 'stridence'); ?>
-                            </a>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-        </section>
-    <?php endif; ?>
-
-    <!-- Afgerond (Completed - merged editions + online courses) -->
-    <?php if (!empty($completed_items)) : ?>
-        <section x-data="{ open: false }">
-            <button type="button"
-                    class="w-full flex items-center justify-between gap-4 mb-4"
-                    @click="open = !open">
-                <h2 class="font-heading text-xl font-bold text-text">
-                    <?php printf(
-                        esc_html__('Afgerond (%d)', 'stridence'),
-                        count($completed_items)
-                    ); ?>
-                </h2>
-                <span class="text-text-muted transition-transform duration-200"
-                      :class="{ 'rotate-180': open }">
-                    <?php echo stridence_icon('chevron-down', 'w-5 h-5'); ?>
-                </span>
-            </button>
-
-            <div x-show="open" x-collapse>
-                <div class="card divide-y divide-border">
-                    <?php foreach ($completed_items as $item) : ?>
-                        <div class="p-4 flex items-center justify-between gap-4">
-                            <div class="flex-1 min-w-0">
-                                <div class="flex items-center gap-2">
-                                    <h3 class="font-medium text-text truncate">
-                                        <?php echo esc_html($item['course_title']); ?>
-                                    </h3>
-                                    <?php if (($item['type'] ?? '') === 'online') : ?>
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-accent/10 text-accent">
-                                            <?php echo esc_html($item['format_label'] ?? __('Online', 'stridence')); ?>
-                                        </span>
-                                    <?php else : ?>
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                                            <?php esc_html_e('Klassikaal', 'stridence'); ?>
-                                        </span>
+                                        <span><?php echo esc_html(sprintf(
+                                            /* translators: %1$d attended, %2$d required sessions */
+                                            __('%1$d/%2$d sessies', 'stridence'),
+                                            $attended,
+                                            $required,
+                                        )); ?></span>
                                     <?php endif; ?>
                                 </div>
-                                <p class="text-sm text-text-muted">
-                                    <?php
-                                    $date = $item['completed_at'] ?? $item['start_date'] ?? '';
-                                    if ($date) {
-                                        echo esc_html(stride_format_date($date));
-                                    }
-                                    ?>
-                                </p>
-                            </div>
-                            <?php
-                            $cert_url = $item['certificate_url'] ?? '';
-                            if (!$cert_url && !empty($item['course_id'])) {
-                                $cert_url = $lmsAdapter->getCertificateLink($user_id, (int) $item['course_id']) ?: '';
-                            }
-                            ?>
-                            <?php if ($cert_url) : ?>
-                                <a href="<?php echo esc_url(add_query_arg('tab', 'certificaten', get_permalink())); ?>"
-                                   class="btn-ghost text-sm">
-                                    <?php echo stridence_icon('award', 'w-4 h-4 mr-1'); ?>
-                                    <?php esc_html_e('Certificaat', 'stridence'); ?>
+                            <?php endif; ?>
+
+                            <?php // Online progress bar — keep for any edition that has online progress ?>
+                        </div>
+
+                        <!-- RIGHT: action warning + CTA buttons -->
+                        <div class="flex flex-col gap-[6px] items-end justify-center shrink-0">
+                            <?php if ($pendingCount > 0) : ?>
+                                <span class="text-[12px] font-bold text-badge-few-text">
+                                    <?php echo esc_html(sprintf(
+                                        /* translators: %d: number of pending actions */
+                                        _n('%d actie open', '%d acties open', $pendingCount, 'stridence'),
+                                        $pendingCount,
+                                    )); ?>
+                                </span>
+                            <?php endif; ?>
+
+                            <?php if ($cta) : ?>
+                                <a href="<?php echo esc_url($cta['url']); ?>"
+                                   class="btn-primary btn-sm">
+                                    <?php echo esc_html($cta['label']); ?>
+                                </a>
+                            <?php elseif ($editionPermalink) : ?>
+                                <a href="<?php echo esc_url($editionPermalink); ?>"
+                                   class="btn-ghost btn-sm">
+                                    <?php esc_html_e('Bekijk details', 'stridence'); ?>
                                 </a>
                             <?php endif; ?>
                         </div>
-                    <?php endforeach; ?>
+                    </div>
+                <?php endforeach; ?>
+
+                <?php foreach ($active_online as $reg) :
+                    $progressPct      = (int) ($reg['progress'] ?? 0);
+                    $courseId         = (int) ($reg['course_id'] ?? 0);
+                    $cta              = null;
+                    $ctaUrl           = $reg['course_url'] ?? '';
+                    if (!$ctaUrl && $courseId) {
+                        $courseSlug = get_post_field('post_name', $courseId);
+                        $ctaUrl = $courseSlug ? home_url('/edities/' . $courseSlug . '/') : '';
+                    }
+                    if ($ctaUrl) {
+                        $cta = [
+                            'url'   => $ctaUrl,
+                            'label' => $progressPct > 0 ? __('Ga verder', 'stridence') : __('Start cursus', 'stridence'),
+                        ];
+                    }
+                    ?>
+                    <div class="bg-surface-card rounded-[16px] shadow-card p-[22px] px-6 flex flex-wrap justify-between gap-4">
+                        <!-- LEFT: badge + title + progress bar -->
+                        <div class="flex-1 min-w-[240px]">
+                            <!-- Badge row -->
+                            <div class="flex flex-wrap gap-[6px] mb-[10px]">
+                                <?php stridence_template_part('partials/badge-status', null, ['status' => 'online', 'size' => 'sm']); ?>
+                                <?php if ($progressPct > 0) :
+                                    stridence_template_part('partials/badge-status', null, [
+                                        'status' => 'enrolled',
+                                        'size'   => 'sm',
+                                    ]);
+                                endif; ?>
+                            </div>
+
+                            <!-- Title 16px/700 -->
+                            <div class="text-[16px] font-bold text-text leading-snug">
+                                <?php echo esc_html($reg['course_title'] ?? ''); ?>
+                            </div>
+
+                            <!-- Progress bar for online courses -->
+                            <?php if ($progressPct > 0) : ?>
+                                <div class="mt-[10px] max-w-[320px]">
+                                    <div class="h-[7px] rounded-full bg-surface-alt overflow-hidden">
+                                        <div class="h-full bg-primary rounded-full"
+                                             style="width: <?php echo (int) $progressPct; ?>%"></div>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- RIGHT: primary CTA -->
+                        <?php if ($cta) : ?>
+                            <div class="flex flex-col justify-center shrink-0">
+                                <a href="<?php echo esc_url($cta['url']); ?>"
+                                   class="btn-primary btn-sm">
+                                    <?php echo esc_html($cta['label']); ?>
+                                </a>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+
+            </div>
+        </section>
+
+    <?php endif; ?>
+
+    <!-- Afgerond (Completed) — collapsible section -->
+    <?php if (!empty($completed_items)) : ?>
+        <section x-data="{ open: false }">
+            <button type="button"
+                    class="w-full flex items-center justify-between gap-4 mb-3"
+                    @click="open = !open">
+                <h3 class="text-base font-semibold text-text">
+                    <?php printf(
+                        esc_html__('Afgerond (%d)', 'stridence'),
+                        count($completed_items),
+                    ); ?>
+                </h3>
+                <span class="text-text-muted transition-transform duration-200"
+                      :class="{ 'rotate-180': open }">
+                    <?php echo stridence_icon('chevron-down', 'w-4 h-4'); ?>
+                </span>
+            </button>
+
+            <div x-show="open" x-collapse>
+                <div class="flex flex-col gap-[14px]">
+                    <?php foreach ($completed_items as $reg) :
+                        $args = stridence_build_course_card_args_from_enrollment($reg, completed: true);
+                        get_template_part('templates/components/course-card', null, $args);
+                    endforeach; ?>
                 </div>
             </div>
         </section>
     <?php endif; ?>
 
-    <!-- Cancelled Registrations -->
+    <!-- Geannuleerd (Cancelled) — collapsible section -->
     <?php if (!empty($cancelled_editions)) : ?>
         <section x-data="{ open: false }">
             <button type="button"
-                    class="w-full flex items-center justify-between gap-4 mb-4"
+                    class="w-full flex items-center justify-between gap-4 mb-3"
                     @click="open = !open">
-                <h2 class="font-heading text-xl font-bold text-text-muted">
-                    <?php
-                    printf(
-                        /* translators: %d: number of cancelled registrations */
+                <h3 class="text-base font-semibold text-text-muted">
+                    <?php printf(
                         esc_html__('Geannuleerd (%d)', 'stridence'),
-                        count($cancelled_editions)
-                    );
-                    ?>
-                </h2>
+                        count($cancelled_editions),
+                    ); ?>
+                </h3>
                 <span class="text-text-muted transition-transform duration-200"
                       :class="{ 'rotate-180': open }">
-                    <?php echo stridence_icon('chevron-down', 'w-5 h-5'); ?>
+                    <?php echo stridence_icon('chevron-down', 'w-4 h-4'); ?>
                 </span>
             </button>
 
             <div x-show="open" x-collapse>
-                <div class="card divide-y divide-border">
-                    <?php foreach ($cancelled_editions as $reg) : ?>
-                        <div class="p-4 text-text-muted">
-                            <h3 class="font-medium truncate">
-                                <?php echo esc_html($reg['course_title']); ?>
-                            </h3>
-                            <p class="text-sm">
-                                <?php
-                                if ($reg['start_date']) {
-                                    echo esc_html(stride_format_date($reg['start_date']));
-                                }
-                                ?>
-                            </p>
+                <div class="flex flex-col gap-[14px]">
+                    <?php foreach ($cancelled_editions as $reg) :
+                        $courseTitle  = esc_html($reg['course_title'] ?? '');
+                        $startDate    = $reg['start_date'] ?? null;
+                        $courseId     = (int) ($reg['course_id'] ?? 0);
+                        $altUrl       = $courseId ? home_url('/edities/' . get_post_field('post_name', $courseId) . '/') : home_url('/klassikaal/');
+                    ?>
+                        <div class="bg-surface-card rounded-[16px] shadow-card p-[22px] px-6 flex flex-wrap justify-between gap-4 opacity-80">
+                            <!-- LEFT: badge + title (muted) + date -->
+                            <div class="flex-1 min-w-[240px]">
+                                <div class="flex flex-wrap gap-[6px] mb-[10px]">
+                                    <span class="text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex items-center gap-1 bg-badge-online-bg text-badge-online-text">
+                                        <?php esc_html_e('Klassikaal', 'stridence'); ?>
+                                    </span>
+                                    <?php stridence_template_part('partials/badge-status', null, ['status' => 'cancelled', 'size' => 'sm']); ?>
+                                </div>
+                                <div class="text-[16px] font-bold text-text-muted leading-snug">
+                                    <?php echo $courseTitle; ?>
+                                </div>
+                                <?php if ($startDate) : ?>
+                                    <div class="text-[13px] text-text-muted mt-1">
+                                        <?php echo esc_html(stride_format_date($startDate)); ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+
+                            <!-- RIGHT: ghost "Bekijk alternatieven" -->
+                            <div class="flex flex-col justify-center shrink-0">
+                                <a href="<?php echo esc_url($altUrl); ?>"
+                                   class="btn-ghost btn-sm">
+                                    <?php esc_html_e('Bekijk alternatieven', 'stridence'); ?>
+                                </a>
+                            </div>
                         </div>
                     <?php endforeach; ?>
                 </div>
             </div>
         </section>
     <?php endif; ?>
+
 </div>

@@ -19,7 +19,7 @@
         </testsuite>
     </testsuites>
 
-    <source>
+    <source restrictWarnings="true" restrictNotices="true" restrictDeprecations="true">
         <include>
             <directory>web/app/themes/stride/services</directory>
             <directory>web/app/mu-plugins/stride-core</directory>

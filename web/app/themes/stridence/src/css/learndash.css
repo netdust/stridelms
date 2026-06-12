@@ -3,6 +3,18 @@
  *
  * Theme LearnDash elements to match Stride design system.
  * Rule: Style it, don't rebuild it.
+ *
+ * All five LD-skin layers verified (gotcha_learndash_css_skin.md):
+ * 1. Tokens  — all var(--*) reference v2 tokens.css; no orphan vars.
+ * 2. Hex     — only two raw hex values remain: LD custom-prop fallbacks
+ *              (--ld-focus-header-color) using v2 cool-ink #292C31.
+ *              Every other value uses @apply or rgb(var(--*)).
+ * 3. Enqueue — Vite-bundled (AssetHooks.php); no learndash-front/ld30-modern
+ *              dep declared here. Unchanged.
+ * 4. :root   — LD focus-sidebar lives outside .learndash-wrapper; focus-mode
+ *              rules target .ld-focus at document level, not nested inside
+ *              .learndash-wrapper. Correct.
+ * 5. Hex fmt — LD custom-prop fallbacks stay hex (not rgb triples). Correct.
  */
 
 @layer components {
@@ -15,23 +27,283 @@
   }
 
   /* ══════════════════════════════════════
-     LESSON LIST
+     LESSON LIST (course_content shortcode)
+     Styled after Detail – Online opleiding.dc.html lines 66-101:
+     one white card, divider rows, ✓ done in badge-open colors,
+     current row tinted badge-online-bg + bold, locked muted.
+     CSS overrides only — never re-implementing LD HTML.
      ══════════════════════════════════════ */
 
-  .learndash-wrapper .ld-lesson-list .ld-lesson-item {
-    @apply border border-border rounded-lg mb-2 bg-surface-card;
+  /* Remove LD default outer margin */
+  .learndash-course-content .learndash-wrapper .ld-item-list.ld-lesson-list {
+    @apply m-0;
   }
 
-  .learndash-wrapper .ld-lesson-list .ld-lesson-item:hover {
-    @apply shadow-card;
+  /* Hide LD's "Course Content" heading — we use our own "Programma" h2 */
+  .learndash-course-content .ld-lesson-list > .ld-section-heading > h2 {
+    @apply sr-only;
   }
 
-  .learndash-wrapper .ld-lesson-item-preview {
+  /* Section heading: keep expand-all button, style as subtle bar */
+  .learndash-course-content .ld-lesson-list > .ld-section-heading {
+    @apply flex items-center justify-end mb-4 pb-0 border-none;
+  }
+
+  /* Expand All button — override LD inline !important styles */
+  .learndash-course-content .ld-expand-button.ld-primary-background {
+    background: transparent !important;
+    color: rgb(var(--color-primary)) !important;
+    @apply text-sm font-medium px-3 py-1.5 rounded-lg border border-border
+           hover:bg-surface-alt transition-colors duration-fast;
+    max-width: none;
+    width: auto;
+    padding: 0.375rem 0.75rem !important;
+  }
+
+  .learndash-course-content .ld-expand-button.ld-primary-background .ld-icon {
+    color: rgb(var(--color-primary)) !important;
+    background: none !important;
+  }
+
+  .learndash-course-content .ld-expand-button.ld-primary-background .ld-text {
+    color: rgb(var(--color-primary)) !important;
+    @apply flex-none text-left p-0;
+  }
+
+  /* ── Lesson list container: one white card ── */
+  /* Wrap the ul itself in a card shell; individual items become divider rows */
+  .learndash-course-content .ld-item-list.ld-lesson-list > .ld-item-list-items {
+    @apply bg-surface-card rounded-xl shadow-sm overflow-hidden;
+    border: none;
+  }
+
+  /* ── Lesson rows: flat, no individual cards ── */
+  .learndash-course-content .ld-item-list .ld-item-list-item {
+    @apply bg-transparent border-none rounded-none mb-0
+           transition-colors duration-fast;
+  }
+
+  /* Divider between rows (not after the last one) */
+  .learndash-course-content .ld-item-list .ld-item-list-item + .ld-item-list-item {
+    border-top: 1px solid rgb(var(--color-border-soft));
+    margin-top: 0;
+  }
+
+  /* Hover: subtle page-bg tint */
+  .learndash-course-content .ld-item-list .ld-item-list-item:hover {
+    background-color: rgb(var(--color-surface));
+  }
+
+  /* ── Current / "next" lesson: badge-online-bg tint + bold title ── */
+  /* DC.html row 4: background #E2F0EE = badge-online-bg */
+  .learndash-course-content .ld-item-list .ld-item-list-item.ld-is-next {
+    background-color: rgb(var(--color-badge-online-bg)) !important;
+    border-color: transparent !important;
+  }
+
+  .learndash-course-content .ld-item-list .ld-item-list-item.ld-is-next .ld-item-title {
+    @apply font-bold text-text;
+  }
+
+  /* "Hier ben je gebleven" sub-label for current lesson */
+  .learndash-course-content .ld-item-list-item.ld-is-next .ld-item-components {
+    color: rgb(var(--color-badge-online-text)) !important;
+    @apply font-bold;
+  }
+
+  /* ── Locked / not available: muted text ── */
+  /* DC.html row 5: color #90959E = --color-border-strong */
+  .learndash-course-content .ld-item-list .ld-item-list-item.ld-is-not-available .ld-item-title,
+  .learndash-course-content .ld-item-list .ld-item-list-item.ld-lesson-status-not-available .ld-item-title {
+    color: rgb(var(--color-border-strong)) !important;
+    @apply font-medium;
+  }
+
+  /* Row preview layout */
+  .learndash-course-content .ld-item-list-item .ld-item-list-item-preview {
+    @apply px-5 py-4 flex items-center justify-between gap-3;
+  }
+
+  /* Lesson link */
+  .learndash-course-content .ld-item-list-item .ld-item-name {
+    @apply text-text no-underline flex items-start flex-1 gap-3;
+  }
+
+  .learndash-course-content .ld-item-list-item a.ld-item-name:hover {
+    @apply text-primary;
+  }
+
+  /* Lesson title text: slightly larger per DC.html (15px → text-[15px]) */
+  .learndash-course-content .ld-item-list-item .ld-item-title {
+    @apply font-semibold text-[15px] leading-snug;
+  }
+
+  /* Topic/quiz count badges */
+  .learndash-course-content .ld-item-list-item .ld-item-components {
+    @apply text-xs font-normal text-text-muted mt-1 block;
+  }
+
+  .learndash-course-content .ld-item-list-item .ld-sep {
+    @apply text-border px-1;
+  }
+
+  /* ── Status icons: DC.html recipe ──
+     Done (complete)  : bg badge-open-bg (#E2F2E8), text badge-open-text (#17683D), ✓ mark
+     In-progress      : teal filled circle (primary) with white dot center
+     Incomplete       : ghost circle, inset border #D2D6DD (--color-border)
+     ── */
+  .learndash-course-content .ld-status-icon {
+    @apply w-6 h-6 rounded-full shrink-0;
+    flex-basis: 24px;
+    display: grid;
+    place-items: center;
+  }
+
+  .learndash-course-content .ld-status-icon .ld-icon {
+    @apply text-xs;
+  }
+
+  /* Complete: badge-open green circle */
+  .learndash-course-content .ld-status-complete {
+    background-color: rgb(var(--color-badge-open-bg)) !important;
+    color: rgb(var(--color-badge-open-text)) !important;
+    @apply font-extrabold text-[13px];
+    box-shadow: none !important;
+  }
+
+  /* Incomplete: ghost circle via inset shadow (no extra element needed) */
+  .learndash-course-content .ld-status-incomplete.ld-status-icon {
+    background-color: rgb(var(--color-surface-card)) !important;
+    border: none !important;
+    box-shadow: inset 0 0 0 1.5px rgb(var(--color-border)) !important;
+  }
+
+  /* In-progress: primary-filled circle (matches DC.html row 4 dot) */
+  .learndash-course-content .ld-status-in-progress {
+    background-color: rgb(var(--color-primary)) !important;
+    border: none !important;
+    box-shadow: none !important;
+    position: relative;
+  }
+
+  /* White dot center for in-progress */
+  .learndash-course-content .ld-status-in-progress::after {
+    content: '';
+    display: block;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: rgb(var(--color-surface-card));
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  /* ── Per-lesson expand button ── */
+  .learndash-course-content .ld-item-details .ld-expand-button {
+    background: transparent !important;
+    color: rgb(var(--color-text-muted)) !important;
+    @apply text-xs font-medium px-2 py-1 rounded border border-border
+           hover:bg-surface-alt transition-colors duration-fast cursor-pointer;
+    max-width: none;
+    width: auto;
+    padding: 0.25rem 0.5rem !important;
+  }
+
+  .learndash-course-content .ld-item-details .ld-expand-button .ld-icon {
+    background: none !important;
+    color: rgb(var(--color-text-muted)) !important;
+  }
+
+  .learndash-course-content .ld-item-details .ld-expand-button .ld-text {
+    color: rgb(var(--color-text-muted)) !important;
+    @apply flex-none p-0;
+  }
+
+  .learndash-course-content .ld-item-details .ld-expand-button:hover .ld-icon,
+  .learndash-course-content .ld-item-details .ld-expand-button:hover .ld-text {
+    color: rgb(var(--color-text)) !important;
+  }
+
+  /* ── Expanded content (topics/quizzes) ── */
+  .learndash-course-content .ld-item-list-item-expanded {
+    @apply border-t border-border;
+  }
+
+  /* Remove the decorative triangle arrow */
+  .learndash-course-content .ld-item-list-item-expanded::before {
+    display: none !important;
+  }
+
+  .learndash-course-content .ld-item-list-item-expanded .ld-progress {
+    @apply bg-surface-alt px-4 py-3;
+  }
+
+  .learndash-course-content .ld-item-list-item-expanded .ld-item-contents {
     @apply px-4 py-3;
   }
 
-  .learndash-wrapper .ld-lesson-title {
-    @apply text-text font-medium;
+  /* ── Topic table list ── */
+  .learndash-course-content .ld-table-list {
+    @apply rounded-none m-0 overflow-visible;
+  }
+
+  .learndash-course-content .ld-table-list .ld-table-list-item {
+    @apply border-b border-border last:border-b-0;
+  }
+
+  .learndash-course-content .ld-table-list .ld-table-list-item-preview {
+    @apply px-4 py-2.5 flex items-center gap-3;
+  }
+
+  .learndash-course-content .ld-table-list .ld-table-list-title {
+    @apply text-sm text-text font-normal;
+  }
+
+  .learndash-course-content .ld-table-list .ld-table-list-title a {
+    @apply text-text no-underline hover:text-primary transition-colors;
+  }
+
+  /* ── Tooltip (locked lesson hint) ── */
+  .learndash-course-content .ld-tooltip .ld-tooltip__text {
+    @apply hidden absolute z-10 bg-text text-text-inverse text-xs
+           rounded-lg px-3 py-2 -top-2 left-1/2 -translate-x-1/2 -translate-y-full
+           whitespace-nowrap pointer-events-none;
+  }
+
+  .learndash-course-content .ld-tooltip:hover .ld-tooltip__text {
+    @apply block;
+  }
+
+  /* ── Section headings (course sections/dividers) ── */
+  .learndash-course-content .ld-lesson-list .ld-lesson-section-heading {
+    @apply text-xs font-semibold text-text-muted uppercase tracking-wider
+           mt-6 mb-2 px-1;
+  }
+
+  /* ── Status badges in lesson attributes ── */
+  .learndash-course-content .ld-item-title .ld-status {
+    @apply inline-block text-xs font-medium px-2 py-0.5 rounded-full
+           bg-surface-alt text-text-muted;
+  }
+
+  /* ── Pagination ── */
+  .learndash-course-content .ld-pagination {
+    @apply flex items-center justify-center gap-2 py-4;
+  }
+
+  .learndash-course-content .ld-pagination .ld-pages a,
+  .learndash-course-content .ld-pagination .ld-pages span {
+    @apply w-8 h-8 flex items-center justify-center rounded text-sm;
+  }
+
+  .learndash-course-content .ld-pagination .ld-pages a {
+    @apply text-text-muted hover:bg-surface-alt transition-colors;
+  }
+
+  .learndash-course-content .ld-pagination .ld-pages span.current {
+    @apply bg-primary text-text-inverse font-medium;
   }
 
   /* ══════════════════════════════════════
@@ -146,15 +418,15 @@
   }
 
   .learndash-wrapper .ld-alert-success {
-    @apply bg-green-50 text-green-800 border border-green-200;
+    @apply bg-status-success-subtle text-status-success border border-status-success;
   }
 
   .learndash-wrapper .ld-alert-warning {
-    @apply bg-yellow-50 text-yellow-800 border border-yellow-200;
+    @apply bg-status-warning-subtle text-status-warning border border-status-warning;
   }
 
   .learndash-wrapper .ld-alert-danger {
-    @apply bg-red-50 text-red-800 border border-red-200;
+    @apply bg-status-error-subtle text-status-error border border-status-error;
   }
 
   /* ══════════════════════════════════════
@@ -178,11 +450,21 @@
     @apply bg-surface-alt/50;
   }
 
+  /* ══════════════════════════════════════
+     FOCUS MODE — Editorial No-Line Rule
+     ══════════════════════════════════════ */
+
+  .ld-focus .ld-focus-header {
+    border-bottom: none;
+  }
+
 }
 
 /* ══════════════════════════════════════
    FOCUS MODE HEADER CUSTOMIZATION
    Back button + simplified profile nav
+   Focus-sidebar lives OUTSIDE .learndash-wrapper — rules at :root
+   level (document scope), not nested inside .learndash-wrapper.
    ══════════════════════════════════════ */
 
 /* Back button in brand logo area */
@@ -190,7 +472,9 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: var(--ld-focus-header-color, #333);
+  /* --ld-focus-header-color is LD's own custom prop.
+     Fallback: v2 cool-ink #292C31 (≈ --color-text: 41 44 49). */
+  color: var(--ld-focus-header-color, #292C31);
   text-decoration: none;
   font-weight: 500;
   font-size: 0.875rem;
@@ -239,7 +523,9 @@
   display: block;
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
-  color: var(--ld-focus-header-color, #333);
+  /* --ld-focus-header-color is LD's own custom prop.
+     Fallback: v2 cool-ink #292C31 (≈ --color-text: 41 44 49). */
+  color: var(--ld-focus-header-color, #292C31);
   text-decoration: none;
 }
 

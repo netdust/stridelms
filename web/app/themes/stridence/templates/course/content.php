@@ -5,8 +5,11 @@
  * Main content sections for course detail page.
  *
  * @param array $args {
- *     @type int  $course_id Course post ID
- *     @type bool $is_online Whether course is online
+ *     @type int   $course_id Course post ID
+ *     @type bool  $is_online Whether course is online
+ *     @type array $editions  Scheduled editions for in-person courses (optional)
+ *     @type array $lessons   Course lessons (LearnDashHelper::getLessons), fetched
+ *                            once in single-sfwd-courses.php
  * }
  */
 
@@ -14,8 +17,13 @@ defined('ABSPATH') || exit;
 
 use Stride\Integrations\LearnDash\LearnDashHelper;
 
-$course_id = $args['course_id'] ?? get_the_ID();
-$is_online = $args['is_online'] ?? false;
+$course_id    = $args['course_id'] ?? get_the_ID();
+$is_online    = $args['is_online'] ?? false;
+$editions     = $args['editions'] ?? [];
+$lessons      = $args['lessons'] ?? [];
+// When rendered on /edities/<course-slug>/ (the enrollment surface itself),
+// we don't repeat the editions list — the visitor is already past discovery.
+$show_editions = $args['show_editions'] ?? true;
 
 ?>
 
@@ -28,26 +36,26 @@ if ($is_online && LearnDashHelper::hasPrerequisites($course_id)) :
     $all_met = !$user_id ? false : LearnDashHelper::arePrerequisitesMet($course_id, $user_id);
 
     if (!empty($prerequisites) && !$all_met) :
-?>
-<div class="mb-8 p-4 rounded-lg border border-amber-200 bg-amber-50">
+        ?>
+<div class="mb-8 p-4 rounded-lg border border-status-warning bg-status-warning-subtle">
     <div class="flex items-start gap-3">
-        <?php echo stridence_icon('alert-circle', 'w-5 h-5 text-amber-600 mt-0.5 shrink-0'); ?>
+        <?php echo stridence_icon('alert-circle', 'w-5 h-5 text-status-warning mt-0.5 shrink-0'); ?>
         <div>
-            <h3 class="font-semibold text-amber-800 mb-1">
+            <h3 class="font-semibold text-status-warning mb-1">
                 <?php esc_html_e('Vereiste voorkennis', 'stridence'); ?>
             </h3>
-            <p class="text-sm text-amber-700 mb-3">
+            <p class="text-sm text-status-warning mb-3">
                 <?php esc_html_e('Rond eerst de volgende cursus(sen) af om toegang te krijgen:', 'stridence'); ?>
             </p>
             <ul class="space-y-2">
                 <?php foreach ($prerequisites as $prereq) : ?>
                     <li class="flex items-center gap-2 text-sm">
                         <?php if ($prereq['completed']) : ?>
-                            <?php echo stridence_icon('check-circle', 'w-4 h-4 text-green-600'); ?>
-                            <span class="text-green-700 line-through"><?php echo esc_html($prereq['title']); ?></span>
+                            <?php echo stridence_icon('check-circle', 'w-4 h-4 text-status-success'); ?>
+                            <span class="text-status-success line-through"><?php echo esc_html($prereq['title']); ?></span>
                         <?php else : ?>
-                            <?php echo stridence_icon('circle', 'w-4 h-4 text-amber-400'); ?>
-                            <a href="<?php echo esc_url($prereq['url']); ?>" class="text-amber-800 hover:underline font-medium">
+                            <?php echo stridence_icon('circle', 'w-4 h-4 text-status-warning'); ?>
+                            <a href="<?php echo esc_url($prereq['url']); ?>" class="text-status-warning hover:underline font-medium">
                                 <?php echo esc_html($prereq['title']); ?>
                             </a>
                         <?php endif; ?>
@@ -58,14 +66,14 @@ if ($is_online && LearnDashHelper::hasPrerequisites($course_id)) :
     </div>
 </div>
 <?php
-    endif;
+endif;
 endif;
 
 // Points requirement notice
 if ($is_online && LearnDashHelper::hasPointsRequirement($course_id)) :
     $points_required = LearnDashHelper::getPointsRequired($course_id);
     if ($points_required > 0) :
-?>
+        ?>
 <div class="mb-8 p-4 rounded-lg border border-blue-200 bg-blue-50">
     <div class="flex items-start gap-3">
         <?php echo stridence_icon('info', 'w-5 h-5 text-blue-600 mt-0.5 shrink-0'); ?>
@@ -76,7 +84,7 @@ if ($is_online && LearnDashHelper::hasPointsRequirement($course_id)) :
             <p class="text-sm text-blue-700">
                 <?php echo esc_html(sprintf(
                     __('Je hebt %d punten nodig om deze cursus te volgen.', 'stridence'),
-                    $points_required
+                    $points_required,
                 )); ?>
             </p>
         </div>
@@ -94,22 +102,59 @@ endif;
     </div>
 </section>
 
+<!-- Edities Section — every course (including pure-LD) shows editions on the
+     /opleidingen/ container view. The list is the visitor's entry point into
+     /edities/<slug>/ where the CTA lives. -->
+<?php if ($show_editions) : ?>
+    <?php
+    stridence_template_part('templates/course/editions-list', null, [
+        'editions'  => $editions,
+        'course_id' => $course_id,
+        'is_online' => $is_online,
+    ]);
+    ?>
+<?php endif; ?>
+
 <!-- Programma Section -->
 <section id="programma" class="scroll-mt-32">
+    <?php
+if ($is_online) :
+    // Helder Tij: heading row with progress label ("X van Y modules afgerond")
+    // from the hoisted $lessons arg — only when the visitor has access.
+    $lesson_total   = count($lessons);
+    $lessons_done   = count(array_filter($lessons, static fn(array $l): bool => !empty($l['completed'])));
+    $show_lesson_progress = $user_id
+        && $lesson_total > 0
+        && LearnDashHelper::hasAccess($course_id, $user_id);
+    ?>
+    <div class="flex justify-between items-baseline gap-3.5 flex-wrap mb-3">
+        <h2 class="text-[18px] font-bold text-text">
+            <?php esc_html_e('Inhoud van de opleiding', 'stridence'); ?>
+        </h2>
+        <?php if ($show_lesson_progress) : ?>
+            <div class="text-[13px] font-bold text-text-muted">
+                <?php
+                /* translators: 1: completed modules, 2: total modules */
+                echo esc_html(sprintf(__('%1$d van %2$d modules afgerond', 'stridence'), $lessons_done, $lesson_total));
+            ?>
+            </div>
+        <?php endif; ?>
+    </div>
+    <?php else : ?>
     <h2 class="font-heading text-2xl font-bold text-text mb-6">
         <?php esc_html_e('Programma', 'stridence'); ?>
     </h2>
+    <?php endif; ?>
 
     <?php
-    $current_user_id = get_current_user_id();
-    $has_drip = $is_online && $current_user_id && LearnDashHelper::hasAccess($course_id, $current_user_id) && LearnDashHelper::hasDripFeed($course_id);
+$has_drip = $is_online && $user_id && LearnDashHelper::hasAccess($course_id, $user_id) && LearnDashHelper::hasDripFeed($course_id);
 
-    if ($has_drip) :
-        $lessons_with_dates = LearnDashHelper::getLessonsWithAvailability($course_id, $current_user_id);
-        $locked_lessons = array_filter($lessons_with_dates, fn($l) => !$l['is_available']);
+if ($has_drip) :
+    $lessons_with_dates = LearnDashHelper::getLessonsWithAvailability($course_id, $user_id);
+    $locked_lessons = array_filter($lessons_with_dates, fn($l) => !$l['is_available']);
 
-        if (!empty($locked_lessons)) :
-    ?>
+    if (!empty($locked_lessons)) :
+        ?>
         <div class="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800 flex items-start gap-2">
             <?php echo stridence_icon('info', 'w-4 h-4 mt-0.5 shrink-0 text-blue-600'); ?>
             <span>
@@ -117,24 +162,43 @@ endif;
             </span>
         </div>
 
-        <div class="mb-6 space-y-2">
-            <?php foreach ($lessons_with_dates as $lesson) : ?>
-                <div class="flex items-center gap-3 p-3 rounded-lg <?php echo $lesson['is_available'] ? 'bg-surface' : 'bg-surface-alt'; ?>">
-                    <?php if ($lesson['completed']) : ?>
-                        <?php echo stridence_icon('check-circle', 'w-5 h-5 text-green-600 shrink-0'); ?>
-                    <?php elseif (!$lesson['is_available']) : ?>
-                        <?php echo stridence_icon('clock', 'w-5 h-5 text-text-muted shrink-0'); ?>
+        <!-- Custom drip list — our own markup, restyled to the Helder Tij
+             lesson-list recipe (white card, divider rows, status circles). -->
+        <div class="mb-6 bg-surface-card rounded-[16px] shadow-card flex flex-col">
+            <?php
+            $current_marked = false;
+        foreach ($lessons_with_dates as $i => $lesson) :
+            $is_done    = !empty($lesson['completed']);
+            $is_locked  = empty($lesson['is_available']);
+            $is_current = !$current_marked && !$is_done && !$is_locked;
+            if ($is_current) {
+                $current_marked = true;
+            }
+            ?>
+                <?php if ($i > 0) : ?>
+                    <div class="h-px bg-surface-alt mx-5"></div>
+                <?php endif; ?>
+                <div class="px-5 py-4 flex items-center gap-3.5<?php echo $is_current ? ' bg-badge-online-bg/50' : ''; ?>">
+                    <?php if ($is_done) : ?>
+                        <span class="w-6 h-6 rounded-full bg-badge-open-bg text-badge-open-text text-[13px] font-extrabold grid place-items-center shrink-0" aria-hidden="true">&check;</span>
+                    <?php elseif ($is_current) : ?>
+                        <span class="w-6 h-6 rounded-full bg-primary grid place-items-center shrink-0" aria-hidden="true"><span class="w-2 h-2 rounded-full bg-white"></span></span>
                     <?php else : ?>
-                        <?php echo stridence_icon('circle', 'w-5 h-5 text-primary shrink-0'); ?>
+                        <span class="w-6 h-6 rounded-full border-2 border-border shrink-0" aria-hidden="true"></span>
                     <?php endif; ?>
 
                     <div class="flex-1 min-w-0">
-                        <?php if ($lesson['is_available']) : ?>
-                            <a href="<?php echo esc_url($lesson['url']); ?>" class="text-sm font-medium text-text hover:text-primary truncate block">
+                        <?php if (!$is_locked) : ?>
+                            <a href="<?php echo esc_url($lesson['url']); ?>" class="text-[15px] <?php echo $is_current ? 'font-bold text-text' : 'font-semibold ' . ($is_done ? 'text-text-muted' : 'text-text'); ?> hover:text-primary truncate block">
                                 <?php echo esc_html($lesson['title']); ?>
                             </a>
+                            <?php if ($is_current) : ?>
+                                <div class="text-[12px] font-bold text-badge-online-text mt-0.5">
+                                    <?php esc_html_e('Hier ben je gebleven', 'stridence'); ?>
+                                </div>
+                            <?php endif; ?>
                         <?php else : ?>
-                            <span class="text-sm font-medium text-text-muted truncate block">
+                            <span class="text-[15px] font-semibold text-text-muted truncate block">
                                 <?php echo esc_html($lesson['title']); ?>
                             </span>
                         <?php endif; ?>
@@ -144,11 +208,11 @@ endif;
                         <span class="text-xs text-text-muted whitespace-nowrap">
                             <?php echo esc_html(sprintf(
                                 __('Beschikbaar %s', 'stridence'),
-                                stride_format_date(date('Y-m-d', $lesson['available_from']))
+                                stride_format_date(date('Y-m-d', $lesson['available_from'])),
                             )); ?>
                         </span>
-                    <?php elseif ($lesson['completed']) : ?>
-                        <span class="text-xs text-green-600 whitespace-nowrap">
+                    <?php elseif ($is_done) : ?>
+                        <span class="text-xs text-badge-open-text whitespace-nowrap">
                             <?php esc_html_e('Afgerond', 'stridence'); ?>
                         </span>
                     <?php endif; ?>
@@ -157,13 +221,13 @@ endif;
         </div>
     <?php
         endif;
-    endif;
-    ?>
+endif;
+?>
 
     <div class="learndash-course-content">
         <?php
-        echo do_shortcode('[course_content course_id="' . esc_attr($course_id) . '"]');
-        ?>
+    echo do_shortcode('[course_content course_id="' . esc_attr($course_id) . '"]');
+?>
     </div>
 </section>
 
@@ -187,26 +251,12 @@ endif;
     <h2 class="font-heading text-2xl font-bold text-text mb-6">
         <?php esc_html_e('Praktische informatie', 'stridence'); ?>
     </h2>
+    <?php /* Doelgroep + Accreditatie cards removed (Stefan, 2026-06-12):
+             courses carry no such fields — we use only what LearnDash
+             offers at course level. Audience info lives on editions
+             (target_audience). The remaining cards are generic copy. */ ?>
+    <?php if ($is_online) : ?>
     <div class="grid sm:grid-cols-2 gap-4">
-        <div class="card-bordered p-5">
-            <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
-                <?php echo stridence_icon('users', 'w-5 h-5 text-primary'); ?>
-                <?php esc_html_e('Doelgroep', 'stridence'); ?>
-            </h3>
-            <p class="text-text-muted text-sm">
-                <?php esc_html_e('Zorgprofessionals', 'stridence'); ?>
-            </p>
-        </div>
-        <div class="card-bordered p-5">
-            <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
-                <?php echo stridence_icon('award', 'w-5 h-5 text-primary'); ?>
-                <?php esc_html_e('Accreditatie', 'stridence'); ?>
-            </h3>
-            <p class="text-text-muted text-sm">
-                <?php esc_html_e('In aanvraag', 'stridence'); ?>
-            </p>
-        </div>
-        <?php if ($is_online) : ?>
         <div class="card-bordered p-5">
             <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
                 <?php echo stridence_icon('clock', 'w-5 h-5 text-primary'); ?>
@@ -225,12 +275,12 @@ endif;
                 <?php esc_html_e('Online, 24/7 beschikbaar', 'stridence'); ?>
             </p>
         </div>
-        <?php endif; ?>
     </div>
+    <?php endif; ?>
 
     <?php
     $materials = LearnDashHelper::getCourseMaterials($course_id);
-    if (!empty($materials)) :
+if (!empty($materials)) :
     ?>
         <div class="card-bordered p-5 mt-6">
             <h3 class="font-semibold text-text mb-3 flex items-center gap-2">

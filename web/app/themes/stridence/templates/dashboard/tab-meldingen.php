@@ -1,0 +1,94 @@
+<?php
+/**
+ * Dashboard Tab: Meldingen (Notifications)
+ *
+ * Displays user notifications derived from audit log events.
+ * Grouped by "Vandaag" / "Eerder" with mark-all-read capability.
+ *
+ * @param array $args {
+ *     @type WP_User $user Current user object
+ * }
+ * @package stridence
+ */
+
+declare(strict_types=1);
+
+defined('ABSPATH') || exit;
+
+$user    = $args['user'] ?? wp_get_current_user();
+$user_id = $user->ID;
+
+// Get notifications
+$notificationService = ntdst_get(\Stride\Modules\Notification\NotificationService::class);
+$notifications       = $notificationService->getNotifications($user_id);
+$unreadCount         = $notificationService->getUnreadCount($user_id);
+
+// Group by today / earlier
+$today  = wp_date('Y-m-d');
+$groups = ['today' => [], 'earlier' => []];
+
+foreach ($notifications as $n) {
+    $date = wp_date('Y-m-d', $n['timestamp']);
+    $key  = ($date === $today) ? 'today' : 'earlier';
+    $groups[$key][] = $n;
+}
+?>
+
+<div class="space-y-6">
+    <?php if (!empty($notifications)) : ?>
+
+        <!-- Mark-all-read action (page title is rendered by page-mijn-account.php) -->
+        <?php if ($unreadCount > 0) : ?>
+            <div class="flex justify-end">
+                <button type="button"
+                        class="text-[13px] font-bold text-primary hover:text-primary-hover transition-colors"
+                        onclick="(async () => { await ntdstAPI.call('stride_mark_notifications_read'); window.location.reload(); })()">
+                    <?php esc_html_e('Alles als gelezen markeren', 'stridence'); ?>
+                </button>
+            </div>
+        <?php endif; ?>
+
+        <!-- Vandaag -->
+        <?php if (!empty($groups['today'])) : ?>
+            <section>
+                <h3 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">
+                    <?php esc_html_e('Vandaag', 'stridence'); ?>
+                </h3>
+                <div class="space-y-2">
+                    <?php foreach ($groups['today'] as $notification) : ?>
+                        <?php stridence_template_part('templates/dashboard/partials/notification-item', null, [
+                            'notification' => $notification,
+                        ]); ?>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+        <?php endif; ?>
+
+        <!-- Eerder -->
+        <?php if (!empty($groups['earlier'])) : ?>
+            <section>
+                <h3 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">
+                    <?php esc_html_e('Eerder', 'stridence'); ?>
+                </h3>
+                <div class="space-y-2">
+                    <?php foreach ($groups['earlier'] as $notification) : ?>
+                        <?php stridence_template_part('templates/dashboard/partials/notification-item', null, [
+                            'notification' => $notification,
+                        ]); ?>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+        <?php endif; ?>
+
+    <?php else : ?>
+
+        <?php
+        stridence_template_part('partials/empty-state', null, [
+            'icon'    => 'bell',
+            'title'   => __('Geen meldingen', 'stridence'),
+            'message' => __('Je hebt momenteel geen meldingen. Zodra er iets is dat je aandacht nodig heeft, verschijnt het hier.', 'stridence'),
+        ]);
+        ?>
+
+    <?php endif; ?>
+</div>

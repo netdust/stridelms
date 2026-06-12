@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Stride\Modules\Enrollment;
 
 use Stride\Domain\RegistrationStatus;
+use Stride\Infrastructure\AbstractRepository;
+use Stride\Modules\Edition\EditionRepository;
+use Stride\Modules\Trajectory\TrajectoryRepository;
 use WP_Error;
 
 /**
@@ -17,13 +20,43 @@ use WP_Error;
  */
 final class EnrollmentCompletion
 {
-    private const TASK_TYPES = ['session_selection', 'questionnaire', 'documents', 'approval'];
+    public function __construct(
+        private readonly RegistrationRepository $registrations,
+        private readonly EditionRepository $editions,
+        private readonly TrajectoryRepository $trajectories,
+    ) {}
+
+    /**
+     * Resolve the repository for a given CPT slug.
+     * Used by getRequirements/getPostCourseRequirements where the type is
+     * decided by the caller (edition OR trajectory).
+     */
+    private function repoFor(string $postType): AbstractRepository
+    {
+        return match ($postType) {
+            'vad_trajectory' => $this->trajectories,
+            default          => $this->editions, // vad_edition
+        };
+    }
+
+    private const TASK_TYPES = [
+        'session_selection', 'questionnaire', 'documents', 'approval',
+        'post_evaluation', 'post_documents', 'post_approval',
+    ];
 
     private const META_KEYS = [
         'session_selection' => 'requires_session_selection',
         'questionnaire'     => 'requires_questionnaire',
         'documents'         => 'requires_documents',
         'approval'          => 'requires_approval',
+    ];
+
+    private const POST_COURSE_TASK_TYPES = ['post_evaluation', 'post_documents', 'post_approval'];
+
+    private const POST_COURSE_META_KEYS = [
+        'post_evaluation' => 'post_requires_evaluation',
+        'post_documents'  => 'post_requires_documents',
+        'post_approval'   => 'post_requires_approval',
     ];
 
     /**
@@ -33,11 +66,11 @@ final class EnrollmentCompletion
      */
     public function getRequirements(int $postId, string $postType): array
     {
-        $model = ntdst_data()->get($postType);
+        $repo = $this->repoFor($postType);
         $result = [];
 
         foreach (self::META_KEYS as $task => $metaKey) {
-            $result[$task] = (bool) $model->getMeta($postId, $metaKey);
+            $result[$task] = (bool) $repo->getField($postId, $metaKey);
         }
 
         return $result;
@@ -63,7 +96,7 @@ final class EnrollmentCompletion
 
         foreach ($reqs as $task => $enabled) {
             if ($enabled) {
-                $tasks[$task] = ['status' => 'pending'];
+                $tasks[$task] = ['status' => 'pending', 'phase' => 'enrollment'];
             }
         }
 
@@ -91,14 +124,22 @@ final class EnrollmentCompletion
 
         $approvalDone = !isset($tasks['approval']) || ($tasks['approval']['status'] ?? 'pending') === 'completed';
 
+        // Pre-compute: are post-course immediate tasks (post_evaluation + post_documents) done?
+        $postImmediateDone = true;
+        foreach (['post_evaluation', 'post_documents'] as $type) {
+            if (isset($tasks[$type]) && ($tasks[$type]['status'] ?? 'pending') !== 'completed') {
+                $postImmediateDone = false;
+            }
+        }
+
         // Selection window from edition meta
         $selectionOpen = false;
         $selectionReason = '';
+        $deadline = null;
         if ($editionId && isset($tasks['session_selection'])) {
-            $model = ntdst_data()->get('vad_edition');
-            $isOpen = (bool) $model->getMeta($editionId, 'selection_open');
-            $deadline = $model->getMeta($editionId, 'selection_deadline');
-            $pastDeadline = $deadline && strtotime($deadline) < current_time('timestamp');
+            $isOpen = (bool) $this->editions->getField($editionId, 'selection_open');
+            $deadline = $this->editions->getField($editionId, 'selection_deadline');
+            $pastDeadline = $deadline && strtotime($deadline) < time();
 
             if (!$isOpen) {
                 $selectionReason = __('Sessiekeuze is nog niet geopend.', 'stride');
@@ -111,6 +152,17 @@ final class EnrollmentCompletion
 
         foreach ($tasks as $type => $task) {
             $status = $task['status'] ?? 'pending';
+
+            // Session selection: allow re-editing even when completed
+            if ($status === 'completed' && $type === 'session_selection' && $selectionOpen) {
+                $startDate = $editionId ? $this->editions->getField($editionId, 'start_date') : null;
+                $courseStarted = $startDate && strtotime($startDate) < time();
+
+                if (!$courseStarted) {
+                    $availability[$type] = ['state' => 'available', 'reason' => __('Je kunt je keuze nog wijzigen.', 'stride')];
+                    continue;
+                }
+            }
 
             if ($status === 'completed') {
                 $availability[$type] = ['state' => 'completed', 'reason' => ''];
@@ -138,12 +190,26 @@ final class EnrollmentCompletion
                         $availability[$type] = ['state' => 'locked', 'reason' => $selectionReason];
                     } else {
                         $availability[$type] = ['state' => 'available', 'reason' => ''];
-                        if ($deadline = ntdst_data()->get('vad_edition')->getMeta($editionId, 'selection_deadline')) {
+                        if ($deadline) {
                             $availability[$type]['reason'] = sprintf(
                                 __('Kies voor %s', 'stride'),
-                                date_i18n('d M Y', strtotime($deadline))
+                                date_i18n('d M Y', strtotime($deadline)),
                             );
                         }
+                    }
+                    break;
+
+                    // Post-course tasks
+                case 'post_evaluation':
+                case 'post_documents':
+                    $availability[$type] = ['state' => 'available', 'reason' => ''];
+                    break;
+
+                case 'post_approval':
+                    if ($postImmediateDone) {
+                        $availability[$type] = ['state' => 'available', 'reason' => __('Klaar voor beoordeling.', 'stride')];
+                    } else {
+                        $availability[$type] = ['state' => 'locked', 'reason' => __('Wacht op evaluatie en documenten.', 'stride')];
                     }
                     break;
 
@@ -166,8 +232,122 @@ final class EnrollmentCompletion
             return;
         }
 
-        $repo = ntdst_get(RegistrationRepository::class);
+        $repo = $this->registrations;
         $repo->updateCompletionTasks($registrationId, $tasks);
+    }
+
+    // === Post-course phase ===
+
+    /**
+     * Get which post-course requirements are enabled for an edition/trajectory.
+     *
+     * @return array{post_evaluation: bool, post_documents: bool, post_approval: bool}
+     */
+    public function getPostCourseRequirements(int $postId, string $postType): array
+    {
+        $repo = $this->repoFor($postType);
+        $result = [];
+
+        foreach (self::POST_COURSE_META_KEYS as $task => $metaKey) {
+            $result[$task] = (bool) $repo->getField($postId, $metaKey);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Check if any post-course requirements are enabled.
+     */
+    public function hasPostCourseRequirements(int $postId, string $postType): bool
+    {
+        return in_array(true, array_values($this->getPostCourseRequirements($postId, $postType)), true);
+    }
+
+    /**
+     * Build post-course completion tasks for an edition/trajectory.
+     *
+     * @return array<string, array{status: string, phase: string}> Only includes enabled tasks
+     */
+    public function buildPostCourseTasks(int $postId, string $postType): array
+    {
+        $reqs = $this->getPostCourseRequirements($postId, $postType);
+        $tasks = [];
+
+        foreach ($reqs as $task => $enabled) {
+            if ($enabled) {
+                $tasks[$task] = ['status' => 'pending', 'phase' => 'post_course'];
+            }
+        }
+
+        return $tasks;
+    }
+
+    /**
+     * Initialize post-course tasks for a registration.
+     *
+     * Appends post-course tasks to existing completion_tasks JSON.
+     */
+    public function initializePostCourseTasks(int $registrationId, int $editionId, string $postType = 'vad_edition'): void
+    {
+        $postCourseTasks = $this->buildPostCourseTasks($editionId, $postType);
+
+        if (empty($postCourseTasks)) {
+            return;
+        }
+
+        $repo = $this->registrations;
+        $registration = $repo->find($registrationId);
+
+        if (!$registration) {
+            return;
+        }
+
+        $existingTasks = $registration->completion_tasks ?? [];
+        $mergedTasks = array_merge($existingTasks, $postCourseTasks);
+
+        $repo->updateCompletionTasks($registrationId, $mergedTasks);
+    }
+
+    /**
+     * Check if all enrollment-phase tasks are complete.
+     */
+    public function isEnrollmentPhaseComplete(array $tasks): bool
+    {
+        $phaseTasks = $this->getTasksForPhase($tasks, 'enrollment');
+
+        foreach ($phaseTasks as $task) {
+            if (($task['status'] ?? 'pending') !== 'completed') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Check if all post-course-phase tasks are complete.
+     */
+    public function isPostCoursePhaseComplete(array $tasks): bool
+    {
+        $phaseTasks = $this->getTasksForPhase($tasks, 'post_course');
+
+        foreach ($phaseTasks as $task) {
+            if (($task['status'] ?? 'pending') !== 'completed') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Filter tasks by phase.
+     *
+     * @return array<string, array>
+     */
+    public function getTasksForPhase(array $tasks, string $phase): array
+    {
+        return array_filter($tasks, fn(array $task) => ($task['phase'] ?? 'enrollment') === $phase);
     }
 
     /**
@@ -181,7 +361,7 @@ final class EnrollmentCompletion
             return new WP_Error('invalid_task', 'Unknown task type: ' . $taskType);
         }
 
-        $repo = ntdst_get(RegistrationRepository::class);
+        $repo = $this->registrations;
         $registration = $repo->find($registrationId);
 
         if (!$registration) {
@@ -195,6 +375,17 @@ final class EnrollmentCompletion
         }
 
         if ($tasks[$taskType]['status'] === 'completed') {
+            // Session selection allows re-submission to update quote pricing
+            if ($taskType === 'session_selection') {
+                $tasks = $this->markTaskComplete($tasks, $taskType, $data);
+                $repo->updateCompletionTasks($registrationId, $tasks);
+
+                do_action('stride/enrollment/task_completed', [
+                    'registration_id' => $registrationId,
+                    'task_type' => $taskType,
+                    'tasks' => $tasks,
+                ]);
+            }
             return true;
         }
 
@@ -233,12 +424,12 @@ final class EnrollmentCompletion
     }
 
     /**
-     * Check if all user-completable tasks are done (excludes approval).
+     * Check if all user-completable tasks are done (excludes approval types).
      */
     public function areUserTasksComplete(array $tasks): bool
     {
         foreach ($tasks as $type => $task) {
-            if ($type === 'approval') {
+            if ($type === 'approval' || $type === 'post_approval') {
                 continue;
             }
             if (($task['status'] ?? 'pending') !== 'completed') {
@@ -247,6 +438,43 @@ final class EnrollmentCompletion
         }
 
         return true;
+    }
+
+    /**
+     * Find the first user-completable task that's still open.
+     * Used to surface "Waarop wachten we?" in the admin stale-pending view.
+     *
+     * @return string|null Task type (e.g. 'session_selection') or null if all user tasks done.
+     */
+    public function getFirstOpenUserTask(array $tasks): ?string
+    {
+        foreach ($tasks as $type => $task) {
+            if ($type === 'approval' || $type === 'post_approval') {
+                continue;
+            }
+            if (($task['status'] ?? 'pending') !== 'completed') {
+                return $type;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Human label for a task type (Dutch, admin-facing).
+     */
+    public static function taskTypeLabel(string $type): string
+    {
+        return match ($type) {
+            'session_selection' => __('Sessiekeuze', 'stride'),
+            'questionnaire'     => __('Intakevragen', 'stride'),
+            'documents'         => __('Documenten uploaden', 'stride'),
+            'approval'          => __('Goedkeuring', 'stride'),
+            'post_evaluation'   => __('Evaluatie na opleiding', 'stride'),
+            'post_documents'    => __('Documenten na opleiding', 'stride'),
+            'post_approval'     => __('Aftekening', 'stride'),
+            default             => $type,
+        };
     }
 
     /**
@@ -270,8 +498,12 @@ final class EnrollmentCompletion
      */
     public function getTaskSummary(int $registrationId): array
     {
-        $repo = ntdst_get(RegistrationRepository::class);
+        $repo = $this->registrations;
         $registration = $repo->find($registrationId);
+
+        if (!$registration) {
+            return ['tasks' => [], 'total' => 0, 'completed' => 0, 'percentage' => 0];
+        }
 
         $tasks = $registration->completion_tasks ?? [];
         $editionId = (int) ($registration->edition_id ?? 0);
@@ -300,6 +532,8 @@ final class EnrollmentCompletion
     /**
      * Get all registrations with pending tasks for a user.
      *
+     * Includes both pending (enrollment phase) and confirmed (post-course phase) registrations.
+     *
      * @return array<object>
      */
     public function getPendingForUser(int $userId): array
@@ -308,14 +542,26 @@ final class EnrollmentCompletion
 
         $table = RegistrationTable::getTableName();
 
-        return $wpdb->get_results($wpdb->prepare(
+        $results = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$table}
              WHERE user_id = %d
-               AND status = %s
+               AND status IN (%s, %s)
                AND completion_tasks IS NOT NULL
              ORDER BY registered_at DESC",
             $userId,
-            RegistrationStatus::Pending->value
+            RegistrationStatus::Pending->value,
+            RegistrationStatus::Confirmed->value,
         ));
+
+        // Filter: only return registrations where at least one task is incomplete
+        return array_filter($results, function (object $reg): bool {
+            $tasks = json_decode($reg->completion_tasks, true) ?: [];
+            foreach ($tasks as $task) {
+                if (($task['status'] ?? 'pending') !== 'completed') {
+                    return true;
+                }
+            }
+            return false;
+        });
     }
 }

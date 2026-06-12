@@ -24,21 +24,11 @@ final class SessionSelection
     // === Selection Queries ===
 
     /**
-     * Get user's session selections for a registration.
-     *
-     * @return array<int> Session IDs
-     */
-    public function getSelections(int $registrationId): array
-    {
-        return $this->registrations->getSelections($registrationId);
-    }
-
-    /**
      * Check if user selected a specific session.
      */
     public function hasSelectedSession(int $registrationId, int $sessionId): bool
     {
-        $selections = $this->getSelections($registrationId);
+        $selections = $this->registrations->getSelections($registrationId);
         return in_array($sessionId, $selections, true);
     }
 
@@ -97,7 +87,7 @@ final class SessionSelection
      */
     public function addSession(int $registrationId, int $sessionId): true|WP_Error
     {
-        $selections = $this->getSelections($registrationId);
+        $selections = $this->registrations->getSelections($registrationId);
 
         if (in_array($sessionId, $selections, true)) {
             return new WP_Error('already_selected', 'Session already selected');
@@ -113,7 +103,7 @@ final class SessionSelection
      */
     public function removeSession(int $registrationId, int $sessionId): true|WP_Error
     {
-        $selections = $this->getSelections($registrationId);
+        $selections = $this->registrations->getSelections($registrationId);
 
         $key = array_search($sessionId, $selections, true);
         if ($key === false) {
@@ -192,13 +182,9 @@ final class SessionSelection
      */
     public function getSlotConfig(int $editionId): array
     {
-        $slots = $this->editions->getField($editionId, 'session_slots');
+        $slots = $this->editions->getField($editionId, 'session_slots', []);
 
-        if (empty($slots)) {
-            return [];
-        }
-
-        return is_array($slots) ? $slots : (json_decode($slots, true) ?: []);
+        return is_array($slots) ? $slots : [];
     }
 
     /**
@@ -207,12 +193,15 @@ final class SessionSelection
     public function validateSelections(int $registrationId, int $editionId): true|WP_Error
     {
         $slots = $this->getSlotConfig($editionId);
-        $selectedSessionIds = $this->getSelections($registrationId);
+        $selectedSessionIds = $this->registrations->getSelections($registrationId);
 
         foreach ($slots as $slot) {
             $slotName = $slot['slot'] ?? '';
             $required = $slot['required'] ?? false;
-            $pickCount = $slot['pick_count'] ?? 1;
+            // Admin saves the chooser count as `max_selections` (canonical key,
+            // set by EditionSessionsMetabox). Legacy slot configs from seed
+            // data + JSON-stored rows used `pick_count` — keep as fallback.
+            $pickCount = $slot['max_selections'] ?? $slot['pick_count'] ?? 1;
 
             if (!$required) {
                 continue;
@@ -228,7 +217,7 @@ final class SessionSelection
             if ($selectedInSlot < $pickCount) {
                 return new WP_Error(
                     'incomplete_selection',
-                    sprintf('Slot "%s" requires %d selection(s), got %d', $slotName, $pickCount, $selectedInSlot)
+                    sprintf('Slot "%s" requires %d selection(s), got %d', $slotName, $pickCount, $selectedInSlot),
                 );
             }
         }

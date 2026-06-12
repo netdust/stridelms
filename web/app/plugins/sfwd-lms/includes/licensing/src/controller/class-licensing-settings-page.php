@@ -43,8 +43,9 @@ if ( ( class_exists( 'LearnDash_Settings_Page' ) ) ) {
 			$this->parent_menu_page_url  = 'admin.php?page=learndash_lms_settings';
 			$this->menu_page_capability  = LEARNDASH_ADMIN_CAPABILITY_CHECK;
 			$this->settings_page_id      = 'learndash_hub_licensing';
-			$this->settings_page_title   = esc_html__( 'LMS License', 'learndash' );
-			$this->settings_tab_title    = esc_html__( 'LMS License', 'learndash' );
+			$this->settings_page_title   = esc_html__( 'Legacy License', 'learndash' );
+			$this->settings_tab_title    = esc_html__( 'Legacy License', 'learndash' );
+			$this->settings_tab_priority = 120;
 			$this->show_submit_meta      = false;
 			$this->show_quick_links_meta = false;
 
@@ -96,6 +97,9 @@ if ( ( class_exists( 'LearnDash_Settings_Page' ) ) ) {
 		 * @return void
 		 */
 		public function show_settings_page() {
+			// Display the legacy license page notice.
+			lw_harbor_display_legacy_license_page_notice( 'LearnDash' );
+
 			if ( ! $this->is_user_allowed() ) {
 				require_once $this->view_path . 'access_denied.php';
 				return;

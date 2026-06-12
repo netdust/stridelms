@@ -19,8 +19,8 @@ if (!defined('ABSPATH')) {
 }
 
 // Prevent accidental runs in production
-if (defined('WP_ENV') && WP_ENV === 'production') {
-    echo "ERROR: Cannot run unseed script in production!\n";
+if (!defined('WP_ENV') || !in_array(WP_ENV, ['development', 'local'], true)) {
+    echo "ERROR: Seed script only allowed in development/local environments!\n";
     exit(1);
 }
 
@@ -40,6 +40,7 @@ class StrideSeedCleaner {
         'editions' => 0,
         'sessions' => 0,
         'registrations' => 0,
+        'trajectories' => 0,
         'groups' => 0,
         'vouchers' => 0,
         'quotes' => 0,
@@ -89,6 +90,7 @@ class StrideSeedCleaner {
         $this->removeVouchers();
         $this->removeRegistrations();
         $this->removeEnrollments();
+        $this->removeTrajectories();
         $this->removeSessions();
         $this->removeEditions();
         $this->removeLessons();
@@ -256,6 +258,28 @@ class StrideSeedCleaner {
     }
 
     /**
+     * Remove seed trajectories
+     */
+    private function removeTrajectories(): void {
+        echo "Removing trajectories...\n";
+
+        $trajectories = get_posts([
+            'post_type' => 'vad_trajectory',
+            'posts_per_page' => -1,
+            'meta_key' => self::SEED_META_KEY,
+            'meta_value' => '1',
+            'fields' => 'ids',
+        ]);
+
+        foreach ($trajectories as $trajectoryId) {
+            wp_delete_post($trajectoryId, true);
+            $this->removed['trajectories']++;
+        }
+
+        echo "  - Removed {$this->removed['trajectories']} trajectories\n";
+    }
+
+    /**
      * Remove seed sessions
      */
     private function removeSessions(): void {
@@ -411,6 +435,7 @@ class StrideSeedCleaner {
         echo "  - Lessons: {$this->removed['lessons']}\n";
         echo "  - Editions: {$this->removed['editions']}\n";
         echo "  - Sessions: {$this->removed['sessions']}\n";
+        echo "  - Trajectories: {$this->removed['trajectories']}\n";
         echo "  - Registrations: {$this->removed['registrations']}\n";
         echo "  - Groups: {$this->removed['groups']}\n";
         echo "  - Vouchers: {$this->removed['vouchers']}\n";

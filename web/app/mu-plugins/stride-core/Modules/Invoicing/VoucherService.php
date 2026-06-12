@@ -7,7 +7,10 @@ namespace Stride\Modules\Invoicing;
 use Stride\Domain\DiscountType;
 use Stride\Domain\Money;
 use Stride\Domain\VoucherStatus;
+use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Invoicing\Helpers\VoucherCodeGenerator;
+use Stride\Modules\Invoicing\Helpers\VoucherProrater;
+use Stride\Modules\Invoicing\Helpers\VoucherScopeValidator;
 use WP_Error;
 use WP_Post;
 
@@ -20,8 +23,10 @@ final class VoucherService
 {
     public function __construct(
         private readonly VoucherRepository $repository,
-    ) {
-    }
+        private readonly VoucherScopeValidator $scopeValidator,
+        private readonly VoucherProrater $prorater,
+        private readonly SessionService $sessionService,
+    ) {}
 
     /**
      * Create a voucher.
@@ -69,7 +74,7 @@ final class VoucherService
 
         $voucherId = $result->ID;
 
-        $this->dispatch('voucher/created', [
+        do_action('stride/voucher/created', [
             'voucher_id' => $voucherId,
             'code' => $code,
         ]);
@@ -134,9 +139,10 @@ final class VoucherService
             return new WP_Error('expired', 'Voucher is verlopen');
         }
 
-        // Check edition restriction
-        if ($editionId !== null && $voucher['edition_id'] > 0 && $voucher['edition_id'] !== $editionId) {
-            return new WP_Error('wrong_edition', 'Voucher is niet geldig voor deze editie');
+        // Check edition scope (alle / alleen / behalve)
+        $scopeCheck = $this->scopeValidator->validate($voucher, $editionId);
+        if (is_wp_error($scopeCheck)) {
+            return $scopeCheck;
         }
 
         return $voucher;
@@ -144,18 +150,40 @@ final class VoucherService
 
     /**
      * Calculate discount amount for a voucher.
+     *
+     * When apply_mode is 'single_session' and an edition context is provided,
+     * the subtotal is prorated to one session's share before the discount type
+     * is applied. Editions with zero sessions (e-learning) collapse to "full".
      */
-    public function calculateDiscount(array $voucher, Money $subtotal): Money
+    public function calculateDiscount(array $voucher, Money $subtotal, ?int $editionId = null): Money
     {
+        $effectiveSubtotal = $this->applyModeAdjustment($voucher, $subtotal, $editionId);
         $discountType = DiscountType::tryFrom($voucher['discount_type'] ?? '') ?? DiscountType::Full;
 
         return match ($discountType) {
-            DiscountType::Full => $subtotal,
-            DiscountType::Fixed => Money::cents(min($voucher['discount_value'], $subtotal->inCents())),
-            DiscountType::Percentage => Money::cents(
-                (int) round($subtotal->inCents() * ($voucher['discount_value'] / 100))
-            ),
+            DiscountType::Full => $effectiveSubtotal,
+            DiscountType::Fixed => Money::cents(min($voucher['discount_value'], $effectiveSubtotal->inCents())),
+            // Capped at the effective subtotal, matching Fixed: nothing
+            // validates discount_value <= 100 at creation, so a misconfigured
+            // 150% voucher must not produce a discount the quote can't absorb.
+            DiscountType::Percentage => Money::cents(min(
+                (int) round($effectiveSubtotal->inCents() * ($voucher['discount_value'] / 100)),
+                $effectiveSubtotal->inCents(),
+            )),
         };
+    }
+
+    private function applyModeAdjustment(array $voucher, Money $subtotal, ?int $editionId): Money
+    {
+        $applyMode = $voucher['apply_mode'] ?? 'full';
+
+        if ($applyMode !== 'single_session' || $editionId === null) {
+            return $subtotal;
+        }
+
+        $sessions = $this->sessionService->getSessionsForEdition($editionId);
+
+        return $this->prorater->prorate($subtotal, count($sessions));
     }
 
     /**
@@ -182,7 +210,7 @@ final class VoucherService
             // Lock the voucher row
             $wpdb->get_row($wpdb->prepare(
                 "SELECT ID FROM {$wpdb->posts} WHERE ID = %d FOR UPDATE",
-                $voucherId
+                $voucherId,
             ));
 
             // Re-fetch after lock to get current state
@@ -220,7 +248,7 @@ final class VoucherService
                 $voucherId,
                 $redemption,
                 $newUsedCount,
-                $newStatus
+                $newStatus,
             );
 
             if (!$success) {
@@ -230,7 +258,7 @@ final class VoucherService
 
             $wpdb->query('COMMIT');
 
-            $this->dispatch('voucher/redeemed', [
+            do_action('stride/voucher/redeemed', [
                 'voucher_id' => $voucherId,
                 'user_id' => $userId,
                 'quote_id' => $quoteId,
@@ -244,6 +272,72 @@ final class VoucherService
         } catch (\Exception $e) {
             $wpdb->query('ROLLBACK');
             return new WP_Error('transaction_failed', 'Transactie mislukt');
+        }
+    }
+
+    /**
+     * Reverse of redeemVoucher: remove the (userId, quoteId) redemption
+     * and decrement used_count. Idempotent — returns false if no matching
+     * redemption was found.
+     *
+     * Used when:
+     *   - a quote's voucher is replaced (apply a different code)
+     *   - a quote is cancelled with a voucher attached
+     */
+    public function releaseVoucher(string $code, int $userId, int $quoteId): bool
+    {
+        global $wpdb;
+
+        $voucher = $this->getVoucherByCode($code);
+        if (!$voucher) {
+            return false;
+        }
+
+        $voucherId = (int) $voucher['id'];
+
+        try {
+            $wpdb->query('START TRANSACTION');
+
+            $wpdb->get_row($wpdb->prepare(
+                "SELECT ID FROM {$wpdb->posts} WHERE ID = %d FOR UPDATE",
+                $voucherId,
+            ));
+
+            $voucher = $this->getVoucher($voucherId);
+            if (!$voucher) {
+                $wpdb->query('ROLLBACK');
+                return false;
+            }
+
+            $newUsedCount = max(0, ((int) ($voucher['used_count'] ?? 0)) - 1);
+
+            // If the voucher was Exhausted and now has capacity again, flip
+            // back to Active. Otherwise keep the current status.
+            $newStatus = $voucher['status_enum'];
+            $limit = (int) ($voucher['usage_limit'] ?? 0);
+            if ($newStatus === VoucherStatus::Exhausted && ($limit === 0 || $newUsedCount < $limit)) {
+                $newStatus = VoucherStatus::Active;
+            }
+
+            $removed = $this->repository->removeRedemption($voucherId, $userId, $quoteId, $newUsedCount, $newStatus);
+
+            if (!$removed) {
+                $wpdb->query('ROLLBACK');
+                return false;
+            }
+
+            $wpdb->query('COMMIT');
+
+            do_action('stride/voucher/released', [
+                'voucher_id' => $voucherId,
+                'user_id' => $userId,
+                'quote_id' => $quoteId,
+            ]);
+
+            return true;
+        } catch (\Exception $e) {
+            $wpdb->query('ROLLBACK');
+            return false;
         }
     }
 
@@ -262,11 +356,12 @@ final class VoucherService
         if (isset($data['fields']) && is_array($data['fields'])) {
             $data = array_merge($data, $data['fields']);
         } elseif (isset($data['meta']) && is_array($data['meta'])) {
-            // Strip _ntdst_ prefix from meta keys for consistent access
+            $prefix = $this->repository->getMetaPrefix();
+            $prefixLen = strlen($prefix);
             $unprefixedMeta = [];
             foreach ($data['meta'] as $key => $value) {
-                $unprefixedKey = str_starts_with($key, '_ntdst_')
-                    ? substr($key, 7)  // strlen('_ntdst_') = 7
+                $unprefixedKey = ($prefix !== '' && str_starts_with($key, $prefix))
+                    ? substr($key, $prefixLen)
                     : $key;
                 $unprefixedMeta[$unprefixedKey] = $value;
             }
@@ -282,6 +377,16 @@ final class VoucherService
         $data['used_count'] = (int) ($data['used_count'] ?? 0);
         $data['discount_value'] = (int) ($data['discount_value'] ?? 0);
         $data['edition_id'] = (int) ($data['edition_id'] ?? 0);
+
+        // Scope + apply-mode defaults
+        $data['scope_mode'] = $data['scope_mode'] ?? '';
+        $data['apply_mode'] = $data['apply_mode'] ?? 'full';
+
+        if (!isset($data['excluded_edition_ids']) || !is_array($data['excluded_edition_ids'])) {
+            $data['excluded_edition_ids'] = [];
+        } else {
+            $data['excluded_edition_ids'] = array_map('intval', $data['excluded_edition_ids']);
+        }
 
         // Ensure redemptions is array
         if (!isset($data['redemptions']) || !is_array($data['redemptions'])) {

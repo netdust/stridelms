@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Stride\Admin;
 
+use NTDST\Audit\AuditTable;
 use Stride\Domain\AttendanceStatus;
+use Stride\Domain\Money;
 use Stride\Domain\QuoteStatus;
 use Stride\Infrastructure\BatchQueryHelper;
 use Stride\Modules\Attendance\AttendanceRepository;
@@ -13,9 +15,11 @@ use Stride\Modules\Edition\EditionCPT;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\SessionCPT;
 use Stride\Modules\Edition\SessionRepository;
+use Stride\Modules\Enrollment\EnrollmentService;
 use Stride\Modules\Enrollment\RegistrationTable;
 use Stride\Modules\Invoicing\QuoteCPT;
 use Stride\Modules\Trajectory\TrajectoryCPT;
+use Stride\Modules\User\ProfileTypeService;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -28,6 +32,12 @@ use WP_REST_Response;
 final class AdminAPIController
 {
     private const NAMESPACE = 'stride/v1';
+
+    /**
+     * Hard upper bound on rows fetched per pending-approvals query (H-8).
+     * Bounds JSON-decode work per poll; bucket counts clip silently beyond it.
+     */
+    private const APPROVALS_SCAN_CAP = 500;
 
     public function __construct(
         private readonly AttendanceRepository $attendance,
@@ -48,14 +58,14 @@ final class AdminAPIController
         register_rest_route(self::NAMESPACE, '/admin/stats', [
             'methods' => 'GET',
             'callback' => [$this, 'getStats'],
-            'permission_callback' => [$this, 'canAccessAdmin'],
+            'permission_callback' => [$this, 'canViewAdmin'],
         ]);
 
         // Editions list
         register_rest_route(self::NAMESPACE, '/admin/editions', [
             'methods' => 'GET',
             'callback' => [$this, 'getEditions'],
-            'permission_callback' => [$this, 'canAccessAdmin'],
+            'permission_callback' => [$this, 'canViewAdmin'],
             'args' => [
                 'page' => [
                     'type' => 'integer',
@@ -84,7 +94,15 @@ final class AdminAPIController
                     'type' => 'string',
                     'default' => '',
                 ],
-                'course_tag' => [
+                'theme' => [
+                    'type' => 'integer',
+                    'default' => 0,
+                ],
+                'format' => [
+                    'type' => 'integer',
+                    'default' => 0,
+                ],
+                'tag' => [
                     'type' => 'integer',
                     'default' => 0,
                 ],
@@ -100,7 +118,7 @@ final class AdminAPIController
         register_rest_route(self::NAMESPACE, '/admin/editions/(?P<id>\d+)', [
             'methods' => 'GET',
             'callback' => [$this, 'getEdition'],
-            'permission_callback' => [$this, 'canAccessAdmin'],
+            'permission_callback' => [$this, 'canViewAdmin'],
             'args' => [
                 'id' => [
                     'type' => 'integer',
@@ -113,7 +131,7 @@ final class AdminAPIController
         register_rest_route(self::NAMESPACE, '/admin/editions/(?P<id>\d+)/registrations', [
             'methods' => 'GET',
             'callback' => [$this, 'getEditionRegistrations'],
-            'permission_callback' => [$this, 'canAccessAdmin'],
+            'permission_callback' => [$this, 'canViewAdmin'],
             'args' => [
                 'id' => [
                     'type' => 'integer',
@@ -126,14 +144,14 @@ final class AdminAPIController
         register_rest_route(self::NAMESPACE, '/admin/course-tags', [
             'methods' => 'GET',
             'callback' => [$this, 'getCourseTags'],
-            'permission_callback' => [$this, 'canAccessAdmin'],
+            'permission_callback' => [$this, 'canViewAdmin'],
         ]);
 
         // Mark attendance
         register_rest_route(self::NAMESPACE, '/admin/attendance', [
             'methods' => 'POST',
             'callback' => [$this, 'markAttendance'],
-            'permission_callback' => [$this, 'canAccessAdmin'],
+            'permission_callback' => [$this, 'canManageAdmin'],
             'args' => [
                 'session_id' => [
                     'type' => 'integer',
@@ -155,7 +173,7 @@ final class AdminAPIController
         register_rest_route(self::NAMESPACE, '/admin/quotes', [
             'methods' => 'GET',
             'callback' => [$this, 'getQuotes'],
-            'permission_callback' => [$this, 'canAccessAdmin'],
+            'permission_callback' => [$this, 'canViewAdmin'],
             'args' => [
                 'page' => [
                     'type' => 'integer',
@@ -187,7 +205,7 @@ final class AdminAPIController
         register_rest_route(self::NAMESPACE, '/admin/trajectories', [
             'methods' => 'GET',
             'callback' => [$this, 'getTrajectories'],
-            'permission_callback' => [$this, 'canAccessAdmin'],
+            'permission_callback' => [$this, 'canViewAdmin'],
             'args' => [
                 'page' => [
                     'type' => 'integer',
@@ -211,18 +229,49 @@ final class AdminAPIController
             ],
         ]);
 
+        // Trajectory detail
+        register_rest_route(self::NAMESPACE, '/admin/trajectories/(?P<id>\d+)', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getTrajectory'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+            'args' => [
+                'id' => [
+                    'type' => 'integer',
+                    'required' => true,
+                ],
+            ],
+        ]);
+
         // Pending approvals
         register_rest_route(self::NAMESPACE, '/admin/pending-approvals', [
             'methods' => 'GET',
             'callback' => [$this, 'getPendingApprovals'],
-            'permission_callback' => [$this, 'canAccessAdmin'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+            'args' => [
+                'stale_days' => [
+                    'type' => 'integer',
+                    'default' => 7,
+                    'minimum' => 1,
+                ],
+                'page' => [
+                    'type' => 'integer',
+                    'default' => 1,
+                    'minimum' => 1,
+                ],
+                'per_page' => [
+                    'type' => 'integer',
+                    'default' => 20,
+                    'minimum' => 1,
+                    'maximum' => 100,
+                ],
+            ],
         ]);
 
-        // Approve registration
+        // Approve registration (enrollment phase)
         register_rest_route(self::NAMESPACE, '/admin/approve-registration', [
             'methods' => 'POST',
             'callback' => [$this, 'approveRegistration'],
-            'permission_callback' => [$this, 'canAccessAdmin'],
+            'permission_callback' => [$this, 'canManageAdmin'],
             'args' => [
                 'registration_id' => [
                     'type' => 'integer',
@@ -230,14 +279,158 @@ final class AdminAPIController
                 ],
             ],
         ]);
+
+        // Approve post-course (aftekenen)
+        register_rest_route(self::NAMESPACE, '/admin/approve-post-course', [
+            'methods' => 'POST',
+            'callback' => [$this, 'approvePostCourse'],
+            'permission_callback' => [$this, 'canManageAdmin'],
+            'args' => [
+                'registration_id' => [
+                    'type' => 'integer',
+                    'required' => true,
+                ],
+            ],
+        ]);
+
+        // Action queue
+        register_rest_route(self::NAMESPACE, '/admin/action-queue', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getActionQueue'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+        ]);
+
+        // Dismiss action queue item
+        register_rest_route(self::NAMESPACE, '/admin/action-queue/dismiss', [
+            'methods' => 'POST',
+            'callback' => [$this, 'dismissActionItem'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+            'args' => [
+                'rule' => ['type' => 'string', 'required' => true],
+                'subject_id' => ['type' => 'integer', 'default' => 0],
+            ],
+        ]);
+
+        // Health checks
+        register_rest_route(self::NAMESPACE, '/admin/health-checks', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getHealthChecks'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+        ]);
+
+        // Activity feed
+        register_rest_route(self::NAMESPACE, '/admin/activity', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getActivityFeed'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+            'args' => [
+                'limit' => ['type' => 'integer', 'default' => 10, 'maximum' => 50],
+            ],
+        ]);
+
+        // User search
+        register_rest_route(self::NAMESPACE, '/admin/users/search', [
+            'methods' => 'GET',
+            'callback' => [$this, 'searchUsers'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+            'args' => [
+                'q' => ['type' => 'string', 'required' => true, 'minLength' => 2],
+            ],
+        ]);
+
+        // User detail
+        register_rest_route(self::NAMESPACE, '/admin/users/(?P<id>\d+)/detail', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getUserDetail'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+            'args' => [
+                'id' => ['type' => 'integer', 'required' => true],
+                'reg_page' => ['type' => 'integer', 'default' => 1],
+            ],
+        ]);
+
+        // Update user profile (personal + billing)
+        register_rest_route(self::NAMESPACE, '/admin/users/(?P<id>\d+)/profile', [
+            'methods' => 'POST',
+            'callback' => [$this, 'updateUserProfile'],
+            'permission_callback' => [$this, 'canManageAdmin'],
+            'args' => [
+                'id' => ['type' => 'integer', 'required' => true],
+            ],
+        ]);
+
+        // Reveal a single sensitive field (national_id, date_of_birth,
+        // professional_license_number, phone) — every success is audited.
+        register_rest_route(self::NAMESPACE, '/admin/users/(?P<id>\d+)/reveal', [
+            'methods' => 'GET',
+            'callback' => [$this, 'revealSensitiveField'],
+            'permission_callback' => [$this, 'canManageAdmin'],
+            'args' => [
+                'id' => ['type' => 'integer', 'required' => true],
+                'field' => ['type' => 'string', 'required' => true],
+            ],
+        ]);
+
+        // Impersonate user
+        register_rest_route(self::NAMESPACE, '/admin/users/(?P<id>\d+)/impersonate', [
+            'methods' => 'POST',
+            'callback' => [$this, 'impersonateUser'],
+            'permission_callback' => [$this, 'canManageAdmin'],
+            'args' => [
+                'id' => ['type' => 'integer', 'required' => true],
+            ],
+        ]);
+
+        // End impersonation — permission validated internally via cookie+transient
+        register_rest_route(self::NAMESPACE, '/admin/impersonate/end', [
+            'methods' => ['GET', 'POST'],
+            'callback' => [$this, 'endImpersonation'],
+            'permission_callback' => function () {
+                $handler = new ImpersonationHandler();
+                if (!$handler->isActive()) {
+                    return false;
+                }
+                $token = $handler->getTokenFromCookie();
+                return $handler->getOriginalAdmin($token) > 0;
+            },
+        ]);
+
+        // Notifications
+        register_rest_route(self::NAMESPACE, '/admin/notifications', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getNotifications'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+        ]);
+
+        // Mark notifications read
+        register_rest_route(self::NAMESPACE, '/admin/notifications/read', [
+            'methods' => 'POST',
+            'callback' => [$this, 'markNotificationsRead'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+        ]);
+
+        // Export registrations as CSV
+        register_rest_route(self::NAMESPACE, '/admin/export/registrations', [
+            'methods' => 'GET',
+            'callback' => [$this, 'exportRegistrations'],
+            'permission_callback' => [$this, 'canManageAdmin'],
+        ]);
     }
 
     /**
-     * Permission callback for admin endpoints.
+     * Permission callback for read-only admin endpoints.
      */
-    public function canAccessAdmin(): bool
+    public function canViewAdmin(): bool
     {
-        return current_user_can('edit_others_posts');
+        return current_user_can('stride_view');
+    }
+
+    /**
+     * Permission callback for mutation admin endpoints.
+     */
+    public function canManageAdmin(): bool
+    {
+        return current_user_can('stride_manage');
     }
 
     /**
@@ -262,16 +455,16 @@ final class AdminAPIController
              INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = %s
              WHERE p.post_type = %s AND p.post_status = 'publish'
              AND pm.meta_value >= %s",
-            'start_date',
+            '_ntdst_start_date',
             EditionCPT::POST_TYPE,
-            $today
+            $today,
         ));
 
         // Total active registrations
         $totalRegistrations = 0;
         if ($registrationTableExists) {
             $totalRegistrations = (int) $wpdb->get_var(
-                "SELECT COUNT(*) FROM {$registrationTable} WHERE status = 'confirmed'"
+                "SELECT COUNT(*) FROM {$registrationTable} WHERE status = 'confirmed'",
             );
         }
 
@@ -283,8 +476,16 @@ final class AdminAPIController
              AND pm.meta_value = %s",
             'status',
             QuoteCPT::POST_TYPE,
-            QuoteStatus::Draft->value
+            QuoteStatus::Draft->value,
         ));
+
+        // Pending registrations (for actionCount)
+        $pendingRegistrations = 0;
+        if ($registrationTableExists) {
+            $pendingRegistrations = (int) $wpdb->get_var(
+                "SELECT COUNT(*) FROM {$registrationTable} WHERE status = 'pending'",
+            );
+        }
 
         // Sessions today count
         $todaySessions = (int) $wpdb->get_var($wpdb->prepare(
@@ -292,9 +493,9 @@ final class AdminAPIController
              INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = %s
              WHERE p.post_type = %s AND p.post_status = 'publish'
              AND pm.meta_value = %s",
-            'date',
+            '_ntdst_date',
             SessionCPT::POST_TYPE,
-            $today
+            $today,
         ));
 
         // Open trajectories (status = 'open')
@@ -303,9 +504,9 @@ final class AdminAPIController
              INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = %s
              WHERE p.post_type = %s AND p.post_status = 'publish'
              AND pm.meta_value = %s",
-            'status',
+            '_ntdst_status',
             TrajectoryCPT::POST_TYPE,
-            'open'
+            'open',
         ));
 
         // === TODAY'S SESSIONS WITH DETAILS (batch fetch) ===
@@ -315,15 +516,15 @@ final class AdminAPIController
             "SELECT p.ID, p.post_title, pm_time.meta_value as start_time, pm_end.meta_value as end_time,
                     pm_edition.meta_value as edition_id
              FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = 'date'
-             LEFT JOIN {$wpdb->postmeta} pm_time ON p.ID = pm_time.post_id AND pm_time.meta_key = 'start_time'
-             LEFT JOIN {$wpdb->postmeta} pm_end ON p.ID = pm_end.post_id AND pm_end.meta_key = 'end_time'
-             LEFT JOIN {$wpdb->postmeta} pm_edition ON p.ID = pm_edition.post_id AND pm_edition.meta_key = 'edition_id'
+             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_date'
+             LEFT JOIN {$wpdb->postmeta} pm_time ON p.ID = pm_time.post_id AND pm_time.meta_key = '_ntdst_start_time'
+             LEFT JOIN {$wpdb->postmeta} pm_end ON p.ID = pm_end.post_id AND pm_end.meta_key = '_ntdst_end_time'
+             LEFT JOIN {$wpdb->postmeta} pm_edition ON p.ID = pm_edition.post_id AND pm_edition.meta_key = '_ntdst_edition_id'
              WHERE p.post_type = %s AND p.post_status = 'publish'
              AND pm_date.meta_value = %s
              ORDER BY pm_time.meta_value ASC",
             SessionCPT::POST_TYPE,
-            $today
+            $today,
         ));
 
         if (!empty($sessions)) {
@@ -365,15 +566,15 @@ final class AdminAPIController
             "SELECT p.ID, p.post_title, pm_date.meta_value as start_date,
                     pm_capacity.meta_value as capacity, pm_status.meta_value as status
              FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = 'start_date'
-             LEFT JOIN {$wpdb->postmeta} pm_capacity ON p.ID = pm_capacity.post_id AND pm_capacity.meta_key = 'capacity'
-             LEFT JOIN {$wpdb->postmeta} pm_status ON p.ID = pm_status.post_id AND pm_status.meta_key = 'status'
+             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_start_date'
+             LEFT JOIN {$wpdb->postmeta} pm_capacity ON p.ID = pm_capacity.post_id AND pm_capacity.meta_key = '_ntdst_capacity'
+             LEFT JOIN {$wpdb->postmeta} pm_status ON p.ID = pm_status.post_id AND pm_status.meta_key = '_ntdst_status'
              WHERE p.post_type = %s AND p.post_status = 'publish'
              AND pm_date.meta_value >= %s
              ORDER BY pm_date.meta_value ASC
              LIMIT 5",
             EditionCPT::POST_TYPE,
-            $today
+            $today,
         ));
 
         if (!empty($upcomingList)) {
@@ -408,12 +609,12 @@ final class AdminAPIController
         if ($registrationTableExists) {
             $weekAgo = wp_date('Y-m-d H:i:s', strtotime('-7 days'));
             $recentRegs = $wpdb->get_results($wpdb->prepare(
-                "SELECT r.id, r.user_id, r.edition_id, r.status, r.created_at
+                "SELECT r.id, r.user_id, r.edition_id, r.status, r.registered_at
                  FROM {$registrationTable} r
-                 WHERE r.created_at >= %s
-                 ORDER BY r.created_at DESC
+                 WHERE r.registered_at >= %s
+                 ORDER BY r.registered_at DESC
                  LIMIT 10",
-                $weekAgo
+                $weekAgo,
             ));
 
             if (!empty($recentRegs)) {
@@ -441,7 +642,7 @@ final class AdminAPIController
                         'userEmail' => $user ? $user->user_email : '',
                         'editionTitle' => $edition ? $edition->post_title : 'Unknown',
                         'status' => $reg->status,
-                        'createdAt' => $reg->created_at,
+                        'createdAt' => $reg->registered_at,
                     ];
                 }
             }
@@ -456,13 +657,13 @@ final class AdminAPIController
 
         if ($registrationTableExists) {
             $registrationsThisWeek = (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM {$registrationTable} WHERE created_at >= %s",
-                $thisWeekStart
+                "SELECT COUNT(*) FROM {$registrationTable} WHERE registered_at >= %s",
+                $thisWeekStart,
             ));
             $registrationsLastWeek = (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM {$registrationTable} WHERE created_at >= %s AND created_at < %s",
+                "SELECT COUNT(*) FROM {$registrationTable} WHERE registered_at >= %s AND registered_at < %s",
                 $lastWeekStart,
-                $thisWeekStart
+                $thisWeekStart,
             ));
         }
 
@@ -474,14 +675,14 @@ final class AdminAPIController
             "SELECT p.ID, p.post_title, pm_date.meta_value as start_date,
                     pm_capacity.meta_value as capacity
              FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = 'start_date'
-             LEFT JOIN {$wpdb->postmeta} pm_capacity ON p.ID = pm_capacity.post_id AND pm_capacity.meta_key = 'capacity'
+             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_start_date'
+             LEFT JOIN {$wpdb->postmeta} pm_capacity ON p.ID = pm_capacity.post_id AND pm_capacity.meta_key = '_ntdst_capacity'
              WHERE p.post_type = %s AND p.post_status = 'publish'
              AND pm_date.meta_value >= %s AND pm_date.meta_value <= %s
              ORDER BY pm_date.meta_value ASC",
             EditionCPT::POST_TYPE,
             $today,
-            $twoWeeksFromNow
+            $twoWeeksFromNow,
         ));
 
         if (!empty($alertEditions)) {
@@ -535,6 +736,7 @@ final class AdminAPIController
             'pendingQuotes' => $pendingQuotes,
             'todaySessions' => $todaySessions,
             'openTrajectories' => $openTrajectories,
+            'actionCount' => $pendingRegistrations + $pendingQuotes,
             // Dashboard detail data
             'todaySessionDetails' => $todaySessionDetails,
             'upcomingEditionDetails' => $upcomingEditionDetails,
@@ -558,13 +760,15 @@ final class AdminAPIController
         global $wpdb;
 
         $view = $request->get_param('view') ?? 'agenda';
-        $page = $request->get_param('page');
-        $perPage = $request->get_param('per_page');
+        $page = max(1, (int) ($request->get_param('page') ?: 1));
+        $perPage = max(1, (int) ($request->get_param('per_page') ?: 20));
         $search = sanitize_text_field($request->get_param('search') ?? '');
         $status = sanitize_text_field($request->get_param('status') ?? '');
         $dateFrom = sanitize_text_field($request->get_param('date_from') ?? '');
         $dateTo = sanitize_text_field($request->get_param('date_to') ?? '');
-        $courseTag = (int) $request->get_param('course_tag');
+        $themeId = (int) $request->get_param('theme');
+        $formatId = (int) $request->get_param('format');
+        $tagId = (int) $request->get_param('tag');
         $offset = ($page - 1) * $perPage;
 
         $today = current_time('Y-m-d');
@@ -591,7 +795,7 @@ final class AdminAPIController
         }
 
         if (!empty($status)) {
-            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = 'status' AND pm_status.meta_value = %s)";
+            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = '_ntdst_status' AND pm_status.meta_value = %s)";
             $params[] = $status;
         }
 
@@ -605,15 +809,12 @@ final class AdminAPIController
             $params[] = $dateTo;
         }
 
-        // Course tag filter (via linked course)
-        $tagJoin = '';
-        if ($courseTag > 0) {
-            $tagJoin = "INNER JOIN {$wpdb->postmeta} pm_course ON p.ID = pm_course.post_id AND pm_course.meta_key = 'course_id'
-                        INNER JOIN {$wpdb->term_relationships} tr ON pm_course.meta_value = tr.object_id
-                        INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id AND tt.taxonomy = 'ld_course_tag'";
-            $where[] = "tt.term_id = %d";
-            $params[] = $courseTag;
-        }
+        // Taxonomy filters (theme/format/tag — applied to the linked course's terms)
+        $tagJoin = $this->buildCourseTaxonomyJoin(
+            ['theme' => $themeId, 'format' => $formatId, 'tag' => $tagId],
+            $where,
+            $params,
+        );
 
         $whereClause = implode(' AND ', $where);
 
@@ -621,10 +822,10 @@ final class AdminAPIController
         $countParams = $params;
         $total = (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(DISTINCT p.ID) FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = 'start_date'
+             INNER JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
              {$tagJoin}
              WHERE {$whereClause}",
-            ...$countParams
+            ...$countParams,
         ));
 
         // Get editions - ordered by start date ASC (nearest first)
@@ -634,12 +835,12 @@ final class AdminAPIController
         $editions = $wpdb->get_results($wpdb->prepare(
             "SELECT DISTINCT p.ID, p.post_title, pm_start.meta_value as start_date
              FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = 'start_date'
+             INNER JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
              {$tagJoin}
              WHERE {$whereClause}
              ORDER BY pm_start.meta_value ASC
              LIMIT %d OFFSET %d",
-            ...$params
+            ...$params,
         ));
 
         // Format editions with meta
@@ -650,7 +851,7 @@ final class AdminAPIController
 
         // Batch fetch meta for all editions
         $editionMeta = BatchQueryHelper::batchGetPostMeta($editionIds, [
-            'start_date', 'end_date', 'venue', 'capacity', 'status', 'course_id',
+            '_ntdst_start_date', '_ntdst_end_date', '_ntdst_venue', '_ntdst_capacity', '_ntdst_status', '_ntdst_course_id',
         ]);
 
         // Batch fetch registration counts
@@ -659,7 +860,7 @@ final class AdminAPIController
             : [];
 
         // Batch fetch course data
-        $courseIds = array_filter(array_map(fn($id) => (int) ($editionMeta[$id]['course_id'] ?? 0), $editionIds));
+        $courseIds = array_filter(array_map(fn($id) => (int) ($editionMeta[$id]['_ntdst_course_id'] ?? 0), $editionIds));
         $courses = BatchQueryHelper::batchGetPosts($courseIds, 'sfwd-courses');
         $courseTags = BatchQueryHelper::batchGetCourseTags($courseIds);
 
@@ -668,12 +869,12 @@ final class AdminAPIController
             $meta = $editionMeta[$editionId] ?? [];
 
             // Get meta values from batch
-            $startDate = $meta['start_date'] ?? '';
-            $endDate = $meta['end_date'] ?? '';
-            $venue = $meta['venue'] ?? '';
-            $capacity = (int) ($meta['capacity'] ?? 0);
-            $editionStatus = $meta['status'] ?? '';
-            $courseId = (int) ($meta['course_id'] ?? 0);
+            $startDate = $meta['_ntdst_start_date'] ?? '';
+            $endDate = $meta['_ntdst_end_date'] ?? '';
+            $venue = $meta['_ntdst_venue'] ?? '';
+            $capacity = (int) ($meta['_ntdst_capacity'] ?? 0);
+            $editionStatus = $meta['_ntdst_status'] ?? '';
+            $courseId = (int) ($meta['_ntdst_course_id'] ?? 0);
 
             // Get course data from batch
             $courseTitle = '';
@@ -730,13 +931,15 @@ final class AdminAPIController
     {
         global $wpdb;
 
-        $page = $request->get_param('page');
-        $perPage = $request->get_param('per_page');
+        $page = max(1, (int) ($request->get_param('page') ?: 1));
+        $perPage = max(1, (int) ($request->get_param('per_page') ?: 20));
         $search = sanitize_text_field($request->get_param('search') ?? '');
         $status = sanitize_text_field($request->get_param('status') ?? '');
         $dateFrom = sanitize_text_field($request->get_param('date_from') ?? '');
         $dateTo = sanitize_text_field($request->get_param('date_to') ?? '');
-        $courseTag = (int) $request->get_param('course_tag');
+        $themeId = (int) $request->get_param('theme');
+        $formatId = (int) $request->get_param('format');
+        $tagId = (int) $request->get_param('tag');
         $offset = ($page - 1) * $perPage;
 
         // Build query for sessions with edition info
@@ -762,7 +965,7 @@ final class AdminAPIController
 
         // Filter by edition status
         if (!empty($status)) {
-            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = e.ID AND pm_status.meta_key = 'status' AND pm_status.meta_value = %s)";
+            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = e.ID AND pm_status.meta_key = '_ntdst_status' AND pm_status.meta_value = %s)";
             $params[] = $status;
         }
 
@@ -776,15 +979,13 @@ final class AdminAPIController
             $params[] = $dateTo;
         }
 
-        // Course tag filter
-        $tagJoin = '';
-        if ($courseTag > 0) {
-            $tagJoin = "INNER JOIN {$wpdb->postmeta} pm_course ON e.ID = pm_course.post_id AND pm_course.meta_key = 'course_id'
-                        INNER JOIN {$wpdb->term_relationships} tr ON pm_course.meta_value = tr.object_id
-                        INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id AND tt.taxonomy = 'ld_course_tag'";
-            $where[] = "tt.term_id = %d";
-            $params[] = $courseTag;
-        }
+        // Taxonomy filters (theme/format/tag — applied to the linked course's terms)
+        $tagJoin = $this->buildCourseTaxonomyJoin(
+            ['theme' => $themeId, 'format' => $formatId, 'tag' => $tagId],
+            $where,
+            $params,
+            'e.ID',
+        );
 
         $whereClause = implode(' AND ', $where);
 
@@ -793,12 +994,12 @@ final class AdminAPIController
         $total = (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(DISTINCT s.ID)
              FROM {$wpdb->posts} s
-             INNER JOIN {$wpdb->postmeta} pm_edition ON s.ID = pm_edition.post_id AND pm_edition.meta_key = 'edition_id'
+             INNER JOIN {$wpdb->postmeta} pm_edition ON s.ID = pm_edition.post_id AND pm_edition.meta_key = '_ntdst_edition_id'
              INNER JOIN {$wpdb->posts} e ON pm_edition.meta_value = e.ID
-             INNER JOIN {$wpdb->postmeta} pm_date ON s.ID = pm_date.post_id AND pm_date.meta_key = 'date'
+             INNER JOIN {$wpdb->postmeta} pm_date ON s.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_date'
              {$tagJoin}
              WHERE {$whereClause}",
-            ...$countParams
+            ...$countParams,
         ));
 
         // Get sessions ordered by date
@@ -810,14 +1011,14 @@ final class AdminAPIController
                     e.ID as edition_id, e.post_title as edition_title,
                     pm_date.meta_value as session_date
              FROM {$wpdb->posts} s
-             INNER JOIN {$wpdb->postmeta} pm_edition ON s.ID = pm_edition.post_id AND pm_edition.meta_key = 'edition_id'
+             INNER JOIN {$wpdb->postmeta} pm_edition ON s.ID = pm_edition.post_id AND pm_edition.meta_key = '_ntdst_edition_id'
              INNER JOIN {$wpdb->posts} e ON pm_edition.meta_value = e.ID
-             INNER JOIN {$wpdb->postmeta} pm_date ON s.ID = pm_date.post_id AND pm_date.meta_key = 'date'
+             INNER JOIN {$wpdb->postmeta} pm_date ON s.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_date'
              {$tagJoin}
              WHERE {$whereClause}
              ORDER BY pm_date.meta_value ASC, pm_edition.meta_value ASC
              LIMIT %d OFFSET %d",
-            ...$params
+            ...$params,
         ));
 
         // Format items
@@ -829,12 +1030,12 @@ final class AdminAPIController
 
         // Batch fetch session meta
         $sessionMeta = BatchQueryHelper::batchGetPostMeta($sessionIds, [
-            'start_time', 'end_time', 'location',
+            '_ntdst_start_time', '_ntdst_end_time', '_ntdst_location',
         ]);
 
         // Batch fetch edition meta
         $editionMeta = BatchQueryHelper::batchGetPostMeta($editionIds, [
-            'venue', 'capacity', 'status', 'course_id',
+            '_ntdst_venue', '_ntdst_capacity', '_ntdst_status', '_ntdst_course_id',
         ]);
 
         // Batch fetch registration counts
@@ -843,7 +1044,7 @@ final class AdminAPIController
             : [];
 
         // Batch fetch course data
-        $courseIds = array_filter(array_map(fn($id) => (int) ($editionMeta[$id]['course_id'] ?? 0), $editionIds));
+        $courseIds = array_filter(array_map(fn($id) => (int) ($editionMeta[$id]['_ntdst_course_id'] ?? 0), $editionIds));
         $courses = BatchQueryHelper::batchGetPosts($courseIds, 'sfwd-courses');
 
         foreach ($sessions as $session) {
@@ -853,16 +1054,16 @@ final class AdminAPIController
 
             // Get session meta from batch
             $sMeta = $sessionMeta[$sessionId] ?? [];
-            $startTime = $sMeta['start_time'] ?? '';
-            $endTime = $sMeta['end_time'] ?? '';
-            $location = $sMeta['location'] ?? '';
+            $startTime = $sMeta['_ntdst_start_time'] ?? '';
+            $endTime = $sMeta['_ntdst_end_time'] ?? '';
+            $location = $sMeta['_ntdst_location'] ?? '';
 
             // Get edition meta from batch
             $eMeta = $editionMeta[$editionId] ?? [];
-            $venue = $eMeta['venue'] ?? '';
-            $capacity = (int) ($eMeta['capacity'] ?? 0);
-            $editionStatus = $eMeta['status'] ?? '';
-            $courseId = (int) ($eMeta['course_id'] ?? 0);
+            $venue = $eMeta['_ntdst_venue'] ?? '';
+            $capacity = (int) ($eMeta['_ntdst_capacity'] ?? 0);
+            $editionStatus = $eMeta['_ntdst_status'] ?? '';
+            $courseId = (int) ($eMeta['_ntdst_course_id'] ?? 0);
 
             // Get course title from batch
             $courseTitle = '';
@@ -915,29 +1116,94 @@ final class AdminAPIController
     /**
      * GET /admin/course-tags
      *
-     * Get all course tags for filter dropdown.
+     * Get the three taxonomies used by the editions filter:
+     *   - theme   (stride_theme, curated content area)
+     *   - format  (stride_format, delivery format)
+     *   - tag     (ld_course_tag, free-form admin tags)
+     *
+     * Each is an array of {id, name, count}, with `hide_empty => false` so admins
+     * can browse the full vocabulary even when nothing is tagged yet.
      */
     public function getCourseTags(WP_REST_Request $request): WP_REST_Response
     {
-        $tags = get_terms([
-            'taxonomy' => 'ld_course_tag',
+        return new WP_REST_Response([
+            'theme'  => $this->fetchTaxonomyTerms('stride_theme'),
+            'format' => $this->fetchTaxonomyTerms('stride_format'),
+            'tag'    => $this->fetchTaxonomyTerms('ld_course_tag'),
+        ]);
+    }
+
+    /**
+     * Fetch terms for a taxonomy as a simple list of {id, name, count}.
+     */
+    private function fetchTaxonomyTerms(string $taxonomy): array
+    {
+        $terms = get_terms([
+            'taxonomy' => $taxonomy,
             'hide_empty' => false,
             'orderby' => 'name',
             'order' => 'ASC',
         ]);
 
-        $items = [];
-        if (!is_wp_error($tags)) {
-            foreach ($tags as $tag) {
-                $items[] = [
-                    'id' => $tag->term_id,
-                    'name' => $tag->name,
-                    'count' => $tag->count,
-                ];
-            }
+        if (is_wp_error($terms)) {
+            return [];
         }
 
-        return new WP_REST_Response($items);
+        return array_map(static fn($t) => [
+            'id' => (int) $t->term_id,
+            'name' => $t->name,
+            'count' => (int) $t->count,
+        ], $terms);
+    }
+
+    /**
+     * Build the JOIN clause filtering editions by linked-course taxonomy terms.
+     *
+     * Adds WHERE conditions + params for each non-zero term id. Returns the JOIN SQL
+     * fragment (empty string if no filters active). Mutates $where and $params in place.
+     *
+     * @param array{theme: int, format: int, tag: int} $termIds
+     * @param array<int, string>                       $where
+     * @param array<int, mixed>                        $params
+     * @param string                                   $editionIdColumn  Column for the edition post ID (e.g. 'p.ID' or 'e.ID')
+     */
+    private function buildCourseTaxonomyJoin(array $termIds, array &$where, array &$params, string $editionIdColumn = 'p.ID'): string
+    {
+        global $wpdb;
+
+        $taxonomies = [
+            'theme'  => 'stride_theme',
+            'format' => 'stride_format',
+            'tag'    => 'ld_course_tag',
+        ];
+
+        $activeFilters = array_filter($termIds, static fn($id) => $id > 0);
+        if (empty($activeFilters)) {
+            return '';
+        }
+
+        // Always join postmeta → course id once
+        $joins = ["INNER JOIN {$wpdb->postmeta} pm_course ON {$editionIdColumn} = pm_course.post_id AND pm_course.meta_key = '_ntdst_course_id'"];
+
+        // Add one term_relationships + term_taxonomy join alias per active filter,
+        // so they can be AND-combined. Taxonomy names are hardcoded (internal
+        // constants, never user input) to avoid placeholder ordering issues
+        // between JOIN and WHERE — only the integer term_id is parameterized.
+        //
+        // CAST the postmeta varchar to UNSIGNED to match term_relationships.object_id
+        // (bigint). Without the explicit cast MySQL coerces the bigint to varchar,
+        // killing the object_id index on a large term_relationships table.
+        foreach ($activeFilters as $kind => $termId) {
+            $aliasTr = "tr_{$kind}";
+            $aliasTt = "tt_{$kind}";
+            $taxonomy = esc_sql($taxonomies[$kind]);
+            $joins[] = "INNER JOIN {$wpdb->term_relationships} {$aliasTr} ON CAST(pm_course.meta_value AS UNSIGNED) = {$aliasTr}.object_id";
+            $joins[] = "INNER JOIN {$wpdb->term_taxonomy} {$aliasTt} ON {$aliasTr}.term_taxonomy_id = {$aliasTt}.term_taxonomy_id AND {$aliasTt}.taxonomy = '{$taxonomy}'";
+            $where[] = "{$aliasTt}.term_id = %d";
+            $params[] = (int) $termId;
+        }
+
+        return implode(' ', $joins);
     }
 
     /**
@@ -966,7 +1232,7 @@ final class AdminAPIController
         $courseId = (int) $this->editionRepository->getField($editionId, 'course_id', 0);
         $price = (int) $this->editionRepository->getField($editionId, 'price', 0);
         $priceNonMember = (int) $this->editionRepository->getField($editionId, 'price_non_member', 0);
-        $speakers = $this->editionRepository->getField($editionId, 'speakers', '');
+        $speakers = $this->editionRepository->getSpeakersLabel($editionId);
 
         // Get course title
         $courseTitle = '';
@@ -983,7 +1249,7 @@ final class AdminAPIController
         if (RegistrationTable::exists()) {
             $registeredCount = (int) $wpdb->get_var($wpdb->prepare(
                 "SELECT COUNT(*) FROM {$registrationTable} WHERE edition_id = %d AND status = 'confirmed'",
-                $editionId
+                $editionId,
             ));
         }
 
@@ -1051,25 +1317,25 @@ final class AdminAPIController
         // Get sessions for this edition
         $sessions = $wpdb->get_results($wpdb->prepare(
             "SELECT p.ID FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = 'edition_id'
+             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_ntdst_edition_id'
              WHERE p.post_type = %s AND p.post_status = 'publish' AND pm.meta_value = %d
              ORDER BY p.ID ASC",
             SessionCPT::POST_TYPE,
-            $editionId
+            $editionId,
         ));
 
         $sessionIds = array_map(fn($s) => (int) $s->ID, $sessions);
 
         // Batch fetch session meta
-        $sessionMeta = BatchQueryHelper::batchGetPostMeta($sessionIds, ['date', 'start_time']);
+        $sessionMeta = BatchQueryHelper::batchGetPostMeta($sessionIds, ['_ntdst_date', '_ntdst_start_time']);
 
         $sessionItems = [];
         foreach ($sessionIds as $sessionId) {
             $meta = $sessionMeta[$sessionId] ?? [];
             $sessionItems[] = [
                 'id' => $sessionId,
-                'date' => $meta['date'] ?: null,
-                'startTime' => $meta['start_time'] ?: null,
+                'date' => $meta['_ntdst_date'] ?: null,
+                'startTime' => $meta['_ntdst_start_time'] ?: null,
             ];
         }
 
@@ -1077,7 +1343,7 @@ final class AdminAPIController
         $registrationTable = RegistrationTable::getTableName();
         $registrations = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$registrationTable} WHERE edition_id = %d ORDER BY registered_at ASC",
-            $editionId
+            $editionId,
         ));
 
         // Collect user IDs for batch fetch
@@ -1089,29 +1355,50 @@ final class AdminAPIController
         // Get attendance records if table exists (already optimized with batch)
         $attendanceByUser = BatchQueryHelper::batchGetAttendance($editionId);
 
-        // Format registrations with pre-fetched data
+        // Format registrations with pre-fetched data.
+        // Anonymous interest/waitlist rows have no user record — fall back to
+        // the name/email captured in enrollment_data so admin can see them.
         $items = [];
         foreach ($registrations as $reg) {
             $userId = (int) $reg->user_id;
-            $user = $users[$userId] ?? null;
+            $user = $userId ? ($users[$userId] ?? null) : null;
 
-            if (!$user) {
-                continue;
+            $name = $user ? $user->display_name : '';
+            $email = $user ? $user->user_email : '';
+            $isAnon = !$user;
+
+            if ($isAnon) {
+                $stageData = [];
+                $raw = $reg->enrollment_data ?? '';
+                if (is_string($raw) && $raw !== '') {
+                    $decoded = json_decode($raw, true);
+                    if (is_array($decoded)) {
+                        // status maps to the stage key (interest/waitlist).
+                        // Wrapped shape: $decoded[$status]['data'][field].
+                        $stageEnvelope = $decoded[$reg->status] ?? [];
+                        $stageData = is_array($stageEnvelope['data'] ?? null) ? $stageEnvelope['data'] : [];
+                    }
+                }
+                $name = $stageData['name'] ?? '(anoniem)';
+                $email = $stageData['email'] ?? '';
             }
 
-            // Build attendance map for this user
+            // Build attendance map for this user (anon rows have empty attendance)
             $attendance = [];
-            foreach ($sessionIds as $sessionId) {
-                $attendance[$sessionId] = $attendanceByUser[$userId][$sessionId] ?? null;
+            if ($userId) {
+                foreach ($sessionIds as $sessionId) {
+                    $attendance[$sessionId] = $attendanceByUser[$userId][$sessionId] ?? null;
+                }
             }
 
             $items[] = [
                 'id' => (int) $reg->id,
                 'user' => [
                     'id' => $userId,
-                    'name' => $user->display_name,
-                    'email' => $user->user_email,
+                    'name' => $name,
+                    'email' => $email,
                 ],
+                'anonymous' => $isAnon,
                 'status' => $reg->status,
                 'enrollmentPath' => $reg->enrollment_path,
                 'registeredAt' => $reg->registered_at,
@@ -1175,9 +1462,13 @@ final class AdminAPIController
             return new WP_Error('invalid_status', 'Invalid attendance status', ['status' => 400]);
         }
 
-        // Record attendance
-        $currentUserId = get_current_user_id();
-        $result = $this->attendance->record($sessionId, $userId, $status, null, $currentUserId);
+        // Record attendance via service (fires events for audit + auto-complete)
+        $attendanceService = ntdst_get(\Stride\Modules\Attendance\AttendanceService::class);
+        $result = match ($status) {
+            AttendanceStatus::Present => $attendanceService->markPresent($sessionId, $userId),
+            AttendanceStatus::Absent => $attendanceService->markAbsent($sessionId, $userId),
+            AttendanceStatus::Excused => $attendanceService->markExcused($sessionId, $userId),
+        };
 
         if (is_wp_error($result)) {
             return $result;
@@ -1201,8 +1492,8 @@ final class AdminAPIController
     {
         global $wpdb;
 
-        $page = $request->get_param('page');
-        $perPage = $request->get_param('per_page');
+        $page = max(1, (int) ($request->get_param('page') ?: 1));
+        $perPage = max(1, (int) ($request->get_param('per_page') ?: 20));
         $search = sanitize_text_field($request->get_param('search') ?? '');
         $status = sanitize_text_field($request->get_param('status') ?? '');
         $editionId = (int) $request->get_param('edition_id');
@@ -1212,29 +1503,51 @@ final class AdminAPIController
         $where = ["p.post_type = %s", "p.post_status = 'publish'"];
         $params = [QuoteCPT::POST_TYPE];
 
-        // Search by user name or email
+        // Search by user name or email. Resolve to user IDs first so the main
+        // quote query only filters by meta_value IN (...) instead of running a
+        // double LIKE join against wp_users for every candidate quote.
         if (!empty($search)) {
             $searchPattern = '%' . $wpdb->esc_like($search) . '%';
+            $matchedUserIds = $wpdb->get_col($wpdb->prepare(
+                "SELECT ID FROM {$wpdb->users}
+                 WHERE display_name LIKE %s OR user_email LIKE %s
+                 LIMIT 500",
+                $searchPattern,
+                $searchPattern,
+            ));
+
+            if (empty($matchedUserIds)) {
+                // No matching users — short-circuit with an empty result set.
+                return new WP_REST_Response([
+                    'data'     => [],
+                    'total'    => 0,
+                    'page'     => $page,
+                    'per_page' => $perPage,
+                ]);
+            }
+
+            $matchedUserIds = array_map('intval', $matchedUserIds);
+            $idPlaceholders = implode(',', array_fill(0, count($matchedUserIds), '%d'));
             $where[] = "EXISTS (
                 SELECT 1 FROM {$wpdb->postmeta} pm_user
-                INNER JOIN {$wpdb->users} u ON u.ID = pm_user.meta_value
                 WHERE pm_user.post_id = p.ID
-                AND pm_user.meta_key = '_quote_user_id'
-                AND (u.display_name LIKE %s OR u.user_email LIKE %s)
+                AND pm_user.meta_key = 'user_id'
+                AND pm_user.meta_value IN ({$idPlaceholders})
             )";
-            $params[] = $searchPattern;
-            $params[] = $searchPattern;
+            foreach ($matchedUserIds as $uid) {
+                $params[] = $uid;
+            }
         }
 
         // Filter by status
         if (!empty($status)) {
-            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = '_quote_status' AND pm_status.meta_value = %s)";
+            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = 'status' AND pm_status.meta_value = %s)";
             $params[] = $status;
         }
 
         // Filter by edition (item_id when item_type is edition)
         if ($editionId > 0) {
-            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_edition WHERE pm_edition.post_id = p.ID AND pm_edition.meta_key = '_quote_item_id' AND pm_edition.meta_value = %d)";
+            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_edition WHERE pm_edition.post_id = p.ID AND pm_edition.meta_key = 'edition_id' AND pm_edition.meta_value = %d)";
             $params[] = $editionId;
         }
 
@@ -1243,7 +1556,7 @@ final class AdminAPIController
         // Get total count
         $total = (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM {$wpdb->posts} p WHERE {$whereClause}",
-            ...$params
+            ...$params,
         ));
 
         // Get quotes
@@ -1255,7 +1568,7 @@ final class AdminAPIController
              WHERE {$whereClause}
              ORDER BY p.post_date DESC
              LIMIT %d OFFSET %d",
-            ...$params
+            ...$params,
         ));
 
         // Collect quote IDs for batch queries
@@ -1263,17 +1576,17 @@ final class AdminAPIController
 
         // Batch fetch all quote meta
         $quoteMeta = BatchQueryHelper::batchGetPostMeta($quoteIds, [
-            '_quote_number', '_quote_status', '_quote_total', '_quote_subtotal',
-            '_quote_tax', '_quote_user_id', '_quote_item_id', '_quote_sent_at',
-            '_quote_valid_until', '_quote_items', '_quote_billing',
+            'quote_number', 'status', 'total', 'subtotal',
+            'tax', 'user_id', 'edition_id', 'sent_at',
+            'valid_until', 'items', 'billing',
         ]);
 
         // Collect unique user IDs and edition IDs for batch fetch
         $userIds = [];
         $editionIds = [];
         foreach ($quoteIds as $quoteId) {
-            $userId = (int) ($quoteMeta[$quoteId]['_quote_user_id'] ?? 0);
-            $editionId = (int) ($quoteMeta[$quoteId]['_quote_item_id'] ?? 0);
+            $userId = (int) ($quoteMeta[$quoteId]['user_id'] ?? 0);
+            $editionId = (int) ($quoteMeta[$quoteId]['edition_id'] ?? 0);
             if ($userId > 0) {
                 $userIds[] = $userId;
             }
@@ -1292,17 +1605,17 @@ final class AdminAPIController
             $quoteId = (int) $quote->ID;
             $meta = $quoteMeta[$quoteId] ?? [];
 
-            $quoteNumber = $meta['_quote_number'] ?? '';
-            $quoteStatus = $meta['_quote_status'] ?? 'draft';
-            $quoteTotal = (float) ($meta['_quote_total'] ?? 0);
-            $quoteSubtotal = (float) ($meta['_quote_subtotal'] ?? 0);
-            $quoteTax = (float) ($meta['_quote_tax'] ?? 0);
-            $userId = (int) ($meta['_quote_user_id'] ?? 0);
-            $editionId = (int) ($meta['_quote_item_id'] ?? 0);
-            $sentAt = $meta['_quote_sent_at'] ?? '';
-            $validUntil = $meta['_quote_valid_until'] ?? '';
-            $quoteItems = $meta['_quote_items'] ?? [];
-            $billing = $meta['_quote_billing'] ?? [];
+            $quoteNumber = $meta['quote_number'] ?? '';
+            $quoteStatus = $meta['status'] ?? 'draft';
+            $quoteTotal = Money::cents((int) ($meta['total'] ?? 0))->amount();
+            $quoteSubtotal = Money::cents((int) ($meta['subtotal'] ?? 0))->amount();
+            $quoteTax = Money::cents((int) ($meta['tax'] ?? 0))->amount();
+            $userId = (int) ($meta['user_id'] ?? 0);
+            $editionId = (int) ($meta['edition_id'] ?? 0);
+            $sentAt = $meta['sent_at'] ?? '';
+            $validUntil = $meta['valid_until'] ?? '';
+            $quoteItems = $meta['items'] ?? [];
+            $billing = $meta['billing'] ?? [];
 
             // Get user info from batch
             $userName = '';
@@ -1345,7 +1658,9 @@ final class AdminAPIController
                     'id' => $editionId,
                     'title' => $editionTitle,
                 ],
-                'lineItems' => is_array($quoteItems) ? $quoteItems : (json_decode($quoteItems, true) ?: []),
+                'lineItems' => $this->lineItemsToEuros(
+                    is_array($quoteItems) ? $quoteItems : (json_decode($quoteItems, true) ?: []),
+                ),
                 'billing' => is_array($billing) ? $billing : (json_decode($billing, true) ?: []),
                 'editUrl' => admin_url("post.php?post={$quoteId}&action=edit"),
             ];
@@ -1370,8 +1685,8 @@ final class AdminAPIController
     {
         global $wpdb;
 
-        $page = $request->get_param('page');
-        $perPage = $request->get_param('per_page');
+        $page = max(1, (int) ($request->get_param('page') ?: 1));
+        $perPage = max(1, (int) ($request->get_param('per_page') ?: 20));
         $search = sanitize_text_field($request->get_param('search') ?? '');
         $status = sanitize_text_field($request->get_param('status') ?? '');
         $offset = ($page - 1) * $perPage;
@@ -1386,7 +1701,7 @@ final class AdminAPIController
         }
 
         if (!empty($status)) {
-            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = 'status' AND pm_status.meta_value = %s)";
+            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = '_ntdst_status' AND pm_status.meta_value = %s)";
             $params[] = $status;
         }
 
@@ -1395,7 +1710,7 @@ final class AdminAPIController
         // Get total count
         $total = (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM {$wpdb->posts} p WHERE {$whereClause}",
-            ...$params
+            ...$params,
         ));
 
         // Get trajectories
@@ -1407,7 +1722,7 @@ final class AdminAPIController
              WHERE {$whereClause}
              ORDER BY p.post_date DESC
              LIMIT %d OFFSET %d",
-            ...$params
+            ...$params,
         ));
 
         if (empty($trajectories)) {
@@ -1426,25 +1741,19 @@ final class AdminAPIController
 
         // Batch fetch trajectory meta
         $trajectoryMeta = BatchQueryHelper::batchGetPostMeta($trajectoryIds, [
-            'status', 'mode', 'capacity', 'enrollment_deadline', 'choice_deadline',
-            'courses', 'price', 'price_non_member', 'choice_available_date',
+            '_ntdst_status', '_ntdst_mode', '_ntdst_capacity', '_ntdst_enrollment_deadline', '_ntdst_choice_deadline',
+            '_ntdst_courses', '_ntdst_price', '_ntdst_price_non_member', '_ntdst_choice_available_date',
         ]);
 
-        // Check if enrollment table exists (once)
-        $enrollmentTable = $wpdb->prefix . 'vad_trajectory_enrollments';
-        $enrollmentTableExists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $enrollmentTable)) === $enrollmentTable;
-
-        // Collect all edition IDs from courses meta and all enrollments
+        // Collect all edition IDs from trajectory courses meta
         $allEditionIds = [];
-        $allEnrollments = []; // trajectoryId => enrollments
-        $enrollmentCounts = []; // trajectoryId => count
 
         foreach ($trajectories as $trajectory) {
             $trajectoryId = (int) $trajectory->ID;
             $meta = $trajectoryMeta[$trajectoryId] ?? [];
 
             // Parse courses to collect edition IDs
-            $courses = $meta['courses'] ?? null;
+            $courses = $meta['_ntdst_courses'] ?? null;
             $courseList = [];
             if (is_array($courses)) {
                 $courseList = $courses;
@@ -1463,44 +1772,18 @@ final class AdminAPIController
             }
         }
 
-        // Batch fetch enrollments for all trajectories
+        // Batch fetch trajectory enrollments via canonical RegistrationRepository
+        // (stride_vad_registrations is the unified source; the legacy
+        // stride_vad_trajectory_enrollments table is no longer written to.)
+        $registrationRepo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+        $enrollmentCounts = $registrationRepo->countByTrajectoryIds($trajectoryIds);
+        $allEnrollments = $registrationRepo->findByTrajectoryIds($trajectoryIds, 50);
+
         $allEnrollmentUserIds = [];
-        if ($enrollmentTableExists && !empty($trajectoryIds)) {
-            $placeholders = implode(',', array_fill(0, count($trajectoryIds), '%d'));
-
-            // Get enrollment counts
-            $countResults = $wpdb->get_results($wpdb->prepare(
-                "SELECT trajectory_id, COUNT(*) as count FROM {$enrollmentTable}
-                 WHERE trajectory_id IN ({$placeholders})
-                 GROUP BY trajectory_id",
-                ...$trajectoryIds
-            ));
-            foreach ($countResults as $row) {
-                $enrollmentCounts[(int) $row->trajectory_id] = (int) $row->count;
+        foreach ($allEnrollments as $rows) {
+            foreach ($rows as $row) {
+                $allEnrollmentUserIds[] = (int) $row->user_id;
             }
-
-            // Get enrollment details (limited to 50 per trajectory)
-            // Use a single query with ROW_NUMBER or just fetch all and limit in PHP
-            $enrollmentResults = $wpdb->get_results($wpdb->prepare(
-                "SELECT trajectory_id, user_id, status, enrolled_at FROM {$enrollmentTable}
-                 WHERE trajectory_id IN ({$placeholders})
-                 ORDER BY trajectory_id, enrolled_at DESC",
-                ...$trajectoryIds
-            ));
-
-            // Group by trajectory and limit to 50 per trajectory
-            $enrollmentsByTrajectory = [];
-            foreach ($enrollmentResults as $row) {
-                $trajectoryId = (int) $row->trajectory_id;
-                if (!isset($enrollmentsByTrajectory[$trajectoryId])) {
-                    $enrollmentsByTrajectory[$trajectoryId] = [];
-                }
-                if (count($enrollmentsByTrajectory[$trajectoryId]) < 50) {
-                    $enrollmentsByTrajectory[$trajectoryId][] = $row;
-                    $allEnrollmentUserIds[] = (int) $row->user_id;
-                }
-            }
-            $allEnrollments = $enrollmentsByTrajectory;
         }
 
         // Batch fetch editions for courses
@@ -1517,17 +1800,17 @@ final class AdminAPIController
             $meta = $trajectoryMeta[$trajectoryId] ?? [];
 
             // Get meta values from batch
-            $trajectoryStatus = $meta['status'] ?? '';
-            $mode = $meta['mode'] ?? '';
-            $capacity = (int) ($meta['capacity'] ?? 0);
-            $enrollmentDeadline = $meta['enrollment_deadline'] ?? '';
-            $choiceDeadline = $meta['choice_deadline'] ?? '';
-            $price = (int) ($meta['price'] ?? 0);
-            $priceNonMember = (float) ($meta['price_non_member'] ?? 0);
-            $choiceAvailableDate = $meta['choice_available_date'] ?? '';
+            $trajectoryStatus = $meta['_ntdst_status'] ?? '';
+            $mode = $meta['_ntdst_mode'] ?? '';
+            $capacity = (int) ($meta['_ntdst_capacity'] ?? 0);
+            $enrollmentDeadline = $meta['_ntdst_enrollment_deadline'] ?? '';
+            $choiceDeadline = $meta['_ntdst_choice_deadline'] ?? '';
+            $price = (int) ($meta['_ntdst_price'] ?? 0);
+            $priceNonMember = (float) ($meta['_ntdst_price_non_member'] ?? 0);
+            $choiceAvailableDate = $meta['_ntdst_choice_available_date'] ?? '';
 
             // Parse courses
-            $courses = $meta['courses'] ?? null;
+            $courses = $meta['_ntdst_courses'] ?? null;
             $courseList = [];
             if (is_array($courses)) {
                 $courseList = $courses;
@@ -1571,7 +1854,7 @@ final class AdminAPIController
                         'name' => $user->display_name,
                         'email' => $user->user_email,
                         'status' => $enrollment->status,
-                        'enrolledAt' => $enrollment->enrolled_at,
+                        'enrolledAt' => $enrollment->registered_at,
                     ];
                 }
             }
@@ -1630,61 +1913,204 @@ final class AdminAPIController
     }
 
     /**
-     * GET /admin/pending-approvals
+     * GET /admin/trajectories/{id}
      *
-     * Returns registrations where all user tasks are complete, awaiting admin approval.
+     * Single trajectory detail. Reuses the same logic as the list endpoint
+     * but returns a single item by fetching the list for that ID.
      */
-    public function getPendingApprovals(WP_REST_Request $request): WP_REST_Response
+    public function getTrajectory(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
         global $wpdb;
 
-        $table = RegistrationTable::getTableName();
+        $trajectoryId = (int) $request->get_param('id');
+
+        $post = get_post($trajectoryId);
+        if (!$post || $post->post_type !== TrajectoryCPT::POST_TYPE) {
+            return new WP_Error('not_found', 'Trajectory not found', ['status' => 404]);
+        }
+
+        // Reuse the list endpoint with a filter that returns just this one
+        $listRequest = new WP_REST_Request('GET', '/stride/v1/admin/trajectories');
+        $listRequest->set_param('page', 1);
+        $listRequest->set_param('per_page', 100);
+        $listRequest->set_param('search', '');
+        $listRequest->set_param('status', '');
+
+        $listResponse = $this->getTrajectories($listRequest);
+        $items = $listResponse->get_data()['items'] ?? [];
+
+        foreach ($items as $item) {
+            if ($item['id'] === $trajectoryId) {
+                // Remap enrolledUsers to registrations for slide-over template
+                $regStatusLabels = [
+                    'active' => 'Actief', 'completed' => 'Afgerond',
+                    'cancelled' => 'Geannuleerd', 'pending' => 'In afwachting',
+                ];
+                $registrations = array_map(function (array $u) use ($regStatusLabels) {
+                    return [
+                        'id' => $u['id'],
+                        'name' => $u['name'],
+                        'email' => $u['email'],
+                        'status' => $u['status'],
+                        'status_label' => $regStatusLabels[$u['status']] ?? ucfirst($u['status'] ?? ''),
+                    ];
+                }, $item['enrolledUsers'] ?? []);
+
+                return new WP_REST_Response(array_merge($item, [
+                    'registrations' => $registrations,
+                ]));
+            }
+        }
+
+        return new WP_Error('not_found', 'Trajectory not found', ['status' => 404]);
+    }
+
+    /**
+     * GET /admin/pending-approvals
+     *
+     * Returns "needs admin attention" registrations across three buckets:
+     * - approval        : pending, user tasks complete, waiting for admin
+     * - post_approval   : confirmed, post-course user tasks complete, waiting for sign-off
+     * - stale_user      : pending, user tasks incomplete, idle for ≥ stale_days (default 7)
+     *                     — admin sees who's stuck and decides per case (no auto-cancel)
+     *
+     * Query params:
+     * - stale_days (int, default 7): how many days of inactivity before a user-side
+     *   pending registration is considered "stale".
+     * - page / per_page (int, defaults 1/20): paginate `items` like the other
+     *   list endpoints (total/page/perPage/totalPages in the response).
+     *   `counts` stays GLOBAL — the dashboard tab pills read it.
+     *
+     * Bounded (audit H-8): both queries are column-trimmed, pre-filtered with
+     * JSON predicates on the FIXED task keys (approval / post_approval /
+     * post_evaluation / post_documents) and LIMIT-capped. The arbitrary-key
+     * scans (areUserTasksComplete / getFirstOpenUserTask) stay in PHP —
+     * EnrollmentCompletion owns those semantics, so the SQL filter is shaped
+     * to only ever OVER-fetch (PHP re-checks remain authoritative). The task
+     * status comparisons carry an explicit COLLATE utf8mb4_bin so SQL matches
+     * PHP's strict ===/!== exactly (CR-E1): MariaDB's JSON column type already
+     * pins completion_tasks to utf8mb4_bin (live-probed), but the explicit
+     * collation keeps the over-fetch property even if the column type drifts
+     * to the table's case-insensitive collation.
+     * Bucket counts clip beyond APPROVALS_SCAN_CAP rows per query; the
+     * response carries `clipped` so the consumer can surface the truncation
+     * instead of presenting capped counts as the whole queue (CR-E2).
+     */
+    public function getPendingApprovals(WP_REST_Request $request): WP_REST_Response
+    {
+        $staleDays = max(1, (int) ($request->get_param('stale_days') ?? 7));
+        $page = max(1, (int) ($request->get_param('page') ?: 1));
+        $perPage = max(1, (int) ($request->get_param('per_page') ?: 20));
 
         if (!RegistrationTable::exists()) {
-            return new WP_REST_Response(['items' => []]);
+            return new WP_REST_Response([
+                'items' => [],
+                'counts' => ['approval' => 0, 'post_approval' => 0, 'stale_user' => 0],
+                'clipped' => false,
+                'stale_threshold_days' => $staleDays,
+                'total' => 0,
+                'page' => $page,
+                'perPage' => $perPage,
+                'totalPages' => 0,
+            ]);
         }
 
-        $rows = $wpdb->get_results(
-            "SELECT * FROM {$table}
-             WHERE status = 'pending'
-               AND completion_tasks IS NOT NULL
-             ORDER BY registered_at DESC"
-        );
+        $staleThreshold = gmdate('Y-m-d H:i:s', time() - ($staleDays * DAY_IN_SECONDS));
+
+        // INV-3: the registrations table is repository-owned — both scan
+        // queries (exact SQL incl. COLLATE pin + scan cap) live in
+        // RegistrationRepository; the controller keeps bucketing/pagination.
+        $registrationRepo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+
+        // Enrollment phase: pending registrations that can still yield an item —
+        // an open admin-approval task (bucket 1) or stale-aged (bucket 3 candidate).
+        $pendingRows = $registrationRepo->findPendingWithOpenApproval($staleThreshold, self::APPROVALS_SCAN_CAP);
+
+        // Post-course phase: confirmed registrations with an open post_approval
+        // task whose post-course user tasks (fixed keys) are absent-or-completed.
+        $confirmedRows = $registrationRepo->findConfirmedWithOpenPostApproval(self::APPROVALS_SCAN_CAP);
 
         $completionService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
-        $items = [];
+        /** @var list<array{0: object, 1: array, 2: string, 3: array}> $matches */
+        $matches = [];
+        $counts = ['approval' => 0, 'post_approval' => 0, 'stale_user' => 0];
 
-        foreach ($rows as $row) {
-            $tasks = json_decode($row->completion_tasks ?? '{}', true) ?: [];
+        foreach ($pendingRows as $row) {
+            $tasks = is_array($row->completion_tasks) ? $row->completion_tasks : [];
+            $userTasksDone = $completionService->areUserTasksComplete($tasks);
 
-            // Only include registrations where user tasks are done AND approval is pending
-            if (!isset($tasks['approval']) || $tasks['approval']['status'] === 'completed') {
+            // Bucket 1: user is done, waiting on admin approval
+            if (
+                $userTasksDone
+                && isset($tasks['approval'])
+                && ($tasks['approval']['status'] ?? 'pending') !== 'completed'
+            ) {
+                $matches[] = [$row, $tasks, 'approval', []];
+                $counts['approval']++;
                 continue;
             }
 
-            if (!$completionService->areUserTasksComplete($tasks)) {
-                continue;
+            // Bucket 3: user-side stale pending — user hasn't finished tasks and the
+            // registration is older than the threshold. Capacity is held until admin
+            // contacts the user or cancels.
+            if (!$userTasksDone && $row->registered_at && $row->registered_at <= $staleThreshold) {
+                $openTask = $completionService->getFirstOpenUserTask($tasks);
+                $matches[] = [$row, $tasks, 'stale_user', [
+                    'open_task' => $openTask,
+                    'open_task_label' => $openTask
+                        ? \Stride\Modules\Enrollment\EnrollmentCompletion::taskTypeLabel($openTask)
+                        : null,
+                    'days_idle' => (int) floor((time() - strtotime($row->registered_at)) / DAY_IN_SECONDS),
+                ]];
+                $counts['stale_user']++;
             }
-
-            // Build response item
-            $userId = (int) $row->user_id;
-            $user = get_userdata($userId);
-            $editionId = (int) ($row->edition_id ?? 0);
-            $edition = $editionId ? get_post($editionId) : null;
-
-            $items[] = [
-                'id' => (int) $row->id,
-                'user_id' => $userId,
-                'user_name' => $user ? $user->display_name : __('Onbekend', 'stride'),
-                'user_email' => $user ? $user->user_email : '',
-                'edition_id' => $editionId,
-                'edition_title' => $edition ? $edition->post_title : __('Onbekend', 'stride'),
-                'registered_at' => $row->registered_at,
-                'tasks' => $tasks,
-            ];
         }
 
-        return new WP_REST_Response(['items' => $items]);
+        // Bucket 2: post-course approval. SQL already filtered on the fixed
+        // keys; the PHP re-check stays authoritative (the filter may over-fetch).
+        foreach ($confirmedRows as $row) {
+            $tasks = is_array($row->completion_tasks) ? $row->completion_tasks : [];
+
+            if (!isset($tasks['post_approval']) || $tasks['post_approval']['status'] === 'completed') {
+                continue;
+            }
+            $postUserDone = true;
+            foreach (['post_evaluation', 'post_documents'] as $pt) {
+                if (isset($tasks[$pt]) && ($tasks[$pt]['status'] ?? 'pending') !== 'completed') {
+                    $postUserDone = false;
+                    break;
+                }
+            }
+            if (!$postUserDone) {
+                continue;
+            }
+
+            $matches[] = [$row, $tasks, 'post_approval', []];
+            $counts['post_approval']++;
+        }
+
+        // Hydrate (get_userdata/get_post) only the requested page.
+        $total = count($matches);
+        $items = array_map(
+            fn(array $match): array => $this->buildApprovalItem(...$match),
+            array_slice($matches, ($page - 1) * $perPage, $perPage),
+        );
+
+        // CR-E2: a scan query that fills the cap may have left qualifying
+        // rows unscanned — counts/items are then lower bounds, not the queue.
+        $clipped = count($pendingRows) >= self::APPROVALS_SCAN_CAP
+            || count($confirmedRows) >= self::APPROVALS_SCAN_CAP;
+
+        return new WP_REST_Response([
+            'items' => $items,
+            'counts' => $counts,
+            'clipped' => $clipped,
+            'stale_threshold_days' => $staleDays,
+            'total' => $total,
+            'page' => $page,
+            'perPage' => $perPage,
+            'totalPages' => (int) ceil($total / $perPage),
+        ]);
     }
 
     /**
@@ -1721,5 +2147,1481 @@ final class AdminAPIController
             'approved' => true,
             'registration_id' => $registrationId,
         ]);
+    }
+
+    /**
+     * POST /admin/approve-post-course
+     *
+     * Marks post_approval task as complete (triggers LD completion + status change).
+     */
+    public function approvePostCourse(WP_REST_Request $request): WP_REST_Response|WP_Error
+    {
+        $registrationId = $request->get_param('registration_id');
+
+        if (!$registrationId) {
+            return new WP_Error('missing_param', __('registration_id is verplicht.', 'stride'), ['status' => 400]);
+        }
+
+        $completionService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
+        $result = $completionService->completeTask($registrationId, 'post_approval');
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return new WP_REST_Response([
+            'approved' => true,
+            'registration_id' => $registrationId,
+        ]);
+    }
+
+    // =========================================================================
+    // ACTION QUEUE, HEALTH CHECKS, ACTIVITY FEED
+    // =========================================================================
+
+    /**
+     * GET /admin/action-queue
+     *
+     * Evaluate notification rules against live data, cached for 5 minutes.
+     */
+    public function getActionQueue(WP_REST_Request $request): WP_REST_Response
+    {
+        global $wpdb;
+
+        $rules = StrideSettingsService::getNotificationRules();
+
+        // Check transient cache
+        $cached = get_transient('stride_action_queue');
+        if ($cached !== false) {
+            $items = $cached;
+        } else {
+            $today = current_time('Y-m-d');
+            $registrationTable = RegistrationTable::getTableName();
+            $registrationTableExists = RegistrationTable::exists();
+
+            $data = [];
+
+            // Editions with capacity (for capacity_threshold rule)
+            if (!empty($rules['capacity_threshold']['enabled'])) {
+                $editions = $wpdb->get_results($wpdb->prepare(
+                    "SELECT p.ID as id, p.post_title as title,
+                            pm_cap.meta_value as capacity,
+                            COALESCE(rc.cnt, 0) as registered
+                     FROM {$wpdb->posts} p
+                     INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_start_date'
+                     LEFT JOIN {$wpdb->postmeta} pm_cap ON p.ID = pm_cap.post_id AND pm_cap.meta_key = '_ntdst_capacity'
+                     LEFT JOIN (
+                         SELECT edition_id, COUNT(*) as cnt FROM {$registrationTable}
+                         WHERE status = 'confirmed' GROUP BY edition_id
+                     ) rc ON rc.edition_id = p.ID
+                     WHERE p.post_type = %s AND p.post_status = 'publish'
+                     AND pm_date.meta_value >= %s
+                     AND pm_cap.meta_value > 0",
+                    EditionCPT::POST_TYPE,
+                    $today,
+                ), ARRAY_A);
+                $data['editions'] = $editions ?: [];
+            }
+
+            // Pending approvals
+            if (!empty($rules['pending_approval']['enabled']) && $registrationTableExists) {
+                $pending = $wpdb->get_results(
+                    "SELECT id FROM {$registrationTable} WHERE status = 'pending'",
+                    ARRAY_A,
+                );
+                $data['pending_approvals'] = $pending ?: [];
+            }
+
+            // Stale quotes
+            if (!empty($rules['stale_quote']['enabled'])) {
+                $staleDays = (int) ($rules['stale_quote']['value'] ?? 7);
+                $cutoff = wp_date('Y-m-d H:i:s', strtotime("-{$staleDays} days"));
+                $staleQuotes = $wpdb->get_results($wpdb->prepare(
+                    "SELECT p.ID as id, pm_num.meta_value as number
+                     FROM {$wpdb->posts} p
+                     INNER JOIN {$wpdb->postmeta} pm_st ON p.ID = pm_st.post_id AND pm_st.meta_key = 'status'
+                     LEFT JOIN {$wpdb->postmeta} pm_num ON p.ID = pm_num.post_id AND pm_num.meta_key = 'quote_number'
+                     WHERE p.post_type = %s AND p.post_status = 'publish'
+                     AND pm_st.meta_value = %s
+                     AND p.post_date < %s",
+                    QuoteCPT::POST_TYPE,
+                    QuoteStatus::Draft->value,
+                    $cutoff,
+                ), ARRAY_A);
+                $data['stale_quotes'] = $staleQuotes ?: [];
+            }
+
+            // Sessions approaching
+            if (!empty($rules['session_approaching']['enabled'])) {
+                $approachDays = (int) ($rules['session_approaching']['value'] ?? 1);
+                $approachDate = wp_date('Y-m-d', strtotime("+{$approachDays} days"));
+                $approachingSessions = $wpdb->get_results($wpdb->prepare(
+                    "SELECT s.ID as id, s.post_title,
+                            pm_date.meta_value as date,
+                            pm_eid.meta_value as edition_id,
+                            e.post_title as edition_title
+                     FROM {$wpdb->posts} s
+                     INNER JOIN {$wpdb->postmeta} pm_date ON s.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_date'
+                     LEFT JOIN {$wpdb->postmeta} pm_eid ON s.ID = pm_eid.post_id AND pm_eid.meta_key = '_ntdst_edition_id'
+                     LEFT JOIN {$wpdb->posts} e ON e.ID = pm_eid.meta_value
+                     WHERE s.post_type = %s AND s.post_status = 'publish'
+                     AND pm_date.meta_value >= %s AND pm_date.meta_value <= %s",
+                    SessionCPT::POST_TYPE,
+                    $today,
+                    $approachDate,
+                ), ARRAY_A);
+                $data['approaching_sessions'] = $approachingSessions ?: [];
+            }
+
+            // Editions starting soon
+            if (!empty($rules['edition_starting']['enabled'])) {
+                $startDays = (int) ($rules['edition_starting']['value'] ?? 3);
+                $startDate = wp_date('Y-m-d', strtotime("+{$startDays} days"));
+                $startingSoon = $wpdb->get_results($wpdb->prepare(
+                    "SELECT p.ID as id, p.post_title as title,
+                            pm_date.meta_value as start_date
+                     FROM {$wpdb->posts} p
+                     INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_start_date'
+                     WHERE p.post_type = %s AND p.post_status = 'publish'
+                     AND pm_date.meta_value >= %s AND pm_date.meta_value <= %s",
+                    EditionCPT::POST_TYPE,
+                    $today,
+                    $startDate,
+                ), ARRAY_A);
+                $data['starting_soon'] = $startingSoon ?: [];
+            }
+
+            // Incomplete tasks (editions where last session passed, registrations with incomplete tasks)
+            if (!empty($rules['incomplete_tasks']['enabled']) && $registrationTableExists) {
+                $taskDays = (int) ($rules['incomplete_tasks']['value'] ?? 7);
+                $taskCutoff = wp_date('Y-m-d', strtotime("-{$taskDays} days"));
+                $incompleteTasks = $wpdb->get_results($wpdb->prepare(
+                    "SELECT r.id
+                     FROM {$registrationTable} r
+                     WHERE r.status = 'confirmed'
+                     AND r.completion_tasks IS NOT NULL
+                     AND r.completion_tasks LIKE %s
+                     AND r.registered_at < %s",
+                    '%"completed":false%',
+                    $taskCutoff,
+                ), ARRAY_A);
+                $data['incomplete_tasks'] = $incompleteTasks ?: [];
+            }
+
+            $service = new ActionQueueService();
+            $items = $service->evaluate($rules, $data);
+
+            set_transient('stride_action_queue', $items, 5 * MINUTE_IN_SECONDS);
+        }
+
+        // Filter out dismissed items
+        $userId = get_current_user_id();
+        $dismissed = get_user_meta($userId, 'stride_dismissed_actions', true);
+        $dismissed = is_array($dismissed) ? $dismissed : [];
+
+        // Prune dismissals older than 30 days
+        $thirtyDaysAgo = strtotime('-30 days');
+        $dismissed = array_filter($dismissed, static function (array $entry) use ($thirtyDaysAgo): bool {
+            return strtotime($entry['date'] ?? '1970-01-01') > $thirtyDaysAgo;
+        });
+        update_user_meta($userId, 'stride_dismissed_actions', $dismissed);
+
+        // Build a lookup set for fast filtering
+        $dismissedKeys = [];
+        foreach ($dismissed as $entry) {
+            $dismissedKeys[$entry['rule'] . ':' . ($entry['subject_id'] ?? 0)] = true;
+        }
+
+        $filtered = array_values(array_filter($items, static function (array $item) use ($dismissedKeys): bool {
+            $key = $item['rule'] . ':' . ($item['subject_id'] ?? 0);
+            return !isset($dismissedKeys[$key]);
+        }));
+
+        return new WP_REST_Response($filtered);
+    }
+
+    /**
+     * POST /admin/action-queue/dismiss
+     *
+     * Dismiss an action queue item for the current user.
+     */
+    public function dismissActionItem(WP_REST_Request $request): WP_REST_Response
+    {
+        $rule = sanitize_text_field($request->get_param('rule'));
+        $subjectId = (int) $request->get_param('subject_id');
+        $userId = get_current_user_id();
+
+        $dismissed = get_user_meta($userId, 'stride_dismissed_actions', true);
+        $dismissed = is_array($dismissed) ? $dismissed : [];
+
+        $dismissed[] = [
+            'rule' => $rule,
+            'subject_id' => $subjectId,
+            'date' => current_time('Y-m-d'),
+        ];
+
+        update_user_meta($userId, 'stride_dismissed_actions', $dismissed);
+
+        return new WP_REST_Response(['dismissed' => true]);
+    }
+
+    /**
+     * GET /admin/health-checks
+     *
+     * System health indicators for the dashboard.
+     */
+    public function getHealthChecks(WP_REST_Request $request): WP_REST_Response
+    {
+        global $wpdb;
+
+        $registrationTable = RegistrationTable::getTableName();
+        $registrationTableExists = RegistrationTable::exists();
+        $today = current_time('Y-m-d');
+
+        // Last registration timestamp
+        $lastRegistration = 0;
+        if ($registrationTableExists) {
+            $lastRegDate = $wpdb->get_var(
+                "SELECT MAX(registered_at) FROM {$registrationTable}",
+            );
+            if ($lastRegDate) {
+                $lastRegistration = (int) strtotime($lastRegDate);
+            }
+        }
+
+        // Last mail send timestamp — check audit log for quote.sent action
+        $lastMailSend = 0;
+        if (AuditTable::exists()) {
+            $auditTable = AuditTable::getTableName();
+            $lastMailDate = $wpdb->get_var($wpdb->prepare(
+                "SELECT MAX(created_at) FROM {$auditTable} WHERE action = %s",
+                'quote.sent',
+            ));
+            if ($lastMailDate) {
+                $lastMailSend = (int) strtotime($lastMailDate);
+            }
+        }
+
+        // Any open editions with future start date?
+        $hasOpenEditions = (bool) $wpdb->get_var($wpdb->prepare(
+            "SELECT 1 FROM {$wpdb->posts} p
+             INNER JOIN {$wpdb->postmeta} pm_status ON p.ID = pm_status.post_id AND pm_status.meta_key = '_ntdst_status'
+             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_start_date'
+             WHERE p.post_type = %s AND p.post_status = 'publish'
+             AND pm_status.meta_value = 'open'
+             AND pm_date.meta_value >= %s
+             LIMIT 1",
+            EditionCPT::POST_TYPE,
+            $today,
+        ));
+
+        $service = new HealthCheckService();
+        $checks = $service->evaluate(
+            $lastRegistration,
+            $lastMailSend,
+            $hasOpenEditions,
+            // AF-2 residual: PII-reveal audit trail inactive = red flag.
+            class_exists(\NTDST\Audit\AuditService::class),
+        );
+
+        return new WP_REST_Response($checks);
+    }
+
+    /**
+     * GET /admin/activity
+     *
+     * Recent activity feed from audit log.
+     */
+    public function getActivityFeed(WP_REST_Request $request): WP_REST_Response
+    {
+        global $wpdb;
+
+        $limit = min((int) $request->get_param('limit'), 50);
+        if ($limit <= 0) {
+            $limit = 10;
+        }
+
+        if (!AuditTable::exists()) {
+            return new WP_REST_Response([]);
+        }
+
+        $auditTable = AuditTable::getTableName();
+        $entries = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$auditTable} ORDER BY created_at DESC LIMIT %d",
+            $limit,
+        ));
+
+        if (empty($entries)) {
+            return new WP_REST_Response([]);
+        }
+
+        // Collect actor IDs AND target user IDs (entity_type=user) for one batch fetch
+        $userIdsToResolve = [];
+        foreach ($entries as $entry) {
+            if (!empty($entry->actor_id)) {
+                $userIdsToResolve[] = (int) $entry->actor_id;
+            }
+            if (($entry->entity_type ?? '') === 'user' && !empty($entry->entity_id)) {
+                $userIdsToResolve[] = (int) $entry->entity_id;
+            }
+        }
+
+        $usersMap = !empty($userIdsToResolve)
+            ? BatchQueryHelper::batchGetUsers(array_unique($userIdsToResolve))
+            : [];
+
+        $entries = $this->enrichAuditContexts($entries);
+
+        $feed = [];
+        foreach ($entries as $entry) {
+            // Skip raw/system events that don't have a user-friendly label
+            if (!AdminActivityMapper::isKnownAction($entry)) {
+                continue;
+            }
+
+            $actorId = (int) ($entry->actor_id ?? 0);
+            $actor = $usersMap[$actorId] ?? null;
+            $actorName = $actor ? $actor->display_name : __('Systeem', 'stride');
+
+            // Resolve target name from entity_id for user.* events
+            $targetName = '';
+            if (($entry->entity_type ?? '') === 'user' && !empty($entry->entity_id)) {
+                $targetUser = $usersMap[(int) $entry->entity_id] ?? null;
+                if ($targetUser) {
+                    $targetName = $targetUser->display_name;
+                }
+            }
+
+            $feed[] = AdminActivityMapper::fromAuditEntry($entry, $actorName, $targetName);
+        }
+
+        return new WP_REST_Response($feed);
+    }
+
+    // =========================================================================
+    // USER SEARCH + DETAIL
+    // =========================================================================
+
+    /**
+     * GET /admin/users/search
+     *
+     * Search users by name, email, or login. Returns max 10 results.
+     */
+    public function searchUsers(WP_REST_Request $request): WP_REST_Response
+    {
+        $query = sanitize_text_field($request->get_param('q'));
+
+        $userQuery = new \WP_User_Query([
+            'search' => "*{$query}*",
+            'search_columns' => ['user_login', 'user_email', 'display_name'],
+            'number' => 10,
+            'orderby' => 'display_name',
+            'fields' => ['ID', 'display_name', 'user_email'],
+        ]);
+
+        $results = $userQuery->get_results();
+        if (empty($results)) {
+            return new WP_REST_Response([]);
+        }
+
+        // Prime user-meta cache once so the per-row get_user_meta() call below
+        // is a cache hit — drops 10 queries on a full result set.
+        $userIds = array_map(static fn($u) => (int) $u->ID, $results);
+        update_meta_cache('user', $userIds);
+
+        // Aggregate registration counts in a single GROUP BY query instead of
+        // one COUNT(*) per row.
+        $counts = $this->batchCountUserRegistrations($userIds);
+
+        $users = array_map(static function ($user) use ($counts) {
+            $userId = (int) $user->ID;
+            return [
+                'id' => $userId,
+                'name' => $user->display_name,
+                'email' => $user->user_email,
+                'organisation' => get_user_meta($userId, 'organisation', true) ?: '',
+                'registration_count' => $counts[$userId] ?? 0,
+            ];
+        }, $results);
+
+        return new WP_REST_Response($users);
+    }
+
+    /**
+     * GET /admin/users/{id}/detail
+     *
+     * Comprehensive user profile: personal info, registrations, quotes,
+     * attendance summary, and audit trail.
+     */
+    public function getUserDetail(WP_REST_Request $request): WP_REST_Response
+    {
+        global $wpdb;
+
+        $userId = (int) $request->get_param('id');
+        $regPage = max(1, (int) $request->get_param('reg_page'));
+        $regPerPage = 20;
+
+        // Sensitive fields (phone, audit trail, full quote listing) are only
+        // returned to stride_manage. stride_view (read-only Supervisor role)
+        // gets the safe subset — without this, a Supervisor can dump the
+        // entire user base via /admin/users/{id}/detail.
+        $canSeeSensitive = current_user_can('stride_manage');
+
+        // --- User data ---
+        $userData = get_userdata($userId);
+        if (!$userData) {
+            return new WP_REST_Response(['error' => 'User not found'], 404);
+        }
+
+        // Profile type
+        $profileType = null;
+        $profileService = ntdst_get(ProfileTypeService::class);
+        if ($profileService) {
+            $type = $profileService->getUserType($userId);
+            if ($type) {
+                $profileType = [
+                    'name' => $type['label'] ?? $type['slug'],
+                    'color' => $type['color'] ?? '',
+                ];
+            }
+        }
+
+        $anonymisedAt = (int) get_user_meta($userId, '_stride_anonymised_at', true);
+        $isAnonymised = $anonymisedAt > 0;
+
+        $anonymiseUrl = null;
+        if (!$isAnonymised && current_user_can('edit_user', $userId) && $userId !== get_current_user_id()) {
+            $anonymiseUrl = wp_nonce_url(
+                admin_url('admin-post.php?action=stride_anonymise_user&user=' . $userId),
+                'stride_anonymise_user_' . $userId,
+            );
+        }
+
+        $sensitivePlaceholder = '••••••';
+
+        $rawNationalId = get_user_meta($userId, 'national_id', true) ?: '';
+        $rawDateOfBirth = get_user_meta($userId, 'date_of_birth', true) ?: '';
+        $rawLicense = get_user_meta($userId, 'professional_license_number', true) ?: '';
+
+        $user = [
+            'id' => $userId,
+            'first_name' => $userData->first_name ?? '',
+            'last_name' => $userData->last_name ?? '',
+            'display_name' => $userData->display_name,
+            'email' => $userData->user_email,
+            'phone' => $canSeeSensitive ? (get_user_meta($userId, 'phone', true) ?: '') : '',
+            'organisation' => get_user_meta($userId, 'organisation', true) ?: '',
+            'department' => get_user_meta($userId, 'department', true) ?: '',
+
+            // Sensitive identity fields — read-only masked for non-managers.
+            // Boolean flag tells the UI whether to show a "reveal" affordance.
+            'national_id' => $canSeeSensitive && $rawNationalId !== '' ? $sensitivePlaceholder : '',
+            'national_id_present' => $rawNationalId !== '',
+            'date_of_birth' => $canSeeSensitive && $rawDateOfBirth !== '' ? $sensitivePlaceholder : '',
+            'date_of_birth_present' => $rawDateOfBirth !== '',
+            'professional_license_number' => $canSeeSensitive && $rawLicense !== '' ? $sensitivePlaceholder : '',
+            'professional_license_number_present' => $rawLicense !== '',
+
+            // Billing
+            'billing_company' => get_user_meta($userId, 'billing_company', true) ?: '',
+            'billing_vat' => get_user_meta($userId, 'billing_vat', true) ?: '',
+            'billing_address_1' => get_user_meta($userId, 'billing_address_1', true) ?: '',
+            'billing_postcode' => get_user_meta($userId, 'billing_postcode', true) ?: '',
+            'billing_city' => get_user_meta($userId, 'billing_city', true) ?: '',
+            'invoice_email' => get_user_meta($userId, 'invoice_email', true) ?: '',
+            'gln_number' => get_user_meta($userId, 'gln_number', true) ?: '',
+
+            'profile_type' => $profileType,
+            'is_anonymised' => $isAnonymised,
+            'anonymised_label' => $isAnonymised
+                ? sprintf(__('Geanonimiseerd op %s', 'stride'), date_i18n('d M Y', $anonymisedAt))
+                : '',
+            'anonymise_url' => $anonymiseUrl,
+        ];
+
+        // --- Registrations (paginated, with edition title) ---
+        $registrations = [];
+        $registrationsTotal = 0;
+        $registrationTable = RegistrationTable::getTableName();
+
+        if (RegistrationTable::exists()) {
+            $registrationsTotal = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$registrationTable} WHERE user_id = %d",
+                $userId,
+            ));
+
+            $regOffset = ($regPage - 1) * $regPerPage;
+            $regRows = $wpdb->get_results($wpdb->prepare(
+                "SELECT r.id, r.edition_id, r.status, r.enrollment_path, r.registered_at,
+                        r.completed_at, r.cancelled_at, p.post_title AS edition_title
+                 FROM {$registrationTable} r
+                 LEFT JOIN {$wpdb->posts} p ON r.edition_id = p.ID
+                 WHERE r.user_id = %d
+                 ORDER BY r.registered_at DESC
+                 LIMIT %d OFFSET %d",
+                $userId,
+                $regPerPage,
+                $regOffset,
+            ));
+
+            // Pre-fetch attendance stats + total session counts for all loaded editions,
+            // so each row carries actionable info without N+1 queries.
+            $editionIds = array_map(static fn($r) => (int) $r->edition_id, $regRows);
+            $editionIds = array_values(array_unique(array_filter($editionIds)));
+
+            $attendanceByEdition = $this->fetchUserAttendanceByEdition($userId, $editionIds);
+            $sessionCountByEdition = $this->fetchSessionCountByEdition($editionIds);
+
+            foreach ($regRows as $row) {
+                $editionId = (int) $row->edition_id;
+                $att = $attendanceByEdition[$editionId] ?? null;
+                $totalSessions = $sessionCountByEdition[$editionId] ?? 0;
+                $attendanceSummary = null;
+
+                if ($totalSessions > 0) {
+                    $present = $att['present'] ?? 0;
+                    $absent = $att['absent'] ?? 0;
+                    $excused = $att['excused'] ?? 0;
+                    $hours = $att['hours'] ?? 0;
+                    $attendanceSummary = [
+                        'present' => $present,
+                        'absent' => $absent,
+                        'excused' => $excused,
+                        'total_sessions' => $totalSessions,
+                        'hours' => $hours,
+                    ];
+                }
+
+                $registrations[] = [
+                    'id' => (int) $row->id,
+                    'edition_id' => $editionId,
+                    'edition_title' => $row->edition_title ?: __('Onbekend', 'stride'),
+                    'status' => $row->status,
+                    'enrollment_path' => $row->enrollment_path,
+                    'registered_at' => $row->registered_at,
+                    'completed_at' => $row->completed_at,
+                    'cancelled_at' => $row->cancelled_at,
+                    'has_sessions' => $totalSessions > 0,
+                    'attendance' => $attendanceSummary,
+                ];
+            }
+        }
+
+        // --- Quotes (linked to user by user_id meta or billing email) ---
+        //
+        // WP_Query meta_query OR forces a double LEFT JOIN with no covering
+        // index, then the per-row get_post_meta() loop adds 5-7 lookups per
+        // quote. Mirror getQuotes() instead: one SELECT with explicit joins,
+        // one BatchQueryHelper::batchGetPostMeta() for everything we need.
+        $quotePosts = $wpdb->get_results($wpdb->prepare(
+            "SELECT DISTINCT p.ID, p.post_title, p.post_date
+             FROM {$wpdb->posts} p
+             LEFT JOIN {$wpdb->postmeta} pm_user
+               ON pm_user.post_id = p.ID AND pm_user.meta_key = 'user_id'
+             LEFT JOIN {$wpdb->postmeta} pm_email
+               ON pm_email.post_id = p.ID AND pm_email.meta_key = 'billing_email'
+             WHERE p.post_type = %s
+               AND p.post_status = 'publish'
+               AND (pm_user.meta_value = %s OR pm_email.meta_value = %s)
+             ORDER BY p.post_date DESC
+             LIMIT 20",
+            QuoteCPT::POST_TYPE,
+            (string) $userId,
+            $userData->user_email,
+        ));
+
+        $quoteIds = array_map(static fn($q) => (int) $q->ID, $quotePosts);
+        $quoteMeta = BatchQueryHelper::batchGetPostMeta($quoteIds, [
+            'quote_number', 'status', 'total', 'edition_id',
+            'sent_at', 'paid_at', 'valid_until',
+        ]);
+
+        $quoteEditionIds = array_values(array_unique(array_filter(array_map(
+            static fn($id) => (int) ($quoteMeta[$id]['edition_id'] ?? 0),
+            $quoteIds,
+        ))));
+        $quoteEditions = BatchQueryHelper::batchGetPosts($quoteEditionIds, EditionCPT::POST_TYPE);
+
+        $quotes = [];
+        foreach ($quotePosts as $quotePost) {
+            $quoteId = (int) $quotePost->ID;
+            $meta = $quoteMeta[$quoteId] ?? [];
+
+            $quoteEditionId = (int) ($meta['edition_id'] ?? 0);
+            $quoteStatus = (string) ($meta['status'] ?? '');
+            $statusEnum = QuoteStatus::tryFrom($quoteStatus);
+
+            $quotes[] = [
+                'id' => $quoteId,
+                'title' => $quotePost->post_title,
+                'number' => (string) ($meta['quote_number'] ?? ''),
+                'edition_id' => $quoteEditionId,
+                'edition_title' => isset($quoteEditions[$quoteEditionId]) ? $quoteEditions[$quoteEditionId]->post_title : '',
+                'status' => $quoteStatus,
+                'status_label' => $statusEnum?->label() ?? $quoteStatus,
+                'total' => Money::cents((int) ($meta['total'] ?? 0))->amount(),
+                'created_at' => $quotePost->post_date,
+                'sent_at' => ($meta['sent_at'] ?? '') ?: null,
+                'paid_at' => ($meta['paid_at'] ?? '') ?: null,
+                'valid_until' => ($meta['valid_until'] ?? '') ?: null,
+            ];
+        }
+
+        // --- Attendance summary (grouped by edition) ---
+        $attendance = [];
+        if (AttendanceTable::exists()) {
+            $attendanceTable = AttendanceTable::getTableName();
+            $attRows = $wpdb->get_results($wpdb->prepare(
+                "SELECT a.edition_id, a.status, COUNT(*) as cnt,
+                        p.post_title AS edition_title
+                 FROM {$attendanceTable} a
+                 LEFT JOIN {$wpdb->posts} p ON a.edition_id = p.ID
+                 WHERE a.user_id = %d
+                 GROUP BY a.edition_id, a.status
+                 ORDER BY a.edition_id DESC",
+                $userId,
+            ));
+
+            // Group by edition
+            $grouped = [];
+            foreach ($attRows as $row) {
+                $editionId = (int) $row->edition_id;
+                if (!isset($grouped[$editionId])) {
+                    $grouped[$editionId] = [
+                        'edition_id' => $editionId,
+                        'edition_title' => $row->edition_title ?: __('Onbekend', 'stride'),
+                        'present' => 0,
+                        'absent' => 0,
+                        'excused' => 0,
+                    ];
+                }
+                $status = $row->status;
+                if (isset($grouped[$editionId][$status])) {
+                    $grouped[$editionId][$status] = (int) $row->cnt;
+                }
+            }
+
+            // Enrich with total session count + hours per edition
+            $summaryEditionIds = array_keys($grouped);
+            if (!empty($summaryEditionIds)) {
+                $sessionCounts = $this->fetchSessionCountByEdition($summaryEditionIds);
+                $hoursByEdition = $this->fetchUserAttendanceByEdition($userId, $summaryEditionIds);
+                foreach ($grouped as $editionId => &$row) {
+                    $row['total_sessions'] = $sessionCounts[$editionId] ?? 0;
+                    $row['hours'] = $hoursByEdition[$editionId]['hours'] ?? 0;
+                }
+                unset($row);
+            }
+
+            $attendance = array_values($grouped);
+        }
+
+        // --- Audit trail (last 50 entries where user is actor or subject) ---
+        $auditTrail = [];
+        $auditTrailTotal = 0;
+
+        if (AuditTable::exists()) {
+            $auditTable = AuditTable::getTableName();
+
+            $auditTrailTotal = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$auditTable}
+                 WHERE actor_id = %d OR (entity_type = 'user' AND entity_id = %d)",
+                $userId,
+                $userId,
+            ));
+
+            $auditEntries = $wpdb->get_results($wpdb->prepare(
+                "SELECT * FROM {$auditTable}
+                 WHERE actor_id = %d OR (entity_type = 'user' AND entity_id = %d)
+                 ORDER BY created_at DESC
+                 LIMIT 50",
+                $userId,
+                $userId,
+            ));
+
+            // Collect actor IDs AND target user IDs for batch fetch
+            $userIdsToResolve = [];
+            foreach ($auditEntries as $entry) {
+                if (!empty($entry->actor_id)) {
+                    $userIdsToResolve[] = (int) $entry->actor_id;
+                }
+                if (($entry->entity_type ?? '') === 'user' && !empty($entry->entity_id)) {
+                    $userIdsToResolve[] = (int) $entry->entity_id;
+                }
+            }
+            $usersMap = !empty($userIdsToResolve)
+                ? BatchQueryHelper::batchGetUsers(array_unique($userIdsToResolve))
+                : [];
+
+            $auditEntries = $this->enrichAuditContexts($auditEntries);
+
+            foreach ($auditEntries as $entry) {
+                $actorId = (int) ($entry->actor_id ?? 0);
+                $actorUser = $usersMap[$actorId] ?? null;
+                $actorName = $actorUser ? $actorUser->display_name : __('Systeem', 'stride');
+
+                $targetName = '';
+                if (($entry->entity_type ?? '') === 'user' && !empty($entry->entity_id)) {
+                    $targetUser = $usersMap[(int) $entry->entity_id] ?? null;
+                    if ($targetUser) {
+                        $targetName = $targetUser->display_name;
+                    }
+                }
+
+                $auditTrail[] = AdminActivityMapper::fromAuditEntry($entry, $actorName, $targetName);
+            }
+        }
+
+        return new WP_REST_Response([
+            'user' => $user,
+            'registrations' => $registrations,
+            'registrations_total' => $registrationsTotal,
+            'quotes' => $canSeeSensitive ? $quotes : [],
+            'attendance' => $attendance,
+            'audit_trail' => $canSeeSensitive ? $auditTrail : [],
+            'audit_trail_total' => $canSeeSensitive ? $auditTrailTotal : 0,
+        ]);
+    }
+
+    /**
+     * POST /admin/users/{id}/profile
+     *
+     * Updates personal + billing user data. Delegates persistence to
+     * {@see EnrollmentService::updateUserProfile()} so admin edits and
+     * enrollment-form edits share one canonical mutator.
+     */
+    public function updateUserProfile(WP_REST_Request $request): WP_REST_Response
+    {
+        $userId = (int) $request->get_param('id');
+
+        $userData = get_userdata($userId);
+        if (!$userData) {
+            return new WP_REST_Response(['error' => 'User not found'], 404);
+        }
+
+        if (!current_user_can('edit_user', $userId)) {
+            return new WP_REST_Response(['error' => 'Forbidden'], 403);
+        }
+
+        if ((int) get_user_meta($userId, '_stride_anonymised_at', true) > 0) {
+            return new WP_REST_Response([
+                'error' => __('Geanonimiseerde gebruikers kunnen niet bewerkt worden.', 'stride'),
+            ], 403);
+        }
+
+        $body = $request->get_json_params() ?: $request->get_body_params();
+
+        // Update WP user core fields (name/email).
+        $coreUpdate = ['ID' => $userId];
+        $hasCoreChange = false;
+
+        if (array_key_exists('first_name', $body)) {
+            $coreUpdate['first_name'] = sanitize_text_field((string) $body['first_name']);
+            $hasCoreChange = true;
+        }
+        if (array_key_exists('last_name', $body)) {
+            $coreUpdate['last_name'] = sanitize_text_field((string) $body['last_name']);
+            $hasCoreChange = true;
+        }
+        if ($hasCoreChange) {
+            $coreUpdate['display_name'] = trim(
+                ($coreUpdate['first_name'] ?? $userData->first_name ?? '')
+                . ' '
+                . ($coreUpdate['last_name'] ?? $userData->last_name ?? ''),
+            );
+        }
+
+        if (array_key_exists('email', $body)) {
+            $email = sanitize_email((string) $body['email']);
+            if ($email === '' || !is_email($email)) {
+                return new WP_REST_Response([
+                    'error' => __('Ongeldig e-mailadres.', 'stride'),
+                ], 400);
+            }
+            $existing = email_exists($email);
+            if ($existing && (int) $existing !== $userId) {
+                return new WP_REST_Response([
+                    'error' => __('Dit e-mailadres is al in gebruik.', 'stride'),
+                ], 400);
+            }
+            $coreUpdate['user_email'] = $email;
+            $hasCoreChange = true;
+        }
+
+        if ($hasCoreChange) {
+            $result = wp_update_user($coreUpdate);
+            if (is_wp_error($result)) {
+                return new WP_REST_Response([
+                    'error' => $result->get_error_message(),
+                ], 400);
+            }
+        }
+
+        // Map request keys to the EnrollmentService::getUserMetaMapping() input keys.
+        $mapping = EnrollmentService::getUserMetaMapping();
+        $profileData = [];
+        foreach (array_keys($mapping) as $inputKey) {
+            if (array_key_exists($inputKey, $body)) {
+                $profileData[$inputKey] = $body[$inputKey];
+            }
+        }
+
+        if (!empty($profileData)) {
+            /** @var EnrollmentService $enrollment */
+            $enrollment = ntdst_get(EnrollmentService::class);
+            $enrollment->updateUserProfile($userId, $profileData);
+        }
+
+        // Audit (event name matches AdminActivityMapper's existing slot).
+        $audit = ntdst_get(\NTDST\Audit\AuditService::class);
+        if ($audit) {
+            $audit->record(
+                'user',
+                $userId,
+                'user.profile_updated',
+                get_current_user_id() ?: null,
+                [
+                    'target_user_id' => $userId,
+                    'fields' => array_keys($profileData) + ($hasCoreChange ? ['core'] : []),
+                ],
+            );
+        }
+
+        return new WP_REST_Response([
+            'success' => true,
+            'message' => __('Gebruiker bijgewerkt.', 'stride'),
+        ]);
+    }
+
+    /**
+     * GET /admin/users/{id}/reveal?field=...
+     *
+     * Returns the raw value of one sensitive identity field. Admin-only,
+     * one field per call — keeps reveal explicit. Every successful reveal
+     * writes an audit row (threat-model M5): the access attempt is the
+     * event, even when the stored value is empty.
+     */
+    public function revealSensitiveField(WP_REST_Request $request): WP_REST_Response
+    {
+        $userId = (int) $request->get_param('id');
+        $field = (string) $request->get_param('field');
+
+        $allowed = ['national_id', 'date_of_birth', 'professional_license_number', 'phone'];
+        if (!in_array($field, $allowed, true)) {
+            return new WP_REST_Response(['error' => 'Invalid field'], 400);
+        }
+
+        if (!get_userdata($userId)) {
+            return new WP_REST_Response(['error' => 'User not found'], 404);
+        }
+
+        $value = get_user_meta($userId, $field, true) ?: '';
+
+        // Audit the PII access. A failed audit write is logged but does NOT
+        // block the reveal (availability over strictness — AF-2 ruling).
+        // class_exists guard: the container THROWS on unresolvable ids, so
+        // resolving without it would 500 when ntdst-audit is deactivated
+        // (review finding CR-B2) — check availability before resolving.
+        $audit = class_exists(\NTDST\Audit\AuditService::class)
+            ? ntdst_get(\NTDST\Audit\AuditService::class)
+            : null;
+        $recorded = $audit
+            ? $audit->record('user', $userId, 'admin.pii_reveal', null, ['field' => $field])
+            : new WP_Error('audit_unavailable', 'AuditService not available');
+
+        if (is_wp_error($recorded)) {
+            ntdst_log('audit')->warning('PII reveal audit write failed', [
+                'user_id' => $userId,
+                'field' => $field,
+                'error' => $recorded->get_error_message(),
+            ]);
+        }
+
+        return new WP_REST_Response([
+            'field' => $field,
+            'value' => $value,
+        ]);
+    }
+
+    /**
+     * Batch-load edition / course titles referenced by a set of audit
+     * entries and inject them into each entry's encoded JSON context so the
+     * mapper can render full activity strings without per-row queries.
+     *
+     * Mutates entries in place and returns them for convenience.
+     *
+     * @param array<object> $entries
+     * @return array<object>
+     */
+    private function enrichAuditContexts(array $entries): array
+    {
+        if (empty($entries)) {
+            return $entries;
+        }
+
+        $postIds = [];
+        $decoded = [];
+
+        foreach ($entries as $i => $entry) {
+            $ctx = json_decode($entry->context ?? '{}', true) ?: [];
+            $decoded[$i] = $ctx;
+            if (!empty($ctx['edition_id'])) {
+                $postIds[] = (int) $ctx['edition_id'];
+            }
+            if (!empty($ctx['course_id']) && empty($ctx['course_title'])) {
+                $postIds[] = (int) $ctx['course_id'];
+            }
+            if (!empty($ctx['quote_id'])) {
+                $postIds[] = (int) $ctx['quote_id'];
+            }
+        }
+
+        $titles = $this->fetchPostTitles(array_values(array_unique(array_filter($postIds))));
+
+        foreach ($entries as $i => $entry) {
+            $ctx = $decoded[$i];
+            $editionId = (int) ($ctx['edition_id'] ?? 0);
+            $courseId = (int) ($ctx['course_id'] ?? 0);
+
+            if ($editionId > 0 && empty($ctx['edition_title']) && isset($titles[$editionId])) {
+                $ctx['edition_title'] = $titles[$editionId];
+            }
+            if ($courseId > 0 && empty($ctx['course_title']) && isset($titles[$courseId])) {
+                $ctx['course_title'] = $titles[$courseId];
+            }
+
+            $entry->context = wp_json_encode($ctx);
+        }
+
+        return $entries;
+    }
+
+    /**
+     * Batch fetch post_title for a set of IDs.
+     *
+     * @param array<int> $postIds
+     * @return array<int, string>
+     */
+    private function fetchPostTitles(array $postIds): array
+    {
+        if (empty($postIds)) {
+            return [];
+        }
+        global $wpdb;
+        $placeholders = implode(',', array_fill(0, count($postIds), '%d'));
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT ID, post_title FROM {$wpdb->posts} WHERE ID IN ({$placeholders})",
+            ...$postIds,
+        ));
+        $titles = [];
+        foreach ($rows as $row) {
+            $titles[(int) $row->ID] = (string) $row->post_title;
+        }
+        return $titles;
+    }
+
+    // =========================================================================
+    // HELPERS
+    // =========================================================================
+
+    /**
+     * Count registrations for a given user.
+     */
+    private function countUserRegistrations(int $userId): int
+    {
+        global $wpdb;
+        $table = RegistrationTable::getTableName();
+        if (!RegistrationTable::exists()) {
+            return 0;
+        }
+        return (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table} WHERE user_id = %d",
+            $userId,
+        ));
+    }
+
+    /**
+     * Batch-count registrations for a list of users in a single query.
+     *
+     * @param int[] $userIds
+     * @return array<int,int> user_id => count (missing user_ids return 0 via caller fallback)
+     */
+    private function batchCountUserRegistrations(array $userIds): array
+    {
+        if (empty($userIds) || !RegistrationTable::exists()) {
+            return [];
+        }
+
+        global $wpdb;
+        $table = RegistrationTable::getTableName();
+        $userIds = array_values(array_unique(array_map('intval', $userIds)));
+        $placeholders = implode(',', array_fill(0, count($userIds), '%d'));
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT user_id, COUNT(*) AS cnt FROM {$table}
+             WHERE user_id IN ({$placeholders})
+             GROUP BY user_id",
+            ...$userIds,
+        ));
+
+        $counts = [];
+        foreach ($rows as $row) {
+            $counts[(int) $row->user_id] = (int) $row->cnt;
+        }
+        return $counts;
+    }
+
+    /**
+     * Count sessions per edition for a set of edition IDs.
+     *
+     * Returns [edition_id => session_count]. Editions with no sessions are absent
+     * from the map; callers should treat missing keys as 0 (no sessions ⇒ e-learning).
+     *
+     * @param array<int> $editionIds
+     * @return array<int, int>
+     */
+    private function fetchSessionCountByEdition(array $editionIds): array
+    {
+        if (empty($editionIds)) {
+            return [];
+        }
+
+        global $wpdb;
+        $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
+        $params = array_merge([SessionCPT::POST_TYPE], $editionIds);
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT pm.meta_value AS edition_id, COUNT(*) AS cnt
+             FROM {$wpdb->posts} p
+             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_ntdst_edition_id'
+             WHERE p.post_type = %s
+               AND p.post_status = 'publish'
+               AND pm.meta_value IN ({$placeholders})
+             GROUP BY pm.meta_value",
+            ...$params,
+        ));
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[(int) $row->edition_id] = (int) $row->cnt;
+        }
+        return $map;
+    }
+
+    /**
+     * Aggregate attendance for a user across a set of editions.
+     *
+     * Returns [edition_id => [present, absent, excused, hours]]. Hours assumes
+     * 4 hours per "present" session (current convention in the user-detail
+     * attendance summary). Editions with no recorded attendance are absent.
+     *
+     * @param array<int> $editionIds
+     * @return array<int, array{present:int, absent:int, excused:int, hours:int}>
+     */
+    private function fetchUserAttendanceByEdition(int $userId, array $editionIds): array
+    {
+        if (empty($editionIds) || !AttendanceTable::exists()) {
+            return [];
+        }
+
+        global $wpdb;
+        $attendanceTable = AttendanceTable::getTableName();
+        $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
+        $params = array_merge([$userId], $editionIds);
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT edition_id, status, COUNT(*) AS cnt
+             FROM {$attendanceTable}
+             WHERE user_id = %d
+               AND edition_id IN ({$placeholders})
+             GROUP BY edition_id, status",
+            ...$params,
+        ));
+
+        $map = [];
+        foreach ($rows as $row) {
+            $editionId = (int) $row->edition_id;
+            if (!isset($map[$editionId])) {
+                $map[$editionId] = ['present' => 0, 'absent' => 0, 'excused' => 0, 'hours' => 0];
+            }
+            if (isset($map[$editionId][$row->status])) {
+                $map[$editionId][$row->status] = (int) $row->cnt;
+            }
+        }
+
+        // Hours = present count × 4 (matches existing convention)
+        foreach ($map as &$entry) {
+            $entry['hours'] = $entry['present'] * 4;
+        }
+        unset($entry);
+
+        return $map;
+    }
+
+    /**
+     * Convert quote line-item money fields from cents (storage) to euros (API).
+     * Storage fields: unit_price, total. Other fields pass through unchanged.
+     */
+    private function lineItemsToEuros(array $items): array
+    {
+        return array_map(static function ($item) {
+            if (!is_array($item)) {
+                return $item;
+            }
+            if (isset($item['unit_price'])) {
+                $item['unit_price'] = Money::cents((int) $item['unit_price'])->amount();
+            }
+            if (isset($item['total'])) {
+                $item['total'] = Money::cents((int) $item['total'])->amount();
+            }
+            return $item;
+        }, $items);
+    }
+
+    /**
+     * Build a pending approval item for the REST response.
+     */
+    /**
+     * @param array<string, mixed> $extra Bucket-specific extra fields (e.g. open_task, days_idle)
+     */
+    private function buildApprovalItem(object $row, array $tasks, string $type, array $extra = []): array
+    {
+        $userId = (int) $row->user_id;
+        $user = get_userdata($userId);
+        $editionId = (int) ($row->edition_id ?? 0);
+        $edition = $editionId ? get_post($editionId) : null;
+
+        return array_merge([
+            'id' => (int) $row->id,
+            'type' => $type,
+            'user_id' => $userId,
+            'user_name' => $user ? $user->display_name : __('Onbekend', 'stride'),
+            'user_email' => $user ? $user->user_email : '',
+            'edition_id' => $editionId,
+            'edition_title' => $edition ? $edition->post_title : __('Onbekend', 'stride'),
+            'registered_at' => $row->registered_at,
+            'tasks' => $tasks,
+        ], $extra);
+    }
+
+    /* ---------------------------------------------------------------
+     *  Impersonation
+     * ------------------------------------------------------------- */
+
+    /**
+     * Start impersonating a user. Switches the current session to the target user
+     * and stores a token so the admin can return.
+     */
+    public function impersonateUser(WP_REST_Request $request): WP_REST_Response|WP_Error
+    {
+        $targetId = (int) $request->get_param('id');
+        $targetUser = get_userdata($targetId);
+
+        if (!$targetUser) {
+            return new WP_Error('not_found', __('Gebruiker niet gevonden.', 'stride'), ['status' => 404]);
+        }
+
+        $handler = new ImpersonationHandler();
+        $validation = $handler->validateTarget(
+            targetUserId: $targetId,
+            targetIsAdmin: user_can($targetId, 'manage_options'),
+            callerHasManageOptions: current_user_can('manage_options'),
+        );
+
+        if (is_wp_error($validation)) {
+            return $validation;
+        }
+
+        $adminId = get_current_user_id();
+        $token = $handler->generateToken();
+        $handler->storeSession($token, $adminId, $targetId);
+
+        // Audit trail via AuditService::record() — the single write path that
+        // owns the entity_type/entity_id schema, JSON-encodes context, stamps
+        // created_at, and logs. (Previously a raw $wpdb->insert here bypassed it.)
+        $audit = ntdst_get(\NTDST\Audit\AuditService::class);
+        if ($audit) {
+            $audit->record(
+                'user',
+                $targetId,
+                'impersonation.started',
+                $adminId,
+                [
+                    'target_name'  => $targetUser->display_name,
+                    'target_email' => $targetUser->user_email,
+                ],
+            );
+        }
+
+        // Switch session to target user
+        wp_clear_auth_cookie();
+        wp_set_auth_cookie($targetId, false);
+
+        // Set impersonation cookie
+        setcookie(ImpersonationHandler::COOKIE_NAME, $token, [
+            'expires'  => time() + ImpersonationHandler::TTL,
+            'path'     => COOKIEPATH,
+            'domain'   => COOKIE_DOMAIN,
+            'secure'   => is_ssl(),
+            'httponly'  => true,
+            'samesite' => 'Strict',
+        ]);
+
+        return new WP_REST_Response([
+            'success'  => true,
+            'redirect' => home_url('/'),
+        ]);
+    }
+
+    /**
+     * End impersonation and switch back to the original admin.
+     * Redirects to the admin dashboard users tab.
+     */
+    public function endImpersonation(WP_REST_Request $request): void
+    {
+        $handler = new ImpersonationHandler();
+        $token = $handler->getTokenFromCookie();
+        $session = $handler->getSession($token);
+        $adminId = $session['admin_id'] ?? 0;
+        $targetId = $session['target_id'] ?? 0;
+        $callerId = get_current_user_id();
+
+        // Caller-is-target check: the only user allowed to walk back into the
+        // original admin's session is the user who is currently impersonated.
+        // Without this, anyone who steals the auth cookie of an impersonated
+        // user (XSS, session theft) could escalate to admin by hitting /end.
+        if ($adminId <= 0 || $callerId <= 0 || ($targetId > 0 && $callerId !== $targetId)) {
+            wp_safe_redirect(admin_url());
+            exit;
+        }
+
+        // Clean up session
+        $handler->endSession($token);
+
+        // Clear impersonation cookie
+        setcookie(ImpersonationHandler::COOKIE_NAME, '', [
+            'expires' => time() - 3600,
+            'path'    => COOKIEPATH,
+            'domain'  => COOKIE_DOMAIN,
+        ]);
+
+        // Symmetric audit row — same single write path as impersonation.started.
+        $audit = ntdst_get(\NTDST\Audit\AuditService::class);
+        if ($audit) {
+            $targetUser = $targetId > 0 ? get_userdata($targetId) : null;
+            $audit->record(
+                'user',
+                $targetId,
+                'impersonation.ended',
+                $adminId,
+                [
+                    'target_name'  => $targetUser?->display_name,
+                    'target_email' => $targetUser?->user_email,
+                ],
+            );
+        }
+
+        // Switch back to admin
+        wp_clear_auth_cookie();
+        wp_set_auth_cookie($adminId, false);
+
+        // Redirect to dashboard users tab
+        wp_safe_redirect(admin_url('admin.php?page=stride-dashboard#/gebruikers'));
+        exit;
+    }
+
+    /* ---------------------------------------------------------------
+     *  Notifications
+     * ------------------------------------------------------------- */
+
+    /**
+     * Get recent notifications from the audit log.
+     * Tracks read/unread state per admin user.
+     */
+    public function getNotifications(WP_REST_Request $request): WP_REST_Response
+    {
+        $userId = get_current_user_id();
+        $lastReadId = (int) get_user_meta($userId, 'stride_last_read_notification_id', true);
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'audit_log';
+
+        // Only notification-worthy events
+        $actions = [
+            'registration.created',
+            'registration.cancelled',
+            'quote.created',
+            'completion.course_completed',
+        ];
+        $placeholders = implode(',', array_fill(0, count($actions), '%s'));
+
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $entries = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$table} WHERE action IN ({$placeholders}) ORDER BY created_at DESC LIMIT 10",
+            ...$actions,
+        ));
+
+        $entries = $this->enrichAuditContexts($entries ?: []);
+
+        $notifications = array_map(function ($entry) use ($lastReadId) {
+            $actorName = '';
+            if (!empty($entry->actor_id)) {
+                $user = get_userdata((int) $entry->actor_id);
+                $actorName = $user ? $user->display_name : 'Onbekend';
+            }
+            $mapped = AdminActivityMapper::fromAuditEntry($entry, $actorName);
+            $mapped['read'] = $mapped['id'] <= $lastReadId;
+
+            return $mapped;
+        }, $entries);
+
+        $unread = count(array_filter($notifications, fn($n) => !$n['read']));
+
+        return new WP_REST_Response([
+            'notifications' => $notifications,
+            'unread_count'  => $unread,
+        ]);
+    }
+
+    /**
+     * Mark all notifications as read by storing the latest audit log ID.
+     */
+    public function markNotificationsRead(WP_REST_Request $request): WP_REST_Response
+    {
+        $userId = get_current_user_id();
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'audit_log';
+        $latestId = (int) $wpdb->get_var("SELECT MAX(id) FROM {$table}");
+
+        update_user_meta($userId, 'stride_last_read_notification_id', $latestId);
+
+        return new WP_REST_Response(['success' => true, 'unread_count' => 0]);
+    }
+
+    /**
+     * Export confirmed registrations for upcoming editions as a UTF-8 CSV file.
+     *
+     * Outputs directly to php://output and exits — no WP_REST_Response return.
+     */
+    public function exportRegistrations(WP_REST_Request $request): void
+    {
+        global $wpdb;
+        $table = RegistrationTable::getTableName();
+
+        if (!RegistrationTable::exists()) {
+            wp_die('Registration table not found.');
+        }
+
+        // Get confirmed registrations for upcoming editions. Columns are
+        // enumerated (panel perf SF-1): r.* dragged the completion_tasks +
+        // enrollment_data JSON blobs into memory for every row while the CSV
+        // reads five scalars — O(rows x blob) at production scale.
+        $today = current_time('Y-m-d');
+        $registrations = $wpdb->get_results($wpdb->prepare(
+            "SELECT r.id, r.user_id, r.status,
+                    p.post_title as edition_title,
+                    pm_date.meta_value as edition_date
+             FROM {$table} r
+             LEFT JOIN {$wpdb->posts} p ON r.edition_id = p.ID
+             LEFT JOIN {$wpdb->postmeta} pm_date ON r.edition_id = pm_date.post_id AND pm_date.meta_key = '_ntdst_start_date'
+             WHERE r.status = 'confirmed'
+             AND (pm_date.meta_value >= %s OR pm_date.meta_value IS NULL)
+             ORDER BY pm_date.meta_value ASC, r.registered_at ASC",
+            $today,
+        ));
+
+        // Set download headers. nosniff mirrors the universal file-response
+        // posture (NTDST_Response::fileHeaders / M4): a browser must never
+        // content-sniff an attacker-influenced CSV into HTML.
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="inschrijvingen-' . date('Y-m-d') . '.csv"');
+        header('X-Content-Type-Options: nosniff');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        $output = fopen('php://output', 'w');
+        // BOM for Excel UTF-8 compatibility
+        fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+        // Header row (semicolons for Dutch Excel)
+        fputcsv($output, ['Naam', 'E-mail', 'Organisatie', 'Editie', 'Datum', 'Status', 'Offerte #'], ';');
+
+        // Batch-prime all per-row lookups so the export's query count stays
+        // constant regardless of row count (audit 2.6): one user fetch + one
+        // user-meta prime + one quote map + one quote-meta fetch replace the
+        // previous ~4 queries per row. A missing user (deleted account) maps
+        // to null and renders as blank cells, same as get_userdata() === false.
+        $userIds = array_values(array_unique(array_filter(array_map(
+            static fn($reg) => (int) ($reg->user_id ?? 0),
+            $registrations,
+        ))));
+        $users = BatchQueryHelper::batchGetUsers($userIds);
+        if ($userIds !== []) {
+            update_meta_cache('user', $userIds);
+        }
+
+        $registrationIds = array_values(array_filter(array_map(
+            static fn($reg) => (int) ($reg->id ?? 0),
+            $registrations,
+        )));
+        $quoteIdsByRegistration = ntdst_get(\Stride\Modules\Invoicing\QuoteRepository::class)
+            ->findQuoteIdsByRegistrations($registrationIds);
+        $quoteMeta = BatchQueryHelper::batchGetPostMeta(
+            array_values($quoteIdsByRegistration),
+            ['quote_number'],
+        );
+
+        foreach ($registrations as $reg) {
+            $user = $users[(int) ($reg->user_id ?? 0)] ?? null;
+            $name = $user ? $user->display_name : 'Onbekend';
+            $email = $user ? $user->user_email : '';
+            $org = $user ? (get_user_meta($user->ID, 'organisation', true) ?: '') : '';
+
+            // Linked quote number from the batched map (fallback mirrors the
+            // old per-row behaviour: 'Q-' . post ID when the meta is empty).
+            $quoteNumber = '';
+            $quoteId = $quoteIdsByRegistration[(int) ($reg->id ?? 0)] ?? 0;
+            if ($quoteId) {
+                $quoteNumber = (string) ($quoteMeta[$quoteId]['quote_number'] ?? '') ?: 'Q-' . $quoteId;
+            }
+
+            fputcsv($output, array_map([self::class, 'sanitizeCsvCell'], [
+                $name,
+                $email,
+                $org,
+                $reg->edition_title ?? '',
+                $reg->edition_date ?? '',
+                $reg->status ?? '',
+                $quoteNumber,
+            ]), ';');
+        }
+
+        fclose($output);
+        exit;
+    }
+
+    /**
+     * Neutralise CSV / spreadsheet formula injection.
+     *
+     * Excel, LibreOffice and Google Sheets execute any cell whose first
+     * character is `=`, `+`, `-`, `@`, TAB or CR. An attacker who can place
+     * arbitrary text into a user-facing field (display_name, organisation,
+     * edition title) could exfiltrate data via `=WEBSERVICE(...)` when an
+     * admin opens the export. Prefix any such cell with a single quote so
+     * the spreadsheet treats it as a literal string.
+     */
+    private static function sanitizeCsvCell(mixed $value): string
+    {
+        $str = (string) $value;
+        if ($str === '') {
+            return '';
+        }
+        $first = $str[0];
+        if ($first === '=' || $first === '+' || $first === '-' || $first === '@' || $first === "\t" || $first === "\r") {
+            return "'" . $str;
+        }
+        return $str;
     }
 }

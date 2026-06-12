@@ -1,0 +1,187 @@
+<?php
+/**
+ * Plugin Name: Stride Client — Safe & Sound
+ * Description: Safe & Sound youth festival-safety org. Hot magenta + hi-vis lime on warm cream paper, Bricolage Grotesque + Hanken Grotesk + JetBrains Mono, festival-flyer / poster aesthetic.
+ * Version: 1.0.0
+ * Author: Netdust
+ *
+ * @package stride-client-safeandsound
+ */
+
+declare(strict_types=1);
+
+defined('ABSPATH') || exit;
+
+final class StrideClientSafeAndSound
+{
+    private string $dir;
+    private string $url;
+
+    public function __construct()
+    {
+        $this->dir = __DIR__;
+        $this->url = plugins_url('', __FILE__);
+        $this->init();
+    }
+
+    private function init(): void
+    {
+        // Template overrides: NTDST_Response/locate_template() and
+        // stridence_template_part() will pick files from <plugin>/templates
+        // ahead of the theme's own templates.
+        if (class_exists('\NTDST_Template_Loader')) {
+            \NTDST_Template_Loader::addPath($this->dir . '/templates');
+        }
+
+        // Full page template overrides (front-page, header, footer)
+        add_filter('template_include', [$this, 'overridePageTemplate'], 20);
+
+        // CSS branding overrides (load after theme styles)
+        add_action('wp_enqueue_scripts', [$this, 'enqueueStyles'], 100);
+
+        // Google Fonts swap
+        add_filter('stridence_font_url', [$this, 'overrideFontUrl']);
+
+        // Register block patterns (Contact, FAQ, About, Agenda, T&Cs)
+        add_action('init', [$this, 'registerPatterns']);
+
+        // Register page templates (narrow long-form layout for stub pages)
+        add_filter('theme_page_templates', [$this, 'registerPageTemplates']);
+        add_filter('template_include', [$this, 'resolvePageTemplate'], 25);
+    }
+
+    /**
+     * Override full page templates (front-page.php, etc).
+     */
+    public function overridePageTemplate(string $template): string
+    {
+        if (is_front_page()) {
+            $override = $this->dir . '/templates/front-page.php';
+            if (file_exists($override)) {
+                return $override;
+            }
+        }
+
+        return $template;
+    }
+
+    /**
+     * Enqueue client CSS after theme styles.
+     */
+    public function enqueueStyles(): void
+    {
+        $cssFile = $this->dir . '/assets/client.css';
+        if (!file_exists($cssFile)) {
+            return;
+        }
+
+        // Depend on LearnDash's late stylesheets so our :root token overrides
+        // win against the LD30 modern theme (loaded after our default priority).
+        // Each handle is only listed as a dep if it's actually registered —
+        // wp_style_is() guards against breaking pages where LD isn't loaded.
+        $deps = [];
+        foreach (['learndash-front', 'learndash-ld30-modern', 'learndash-css'] as $handle) {
+            if (wp_style_is($handle, 'registered') || wp_style_is($handle, 'enqueued')) {
+                $deps[] = $handle;
+            }
+        }
+
+        wp_enqueue_style(
+            'stride-client',
+            $this->url . '/assets/client.css',
+            $deps,
+            (string) filemtime($cssFile)
+        );
+    }
+
+    /**
+     * Register a "Safe & Sound" pattern category and auto-load every PHP file
+     * in /patterns/ as a block pattern. Pattern files use a header docblock
+     * (Title / Slug / Categories / Keywords) similar to theme patterns.
+     */
+    public function registerPatterns(): void
+    {
+        if (!function_exists('register_block_pattern_category') || !function_exists('register_block_pattern')) {
+            return;
+        }
+
+        register_block_pattern_category('safeandsound', [
+            'label'       => __('Safe & Sound', 'stridence'),
+            'description' => __('Bespoke patterns for the Safe & Sound brand identity.', 'stridence'),
+        ]);
+
+        $dir = $this->dir . '/patterns';
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        foreach (glob($dir . '/*.php') as $file) {
+            $headers = get_file_data($file, [
+                'title'       => 'Title',
+                'slug'        => 'Slug',
+                'description' => 'Description',
+                'categories'  => 'Categories',
+                'keywords'    => 'Keywords',
+                'viewportWidth' => 'Viewport Width',
+            ]);
+
+            if (empty($headers['slug']) || empty($headers['title'])) {
+                continue;
+            }
+
+            ob_start();
+            include $file;
+            $content = (string) ob_get_clean();
+
+            register_block_pattern($headers['slug'], [
+                'title'         => $headers['title'],
+                'description'   => $headers['description'] ?: '',
+                'categories'    => array_filter(array_map('trim', explode(',', $headers['categories'] ?: 'safeandsound'))),
+                'keywords'      => array_filter(array_map('trim', explode(',', $headers['keywords'] ?: ''))),
+                'viewportWidth' => (int) ($headers['viewportWidth'] ?: 1280),
+                'content'       => $content,
+            ]);
+        }
+    }
+
+    /**
+     * Register custom page templates available in the Page Attributes panel.
+     */
+    public function registerPageTemplates(array $templates): array
+    {
+        $templates['safeandsound-page-stub.php'] = __('Safe & Sound — Long-form page', 'stridence');
+        return $templates;
+    }
+
+    /**
+     * Map the registered template slug to the actual file inside the plugin.
+     */
+    public function resolvePageTemplate(string $template): string
+    {
+        if (is_page()) {
+            $assigned = (string) get_page_template_slug();
+            if ($assigned === 'safeandsound-page-stub.php') {
+                $override = $this->dir . '/templates/page-stub.php';
+                if (file_exists($override)) {
+                    return $override;
+                }
+            }
+        }
+        return $template;
+    }
+
+    /**
+     * Swap Google Fonts: Bricolage Grotesque + Hanken Grotesk + Instrument Serif + JetBrains Mono.
+     */
+    public function overrideFontUrl(string $url): string
+    {
+        return 'https://fonts.googleapis.com/css2'
+            . '?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800'
+            . '&family=Hanken+Grotesk:wght@400;500;600;700'
+            . '&family=Instrument+Serif:ital@0;1'
+            . '&family=JetBrains+Mono:wght@500;600'
+            . '&display=swap';
+    }
+}
+
+new StrideClientSafeAndSound();

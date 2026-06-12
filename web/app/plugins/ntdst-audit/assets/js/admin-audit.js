@@ -3,6 +3,7 @@
  */
 function strideAuditApp() {
     return {
+        tab: 'log',
         entries: [],
         loading: false,
         page: 1,
@@ -10,6 +11,8 @@ function strideAuditApp() {
         totalPages: 1,
         totalEntries: 0,
         userResults: [],
+        notification: null,
+        notificationType: 'success',
         filters: {
             from: '',
             to: '',
@@ -40,6 +43,14 @@ function strideAuditApp() {
             const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
             this.filters.from = thirtyDaysAgo.toISOString().split('T')[0];
             this.filters.to = now.toISOString().split('T')[0];
+
+            // Pre-populate actor filter from URL (?actor_id=N) — used when deep-linked
+            // from the Stride user-detail view's "Open in volledige audit log" link.
+            const urlParams = new URLSearchParams(window.location.search);
+            const actorId = urlParams.get('actor_id');
+            if (actorId) {
+                this.filters.actor_id = actorId;
+            }
 
             // Load initial data
             this.loadEntries();
@@ -83,7 +94,7 @@ function strideAuditApp() {
 
             } catch (error) {
                 console.error('Error loading audit entries:', error);
-                alert('Error loading audit entries');
+                this.notify('Error loading audit entries', 'error');
             } finally {
                 this.loading = false;
             }
@@ -158,6 +169,12 @@ function strideAuditApp() {
             } catch {
                 return contextStr;
             }
-        }
+        },
+
+        notify(message, type = 'success') {
+            this.notification = message;
+            this.notificationType = type;
+            setTimeout(() => { this.notification = null; }, 4000);
+        },
     };
 }

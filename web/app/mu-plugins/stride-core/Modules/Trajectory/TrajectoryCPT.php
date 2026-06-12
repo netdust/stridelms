@@ -33,7 +33,7 @@ final class TrajectoryCPT
             'show_ui' => true,
             'show_in_menu' => 'stride-dashboard',
             'menu_icon' => 'dashicons-networking',
-            'supports' => ['title', 'editor'],
+            'supports' => ['title', 'editor', 'excerpt', 'thumbnail'],
             'auto_metabox' => false,
             'rewrite' => [
                 'slug' => StrideSettingsService::getTrajectorySlug(),
@@ -92,6 +92,21 @@ final class TrajectoryCPT
                 'type' => 'text',
                 'label' => 'Beschrijving',
             ],
+            'tagline' => [
+                'type' => 'text',
+                'label' => 'Tagline',
+                'description' => 'Korte pakkende zin over het traject',
+            ],
+            'target_audience' => [
+                'type' => 'text',
+                'label' => 'Doelgroep',
+                'description' => 'Voor wie is dit traject bedoeld?',
+            ],
+            'duration' => [
+                'type' => 'text',
+                'label' => 'Duur',
+                'description' => 'Bijv. "6 maanden" of "1 jaar"',
+            ],
             'deadline_months' => [
                 'type' => 'int',
                 'label' => 'Deadline maanden',
@@ -102,6 +117,41 @@ final class TrajectoryCPT
                 'label' => 'Gekoppelde edities',
                 'description' => 'JSON array of course-edition mappings',
             ],
+            'requires_approval' => [
+                'type' => 'boolean',
+                'label' => 'Goedkeuring vereist',
+                'description' => 'Enrollment requires admin approval',
+            ],
+            'enrollment_form' => [
+                'type' => 'text',
+                'label' => 'Inschrijfformulier',
+                'description' => 'Welk formulier wordt gebruikt: default, minimal, direct',
+            ],
+            'requires_questionnaire' => [
+                'type' => 'boolean',
+                'label' => 'Vragenlijst vereist',
+                'description' => 'Enrollment requires questionnaire completion',
+            ],
+            'requires_documents' => [
+                'type' => 'boolean',
+                'label' => 'Documenten vereist',
+                'description' => 'Enrollment requires document upload',
+            ],
+            'post_requires_evaluation' => [
+                'type' => 'boolean',
+                'label' => 'Evaluatie vereist na afloop',
+                'description' => 'Post-trajectory evaluation questionnaire required',
+            ],
+            'post_requires_documents' => [
+                'type' => 'boolean',
+                'label' => 'Documenten vereist na afloop',
+                'description' => 'Post-trajectory document upload required',
+            ],
+            'post_requires_approval' => [
+                'type' => 'boolean',
+                'label' => 'Aftekenen door beheerder',
+                'description' => 'Post-trajectory admin sign-off required',
+            ],
         ];
     }
 
@@ -110,7 +160,7 @@ final class TrajectoryCPT
         return [
             'trajectory_details' => [
                 'title' => 'Traject Details',
-                'fields' => ['mode', 'status', 'capacity'],
+                'fields' => ['mode', 'status', 'capacity', 'requires_approval'],
             ],
             'trajectory_deadlines' => [
                 'title' => 'Deadlines',

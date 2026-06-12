@@ -87,7 +87,13 @@ class LearnDash_Settings_Section_General_Appearance extends LearnDash_Settings_S
 					'label'   => '',
 					'value'   => $this->setting_option_values['course_enabled'] ?? '',
 					'options' => [
-						'yes' => '',
+						'yes' => [
+							'tooltip' => sprintf(
+								/* translators: placeholder: Course. */
+								__( 'Tabs in Modern mode appear only when multiple sections have content. If just one section (%1$s, Materials, or Reviews) is populated, the tab navigation is hidden.', 'learndash' ),
+								learndash_get_custom_label( 'course' )
+							),
+						],
 					],
 				],
 				'group_enabled'        => [
@@ -96,7 +102,13 @@ class LearnDash_Settings_Section_General_Appearance extends LearnDash_Settings_S
 					'label'   => '',
 					'value'   => $this->setting_option_values['group_enabled'] ?? '',
 					'options' => [
-						'yes' => '',
+						'yes' => [
+							'tooltip' => sprintf(
+								/* translators: placeholder: Group. */
+								__( 'Tabs in Modern mode appear only when multiple sections have content. If just one section (%1$s or Materials) is populated, the tab navigation is hidden.', 'learndash' ),
+								learndash_get_custom_label( 'group' )
+							),
+						],
 					],
 				],
 			]

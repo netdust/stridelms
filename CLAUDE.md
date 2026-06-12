@@ -11,9 +11,7 @@
 - CRM/Forms: FluentCRM, FluentForms, Fluent SMTP
 - Frontend: Tailwind CSS + Alpine.js + Vite (Stridence theme)
 
-**Project Plan:** See `docs/V4-PROJECT-PLAN master.md` for the full feature inventory and 9-phase implementation plan.
-
-**Current Phase:** Phase 3 - Invoicing/Vouchers
+Operational config (hosting, deploy, SSH): `site.yml`. Memory: `memory/`. Tasks: `tasks/`.
 
 ---
 
@@ -22,71 +20,177 @@
 Stride follows WordPress mu-plugin architecture with clear separation:
 
 - **stride-core** (mu-plugin): All business logic, services, data models
-- **stride** (theme): Presentation only - templates, assets, frontend services
+- **stridence** (theme): Presentation only - templates, assets, frontend services
 
 ### Namespace Structure
 
 | Location | Namespace | Purpose |
 |----------|-----------|---------|
-| `mu-plugins/stride-core/` | `Stride\` | Business logic (modules, domain) |
+| `mu-plugins/stride-core/Modules/` | `Stride\Modules\{Module}\` | Domain modules (Edition, Enrollment, etc.) |
 | `mu-plugins/stride-core/Handlers/` | `Stride\Handlers\` | AJAX handlers |
-| `mu-plugins/stride-core/Admin/` | `Stride\Admin\` | Admin services |
-| `themes/stride/services/frontend/` | `stride\services\frontend` | Presentation services |
-| `themes/stride/services/frontend/shortcodes/` | `stride\services\frontend\shortcodes` | Shortcode classes |
+| `mu-plugins/stride-core/Admin/` | `Stride\Admin\` | Admin dashboard services |
+| `mu-plugins/stride-core/Integrations/` | `Stride\Integrations\` | Third-party adapters (LearnDash) |
+| `mu-plugins/stride-core/Contracts/` | `Stride\Contracts\` | Interfaces (LMSAdapterInterface, etc.) |
+| `mu-plugins/stride-core/Domain/` | `Stride\Domain\` | Value objects (Money, EditionStatus, RegistrationStatus, etc.) |
+| `mu-plugins/stride-core/Infrastructure/` | `Stride\Infrastructure\` | Abstract base classes (AbstractRepository, AbstractService, BatchQueryHelper) |
+| `themes/stridence/services/frontend/` | `stridence\services\frontend` | Theme presentation services |
 
 ---
 
-## Useful Skills
+## Development Workflow Skills
 
-Use these skills during development:
+Skills are invoked automatically or via `/skill-name`. They guide how Claude approaches tasks.
 
-### Planning & Workflow
-| Skill | Usage |
-|-------|-------|
-| `/do:plan` | Transform feature descriptions into structured implementation plans |
-| `/do:work` | Execute work plans efficiently while maintaining quality |
-| `/do:quick` | Fast path for small tasks - skip planning, just do the work |
-| `/do:review` | Code review (light mode default, thorough mode optional) |
-| `/deepen-plan` | Enhance a plan with research |
-| `/review-plan` | Get reviewer feedback on a plan before implementation |
+### Superpowers Workflow (Brainstorm → Plan → Implement)
 
-### NTDST WordPress Development
-| Skill | Usage |
-|-------|-------|
-| `/ntdst-wp-dev` | Generate production-ready WordPress code following NTDST framework patterns. Use when creating services, data models, API endpoints. |
-| `/ntdst-wp-workflow` | Development workflow commands - setup, deployment, syncing, templates |
+The core development loop follows three phases:
 
-### Performance & Quality
-| Skill | Usage |
-|-------|-------|
-| `/wp-perf` | Quick WordPress performance scan |
-| `/wp-perf-review` | WordPress performance code review |
-| `/do:compound` | Document a recently solved problem to compound knowledge |
+| Phase | Skill | When |
+|-------|-------|------|
+| **Brainstorm** | `superpowers:brainstorming` | Before any creative work — features, components, modifications. Explores intent, requirements, and design before code. |
+| **Plan** | `superpowers:writing-plans` | After brainstorming, when you have spec/requirements for a multi-step task. Produces a structured implementation plan. |
+| **Plan (security)** | `netdust-core:threat-modeling` | Alongside `writing-plans` when the plan touches surfaces listed under "Threat-modeling triggers" below. Produces a `## Threat model` section the plan embeds inline, BEFORE task breakdown. Required for security-rich features — opt-in for everything else. |
+| **Implement** | `superpowers:executing-plans` | Execute a written plan in a session with review checkpoints. |
+| **Implement (parallel)** | `superpowers:subagent-driven-development` | Execute plans with independent tasks using parallel subagents. |
+| **Parallel dispatch** | `superpowers:dispatching-parallel-agents` | When facing 2+ independent tasks that need no shared state. |
 
-### Task Management
-| Skill | Usage |
-|-------|-------|
-| `/file-todos` | File-based todo tracking in todos/ directory |
+### Threat-modeling triggers (WordPress / NTDST surfaces)
+
+Invoke `netdust-core:threat-modeling` alongside `writing-plans` when the plan touches ANY of these. The list is the trigger predicate — one match is enough.
+
+| Surface | WP/NTDST examples |
+|---|---|
+| User-controlled URLs | Webhook endpoints, OAuth redirect URLs, external API calls (mailers, payment gateways, LearnDash integrations), embed URLs, REST proxy endpoints |
+| AJAX handlers | New `wp_ajax_*` or `wp_ajax_nopriv_*` handler — nonces, capability checks, sanitization, output escaping all need explicit spec |
+| REST endpoints | `register_rest_route` additions — `permission_callback`, schema validation, capability enforcement |
+| Shortcodes | New `add_shortcode` registration that takes attributes from post content |
+| Settings pages | `add_options_page` / `add_settings_field` that takes user input + persists to `wp_options` |
+| Untrusted parsing | Frontmatter from external MD, CSV imports, file uploads, third-party API JSON responses, RSS/atom feeds |
+| Capability boundaries | New `current_user_can` check or new capability registration, cross-role visibility surfaces |
+| Multi-tenancy / role-based isolation | LearnDash group access, course/lesson visibility based on role, partner-API scoping |
+| File handling | Uploads (path traversal via filename), downloads (content-type sniffing), attachment storage |
+| Database with user-controlled `$wpdb` input | Any `$wpdb->prepare`-free path, `meta_query` with user-supplied keys, custom-table writes |
+| BYOK / external credentials | API keys for third-party services (Mollie, Combell, mailer providers) stored in options or post meta |
+| Partner API surface | Any new endpoint under `/wp-json/stride-partner/v1/` — auth model, rate limits, scoped data access |
+
+**Worked example** (across stacks): `~/Projects/folio/docs/superpowers/plans/2026-05-27-phase-3-agent-runner.md` section `## Threat model`. Different stack (Bun/TS), same shape — list of assets, actors, attacks paired with mitigations, explicit out-of-scope deferrals. For WP-specific worked examples, expect one to be authored in Stride's next plan that qualifies.
+
+**Do NOT invoke** for refactors with no new attack surface, pure UI/CSS changes, theme template tweaks that don't touch input, migrations on internal tables with no user-facing change, test-only additions, or pure documentation.
+
+If unsure whether a plan qualifies, default to running the skill — false positives cost 15 minutes, false negatives cost hours of `/code-review` review-fix loops.
+
+### Testing
+
+| Skill | When |
+|-------|------|
+| `superpowers:test-driven-development` | Before writing implementation code — write tests first. |
+| `testing-workflow` | After every task (unit tests) and after every phase (integration + acceptance). Covers PHP (PHPUnit) and TypeScript (Vitest/Playwright). |
+
+### NTDST Domain Skills
+
+| Skill | When |
+|-------|------|
+| `ntdst-architecture` | Service lifecycle, DI container, routing, templating, PHP 8.1+ standards. Consult during planning and code review. |
+| `ntdst-data` | Data models, CPTs, field definitions, metaboxes, REST API, caching. Consult during planning for any data-related work. |
+| `ntdst-infra` | DDEV environments, Vite builds, git branching, Makefile workflows, deployment. Consult during planning for DevOps work. |
+
+### Quality & Review
+
+| Skill | When |
+|-------|------|
+| `review` | Review code for NTDST framework compliance and architecture rules. |
+| `code-audit` | Audit existing features against framework patterns. |
+| `simplify` | Review changed code for reuse, quality, and efficiency. |
+| `superpowers:requesting-code-review` | Before merging — verify work meets requirements. |
+| `superpowers:receiving-code-review` | When receiving feedback — verify before implementing suggestions. |
+
+### Completion & Git
+
+| Skill | When |
+|-------|------|
+| `superpowers:verification-before-completion` | Before claiming work is done — run verification, confirm output. |
+| `superpowers:finishing-a-development-branch` | After all tests pass — guides merge, PR, or cleanup decisions. |
+| `superpowers:using-git-worktrees` | When feature work needs isolation from current workspace. |
+
+### Debugging
+
+| Skill | When |
+|-------|------|
+| `superpowers:systematic-debugging` | Before proposing fixes for any bug, test failure, or unexpected behavior. |
+
+### Critical Thinking
+
+| Skill | When |
+|-------|------|
+| `thinking-deeply` | When facing confirmation-seeking questions, leading statements, binary choices, or embedded assumptions. Stop and think rigorously before agreeing or disagreeing. |
+
+---
+
+## Problem Memory
+
+Claude maintains a persistent knowledge base in `~/.claude/projects/-home-ntdst-Sites-stride/memory/`.
+
+### Before debugging: check memory first
+
+When hitting an error, test failure, or unexpected behavior — **search memory before investigating**:
+```
+Grep pattern="<error keyword>" path="/home/ntdst/.claude/projects/-home-ntdst-Sites-stride/memory/" glob="*.md"
+```
+If a match is found, apply the known fix directly. Don't re-debug.
+
+### After solving: write it back
+
+When you solve a non-trivial problem (not a typo, not a missing import), add an entry to the appropriate file:
+
+| File | What goes in it |
+|------|----------------|
+| `memory/problems.md` | Errors with root cause and fix (codebase, deployment, testing, DI, frontend) |
+| `memory/gotchas.md` | Non-obvious behavior, traps, things that waste time |
+| `memory/patterns.md` | Confirmed conventions verified across multiple interactions |
+
+## Memory
+
+Memory and tasks are managed automatically by global hooks.
+- `memory/STATE.md` — current project state, open work, decisions, risks
+- `memory/lessons.md` — accumulated learnings specific to this project
+- `tasks/todo.md` — open tasks carried forward between sessions
+
+Entry format for problems:
+```
+### [Short title]
+**Context:** Where/when this happens
+**Symptom:** Error message or behavior
+**Cause:** Root cause
+**Fix:** Exact solution
+**Date:** YYYY-MM-DD
+```
+
+### Rules
+- Search before debugging — don't waste tokens re-solving known issues
+- Only record verified solutions, not guesses
+- Keep entries concise — future you needs the fix, not the journey
+- Update entries if a better fix is found
+- Delete entries that are no longer relevant
 
 ---
 
 ## Useful Agents
 
-These specialized agents help with complex tasks:
+Specialized agents for complex tasks. Launch via the Agent tool.
 
 ### Code Quality
 | Agent | When to Use |
 |-------|-------------|
 | `ntdst-wp-backend-reviewer` | After implementing PHP services, API endpoints, or modifying existing code. Strict NTDST framework compliance review. |
-| `code-simplicity-reviewer` | Final review pass to ensure code is minimal and follows YAGNI principles. Use before finalizing changes. |
-| `netdust-frontend-reviewer` | Review JavaScript code for race conditions, page transitions, scroll management. |
+| `code-simplicity-reviewer` | Final review pass to ensure code is minimal and follows YAGNI principles. |
+| `netdust-frontend-reviewer` | Review JavaScript for race conditions, Barba transitions, UIkit lifecycle, Lenis scroll. |
 
 ### Architecture & Planning
 | Agent | When to Use |
 |-------|-------------|
 | `Plan` | Design implementation strategy for features. Returns step-by-step plans. |
 | `architecture-strategist` | Analyze code changes from architectural perspective, evaluate design decisions. |
-| `spec-flow-analyzer` | Analyze specifications for user flows and gap identification. Use when planning features. |
+| `spec-flow-analyzer` | Analyze specifications for user flows and gap identification. |
 
 ### Security & Performance
 | Agent | When to Use |
@@ -107,11 +211,13 @@ These specialized agents help with complex tasks:
 
 ```
 stride/
+├── site.yml                          # Operational config (hosting, deploy, DDEV, SSH)
 ├── docs/
 │   ├── V4-PROJECT-PLAN master.md    # Feature inventory & 9-phase implementation
 │   ├── ARCHITECTURE-V4-PROPOSAL.md  # Architecture decisions & design
-│   └── ARCHITECTURE-V3-ANALYSIS.md  # V3 analysis for reference
-├── plans/                            # Implementation plans
+│   ├── ARCHITECTURE-V3-ANALYSIS.md  # V3 analysis for reference
+│   └── plans/                       # Dated design docs & implementation plans
+├── plans/                            # Phase implementation plans (phase-1.5 through phase-5)
 ├── scripts/
 │   ├── seed.php                     # Development data seeder
 │   └── unseed.php                   # Seed data cleanup
@@ -122,37 +228,55 @@ stride/
 │   │   │   ├── ntdst-core/             # DI, Bootstrap, Router, Theme
 │   │   │   ├── stride-coreloader.php   # Stride business logic loader
 │   │   │   └── stride-core/            # Stride business logic
-│   │   │       ├── core/               # EditionService, SessionService, CourseService, etc.
-│   │   │       ├── enrollment/         # EnrollmentService, FormSubmissionHandler
-│   │   │       ├── invoicing/          # QuoteService, VoucherService
-│   │   │       ├── Handlers/           # AJAX handlers (ProfileHandler, ICalHandler, etc.)
+│   │   │       ├── Modules/            # Domain modules
+│   │   │       │   ├── Edition/        # EditionService, EditionRepository, EditionCPT
+│   │   │       │   ├── Enrollment/     # EnrollmentService, RegistrationRepository
+│   │   │       │   ├── Invoicing/      # QuoteService, VoucherService
+│   │   │       │   ├── Trajectory/     # TrajectoryService, TrajectoryDashboardService
+│   │   │       │   ├── Attendance/     # AttendanceService, AttendanceRepository
+│   │   │       │   ├── Questionnaire/  # QuestionnaireService
+│   │   │       │   ├── Notification/   # NotificationService
+│   │   │       │   ├── User/           # ProfileTypeService, UserLifecycleService
+│   │   │       │   ├── Membership/     # MembershipService
+│   │   │       │   ├── Reporting/      # AnnualReportService, AnnualReportPdfGenerator
+│   │   │       │   ├── Mail/           # StrideMailBridge
+│   │   │       │   ├── Audit/          # AuditBridge
+│   │   │       │   ├── Assistant/      # ReadAbilityRegistrar, WriteAbilityRegistrar
+│   │   │       │   └── PartnerAPI/     # REST API for partner organizations
+│   │   │       ├── Admin/              # AdminDashboardService, StrideToolsService, AdminAPIController, ...
+│   │   │       ├── Handlers/           # AJAX handlers: AnnualReportHandler, CompletionTaskHandler,
+│   │   │       │                       #   EnrollmentFormHandler, EnrollmentQuoteHandler, ICalHandler,
+│   │   │       │                       #   ProfileHandler, QuoteUpdateHandler
+│   │   │       ├── Integrations/       # LearnDashService, LearnDashHelper
+│   │   │       ├── Contracts/          # Interfaces (LMSAdapterInterface, etc.)
+│   │   │       ├── Domain/             # Value objects (Money, EditionStatus, etc.)
+│   │   │       ├── Infrastructure/     # AbstractRepository, AbstractService, BatchQueryHelper
+│   │   │       ├── Support/            # formatting.php (stride_format_date — shared, usable by PDFs/emails)
 │   │   │       ├── assets/
-│   │   │       │   ├── css/            # Admin CSS (admin-dashboard.css)
-│   │   │       │   └── js/             # Admin JS (admin-dashboard.js)
+│   │   │       │   ├── css/            # Admin CSS + per-module CSS
+│   │   │       │   └── js/             # Admin JS + per-module JS
 │   │   │       ├── templates/
-│   │   │       │   └── admin/          # Admin templates (dashboard.php)
-│   │   │       ├── sync/               # UserDataSync
-│   │   │       ├── adapters/           # LearnDashAdapter, FluentCRMAdapter
-│   │   │       ├── contracts/          # Interfaces
-│   │   │       ├── admin/              # AdminMenuService
-│   │   │       ├── smartcode/          # SmartCodeService
-│   │   │       ├── FieldRegistry.php   # Field name constants
+│   │   │       │   ├── admin/          # Admin templates (dashboard, settings, handleiding)
+│   │   │       │   └── pdf/            # PDF templates (quote.php)
 │   │   │       └── plugin-config.php   # Service registration
+│   │   │       # Field names: no central registry — each CPT's getFields() is the source of truth (see ARCHITECTURE-INVARIANTS.md INV-3)
 │   │   ├── plugins/                     # Composer-managed plugins
 │   │   └── themes/
-│   │       └── stride/
-│   │           ├── functions.php        # Bootstrap lifecycle
+│   │       └── stridence/
+│   │           ├── functions.php        # Bootstrap lifecycle + inline shortcodes
 │   │           ├── theme-config.php     # Frontend services config
 │   │           ├── services/
-│   │           │   └── frontend/        # DashboardService, DashboardShortcodes
-│   │           │       └── shortcodes/  # Focused shortcode classes + ShortcodeBase trait
-│   │           └── templates/           # View templates
-│   │               ├── dashboard/
-│   │               ├── course/
-│   │               ├── invoice/
-│   │               ├── admin/
-│   │               ├── emails/
-│   │               └── pdf/
+│   │           │   └── frontend/
+│   │           │       └── shortcodes/  # InterestShortcodes, IntakeShortcodes, EvaluationShortcodes
+│   │           ├── helpers/             # icons.php, formatting.php, templates.php
+│   │           ├── templates/           # View templates
+│   │           │   ├── dashboard/
+│   │           │   ├── course/
+│   │           │   ├── enrollment/
+│   │           │   ├── invoice/
+│   │           │   ├── emails/
+│   │           │   └── pdf/
+│   │           └── src/css/             # Tailwind source + tokens.css
 │   └── wp/                              # WordPress core (Bedrock)
 ├── config/                              # Bedrock config
 ├── vendor/                              # Composer dependencies
@@ -168,22 +292,34 @@ stride/
 
 ```php
 return [
+    'bindings' => [
+        LMSAdapterInterface::class => LearnDashService::class,
+        EditionQueryInterface::class => EditionService::class,
+    ],
     'services' => [
-        // Core Services
-        \ntdst\Stride\core\RegistrationRepository::class,
-        \ntdst\Stride\core\EditionService::class,
-        \ntdst\Stride\core\SessionService::class,
-        \ntdst\Stride\core\CourseService::class,
-
-        // Enrollment
-        \ntdst\Stride\enrollment\EnrollmentService::class,
-
-        // Invoicing
-        \ntdst\Stride\invoicing\QuoteService::class,
-        \ntdst\Stride\invoicing\VoucherService::class,
-
-        // Handlers
-        \ntdst\Stride\handlers\EnrollmentQuoteHandler::class,
+        \Stride\Integrations\LearnDash\LearnDashService::class,
+        \Stride\Admin\AdminDashboardService::class,
+        \Stride\Admin\StrideToolsService::class,
+        \Stride\Modules\Membership\MembershipService::class,
+        \Stride\Modules\Edition\EditionService::class,
+        \Stride\Modules\Edition\EditionDuplicator::class,
+        \Stride\Modules\Edition\CourseEnrollHandler::class,
+        \Stride\Modules\Enrollment\EnrollmentService::class,
+        \Stride\Modules\Questionnaire\QuestionnaireService::class,
+        \Stride\Modules\Trajectory\TrajectoryService::class,
+        \Stride\Modules\Attendance\AttendanceService::class,
+        \Stride\Modules\Invoicing\QuoteService::class,
+        \Stride\Modules\Notification\NotificationService::class,
+        \Stride\Modules\Audit\AuditBridge::class,
+        \Stride\Modules\Mail\StrideMailBridge::class,
+        \Stride\Modules\PartnerAPI\PartnerAPIController::class,
+        \Stride\Modules\User\ProfileTypeService::class,
+        \Stride\Modules\User\UserLifecycleService::class,
+        \Stride\Modules\Assistant\ReadAbilityRegistrar::class,
+        \Stride\Modules\Assistant\WriteAbilityRegistrar::class,
+        \Stride\Modules\Reporting\AnnualReportService::class,
+        \Stride\Modules\Reporting\AnnualReportPdfGenerator::class,
+        \Stride\Modules\Reporting\Admin\AnnualReportPage::class,
     ],
 ];
 ```
@@ -192,7 +328,7 @@ return [
 
 ```php
 <?php
-namespace ntdst\Stride\core;
+namespace Stride\Modules\Edition;
 
 class EditionService implements \NTDST_Service_Meta
 {
@@ -205,7 +341,13 @@ class EditionService implements \NTDST_Service_Meta
         ];
     }
 
-    public function __construct()
+    public function __construct(
+        private readonly EditionRepository $repository,
+    ) {
+        $this->init();
+    }
+
+    private function init(): void
     {
         // Hook registrations
     }
@@ -217,14 +359,14 @@ class EditionService implements \NTDST_Service_Meta
 ### Container Access
 
 ```php
-// Get service instance (new namespace)
-$editionService = ntdst_get(\ntdst\Stride\core\EditionService::class);
+// Get service instance
+$editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
 
 // Register singleton
 ntdst_set(MyService::class, fn() => new MyService());
 
-// Theme helper (still works)
-stride_service(\ntdst\Stride\core\EditionService::class);
+// Theme helper
+stride_service(\Stride\Modules\Edition\EditionService::class);
 ```
 
 ### Thin Handler Pattern (AJAX)
@@ -274,49 +416,16 @@ final class ProfileHandler
 }
 ```
 
-### Shortcode Classes Pattern
+### Shortcode Organization
 
-Shortcodes in `themes/stride/services/frontend/shortcodes/` use focused classes with a shared trait:
+Most shortcodes are registered inline in `themes/stridence/functions.php` (e.g., `stride_enrollment`).
+Newer shortcodes use focused classes in `themes/stridence/services/frontend/shortcodes/`:
 
-```php
-<?php
-namespace stride\services\frontend\shortcodes;
-
-use stride\services\frontend\DashboardService;
-
-final class CourseShortcodes
-{
-    use ShortcodeBase;  // Shared helpers: renderTemplate, requireLogin, resolveService
-
-    private ?DashboardService $dashboardService;
-
-    public function __construct(?DashboardService $dashboardService = null)
-    {
-        $this->dashboardService = $dashboardService ?? $this->resolveService(DashboardService::class);
-    }
-
-    public function register(): void
-    {
-        add_shortcode('stride_course_catalog', [$this, 'renderCourseCatalog']);
-        add_shortcode('stride_course_sidebar', [$this, 'renderCourseSidebar']);
-    }
-
-    public function renderCourseCatalog(array $atts = []): string
-    {
-        // Use $this->renderTemplate() from trait
-        return $this->renderTemplate('course/catalog.php', ['courses' => $data]);
-    }
-}
-```
-
-**Shortcode class organization:**
 | Class | Shortcodes |
 |-------|------------|
-| `UserDashboardShortcodes` | `stride_dashboard`, `stride_my_courses`, `stride_my_profile`, `stride_my_calendar` |
-| `CourseShortcodes` | `stride_course_catalog`, `stride_course_sidebar` |
-| `TrajectoryShortcodes` | `stride_my_trajectories`, `stride_trajectory`, `stride_trajectory_catalog` |
-| `QuoteShortcodes` | `stride_my_quotes`, `stride_quote_update` |
-| `EnrollmentShortcodes` | `stride_enrollment`, `stride_edition`, `stride_session_selection` |
+| `InterestShortcodes` | `stride_interest` |
+| `IntakeShortcodes` | `stride_intake` |
+| `EvaluationShortcodes` | `stride_evaluation` |
 
 ### External Assets Pattern (Admin)
 
@@ -325,12 +434,30 @@ Admin CSS/JS/HTML extracted to external files in `stride-core/`:
 ```
 stride-core/
 ├── Admin/
-│   └── AdminDashboardService.php   # Slim orchestrator (~240 lines)
+│   └── AdminDashboardService.php   # Slim orchestrator
 ├── assets/
-│   ├── css/admin-dashboard.css     # Extracted CSS
-│   └── js/admin-dashboard.js       # Extracted JS (Alpine.js)
+│   ├── css/
+│   │   ├── admin-dashboard.css     # Dashboard CSS
+│   │   └── admin/                  # Per-module CSS
+│   │       ├── edition-admin.css
+│   │       ├── questionnaire-builder.css
+│   │       ├── quote-admin.css
+│   │       ├── settings.css
+│   │       └── trajectory-admin.css
+│   └── js/
+│       ├── admin-dashboard.js      # Dashboard JS (Alpine.js)
+│       └── admin/                  # Per-module JS
+│           ├── edition-admin.js
+│           ├── questionnaire-builder.js
+│           ├── quote-admin.js
+│           ├── settings.js
+│           └── trajectory-admin.js
 └── templates/
-    └── admin/dashboard.php         # Extracted HTML template
+    ├── admin/                      # Admin templates
+    │   ├── dashboard.php
+    │   ├── handleiding.php
+    │   └── settings.php + settings/*.php
+    └── pdf/quote.php               # PDF templates
 ```
 
 Load external assets using `dirname(__DIR__)` for path calculation:
@@ -370,18 +497,37 @@ The Edition/Session layer separates scheduled course offerings from LearnDash co
 | `vad_quote` | Quotes/invoices |
 | `wp_vad_registrations` | High-volume registration table |
 
+### User Meta Keys
+
+Personal and billing user meta are **separate concerns** — never conflate them:
+
+| Field | Meta Key | Step | Purpose |
+|-------|----------|------|---------|
+| `organisation` | `organisation` | Personal | User's employer/organisation |
+| `department` | `department` | Personal | User's department within organisation |
+| `company` | `billing_company` | Billing | Company name on invoices |
+| `address` | `billing_address_1` | Billing | Invoice address |
+| `postal_code` | `billing_postcode` | Billing | Invoice postal code |
+| `city` | `billing_city` | Billing | Invoice city |
+| `vat_number` | `billing_vat` | Billing | VAT number |
+| `invoice_email` | `invoice_email` | Billing | Invoice email |
+| `gln_number` | `gln_number` | Billing | GLN number |
+
+**Important:** `organisation` ≠ `billing_company`. A user's employer (personal) and their invoice company (billing) are two independent fields. Never fall back from one to the other.
+
 ### Core Services
 
 ```php
-use ntdst\Stride\core\EditionService;
-use ntdst\Stride\core\SessionService;
-use ntdst\Stride\core\RegistrationRepository;
+use Stride\Modules\Edition\EditionService;
+use Stride\Modules\Edition\SessionService;
+use Stride\Modules\Enrollment\RegistrationRepository;
 
 // EditionService - scheduled offerings
 $editionService = ntdst_get(EditionService::class);
-$edition = $editionService->getEdition($editionId);
+$edition = $editionService->getEdition($editionId);  // Returns WP_Post|WP_Error
 $editions = $editionService->getEditionsForCourse($courseId);
 $price = $editionService->getPrice($editionId);
+$courseId = $editionService->getCourseId($editionId);
 
 // SessionService - meeting days and attendance
 $sessionService = ntdst_get(SessionService::class);
@@ -397,19 +543,35 @@ $regId = $regRepo->create([
     'status' => 'confirmed',
     'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
 ]);
+
+// Query by company (Partner API)
+$results = $regRepo->findByCompany($companyId, [
+    'status' => 'confirmed',
+    'page' => 1,
+    'per_page' => 20,
+]);
 ```
 
-### LearnDash Integration (4 points only)
+### LearnDash Integration (3 business operations + static helper)
 
 ```php
-use ntdst\Stride\core\CourseService;
+use Stride\Contracts\LMSAdapterInterface;
+use Stride\Integrations\LearnDash\LearnDashHelper;
 
-// CourseService wraps LearnDash
-$courseService = ntdst_get(CourseService::class);
-$courseService->grantAccess($userId, $courseId);   // On registration
-$courseService->revokeAccess($userId, $courseId);  // On cancellation
-$courseService->isComplete($userId, $courseId);    // Check completion
-$courseService->getCertificateLink($userId, $courseId);
+// LMSAdapterInterface — business operations only (DI)
+$lms = ntdst_get(LMSAdapterInterface::class);
+$lms->grantAccess($userId, $courseId);   // On registration
+$lms->revokeAccess($userId, $courseId);  // On cancellation
+$lms->isComplete($userId, $courseId);    // Check completion (used in business logic)
+
+// LearnDashHelper — read-only presentation (static, for templates)
+LearnDashHelper::getProgress($courseId, $userId);
+LearnDashHelper::getCertificateLink($courseId, $userId);
+LearnDashHelper::getEnrolledCourses($userId);
+LearnDashHelper::getCompletionDate($courseId, $userId);
+LearnDashHelper::isComplete($courseId, $userId);        // Template convenience
+LearnDashHelper::getCourseAction($courseId, $userId);   // CTA logic
+LearnDashHelper::getLessons($courseId, $userId);         // Lesson lists
 ```
 
 ---
@@ -450,11 +612,78 @@ Test credentials after seeding:
 - All seed users have password: `seedpass123`
 - Admin: `seed_admin@seed.test`
 - Students: `seed_student1@seed.test` through `seed_student5@seed.test`
+- Partner: `seed_partner@seed.test` (has `partner` role, company_id=1)
 
 ### Verify Plugin Load
 ```bash
-ddev exec wp eval "echo class_exists('\ntdst\Stride\core\EditionService') ? 'OK' : 'FAIL';"
+ddev exec wp eval "echo class_exists('\Stride\Modules\Edition\EditionService') ? 'OK' : 'FAIL';"
 ```
+
+### Running Tests
+
+```bash
+# Run all unit tests (fast, uses stubs)
+ddev exec vendor/bin/phpunit --testsuite Unit
+
+# Run all integration tests (slower, uses real WordPress — own config + bootstrap)
+ddev exec vendor/bin/phpunit -c phpunit-integration.xml.dist
+
+# Run specific test file
+ddev exec vendor/bin/phpunit --filter PartnerAPIController --testsuite Unit
+
+# Run with coverage (if xdebug enabled)
+ddev exec vendor/bin/phpunit --testsuite Unit --coverage-text
+
+# Static analysis (PHPStan)
+ddev exec composer lint:stan
+```
+
+**Test structure:**
+- `tests/Unit/` - Fast isolated tests with mocked dependencies
+- `tests/Integration/` - Full WordPress tests with real database
+- `tests/Stubs/` - WordPress function stubs for unit testing
+- `tests/TestCase.php` - Base class for unit tests
+- `tests/Integration/bootstrap.php` - Loads WordPress for integration tests
+
+---
+
+## Partner API
+
+REST API for partner organizations to manage their users' enrollments.
+
+**Design doc:** `docs/plans/2026-02-25-partner-api-design.md`
+
+### Authentication
+
+Partners use WordPress Application Passwords with Basic auth:
+```bash
+curl -u "partner_user:xxxx xxxx xxxx xxxx" \
+  https://stride.ddev.site/wp-json/stride/v1/partner/users
+```
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/stride/v1/partner/users` | List company users |
+| GET | `/stride/v1/partner/enrollments` | List company enrollments |
+| GET | `/stride/v1/partner/enrollments/{id}` | Single enrollment details |
+| GET | `/stride/v1/partner/certificates` | List certificates |
+| GET | `/stride/v1/partner/attendance` | Attendance records |
+| POST | `/stride/v1/partner/enrollments` | Create enrollment |
+
+### Company Scoping
+
+- Partner user has `_stride_company_id` in usermeta
+- All queries automatically scoped to partner's company
+- `company_id` column in `wp_vad_registrations` table
+
+### Key Files
+
+- `Modules/PartnerAPI/PartnerAPIController.php` - REST controller
+- `Modules/Enrollment/RegistrationRepository.php` - `findByCompany()` method
+- `tests/Unit/PartnerAPIControllerTest.php` - Unit tests
+- `tests/Integration/PartnerAPIIntegrationTest.php` - Integration tests
 
 ---
 
@@ -467,8 +696,8 @@ ddev exec wp eval "echo class_exists('\ntdst\Stride\core\EditionService') ? 'OK'
 5. **Simplified Admin**: Unified user profile view instead of 6+ tools
 6. **Journey UX**: Trajectories shown as visual learning paths, not course grids
 7. **Edition/Session Model**: LearnDash courses are content only; editions are scheduled offerings with dates, pricing, capacity; sessions are individual meeting days
-8. **LearnDash as Content Engine**: Only 4 integration points: `grantAccess`, `revokeAccess`, `isComplete`, `getCertificateLink`
-9. **Plugin Architecture**: Business logic in mu-plugin (`stride-core`), presentation in theme (`stride`)
+8. **LearnDash as Content Engine**: 5 adapter operations (`Contracts/LMSAdapterInterface`): `grantAccess`, `revokeAccess`, `isComplete`, `markComplete`, `isOpenCourse` — read-only presentation (e.g. `getCertificateLink`) via `LearnDashHelper`
+9. **Plugin Architecture**: Business logic in mu-plugin (`stride-core`), presentation in theme (`stridence`)
 
 ---
 
@@ -502,7 +731,7 @@ npm run build   # Production build
 ### Helper Functions
 
 ```php
-stride_format_date($date)      // Dutch formatted date
+stride_format_date($date)      // Dutch formatted date — lives in stride-core (Support/formatting.php), not the theme
 stride_format_money($cents)    // "€ 45,00"
 stride_enrollment_url($id)     // Enrollment page URL
 stridence_icon($name, $class)  // Inline SVG icon
@@ -522,10 +751,13 @@ stridence_icon($name, $class)  // Inline SVG icon
 
 ## Related Documentation
 
+- **Operational Config (DevOps):** `site.yml` — hosting, SSH, deploy commands, DDEV config. Read this for any deployment or infrastructure questions.
 - **V4 Project Plan (Master):** `docs/V4-PROJECT-PLAN master.md`
 - **V4 Architecture:** `docs/ARCHITECTURE-V4-PROPOSAL.md`
 - **Stridence Theme Spec:** `docs/plans/stride-theme-spec.md`
 - **V3 Analysis:** `docs/ARCHITECTURE-V3-ANALYSIS.md`
+- **Phase Plans:** `plans/` — phase-1.5 through phase-5 implementation plans
+- **Design Docs:** `docs/plans/` — dated design and implementation documents
 - **Plugin Extraction Plan:** `plans/plugin-extraction.md`
 - **Seed Scripts:** `scripts/seed.php`, `scripts/unseed.php`
 - **V3 Codebase (reference):** `/home/ntdst/Sites/vad-vormingen/`

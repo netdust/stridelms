@@ -14,14 +14,15 @@ enum RegistrationStatus: string
     case Cancelled = 'cancelled';
     case Waitlist = 'waitlist';
     case Interest = 'interest';
+    case Pending = 'pending';
 
     /**
      * Check if registration counts toward capacity.
      */
     public function countsTowardCapacity(): bool
     {
-        // Completed registrations still count - the spot was used
-        return in_array($this, [self::Confirmed, self::Completed], true);
+        // Pending registrations reserve a spot, completed registrations still count
+        return in_array($this, [self::Confirmed, self::Completed, self::Pending], true);
     }
 
     /**
@@ -30,7 +31,16 @@ enum RegistrationStatus: string
     public function hasAccess(): bool
     {
         // Both confirmed and completed users have access to course content
+        // Pending does NOT have access until admin confirms
         return in_array($this, [self::Confirmed, self::Completed], true);
+    }
+
+    /**
+     * Check if registration blocks duplicate submissions.
+     */
+    public function blocksDuplicate(): bool
+    {
+        return in_array($this, [self::Confirmed, self::Completed, self::Pending, self::Interest], true);
     }
 
     /**
@@ -44,6 +54,7 @@ enum RegistrationStatus: string
             self::Cancelled => 'Geannuleerd',
             self::Waitlist => 'Wachtlijst',
             self::Interest => 'Interesse',
+            self::Pending => 'In afwachting',
         };
     }
 }

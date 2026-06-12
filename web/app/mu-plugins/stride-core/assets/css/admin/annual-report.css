@@ -1,0 +1,83 @@
+/* Annual Report admin page styles. */
+
+.stride-annual-report .sar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 8px;
+}
+
+.stride-annual-report .sar-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.stride-annual-report .sar-meta {
+    color: #646970;
+    margin: 0 0 16px;
+}
+
+.stride-annual-report .sar-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.stride-annual-report .sar-kpi {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    padding: 12px 14px;
+}
+
+.stride-annual-report .sar-kpi-label {
+    font-size: 12px;
+    color: #646970;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.stride-annual-report .sar-kpi-current {
+    font-size: 24px;
+    font-weight: 600;
+    margin: 4px 0;
+}
+
+.stride-annual-report .sar-kpi-previous {
+    font-size: 12px;
+    color: #50575e;
+}
+
+.stride-annual-report .sar-kpi-delta {
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: #f0f0f1;
+}
+
+.stride-annual-report .sar-chart {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 24px;
+}
+
+.stride-annual-report .sar-section {
+    margin-bottom: 24px;
+}
+
+.stride-annual-report .sar-section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.stride-annual-report .sar-section-head h2 {
+    margin: 0;
+    font-size: 16px;
+}

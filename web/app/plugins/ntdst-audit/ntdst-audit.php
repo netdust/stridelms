@@ -2,9 +2,10 @@
 /**
  * Plugin Name: NTDST Audit
  * Description: Generic audit logging for WordPress with admin viewer and REST API
- * Version: 1.0.0
+ * Version: 1.1.0
  * Requires at least: 6.0
  * Requires PHP: 8.1
+ * Requires DB: MariaDB 10.2.3+ or MySQL 8.0.21+ (JSON_VALUE inside a generated column)
  * Author: NTDST
  * Text Domain: ntdst-audit
  */
@@ -23,7 +24,7 @@ if (!function_exists('ntdst_get')) {
 
 define('NTDST_AUDIT_PATH', plugin_dir_path(__FILE__));
 define('NTDST_AUDIT_URL', plugin_dir_url(__FILE__));
-define('NTDST_AUDIT_VERSION', '1.0.0');
+define('NTDST_AUDIT_VERSION', '1.1.0');
 
 // Autoloader for NTDST\Audit\ namespace
 spl_autoload_register(function (string $class): void {

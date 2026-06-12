@@ -8,8 +8,8 @@ use NetdustLTI\Plugin;
 /**
  * Unified LTI Settings Page
  *
- * Single Alpine.js-powered admin page replacing all scattered LTI admin pages.
- * Manages Platforms, Tools, Resources inline with CRUD via WP REST API.
+ * Single Alpine.js-powered admin page for LTI tool provider configuration.
+ * Manages Platforms (external LMS connections) inline with CRUD via WP REST API.
  */
 final class SettingsPage
 {
@@ -23,10 +23,23 @@ final class SettingsPage
         add_action('admin_head', [$this, 'injectStyles']);
         add_action('admin_footer', [$this, 'injectScripts']);
         add_filter('admin_body_class', [$this, 'addBodyClasses']);
+        add_filter('stride_tools_menu_items', [$this, 'registerToolsCard']);
     }
 
     public function registerMenu(): void
     {
+        if ($this->hasStrideTools()) {
+            add_submenu_page(
+                'stride-tools',
+                'Netdust LTI',
+                'LTI',
+                self::CAPABILITY,
+                self::MENU_SLUG,
+                [$this, 'renderPage']
+            );
+            return;
+        }
+
         add_options_page(
             'Netdust LTI',
             'Netdust LTI',
@@ -36,20 +49,44 @@ final class SettingsPage
         );
     }
 
+    /**
+     * Surface this tool on the Stride Tools index + dashboard card.
+     */
+    public function registerToolsCard(array $items): array
+    {
+        $items[] = [
+            'slug'        => self::MENU_SLUG,
+            'label'       => 'LTI',
+            'description' => 'Configureer LTI tools, platforms en launch tests.',
+            'icon'        => 'dashicons-admin-plugins',
+            'capability'  => self::CAPABILITY,
+        ];
+        return $items;
+    }
+
+    private function hasStrideTools(): bool
+    {
+        return class_exists('\Stride\Admin\StrideToolsService');
+    }
+
     private function isLtiPage(): bool
     {
         $screen = get_current_screen();
         if (!$screen) {
             return (sanitize_text_field($_GET['page'] ?? '') === self::MENU_SLUG);
         }
-        return $screen->id === 'settings_page_' . self::MENU_SLUG;
+        $expected = ($this->hasStrideTools() ? 'stride-tools_page_' : 'settings_page_') . self::MENU_SLUG;
+        return $screen->id === $expected;
     }
 
     public function enqueueAssets(string $hook): void
     {
-        if ($hook !== 'settings_page_' . self::MENU_SLUG) {
+        $expected = ($this->hasStrideTools() ? 'stride-tools_page_' : 'settings_page_') . self::MENU_SLUG;
+        if ($hook !== $expected) {
             return;
         }
+
+        ntdst_enqueue_admin_toolkit();
 
         wp_enqueue_script(
             'alpinejs',
@@ -65,7 +102,6 @@ final class SettingsPage
             'homeUrl' => home_url(),
             'adminUrl' => admin_url(),
             'toolEndpoints' => $this->getToolEndpoints(),
-            'platformEndpoints' => $this->getPlatformEndpoints(),
             'keyStatus' => $this->getKeyStatus(),
         ]);
     }
@@ -73,7 +109,7 @@ final class SettingsPage
     public function addBodyClasses(string $classes): string
     {
         if ($this->isLtiPage()) {
-            $classes .= ' lti-settings-page folded';
+            $classes .= ' lti-settings-page';
         }
         return $classes;
     }
@@ -122,17 +158,6 @@ final class SettingsPage
         ];
     }
 
-    private function getPlatformEndpoints(): array
-    {
-        return [
-            'issuer' => home_url('/'),
-            'auth_endpoint' => home_url('/lti/platform/auth'),
-            'jwks_url' => home_url('/lti/jwks'),
-            'ags_endpoint' => home_url('/lti/platform/grades'),
-            'deep_link_return' => home_url('/lti/platform/deep-link-return'),
-        ];
-    }
-
     private function getKeyStatus(): array
     {
         $kid = get_option('netdust_lti_kid', '');
@@ -141,6 +166,18 @@ final class SettingsPage
         return [
             'kid' => $kid,
             'hasKeys' => $hasPrivateKey && $hasPublicKey,
+        ];
+    }
+
+    /**
+     * Get legacy (LTI 1.1/1.2) configuration for a platform.
+     */
+    public function getLegacyConfig(int $platformId): array
+    {
+        return [
+            'launch_url'      => home_url('/lti/launch'),
+            'consumer_key'    => get_post_meta($platformId, 'lti_consumer_key', true) ?: '',
+            'consumer_secret' => get_post_meta($platformId, 'lti_consumer_secret', true) ?: '',
         ];
     }
 }

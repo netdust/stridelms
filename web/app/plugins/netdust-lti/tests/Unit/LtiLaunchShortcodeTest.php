@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 namespace NetdustLTI\Tests\Unit;
 
-use NetdustLTI\Shortcodes\LtiLaunchShortcode;
-use NetdustLTI\Repositories\ToolRepository;
+use NetdustLTI\Platform\LtiLaunchShortcode;
+use NetdustLTI\Platform\ToolRepository;
 use PHPUnit\Framework\TestCase;
 use WP_Post;
 use WP_Error;

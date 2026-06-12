@@ -1,0 +1,15 @@
+<?php
+/**
+ * Title: VAD — Privacybeleid
+ * Slug: vad/privacy
+ * Description: Plain long-form legal page (no intro band — matches VAD's live privacy layout).
+ * Categories: vad
+ * Keywords: privacy, gdpr, beleid, vad
+ * Viewport Width: 1280
+ */
+?>
+<!-- wp:group {"tagName":"section","className":"vad-prose vad-legal","style":{"spacing":{"padding":{"top":"clamp(2rem,4vw,3rem)","bottom":"clamp(3rem,5vw,4rem)"}}},"layout":{"type":"constrained","contentSize":"720px"}} -->
+<section class="wp-block-group vad-prose vad-legal" style="padding-top:clamp(2rem,4vw,3rem);padding-bottom:clamp(3rem,5vw,4rem)">
+    <!-- VAD_BODY_PLACEHOLDER -->
+</section>
+<!-- /wp:group -->

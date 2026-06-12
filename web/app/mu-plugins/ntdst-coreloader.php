@@ -42,3 +42,46 @@ require_once NTDST_PATH . '/services/RelationField.php';
 
 // Register singleton instances that can't be auto-wired
 ntdst_set(NTDST_SectorRegistry::class, fn() => ntdst_sectors());
+
+/**
+ * Enqueue the shared NTDST admin toolkit CSS.
+ *
+ * Call from admin_enqueue_scripts (or admin_head) on your plugin's settings page.
+ * Uses wp_enqueue_style to prevent duplicates when multiple plugins load it.
+ */
+function ntdst_enqueue_admin_toolkit(): void
+{
+    wp_enqueue_style(
+        'ntdst-admin-toolkit',
+        NTDST_URL . '/assets/css/admin-toolkit.css',
+        [],
+        '1.0.0'
+    );
+}
+
+/**
+ * Enqueue the shared NTDST API client (window.ntdstAPI).
+ *
+ * Single source of truth for /wp-json/ntdst/v1/action calls. Use from both
+ * frontend (theme) and admin pages. Localizes the wp_rest nonce as
+ * window.ntdstAPIConfig.restNonce so the client can authenticate the REST
+ * endpoint regardless of context.
+ */
+function ntdst_enqueue_api_client(): void
+{
+    $path = NTDST_PATH . '/assets/js/ntdst-api.js';
+    wp_enqueue_script(
+        'ntdst-api',
+        NTDST_URL . '/assets/js/ntdst-api.js',
+        [],
+        file_exists($path) ? (string) filemtime($path) : '1.0.0',
+        false
+    );
+    wp_add_inline_script(
+        'ntdst-api',
+        'window.ntdstAPIConfig = ' . wp_json_encode([
+            'restNonce' => wp_create_nonce('wp_rest'),
+        ]) . ';',
+        'before'
+    );
+}

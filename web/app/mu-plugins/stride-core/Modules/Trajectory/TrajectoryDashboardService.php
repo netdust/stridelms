@@ -26,8 +26,7 @@ final class TrajectoryDashboardService
         private readonly RegistrationRepository $registrationRepo,
         private readonly EditionService $editionService,
         private readonly LMSAdapterInterface $lmsAdapter,
-    ) {
-    }
+    ) {}
 
     /**
      * Get trajectory by slug.
@@ -44,15 +43,7 @@ final class TrajectoryDashboardService
      */
     public function getEnrollmentForUser(int $userId, int $trajectoryId): ?object
     {
-        $enrollments = $this->registrationRepo->findTrajectoryEnrollmentsByUser($userId);
-
-        foreach ($enrollments as $enrollment) {
-            if ((int) $enrollment->trajectory_id === $trajectoryId) {
-                return $enrollment;
-            }
-        }
-
-        return null;
+        return $this->registrationRepo->findByUserAndTrajectory($userId, $trajectoryId);
     }
 
     /**
@@ -75,8 +66,8 @@ final class TrajectoryDashboardService
         $trajectory = $this->trajectoryService->getTrajectory($trajectoryId);
         $mode = TrajectoryMode::tryFrom($trajectory['mode'] ?? '') ?? TrajectoryMode::Cohort;
 
-        $requiredCourses = $this->trajectoryService->getRequiredCourses($trajectoryId);
-        $electiveGroups = $this->trajectoryService->getElectiveGroups($trajectoryId);
+        $requiredCourses = $this->repository->getRequiredCourses($trajectoryId);
+        $electiveGroups = $this->repository->getElectiveGroups($trajectoryId);
 
         // Calculate required count
         $totalRequired = count($requiredCourses);
@@ -87,6 +78,13 @@ final class TrajectoryDashboardService
         // Get user's edition registrations for this trajectory
         $editionRegs = $this->registrationRepo->findEditionsByTrajectory($userId, $trajectoryId);
 
+        // Pre-build edition → courseId map to avoid N+1 getCourseId calls
+        $editionCourseMap = [];
+        foreach ($editionRegs as $edReg) {
+            $edId = (int) $edReg->edition_id;
+            $editionCourseMap[$edId] = $this->editionService->getCourseId($edId);
+        }
+
         // Calculate completion
         $completedCourses = [];
         $inProgressCourses = [];
@@ -96,8 +94,9 @@ final class TrajectoryDashboardService
                 $userId,
                 $course->ID,
                 $editionRegs,
+                $editionCourseMap,
                 $completedCourses,
-                $inProgressCourses
+                $inProgressCourses,
             );
         }
 
@@ -107,8 +106,9 @@ final class TrajectoryDashboardService
                     $userId,
                     $course->ID,
                     $editionRegs,
+                    $editionCourseMap,
                     $completedCourses,
-                    $inProgressCourses
+                    $inProgressCourses,
                 );
             }
         }
@@ -133,8 +133,9 @@ final class TrajectoryDashboardService
         int $userId,
         int $courseId,
         array $editionRegs,
+        array $editionCourseMap,
         array &$completedCourses,
-        array &$inProgressCourses
+        array &$inProgressCourses,
     ): void {
         if ($this->lmsAdapter->isComplete($userId, $courseId)) {
             $completedCourses[] = $courseId;
@@ -144,7 +145,7 @@ final class TrajectoryDashboardService
 
         // Check if enrolled in any edition for this course
         foreach ($editionRegs as $edReg) {
-            $edCourseId = $this->editionService->getCourseId((int) $edReg->edition_id);
+            $edCourseId = $editionCourseMap[(int) $edReg->edition_id] ?? 0;
             if ($edCourseId === $courseId) {
                 $inProgressCourses[] = $courseId;
 
@@ -160,8 +161,8 @@ final class TrajectoryDashboardService
      */
     public function getMaterials(int $trajectoryId, int $userId): array
     {
-        $requiredCourses = $this->trajectoryService->getRequiredCourses($trajectoryId);
-        $electiveGroups = $this->trajectoryService->getElectiveGroups($trajectoryId);
+        $requiredCourses = $this->repository->getRequiredCourses($trajectoryId);
+        $electiveGroups = $this->repository->getElectiveGroups($trajectoryId);
 
         $allCourses = $requiredCourses;
         foreach ($electiveGroups as $group) {

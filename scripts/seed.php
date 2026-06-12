@@ -5,11 +5,25 @@
  * Run with: ddev exec wp eval-file scripts/seed.php
  *
  * Creates comprehensive test data for frontend testing:
- * - 10 courses (2 online, 8 in-person)
- * - Various edition configurations (single/multiple editions, all statuses)
- * - Sessions with different types (in_person, online, webinar, assignment)
- * - 2 trajectories (cohort and self-paced) with courses
- * - Registrations, quotes and vouchers
+ *
+ * ONLINE COURSES (5 total):
+ *   - 2 "open" courses: LD native enrollment (no edition, LearnDash handles access)
+ *   - 3 "closed" courses: with editions + enrollment_form + sessions for admin
+ *
+ * IN-PERSON COURSES (8 total):
+ *   - Simple single-session courses
+ *   - Multi-day intensive courses (consecutive days)
+ *   - Multi-session courses (spread over weeks)
+ *   - Courses with session slots + selection deadlines
+ *   - Courses with optional/mandatory sessions
+ *   - Full/cancelled/rescheduled editions
+ *   - Free introductory courses
+ *
+ * HYBRID / WEBINAR (3 total)
+ *
+ * TRAJECTORIES (3 total)
+ *
+ * VOUCHERS, QUOTES, REGISTRATIONS for testing
  */
 
 if (!defined('ABSPATH')) {
@@ -18,20 +32,21 @@ if (!defined('ABSPATH')) {
 }
 
 // Prevent accidental runs in production
-if (defined('WP_ENV') && WP_ENV === 'production') {
-    echo "ERROR: Cannot run seed script in production!\n";
+if (!defined('WP_ENV') || !in_array(WP_ENV, ['development', 'local'], true)) {
+    echo "ERROR: Seed script only allowed in development/local environments!\n";
     exit(1);
 }
 
 use Stride\Domain\RegistrationStatus;
 use Stride\Domain\SessionType;
 use Stride\Domain\TrajectoryMode;
-use Stride\Domain\TrajectoryStatus;
+use Stride\Domain\OfferingStatus;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Trajectory\TrajectoryService;
+use Stride\Modules\Enrollment\EnrollmentCompletion;
 
 // Session type constants
 const SESSION_TYPE_IN_PERSON = 'in_person';
@@ -70,14 +85,17 @@ class StrideSeedData {
         echo "\n=== Stride LMS Comprehensive Seed ===\n\n";
 
         $this->initServices();
+        $this->ensureTaxonomyTerms();
         $this->createUsers();
         $this->createCourses();
         $this->createTrajectories();
         $this->createVouchers();
         $this->createEnrollmentsAndQuotes();
+        $this->createPostCourseTestData();
         $this->createTrajectoryTestData();
 
         $this->saveSeedManifest();
+        $this->seedCompanyDetails();
         $this->printSummary();
     }
 
@@ -91,23 +109,68 @@ class StrideSeedData {
         }
     }
 
+    /**
+     * Ensure stride_format and stride_theme taxonomy terms exist.
+     */
+    private function ensureTaxonomyTerms(): void {
+        echo "Ensuring taxonomy terms...\n";
+
+        // stride_format terms
+        $formats = [
+            'klassikaal' => 'Klassikaal',
+            'online'     => 'Online',
+            'e-learning' => 'E-learning',
+            'webinar'    => 'Webinar',
+            'hybrid'     => 'Hybride',
+        ];
+
+        foreach ($formats as $slug => $name) {
+            if (!term_exists($slug, 'stride_format')) {
+                $result = wp_insert_term($name, 'stride_format', ['slug' => $slug]);
+                if (!is_wp_error($result)) {
+                    echo "  + Format term: {$name}\n";
+                }
+            }
+        }
+
+        // stride_theme terms
+        $themes = [
+            'beweging'       => 'Beweging',
+            'voeding'        => 'Voeding',
+            'welzijn'        => 'Welzijn',
+            'sportblessures' => 'Sportblessures',
+            'jeugdwerk'      => 'Jeugdwerk',
+            'schoolbeleid'   => 'Schoolbeleid',
+        ];
+
+        foreach ($themes as $slug => $name) {
+            if (!term_exists($slug, 'stride_theme')) {
+                $result = wp_insert_term($name, 'stride_theme', ['slug' => $slug]);
+                if (!is_wp_error($result)) {
+                    echo "  + Theme term: {$name}\n";
+                }
+            }
+        }
+    }
+
     private function createUsers(): void {
-        echo "Creating users...\n";
+        echo "\nCreating users...\n";
 
         $users = [
             ['login' => 'seed_admin', 'email' => 'seed_admin@seed.test', 'role' => 'administrator', 'first' => 'Admin', 'last' => 'Seed'],
             ['login' => 'seed_instructor', 'email' => 'instructor@seed.test', 'role' => 'group_leader', 'first' => 'Jan', 'last' => 'De Trainer'],
             ['login' => 'seed_partner', 'email' => 'seed_partner@seed.test', 'role' => 'partner', 'first' => 'Partner', 'last' => 'Test', 'company_id' => 1],
-            ['login' => 'seed_student1', 'email' => 'student1@seed.test', 'role' => 'subscriber', 'first' => 'Pieter', 'last' => 'Janssen', 'is_member' => true, 'company_id' => 1],
-            ['login' => 'seed_student2', 'email' => 'student2@seed.test', 'role' => 'subscriber', 'first' => 'Anna', 'last' => 'De Vries', 'is_member' => true, 'company_id' => 1],
-            ['login' => 'seed_student3', 'email' => 'student3@seed.test', 'role' => 'subscriber', 'first' => 'Thomas', 'last' => 'Bakker', 'is_member' => false, 'company_id' => 1],
+            ['login' => 'seed_student1', 'email' => 'student1@seed.test', 'role' => 'subscriber', 'first' => 'Pieter', 'last' => 'Janssen', 'company_id' => 1],
+            ['login' => 'seed_student2', 'email' => 'student2@seed.test', 'role' => 'subscriber', 'first' => 'Anna', 'last' => 'De Vries', 'company_id' => 1],
+            ['login' => 'seed_student3', 'email' => 'student3@seed.test', 'role' => 'subscriber', 'first' => 'Thomas', 'last' => 'Bakker', 'company_id' => 1],
+            ['login' => 'seed_coordinator', 'email' => 'seed_coordinator@seed.test', 'role' => 'stride_coordinator', 'first' => 'Coordinator', 'last' => 'Seed'],
+            ['login' => 'seed_supervisor', 'email' => 'seed_supervisor@seed.test', 'role' => 'stride_supervisor', 'first' => 'Supervisor', 'last' => 'Seed'],
         ];
 
         foreach ($users as $userData) {
             $existing = get_user_by('login', $userData['login']);
             if ($existing) {
                 $this->created['users'][] = $existing->ID;
-                // Ensure existing seed users are activated
                 if (!get_user_meta($existing->ID, 'ntdst_auth_activated', true)) {
                     update_user_meta($existing->ID, 'ntdst_auth_activated', true);
                     update_user_meta($existing->ID, 'ntdst_auth_activated_at', time());
@@ -115,7 +178,6 @@ class StrideSeedData {
                 } else {
                     echo "  - User {$userData['login']} exists (ID: {$existing->ID})\n";
                 }
-                // Ensure company_id is set for existing users
                 if (isset($userData['company_id'])) {
                     update_user_meta($existing->ID, '_stride_company_id', $userData['company_id']);
                 }
@@ -138,9 +200,6 @@ class StrideSeedData {
             }
 
             update_user_meta($userId, self::SEED_META_KEY, true);
-            if (isset($userData['is_member'])) {
-                update_user_meta($userId, 'is_vad_member', $userData['is_member']);
-            }
             if (isset($userData['company_id'])) {
                 update_user_meta($userId, '_stride_company_id', $userData['company_id']);
             }
@@ -162,310 +221,248 @@ class StrideSeedData {
             return;
         }
 
-        // ===== COURSE DEFINITIONS =====
-        // Organized by type: Online (self-paced), In-Person (with editions), Hybrid, Webinar
         $courses = [
 
             // =========================================================================
-            // ONLINE COURSES (Self-paced e-learning - NO editions, always available)
+            // INDEX 0-1: ONLINE COURSES - OPEN (LearnDash native enrollment, no editions)
+            // These appear on /online/ and use LD payment buttons for enrollment.
             // =========================================================================
 
-            // === ONLINE 1: Comprehensive introduction course ===
+            // === INDEX 0: Open online - comprehensive introduction ===
             [
-                'title' => 'E-learning: Basiskennis Verslavingszorg',
-                'description' => 'Deze uitgebreide online cursus biedt een stevige basis in de verslavingszorg. Je leert over de verschillende soorten verslavingen, de biologische en psychologische mechanismen, en de belangrijkste behandelmethoden. Ideaal voor nieuwe medewerkers of als opfrisser voor ervaren professionals. Na afronding ontvang je een officieel VAD-certificaat.',
+                'title' => 'E-learning: Basiskennis Jeugdgezondheid',
+                'description' => 'Uitgebreide online cursus over de pijlers van jeugdgezondheid: beweging, voeding en mentaal welzijn. Evidence-based inzichten voor iedereen die met jongeren werkt.',
                 'type' => 'online',
-                'editions' => [], // No editions - always available
-                'lessons' => [
-                    [
-                        'title' => 'Module 1: Wat is verslaving?',
-                        'content' => '<h3>Definitie en Kenmerken</h3>
-<p>In deze eerste module verkennen we wat verslaving precies inhoudt. We bekijken de DSM-5 criteria voor stoornis in middelengebruik en gedragsverslavingen.</p>
-
-<h4>Leerdoelen</h4>
-<ul>
-<li>Je kunt verslaving definiëren volgens de huidige wetenschappelijke inzichten</li>
-<li>Je herkent de 11 criteria van DSM-5 voor stoornissen in middelengebruik</li>
-<li>Je begrijpt het verschil tussen gebruik, misbruik en afhankelijkheid</li>
-</ul>
-
-<h4>Kernbegrippen</h4>
-<p><strong>Tolerantie:</strong> Het lichaam went aan de stof, waardoor steeds meer nodig is voor hetzelfde effect.</p>
-<p><strong>Onthoudingsverschijnselen:</strong> Lichamelijke en psychische klachten die optreden bij stoppen of minderen.</p>
-<p><strong>Craving:</strong> Een intense drang of verlangen naar de stof of het gedrag.</p>',
-                    ],
-                    [
-                        'title' => 'Module 2: Het verslaafde brein',
-                        'content' => '<h3>Neurobiologie van Verslaving</h3>
-<p>Verslaving is een hersenziekte. In deze module leer je hoe verslavende stoffen en gedragingen het beloningssysteem van de hersenen beïnvloeden.</p>
-
-<h4>Het Dopamine Systeem</h4>
-<p>Dopamine speelt een centrale rol bij verslaving. We bekijken hoe drugs en verslavend gedrag leiden tot een abnormale dopamine-afgifte en hoe dit het brein verandert.</p>
-
-<h4>De Prefrontale Cortex</h4>
-<p>Dit deel van de hersenen is verantwoordelijk voor planning, impulscontrole en besluitvorming. Bij verslaving raakt dit gebied aangetast, wat verklaart waarom mensen blijven gebruiken ondanks negatieve gevolgen.</p>',
-                    ],
-                    [
-                        'title' => 'Module 3: Soorten verslavingen',
-                        'content' => '<h3>Middelen en Gedragsverslavingen</h3>
-
-<h4>Middelenverslavingen</h4>
-<ul>
-<li><strong>Alcohol:</strong> De meest voorkomende verslaving in België en Nederland</li>
-<li><strong>Cannabis:</strong> Vooral problematisch bij jongeren vanwege hersenontwikkeling</li>
-<li><strong>Opiaten:</strong> Heroïne en pijnstillers - hoog risico op overdosis</li>
-<li><strong>Stimulantia:</strong> Cocaïne, amfetaminen, MDMA</li>
-<li><strong>Benzodiazepines:</strong> Vaak onderschat maar zeer verslavend</li>
-</ul>
-
-<h4>Gedragsverslavingen</h4>
-<ul>
-<li><strong>Gokken:</strong> Officieel erkend als verslaving in DSM-5</li>
-<li><strong>Gaming:</strong> Internet Gaming Disorder</li>
-<li><strong>Social media:</strong> Groeiend probleem, vooral bij jongeren</li>
-</ul>',
-                    ],
-                    [
-                        'title' => 'Module 4: Behandelmethoden overzicht',
-                        'content' => '<h3>Evidence-Based Behandelingen</h3>
-
-<h4>Psychosociale Behandelingen</h4>
-<p><strong>Cognitieve Gedragstherapie (CGT):</strong> Helpt cliënten hun gedachten en gedrag te veranderen. Zeer effectief bij diverse verslavingen.</p>
-<p><strong>Motiverende Gespreksvoering (MGV):</strong> Versterkt de eigen motivatie van de cliënt om te veranderen. Niet-confronterend en cliëntgericht.</p>
-<p><strong>Community Reinforcement Approach (CRA):</strong> Richt zich op het opbouwen van een bevredigend leven zonder middelen.</p>
-
-<h4>Farmacologische Behandelingen</h4>
-<p>Bij sommige verslavingen kunnen medicijnen helpen: methadon/buprenorfine bij opiaatverslaving, naltrexon bij alcohol, varenicline bij nicotine.</p>',
-                    ],
-                    [
-                        'title' => 'Module 5: Eindtoets en certificaat',
-                        'content' => '<h3>Toets je Kennis</h3>
-<p>Je hebt alle modules doorgewerkt. Nu is het tijd om je kennis te toetsen met de eindtoets.</p>
-
-<h4>Instructies</h4>
-<ul>
-<li>De toets bestaat uit 25 meerkeuzevragen</li>
-<li>Je hebt 45 minuten de tijd</li>
-<li>Je moet minimaal 70% scoren om te slagen</li>
-<li>Bij voldoende resultaat ontvang je direct je certificaat</li>
-</ul>
-
-<p><strong>Succes!</strong></p>',
-                    ],
-                ],
-            ],
-
-            // === ONLINE 2: Alcohol specific course ===
-            [
-                'title' => 'E-learning: Alcohol en Gezondheid',
-                'description' => 'Verdiepende online module over alle aspecten van alcohol. Van de werking op het lichaam tot de sociale impact, van vroege signalering tot behandeling. Met interactieve cases, video-interviews met ervaringsdeskundigen, en praktische tools voor gesprekken over alcohol.',
-                'type' => 'online',
+                'format' => ['online', 'e-learning'],
+                'themes' => ['beweging', 'welzijn'],
+                'ld_price_type' => 'open', // free, no restrictions
                 'editions' => [],
                 'lessons' => [
-                    [
-                        'title' => 'Hoofdstuk 1: Alcohol in cijfers',
-                        'content' => '<h3>De Nederlandse en Belgische Situatie</h3>
-
-<h4>Alcoholgebruik in België</h4>
-<p>België staat in de Europese top als het gaat om alcoholconsumptie. Gemiddeld drinkt een Belg 12,1 liter pure alcohol per jaar.</p>
-
-<h4>Problematisch gebruik</h4>
-<ul>
-<li>Ongeveer 10% van de bevolking heeft een riskant drinkpatroon</li>
-<li>Mannen drinken gemiddeld meer dan vrouwen</li>
-<li>Bingedrinken is vooral een probleem bij jongvolwassenen (18-24 jaar)</li>
-<li>De kosten voor de maatschappij worden geschat op 4,2 miljard euro per jaar</li>
-</ul>
-
-<h4>Wat is een standaardglas?</h4>
-<p>Een standaardglas bevat 10 gram pure alcohol. Dit komt overeen met: een glas bier (25cl), een glas wijn (10cl), of een borrel (3,5cl).</p>',
-                    ],
-                    [
-                        'title' => 'Hoofdstuk 2: Effecten op lichaam en geest',
-                        'content' => '<h3>Hoe Alcohol Werkt</h3>
-
-<h4>Korte termijn effecten</h4>
-<p>Alcohol werkt als een remmer op het centrale zenuwstelsel. Het verhoogt de activiteit van GABA (remmende neurotransmitter) en verlaagt de activiteit van glutamaat (stimulerende neurotransmitter).</p>
-
-<h4>Effecten per BAC niveau</h4>
-<ul>
-<li><strong>0.2-0.5‰:</strong> Ontspanning, lichte euforie, verminderde remmingen</li>
-<li><strong>0.5-1.0‰:</strong> Verminderde coördinatie, trager reactievermogen</li>
-<li><strong>1.0-2.0‰:</strong> Onduidelijke spraak, evenwichtsproblemen, emotionele instabiliteit</li>
-<li><strong>2.0-3.0‰:</strong> Ernstige motorische problemen, black-outs mogelijk</li>
-<li><strong>>3.0‰:</strong> Levensgevaarlijk, risico op coma</li>
-</ul>
-
-<h4>Lange termijn gevolgen</h4>
-<p>Chronisch overmatig alcoholgebruik kan leiden tot levercirrose, hersenkrimp, hart- en vaatziekten, kanker, en psychische stoornissen.</p>',
-                    ],
-                    [
-                        'title' => 'Hoofdstuk 3: Herkennen van problematisch gebruik',
-                        'content' => '<h3>Vroege Signalering</h3>
-
-<h4>Signalen bij de persoon zelf</h4>
-<ul>
-<li>Regelmatig meer drinken dan gepland</li>
-<li>Tolerantieontwikkeling: steeds meer nodig voor effect</li>
-<li>Onthoudingsklachten bij niet drinken (trillen, zweten, angst)</li>
-<li>Verwaarlozing van andere activiteiten</li>
-<li>Blijven drinken ondanks problemen</li>
-</ul>
-
-<h4>De CAGE vragenlijst</h4>
-<p>Een snelle screening tool met 4 vragen:</p>
-<ol>
-<li><strong>C</strong>ut down: Heeft u ooit het gevoel gehad dat u moest minderen?</li>
-<li><strong>A</strong>nnoyed: Ergert u zich aan kritiek van anderen op uw drinkgedrag?</li>
-<li><strong>G</strong>uilty: Heeft u zich wel eens schuldig gevoeld over uw drinkgedrag?</li>
-<li><strong>E</strong>ye-opener: Drinkt u wel eens alcohol in de ochtend?</li>
-</ol>
-<p>2 of meer "ja" antwoorden wijzen op mogelijk problematisch gebruik.</p>',
-                    ],
-                    [
-                        'title' => 'Hoofdstuk 4: Gespreksvoering over alcohol',
-                        'content' => '<h3>Het Gesprek Aangaan</h3>
-
-<h4>Barrières overwinnen</h4>
-<p>Veel hulpverleners vinden het lastig om alcohol ter sprake te brengen. Veelgehoorde redenen:</p>
-<ul>
-<li>"Het is privé"</li>
-<li>"De cliënt zal boos worden"</li>
-<li>"Ik drink zelf ook, wie ben ik om te oordelen?"</li>
-</ul>
-<p>Onderzoek toont echter dat de meeste mensen korte interventies over alcohol waarderen.</p>
-
-<h4>De 5 A\'s</h4>
-<ol>
-<li><strong>Ask:</strong> Vraag naar alcoholgebruik</li>
-<li><strong>Assess:</strong> Bepaal het risiconiveau</li>
-<li><strong>Advise:</strong> Geef helder advies</li>
-<li><strong>Assist:</strong> Help bij verandering</li>
-<li><strong>Arrange:</strong> Regel follow-up</li>
-</ol>',
-                    ],
-                    [
-                        'title' => 'Hoofdstuk 5: Behandelmogelijkheden',
-                        'content' => '<h3>Van Vroeginterventie tot Intensieve Behandeling</h3>
-
-<h4>Korte interventies</h4>
-<p>Voor mensen met riskant maar niet afhankelijk drinkgedrag kan een korte interventie (5-15 minuten) al effect hebben. Dit omvat feedback, advies en het stellen van doelen.</p>
-
-<h4>Ambulante behandeling</h4>
-<p>Bij alcoholafhankelijkheid is vaak intensievere hulp nodig. Dit kan bestaan uit:</p>
-<ul>
-<li>Individuele therapie (CGT, MGV)</li>
-<li>Groepstherapie</li>
-<li>Medicamenteuze ondersteuning (disulfiram, acamprosaat, naltrexon)</li>
-</ul>
-
-<h4>Klinische behandeling</h4>
-<p>Bij ernstige afhankelijkheid of comorbiditeit kan opname nodig zijn voor detoxificatie en intensieve behandeling.</p>
-
-<h4>Zelfhulpgroepen</h4>
-<p>AA (Anonieme Alcoholisten) en SMART Recovery bieden peer support en zijn een waardevolle aanvulling op professionele behandeling.</p>',
-                    ],
+                    ['title' => 'Module 1: Wat is jeugdgezondheid?', 'content' => '<h3>Definitie en Kenmerken</h3><p>In deze eerste module verkennen we wat jeugdgezondheid precies inhoudt. We bekijken de drie pijlers: beweging, voeding en mentaal welzijn.</p>'],
+                    ['title' => 'Module 2: Bewegen en motoriek', 'content' => '<h3>Beweging bij Jongeren</h3><p>Hoe beweging bijdraagt aan fysieke en mentale ontwikkeling. Beweegnormen en motorische vaardigheden.</p>'],
+                    ['title' => 'Module 3: Voeding bij jongeren', 'content' => '<h3>Gezonde Voeding</h3><p>Overzicht van voedingsbehoeften bij jongeren en de impact op groei en prestaties.</p>'],
+                    ['title' => 'Module 4: Mentaal welzijn', 'content' => '<h3>Psychisch Welbevinden</h3><p>Stressmanagement, veerkracht en het herkennen van signalen bij jongeren.</p>'],
+                    ['title' => 'Module 5: Eindtoets', 'content' => '<h3>Toets je Kennis</h3><p>25 meerkeuzevragen. Minimaal 70% om te slagen.</p>'],
                 ],
             ],
 
-            // === ONLINE 3: Cannabis course ===
+            // === INDEX 1: Open online - sport nutrition course ===
             [
-                'title' => 'E-learning: Cannabis - Feiten en Fabels',
-                'description' => 'Alles wat je moet weten over cannabis: van de werkzame stoffen tot de effecten op de hersenen, van recreatief gebruik tot medicinale toepassingen. Speciaal ontwikkeld voor professionals die werken met jongeren en jongvolwassenen.',
+                'title' => 'E-learning: Voeding en Prestatie bij Jonge Sporters',
+                'description' => 'Verdiepende online module over sportvoeding voor jongeren. Van koolhydraatlading tot hydratatie, afgestemd op groeiende lichamen.',
                 'type' => 'online',
+                'format' => ['online', 'e-learning'],
+                'themes' => ['voeding', 'beweging'],
+                'ld_price_type' => 'open',
+                'ld_expire_access' => 'on',
+                'ld_expire_access_days' => 90,
                 'editions' => [],
                 'lessons' => [
-                    [
-                        'title' => 'Les 1: Cannabis 101 - De Basis',
-                        'content' => '<h3>Wat is Cannabis?</h3>
-<p>Cannabis is een plant die meer dan 100 verschillende cannabinoïden bevat. De twee belangrijkste zijn THC (tetrahydrocannabinol) en CBD (cannabidiol).</p>
-
-<h4>THC vs CBD</h4>
-<p><strong>THC</strong> is de psychoactieve stof die zorgt voor de "high". Het bindt aan CB1-receptoren in de hersenen.</p>
-<p><strong>CBD</strong> is niet psychoactief en heeft mogelijk medicinale eigenschappen. Het kan zelfs de effecten van THC temperen.</p>
-
-<h4>Vormen van cannabis</h4>
-<ul>
-<li><strong>Wiet/marihuana:</strong> Gedroogde bloemen van de cannabisplant</li>
-<li><strong>Hasj:</strong> Geperste hars van de plant</li>
-<li><strong>Cannabis olie:</strong> Geconcentreerd extract</li>
-<li><strong>Edibles:</strong> Eetbare producten met cannabis</li>
-</ul>',
-                    ],
-                    [
-                        'title' => 'Les 2: Effecten en risico\'s',
-                        'content' => '<h3>Wat Doet Cannabis?</h3>
-
-<h4>Gewenste effecten</h4>
-<ul>
-<li>Ontspanning en euforie</li>
-<li>Verhoogde zintuiglijke waarneming</li>
-<li>Creativiteit en associatief denken</li>
-<li>Eetlust stimulatie ("munchies")</li>
-</ul>
-
-<h4>Ongewenste effecten</h4>
-<ul>
-<li>Angst en paranoia</li>
-<li>Verstoord korte termijn geheugen</li>
-<li>Verminderde concentratie en reactiesnelheid</li>
-<li>Bij hoge doses: hallucinaties, psychose</li>
-</ul>
-
-<h4>Risico\'s bij jongeren</h4>
-<p>De hersenen zijn pas rond het 25e levensjaar volgroeid. Cannabisgebruik tijdens de adolescentie kan leiden tot:</p>
-<ul>
-<li>Verstoring van de hersenontwikkeling</li>
-<li>Verhoogd risico op psychose (vooral bij genetische aanleg)</li>
-<li>Cognitieve achteruitgang</li>
-<li>Amotivatie syndroom</li>
-</ul>',
-                    ],
-                    [
-                        'title' => 'Les 3: Cannabis en psychose',
-                        'content' => '<h3>De Relatie Tussen Cannabis en Psychose</h3>
-
-<h4>Wat zegt het onderzoek?</h4>
-<p>Er is een duidelijke statistische relatie tussen cannabisgebruik en psychose. Hoe vroeger iemand begint en hoe meer hij/zij gebruikt, hoe groter het risico.</p>
-
-<h4>Risicofactoren</h4>
-<ul>
-<li><strong>Genetische kwetsbaarheid:</strong> Mensen met psychose in de familie hebben een verhoogd risico</li>
-<li><strong>Leeftijd van eerste gebruik:</strong> Gebruik vóór 15 jaar vergroot het risico aanzienlijk</li>
-<li><strong>THC-gehalte:</strong> Hoog-potente cannabis is riskanter</li>
-<li><strong>Frequentie van gebruik:</strong> Dagelijks gebruik verhoogt het risico 5x</li>
-</ul>
-
-<h4>Praktische implicaties</h4>
-<p>Screen bij elke jongere met psychotische symptomen op cannabisgebruik. Bespreek de risico\'s openlijk, zonder te moraliseren.</p>',
-                    ],
+                    ['title' => 'Hoofdstuk 1: Voedingsbehoeften van jonge sporters', 'content' => '<h3>De basis</h3><p>Jongeren in de groei hebben specifieke voedingsbehoeften, zeker bij sport.</p>'],
+                    ['title' => 'Hoofdstuk 2: Macro- en micronutriënten', 'content' => '<h3>Bouwstenen</h3><p>Koolhydraten, eiwitten, vetten, vitaminen en mineralen voor prestatie.</p>'],
+                    ['title' => 'Hoofdstuk 3: Hydratatie en sportdranken', 'content' => '<h3>Vochtbalans</h3><p>Wanneer water volstaat en wanneer sportdranken nodig zijn.</p>'],
+                    ['title' => 'Hoofdstuk 4: Timing en maaltijdplanning', 'content' => '<h3>Rond de Training</h3><p>Wat eet je voor, tijdens en na het sporten?</p>'],
+                    ['title' => 'Hoofdstuk 5: Veelvoorkomende fouten', 'content' => '<h3>Valkuilen</h3><p>Supplementengebruik, crash-diëten en onvoldoende energie-inname bij jongeren.</p>'],
                 ],
             ],
 
             // =========================================================================
-            // IN-PERSON COURSES (With editions and sessions)
+            // INDEX 2-4: ONLINE COURSES - CLOSED (with editions, enrollment form, sessions)
+            // These appear on /online/ but require going through Stride enrollment form.
             // =========================================================================
 
-            // === IN-PERSON 1: Single day course ===
+            // === INDEX 2: Closed online - eating disorders (with edition + form) ===
             [
-                'title' => 'Motiverende Gespreksvoering - Basistraining',
-                'description' => 'Motiverende Gespreksvoering (MGV) is een evidence-based gespreksmethodiek die de intrinsieke motivatie van cliënten versterkt. In deze intensieve basistraining leer je de vier processen van MGV en oefen je uitgebreid met de technieken. Je leert reflectief luisteren, open vragen stellen, en omgaan met weerstand. Deze cursus is erkend voor SKJ/NVO-registratie.',
-                'type' => 'in-person',
-                'lessons' => [
-                    ['title' => 'Theorie: De geest van MGV', 'content' => 'Achtergrond en principes van motiverende gespreksvoering.'],
-                    ['title' => 'Praktijk: ORBS-technieken', 'content' => 'Open vragen, Reflecteren, Bevestigen, Samenvatten.'],
-                ],
+                'title' => 'E-learning: Eetproblemen Herkennen en Bespreekbaar Maken',
+                'description' => 'Leer de vroege signalen van eetproblemen herkennen bij jongeren en hoe je het gesprek aangaat — zonder te diagnosticeren. Speciaal voor leerkrachten en CLB-medewerkers.',
+                'type' => 'online',
+                'format' => ['online', 'e-learning'],
+                'themes' => ['welzijn', 'voeding'],
+                'ld_price_type' => 'closed', // requires enrollment
                 'editions' => [
                     [
+                        'start_date' => date('Y-m-d', strtotime('+1 day')),
+                        'end_date' => date('Y-m-d', strtotime('+90 days')),
+                        'price' => 75.00,
+                        'price_non_member' => 95.00,
+                        'capacity' => 100,
+                        'venue' => 'Online',
+                        'status' => 'open',
+                        'enrollment_form' => 'default',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Eetproblemen module (90 dagen toegang)'],
+                        ],
+                    ],
+                ],
+                'lessons' => [
+                    ['title' => 'Les 1: Wat zijn eetproblemen?', 'content' => '<h3>Vormen en Signalen</h3><p>Anorexia, boulimie, eetbuistoornis en selectief eten bij jongeren.</p>'],
+                    ['title' => 'Les 2: Vroege signalen herkennen', 'content' => '<h3>Observatie en Alert Zijn</h3><p>Fysieke, emotionele en gedragsmatige signalen die wijzen op eetproblemen.</p>'],
+                    ['title' => 'Les 3: Het gesprek aangaan', 'content' => '<h3>Communicatie</h3><p>Hoe bespreek je zorgen zonder te diagnosticeren of te stigmatiseren?</p>'],
+                ],
+            ],
+
+            // === INDEX 3: Closed online - screen time + movement (with edition + form) ===
+            [
+                'title' => 'E-learning: Schermtijd en Bewegingsarmoede',
+                'description' => 'Interactieve e-learning over de impact van schermgedrag op beweging en welzijn bij jongeren. Met casussen, video-interviews en een toolkit voor gesprekken.',
+                'type' => 'online',
+                'format' => ['online', 'e-learning'],
+                'themes' => ['welzijn', 'beweging'],
+                'ld_price_type' => 'closed',
+                'editions' => [
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+1 day')),
+                        'end_date' => date('Y-m-d', strtotime('+60 days')),
+                        'price' => 65.00,
+                        'price_non_member' => 85.00,
+                        'capacity' => 200,
+                        'venue' => 'Online',
+                        'status' => 'open',
+                        'enrollment_form' => 'default',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning module (60 dagen toegang)'],
+                        ],
+                    ],
+                ],
+                'lessons' => [
+                    ['title' => 'Module 1: Schermgedrag bij jongeren', 'content' => '<p>Hoe jongeren schermen gebruiken en de impact op hun beweeggedrag.</p>'],
+                    ['title' => 'Module 2: Gevolgen van bewegingsarmoede', 'content' => '<p>Fysieke, mentale en sociale gevolgen van te weinig bewegen.</p>'],
+                    ['title' => 'Module 3: Schermtijd en welzijn', 'content' => '<p>Het verband tussen schermgebruik, slaap, concentratie en motivatie om te bewegen.</p>'],
+                    ['title' => 'Module 4: In gesprek met jongeren', 'content' => '<p>Praktische gesprekstechnieken om schermtijd en beweging bespreekbaar te maken.</p>'],
+                ],
+            ],
+
+            // === INDEX 4: Closed online - movement policy (full, to test) ===
+            [
+                'title' => 'E-learning: Beweegbeleid Ontwikkelen',
+                'description' => 'Uitgebreide online cursus over het opzetten van een actief beweegbeleid in scholen en jeugdwerkingen. Van visie tot concrete acties.',
+                'type' => 'online',
+                'format' => ['online', 'e-learning'],
+                'themes' => ['schoolbeleid', 'beweging'],
+                'ld_price_type' => 'closed',
+                'editions' => [
+                    [
+                        'start_date' => date('Y-m-d', strtotime('-30 days')),
+                        'end_date' => date('Y-m-d', strtotime('+60 days')),
+                        'price' => 125.00,
+                        'price_non_member' => 150.00,
+                        'capacity' => 50,
+                        'registered' => 50, // FULL
+                        'venue' => 'Online',
+                        'status' => 'open',
+                        'enrollment_form' => 'default',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Beweegbeleid (lopende cohort)'],
+                        ],
+                    ],
+                    // Second edition opening soon
+                    [
                         'start_date' => date('Y-m-d', strtotime('+2 weeks')),
+                        'end_date' => date('Y-m-d', strtotime('+12 weeks')),
+                        'price' => 125.00,
+                        'price_non_member' => 150.00,
+                        'capacity' => 50,
+                        'venue' => 'Online',
+                        'status' => 'open',
+                        'enrollment_form' => 'default',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Beweegbeleid (nieuw cohort)'],
+                        ],
+                    ],
+                ],
+                'lessons' => [
+                    ['title' => 'Module 1: Waarom een beweegbeleid?', 'content' => '<p>Het belang van een structureel beweegbeleid voor jongeren en hoe je draagvlak creëert.</p>'],
+                    ['title' => 'Module 2: Van visie tot actieplan', 'content' => '<p>Stappen om een beweegvisie te formuleren en om te zetten in concrete acties.</p>'],
+                    ['title' => 'Module 3: Evaluatie en borging', 'content' => '<p>Hoe meet je het effect van je beweegbeleid en hoe borg je het op lange termijn?</p>'],
+                ],
+            ],
+
+            // === SHAKE-OUT: Closed online - minimal enrollment form ===
+            [
+                'title' => 'E-learning: Mindfulness voor Jongeren',
+                'description' => 'Korte online module over mindfulness-technieken voor jongeren. Ademhalingsoefeningen, body scan en korte meditaties.',
+                'type' => 'online',
+                'format' => ['online', 'e-learning'],
+                'themes' => ['welzijn'],
+                'ld_price_type' => 'closed',
+                'editions' => [
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+1 day')),
+                        'end_date' => date('Y-m-d', strtotime('+60 days')),
+                        'price' => 45.00,
+                        'price_non_member' => 55.00,
+                        'capacity' => 0, // unlimited — tests capacity=0 edge case
+                        'venue' => 'Online',
+                        'status' => 'open',
+                        'enrollment_form' => 'minimal',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Mindfulness (60 dagen toegang)'],
+                        ],
+                    ],
+                ],
+                'lessons' => [
+                    ['title' => 'Les 1: Wat is mindfulness?', 'content' => '<p>Introductie tot mindfulness en waarom het werkt voor jongeren.</p>'],
+                    ['title' => 'Les 2: Ademhalingsoefeningen', 'content' => '<p>Drie eenvoudige ademhalingstechnieken voor in de klas.</p>'],
+                    ['title' => 'Les 3: Body scan', 'content' => '<p>Geleide body scan oefening met audio-instructies.</p>'],
+                ],
+            ],
+
+            // === SHAKE-OUT: Closed online - direct enrollment (no form) ===
+            [
+                'title' => 'E-learning: Snelle Update Jeugdsport',
+                'description' => 'Korte opfrismodule over actuele richtlijnen jeugdsport. Geen formulier nodig, direct toegang na inschrijving.',
+                'type' => 'online',
+                'format' => ['online', 'e-learning'],
+                'themes' => ['beweging'],
+                'ld_price_type' => 'closed',
+                'editions' => [
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+1 day')),
+                        'end_date' => date('Y-m-d', strtotime('+30 days')),
+                        'price' => 25.00,
+                        'price_non_member' => 35.00,
+                        'capacity' => 500,
+                        'venue' => 'Online',
+                        'status' => 'open',
+                        'enrollment_form' => 'direct',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Jeugdsport update (30 dagen toegang)'],
+                        ],
+                    ],
+                ],
+                'lessons' => [
+                    ['title' => 'Update 1: Nieuwe beweegrichtlijnen 2026', 'content' => '<p>Samenvatting van de herziene beweegrichtlijnen voor jongeren.</p>'],
+                    ['title' => 'Update 2: Blessurepreventie checklist', 'content' => '<p>Praktische checklist voor blessurepreventie bij jeugdsport.</p>'],
+                    ['title' => 'Update 3: Warmteprotocol', 'content' => '<p>Richtlijnen voor sporten bij hoge temperaturen.</p>'],
+                ],
+            ],
+
+            // =========================================================================
+            // INDEX 7-12: IN-PERSON COURSES (various configurations)
+            // =========================================================================
+
+            // === INDEX 5: Simple single-session course (2 editions in different cities) ===
+            // First edition has post-course requirements for testing completion flow
+            [
+                'title' => 'Motiverende Gespreksvoering rond Voeding bij Jongeren',
+                'description' => 'Leer hoe je jongeren op een niet-veroordelende manier motiveert om gezondere eetgewoontes te ontwikkelen. Met rollenspelen en praktijkcasussen. Erkend voor bijscholing.',
+                'type' => 'in-person',
+                'format' => ['klassikaal'],
+                'themes' => ['voeding', 'welzijn'],
+                'editions' => [
+                    [
+                        'start_date' => date('Y-m-d', strtotime('-2 weeks')), // Past date: sessions already happened
                         'price' => 295.00,
                         'price_non_member' => 345.00,
                         'capacity' => 16,
-                        'venue' => 'VAD Opleidingscentrum Brussel',
-                        'speakers' => 'Dr. Marie De Vries',
+                        'venue' => 'BWEEG Opleidingscentrum Gent',
+                        'speakers' => 'Lien De Smedt, sportpedagoge',
                         'status' => 'open',
+                        'enrollment_form' => 'default',
+                        'post_requires_evaluation' => true,
+                        'post_requires_documents' => true,
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Basistraining MGV'],
+                            ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Motiverende gespreksvoering rond voeding'],
                         ],
                     ],
                     [
@@ -473,230 +470,338 @@ class StrideSeedData {
                         'price' => 295.00,
                         'price_non_member' => 345.00,
                         'capacity' => 16,
-                        'venue' => 'VAD Locatie Antwerpen',
+                        'venue' => 'BWEEG Locatie Antwerpen',
                         'speakers' => 'Drs. Peter Willems',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Basistraining MGV'],
+                            ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Motiverende gespreksvoering rond voeding'],
                         ],
                     ],
+                ],
+                'lessons' => [
+                    ['title' => 'Theorie: Motiverende gespreksvoering', 'content' => 'Achtergrond en principes van motiverende gespreksvoering rond voeding.'],
+                    ['title' => 'Praktijk: Rollenspelen en casussen', 'content' => 'Oefenen met gesprekstechnieken aan de hand van praktijkcasussen.'],
                 ],
             ],
 
-            // === IN-PERSON 2: Multi-day intensive course ===
+            // === INDEX 6: Multi-day intensive (3 consecutive days, spread over weeks) ===
+            // First edition has post-course requirements including approval for testing
             [
-                'title' => 'Cognitieve Gedragstherapie bij Verslaving',
-                'description' => 'Deze driedaagse intensieve training geeft je een gedegen basis in CGT specifiek voor de verslavingszorg. Je leert functionele analyses maken, gedachten uitdagen, en terugvalpreventieplannen opstellen. De training combineert theorie met veel praktijkoefeningen, rollenspel en casusbespreking. Inclusief werkboek en online naslagmateriaal.',
+                'title' => 'Sportblessures Voorkomen: van Warm-up tot Cool-down',
+                'description' => 'Driedaagse evidence-based opleiding over blessurepreventie bij jongeren. Functionele screening, opwarming, cooling-down en return-to-play. Inclusief werkboek.',
                 'type' => 'in-person',
-                'lessons' => [
-                    ['title' => 'CGT Dag 1: Functieanalyse', 'content' => 'Leer het gedragsmodel en het maken van een functionele analyse.'],
-                    ['title' => 'CGT Dag 2: Gedachten uitdagen', 'content' => 'Cognitieve technieken voor het werken met automatische gedachten.'],
-                    ['title' => 'CGT Dag 3: Terugvalpreventie', 'content' => 'Het opstellen en implementeren van een terugvalpreventieplan.'],
-                ],
+                'format' => ['klassikaal'],
+                'themes' => ['sportblessures', 'beweging'],
                 'editions' => [
+                    // Edition 1: 3 days spread over 3 weeks (past dates for post-course testing)
                     [
-                        'start_date' => date('Y-m-d', strtotime('+3 weeks')),
+                        'start_date' => date('Y-m-d', strtotime('-4 weeks')),
                         'price' => 695.00,
                         'price_non_member' => 795.00,
                         'capacity' => 12,
-                        'venue' => 'Conferentiecentrum De Factorij, Antwerpen',
-                        'speakers' => 'Prof. dr. Jan Janssen, Dr. Els Peters',
+                        'venue' => 'Sportcentrum De Blaarmeersen, Gent',
+                        'speakers' => 'Prof. dr. Jan Janssen, sportwetenschapper',
                         'status' => 'open',
+                        'enrollment_form' => 'default',
+                        'post_requires_evaluation' => true,
+                        'post_requires_documents' => true,
+                        'post_requires_approval' => true,
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Gedragsanalyse en functieanalyse'],
-                            ['date_offset' => 7, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 2: Cognitieve interventies'],
-                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 3: Terugvalpreventie en integratie'],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Functionele screening'],
+                            ['date_offset' => 7, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 2: Blessurepreventie-oefeningen'],
+                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 3: Return-to-play protocollen'],
                         ],
                     ],
-                    // Second edition - almost full
+                    // Edition 2: almost full
                     [
                         'start_date' => date('Y-m-d', strtotime('+2 months')),
                         'price' => 695.00,
                         'price_non_member' => 795.00,
                         'capacity' => 12,
                         'registered' => 10,
-                        'venue' => 'VAD Opleidingscentrum Gent',
-                        'speakers' => 'Prof. dr. Jan Janssen',
-                        'status' => 'open',
+                        'venue' => 'BWEEG Opleidingscentrum Gent',
+                        'speakers' => 'Dr. Els Peters, kinesitherapeut',
+                        'status' => 'few_spots',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Gedragsanalyse'],
-                            ['date_offset' => 7, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 2: Cognitieve interventies'],
-                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 3: Terugvalpreventie'],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Functionele screening'],
+                            ['date_offset' => 7, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 2: Blessurepreventie-oefeningen'],
+                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 3: Return-to-play protocollen'],
                         ],
                     ],
                 ],
+                'lessons' => [
+                    ['title' => 'Dag 1: Functionele screening', 'content' => 'Leer screeningsmethoden voor het identificeren van blessurerisico bij jongeren.'],
+                    ['title' => 'Dag 2: Preventie-oefeningen', 'content' => 'Evidence-based opwarmings- en preventie-oefeningen voor verschillende sporten.'],
+                    ['title' => 'Dag 3: Return-to-play', 'content' => 'Protocollen voor veilige terugkeer naar sport na een blessure.'],
+                ],
             ],
 
-            // === IN-PERSON 3: Masterclass (sold out + future date) ===
+            // === INDEX 7: Masterclass - sold out + future (single session, exclusive) ===
             [
-                'title' => 'Masterclass Crisisinterventie bij Verslaving',
-                'description' => 'Deze exclusieve masterclass is bedoeld voor ervaren professionals die regelmatig te maken hebben met crisissituaties. Je leert de-escalatietechnieken, crisisassessment, en veilig handelen bij intoxicatie en onthoudingssyndroom. Maximum 8 deelnemers voor optimale interactie. Zeer populair - vaak snel volgeboekt!',
+                'title' => 'Masterclass Mentale Veerkracht bij Jonge Sporters',
+                'description' => 'Exclusieve masterclass voor ervaren sportcoaches. Herken signalen van prestatiedruk en leer technieken om mentale weerbaarheid te versterken. Maximum 8 deelnemers.',
                 'type' => 'in-person',
-                'lessons' => [
-                    ['title' => 'Crisisinterventie module', 'content' => 'Theorie en praktijk van crisisinterventie in de verslavingszorg.'],
-                ],
+                'format' => ['klassikaal'],
+                'themes' => ['welzijn'],
                 'editions' => [
+                    // Full
                     [
                         'start_date' => date('Y-m-d', strtotime('+3 weeks')),
                         'price' => 450.00,
                         'price_non_member' => 525.00,
                         'capacity' => 8,
-                        'registered' => 8, // FULL
-                        'venue' => 'VAD Opleidingscentrum Brussel',
-                        'speakers' => 'Dr. Paul Verhaeghe',
+                        'registered' => 8,
+                        'venue' => 'BWEEG Opleidingscentrum Gent',
+                        'speakers' => 'Dr. Paul Verhaeghe, sportpsycholoog',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Masterclass Crisisinterventie'],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Masterclass Mentale Veerkracht'],
                         ],
                     ],
+                    // Future
                     [
                         'start_date' => date('Y-m-d', strtotime('+3 months')),
                         'price' => 450.00,
                         'price_non_member' => 525.00,
                         'capacity' => 8,
-                        'venue' => 'VAD Opleidingscentrum Brussel',
-                        'speakers' => 'Dr. Paul Verhaeghe',
+                        'venue' => 'BWEEG Opleidingscentrum Gent',
+                        'speakers' => 'Dr. Paul Verhaeghe, sportpsycholoog',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Masterclass Crisisinterventie'],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Masterclass Mentale Veerkracht'],
                         ],
                     ],
+                ],
+                'lessons' => [
+                    ['title' => 'Mentale veerkracht module', 'content' => 'Theorie en praktijk van mentale weerbaarheid bij jonge sporters.'],
                 ],
             ],
 
-            // === IN-PERSON 4: Cancelled + rescheduled ===
+            // === INDEX 8: Course with SESSION SLOTS + SELECTION DEADLINE ===
+            // Users must choose between parallel sessions (morning/afternoon tracks)
             [
-                'title' => 'Workshop Mindfulness in de Verslavingszorg',
-                'description' => 'Praktische workshop over het integreren van mindfulness-technieken in de behandeling van verslaving. Je leert eenvoudige oefeningen die je direct kunt toepassen met cliënten. Geschikt voor alle hulpverleners, geen meditatie-ervaring vereist.',
+                'title' => 'Gezonde Tussendoortjes in de Jeugdwerking',
+                'description' => 'Complete tweedaagse cursus over gezonde voeding in de jeugdwerking. Na de basiscursus kies je uit verdiepingsmodules voor specifieke doelgroepen.',
                 'type' => 'in-person',
-                'lessons' => [
-                    ['title' => 'Mindfulness workshop', 'content' => 'Praktische introductie in mindfulness voor de behandelpraktijk.'],
-                ],
-                'editions' => [
-                    [
-                        'start_date' => date('Y-m-d', strtotime('+2 weeks')),
-                        'price' => 195.00,
-                        'price_non_member' => 225.00,
-                        'capacity' => 15,
-                        'venue' => 'Yogacentrum Leuven',
-                        'speakers' => 'Leen Smits, MBSR-trainer',
-                        'status' => 'cancelled',
-                        'sessions' => [
-                            ['date_offset' => 0, 'start' => '13:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Workshop Mindfulness'],
-                        ],
-                    ],
-                    [
-                        'start_date' => date('Y-m-d', strtotime('+6 weeks')),
-                        'price' => 195.00,
-                        'price_non_member' => 225.00,
-                        'capacity' => 15,
-                        'venue' => 'Yogacentrum Leuven',
-                        'speakers' => 'Leen Smits, MBSR-trainer',
-                        'status' => 'open',
-                        'sessions' => [
-                            ['date_offset' => 0, 'start' => '13:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Workshop Mindfulness (nieuwe datum)'],
-                        ],
-                    ],
-                ],
-            ],
-
-            // === IN-PERSON 5: Course with optional sessions ===
-            [
-                'title' => 'Preventie in de Praktijk',
-                'description' => 'Complete tweedaagse cursus over preventieve interventies in verschillende settings. Na de basistraining kun je kiezen uit optionele verdiepingsmodules voor specifieke doelgroepen: jongeren of ouderen. Praktijkgericht met veel tools en materialen om direct mee aan de slag te gaan.',
-                'type' => 'in-person',
-                'lessons' => [
-                    ['title' => 'Preventie basis', 'content' => 'Basisprincipes van verslavingspreventie.'],
-                    ['title' => 'Preventie praktijk', 'content' => 'Praktische toepassing van preventieve interventies.'],
-                ],
+                'format' => ['klassikaal'],
+                'themes' => ['voeding', 'jeugdwerk'],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+5 weeks')),
                         'price' => 395.00,
                         'price_non_member' => 450.00,
                         'capacity' => 20,
-                        'venue' => 'VAD Opleidingscentrum Brussel',
-                        'speakers' => 'Team VAD Preventie',
+                        'venue' => 'BWEEG Opleidingscentrum Gent',
+                        'speakers' => 'Team BWEEG Voeding',
                         'status' => 'open',
+                        'requires_session_selection' => true,
+                        'selection_open' => true,
+                        // Selection deadline: must choose sessions 1 week before start
+                        'selection_deadline' => date('Y-m-d', strtotime('+4 weeks')),
+                        // Session slots: define which sessions are alternatives
+                        // Plain PHP array — WP serializes via update_post_meta.
+                        // `max_selections` matches admin form key (B-001).
+                        'session_slots' => [
+                            [
+                                'slot' => 'Verdieping (kies 1)',
+                                'label' => 'Verdieping (kies 1)',
+                                'required' => true,
+                                'max_selections' => 1,
+                            ],
+                        ],
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Basisprincipes preventie', 'optional' => false],
-                            ['date_offset' => 1, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 2: Praktijk en interventies', 'optional' => false],
-                            ['date_offset' => 7, 'start' => '09:00', 'end' => '12:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Verdieping: Jongeren en social media', 'optional' => true],
-                            ['date_offset' => 7, 'start' => '13:00', 'end' => '16:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Verdieping: Ouderen en medicatie', 'optional' => true],
+                            // Mandatory day 1
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Basisprincipes gezonde voeding', 'optional' => false],
+                            // Mandatory day 2 morning
+                            ['date_offset' => 1, 'start' => '09:00', 'end' => '12:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 2: Praktijk en recepten', 'optional' => false],
+                            // SLOT: choose ONE of these afternoon sessions
+                            ['date_offset' => 1, 'start' => '13:00', 'end' => '16:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Verdieping A: Sportvoeding', 'optional' => true, 'slot' => 'Verdieping (kies 1)'],
+                            ['date_offset' => 1, 'start' => '13:00', 'end' => '16:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Verdieping B: Budget-vriendelijk koken', 'optional' => true, 'slot' => 'Verdieping (kies 1)'],
+                            ['date_offset' => 1, 'start' => '13:00', 'end' => '16:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Verdieping C: Allergieen en intoleranties', 'optional' => true, 'slot' => 'Verdieping (kies 1)'],
                         ],
                     ],
                 ],
+                'lessons' => [
+                    ['title' => 'Gezonde voeding basis', 'content' => 'Basisprincipes van gezonde voeding in de jeugdwerking.'],
+                    ['title' => 'Gezonde voeding praktijk', 'content' => 'Praktische toepassing: recepten en tussendoortjes.'],
+                ],
             ],
 
-            // === IN-PERSON 6: Free introductory course ===
+            // === INDEX 9: Course with CANCELLED + RESCHEDULED editions ===
             [
-                'title' => 'Gratis Introductie: Werken bij VAD',
-                'description' => 'Gratis kennismakingsochtend voor nieuwe medewerkers en stagiairs. Je maakt kennis met de werkwijze, methodieken en het aanbod van VAD. Inclusief rondleiding en ontmoeting met collega\'s uit verschillende teams.',
+                'title' => 'Workshop Yoga en Mindfulness voor Jongeren',
+                'description' => 'Praktische workshop over yoga- en mindfulness-technieken voor jongeren. Geschikt voor alle begeleiders, geen ervaring vereist.',
                 'type' => 'in-person',
-                'lessons' => [
-                    ['title' => 'Introductie VAD', 'content' => 'Kennismaking met VAD als organisatie.'],
+                'format' => ['klassikaal'],
+                'themes' => ['welzijn', 'beweging'],
+                'editions' => [
+                    // Cancelled
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+2 weeks')),
+                        'price' => 195.00,
+                        'price_non_member' => 225.00,
+                        'capacity' => 15,
+                        'venue' => 'Yogacentrum Gent',
+                        'speakers' => 'Leen Smits, yogadocente',
+                        'status' => 'cancelled',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '13:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Workshop Yoga en Mindfulness (GEANNULEERD)'],
+                        ],
+                    ],
+                    // Rescheduled
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+6 weeks')),
+                        'price' => 195.00,
+                        'price_non_member' => 225.00,
+                        'capacity' => 15,
+                        'venue' => 'Yogacentrum Gent',
+                        'speakers' => 'Leen Smits, yogadocente',
+                        'status' => 'open',
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '13:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Workshop Yoga en Mindfulness (nieuwe datum)'],
+                        ],
+                    ],
                 ],
+                'lessons' => [
+                    ['title' => 'Yoga en mindfulness workshop', 'content' => 'Praktische introductie in yoga en mindfulness voor jongeren.'],
+                ],
+            ],
+
+            // === INDEX 10: Free single-session introductory course ===
+            [
+                'title' => 'Gratis Introductie: Werken bij BWEEG',
+                'description' => 'Gratis kennismakingsochtend voor nieuwe medewerkers en stagiairs. Rondleiding en ontmoeting met collega\'s.',
+                'type' => 'in-person',
+                'format' => ['klassikaal'],
+                'themes' => ['beweging'],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+1 week')),
                         'price' => 0.00,
                         'price_non_member' => 0.00,
                         'capacity' => 30,
-                        'venue' => 'VAD Hoofdkantoor Brussel',
-                        'speakers' => 'Diverse VAD medewerkers',
+                        'venue' => 'BWEEG Hoofdkantoor Gent',
+                        'speakers' => 'Diverse BWEEG medewerkers',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:30', 'end' => '12:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Introductie en rondleiding VAD'],
+                            ['date_offset' => 0, 'start' => '09:30', 'end' => '12:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Introductie en rondleiding BWEEG'],
                         ],
                     ],
+                ],
+                'lessons' => [
+                    ['title' => 'Introductie BWEEG', 'content' => 'Kennismaking met BWEEG als organisatie.'],
                 ],
             ],
 
             // =========================================================================
-            // HYBRID COURSES (Combination of in-person and online)
+            // INDEX 11-12: IN-PERSON COURSES WITH COMPLETION REQUIREMENTS
             // =========================================================================
 
-            // === HYBRID 1: Blended learning course ===
+            // === INDEX 11: Questionnaire + Documents + Approval (full completion flow) ===
             [
-                'title' => 'Dual Diagnose: Verslaving en Psychiatrie',
-                'description' => 'Hybride leertraject over de behandeling van cliënten met zowel een verslaving als een psychiatrische stoornis. Je start met een klassikale dag, vervolgens twee weken e-learning met een live webinar, en sluit af met een praktijkdag. Zo combineer je kennisoverdracht met diepgang en praktische toepassing.',
-                'type' => 'hybrid',
-                'lessons' => [
-                    ['title' => 'E-learning Dual Diagnose Module 1', 'content' => 'Online module over comorbiditeit.'],
-                    ['title' => 'E-learning Dual Diagnose Module 2', 'content' => 'Online module over geïntegreerde behandeling.'],
+                'title' => 'Erkenningstraject Jeugdsportcoach',
+                'description' => 'Erkend opleidingstraject voor jeugdsportcoaches. Na inschrijving vul je een intake-vragenlijst in, upload je relevante diploma\'s, en wacht je op goedkeuring.',
+                'type' => 'in-person',
+                'format' => ['klassikaal'],
+                'themes' => ['beweging', 'sportblessures'],
+                'editions' => [
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+6 weeks')),
+                        'price' => 895.00,
+                        'price_non_member' => 995.00,
+                        'capacity' => 12,
+                        'venue' => 'BWEEG Opleidingscentrum Gent',
+                        'speakers' => 'Prof. dr. An Vermeersch, Dr. Koen De Smet',
+                        'status' => 'open',
+                        'enrollment_form' => 'default',
+                        'requires_questionnaire' => true,
+                        'requires_documents' => true,
+                        'requires_approval' => true,
+                        'sessions' => [
+                            ['date_offset' => 0,  'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Intake en motorische screening'],
+                            ['date_offset' => 7,  'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 2: Blessurepreventie en EHBO'],
+                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 3: Begeleidingsvaardigheden'],
+                        ],
+                    ],
                 ],
+                'lessons' => [
+                    ['title' => 'Voorbereidingsmateriaal', 'content' => 'Lees dit document voor de eerste lesdag van het erkenningstraject.'],
+                ],
+            ],
+
+            // === INDEX 12: Documents only (upload required, no approval) ===
+            [
+                'title' => 'Bijscholing Bewegingsonderwijs',
+                'description' => 'Verplichte bijscholing voor leerkrachten LO. Upload je registratiebewijs bij inschrijving zodat we je accreditatie kunnen verwerken.',
+                'type' => 'in-person',
+                'format' => ['klassikaal'],
+                'themes' => ['schoolbeleid'],
+                'editions' => [
+                    [
+                        'start_date' => date('Y-m-d', strtotime('+4 weeks')),
+                        'price' => 175.00,
+                        'price_non_member' => 225.00,
+                        'capacity' => 25,
+                        'venue' => 'BWEEG Locatie Antwerpen',
+                        'speakers' => 'Drs. Sofie Claes',
+                        'status' => 'open',
+                        'enrollment_form' => 'default',
+                        'requires_documents' => true,
+                        'sessions' => [
+                            ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Bijscholing Bewegingsonderwijs'],
+                        ],
+                    ],
+                ],
+                'lessons' => [
+                    ['title' => 'Bijscholing module', 'content' => 'Actuele ontwikkelingen in het bewegingsonderwijs.'],
+                ],
+            ],
+
+            // =========================================================================
+            // INDEX 13: HYBRID COURSE (in-person + online + webinar sessions)
+            // =========================================================================
+            [
+                'title' => 'Beweegbeleid op School: van Visie tot Actie',
+                'description' => 'Hybride leertraject: klassikale dag + e-learning + live webinar + praktijkdag. Stappenplan om een actief beweegbeleid uit te bouwen op jouw school.',
+                'type' => 'hybrid',
+                'format' => ['klassikaal', 'hybrid'],
+                'themes' => ['schoolbeleid', 'beweging'],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+4 weeks')),
                         'price' => 550.00,
                         'price_non_member' => 650.00,
                         'capacity' => 20,
-                        'venue' => 'VAD Brussel + Online',
-                        'speakers' => 'Dr. Katrien Maes, psychiater',
+                        'venue' => 'BWEEG Gent + Online',
+                        'speakers' => 'Dr. Katrien Maes, onderwijspedagoge',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'location' => 'VAD Opleidingscentrum Brussel', 'title' => 'Introductie dual diagnose'],
-                            ['date_offset' => 3, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Psychiatrische stoornissen'],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'location' => 'BWEEG Opleidingscentrum Gent', 'title' => 'Introductie beweegbeleid'],
+                            ['date_offset' => 3, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Draagvlak en stakeholders'],
                             ['date_offset' => 7, 'start' => '14:00', 'end' => '16:00', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Live Q&A: Casusbespreking'],
-                            ['date_offset' => 10, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Geïntegreerde behandeling'],
-                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'location' => 'VAD Opleidingscentrum Brussel', 'title' => 'Praktijkdag: Integratie en toepassing'],
+                            ['date_offset' => 10, 'start' => '00:00', 'end' => '23:59', 'type' => SESSION_TYPE_ONLINE, 'title' => 'E-learning: Implementatie'],
+                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'location' => 'BWEEG Opleidingscentrum Gent', 'title' => 'Praktijkdag: Evaluatie en bijsturing'],
                         ],
                     ],
+                ],
+                'lessons' => [
+                    ['title' => 'E-learning Beweegbeleid Module 1', 'content' => 'Online module over draagvlak en stakeholders.'],
+                    ['title' => 'E-learning Beweegbeleid Module 2', 'content' => 'Online module over implementatie en evaluatie.'],
                 ],
             ],
 
             // =========================================================================
-            // WEBINAR COURSES
+            // INDEX 14-15: WEBINAR COURSES
             // =========================================================================
 
-            // === WEBINAR 1: Series ===
+            // === INDEX 14: Webinar series (4 weekly sessions) ===
             [
-                'title' => 'Webinarreeks: Actuele Thema\'s in Verslavingszorg',
-                'description' => 'Een reeks van 4 interactieve webinars over actuele onderwerpen in de verslavingszorg. Elke week een nieuw thema met een expert spreker. Je kunt live deelnemen en vragen stellen, of de opname achteraf bekijken. Inclusief handouts en extra leesmateriaal.',
+                'title' => 'Webinarreeks: Actuele Thema\'s in Jeugdgezondheid',
+                'description' => 'Reeks van 4 interactieve webinars. Elke week een nieuw thema met een expert spreker. Inclusief opname en handouts.',
                 'type' => 'webinar',
-                'lessons' => [
-                    ['title' => 'Webinar introductie', 'content' => 'Algemene informatie over de webinarreeks.'],
-                ],
+                'format' => ['webinar', 'online'],
+                'themes' => ['welzijn', 'beweging'],
+                'ld_price_type' => 'closed',
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+1 week')),
@@ -706,24 +811,27 @@ class StrideSeedData {
                         'venue' => 'Online (Zoom)',
                         'speakers' => 'Diverse experts',
                         'status' => 'open',
+                        'enrollment_form' => 'default',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 1: Gaming en sociale media verslaving'],
-                            ['date_offset' => 7, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 2: Jongeren en online gokken'],
-                            ['date_offset' => 14, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 3: Medicatie-ondersteunde behandeling'],
-                            ['date_offset' => 21, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 4: Herstelondersteunende zorg'],
+                            ['date_offset' => 0, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 1: Schermtijd en bewegen'],
+                            ['date_offset' => 7, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 2: Sportvoeding voor jongeren'],
+                            ['date_offset' => 14, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 3: Blessurepreventie update'],
+                            ['date_offset' => 21, 'start' => '19:00', 'end' => '20:30', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Webinar 4: Mentale veerkracht bij jongeren'],
                         ],
                     ],
                 ],
+                'lessons' => [
+                    ['title' => 'Webinar introductie', 'content' => 'Algemene informatie over de webinarreeks jeugdgezondheid.'],
+                ],
             ],
 
-            // === WEBINAR 2: Single webinar ===
+            // === INDEX 15: Single free webinar ===
             [
-                'title' => 'Gratis Webinar: Lachgas - De Nieuwe Trend',
-                'description' => 'Gratis informatief webinar over het toenemende lachgasgebruik onder jongeren. Wat zijn de risico\'s? Hoe herken je gebruik? En hoe ga je het gesprek aan? Speciaal voor professionals in jeugdzorg, onderwijs en preventie.',
+                'title' => 'Gratis Webinar: Energy Drinks - De Nieuwe Trend',
+                'description' => 'Gratis informatief webinar over energy drinks bij jongeren. Risico\'s, herkenning en gesprekstechnieken.',
                 'type' => 'webinar',
-                'lessons' => [
-                    ['title' => 'Lachgas info', 'content' => 'Informatie over lachgas en de effecten.'],
-                ],
+                'format' => ['webinar', 'online'],
+                'themes' => ['voeding', 'welzijn'],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+10 days')),
@@ -731,37 +839,38 @@ class StrideSeedData {
                         'price_non_member' => 0.00,
                         'capacity' => 200,
                         'venue' => 'Online (Teams)',
-                        'speakers' => 'Dr. Sarah Janssen, toxicoloog',
+                        'speakers' => 'Dr. Sarah Janssen, voedingsdeskundige',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '12:00', 'end' => '13:00', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Lunchwebinar: Lachgas - feiten en risico\'s'],
+                            ['date_offset' => 0, 'start' => '12:00', 'end' => '13:00', 'type' => SESSION_TYPE_WEBINAR, 'title' => 'Lunchwebinar: Energy drinks - feiten en risico\'s'],
                         ],
                     ],
+                ],
+                'lessons' => [
+                    ['title' => 'Energy drinks info', 'content' => 'Informatie over energy drinks en de effecten bij jongeren.'],
                 ],
             ],
 
             // =========================================================================
-            // TRAJECTORY COURSES (used in trajectories)
+            // INDEX 16-20: TRAJECTORY COURSES (used in trajectories)
             // =========================================================================
 
-            // === TRAJECTORY COURSE 1: Required foundation ===
+            // === INDEX 16: Required foundation ===
             [
-                'title' => 'Verslavingskunde: Fundament',
-                'description' => 'De basiscursus voor iedereen die professioneel met verslaving werkt. Dit is een verplicht onderdeel van het traject Verslavingsspecialist. Je leert de kernconcepten, hebt contact met ervaringsdeskundigen, en oefent met basis gespreksvaardigheden.',
+                'title' => 'Jeugdgezondheid: Fundament',
+                'description' => 'Basiscursus voor iedereen die professioneel met jeugdgezondheid werkt. Verplicht onderdeel van het traject Jeugdgezondheidsspecialist.',
                 'type' => 'in-person',
-                'trajectory_role' => 'required', // For reference when building trajectories
-                'lessons' => [
-                    ['title' => 'Fundament module 1', 'content' => 'Basiskennis verslavingskunde.'],
-                    ['title' => 'Fundament module 2', 'content' => 'Introductie gespreksvoering.'],
-                ],
+                'format' => ['klassikaal'],
+                'themes' => ['beweging', 'welzijn'],
+                'trajectory_role' => 'required',
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+2 weeks')),
                         'price' => 395.00,
                         'price_non_member' => 495.00,
                         'capacity' => 16,
-                        'venue' => 'VAD Opleidingscentrum Brussel',
-                        'speakers' => 'Team VAD Academie',
+                        'venue' => 'BWEEG Opleidingscentrum Gent',
+                        'speakers' => 'Team BWEEG Academie',
                         'status' => 'open',
                         'sessions' => [
                             ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Dag 1: Basiskennis'],
@@ -769,107 +878,119 @@ class StrideSeedData {
                         ],
                     ],
                 ],
+                'lessons' => [
+                    ['title' => 'Fundament module 1', 'content' => 'Basiskennis jeugdgezondheid.'],
+                    ['title' => 'Fundament module 2', 'content' => 'Introductie gespreksvoering.'],
+                ],
             ],
 
-            // === TRAJECTORY COURSE 2: Required advanced ===
+            // === INDEX 17: Required advanced ===
             [
-                'title' => 'Verslavingskunde: Assessment en Diagnostiek',
-                'description' => 'Leer gestructureerd een intake afnemen, screeningsinstrumenten gebruiken en een behandelplan opstellen. Verplicht onderdeel van het traject Verslavingsspecialist.',
+                'title' => 'Assessment en Motorische Screening',
+                'description' => 'Gestructureerd intake afnemen, motorische screeningsinstrumenten gebruiken, begeleidingsplan opstellen. Verplicht onderdeel traject.',
                 'type' => 'in-person',
+                'format' => ['klassikaal'],
+                'themes' => ['beweging', 'sportblessures'],
                 'trajectory_role' => 'required',
-                'lessons' => [
-                    ['title' => 'Assessment theorie', 'content' => 'Screeningsinstrumenten en intake.'],
-                    ['title' => 'Diagnostiek praktijk', 'content' => 'Behandelplanning.'],
-                ],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+4 weeks')),
                         'price' => 395.00,
                         'price_non_member' => 495.00,
                         'capacity' => 14,
-                        'venue' => 'VAD Opleidingscentrum Brussel',
+                        'venue' => 'BWEEG Opleidingscentrum Gent',
                         'speakers' => 'Dr. Tom Decorte',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Assessment en screeningsinstrumenten'],
-                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Behandelplanning en doelen stellen'],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Motorische screening en instrumenten'],
+                            ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Begeleidingsplanning en doelen stellen'],
                         ],
                     ],
                 ],
+                'lessons' => [
+                    ['title' => 'Assessment theorie', 'content' => 'Motorische screeningsinstrumenten en intake.'],
+                    ['title' => 'Screening praktijk', 'content' => 'Begeleidingsplanning.'],
+                ],
             ],
 
-            // === TRAJECTORY COURSE 3: Optional elective 1 ===
+            // === INDEX 18: Elective 1 ===
             [
-                'title' => 'Keuzecursus: Familie en Systeem',
-                'description' => 'Optionele verdieping over het betrekken van het systeem bij de behandeling. Hoe werk je met partners, ouders en kinderen van mensen met een verslaving? Keuzevak voor het traject Verslavingsspecialist.',
+                'title' => 'Keuzecursus: Familie en Gezondheidscoaching',
+                'description' => 'Verdieping over het betrekken van het gezin bij gezondheidsbevordering. Keuzevak voor het traject Jeugdgezondheidsspecialist.',
                 'type' => 'in-person',
+                'format' => ['klassikaal'],
+                'themes' => ['welzijn', 'voeding'],
                 'trajectory_role' => 'elective',
-                'lessons' => [
-                    ['title' => 'Systeemwerk module', 'content' => 'Werken met het systeem rondom de cliënt.'],
-                ],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+8 weeks')),
                         'price' => 245.00,
                         'price_non_member' => 295.00,
                         'capacity' => 16,
-                        'venue' => 'VAD Locatie Antwerpen',
-                        'speakers' => 'Drs. Lies Verhoeven, systeemtherapeut',
+                        'venue' => 'BWEEG Locatie Antwerpen',
+                        'speakers' => 'Drs. Lies Verhoeven, gezondheidscoach',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Familie en systeemwerk'],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Familie en gezondheidscoaching'],
                         ],
                     ],
                 ],
+                'lessons' => [
+                    ['title' => 'Gezondheidscoaching module', 'content' => 'Werken met het gezin rondom de jongere.'],
+                ],
             ],
 
-            // === TRAJECTORY COURSE 4: Optional elective 2 ===
+            // === INDEX 19: Elective 2 ===
             [
-                'title' => 'Keuzecursus: Groepsbehandeling',
-                'description' => 'Optionele verdieping in het geven van groepstherapie bij verslaving. Je leert groepsdynamica begrijpen, sessies structureren en omgaan met weerstand in de groep. Keuzevak voor het traject Verslavingsspecialist.',
+                'title' => 'Keuzecursus: Groepsdynamiek in Sportteams',
+                'description' => 'Verdieping in groepsdynamiek bij jonge sportteams. Teamcohesie, conflicthantering en motivatietechnieken.',
                 'type' => 'in-person',
+                'format' => ['klassikaal'],
+                'themes' => ['beweging', 'welzijn'],
                 'trajectory_role' => 'elective',
-                'lessons' => [
-                    ['title' => 'Groepsdynamica', 'content' => 'Theorie en praktijk van groepstherapie.'],
-                ],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+9 weeks')),
                         'price' => 245.00,
                         'price_non_member' => 295.00,
                         'capacity' => 12,
-                        'venue' => 'VAD Opleidingscentrum Gent',
+                        'venue' => 'BWEEG Opleidingscentrum Gent',
                         'speakers' => 'Dr. Kris Goethals',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Groepsbehandeling bij verslaving'],
+                            ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Groepsdynamiek in sportteams'],
                         ],
                     ],
                 ],
+                'lessons' => [
+                    ['title' => 'Groepsdynamiek', 'content' => 'Theorie en praktijk van groepsdynamiek in sportteams.'],
+                ],
             ],
 
-            // === TRAJECTORY COURSE 5: Optional elective 3 ===
+            // === INDEX 20: Elective 3 ===
             [
-                'title' => 'Keuzecursus: Harm Reduction',
-                'description' => 'Verdieping in harm reduction benaderingen. Van spuitenruil tot drugscheck, van gebruikersruimtes tot naloxon-distributie. Keuzevak geschikt voor preventiewerkers en behandelaars.',
+                'title' => 'Keuzecursus: Harm Reduction bij Eetproblemen',
+                'description' => 'Verdieping in harm reduction benaderingen bij eetproblemen. Signalering, gespreksvoering en doorverwijzing.',
                 'type' => 'in-person',
+                'format' => ['klassikaal'],
+                'themes' => ['voeding', 'welzijn'],
                 'trajectory_role' => 'elective',
-                'lessons' => [
-                    ['title' => 'Harm reduction module', 'content' => 'Principes en praktijk van schadebeperking.'],
-                ],
                 'editions' => [
                     [
                         'start_date' => date('Y-m-d', strtotime('+10 weeks')),
                         'price' => 195.00,
                         'price_non_member' => 245.00,
                         'capacity' => 20,
-                        'venue' => 'VAD Hoofdkantoor Brussel',
+                        'venue' => 'BWEEG Hoofdkantoor Gent',
                         'speakers' => 'Peter Vander Laenen',
                         'status' => 'open',
                         'sessions' => [
-                            ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Harm reduction: theorie en praktijk'],
+                            ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => SESSION_TYPE_IN_PERSON, 'title' => 'Harm reduction bij eetproblemen: theorie en praktijk'],
                         ],
                     ],
+                ],
+                'lessons' => [
+                    ['title' => 'Harm reduction module', 'content' => 'Principes en praktijk van schadebeperking bij eetproblemen.'],
                 ],
             ],
         ];
@@ -902,26 +1023,53 @@ class StrideSeedData {
         }
 
         update_post_meta($courseId, self::SEED_META_KEY, true);
-        update_post_meta($courseId, '_sfwd-courses', ['course_price_type' => 'open']);
         update_post_meta($courseId, '_course_type', $courseData['type']);
 
-        // Assign course category based on type
-        $category = ($courseData['type'] === 'online') ? 'online' : 'in-person';
-        wp_set_object_terms($courseId, $category, 'ld_course_category');
+        // --- LearnDash course settings ---
+        $ldSettings = ['course_price_type' => $courseData['ld_price_type'] ?? 'open'];
+
+        // Expiration settings
+        if (!empty($courseData['ld_expire_access'])) {
+            $ldSettings['expire_access'] = $courseData['ld_expire_access'];
+            $ldSettings['expire_access_days'] = $courseData['ld_expire_access_days'] ?? 0;
+            $ldSettings['expire_access_delete_progress'] = '';
+        }
+
+        update_post_meta($courseId, '_sfwd-courses', $ldSettings);
+
+        // --- Assign stride_format taxonomy (used by /online/ and /klassikaal/ pages) ---
+        $formats = $courseData['format'] ?? [];
+        if (!empty($formats)) {
+            wp_set_object_terms($courseId, $formats, 'stride_format');
+        }
+
+        // --- Assign stride_theme taxonomy (used for filtering tabs) ---
+        $themes = $courseData['themes'] ?? [];
+        if (!empty($themes)) {
+            wp_set_object_terms($courseId, $themes, 'stride_theme');
+        }
+
+        // --- Assign ld_course_category (used by single-sfwd-courses.php for online detection) ---
+        $ldCategory = match ($courseData['type']) {
+            'online' => 'online',
+            'webinar' => 'webinar',
+            default => 'in-person',
+        };
+        wp_set_object_terms($courseId, $ldCategory, 'ld_course_category');
 
         $this->created['courses'][] = $courseId;
-        echo "  + Course: {$courseData['title']} (ID: {$courseId}) [{$category}]\n";
+        echo "  + Course: {$courseData['title']} (ID: {$courseId}) [format: " . implode(',', $formats) . "] [themes: " . implode(',', $themes) . "]\n";
 
-        // Create lessons (use provided lessons or generate defaults)
+        // Create lessons
         $lessonIds = $this->createLessonsForCourse($courseId, $courseData['title'], $courseData['lessons'] ?? []);
 
-        // Create editions
+        // Create editions (pass lessonIds so online sessions can link to them)
         foreach ($courseData['editions'] as $editionData) {
-            $this->createEdition($courseId, $courseData['title'], $editionData);
+            $this->createEdition($courseId, $courseData['title'], $editionData, $lessonIds);
         }
     }
 
-    private function createEdition(int $courseId, string $courseTitle, array $data): void {
+    private function createEdition(int $courseId, string $courseTitle, array $data, array $lessonIds = []): void {
         if (!$this->editionRepository) return;
 
         $postTitle = $courseTitle . ' - ' . date('j M Y', strtotime($data['start_date']));
@@ -932,14 +1080,20 @@ class StrideSeedData {
         }
         $endDate = $endDate ?? $data['start_date'];
 
+        // v1 has no member feature — both price meta keys must hold the
+        // same value. `price_non_member` from the seed dataset is canonical
+        // (it's what every user sees); copy it to `price` so future reads
+        // of either key return the same number.
+        $effectivePrice = $data['price_non_member'] ?? $data['price'] ?? 0;
+
         $result = $this->editionRepository->create([
             'title' => $postTitle,
             'post_status' => 'publish',
             'course_id' => $courseId,
             'start_date' => $data['start_date'],
             'end_date' => $endDate,
-            'price' => $data['price'],
-            'price_non_member' => $data['price_non_member'],
+            'price' => $effectivePrice,
+            'price_non_member' => $effectivePrice,
             'capacity' => $data['capacity'],
             'venue' => $data['venue'],
             'speakers' => $data['speakers'] ?? '',
@@ -954,15 +1108,48 @@ class StrideSeedData {
         $editionId = $result->ID;
         update_post_meta($editionId, self::SEED_META_KEY, true);
 
+        // Set enrollment form if specified
+        if (!empty($data['enrollment_form'])) {
+            update_post_meta($editionId, '_ntdst_enrollment_form', $data['enrollment_form']);
+        }
+
+        // Set completion requirements if specified (enrollment phase)
+        foreach (['requires_session_selection', 'requires_questionnaire', 'requires_documents', 'requires_approval'] as $reqKey) {
+            if (!empty($data[$reqKey])) {
+                update_post_meta($editionId, '_ntdst_' . $reqKey, '1');
+            }
+        }
+
+        // Set post-course completion requirements if specified
+        foreach (['post_requires_evaluation', 'post_requires_documents', 'post_requires_approval'] as $reqKey) {
+            if (!empty($data[$reqKey])) {
+                update_post_meta($editionId, '_ntdst_' . $reqKey, '1');
+            }
+        }
+
+        // Set selection open/deadline if specified
+        if (!empty($data['selection_open'])) {
+            update_post_meta($editionId, '_ntdst_selection_open', '1');
+        }
+        if (!empty($data['selection_deadline'])) {
+            update_post_meta($editionId, '_ntdst_selection_deadline', $data['selection_deadline']);
+        }
+
+        // Set session slots if specified
+        if (!empty($data['session_slots'])) {
+            update_post_meta($editionId, '_ntdst_session_slots', $data['session_slots']);
+        }
+
         // Simulate registrations if specified
+        // Uses high fake user_ids to avoid unique_user_edition constraint (no real user at these IDs)
         if (!empty($data['registered']) && $this->regRepo) {
+            global $wpdb;
             for ($i = 0; $i < $data['registered']; $i++) {
-                // Create dummy registrations to fill capacity
-                global $wpdb;
-                $wpdb->insert(
+                $fakeUserId = 900000 + ($editionId * 100) + $i + 1;
+                $result = $wpdb->insert(
                     $wpdb->prefix . 'vad_registrations',
                     [
-                        'user_id' => 0, // dummy
+                        'user_id' => $fakeUserId,
                         'edition_id' => $editionId,
                         'status' => 'confirmed',
                         'enrollment_path' => 'individual',
@@ -970,19 +1157,38 @@ class StrideSeedData {
                         'registered_at' => current_time('mysql'),
                     ]
                 );
+                if ($result === false) {
+                    echo "    ! Fake registration insert failed: {$wpdb->last_error}\n";
+                }
             }
         }
 
         $this->created['editions'][] = $editionId;
-        echo "    + Edition: {$data['start_date']} at {$data['venue']} (ID: {$editionId})\n";
+        echo "    + Edition: {$data['start_date']} at {$data['venue']} (ID: {$editionId})";
+        if (!empty($data['enrollment_form'])) {
+            echo " [form: {$data['enrollment_form']}]";
+        }
+        if (!empty($data['selection_deadline'])) {
+            echo " [deadline: {$data['selection_deadline']}]";
+        }
+        echo "\n";
 
-        // Create sessions
+        // Create sessions (pass lessonIds for online session linking)
+        $onlineLessonIndex = 0;
         foreach ($data['sessions'] as $sessionData) {
-            $this->createSession($editionId, $data, $sessionData);
+            $sessionLessonIds = [];
+            if (($sessionData['type'] ?? '') === SESSION_TYPE_ONLINE && !empty($lessonIds)) {
+                // Link each online session to the next available lesson
+                if (isset($lessonIds[$onlineLessonIndex])) {
+                    $sessionLessonIds = [$lessonIds[$onlineLessonIndex]];
+                    $onlineLessonIndex++;
+                }
+            }
+            $this->createSession($editionId, $data, $sessionData, $sessionLessonIds);
         }
     }
 
-    private function createSession(int $editionId, array $editionData, array $sessionData): void {
+    private function createSession(int $editionId, array $editionData, array $sessionData, array $lessonIds = []): void {
         if (!$this->sessionService) return;
 
         $sessionDate = date('Y-m-d', strtotime($editionData['start_date'] . " +{$sessionData['date_offset']} days"));
@@ -1001,6 +1207,10 @@ class StrideSeedData {
             $createData['title'] = $sessionData['title'];
         }
 
+        if (!empty($sessionData['slot'])) {
+            $createData['slot'] = $sessionData['slot'];
+        }
+
         $sessionId = $this->sessionService->createSession($createData);
 
         if (is_wp_error($sessionId)) {
@@ -1009,6 +1219,14 @@ class StrideSeedData {
         }
 
         update_post_meta($sessionId, self::SEED_META_KEY, true);
+
+        // Link online sessions to LearnDash lessons
+        if (!empty($lessonIds)) {
+            update_post_meta($sessionId, '_ntdst_lesson_ids', $lessonIds);
+            $lessonTitles = array_map(fn($id) => get_the_title($id), $lessonIds);
+            echo "        🔗 Linked lessons: " . implode(', ', $lessonTitles) . "\n";
+        }
+
         $this->created['sessions'][] = $sessionId;
 
         $typeEmoji = match($sessionData['type']) {
@@ -1018,19 +1236,19 @@ class StrideSeedData {
             default => '🏢',
         };
         $title = $sessionData['title'] ?? $sessionData['type'];
-        echo "      {$typeEmoji} {$sessionDate} {$sessionData['start']}-{$sessionData['end']}: {$title}\n";
+        $slotInfo = !empty($sessionData['slot']) ? " [slot: {$sessionData['slot']}]" : '';
+        echo "      {$typeEmoji} {$sessionDate} {$sessionData['start']}-{$sessionData['end']}: {$title}{$slotInfo}\n";
     }
 
     private function createLessonsForCourse(int $courseId, string $courseTitle, array $lessonData = []): array {
         $lessonIds = [];
 
-        // Use provided lessons or generate defaults
         if (empty($lessonData)) {
             $lessonData = [
-                ['title' => 'Introductie', 'content' => "Welkom bij deze cursus. In deze module maak je kennis met de leerdoelen en opzet van {$courseTitle}."],
-                ['title' => 'Theorie', 'content' => "In deze module behandelen we de theoretische basis van {$courseTitle}."],
-                ['title' => 'Praktijk', 'content' => "Tijd om de theorie in praktijk te brengen met oefeningen en casussen."],
-                ['title' => 'Evaluatie', 'content' => "Toets je kennis en rond de cursus af met een certificaat."],
+                ['title' => 'Introductie', 'content' => "Welkom bij deze cursus."],
+                ['title' => 'Theorie', 'content' => "Theoretische basis."],
+                ['title' => 'Praktijk', 'content' => "Oefeningen en casussen."],
+                ['title' => 'Evaluatie', 'content' => "Toets en certificaat."],
             ];
         }
 
@@ -1056,7 +1274,6 @@ class StrideSeedData {
         if (!empty($lessonIds) && class_exists('LDLMS_Factory_Post')) {
             $courseStepsObj = LDLMS_Factory_Post::course_steps($courseId);
             if ($courseStepsObj) {
-                // LearnDash expects steps grouped by post type
                 $steps = ['sfwd-lessons' => []];
                 foreach ($lessonIds as $lessonId) {
                     $steps['sfwd-lessons'][$lessonId] = [];
@@ -1076,58 +1293,46 @@ class StrideSeedData {
             return;
         }
 
-        if (count($this->created['courses']) < 12) {
-            echo "  ! Not enough courses for trajectories (need 12, have " . count($this->created['courses']) . ")\n";
+        if (count($this->created['courses']) < 19) {
+            echo "  ! Not enough courses for trajectories (need 19, have " . count($this->created['courses']) . ")\n";
             return;
         }
 
         $courseIds = $this->created['courses'];
 
-        // Find courses by their trajectory role (matching indices to course definitions)
-        // Indices in order of course definitions:
-        // 0-2: Online courses (E-learning Basiskennis, Alcohol, Cannabis)
-        // 3: Motiverende Gespreksvoering
-        // 4: CGT bij Verslaving
-        // 5: Masterclass Crisisinterventie
-        // 6: Workshop Mindfulness
-        // 7: Preventie in de Praktijk
-        // 8: Gratis Introductie
-        // 9: Dual Diagnose (hybrid)
-        // 10: Webinarreeks
-        // 11: Gratis Webinar Lachgas
-        // 12: Verslavingskunde Fundament (trajectory required)
-        // 13: Assessment en Diagnostiek (trajectory required)
-        // 14: Keuzecursus Familie en Systeem (trajectory elective)
-        // 15: Keuzecursus Groepsbehandeling (trajectory elective)
-        // 16: Keuzecursus Harm Reduction (trajectory elective)
+        // Course index reference:
+        // 0: E-learning Basiskennis Jeugdgezondheid (online open)
+        // 1: E-learning Voeding en Prestatie (online open)
+        // 2: E-learning Eetproblemen (online closed)
+        // 3: E-learning Schermtijd en Bewegingsarmoede (online closed)
+        // 4: E-learning Beweegbeleid (online closed)
+        // 5: MGV rond Voeding (in-person)
+        // 6: Sportblessures Voorkomen (in-person)
+        // 7: Masterclass Mentale Veerkracht (in-person)
+        // 8: Gezonde Tussendoortjes (in-person, slots)
+        // 9: Workshop Yoga en Mindfulness (in-person, cancelled/rescheduled)
+        // 10: Gratis Introductie BWEEG (in-person, free)
+        // 11: Erkenningstraject Jeugdsportcoach (in-person, completion)
+        // 12: Bijscholing Bewegingsonderwijs (in-person, documents)
+        // 13: Beweegbeleid op School (hybrid)
+        // 14: Webinarreeks Jeugdgezondheid (webinar)
+        // 15: Gratis Webinar Energy Drinks (webinar, free)
+        // 16: Jeugdgezondheid Fundament (trajectory required)
+        // 17: Assessment en Motorische Screening (trajectory required)
+        // 18: Familie en Gezondheidscoaching (trajectory elective)
+        // 19: Groepsdynamiek in Sportteams (trajectory elective)
+        // 20: Harm Reduction bij Eetproblemen (trajectory elective)
 
-        // === TRAJECTORY 1: COHORT - Verslavingsspecialist (full professional training) ===
+        // === TRAJECTORY 1: COHORT - Jeugdgezondheidsspecialist ===
         $cohortData = [
-            'title' => 'Traject Verslavingsspecialist',
-            'post_content' => '<p>Word een gecertificeerd verslavingsspecialist met dit intensieve cohort-traject. Je volgt de opleiding samen met een vaste groep van maximaal 15 deelnemers, wat zorgt voor een hecht leernetwerk.</p>
-
-<h3>Programma</h3>
-<p>Het traject bestaat uit <strong>4 verplichte cursussen</strong> die de basis vormen, plus <strong>2 keuzecursussen</strong> waarin je je kunt specialiseren naar eigen interesse.</p>
-
-<h4>Verplichte cursussen</h4>
-<ul>
-<li>Verslavingskunde: Fundament (2 dagen)</li>
-<li>Assessment en Diagnostiek (2 dagen)</li>
-<li>Motiverende Gespreksvoering (1 dag)</li>
-<li>CGT bij Verslaving (3 dagen)</li>
-</ul>
-
-<h4>Keuzecursussen (kies 2 uit 3)</h4>
-<ul>
-<li>Familie en Systeem</li>
-<li>Groepsbehandeling</li>
-<li>Harm Reduction</li>
-</ul>
-
-<h3>Certificering</h3>
-<p>Na afronding van alle verplichte cursussen en 2 keuzecursussen ontvang je het certificaat "Verslavingsspecialist VAD".</p>',
+            'title' => 'Traject Jeugdgezondheidsspecialist',
+            'post_content' => '<p>Word een gecertificeerd jeugdgezondheidsspecialist met dit intensieve cohort-traject.</p>
+<h3>Verplichte cursussen</h3>
+<ul><li>Jeugdgezondheid: Fundament (2 dagen)</li><li>Assessment en Motorische Screening (2 dagen)</li><li>Motiverende Gespreksvoering rond Voeding (1 dag)</li><li>Sportblessures Voorkomen (3 dagen)</li></ul>
+<h3>Keuzecursussen (kies 2 uit 3)</h3>
+<ul><li>Familie en Gezondheidscoaching</li><li>Groepsdynamiek in Sportteams</li><li>Harm Reduction bij Eetproblemen</li></ul>',
             'mode' => TrajectoryMode::Cohort->value,
-            'status' => TrajectoryStatus::Open->value,
+            'status' => OfferingStatus::Open->value,
             'enrollment_deadline' => date('Y-m-d', strtotime('+1 month')),
             'choice_available_date' => date('Y-m-d', strtotime('+2 weeks')),
             'choice_deadline' => date('Y-m-d', strtotime('+3 weeks')),
@@ -1135,15 +1340,13 @@ class StrideSeedData {
             'price' => 1695.00,
             'price_non_member' => 1995.00,
             'courses' => json_encode([
-                // Required foundation courses
-                ['course_id' => $courseIds[12], 'required' => true, 'order' => 1],
-                ['course_id' => $courseIds[13], 'required' => true, 'order' => 2],
-                ['course_id' => $courseIds[3], 'required' => true, 'order' => 3], // MGV
-                ['course_id' => $courseIds[4], 'required' => true, 'order' => 4], // CGT
-                // Elective courses (choose 2 of 3)
-                ['course_id' => $courseIds[14], 'required' => false, 'group' => 'Keuzecursussen (kies 2)', 'min_choices' => 2],
-                ['course_id' => $courseIds[15], 'required' => false, 'group' => 'Keuzecursussen (kies 2)', 'min_choices' => 2],
-                ['course_id' => $courseIds[16], 'required' => false, 'group' => 'Keuzecursussen (kies 2)', 'min_choices' => 2],
+                ['course_id' => $courseIds[16], 'required' => true, 'order' => 1],
+                ['course_id' => $courseIds[17], 'required' => true, 'order' => 2],
+                ['course_id' => $courseIds[5], 'required' => true, 'order' => 3],
+                ['course_id' => $courseIds[6], 'required' => true, 'order' => 4],
+                ['course_id' => $courseIds[18], 'required' => false, 'group' => 'Keuzecursussen (kies 2)', 'min_choices' => 2],
+                ['course_id' => $courseIds[19], 'required' => false, 'group' => 'Keuzecursussen (kies 2)', 'min_choices' => 2],
+                ['course_id' => $courseIds[20], 'required' => false, 'group' => 'Keuzecursussen (kies 2)', 'min_choices' => 2],
             ]),
         ];
 
@@ -1151,57 +1354,27 @@ class StrideSeedData {
         if (!is_wp_error($cohortId)) {
             update_post_meta($cohortId, self::SEED_META_KEY, true);
             $this->created['trajectories'][] = $cohortId;
-            echo "  + Cohort trajectory: Traject Verslavingsspecialist (ID: {$cohortId})\n";
-            echo "      Required: Fundament, Assessment, MGV, CGT\n";
-            echo "      Electives (choose 2): Familie, Groepsbehandeling, Harm Reduction\n";
+            echo "  + Cohort trajectory: Traject Jeugdgezondheidsspecialist (ID: {$cohortId})\n";
         } else {
             echo "  ! Cohort trajectory failed: {$cohortId->get_error_message()}\n";
         }
 
-        // === TRAJECTORY 2: SELF-PACED - Preventiewerker (flexible online-first) ===
+        // === TRAJECTORY 2: SELF-PACED - Jeugdgezondheidswerker ===
         $selfPacedData = [
-            'title' => 'Traject Preventiewerker',
-            'post_content' => '<p>Flexibel traject voor (toekomstige) preventiewerkers. Combineer online cursussen met praktijkdagen, in je eigen tempo.</p>
-
-<h3>Waarom dit traject?</h3>
-<p>Dit traject is ideaal voor mensen die:</p>
-<ul>
-<li>Willen starten in de preventie</li>
-<li>Hun preventievaardigheden willen versterken</li>
-<li>Flexibel willen leren naast hun werk</li>
-</ul>
-
-<h3>Programma</h3>
-<h4>Verplichte onderdelen</h4>
-<ul>
-<li>E-learning: Basiskennis Verslavingszorg (online, eigen tempo)</li>
-<li>E-learning: Cannabis - Feiten en Fabels (online, eigen tempo)</li>
-<li>Preventie in de Praktijk (2 dagen klassikaal)</li>
-</ul>
-
-<h4>Optionele verdieping</h4>
-<p>Na de verplichte onderdelen kun je optioneel de volgende cursussen volgen voor verdere verdieping:</p>
-<ul>
-<li>E-learning: Alcohol en Gezondheid</li>
-<li>Webinarreeks: Actuele Thema\'s</li>
-</ul>
-
-<h3>Certificering</h3>
-<p>Na afronding van de verplichte onderdelen ontvang je het certificaat "Preventiewerker VAD Basis".</p>',
+            'title' => 'Traject Jeugdgezondheidswerker',
+            'post_content' => '<p>Flexibel traject voor jeugdgezondheidswerkers. Combineer online cursussen met praktijkdagen, in je eigen tempo.</p>',
             'mode' => TrajectoryMode::SelfPaced->value,
-            'status' => TrajectoryStatus::Open->value,
-            'enrollment_deadline' => '', // no deadline for self-paced
-            'capacity' => 0, // unlimited
+            'status' => OfferingStatus::Open->value,
+            'enrollment_deadline' => '',
+            'capacity' => 0,
             'price' => 595.00,
             'price_non_member' => 745.00,
             'courses' => json_encode([
-                // Required courses
-                ['course_id' => $courseIds[0], 'required' => true, 'order' => 1], // E-learning Basiskennis
-                ['course_id' => $courseIds[2], 'required' => true, 'order' => 2], // E-learning Cannabis
-                ['course_id' => $courseIds[7], 'required' => true, 'order' => 3], // Preventie in de Praktijk
-                // Optional additions
-                ['course_id' => $courseIds[1], 'required' => false, 'group' => 'Optionele verdieping'], // E-learning Alcohol
-                ['course_id' => $courseIds[10], 'required' => false, 'group' => 'Optionele verdieping'], // Webinarreeks
+                ['course_id' => $courseIds[0], 'required' => true, 'order' => 1],
+                ['course_id' => $courseIds[2], 'required' => true, 'order' => 2],
+                ['course_id' => $courseIds[8], 'required' => true, 'order' => 3],
+                ['course_id' => $courseIds[1], 'required' => false, 'group' => 'Optionele verdieping'],
+                ['course_id' => $courseIds[14], 'required' => false, 'group' => 'Optionele verdieping'],
             ]),
         ];
 
@@ -1209,54 +1382,26 @@ class StrideSeedData {
         if (!is_wp_error($selfPacedId)) {
             update_post_meta($selfPacedId, self::SEED_META_KEY, true);
             $this->created['trajectories'][] = $selfPacedId;
-            echo "  + Self-paced trajectory: Traject Preventiewerker (ID: {$selfPacedId})\n";
-            echo "      Required: Basiskennis (online), Cannabis (online), Preventie (klassikaal)\n";
-            echo "      Optional: Alcohol (online), Webinarreeks\n";
+            echo "  + Self-paced trajectory: Traject Jeugdgezondheidswerker (ID: {$selfPacedId})\n";
         } else {
             echo "  ! Self-paced trajectory failed: {$selfPacedId->get_error_message()}\n";
         }
 
-        // === TRAJECTORY 3: BLENDED - Kennismakingstraject (entry-level) ===
+        // === TRAJECTORY 3: BLENDED - Kennismakingstraject ===
         $blendedData = [
-            'title' => 'Kennismakingstraject Verslavingszorg',
-            'post_content' => '<p>Laagdrempelig kennismakingstraject voor mensen die willen ontdekken of de verslavingszorg iets voor hen is. Combinatie van gratis en betaalde onderdelen.</p>
-
-<h3>Voor wie?</h3>
-<ul>
-<li>Studenten die stage overwegen</li>
-<li>Professionals uit aanverwante sectoren</li>
-<li>Vrijwilligers en ervaringsdeskundigen</li>
-</ul>
-
-<h3>Programma</h3>
-<h4>Startonderdelen (gratis)</h4>
-<ul>
-<li>Gratis Introductie: Werken bij VAD</li>
-<li>Gratis Webinar: Lachgas - De Nieuwe Trend</li>
-</ul>
-
-<h4>Verdieping (optioneel, betaald)</h4>
-<p>Na de gratis introductie kun je ervoor kiezen om door te gaan met:</p>
-<ul>
-<li>E-learning: Basiskennis Verslavingszorg</li>
-<li>Motiverende Gespreksvoering</li>
-</ul>
-
-<h3>Doorstromen</h3>
-<p>Na dit kennismakingstraject kun je doorstromen naar het volledige Traject Verslavingsspecialist of Traject Preventiewerker.</p>',
+            'title' => 'Kennismakingstraject Jeugdgezondheid',
+            'post_content' => '<p>Laagdrempelig kennismakingstraject. Combinatie van gratis en betaalde onderdelen.</p>',
             'mode' => TrajectoryMode::SelfPaced->value,
-            'status' => TrajectoryStatus::Open->value,
+            'status' => OfferingStatus::Open->value,
             'enrollment_deadline' => '',
             'capacity' => 0,
-            'price' => 0.00, // Free entry
+            'price' => 0.00,
             'price_non_member' => 0.00,
             'courses' => json_encode([
-                // Free required start
-                ['course_id' => $courseIds[8], 'required' => true, 'order' => 1], // Gratis Introductie
-                ['course_id' => $courseIds[11], 'required' => true, 'order' => 2], // Gratis Webinar Lachgas
-                // Optional paid expansion
-                ['course_id' => $courseIds[0], 'required' => false, 'group' => 'Optionele verdieping (betaald)'], // Basiskennis
-                ['course_id' => $courseIds[3], 'required' => false, 'group' => 'Optionele verdieping (betaald)'], // MGV
+                ['course_id' => $courseIds[10], 'required' => true, 'order' => 1],
+                ['course_id' => $courseIds[15], 'required' => true, 'order' => 2],
+                ['course_id' => $courseIds[0], 'required' => false, 'group' => 'Optionele verdieping (betaald)'],
+                ['course_id' => $courseIds[5], 'required' => false, 'group' => 'Optionele verdieping (betaald)'],
             ]),
         ];
 
@@ -1264,9 +1409,7 @@ class StrideSeedData {
         if (!is_wp_error($blendedId)) {
             update_post_meta($blendedId, self::SEED_META_KEY, true);
             $this->created['trajectories'][] = $blendedId;
-            echo "  + Entry trajectory: Kennismakingstraject Verslavingszorg (ID: {$blendedId})\n";
-            echo "      Required (free): Introductie, Lachgas Webinar\n";
-            echo "      Optional (paid): Basiskennis, MGV\n";
+            echo "  + Entry trajectory: Kennismakingstraject (ID: {$blendedId})\n";
         } else {
             echo "  ! Entry trajectory failed: {$blendedId->get_error_message()}\n";
         }
@@ -1282,7 +1425,7 @@ class StrideSeedData {
 
         $vouchers = [
             ['code' => 'WELKOM2026', 'discount_type' => 'percentage', 'discount_value' => 10, 'usage_limit' => 50],
-            ['code' => 'VAD-MEMBER', 'discount_type' => 'percentage', 'discount_value' => 15, 'usage_limit' => 100],
+            ['code' => 'BWEEG-MEMBER', 'discount_type' => 'percentage', 'discount_value' => 15, 'usage_limit' => 100],
             ['code' => 'GRATIS-INTRO', 'discount_type' => 'full', 'discount_value' => 0, 'usage_limit' => 5],
             ['code' => 'KORTING50', 'discount_type' => 'fixed', 'discount_value' => 5000, 'usage_limit' => 20],
             ['code' => 'SEEDVOUCHER10', 'discount_type' => 'percentage', 'discount_value' => 10, 'usage_limit' => 100],
@@ -1333,11 +1476,11 @@ class StrideSeedData {
             return;
         }
 
-        // Get open editions (skip cancelled) - meta uses _ntdst_ prefix
+        // Get open editions (skip cancelled)
         $openEditions = [];
         foreach ($this->created['editions'] as $editionId) {
             $status = get_post_meta($editionId, '_ntdst_status', true);
-            if ($status === 'open') {
+            if (in_array($status, ['open', 'few_spots'], true)) {
                 $openEditions[] = $editionId;
             }
         }
@@ -1347,11 +1490,10 @@ class StrideSeedData {
             return;
         }
 
-        // Enroll admin in first 3 editions
+        // Enroll admin in first 3 open editions (in-person ones)
         $enrollEditions = array_slice($openEditions, 0, 3);
 
         foreach ($enrollEditions as $editionId) {
-            // Create registration
             if ($this->regRepo) {
                 $regId = $this->regRepo->create([
                     'user_id' => $this->adminUserId,
@@ -1372,6 +1514,19 @@ class StrideSeedData {
                             ld_update_course_access($this->adminUserId, $courseId, false);
                         }
                     }
+
+                    // Initialize completion_tasks if edition has requirements
+                    $completion = ntdst_get(EnrollmentCompletion::class);
+                    $tasks = $completion->buildInitialTasks($editionId, 'vad_edition');
+                    if (!empty($tasks)) {
+                        global $wpdb;
+                        $wpdb->update(
+                            $wpdb->prefix . 'vad_registrations',
+                            ['completion_tasks' => wp_json_encode($tasks)],
+                            ['id' => $regId]
+                        );
+                        echo "    + Completion tasks: " . implode(', ', array_keys($tasks)) . "\n";
+                    }
                 }
             }
 
@@ -1379,7 +1534,94 @@ class StrideSeedData {
             $this->createQuoteForEdition($editionId, $this->adminUserId);
         }
 
-        // Also enroll seed students
+        // === Enroll admin in editions that have enrollment requirements (for task testing) ===
+        foreach ($openEditions as $editionId) {
+            $reqS = get_post_meta($editionId, '_ntdst_requires_session_selection', true);
+            $reqQ = get_post_meta($editionId, '_ntdst_requires_questionnaire', true);
+            $reqD = get_post_meta($editionId, '_ntdst_requires_documents', true);
+            $reqA = get_post_meta($editionId, '_ntdst_requires_approval', true);
+
+            if (!$reqS && !$reqQ && !$reqD && !$reqA) {
+                continue;
+            }
+
+            if ($this->regRepo && !$this->regRepo->exists($this->adminUserId, $editionId)) {
+                $regId = $this->regRepo->create([
+                    'user_id' => $this->adminUserId,
+                    'edition_id' => $editionId,
+                    'status' => RegistrationStatus::Pending->value,
+                    'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
+                    'notes' => 'Seeded: edition with enrollment requirements',
+                ]);
+
+                if (!is_wp_error($regId)) {
+                    $this->created['registrations'][] = $regId;
+
+                    $completion = ntdst_get(EnrollmentCompletion::class);
+                    $tasks = $completion->buildInitialTasks($editionId, 'vad_edition');
+                    if (!empty($tasks)) {
+                        global $wpdb;
+                        $wpdb->update(
+                            $wpdb->prefix . 'vad_registrations',
+                            ['completion_tasks' => wp_json_encode($tasks)],
+                            ['id' => $regId]
+                        );
+                        echo "  + Registration for edition {$editionId} with tasks: " . implode(', ', array_keys($tasks)) . "\n";
+                    }
+
+                    if ($this->editionService && function_exists('ld_update_course_access')) {
+                        $courseId = $this->editionService->getCourseId($editionId);
+                        if ($courseId) {
+                            ld_update_course_access($this->adminUserId, $courseId, false);
+                        }
+                    }
+                }
+            }
+        }
+
+        // === Enroll admin in some ONLINE open courses (LD native) ===
+        // This tests the "enrolled" state on the online archive page
+        $onlineOpenCourseIds = array_slice($this->created['courses'], 0, 2); // First 2 are online open
+        foreach ($onlineOpenCourseIds as $courseId) {
+            if (function_exists('ld_update_course_access')) {
+                ld_update_course_access($this->adminUserId, $courseId, false);
+                echo "  + LD enrollment: admin -> course {$courseId} (online open)\n";
+            }
+        }
+
+        // === Enroll admin in hybrid course (INDEX 13) to test online lesson actions ===
+        // The hybrid course has online sessions linked to lessons
+        if (isset($this->created['courses'][13])) {
+            $hybridCourseId = $this->created['courses'][13];
+            // Find the edition for this course
+            $hybridEditions = array_filter($openEditions, function ($editionId) use ($hybridCourseId) {
+                return (int) get_post_meta($editionId, '_ntdst_course_id', true) === $hybridCourseId;
+            });
+
+            foreach ($hybridEditions as $editionId) {
+                if ($this->regRepo && !$this->regRepo->exists($this->adminUserId, $editionId)) {
+                    $regId = $this->regRepo->create([
+                        'user_id' => $this->adminUserId,
+                        'edition_id' => $editionId,
+                        'status' => RegistrationStatus::Confirmed->value,
+                        'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
+                        'notes' => 'Seeded: hybrid course for online lesson testing',
+                    ]);
+
+                    if (!is_wp_error($regId)) {
+                        $this->created['registrations'][] = $regId;
+                        echo "  + Registration for hybrid edition {$editionId} (online lesson testing)\n";
+
+                        if (function_exists('ld_update_course_access')) {
+                            ld_update_course_access($this->adminUserId, $hybridCourseId, false);
+                            echo "    + Granted LD access to hybrid course {$hybridCourseId}\n";
+                        }
+                    }
+                }
+            }
+        }
+
+        // Enroll seed students
         foreach ($this->created['users'] as $userId) {
             $user = get_user_by('ID', $userId);
             if (!$user || strpos($user->user_login, 'seed_student') === false) {
@@ -1392,20 +1634,41 @@ class StrideSeedData {
 
             foreach ($randomEditions as $editionId) {
                 if ($this->regRepo) {
+                    // Check if edition has enrollment requirements → status=pending
+                    $hasEnrollmentReqs = get_post_meta($editionId, '_ntdst_requires_session_selection', true)
+                        || get_post_meta($editionId, '_ntdst_requires_questionnaire', true)
+                        || get_post_meta($editionId, '_ntdst_requires_documents', true)
+                        || get_post_meta($editionId, '_ntdst_requires_approval', true);
+
                     $regId = $this->regRepo->create([
                         'user_id' => $userId,
                         'edition_id' => $editionId,
-                        'status' => RegistrationStatus::Confirmed->value,
+                        'status' => $hasEnrollmentReqs
+                            ? RegistrationStatus::Pending->value
+                            : RegistrationStatus::Confirmed->value,
                         'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
                     ]);
 
                     if (!is_wp_error($regId)) {
                         $this->created['registrations'][] = $regId;
-                        echo "  + Registration: {$user->user_login} -> edition {$editionId}\n";
+
+                        // Initialize completion tasks if edition has requirements
+                        $completion = ntdst_get(EnrollmentCompletion::class);
+                        $tasks = $completion->buildInitialTasks($editionId, 'vad_edition');
+                        if (!empty($tasks)) {
+                            global $wpdb;
+                            $wpdb->update(
+                                $wpdb->prefix . 'vad_registrations',
+                                ['completion_tasks' => wp_json_encode($tasks)],
+                                ['id' => $regId]
+                            );
+                            echo "  + Registration: {$user->user_login} -> edition {$editionId} (pending, tasks: " . implode(', ', array_keys($tasks)) . ")\n";
+                        } else {
+                            echo "  + Registration: {$user->user_login} -> edition {$editionId}\n";
+                        }
                     }
                 }
 
-                // Create quote for student
                 $this->createQuoteForEdition($editionId, $userId);
             }
         }
@@ -1413,7 +1676,7 @@ class StrideSeedData {
 
     private function createQuoteForEdition(int $editionId, int $userId): void {
         $user = get_user_by('ID', $userId);
-        $price = (float) (get_post_meta($editionId, 'price', true) ?: 299.00);
+        $price = (float) (get_post_meta($editionId, '_ntdst_price', true) ?: 299.00);
         $tax = round($price * 0.21, 2);
 
         $quoteNumber = sprintf('Q-%04d', rand(1000, 9999));
@@ -1467,18 +1730,218 @@ class StrideSeedData {
         echo "  + Quote: {$quoteNumber} ({$status})\n";
     }
 
+    // === Post-Course Completion Test Data ===
+
+    /**
+     * Create post-course completion test data.
+     *
+     * Finds editions with post-course requirements, creates confirmed registrations
+     * with attendance marked, and initializes post-course tasks so the completion
+     * flow can be tested immediately.
+     */
+    private function createPostCourseTestData(): void {
+        echo "\nCreating post-course completion test data...\n";
+
+        if (empty($this->created['editions'])) {
+            echo "  ! No editions available\n";
+            return;
+        }
+
+        // Find seed_student1
+        $student = get_user_by('login', 'seed_student1');
+        if (!$student) {
+            echo "  ! seed_student1 not found\n";
+            return;
+        }
+
+        // Find editions with post-course requirements
+        $postCourseEditions = [];
+        foreach ($this->created['editions'] as $editionId) {
+            $hasEval = get_post_meta($editionId, '_ntdst_post_requires_evaluation', true);
+            $hasDocs = get_post_meta($editionId, '_ntdst_post_requires_documents', true);
+            $hasApproval = get_post_meta($editionId, '_ntdst_post_requires_approval', true);
+
+            if ($hasEval || $hasDocs || $hasApproval) {
+                $postCourseEditions[] = $editionId;
+            }
+        }
+
+        if (empty($postCourseEditions)) {
+            echo "  ! No editions with post-course requirements found\n";
+            return;
+        }
+
+        echo "  Found " . count($postCourseEditions) . " editions with post-course requirements\n";
+
+        // Ensure evaluation field groups are assigned to post-course edition courses
+        if (class_exists(\Stride\Modules\Questionnaire\QuestionnaireRepository::class)) {
+            $questionnaireRepo = ntdst_get(\Stride\Modules\Questionnaire\QuestionnaireRepository::class);
+            $groups = $questionnaireRepo->getAllGroups();
+
+            // Find or create an evaluation field group
+            $evalGroup = null;
+            foreach ($groups as &$g) {
+                if (($g['stage'] ?? '') === 'evaluation') {
+                    $evalGroup = &$g;
+                    break;
+                }
+            }
+            unset($g);
+
+            if (!$evalGroup) {
+                $groups[] = [
+                    'id' => 'qg_eval_seed',
+                    'label' => 'Evaluatie opleiding',
+                    'stage' => 'evaluation',
+                    'assignments' => [],
+                    'fields' => [
+                        ['label' => 'Beoordeling docent', 'name' => 'beoordeling_docent', 'type' => 'scale', 'required' => true, 'min' => 1, 'max' => 5],
+                        ['label' => 'Beoordeling lesmateriaal', 'name' => 'beoordeling_materiaal', 'type' => 'scale', 'required' => true, 'min' => 1, 'max' => 5],
+                        ['label' => 'Opmerkingen', 'name' => 'opmerkingen', 'type' => 'textarea', 'required' => false],
+                    ],
+                ];
+                $evalGroup = &$groups[count($groups) - 1];
+            }
+
+            // Assign to courses linked to post-course editions
+            $editionService = $this->editionService;
+            $courseIds = [];
+            foreach ($postCourseEditions as $editionId) {
+                $courseId = $editionService ? $editionService->getCourseId($editionId) : 0;
+                if ($courseId) {
+                    $courseIds[] = $courseId;
+                }
+            }
+            $courseIds = array_unique($courseIds);
+
+            // Merge into existing assignments (flat int IDs, matching admin settings format)
+            $existing = $evalGroup['assignments'] ?? [];
+            foreach ($courseIds as $cid) {
+                if (!in_array($cid, $existing, true)) {
+                    $evalGroup['assignments'][] = $cid;
+                }
+            }
+
+            $questionnaireRepo->saveGroups($groups);
+            echo "  + Evaluation field group assigned to courses: " . implode(', ', $courseIds) . "\n";
+            unset($evalGroup);
+        }
+
+        global $wpdb;
+        $attendanceTable = $wpdb->prefix . 'vad_attendance';
+
+        foreach ($postCourseEditions as $editionId) {
+            $editionTitle = get_the_title($editionId);
+
+            // Create confirmed registration for seed_student1
+            if ($this->regRepo) {
+                // Check if already enrolled
+                $existing = $this->regRepo->findByUserAndEdition($student->ID, $editionId);
+                if ($existing && $existing->status !== 'cancelled') {
+                    $regId = (int) $existing->id;
+                    echo "  - Registration exists for student1 -> edition {$editionId} (reg: {$regId})\n";
+                } else {
+                    $regId = $this->regRepo->create([
+                        'user_id' => $student->ID,
+                        'edition_id' => $editionId,
+                        'status' => RegistrationStatus::Confirmed->value,
+                        'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
+                        'notes' => 'Seeded for post-course completion testing',
+                    ]);
+
+                    if (is_wp_error($regId)) {
+                        echo "  ! Registration failed for edition {$editionId}: {$regId->get_error_message()}\n";
+                        continue;
+                    }
+
+                    $this->created['registrations'][] = $regId;
+                    echo "  + Registration: student1 -> {$editionTitle} (reg: {$regId})\n";
+                }
+
+                // Grant LearnDash access
+                if ($this->editionService && function_exists('ld_update_course_access')) {
+                    $courseId = $this->editionService->getCourseId($editionId);
+                    if ($courseId) {
+                        ld_update_course_access($student->ID, $courseId, false);
+                        echo "    + LD access granted for course {$courseId}\n";
+                    }
+                }
+
+                // Mark attendance for all sessions
+                $sessions = get_posts([
+                    'post_type' => 'vad_session',
+                    'post_status' => 'publish',
+                    'posts_per_page' => -1,
+                    'meta_query' => [
+                        ['key' => '_ntdst_edition_id', 'value' => $editionId, 'compare' => '='],
+                    ],
+                ]);
+
+                foreach ($sessions as $session) {
+                    // Check if attendance already exists
+                    $existingAttendance = $wpdb->get_var($wpdb->prepare(
+                        "SELECT id FROM {$attendanceTable} WHERE session_id = %d AND user_id = %d",
+                        $session->ID,
+                        $student->ID
+                    ));
+
+                    if (!$existingAttendance) {
+                        $wpdb->insert($attendanceTable, [
+                            'edition_id' => $editionId,
+                            'session_id' => $session->ID,
+                            'user_id' => $student->ID,
+                            'status' => 'present',
+                            'marked_by' => $this->adminUserId,
+                            'marked_at' => current_time('mysql'),
+                        ]);
+                        echo "    + Attendance: session {$session->ID} (present)\n";
+                    } else {
+                        echo "    - Attendance exists: session {$session->ID}\n";
+                    }
+                }
+
+                // Initialize post-course tasks
+                if (function_exists('ntdst_get') && class_exists(EnrollmentCompletion::class)) {
+                    $completion = ntdst_get(EnrollmentCompletion::class);
+                    $completion->initializePostCourseTasks($regId, $editionId);
+
+                    $reqs = $completion->getPostCourseRequirements($editionId, 'vad_edition');
+                    $enabledTasks = array_keys(array_filter($reqs));
+                    echo "    + Post-course tasks initialized: " . implode(', ', $enabledTasks) . "\n";
+                } else {
+                    // Fallback: set completion_tasks directly via wpdb
+                    $tasks = [];
+                    if (get_post_meta($editionId, '_ntdst_post_requires_evaluation', true)) {
+                        $tasks['post_evaluation'] = ['status' => 'pending', 'phase' => 'post_course'];
+                    }
+                    if (get_post_meta($editionId, '_ntdst_post_requires_documents', true)) {
+                        $tasks['post_documents'] = ['status' => 'pending', 'phase' => 'post_course'];
+                    }
+                    if (get_post_meta($editionId, '_ntdst_post_requires_approval', true)) {
+                        $tasks['post_approval'] = ['status' => 'pending', 'phase' => 'post_course'];
+                    }
+
+                    if (!empty($tasks)) {
+                        $wpdb->update(
+                            $wpdb->prefix . 'vad_registrations',
+                            ['completion_tasks' => wp_json_encode($tasks)],
+                            ['id' => $regId]
+                        );
+                        echo "    + Post-course tasks set via fallback: " . implode(', ', array_keys($tasks)) . "\n";
+                    }
+                }
+            }
+        }
+
+        echo "Post-course completion test data complete.\n";
+    }
+
     /**
      * Create trajectory-specific test data for E2E tests.
-     *
-     * Creates:
-     * - test-trajectory (cohort mode, open status)
-     * - seed_enrolled_user (enrolled in test-trajectory)
-     * - seed_completed_user (completed the trajectory)
      */
     private function createTrajectoryTestData(): void {
         echo "\nCreating trajectory test data for E2E tests...\n";
 
-        // Get or create test trajectory
         $testTrajectory = get_page_by_path('test-trajectory', OBJECT, 'vad_trajectory');
         if (!$testTrajectory) {
             $testTrajectoryId = wp_insert_post([
@@ -1486,7 +1949,7 @@ class StrideSeedData {
                 'post_title' => 'Test Trajectory',
                 'post_name' => 'test-trajectory',
                 'post_status' => 'publish',
-                'post_content' => 'A test trajectory for E2E testing. This trajectory is used to verify enrollment flows.',
+                'post_content' => 'A test trajectory for E2E testing.',
             ]);
 
             if (is_wp_error($testTrajectoryId)) {
@@ -1494,13 +1957,12 @@ class StrideSeedData {
                 return;
             }
 
-            // Set trajectory meta using Data Manager if available
             if (function_exists('ntdst_data')) {
                 $trajectoryModel = ntdst_data()->get('vad_trajectory');
                 if ($trajectoryModel) {
                     $trajectoryModel->updateMetaBatch($testTrajectoryId, [
                         'mode' => TrajectoryMode::Cohort->value,
-                        'status' => TrajectoryStatus::Open->value,
+                        'status' => OfferingStatus::Open->value,
                         'price' => 500,
                         'price_non_member' => 600,
                         'enrollment_deadline' => date('Y-m-d', strtotime('+30 days')),
@@ -1508,10 +1970,10 @@ class StrideSeedData {
                     ]);
                 }
             } else {
-                // Fallback to direct meta
                 update_post_meta($testTrajectoryId, '_ntdst_mode', TrajectoryMode::Cohort->value);
-                update_post_meta($testTrajectoryId, '_ntdst_status', TrajectoryStatus::Open->value);
-                update_post_meta($testTrajectoryId, '_ntdst_price', 500);
+                update_post_meta($testTrajectoryId, '_ntdst_status', OfferingStatus::Open->value);
+                // v1: single price (no member tier)
+                update_post_meta($testTrajectoryId, '_ntdst_price', 600);
                 update_post_meta($testTrajectoryId, '_ntdst_price_non_member', 600);
                 update_post_meta($testTrajectoryId, '_ntdst_enrollment_deadline', date('Y-m-d', strtotime('+30 days')));
                 update_post_meta($testTrajectoryId, '_ntdst_capacity', 20);
@@ -1529,83 +1991,74 @@ class StrideSeedData {
         }
 
         // Create enrolled test user
-        $enrolledUser = get_user_by('email', 'seed_enrolled_user@seed.test');
-        if (!$enrolledUser) {
-            $enrolledUserId = wp_insert_user([
-                'user_login' => 'seed_enrolled_user',
-                'user_email' => 'seed_enrolled_user@seed.test',
-                'user_pass' => 'seedpass123',
-                'first_name' => 'Enrolled',
-                'last_name' => 'User',
-                'display_name' => 'Enrolled User',
-                'role' => 'subscriber',
-            ]);
-
-            if (is_wp_error($enrolledUserId)) {
-                echo "  ! Failed to create seed_enrolled_user: {$enrolledUserId->get_error_message()}\n";
-            } else {
-                update_user_meta($enrolledUserId, self::SEED_META_KEY, true);
-                // Activate for auth
-                update_user_meta($enrolledUserId, 'ntdst_auth_activated', true);
-                update_user_meta($enrolledUserId, 'ntdst_auth_activated_at', time());
-                $this->created['users'][] = $enrolledUserId;
-                echo "  + Created seed_enrolled_user@seed.test (ID: {$enrolledUserId})\n";
-            }
-        } else {
-            $enrolledUserId = $enrolledUser->ID;
-            if (!in_array($enrolledUserId, $this->created['users'], true)) {
-                $this->created['users'][] = $enrolledUserId;
-            }
-            // Ensure existing user is activated
-            if (!get_user_meta($enrolledUserId, 'ntdst_auth_activated', true)) {
-                update_user_meta($enrolledUserId, 'ntdst_auth_activated', true);
-                update_user_meta($enrolledUserId, 'ntdst_auth_activated_at', time());
-            }
-            echo "  - seed_enrolled_user@seed.test already exists (ID: {$enrolledUserId})\n";
-        }
-
+        $this->createTestUser('seed_enrolled_user', 'seed_enrolled_user@seed.test', 'Enrolled', 'User');
         // Create completed test user
-        $completedUser = get_user_by('email', 'seed_completed_user@seed.test');
-        if (!$completedUser) {
-            $completedUserId = wp_insert_user([
-                'user_login' => 'seed_completed_user',
-                'user_email' => 'seed_completed_user@seed.test',
-                'user_pass' => 'seedpass123',
-                'first_name' => 'Completed',
-                'last_name' => 'User',
-                'display_name' => 'Completed User',
-                'role' => 'subscriber',
-            ]);
-
-            if (is_wp_error($completedUserId)) {
-                echo "  ! Failed to create seed_completed_user: {$completedUserId->get_error_message()}\n";
-            } else {
-                update_user_meta($completedUserId, self::SEED_META_KEY, true);
-                // Activate for auth
-                update_user_meta($completedUserId, 'ntdst_auth_activated', true);
-                update_user_meta($completedUserId, 'ntdst_auth_activated_at', time());
-                $this->created['users'][] = $completedUserId;
-                echo "  + Created seed_completed_user@seed.test (ID: {$completedUserId})\n";
-            }
-        } else {
-            $completedUserId = $completedUser->ID;
-            if (!in_array($completedUserId, $this->created['users'], true)) {
-                $this->created['users'][] = $completedUserId;
-            }
-            // Ensure existing user is activated
-            if (!get_user_meta($completedUserId, 'ntdst_auth_activated', true)) {
-                update_user_meta($completedUserId, 'ntdst_auth_activated', true);
-                update_user_meta($completedUserId, 'ntdst_auth_activated_at', time());
-            }
-            echo "  - seed_completed_user@seed.test already exists (ID: {$completedUserId})\n";
-        }
+        $this->createTestUser('seed_completed_user', 'seed_completed_user@seed.test', 'Completed', 'User');
 
         echo "Trajectory test data complete.\n";
+    }
+
+    private function createTestUser(string $login, string $email, string $first, string $last): void {
+        $existing = get_user_by('email', $email);
+        if ($existing) {
+            if (!in_array($existing->ID, $this->created['users'], true)) {
+                $this->created['users'][] = $existing->ID;
+            }
+            if (!get_user_meta($existing->ID, 'ntdst_auth_activated', true)) {
+                update_user_meta($existing->ID, 'ntdst_auth_activated', true);
+                update_user_meta($existing->ID, 'ntdst_auth_activated_at', time());
+            }
+            echo "  - {$email} already exists (ID: {$existing->ID})\n";
+            return;
+        }
+
+        $userId = wp_insert_user([
+            'user_login' => $login,
+            'user_email' => $email,
+            'user_pass' => 'seedpass123',
+            'first_name' => $first,
+            'last_name' => $last,
+            'display_name' => "{$first} {$last}",
+            'role' => 'subscriber',
+        ]);
+
+        if (is_wp_error($userId)) {
+            echo "  ! Failed to create {$login}: {$userId->get_error_message()}\n";
+            return;
+        }
+
+        update_user_meta($userId, self::SEED_META_KEY, true);
+        update_user_meta($userId, 'ntdst_auth_activated', true);
+        update_user_meta($userId, 'ntdst_auth_activated_at', time());
+        $this->created['users'][] = $userId;
+        echo "  + Created {$email} (ID: {$userId})\n";
     }
 
     private function saveSeedManifest(): void {
         update_option('stride_seed_manifest', $this->created);
         update_option('stride_seed_timestamp', current_time('mysql'));
+    }
+
+    private function seedCompanyDetails(): void {
+        // =========================================================================
+        // Company Details
+        // =========================================================================
+        echo "\n--- Company Details ---\n";
+
+        $companyDetails = [
+            'name'         => 'BWEEG vzw',
+            'address'      => 'Sportstraat 42',
+            'postal_code'  => '9000',
+            'city'         => 'Gent',
+            'country'      => 'België',
+            'vat'          => 'BE0420.798.935',
+            'email'        => 'info@bweeg.be',
+            'phone'        => '+32 9 234 56 78',
+            'bank_account' => 'BE68 0682 0553 5765',
+        ];
+
+        update_option('stride_company_details', $companyDetails);
+        echo "  - Company details seeded: {$companyDetails['name']}\n";
     }
 
     private function printSummary(): void {
@@ -1622,34 +2075,54 @@ class StrideSeedData {
         echo "\n";
 
         echo "=== Course Types ===\n";
-        echo "  Online (self-paced, no editions):\n";
-        echo "    - E-learning: Basiskennis Verslavingszorg (5 lessons)\n";
-        echo "    - E-learning: Alcohol en Gezondheid (5 lessons)\n";
-        echo "    - E-learning: Cannabis - Feiten en Fabels (3 lessons)\n";
+        echo "  ONLINE (5 total):\n";
+        echo "    Open (LD native enrollment):\n";
+        echo "      - E-learning: Basiskennis Jeugdgezondheid (free, open)\n";
+        echo "      - E-learning: Voeding en Prestatie bij Jonge Sporters (free, 90-day expiry)\n";
+        echo "    Closed (Stride enrollment form + sessions):\n";
+        echo "      - E-learning: Eetproblemen Herkennen en Bespreekbaar Maken (€75, form)\n";
+        echo "      - E-learning: Schermtijd en Bewegingsarmoede (€65, form)\n";
+        echo "      - E-learning: Beweegbeleid Ontwikkelen (€125, full + new cohort)\n";
         echo "\n";
-        echo "  In-Person (with editions):\n";
-        echo "    - Motiverende Gespreksvoering (2 editions: Brussel, Antwerpen)\n";
-        echo "    - CGT bij Verslaving (2 editions, 3-day intensive)\n";
-        echo "    - Masterclass Crisisinterventie (1 full, 1 available)\n";
-        echo "    - Workshop Mindfulness (1 cancelled, 1 rescheduled)\n";
-        echo "    - Preventie in de Praktijk (optional sessions)\n";
-        echo "    - Gratis Introductie (free course)\n";
+
+        echo "  IN-PERSON (6 total, various configs):\n";
+        echo "    - MGV rond Voeding (2 editions: Gent + Antwerpen, single day)\n";
+        echo "    - Sportblessures Voorkomen (2 editions, 3-day spread over weeks, 1 almost full)\n";
+        echo "    - Masterclass Mentale Veerkracht (1 FULL, 1 open, single session)\n";
+        echo "    - Gezonde Tussendoortjes (session SLOTS + selection deadline)\n";
+        echo "    - Workshop Yoga en Mindfulness (1 cancelled, 1 rescheduled)\n";
+        echo "    - Gratis Introductie BWEEG (free, single morning session)\n";
         echo "\n";
-        echo "  Hybrid (in-person + online):\n";
-        echo "    - Dual Diagnose (klassikaal + e-learning + webinar)\n";
+
+        echo "  HYBRID (1 total):\n";
+        echo "    - Beweegbeleid op School (klassikaal + e-learning + webinar mixed sessions)\n";
         echo "\n";
-        echo "  Webinar:\n";
-        echo "    - Webinarreeks: Actuele Thema's (4 sessions)\n";
-        echo "    - Gratis Webinar: Lachgas (free, single session)\n";
+
+        echo "  WEBINAR (2 total):\n";
+        echo "    - Webinarreeks: Actuele Thema's in Jeugdgezondheid (4 weekly sessions)\n";
+        echo "    - Gratis Webinar: Energy Drinks (free, single lunchtime session)\n";
+        echo "\n";
+
+        echo "  TRAJECTORY COURSES (5 total):\n";
+        echo "    Required: Fundament, Assessment en Motorische Screening\n";
+        echo "    Electives: Familie en Gezondheidscoaching, Groepsdynamiek in Sportteams, Harm Reduction bij Eetproblemen\n";
         echo "\n";
 
         echo "=== Trajectories ===\n";
-        echo "  1. Traject Verslavingsspecialist (cohort)\n";
-        echo "     Required: 4 courses | Electives: choose 2 of 3\n";
-        echo "  2. Traject Preventiewerker (self-paced)\n";
-        echo "     Required: 3 courses | Optional: 2 courses\n";
-        echo "  3. Kennismakingstraject (free entry)\n";
-        echo "     Required: 2 free courses | Optional: 2 paid courses\n";
+        echo "  1. Traject Jeugdgezondheidsspecialist (cohort, 4 required + choose 2 of 3)\n";
+        echo "  2. Traject Jeugdgezondheidswerker (self-paced, 3 required + 2 optional)\n";
+        echo "  3. Kennismakingstraject Jeugdgezondheid (free entry, 2 required + 2 optional)\n";
+        echo "\n";
+
+        echo "=== Post-Course Completion ===\n";
+        echo "  - MGV rond Voeding (Gent): post_evaluation + post_documents\n";
+        echo "  - Sportblessures Voorkomen (Blaarmeersen): post_evaluation + post_documents + post_approval\n";
+        echo "  - seed_student1 enrolled + attendance marked + post-course tasks initialized\n";
+        echo "\n";
+
+        echo "=== Admin Enrollments ===\n";
+        echo "  - Enrolled in first 3 open editions (in-person)\n";
+        echo "  - Enrolled in 2 online open courses (LD native)\n";
         echo "\n";
 
         echo "=== Test Credentials ===\n";
@@ -1661,7 +2134,7 @@ class StrideSeedData {
 
         echo "=== Voucher Codes ===\n";
         echo "  - WELKOM2026 (10% off)\n";
-        echo "  - VAD-MEMBER (15% off)\n";
+        echo "  - BWEEG-MEMBER (15% off)\n";
         echo "  - GRATIS-INTRO (100% off)\n";
         echo "  - KORTING50 (€50 off)\n";
         echo "  - SEEDVOUCHER10 (10% off)\n";

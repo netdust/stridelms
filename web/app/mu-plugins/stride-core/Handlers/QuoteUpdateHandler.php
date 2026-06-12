@@ -56,7 +56,8 @@ final class QuoteUpdateHandler
             return $validation;
         }
 
-        $billing = $this->sanitizeBilling($params['billing'] ?? []);
+        // Accept billing as nested object OR flat fields (inlineEditSection sends flat)
+        $billing = $this->sanitizeBilling($params['billing'] ?? $params);
         if (!empty($billing)) {
             $quoteRepo = ntdst_get(QuoteRepository::class);
             $quoteRepo->updateMeta($quoteId, ['billing' => $billing]);
@@ -70,7 +71,7 @@ final class QuoteUpdateHandler
         return [
             'success' => true,
             'message' => __('Offerte bijgewerkt.', 'stride'),
-            'redirect_url' => home_url('/mijn-account/mijn-offertes/'),
+            'redirect_url' => home_url('/mijn-account/?tab=offertes'),
         ];
     }
 
@@ -172,12 +173,17 @@ final class QuoteUpdateHandler
         return [
             'success' => true,
             'message' => __('Inschrijving geannuleerd.', 'stride'),
-            'redirect_url' => home_url('/mijn-account/mijn-offertes/'),
+            'redirect_url' => home_url('/mijn-account/?tab=offertes'),
         ];
     }
 
     /**
      * Validate user has access to quote and quote is editable.
+     *
+     * A quote is editable when:
+     *   - user owns it
+     *   - status is still 'draft' (not sent / exported / cancelled)
+     *   - `locked` flag is false (admin hasn't locked it via the edition bulk action)
      */
     private function validateQuoteAccess(int $quoteId, int $userId): true|WP_Error
     {
@@ -194,6 +200,13 @@ final class QuoteUpdateHandler
         $status = $quote['status'] ?? '';
         if ($status !== 'draft') {
             return new WP_Error('not_editable', __('Deze offerte kan niet meer worden bijgewerkt.', 'stride'));
+        }
+
+        if (!empty($quote['locked'])) {
+            return new WP_Error(
+                'locked',
+                __('Deze offerte is vergrendeld door de beheerder en kan niet meer worden bijgewerkt.', 'stride'),
+            );
         }
 
         return true;
@@ -231,12 +244,14 @@ final class QuoteUpdateHandler
             return [];
         }
 
-        $allowed = ['organisation', 'email', 'address', 'postal_code', 'city', 'vat_number', 'gln_number'];
+        $allowed = ['company', 'email', 'address', 'postal_code', 'city', 'vat_number', 'gln_number'];
         $sanitized = [];
 
         foreach ($allowed as $field) {
             if (isset($billing[$field])) {
-                $sanitized[$field] = sanitize_text_field($billing[$field]);
+                $sanitized[$field] = $field === 'email'
+                    ? sanitize_email($billing[$field])
+                    : sanitize_text_field($billing[$field]);
             }
         }
 

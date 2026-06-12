@@ -1,3 +1,59 @@
+= [5.1.2] 2026-05-14 =
+
+* Tweak - The Settings -> Liquid Web Products page no longer requires an opt-in to communicate with external servers.
+
+= [5.1.1] 2026-05-13 =
+
+* Tweak - Moved the Liquid Web menu item to Settings -> Liquid Web Products.
+* Tweak - The Settings -> Liquid Web Products page now requires a opt-in to communicate with external servers.
+
+= [5.1.0] 2026-05-11 =
+
+* Feature - Integrate with Nexcess Licensing and Portal.
+* Tweak - Removed the license fields from the LearnDash setup wizard.
+* Tweak - Updated branding references from StellarWP to Nexcess.
+* Tweak - Added constants: `LEARNDASH_PLAYLIST_PARSER_SERVICE_ENDPOINT`, `LEARNDASH_PLAYLIST_PARSER_SERVICE_SSL_VERIFY`.
+* Tweak - Added functions: `learndash_get_license_email`, `learndash_get_license_key`.
+
+= [5.0.5.1] 2026-05-07 =
+
+* Security - Tightened security around REST API endpoints.
+
+= [5.0.5] 2026-04-08 =
+
+* Fix - Resolved an issue where group leaders with basic settings could not view or grade assignments submitted by users in their groups. Admins and advanced group leaders are unchanged and still see all assignments; author and group filters respect the same visibility rules.
+* Fix - Resolved an issue where, for group leaders assigned to more than one group, exporting group progress could include users beyond those in the exported group.
+
+= [5.0.4] 2026-03-25 =
+
+* Fix - Added delay between scheduled payment actions to prevent overwhelming the payment gateway when many subscriptions are due at once (e.g. on first run after upgrade).
+* Tweak - Added filters: `learndash_payment_subscription_delay_between_actions`.
+
+= [5.0.3.1] 2026-03-19 =
+
+* Security - Tightened security around SQL queries.
+
+= [5.0.3] 2026-03-11 =
+
+* Fix - Resolved an issue where the `[ld_course_resume]` shortcode/block could redirect users to the wrong course step.
+* Tweak - Updated functions: `learndash_user_progress_get_first_incomplete_step`.
+
+= [5.0.2.1] 2026-03-09 =
+
+* Security - Tightened security around PDF generation.
+
+= [5.0.2] 2026-02-25 =
+
+* Compatibility - Improved blocks compatibility with PHP 8.4.
+* Fix - Fixed courses filtering by progress status in the `LearnDash Course Grid` block.
+* Fix - Number input fields now properly return a number via the REST API if the field is saved with no value.
+* Fix - Prevented PayPal scripts from being enqueued on Checkout and Profile pages when PayPal Checkout is disabled.
+* Fix - Resolved an issue where cloning a Lesson, Topic, or Course built with Elementor would result in a broken layout.
+* Fix - Resolved an issue where locally installed translations without remote GlotPress data were not displayed and could not be removed on the Translations page.
+* Fix - Resolved an issue where non LearnDash plugins could be visible on the Add-ons page.
+* Tweak - Added hints to the Modern Course and Modern Group fields to clarify tabs behavior.
+* Tweak - Added filters: `learndash_hub_installed_projects`.
+
 = [5.0.1.1] 2026-02-17 =
 
 * Fix - Resolved an issue where downloaded Report CSVs would only contain the header row.

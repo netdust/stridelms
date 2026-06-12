@@ -11,10 +11,10 @@
 
 namespace LearnDash\Core\Modules\Payments\Subscriptions;
 
-use LearnDash\Core\Utilities\Cast;
-use LearnDash\Core\Repositories\Subscription as Subscription_Repository;
 use DateTime;
 use DateTimeZone;
+use LearnDash\Core\Repositories\Subscription as Subscription_Repository;
+use LearnDash\Core\Utilities\Cast;
 
 /**
  * Scheduler class for subscriptions.
@@ -135,7 +135,23 @@ class Scheduler {
 		 * @return int The batch size.
 		 */
 		$batch_size = Cast::to_int( apply_filters( 'learndash_payment_subscription_batch_size', 50 ) );
-		$offset     = 0;
+
+		/**
+		 * Filters the delay in seconds between each scheduled payment action.
+		 * Spreading actions over time prevents overwhelming the payment gateway
+		 * when a large number of subscriptions are due at once (e.g. on first run
+		 * after a plugin upgrade).
+		 *
+		 * @since 5.0.4
+		 *
+		 * @param int $delay_between_actions Delay in seconds between each action. Default 5.
+		 *
+		 * @return int The delay in seconds.
+		 */
+		$delay_between_actions = max( 0, Cast::to_int( apply_filters( 'learndash_payment_subscription_delay_between_actions', 5 ) ) );
+
+		$offset          = 0;
+		$scheduled_count = 0;
 
 		do {
 			$subscriptions = Subscription_Repository::find_due_for_payment(
@@ -150,14 +166,23 @@ class Scheduler {
 			}
 
 			foreach ( $subscriptions as $subscription_data ) {
+				$args = [
+					'subscription_id' => $subscription_data['subscription_id'],
+					'user_id'         => $subscription_data['user_id'],
+				];
+
+				if ( as_next_scheduled_action( self::$payment_process_hook, $args, self::$action_group ) ) {
+					continue;
+				}
+
 				as_schedule_single_action(
-					time(),
+					time() + ( $scheduled_count * $delay_between_actions ),
 					self::$payment_process_hook,
-					[
-						'subscription_id' => $subscription_data['subscription_id'],
-						'user_id'         => $subscription_data['user_id'],
-					]
+					$args,
+					self::$action_group
 				);
+
+				++$scheduled_count;
 			}
 
 			$subscription_count = count( $subscriptions );

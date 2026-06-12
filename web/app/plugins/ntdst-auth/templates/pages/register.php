@@ -16,7 +16,6 @@ $fields = $settings['registration_fields'] ?? ['email', 'first_name', 'last_name
 <head>
     <meta charset="<?php bloginfo('charset'); ?>">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php esc_html_e('Register', 'ntdst-auth'); ?> | <?php bloginfo('name'); ?></title>
     <?php wp_head(); ?>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uikit@3.21.5/dist/css/uikit.min.css">
     <link rel="stylesheet" href="<?php echo esc_url(NTDST_AUTH_URL . 'assets/css/auth.css'); ?>">
@@ -52,6 +51,28 @@ $fields = $settings['registration_fields'] ?? ['email', 'first_name', 'last_name
                 <div class="uk-margin">
                     <label class="uk-form-label" for="last_name"><?php esc_html_e('Last Name', 'ntdst-auth'); ?></label>
                     <input class="uk-input" type="text" id="last_name" x-model="lastName" required>
+                </div>
+                <?php endif; ?>
+
+                <?php
+                // Profile type selection (only if types are configured)
+                $profileTypes = [];
+                if (function_exists('ntdst_get') && class_exists(\Stride\Modules\User\ProfileTypeService::class)) {
+                    $profileTypeService = ntdst_get(\Stride\Modules\User\ProfileTypeService::class);
+                    $profileTypes = $profileTypeService->getTypes();
+                }
+                if (!empty($profileTypes)):
+                ?>
+                <div class="uk-margin">
+                    <label class="uk-form-label" for="profile_type"><?php esc_html_e('Ik ben een...', 'ntdst-auth'); ?> *</label>
+                    <select class="uk-select" id="profile_type" x-model="profileType" required>
+                        <option value=""><?php esc_html_e('Selecteer je profieltype...', 'ntdst-auth'); ?></option>
+                        <?php foreach ($profileTypes as $type): ?>
+                            <option value="<?php echo esc_attr($type['slug']); ?>">
+                                <?php echo esc_html($type['label']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
                 <?php endif; ?>
 

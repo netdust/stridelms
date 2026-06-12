@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /**
  * NTDST Sector Registry
  *
@@ -14,7 +16,7 @@
 
 defined('ABSPATH') || exit;
 
-class NTDST_SectorRegistry
+final class NTDST_SectorRegistry
 {
     /**
      * Singleton instance
@@ -324,7 +326,13 @@ class NTDST_SectorRegistry
     }
 
     /**
-     * Check if sector meets a minimum tier requirement
+     * Check if sector meets a minimum tier requirement.
+     *
+     * Asymmetric handling of unknown tiers (intentional):
+     *  - Unknown current tier → treated as lowest (degrade gracefully on
+     *    misconfigured options so the site keeps running).
+     *  - Unknown required tier → returns false (fail-safe; an unknown
+     *    requirement can't be guaranteed to be met).
      *
      * @param string $sector Sector key
      * @param string $minTier Minimum tier required
@@ -384,7 +392,7 @@ class NTDST_SectorRegistry
     {
         return array_filter(
             array_keys($this->sectors),
-            fn($key) => $this->isEnabled($key)
+            fn($key) => $this->isEnabled($key),
         );
     }
 
@@ -425,7 +433,7 @@ class NTDST_SectorRegistry
      * @param array|string|null $requirements Service sector requirements from metadata
      * @return bool
      */
-    public function checkRequirements($requirements): bool
+    public function checkRequirements(array|string|null $requirements): bool
     {
         // No requirements = always load (core/universal service, backwards compatible)
         if ($requirements === null) {
@@ -511,7 +519,9 @@ class NTDST_SectorRegistry
  *
  * @return NTDST_SectorRegistry
  */
-function ntdst_sectors(): NTDST_SectorRegistry
-{
-    return NTDST_SectorRegistry::instance();
+if (!function_exists('ntdst_sectors')) {
+    function ntdst_sectors(): NTDST_SectorRegistry
+    {
+        return NTDST_SectorRegistry::instance();
+    }
 }

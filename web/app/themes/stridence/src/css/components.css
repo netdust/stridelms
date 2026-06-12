@@ -1,90 +1,157 @@
 /**
  * Stride Component Classes
  *
- * Reusable UI components following the design system.
+ * Reusable UI components built on the design token system.
+ * Border-first card design with subtle shadows on interaction.
  */
 
 @layer components {
   /* ══════════════════════════════════════
-     BUTTONS
+     BUTTONS (Helder Tij component sheet)
+
+     Focus: buttons rely on the GLOBAL :focus-visible outline
+     (base.css) — no per-button ring overrides.
+     Vertical rhythm: leading-tight + the sheet's 12px (filled) /
+     11px (1px-bordered ghost) padding nets ~43px md controls,
+     aligned with .input-text.
      ══════════════════════════════════════ */
 
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2
-           bg-primary text-text-inverse font-medium
-           px-5 py-2.5 rounded-lg
-           hover:bg-primary-dark
-           focus:outline-none focus:ring-2 focus:ring-primary/50
-           disabled:opacity-50 disabled:cursor-not-allowed
+           bg-primary text-text-inverse text-[15px] font-bold leading-tight
+           px-[22px] py-3 rounded-[10px] cursor-pointer
+           hover:bg-primary-hover hover:text-text-inverse
+           active:bg-primary-dark
+           disabled:bg-surface-container-highest disabled:text-text-faint disabled:cursor-not-allowed
            transition-colors duration-fast;
   }
 
-  .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2
-           bg-surface-alt text-text font-medium
-           px-5 py-2.5 rounded-lg border border-border
-           hover:bg-border/50
-           focus:outline-none focus:ring-2 focus:ring-primary/50
-           disabled:opacity-50 disabled:cursor-not-allowed
-           transition-colors duration-fast;
-  }
-
+  /* Ghost / outline button — the sheet's secondary action style. */
   .btn-ghost {
     @apply inline-flex items-center justify-center gap-2
-           text-primary font-medium
-           px-5 py-2.5 rounded-lg
-           hover:bg-primary/5
-           focus:outline-none focus:ring-2 focus:ring-primary/50
+           bg-transparent text-text text-[15px] font-bold leading-tight
+           border border-border
+           px-[22px] py-[11px] rounded-[10px] cursor-pointer
+           hover:bg-surface-alt hover:text-text
+           disabled:bg-transparent disabled:border-border-soft disabled:text-text-faint disabled:cursor-not-allowed
            transition-colors duration-fast;
+  }
+
+  /* Secondary maps to the ghost recipe — the sheet defines exactly
+     two button styles (primary filled, ghost outline). Templates
+     keep the .btn-secondary name. */
+  .btn-secondary {
+    @apply btn-ghost;
   }
 
   .btn-danger {
     @apply inline-flex items-center justify-center gap-2
            text-error font-medium
-           px-5 py-2.5 rounded-lg
-           hover:bg-error/5
+           px-5 py-2.5 rounded-lg cursor-pointer
+           hover:bg-error/5 hover:text-error
            transition-colors duration-fast;
   }
 
+  /* Size modifiers — radii per sheet: sm 8px, lg 12px.
+     (Theme radius scale: rounded-sm = 8px, rounded-md = 12px.) */
   .btn-sm {
-    @apply px-3 py-1.5 text-sm;
+    @apply text-[13px] px-3.5 py-2 rounded-sm;
   }
 
   .btn-lg {
-    @apply px-6 py-3 text-lg;
+    @apply text-base px-[30px] py-[15px] rounded-md;
+  }
+
+  /* Loading state — pair with .spinner inside the button. */
+  .btn-loading {
+    @apply inline-flex items-center justify-center gap-2.5 cursor-wait;
+  }
+
+  /* Full-width "Toon meer" button (catalog pagination). */
+  .btn-load-more {
+    @apply btn-ghost w-full;
+  }
+
+  .btn-load-more.btn-loading {
+    @apply bg-surface-alt border-border-soft text-text-muted;
   }
 
   /* ══════════════════════════════════════
-     FORM INPUTS
+     FORM INPUTS (Helder Tij component sheet)
+
+     Focus: inputs replace the global outline with the design's
+     visible border + soft shadow ring (a11y-safe: the replacement
+     is clearly visible). Checkbox/radio keep the global outline.
      ══════════════════════════════════════ */
 
   .input-text {
-    @apply w-full px-3.5 py-2.5 rounded-lg
+    @apply w-full px-3.5 py-[11px] rounded-[10px] text-[15px] leading-tight
            border border-border bg-surface-card text-text
-           placeholder:text-text-muted
-           focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary
-           transition-colors duration-fast;
+           placeholder:text-text-faint
+           focus:outline-none focus:border-primary
+           focus:shadow-[0_0_0_3px_rgb(var(--color-primary)/0.14)]
+           disabled:bg-surface-alt disabled:text-text-faint disabled:border-border-soft disabled:cursor-not-allowed
+           transition-all duration-fast;
+  }
+
+  /* Error state — set aria-invalid="true" on the input.
+     Declared after .input-text so it also wins while focused. */
+  .input-text[aria-invalid="true"] {
+    @apply border-error shadow-[0_0_0_3px_rgb(var(--color-error)/0.12)];
   }
 
   .input-select {
     @apply input-text appearance-none cursor-pointer
+           hover:border-border-strong
            bg-no-repeat bg-[length:1.25rem] bg-[right_0.75rem_center];
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2378716c' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+    /* Chevron stroke is a literal hex (data-URIs can't resolve var());
+       mirrors --color-text-muted (#585C63) — keep in sync with tokens.css. */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%23585C63' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
     padding-right: 2.5rem;
   }
 
   .input-checkbox {
-    @apply w-4 h-4 rounded border-border text-primary
-           focus:ring-2 focus:ring-primary/50 focus:ring-offset-2
-           cursor-pointer;
+    @apply appearance-none shrink-0 w-[22px] h-[22px] rounded-[6px]
+           border border-border bg-surface-card cursor-pointer
+           checked:bg-primary checked:border-primary
+           transition-colors duration-fast;
+  }
+
+  .input-checkbox:hover:not(:checked) {
+    @apply border-border-strong;
+  }
+
+  .input-checkbox:checked {
+    /* Check stroke is a literal hex (data-URIs can't resolve var());
+       mirrors --color-text-inverse (#FFFFFF) — keep in sync with tokens.css. */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 16 16'%3E%3Cpath stroke='%23FFFFFF' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5' d='m3.5 8.5 3 3 6-6.5'/%3E%3C/svg%3E");
+    background-size: 14px 14px;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+
+  .input-radio {
+    @apply appearance-none shrink-0 w-[22px] h-[22px] rounded-full
+           border border-border bg-surface-card cursor-pointer
+           checked:border-[6.5px] checked:border-primary
+           transition-colors duration-fast;
+  }
+
+  .input-radio:hover:not(:checked) {
+    @apply border-border-strong;
+  }
+
+  /* Touch row wrapping a checkbox/radio + its label (44px target). */
+  .choice-row {
+    @apply flex items-center gap-3 min-h-[44px] cursor-pointer;
   }
 
   .input-label {
-    @apply block text-sm font-medium text-text mb-1.5;
+    @apply block text-[13px] font-semibold text-text mb-1.5;
   }
 
   .input-error {
-    @apply text-xs text-error mt-1;
+    @apply text-xs font-semibold text-error mt-1;
   }
 
   .input-hint {
@@ -92,19 +159,53 @@
   }
 
   /* ══════════════════════════════════════
-     CARDS
+     GENERAL CARDS
      ══════════════════════════════════════ */
 
   .card {
-    @apply bg-surface-card rounded-xl shadow-card;
+    @apply bg-surface-card rounded-xl;
+    box-shadow: var(--shadow-xs);
   }
 
   .card-interactive {
-    @apply card hover:shadow-elevated transition-shadow duration-normal cursor-pointer;
+    @apply card cursor-pointer;
+    transition: box-shadow var(--duration-normal) var(--ease-out),
+                transform var(--duration-normal) var(--ease-out);
+  }
+
+  .card-interactive:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
   }
 
   .card-bordered {
-    @apply card border border-border shadow-none;
+    @apply card border-border shadow-none;
+  }
+
+  /* ══════════════════════════════════════
+     DASHBOARD CARDS
+     ══════════════════════════════════════ */
+
+  .dash-card {
+    @apply bg-surface-card rounded-xl;
+    box-shadow: var(--shadow-xs);
+    transition: box-shadow var(--duration-normal) var(--ease-out),
+                transform var(--duration-normal) var(--ease-out);
+  }
+
+  .dash-card-interactive {
+    @apply dash-card cursor-pointer;
+  }
+
+  .dash-card-interactive:hover {
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-1px);
+  }
+
+  .dash-card-hero {
+    @apply bg-surface-card rounded-xl p-6 lg:p-8;
+    background: linear-gradient(135deg, rgb(var(--color-primary) / 0.04), rgb(var(--color-primary) / 0.10));
+    box-shadow: var(--shadow-sm);
   }
 
   /* ══════════════════════════════════════
@@ -116,27 +217,39 @@
   }
 
   .badge-open {
-    @apply badge bg-green-100 text-green-800;
+    @apply badge;
+    background: rgb(var(--color-badge-open-bg));
+    color: rgb(var(--color-badge-open-text));
   }
 
   .badge-few {
-    @apply badge bg-yellow-100 text-yellow-800;
+    @apply badge;
+    background: rgb(var(--color-badge-few-bg));
+    color: rgb(var(--color-badge-few-text));
   }
 
   .badge-full {
-    @apply badge bg-red-100 text-red-800;
+    @apply badge;
+    background: rgb(var(--color-badge-full-bg));
+    color: rgb(var(--color-badge-full-text));
   }
 
   .badge-cancelled {
-    @apply badge bg-gray-100 text-gray-500;
+    @apply badge;
+    background: rgb(var(--color-badge-cancelled-bg));
+    color: rgb(var(--color-badge-cancelled-text));
   }
 
   .badge-online {
-    @apply badge bg-indigo-100 text-indigo-700;
+    @apply badge;
+    background: rgb(var(--color-badge-online-bg));
+    color: rgb(var(--color-badge-online-text));
   }
 
   .badge-free {
-    @apply badge bg-emerald-100 text-emerald-700;
+    @apply badge;
+    background: rgb(var(--color-badge-free-bg));
+    color: rgb(var(--color-badge-free-text));
   }
 
   .badge-primary {
@@ -144,7 +257,7 @@
   }
 
   /* ══════════════════════════════════════
-     SECTIONS
+     SECTIONS & LAYOUT
      ══════════════════════════════════════ */
 
   .section {
@@ -200,13 +313,57 @@
      ══════════════════════════════════════ */
 
   .nav-link {
-    @apply text-text font-medium px-3 py-2 rounded-lg
-           hover:bg-surface-alt hover:text-primary
+    @apply text-[15px] font-semibold text-text-muted px-3 py-2
+           hover:text-text
            transition-colors duration-fast;
   }
 
   .nav-link-active {
-    @apply nav-link bg-primary/10 text-primary;
+    @apply nav-link text-primary;
+  }
+
+  /* ══════════════════════════════════════
+     SIDEBAR NAVIGATION
+     ══════════════════════════════════════ */
+
+  .sidebar {
+    @apply sticky w-sidebar shrink-0
+           flex flex-col self-start;
+    top: 6rem; /* below sticky header (lg:h-20 + gap) */
+    height: calc(100vh - 7rem);
+  }
+
+  .admin-bar .sidebar {
+    top: calc(6rem + 32px);
+    height: calc(100vh - 7rem - 32px);
+  }
+
+  .sidebar-nav-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg
+           text-sm font-medium text-text-muted
+           cursor-pointer
+           hover:text-text hover:bg-surface-alt
+           transition-colors duration-fast;
+  }
+
+  .sidebar-nav-item-active {
+    @apply text-primary bg-primary-subtle;
+  }
+
+  .sidebar-nav-badge {
+    @apply ml-auto text-xs font-semibold
+           bg-primary text-text-inverse
+           rounded-full min-w-[20px] h-5
+           flex items-center justify-center px-1.5;
+  }
+
+  .sidebar-divider {
+    @apply my-3 mx-3;
+    border-top: 1px solid rgb(var(--color-border) / 0.15);
+  }
+
+  .sidebar-user {
+    @apply flex items-center gap-3 px-3 py-3;
   }
 
   /* ══════════════════════════════════════
@@ -222,6 +379,120 @@
 
   .tab-active {
     @apply border-primary text-primary;
+  }
+
+  /* ══════════════════════════════════════
+     SLIDE PANEL
+     ══════════════════════════════════════ */
+
+  .slide-panel-backdrop {
+    @apply fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px];
+    transition: opacity var(--duration-normal) var(--ease-out);
+  }
+
+  .slide-panel {
+    @apply fixed inset-y-0 right-0 z-50
+           w-full sm:max-w-md
+           bg-surface-card
+           flex flex-col;
+    box-shadow: var(--shadow-overlay);
+    transition: transform var(--duration-normal) var(--ease-out);
+  }
+
+  .slide-panel-header {
+    @apply flex items-center justify-between gap-4
+           px-5 py-4 border-b border-border
+           shrink-0;
+  }
+
+  .slide-panel-header h3 {
+    @apply text-lg font-heading font-bold text-text truncate m-0;
+  }
+
+  .slide-panel-body {
+    @apply flex-1 overflow-y-auto overscroll-contain
+           px-5 py-5 space-y-5;
+  }
+
+  .slide-panel-footer {
+    @apply shrink-0 px-5 py-4 border-t border-border bg-surface-alt/50;
+  }
+
+  /* Dashboard panel variant (bottom sheet on mobile) */
+  .dash-panel {
+    @apply fixed inset-y-0 right-0 z-50
+           w-full sm:max-w-md
+           bg-surface-card
+           flex flex-col;
+    box-shadow: var(--shadow-overlay);
+    transition: transform var(--duration-normal) var(--ease-out);
+  }
+
+  .admin-bar .dash-panel {
+    top: 32px;
+  }
+
+  @media (max-width: 639px) {
+    .dash-panel {
+      @apply inset-x-0 top-auto bottom-0;
+      max-height: 90vh;
+      border-radius: 1rem 1rem 0 0;
+    }
+    .admin-bar .dash-panel {
+      top: auto;
+    }
+  }
+
+  /* ══════════════════════════════════════
+     TOAST NOTIFICATIONS
+     ══════════════════════════════════════ */
+
+  .toast {
+    @apply fixed bottom-6 right-6 z-[60]
+           bg-surface-card border border-border
+           rounded-lg px-4 py-3
+           flex items-center gap-3
+           text-sm text-text;
+    box-shadow: var(--shadow-elevated);
+  }
+
+  .toast-success {
+    border-left: 3px solid rgb(var(--color-success));
+  }
+
+  .toast-error {
+    border-left: 3px solid rgb(var(--color-error));
+  }
+
+  /* ══════════════════════════════════════
+     NOTIFICATION LIST
+     ══════════════════════════════════════ */
+
+  /* notification-item styling is inline in the partial */
+
+  /* ══════════════════════════════════════
+     FLAT LIST ITEMS
+     ══════════════════════════════════════ */
+
+  .list-item {
+    @apply flex items-center gap-4 px-4 py-3.5
+           cursor-pointer rounded-lg
+           hover:bg-surface-alt
+           transition-colors duration-fast;
+  }
+
+  .list-item-static {
+    @apply list-item cursor-default hover:bg-transparent;
+  }
+
+  /* (action cards use standard utility classes — no custom CSS needed) */
+
+  /* ══════════════════════════════════════
+     PROGRESS RING (SVG-based)
+     ══════════════════════════════════════ */
+
+  .progress-ring circle {
+    transition: stroke-dashoffset 700ms var(--ease-out);
   }
 
   /* ══════════════════════════════════════
@@ -242,13 +513,54 @@
     overflow: hidden;
   }
 
-  /* Loading spinner */
+  /* Loading spinner — white on filled (primary) buttons by default;
+     st-spin keyframes live in base.css (sheet: 700ms linear). */
   .spinner {
-    @apply animate-spin h-5 w-5 border-2 border-current border-t-transparent rounded-full;
+    @apply inline-block w-4 h-4 rounded-full
+           border-2 border-white/40 border-t-white
+           animate-[st-spin_700ms_linear_infinite];
   }
 
-  /* Safe area padding for devices with home indicators (iOS notch) */
+  /* Dark spinner inside ghost/outline buttons (light backgrounds). */
+  .btn-ghost .spinner,
+  .btn-secondary .spinner,
+  .btn-load-more .spinner {
+    @apply border-border/40 border-t-text-muted;
+  }
+
+  /* Skeleton loading */
+  .skeleton {
+    @apply bg-surface-alt rounded-lg animate-pulse;
+  }
+
+  /* Safe area padding for iOS home indicator */
   .safe-area-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
+
+  /* Section heading — consistent style across dashboard */
+  .dash-heading {
+    @apply text-lg font-semibold text-text tracking-tight;
+  }
+
+  /* Sub-heading for panel/card sections */
+  .dash-subheading {
+    @apply text-xs font-semibold text-text-muted uppercase tracking-wider;
+  }
+
+  /* ══════════════════════════════════════
+     STATUS COLORS (semantic, token-driven)
+     ══════════════════════════════════════ */
+
+  .text-status-success { color: rgb(var(--color-success)); }
+  .bg-status-success-subtle { background: rgb(var(--color-success) / 0.08); }
+  .border-status-success { border-color: rgb(var(--color-success) / 0.2); }
+
+  .text-status-warning { color: rgb(var(--color-warning)); }
+  .bg-status-warning-subtle { background: rgb(var(--color-warning) / 0.08); }
+  .border-status-warning { border-color: rgb(var(--color-warning) / 0.2); }
+
+  .text-status-error { color: rgb(var(--color-error)); }
+  .bg-status-error-subtle { background: rgb(var(--color-error) / 0.08); }
+  .border-status-error { border-color: rgb(var(--color-error) / 0.2); }
 }

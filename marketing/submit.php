@@ -115,7 +115,7 @@ $personResult = json_decode($response, true);
 $personId = $personResult['_id'] ?? null;
 
 // Build task description
-$taskDescription = "New enquiry from Atelier 296 website\n\n";
+$taskDescription = "New enquiry from Stride website\n\n";
 $taskDescription .= "Name: $name\n";
 $taskDescription .= "Email: $email\n";
 if (!empty($organization)) {
@@ -131,7 +131,7 @@ if (!empty($message)) {
 // Step 1: Create task with description
 $taskTitle = "📩 $name" . (!empty($organization) ? " — $organization" : "");
 
-$descriptionHtml = "<p><strong>New enquiry from Atelier 296</strong></p>";
+$descriptionHtml = "<p><strong>New enquiry from Stride website</strong></p>";
 $descriptionHtml .= "<p><strong>Name:</strong> " . htmlspecialchars($name) . "</p>";
 $descriptionHtml .= "<p><strong>Email:</strong> <a href=\"mailto:" . htmlspecialchars($email) . "\">" . htmlspecialchars($email) . "</a></p>";
 if (!empty($organization)) {
@@ -142,13 +142,13 @@ if (!empty($website)) {
 }
 if (!empty($interest)) {
     $interestLabels = [
-        'gallery' => 'Gallery Platform',
-        'artist' => 'Artist Platform',
-        'both' => 'Both Platforms',
-        'questions' => 'Just have questions',
-        'self-service' => 'Artist Self-Service (€22/month)',
-        'managed' => 'Artist Managed (€45/month)',
-        'not-sure' => 'Not sure yet'
+        'online' => 'Online cursussen',
+        'klassikaal' => 'Klassikale opleidingen',
+        'blended' => 'Blended learning',
+        'trajecten' => 'Leertrajecten',
+        'lti' => 'LTI / API-integratie',
+        'migratie' => 'Migratie van ander platform',
+        'anders' => 'Iets anders'
     ];
     $descriptionHtml .= "<p><strong>Interest:</strong> " . ($interestLabels[$interest] ?? htmlspecialchars($interest)) . "</p>";
 }

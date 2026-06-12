@@ -8,6 +8,7 @@ use IntegrationTestCase;
 use Stride\Domain\DiscountType;
 use Stride\Domain\Money;
 use Stride\Domain\VoucherStatus;
+use Stride\Modules\Invoicing\Helpers\QuoteCalculator;
 use Stride\Modules\Invoicing\VoucherService;
 
 /**
@@ -183,6 +184,49 @@ class VoucherServiceIntegrationTest extends IntegrationTestCase
         $this->assertEquals(10000, $discount->inCents());
     }
 
+    /**
+     * @test
+     */
+    public function percentageDiscountOverHundredIsCappedAtSubtotal(): void
+    {
+        // Admin-misconfiguration edge (CR-C1): nothing validates
+        // discount_value <= 100 at creation, so a 150% voucher is storable.
+        // The calculated discount must never exceed the (effective) subtotal —
+        // same semantics as Fixed's existing min() cap.
+        $voucher = [
+            'discount_type' => DiscountType::Percentage->value,
+            'discount_value' => 150,
+        ];
+        $subtotal = Money::cents(10000);
+
+        $discount = $this->voucherService->calculateDiscount($voucher, $subtotal);
+
+        $this->assertEquals(10000, $discount->inCents());
+    }
+
+    /**
+     * @test
+     */
+    public function overHundredPercentVoucherChainNeverYieldsNegativeTotals(): void
+    {
+        // Full 150%-voucher chain: calculateDiscount -> deriveTotalsFromCents
+        // (the applyVoucher derivation). Pre-2026-06 code persisted negative
+        // tax/total on this edge; deriveTotalsFromCents' clamp guards it even
+        // independently of the calculateDiscount cap above.
+        $voucher = [
+            'discount_type' => DiscountType::Percentage->value,
+            'discount_value' => 150,
+        ];
+        $subtotalCents = 10000;
+        $discount = $this->voucherService->calculateDiscount($voucher, Money::cents($subtotalCents));
+
+        $totals = QuoteCalculator::deriveTotalsFromCents($subtotalCents, $discount->inCents());
+
+        $this->assertGreaterThanOrEqual(0, $totals['discount']);
+        $this->assertSame(0, $totals['tax']);
+        $this->assertSame(0, $totals['total']);
+    }
+
     // =========================================================================
     // VOUCHER VALIDATION (Using test helper for setup)
     // =========================================================================
@@ -241,7 +285,8 @@ class VoucherServiceIntegrationTest extends IntegrationTestCase
         $voucherId = $this->createTestVoucher([
             'code' => $code,
             'meta' => [
-                '_ntdst_valid_until' => date('Y-m-d', strtotime('-1 day')),
+                // Site clock, not PHP/UTC — see validationRejectsNotYetValidVoucherFromHelper.
+                '_ntdst_valid_until' => date('Y-m-d', current_time('timestamp') - DAY_IN_SECONDS),
             ],
         ]);
 
@@ -260,7 +305,9 @@ class VoucherServiceIntegrationTest extends IntegrationTestCase
         $voucherId = $this->createTestVoucher([
             'code' => $code,
             'meta' => [
-                '_ntdst_valid_from' => date('Y-m-d', strtotime('+1 day')),
+                // Site clock, not PHP/UTC: validateVoucher() compares against
+                // current_time('Y-m-d'), which diverges from date() near midnight UTC.
+                '_ntdst_valid_from' => date('Y-m-d', current_time('timestamp') + DAY_IN_SECONDS),
             ],
         ]);
 
@@ -374,5 +421,176 @@ class VoucherServiceIntegrationTest extends IntegrationTestCase
 
         $this->assertNotNull($voucher);
         $this->assertEquals($code, $voucher['code']);
+    }
+
+    // =========================================================================
+    // SCOPE — alle / alleen / behalve
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function validationRejectsExcludedEdition(): void
+    {
+        $excluded = $this->createTestEdition();
+        $allowed = $this->createTestEdition();
+
+        $code = 'EXCEPT' . time();
+        $this->createTestVoucher([
+            'code' => $code,
+            'meta' => [
+                '_ntdst_scope_mode' => 'except',
+                '_ntdst_excluded_edition_ids' => [$excluded],
+            ],
+        ]);
+
+        $result = $this->voucherService->validateVoucher($code, $excluded);
+
+        $this->assertTrue(is_wp_error($result));
+        $this->assertEquals('wrong_edition', $result->get_error_code());
+    }
+
+    /**
+     * @test
+     */
+    public function validationAcceptsNonExcludedEdition(): void
+    {
+        $excluded = $this->createTestEdition();
+        $allowed = $this->createTestEdition();
+
+        $code = 'EXCEPTOK' . time();
+        $this->createTestVoucher([
+            'code' => $code,
+            'meta' => [
+                '_ntdst_scope_mode' => 'except',
+                '_ntdst_excluded_edition_ids' => [$excluded],
+            ],
+        ]);
+
+        $result = $this->voucherService->validateVoucher($code, $allowed);
+
+        $this->assertIsArray($result);
+        $this->assertEquals($code, $result['code']);
+    }
+
+    /**
+     * @test
+     *
+     * Back-compat: legacy vouchers stored before scope_mode existed
+     * (only edition_id > 0) must continue to behave as "only" mode.
+     */
+    public function validationLegacyEditionIdActsAsOnlyMode(): void
+    {
+        $allowed = $this->createTestEdition();
+        $other = $this->createTestEdition();
+
+        $code = 'LEGACY' . time();
+        $this->createTestVoucher([
+            'code' => $code,
+            'meta' => [
+                // Deliberately no scope_mode — simulates legacy data
+                '_ntdst_edition_id' => $allowed,
+            ],
+        ]);
+
+        $reject = $this->voucherService->validateVoucher($code, $other);
+        $this->assertTrue(is_wp_error($reject));
+        $this->assertEquals('wrong_edition', $reject->get_error_code());
+
+        $accept = $this->voucherService->validateVoucher($code, $allowed);
+        $this->assertIsArray($accept);
+    }
+
+    // =========================================================================
+    // APPLY MODE — single_session prorating
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function calculatesProratedDiscountForSingleSessionMode(): void
+    {
+        $editionId = $this->createTestEdition();
+        $this->createTestSessions($editionId, 4);
+
+        $voucher = [
+            'discount_type' => DiscountType::Full->value,
+            'discount_value' => 0,
+            'apply_mode' => 'single_session',
+        ];
+
+        $subtotal = Money::cents(10000); // €100
+        $discount = $this->voucherService->calculateDiscount($voucher, $subtotal, $editionId);
+
+        // 100% Full discount on prorated €25 = €25 off
+        $this->assertEquals(2500, $discount->inCents());
+    }
+
+    /**
+     * @test
+     */
+    public function calculatesProratedPercentageDiscount(): void
+    {
+        $editionId = $this->createTestEdition();
+        $this->createTestSessions($editionId, 4);
+
+        $voucher = [
+            'discount_type' => DiscountType::Percentage->value,
+            'discount_value' => 50,
+            'apply_mode' => 'single_session',
+        ];
+
+        $subtotal = Money::cents(10000); // €100
+        $discount = $this->voucherService->calculateDiscount($voucher, $subtotal, $editionId);
+
+        // 50% of (€100 / 4) = 50% of €25 = €12.50
+        $this->assertEquals(1250, $discount->inCents());
+    }
+
+    /**
+     * @test
+     */
+    public function prorateFallsBackForZeroSessionEdition(): void
+    {
+        $editionId = $this->createTestEdition(); // No sessions = e-learning
+
+        $voucher = [
+            'discount_type' => DiscountType::Full->value,
+            'discount_value' => 0,
+            'apply_mode' => 'single_session',
+        ];
+
+        $subtotal = Money::cents(10000);
+        $discount = $this->voucherService->calculateDiscount($voucher, $subtotal, $editionId);
+
+        // 0 sessions collapses to divisor 1, so full subtotal discounts
+        $this->assertEquals(10000, $discount->inCents());
+    }
+
+    /**
+     * Create N sessions for an edition. Cleanup handled via self::$testPosts.
+     */
+    private function createTestSessions(int $editionId, int $count): void
+    {
+        for ($i = 0; $i < $count; $i++) {
+            $sessionId = wp_insert_post([
+                'post_title' => "Test Session {$i}",
+                'post_type' => 'vad_session',
+                'post_status' => 'publish',
+            ]);
+
+            if (is_wp_error($sessionId)) {
+                throw new \RuntimeException('Failed to create test session: ' . $sessionId->get_error_message());
+            }
+
+            update_post_meta($sessionId, '_ntdst_edition_id', $editionId);
+            update_post_meta($sessionId, '_ntdst_date', date('Y-m-d', strtotime("+{$i} days")));
+            update_post_meta($sessionId, '_ntdst_start_time', '09:00');
+
+            self::$testPosts[] = $sessionId;
+        }
+
+        // SessionService caches results; clear to ensure tests see fresh data
+        ntdst_invalidate_post_type('vad_session');
     }
 }

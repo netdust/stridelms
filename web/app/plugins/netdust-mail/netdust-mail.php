@@ -30,6 +30,14 @@ require_once NDMAIL_PATH . 'vendor/autoload.php';
 
 // Register main service with ntdst container
 add_action('ntdst/services_registered', function () {
+    // Register sub-services first (dependencies)
+    ntdst_set(\Netdust\Mail\SmartCodeRegistry::class);
+    ntdst_set(\Netdust\Mail\SmartCodeParser::class);
+    ntdst_set(\Netdust\Mail\TriggerRegistry::class);
+    ntdst_set(\Netdust\Mail\AttachmentHandler::class);
+    ntdst_set(\Netdust\Mail\MailTemplateRepository::class);
+
+    // Register main service with explicit factory
     ntdst_set(\Netdust\Mail\MailService::class, function ($container) {
         return new \Netdust\Mail\MailService(
             $container->get(\Netdust\Mail\SmartCodeRegistry::class),
@@ -40,19 +48,23 @@ add_action('ntdst/services_registered', function () {
         );
     });
 
-    // Register sub-services
-    ntdst_set(\Netdust\Mail\SmartCodeRegistry::class);
-    ntdst_set(\Netdust\Mail\SmartCodeParser::class);
-    ntdst_set(\Netdust\Mail\TriggerRegistry::class);
-    ntdst_set(\Netdust\Mail\AttachmentHandler::class);
-    ntdst_set(\Netdust\Mail\MailTemplateRepository::class);
-    ntdst_set(\Netdust\Mail\Admin\AdminController::class);
+    // Register admin controller with explicit factory
+    ntdst_set(\Netdust\Mail\Admin\AdminController::class, function ($container) {
+        return new \Netdust\Mail\Admin\AdminController(
+            $container->get(\Netdust\Mail\SmartCodeRegistry::class),
+            $container->get(\Netdust\Mail\TriggerRegistry::class),
+            $container->get(\Netdust\Mail\AttachmentHandler::class)
+        );
+    });
 });
 
 // Boot after ntdst features are ready
 add_action('ntdst/features_ready', function () {
     ntdst_get(\Netdust\Mail\MailService::class);
-    ntdst_get(\Netdust\Mail\Admin\AdminController::class);
+
+    if (is_admin()) {
+        ntdst_get(\Netdust\Mail\Admin\AdminController::class);
+    }
 });
 
 /**

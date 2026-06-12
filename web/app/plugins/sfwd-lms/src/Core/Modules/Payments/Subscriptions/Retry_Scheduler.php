@@ -53,6 +53,10 @@ class Retry_Scheduler {
 			return false;
 		}
 
+		if ( self::is_scheduled( $subscription ) ) {
+			return false;
+		}
+
 		$action_id = as_schedule_single_action(
 			$next_retry_timestamp,
 			self::$retry_hook,

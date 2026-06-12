@@ -30,7 +30,10 @@ final class EditionCPT
             ],
             'public' => true,
             'publicly_queryable' => true,
-            'has_archive' => true,
+            // No public CPT archive — /klassikaal/ and /online/ are the
+            // discovery surfaces. Individual /edities/<slug>/ URLs keep
+            // working via the rewrite slug below.
+            'has_archive' => false,
             'show_ui' => true,
             'show_in_menu' => 'stride-dashboard',
             'menu_icon' => 'dashicons-calendar-alt',
@@ -43,6 +46,27 @@ final class EditionCPT
             // Disable auto-generated metabox - custom UI handled by EditionAdminController
             'auto_metabox' => false,
         ]);
+    }
+
+    /**
+     * Default copy for the content fields, prefilled in the admin metabox
+     * for new/empty editions (NTDST field 'default' is not auto-applied on
+     * read, so the metabox passes these as the getField() fallback — they
+     * persist on first save). The theme renders saved values only.
+     *
+     * @return array<string, string>
+     */
+    public static function getContentDefaults(): array
+    {
+        return [
+            'target_audience' => '',
+            'required_experience' => __('Geen voorkennis nodig', 'stride'),
+            'included' => __('Lunch, koffie en cursusmateriaal. Je ontvangt achteraf een attest van deelname.', 'stride'),
+            'price_includes' => __('incl. lunch en cursusmateriaal', 'stride'),
+            'cancellation_policy' => __('Kosteloos tot 14 dagen vóór de eerste sessie. Daarna kan een collega je plaats overnemen.', 'stride'),
+            'cta_benefits' => __('Attest van deelname', 'stride') . "\n" . __('Kosteloos annuleren tot 14 dagen vooraf', 'stride'),
+            'enrollment_info' => __('Na inschrijving ontvang je een mail met de bevestiging van je deelname.', 'stride'),
+        ];
     }
 
     private static function getFields(): array
@@ -84,8 +108,40 @@ final class EditionCPT
                 'label' => 'Status',
             ],
             'speakers' => [
-                'type' => 'text',
+                'type' => 'json',
                 'label' => 'Sprekers',
+                'description' => 'Array of {name, role} entries; legacy values are plain strings',
+            ],
+            'target_audience' => [
+                'type' => 'textarea',
+                'label' => 'Doelpubliek',
+            ],
+            'required_experience' => [
+                'type' => 'text',
+                'label' => 'Voorkennis',
+            ],
+            'included' => [
+                'type' => 'textarea',
+                'label' => 'Inbegrepen',
+            ],
+            'price_includes' => [
+                'type' => 'text',
+                'label' => 'Prijs inclusief',
+                'description' => 'Short line under the sidebar price',
+            ],
+            'cancellation_policy' => [
+                'type' => 'textarea',
+                'label' => 'Annuleringsvoorwaarden',
+            ],
+            'cta_benefits' => [
+                'type' => 'textarea',
+                'label' => 'Voordelen',
+                'description' => 'Sidebar benefits checklist, one item per line',
+            ],
+            'enrollment_info' => [
+                'type' => 'textarea',
+                'label' => 'Inschrijvingsinfo',
+                'description' => 'Shown under the enrollment CTA (e.g. deadline + confirmation info)',
             ],
             'selection_deadline' => [
                 'type' => 'text',
@@ -111,6 +167,56 @@ final class EditionCPT
                 'type' => 'json',
                 'label' => 'Notities',
                 'description' => 'Array of edition notes',
+            ],
+            'requires_approval' => [
+                'type' => 'boolean',
+                'label' => 'Goedkeuring vereist',
+                'description' => 'Enrollment requires admin approval',
+            ],
+            'requires_questionnaire' => [
+                'type' => 'boolean',
+                'label' => 'Vragenlijst vereist',
+                'description' => 'Enrollment requires questionnaire completion',
+            ],
+            'requires_documents' => [
+                'type' => 'boolean',
+                'label' => 'Documenten vereist',
+                'description' => 'Enrollment requires document upload',
+            ],
+            'requires_session_selection' => [
+                'type' => 'boolean',
+                'label' => 'Sessiekeuze vereist',
+                'description' => 'Enrollment requires session selection',
+            ],
+            'selection_open' => [
+                'type' => 'boolean',
+                'label' => 'Sessiekeuze open',
+                'description' => 'Whether session selection window is open',
+            ],
+            'post_requires_evaluation' => [
+                'type' => 'boolean',
+                'label' => 'Evaluatie vereist na afloop',
+                'description' => 'Post-course evaluation questionnaire required',
+            ],
+            'post_requires_documents' => [
+                'type' => 'boolean',
+                'label' => 'Documenten vereist na afloop',
+                'description' => 'Post-course document upload required',
+            ],
+            'post_requires_approval' => [
+                'type' => 'boolean',
+                'label' => 'Goedkeuring vereist na afloop',
+                'description' => 'Post-course admin approval required',
+            ],
+            'enrollment_form' => [
+                'type' => 'text',
+                'label' => 'Inschrijfformulier',
+                'description' => 'Which enrollment form to show for this edition',
+            ],
+            'documents' => [
+                'type' => 'json',
+                'label' => 'Documenten',
+                'description' => 'Attachment IDs of course documents (PDFs, presentations, etc.)',
             ],
         ];
     }

@@ -42,6 +42,7 @@ final class AuthService implements \NTDST_Service_Meta
     {
         // Routes
         add_action('init', [$this, 'registerRoutes']);
+        add_action('template_redirect', [$this, 'handleEarlyAuthRoutes'], 5);
         add_action('template_redirect', [$this, 'preventCanonicalLoginRedirect'], 999);
 
         // Redirect wp-login.php if enabled
@@ -49,9 +50,14 @@ final class AuthService implements \NTDST_Service_Meta
             add_action('login_init', [$this, 'redirectWpLogin']);
         }
 
+        // Let WordPress know about our custom login URL
+        add_filter('login_url', [$this, 'filterLoginUrl'], 10, 3);
+
         // Admin settings
         add_action('admin_menu', [$this, 'addSettingsPage']);
         add_action('admin_init', [$this, 'registerSettings']);
+        add_action('admin_enqueue_scripts', [$this, 'enqueueAdminAssets']);
+        add_filter('stride_tools_menu_items', [$this, 'registerToolsCard']);
 
         // Privacy tools
         add_filter('wp_privacy_personal_data_exporters', [$this, 'registerPrivacyExporter']);
@@ -78,8 +84,8 @@ final class AuthService implements \NTDST_Service_Meta
 
     public function registerRoutes(): void
     {
-        $loginUrl = ltrim(Config::get('login_url', '/login'), '/');
-        $registerUrl = ltrim(Config::get('register_url', '/register'), '/');
+        $loginUrl = ltrim(Config::get('login_url', '/aanmelden'), '/');
+        $registerUrl = ltrim(Config::get('register_url', '/registreren'), '/');
 
         // Login page
         ntdst_router()->get($loginUrl, function () {
@@ -97,35 +103,65 @@ final class AuthService implements \NTDST_Service_Meta
                 exit;
             }
             if (!Config::get('enable_registration', true)) {
-                wp_redirect(home_url(Config::get('login_url', '/login')));
+                wp_redirect(home_url(Config::get('login_url', '/aanmelden')));
                 exit;
             }
             return $this->renderPage('register');
         });
 
-        // Magic link verification
-        ntdst_router()->get('auth/verify/:token', function (array $params) {
-            return $this->handleMagicLinkVerify($params['token']);
-        });
-
-        // Activation link
-        ntdst_router()->get('auth/activate/:token', function (array $params) {
-            return $this->handleActivation($params['token']);
-        });
-
-        // Logout
+        // Logout (no cookie-setting, safe at template_include time)
         ntdst_router()->get('auth/logout', function () {
             return $this->handleLogout();
         });
+
+        // Note: auth/verify and auth/activate are handled at template_redirect
+        // (handleEarlyAuthRoutes) to ensure headers haven't been sent yet
+        // when we set auth cookies.
+    }
+
+    /**
+     * Handle auth routes that set cookies BEFORE any output.
+     *
+     * Magic link verification and activation must set cookies via
+     * wp_set_auth_cookie(), which requires headers not yet sent.
+     * The router's template_include hook fires too late.
+     */
+    public function handleEarlyAuthRoutes(): void
+    {
+        $path = trim(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH), '/');
+
+        if (preg_match('#^auth/verify/([a-zA-Z0-9_-]+)$#', $path, $matches)) {
+            $this->handleMagicLinkVerify($matches[1]);
+            // handleMagicLinkVerify calls exit
+        }
+
+        if (preg_match('#^auth/activate/([a-zA-Z0-9_-]+)$#', $path, $matches)) {
+            $this->handleActivation($matches[1]);
+            // handleActivation calls exit
+        }
+    }
+
+    /**
+     * Filter WordPress login_url so core knows about our custom login page.
+     */
+    public function filterLoginUrl(string $login_url, string $redirect = '', bool $force_reauth = false): string
+    {
+        $customLogin = home_url(Config::get('login_url', '/aanmelden'));
+        if ($redirect) {
+            $customLogin = add_query_arg('redirect_to', urlencode($redirect), $customLogin);
+        }
+        return $customLogin;
     }
 
     public function preventCanonicalLoginRedirect(): void
     {
-        $loginUrl = ltrim(Config::get('login_url', '/login'), '/');
-        $registerUrl = ltrim(Config::get('register_url', '/register'), '/');
+        $loginUrl = ltrim(Config::get('login_url', '/aanmelden'), '/');
+        $registerUrl = ltrim(Config::get('register_url', '/registreren'), '/');
         $currentPath = trim(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH), '/');
 
-        if ($currentPath === $loginUrl || $currentPath === $registerUrl) {
+        $authPaths = [$loginUrl, $registerUrl, 'auth/logout'];
+
+        if (in_array($currentPath, $authPaths, true)) {
             remove_action('template_redirect', 'wp_redirect_admin_locations', 1000);
 
             global $wp_query;
@@ -186,6 +222,9 @@ final class AuthService implements \NTDST_Service_Meta
         if ($this->tokens->isRateLimited('login_ip_' . $this->getClientIp())) {
             return new \WP_Error('rate_limited', __('Too many login attempts. Please try again later.', 'ntdst-auth'));
         }
+
+        // Increment rate limit counter for every attempt (success or failure)
+        $this->tokens->incrementRateLimit('login_ip_' . $this->getClientIp());
 
         $email = sanitize_email($email);
         $user = get_user_by('email', $email);
@@ -248,6 +287,7 @@ final class AuthService implements \NTDST_Service_Meta
         $result = $registration->activate($token);
 
         if (is_wp_error($result)) {
+            // Error pages don't set cookies, safe to render at any time
             $this->renderPage('error', [
                 'title' => __('Activation Failed', 'ntdst-auth'),
                 'message' => $result->get_error_message(),
@@ -257,11 +297,10 @@ final class AuthService implements \NTDST_Service_Meta
 
         $this->setAuthCookie($result['user_id']);
 
-        $this->renderPage('activate', [
-            'title' => __('Account Activated', 'ntdst-auth'),
-            'message' => __('Your account has been activated successfully!', 'ntdst-auth'),
-            'redirect' => $this->getRedirectAfterLogin(),
-        ]);
+        // Redirect immediately (like magic link) instead of rendering inline.
+        // The cookie must be sent before any output.
+        $redirect = add_query_arg('activated', '1', $this->getRedirectAfterLogin());
+        wp_safe_redirect($redirect);
         exit;
     }
 
@@ -271,19 +310,37 @@ final class AuthService implements \NTDST_Service_Meta
             wp_logout();
         }
 
-        $redirectUrl = home_url(Config::get('redirect_after_logout', '/login'));
+        $redirectUrl = home_url(Config::get('redirect_after_logout', '/aanmelden'));
         wp_safe_redirect($redirectUrl);
         exit;
     }
 
     public function redirectWpLogin(): void
     {
-        $action = $_GET['action'] ?? '';
-        if (in_array($action, ['lostpassword', 'rp', 'resetpass', 'logout'], true)) {
+        // Never redirect POST requests (cookie-setting, reauth flows)
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             return;
         }
 
-        $loginUrl = home_url(Config::get('login_url', '/login'));
+        // Allow WordPress internal actions that need wp-login.php
+        $action = $_GET['action'] ?? '';
+        $allowedActions = ['lostpassword', 'rp', 'resetpass', 'logout', 'postpass', 'reauth'];
+        if (in_array($action, $allowedActions, true)) {
+            return;
+        }
+
+        // Allow reauth parameter (WordPress cookie verification)
+        if (isset($_GET['reauth'])) {
+            return;
+        }
+
+        $loginUrl = home_url(Config::get('login_url', '/aanmelden'));
+
+        // Preserve redirect_to parameter
+        if (!empty($_GET['redirect_to'])) {
+            $loginUrl = add_query_arg('redirect_to', urlencode($_GET['redirect_to']), $loginUrl);
+        }
+
         wp_safe_redirect($loginUrl);
         exit;
     }
@@ -294,6 +351,18 @@ final class AuthService implements \NTDST_Service_Meta
 
     public function addSettingsPage(): void
     {
+        if ($this->hasStrideTools()) {
+            add_submenu_page(
+                'stride-tools',
+                __('Authentication', 'ntdst-auth'),
+                __('Authenticatie', 'ntdst-auth'),
+                'manage_options',
+                'ntdst-auth',
+                [$this, 'renderSettingsPage']
+            );
+            return;
+        }
+
         add_options_page(
             __('Authentication', 'ntdst-auth'),
             __('Authentication', 'ntdst-auth'),
@@ -303,12 +372,45 @@ final class AuthService implements \NTDST_Service_Meta
         );
     }
 
+    /**
+     * Surface this tool on the Stride Tools index + dashboard card.
+     *
+     * @param array $items
+     * @return array
+     */
+    public function registerToolsCard(array $items): array
+    {
+        $items[] = [
+            'slug'        => 'ntdst-auth',
+            'label'       => __('Authenticatie', 'ntdst-auth'),
+            'description' => __('Login, redirects en privacy-exporters.', 'ntdst-auth'),
+            'icon'        => 'dashicons-lock',
+            'capability'  => 'manage_options',
+        ];
+        return $items;
+    }
+
+    private function hasStrideTools(): bool
+    {
+        return class_exists('\Stride\Admin\StrideToolsService');
+    }
+
     public function registerSettings(): void
     {
         register_setting('ntdst_auth', Config::optionKey(), [
             'type' => 'array',
             'sanitize_callback' => [Config::class, 'sanitize'],
         ]);
+    }
+
+    public function enqueueAdminAssets(string $hook): void
+    {
+        $expected = ($this->hasStrideTools() ? 'stride-tools_page_' : 'settings_page_') . 'ntdst-auth';
+        if ($hook !== $expected) {
+            return;
+        }
+
+        ntdst_enqueue_admin_toolkit();
     }
 
     public function renderSettingsPage(): void
@@ -400,6 +502,7 @@ final class AuthService implements \NTDST_Service_Meta
     private function renderPage(string $template, array $data = []): void
     {
         status_header(200);
+        nocache_headers();
 
         $paths = [
             get_stylesheet_directory() . '/ntdst-auth/pages/' . $template . '.php',

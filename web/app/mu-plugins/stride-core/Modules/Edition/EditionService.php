@@ -8,18 +8,18 @@ use Stride\Contracts\EditionQueryInterface;
 use Stride\Domain\OfferingStatus;
 use Stride\Domain\Money;
 use Stride\Infrastructure\AbstractService;
-use WP_Post;
-use WP_Error;
 
 /**
  * Edition business logic.
  *
  * Implements EditionQueryInterface for cross-module queries.
  */
-final class EditionService extends AbstractService implements EditionQueryInterface
+class EditionService extends AbstractService implements EditionQueryInterface
 {
     public function __construct(
         private readonly EditionRepository $repository,
+        private readonly SessionRepository $sessions,
+        private readonly \Stride\Modules\Membership\MembershipService $membership,
     ) {
         parent::__construct();
     }
@@ -44,12 +44,14 @@ final class EditionService extends AbstractService implements EditionQueryInterf
         SessionCPT::register();
 
         // Register sub-components as singletons
-        $sessionService = new SessionService(ntdst_get(SessionRepository::class));
+        $sessionRepo = ntdst_get(SessionRepository::class);
+        $sessionService = new SessionService($sessionRepo);
         ntdst_set(SessionService::class, fn() => $sessionService);
 
-        $completion = new EditionCompletion();
+        $completion = new EditionCompletion($this, $this->repository, $sessionService, $sessionRepo);
         ntdst_set(EditionCompletion::class, fn() => $completion);
         add_action('stride/attendance/marked', [$completion, 'onAttendanceMarked']);
+        add_action('learndash_course_completed', [$completion, 'onLearnDashCourseCompleted']);
 
         // Admin UI + settings (registers own hooks in constructor)
         new \Stride\Admin\StrideSettingsService();
@@ -57,13 +59,28 @@ final class EditionService extends AbstractService implements EditionQueryInterf
             $this,
             $this->repository,
             $sessionService,
-            ntdst_get(SessionRepository::class),
+            $sessionRepo,
             ntdst_get(\Stride\Modules\Attendance\AttendanceRepository::class),
+        );
+
+        new Admin\RegistrationModalController(
+            $this,
+            $this->repository,
+            $sessionService,
+            ntdst_get(\Stride\Modules\Edition\SessionSelection::class),
+            ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class),
         );
 
         // Register hooks for capacity updates
         add_action('stride/registration/created', [$this, 'onRegistrationCreated']);
         add_action('stride/registration/cancelled', [$this, 'onRegistrationCancelled']);
+
+        // Cascade delete: clean up sessions and registrations when an edition is deleted
+        add_action('before_delete_post', [$this, 'onEditionDeleted']);
+        add_action('wp_trash_post', [$this, 'onEditionTrashed']);
+
+        // Route /edities/<slug>/ → pure-LD course fallback when slug isn't an edition
+        ntdst_get(EditionRouter::class)->register();
     }
 
     // === EditionQueryInterface Implementation ===
@@ -84,14 +101,30 @@ final class EditionService extends AbstractService implements EditionQueryInterf
 
     public function getRegisteredCount(int $editionId): int
     {
-        global $wpdb;
+        $cacheKey = 'stride_edition_reg_count_' . $editionId;
+        $cached = get_transient($cacheKey);
+        if ($cached !== false) {
+            return (int) $cached;
+        }
 
+        global $wpdb;
         $table = $wpdb->prefix . 'vad_registrations';
 
-        return (int) $wpdb->get_var($wpdb->prepare(
+        $count = (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM {$table} WHERE edition_id = %d AND status IN ('confirmed', 'completed', 'pending')",
-            $editionId
+            $editionId,
         ));
+
+        set_transient($cacheKey, $count, 60);
+
+        return $count;
+    }
+
+    private function invalidateRegisteredCountCache(int $editionId): void
+    {
+        if ($editionId > 0) {
+            delete_transient('stride_edition_reg_count_' . $editionId);
+        }
     }
 
     public function getCapacity(int $editionId): int
@@ -115,7 +148,7 @@ final class EditionService extends AbstractService implements EditionQueryInterf
 
     /**
      * Check if this edition is for an online course.
-     * Derives format from the linked LearnDash course's ld_course_category taxonomy.
+     * Derives format from the linked LearnDash course's stride_format taxonomy.
      */
     public function isOnline(int $editionId): bool
     {
@@ -124,13 +157,13 @@ final class EditionService extends AbstractService implements EditionQueryInterf
             return false;
         }
 
-        $categories = get_the_terms($courseId, 'ld_course_category');
-        if (!$categories || is_wp_error($categories)) {
+        $formats = get_the_terms($courseId, 'stride_format');
+        if (!$formats || is_wp_error($formats)) {
             return false;
         }
 
-        foreach ($categories as $cat) {
-            if (in_array($cat->slug, ['online', 'webinar', 'e-learning'], true)) {
+        foreach ($formats as $fmt) {
+            if (in_array($fmt->slug, ['online', 'webinar', 'e-learning'], true)) {
                 return true;
             }
         }
@@ -144,7 +177,7 @@ final class EditionService extends AbstractService implements EditionQueryInterf
      */
     public function getEnrollmentForm(int $editionId): string
     {
-        return (string) $this->repository->getField($editionId, 'enrollment_form', '');
+        return (string) $this->repository->getField($editionId, 'enrollment_form', 'default');
     }
 
     /**
@@ -170,50 +203,50 @@ final class EditionService extends AbstractService implements EditionQueryInterf
     // === Public API ===
 
     /**
-     * Get edition by ID.
-     */
-    public function getEdition(int $editionId): WP_Post|WP_Error
-    {
-        return $this->repository->find($editionId);
-    }
-
-    /**
-     * Get editions for a course.
+     * Check if a user is a member.
      *
-     * @return array<array<string, mixed>>
+     * Delegates to MembershipService. Kept as a thin pass-through so
+     * existing callers (`$editionService->isMember($id)`) keep working.
      */
-    public function getEditionsForCourse(int $courseId): array
+    public function isMember(int $userId): bool
     {
-        return $this->repository->findByCourse($courseId);
-    }
-
-    /**
-     * Get upcoming editions.
-     *
-     * @return array<array<string, mixed>>
-     */
-    public function getUpcomingEditions(int $limit = 10): array
-    {
-        return $this->repository->findUpcoming($limit);
+        return $this->membership->isMember($userId);
     }
 
     /**
      * Get price for edition.
+     *
+     * When $userId is provided, checks membership for member pricing.
+     * When null (anonymous/display), returns non-member price.
+     *
+     * Override via `stride/membership/price` filter.
      */
-    public function getPrice(int $editionId, bool $isMember = true): Money
+    public function getPrice(int $editionId, ?int $userId = null): Money
     {
+        $isMember = $userId !== null ? $this->isMember($userId) : false;
         $field = $isMember ? 'price' : 'price_non_member';
         $amount = (float) $this->repository->getField($editionId, $field, 0);
+        $price = Money::eur($amount);
 
-        return Money::eur($amount);
+        return apply_filters('stride/membership/price', $price, $editionId, $userId, $isMember);
     }
 
     /**
      * Check if enrollment is allowed.
+     *
+     * Combines admin-managed status, capacity, AND a calendar-aware past-check.
+     * The past-check guards against an admin who forgot to flip an Open edition
+     * to Completed/Archived after its end_date passed — we won't let users
+     * enroll in something that already happened.
      */
     public function canEnroll(int $editionId): bool
     {
-        $status = $this->getStatus($editionId);
+        // Effective status folds in past-date and missing-sessions overrides:
+        // a klassikaal edition with no scheduled sessions reads as Announcement
+        // (interest-only), a past edition reads as Completed, and so on. We
+        // delegate to that primitive so the answer matches what the visitor
+        // actually sees in the CTA chain.
+        $status = $this->getEffectiveStatus($editionId);
 
         if (!$status->allowsEnrollment()) {
             return false;
@@ -223,11 +256,181 @@ final class EditionService extends AbstractService implements EditionQueryInterf
     }
 
     /**
+     * True when the edition's end_date (or start_date as fallback) is in the past.
+     *
+     * Pure calendar check — independent of OfferingStatus. Use this anywhere
+     * UI logic depends on "can a user still take action on this edition?".
+     */
+    public function isPast(int $editionId): bool
+    {
+        $endDate   = (string) $this->repository->getField($editionId, 'end_date', '');
+        $startDate = (string) $this->repository->getField($editionId, 'start_date', '');
+
+        return self::isPastDates($endDate ?: null, $startDate ?: null);
+    }
+
+    /**
+     * The calendar predicate behind isPast(), on prefetched date values.
+     *
+     * end_date wins; start_date is the fallback; no dates at all → not past.
+     */
+    private static function isPastDates(?string $endDate, ?string $startDate): bool
+    {
+        $reference = $endDate ?: $startDate;
+        if (!$reference) {
+            return false;
+        }
+
+        return strtotime($reference) < strtotime(date('Y-m-d'));
+    }
+
+    /**
      * Alias for canEnroll for handler compatibility.
      */
     public function isEnrollmentOpen(int $editionId): bool
     {
         return $this->canEnroll($editionId);
+    }
+
+    /**
+     * Display status for the public frontend.
+     *
+     * Stored `_ntdst_status` reflects admin intent — but several conditions
+     * can override what we actually show:
+     *
+     *  - Terminal stored statuses (Cancelled/Completed/Archived) always win
+     *    over derived overrides.
+     *  - Past end_date → Completed, regardless of stored status.
+     *  - Klassikaal edition with zero scheduled sessions → Announcement.
+     *    You can't enroll in a date that doesn't exist yet; the visitor
+     *    can express interest until the admin schedules sessions.
+     *
+     * Use this anywhere a status is shown to a visitor. Use `getStatus()`
+     * when admin intent matters (queries by stored status, transitions, etc.).
+     */
+    public function getEffectiveStatus(int $editionId): OfferingStatus
+    {
+        return $this->getEffectiveStatusFromPrefetched(
+            $this->getStatus($editionId),
+            ((string) $this->repository->getField($editionId, 'end_date', '')) ?: null,
+            ((string) $this->repository->getField($editionId, 'start_date', '')) ?: null,
+            $this->isClassroom($editionId),
+            $this->sessions->countByEdition($editionId),
+        );
+    }
+
+    /**
+     * The effective-status DECISION ENGINE, operating on prefetched inputs.
+     *
+     * INV-7: this is the single place where the display-status rules live.
+     * `getEffectiveStatus()` (single edition) and `getEffectiveStatuses()`
+     * (batch, catalog pre-pass) both delegate here — never re-implement
+     * these rules anywhere else, and never call this with partial data
+     * (a wrong session count or classroom flag changes the decision).
+     *
+     * Rules, in priority order (see getEffectiveStatus() docblock):
+     *  1. Terminal stored statuses (Cancelled/Completed/Archived) win.
+     *  2. Past end_date (start_date fallback) → Completed.
+     *  3. Classroom edition with zero published sessions → Announcement.
+     *  4. Otherwise: the stored admin intent.
+     */
+    public function getEffectiveStatusFromPrefetched(
+        OfferingStatus $stored,
+        ?string $endDate,
+        ?string $startDate,
+        bool $isClassroom,
+        int $publishedSessionCount,
+    ): OfferingStatus {
+        if ($stored->isTerminal()) {
+            return $stored;
+        }
+        if (self::isPastDates($endDate, $startDate)) {
+            return OfferingStatus::Completed;
+        }
+        if ($isClassroom && $publishedSessionCount === 0) {
+            return OfferingStatus::Announcement;
+        }
+
+        return $stored;
+    }
+
+    /**
+     * Batch variant of getEffectiveStatus() for catalog/list surfaces.
+     *
+     * Primes the WP post/meta/term caches and batches the session count
+     * (SessionRepository::countByEditions, one GROUP BY) so the cost is
+     * independent of the number of editions. The DECISION for every id
+     * still goes through getEffectiveStatusFromPrefetched() — one INV-7
+     * decision point, never forked.
+     *
+     * Per-request only: nothing here is cached across requests, so a
+     * status change is reflected on the next page load.
+     *
+     * @param array<int> $editionIds
+     * @return array<int, OfferingStatus> Map of edition_id => effective status
+     */
+    public function getEffectiveStatuses(array $editionIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $editionIds))));
+        if (empty($ids)) {
+            return [];
+        }
+
+        // Prime posts + meta for the editions, then posts + meta + terms for
+        // their courses (isClassroom reads the course's stride_format terms).
+        _prime_post_caches($ids, false, true);
+
+        $courseIds = [];
+        foreach ($ids as $id) {
+            $courseId = $this->getCourseId($id);
+            if ($courseId) {
+                $courseIds[$courseId] = $courseId;
+            }
+        }
+        if (!empty($courseIds)) {
+            _prime_post_caches(array_values($courseIds), true, true);
+        }
+
+        $sessionCounts = $this->sessions->countByEditions($ids);
+
+        $out = [];
+        foreach ($ids as $id) {
+            $out[$id] = $this->getEffectiveStatusFromPrefetched(
+                $this->getStatus($id),
+                ((string) $this->repository->getField($id, 'end_date', '')) ?: null,
+                ((string) $this->repository->getField($id, 'start_date', '')) ?: null,
+                $this->isClassroom($id),
+                $sessionCounts[$id] ?? 0,
+            );
+        }
+
+        return $out;
+    }
+
+    /**
+     * True when the edition's course is classified as classroom format.
+     *
+     * Differs from `!isOnline()`: requires a positive classroom signal so
+     * we don't accidentally apply klassikaal-specific rules to editions
+     * without any course taxonomy (data-invalid editions, test fixtures,
+     * legacy imports).
+     */
+    private function isClassroom(int $editionId): bool
+    {
+        $courseId = $this->getCourseId($editionId);
+        if (!$courseId) {
+            return false;
+        }
+        $formats = get_the_terms($courseId, 'stride_format');
+        if (!$formats || is_wp_error($formats)) {
+            return false;
+        }
+        foreach ($formats as $fmt) {
+            if (in_array($fmt->slug, ['klassikaal', 'classroom'], true)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // === Event Handlers ===
@@ -239,7 +442,8 @@ final class EditionService extends AbstractService implements EditionQueryInterf
      */
     public function onRegistrationCreated(array $data): void
     {
-        $editionId = $data['edition_id'] ?? 0;
+        $editionId = (int) ($data['edition_id'] ?? 0);
+        $this->invalidateRegisteredCountCache($editionId);
 
         if ($editionId && !$this->hasAvailableSpots($editionId)) {
             $this->repository->updateStatus($editionId, OfferingStatus::Full);
@@ -254,6 +458,8 @@ final class EditionService extends AbstractService implements EditionQueryInterf
     public function onRegistrationCancelled(array $data): void
     {
         $editionId = (int) ($data['edition_id'] ?? 0);
+        $this->invalidateRegisteredCountCache($editionId);
+
         $currentStatus = $this->getStatus($editionId);
 
         if ($editionId && $currentStatus === OfferingStatus::Full) {
@@ -261,5 +467,62 @@ final class EditionService extends AbstractService implements EditionQueryInterf
                 $this->repository->updateStatus($editionId, OfferingStatus::Open);
             }
         }
+    }
+
+    /**
+     * Cascade delete: remove sessions and registrations when edition is permanently deleted.
+     */
+    public function onEditionDeleted(int $postId): void
+    {
+        if (get_post_type($postId) !== EditionCPT::POST_TYPE) {
+            return;
+        }
+
+        $this->deleteChildSessions($postId);
+        $this->deleteEditionRegistrations($postId);
+    }
+
+    /**
+     * Cascade trash: also trash child sessions when edition is trashed.
+     */
+    public function onEditionTrashed(int $postId): void
+    {
+        if (get_post_type($postId) !== EditionCPT::POST_TYPE) {
+            return;
+        }
+
+        $this->deleteChildSessions($postId);
+        $this->deleteEditionRegistrations($postId);
+    }
+
+    private function deleteChildSessions(int $editionId): void
+    {
+        $sessions = $this->sessions->findIdsByEdition($editionId);
+
+        if (empty($sessions)) {
+            return;
+        }
+
+        // Bulk delete attendance records once, then drop the session posts.
+        // Done per-post via wp_delete_post so meta + relationships clean up
+        // through WordPress, but the attendance hit is now a single DELETE.
+        $attendanceRepo = ntdst_get(\Stride\Modules\Attendance\AttendanceRepository::class);
+        $attendanceRepo->deleteBySessions($sessions);
+
+        foreach ($sessions as $sessionId) {
+            wp_delete_post($sessionId, true);
+        }
+    }
+
+    private function deleteEditionRegistrations(int $editionId): void
+    {
+        global $wpdb;
+        $table = $wpdb->prefix . 'vad_registrations';
+        $wpdb->delete($table, ['edition_id' => $editionId], ['%d']);
+
+        // Justified INV-3 bypass (bulk delete), but the invalidation
+        // convergence point allows no bulk-path exception: drop the
+        // repository's per-request cache so stale rows can't be served.
+        ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class)->clearCache();
     }
 }

@@ -1,12 +1,27 @@
 <?php
 /**
- * Course Card Partial
+ * Course Card Partial — PURE RENDERER (Task G1 / audit 2.2 — Helder Tij).
  *
- * Renders a simple course card without edition context.
- * Displays thumbnail, title, excerpt, and "Meer info" button.
+ * Renders a (pure-LD online) course card per the Helder Tij sheet: badge
+ * row, 17px title, 13px meta block, optional 7px progress bar, footer with
+ * arrow CTA. The whole card is the link — hover lift lives on this wrapper.
+ *
+ * All per-card lookups are data-in: callers run the catalog batch pre-pass
+ * (helpers/catalog.php — stridence_prefetch_course_cards() resolves the
+ * primary visible edition with the same enrollable > active ranking this
+ * partial previously computed with a WP_Query PER CARD, plus the visitor's
+ * LD state). When prefetched keys are absent (mid-flow fallback), the card
+ * renders the generic Online badge only — degraded but never fatal.
+ *
+ * Variants (driven ONLY by existing args):
+ * - enrolled:        ✓ Ingeschreven badge (user_state, progress 0)
+ * - online-progress: "X% voltooid" badge + 7px progress bar + "Ga verder" CTA
+ * - completed:       "Afgerond" badge (progress >= 100)
  *
  * @param array $args {
- *     @type WP_Post $course Course post object
+ *     @type WP_Post    $course          Course post object
+ *     @type array|null $primary_edition Prefetched ['id' => int, 'status' => OfferingStatus, 'spots' => ?int] or null (pure-LD)
+ *     @type array|null $user_state      Prefetched ['enrolled' => bool, 'progress' => int] or null (guest / not enrolled)
  * }
  */
 
@@ -19,7 +34,12 @@ if (!$course instanceof WP_Post) {
     return;
 }
 
-// Get course data
+$primary_edition = $args['primary_edition'] ?? null;
+$user_state      = $args['user_state'] ?? null;
+
+// Pure-LD course card. Link to the canonical course URL — LD owns
+// /opleidingen/<slug>/, Stride decorates it via single-sfwd-courses.php.
+// See tasks/url-structure-rework.md.
 $permalink = get_permalink($course);
 $title     = get_the_title($course);
 
@@ -28,39 +48,83 @@ $excerpt = !empty($course->post_excerpt)
     ? $course->post_excerpt
     : wp_trim_words(wp_strip_all_tags($course->post_content), 20, '...');
 
-// Get thumbnail - use stride_course_card size (400x225), fallback to medium
-$thumbnail = get_the_post_thumbnail(
-    $course,
-    'stride_course_card',
-    ['class' => 'w-full h-full object-cover transition-transform hover:scale-105']
-);
+// User-level state (enrolled / in-progress / completed) wins when present —
+// that's the visitor's own status with the course, regardless of edition.
+// Otherwise: if course has a primary visible edition, show its effective
+// status. Pure-LD courses (no edition) only carry the Online type badge.
+$is_enrolled = !empty($user_state['enrolled']);
+$progress    = $is_enrolled ? (int) ($user_state['progress'] ?? 0) : 0;
+$in_progress = $is_enrolled && $progress > 0 && $progress < 100;
+$completed   = $is_enrolled && $progress >= 100;
+
+// Sheet pill recipe (card size 'sm') for the progress badges the
+// badge-status partial has no variant for — exact recipe classes inline.
+$pill_sm = 'text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex items-center gap-1';
+
+// CTA label per the sheet: "Ga verder" while in progress, otherwise
+// "Start opleiding" (completed cards link back to the course overview).
+if ($in_progress) {
+    $cta_label = __('Ga verder', 'stridence');
+} elseif ($completed) {
+    $cta_label = __('Bekijk opleiding', 'stridence');
+} else {
+    $cta_label = __('Start opleiding', 'stridence');
+}
 
 ?>
-<article class="card overflow-hidden flex flex-col h-full">
-    <!-- Thumbnail -->
-    <a href="<?php echo esc_url($permalink); ?>" class="block aspect-video overflow-hidden bg-surface-alt">
-        <?php if ($thumbnail): ?>
-            <?php echo $thumbnail; ?>
-        <?php else: ?>
-            <div class="w-full h-full flex items-center justify-center">
-                <?php echo stridence_icon('book-open', 'w-12 h-12 text-text-muted'); ?>
-            </div>
+<a href="<?php echo esc_url($permalink); ?>"
+   class="bg-surface-card rounded-[14px] shadow-card p-6 flex flex-col gap-3.5 h-full text-text transition-all duration-normal ease-out hover:shadow-elevated hover:-translate-y-0.5">
+
+    <!-- Badge row -->
+    <div class="flex gap-1.5 flex-wrap">
+        <?php stridence_template_part('partials/badge-status', null, [
+            'status' => 'online',
+            'size'   => 'sm',
+        ]); ?>
+
+        <?php if ($completed) : ?>
+            <span class="<?php echo esc_attr($pill_sm); ?> bg-badge-free-bg text-badge-free-text"><?php esc_html_e('Afgerond', 'stridence'); ?></span>
+        <?php elseif ($in_progress) : ?>
+            <span class="<?php echo esc_attr($pill_sm); ?> bg-badge-free-bg text-badge-free-text"><?php
+                /* translators: %d: completion percentage */
+                echo esc_html(sprintf(__('%d%% voltooid', 'stridence'), $progress));
+            ?></span>
+        <?php elseif ($is_enrolled) : ?>
+            <?php stridence_template_part('partials/badge-status', null, [
+                'status' => 'enrolled',
+                'size'   => 'sm',
+            ]); ?>
+        <?php elseif ($primary_edition) : ?>
+            <?php stridence_template_part('partials/badge-status', null, [
+                'status' => $primary_edition['status']->value,
+                'spots'  => $primary_edition['spots'],
+                'size'   => 'sm',
+            ]); ?>
         <?php endif; ?>
-    </a>
+    </div>
 
-    <div class="p-5 flex-1 flex flex-col">
-        <h3 class="font-heading font-semibold text-lg mb-2 line-clamp-2">
-            <a href="<?php echo esc_url($permalink); ?>" class="text-text hover:text-primary transition-colors">
-                <?php echo esc_html($title); ?>
-            </a>
-        </h3>
+    <!-- Title -->
+    <h3 class="text-[17px] font-bold leading-snug text-pretty text-text line-clamp-2">
+        <?php echo esc_html($title); ?>
+    </h3>
 
-        <p class="text-sm text-text-muted line-clamp-2 mb-4 flex-1">
+    <!-- Meta block -->
+    <?php if ($excerpt) : ?>
+        <p class="text-[13px] text-text-muted line-clamp-2">
             <?php echo esc_html($excerpt); ?>
         </p>
+    <?php endif; ?>
 
-        <a href="<?php echo esc_url($permalink); ?>" class="btn-primary w-full text-center">
-            Meer info
-        </a>
+    <!-- Progress bar (online-progress variant) — pct only, so the
+         count-based progress-bar partial's args don't fit: inline track/fill. -->
+    <?php if ($in_progress) : ?>
+        <div class="h-[7px] rounded-full bg-surface-alt overflow-hidden">
+            <div class="h-full bg-primary rounded-full" style="width: <?php echo (int) $progress; ?>%"></div>
+        </div>
+    <?php endif; ?>
+
+    <!-- Footer row -->
+    <div class="mt-auto pt-1 flex items-center justify-end gap-3">
+        <span class="text-sm font-bold text-primary"><?php echo esc_html($cta_label); ?> &rarr;</span>
     </div>
-</article>
+</a>

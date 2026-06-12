@@ -9,6 +9,7 @@ use Stride\Contracts\LMSAdapterInterface;
 use Stride\Domain\RegistrationStatus;
 use Stride\Infrastructure\AbstractService;
 use Stride\Modules\Edition\SessionSelection;
+use Stride\Modules\User\CompanyAffiliation;
 use WP_Error;
 
 /**
@@ -45,18 +46,19 @@ final class EnrollmentService extends AbstractService
     {
         // Register enrollment/completion URL routes
         add_action('init', function () {
-            (new EnrollmentRouter())->register();
+            $completion = ntdst_get(EnrollmentCompletion::class);
+            (new EnrollmentRouter($this, $this->registrations, $completion))->register();
         }, 20);
 
         // Register plain classes as singletons (no service lifecycle)
-        ntdst_set(EnrollmentFieldGroups::class, fn() => new EnrollmentFieldGroups());
-        ntdst_set(EnrollmentCompletion::class, fn() => new EnrollmentCompletion());
+        ntdst_set(EnrollmentCompletion::class, fn() => new EnrollmentCompletion(
+            $this->registrations,
+            ntdst_get(\Stride\Modules\Edition\EditionRepository::class),
+            ntdst_get(\Stride\Modules\Trajectory\TrajectoryRepository::class),
+        ));
 
         // Register completion task handler (AJAX + auto-confirm hook)
         new \Stride\Handlers\CompletionTaskHandler();
-
-        // Admin: field group settings page
-        new \Stride\Admin\FieldGroupSettingsPage();
 
         // Auto-enroll users when they access an open course lesson
         add_action('learndash-lesson-before', [$this, 'maybeEnrollOnLessonAccess'], 10, 3);
@@ -135,15 +137,18 @@ final class EnrollmentService extends AbstractService
         }
 
         // Check if this is an open course (grant access without enrollment)
-        // LearnDash stores settings in serialized array under _sfwd-courses meta
-        $courseMeta = get_post_meta($courseId, '_sfwd-courses', true);
-        $priceType = is_array($courseMeta) ? ($courseMeta['course_price_type'] ?? '') : '';
-        if ($priceType !== 'open') {
-            return; // Not an open course
+        if (!$this->lms->isOpenCourse($courseId)) {
+            return;
         }
 
         // Enroll the user via LearnDash
-        $this->lms->grantAccess($userId, $courseId);
+        if (!$this->lms->grantAccess($userId, $courseId)) {
+            ntdst_log('enrollment')->warning('Open-course auto-enroll: grantAccess returned false', [
+                'user_id' => $userId,
+                'course_id' => $courseId,
+                'lesson_id' => $postId,
+            ]);
+        }
 
         ntdst_log('enrollment')->info('Auto-enrolled user in open course on lesson access', [
             'user_id' => $userId,
@@ -166,8 +171,22 @@ final class EnrollmentService extends AbstractService
             return new WP_Error('invalid_edition', 'Edition does not exist');
         }
 
-        // Check enrollment allowed
-        $status = $this->editions->getStatus($editionId);
+        // Reject when the edition is in the past. OfferingStatus is admin-managed
+        // and doesn't auto-transition when a date passes, so without this guard
+        // an admin who forgot to update the status would let users enroll in
+        // something that already happened.
+        if ($this->editions->isPast($editionId)) {
+            ntdst_log('enrollment')->warning('Enrollment rejected: edition is in the past', [
+                'user_id' => $userId,
+                'edition_id' => $editionId,
+            ]);
+            return new WP_Error('edition_past', 'Deze editie is voorbij');
+        }
+
+        // Check enrollment allowed — effective status folds in past-date,
+        // missing-sessions, and other display overrides so the server can't
+        // accept what the frontend won't offer.
+        $status = $this->editions->getEffectiveStatus($editionId);
         if (!$status->allowsEnrollment()) {
             // Distinguish between "full" and other closed reasons
             if ($status === \Stride\Domain\OfferingStatus::Full) {
@@ -186,65 +205,140 @@ final class EnrollmentService extends AbstractService
             return new WP_Error('enrollment_closed', 'Enrollment is not open for this edition');
         }
 
-        // Check capacity (redundant when status is correctly maintained, but defensive)
-        if (!$this->editions->hasAvailableSpots($editionId)) {
-            ntdst_log('enrollment')->warning('Enrollment rejected: edition full', [
-                'user_id' => $userId,
-                'edition_id' => $editionId,
-            ]);
-            return new WP_Error('edition_full', 'This edition is full');
-        }
+        // Begin atomic enrollment — lock capacity rows to prevent race conditions
+        global $wpdb;
+        $wpdb->query('START TRANSACTION');
 
-        // Check not already registered (confirmed, pending, or interest)
-        if ($this->hasActiveRegistration($userId, editionId: $editionId)) {
-            ntdst_log('enrollment')->warning('Enrollment rejected: already registered', [
-                'user_id' => $userId,
-                'edition_id' => $editionId,
-            ]);
-            return new WP_Error('already_enrolled', 'User is already enrolled in this edition');
-        }
-
-        // Determine initial status based on completion requirements + approval setting
-        $completionService = ntdst_get(EnrollmentCompletion::class);
-        $hasCompletionRequirements = $completionService->hasRequirements($editionId, 'vad_edition');
-
-        $initialStatus = ($hasCompletionRequirements || $this->editions->requiresApproval($editionId))
-            ? RegistrationStatus::Pending
-            : RegistrationStatus::Confirmed;
-
-        // Build registration data
-        $registrationData = [
-            'user_id' => $userId,
-            'edition_id' => $editionId,
-            'status' => $initialStatus->value,
-            'enrollment_path' => $options['enrollment_path'] ?? RegistrationRepository::PATH_INDIVIDUAL,
-            'enrolled_by' => $options['enrolled_by'] ?? null,
-            'voucher_code' => $options['voucher_code'] ?? null,
-            'notes' => $options['notes'] ?? null,
-        ];
-
-        // Propagate company_id from user meta if not explicitly provided
-        if (!isset($options['company_id'])) {
-            $companyId = (int) get_user_meta($userId, '_stride_company_id', true);
-            if ($companyId) {
-                $registrationData['company_id'] = $companyId;
+        try {
+            // Lock capacity check with FOR UPDATE
+            $confirmedCount = $this->registrations->countConfirmedForUpdate($editionId);
+            $capacity = $this->editions->getCapacity($editionId);
+            if ($capacity > 0 && $confirmedCount >= $capacity) {
+                $wpdb->query('ROLLBACK');
+                ntdst_log('enrollment')->warning('Enrollment rejected: edition full', [
+                    'user_id' => $userId,
+                    'edition_id' => $editionId,
+                ]);
+                return new WP_Error('edition_full', 'This edition is full');
             }
-        } elseif ($options['company_id']) {
-            $registrationData['company_id'] = $options['company_id'];
-        }
 
-        // Create registration
-        $registrationId = $this->registrations->create($registrationData);
+            // Determine initial status based on completion requirements + approval setting
+            $completionService = ntdst_get(EnrollmentCompletion::class);
+            $hasCompletionRequirements = $completionService->hasRequirements($editionId, 'vad_edition');
 
-        if (is_wp_error($registrationId)) {
-            return $registrationId;
+            $initialStatus = ($hasCompletionRequirements || $this->editions->requiresApproval($editionId))
+                ? RegistrationStatus::Pending
+                : RegistrationStatus::Confirmed;
+
+            // Check for existing interest registration to upgrade (before duplicate check).
+            // Only allowed when the enrolling user is acting on their own account
+            // (self-enrollment): any other path lets an attacker pre-seed an
+            // interest row with a victim's email and silently merge their data
+            // into the victim's eventual enrollment.
+            $upgradedRegistrationId = null;
+            $callerId = get_current_user_id();
+            $isSelfEnrolment = ($callerId > 0 && $callerId === $userId);
+            $user = get_userdata($userId);
+            $userEmail = $user ? $user->user_email : '';
+            if ($isSelfEnrolment && $userEmail) {
+                $existingInterest = $this->registrations->findByEmailAndEdition($userEmail, $editionId);
+                $interestHasNoUser = $existingInterest && (int) ($existingInterest->user_id ?? 0) === 0;
+                if ($existingInterest
+                    && $interestHasNoUser
+                    && $existingInterest->status === RegistrationStatus::Interest->value
+                ) {
+                    // Upgrade: set user_id, merge enrollment data
+                    $existingData = is_array($existingInterest->enrollment_data)
+                        ? $existingInterest->enrollment_data
+                        : (json_decode($existingInterest->enrollment_data ?? '{}', true) ?: []);
+                    $newData = is_array($options['enrollment_data'] ?? null)
+                        ? $options['enrollment_data']
+                        : [];
+                    $mergedData = array_merge($existingData, $newData);
+
+                    $this->registrations->upgradeFromInterest(
+                        (int) $existingInterest->id,
+                        $userId,
+                        $initialStatus->value,
+                        $options['enrollment_path'] ?? RegistrationRepository::PATH_INDIVIDUAL,
+                        $mergedData,
+                    );
+
+                    $upgradedRegistrationId = (int) $existingInterest->id;
+                }
+            }
+
+            if ($upgradedRegistrationId !== null) {
+                $registrationId = $upgradedRegistrationId;
+                $wpdb->query('COMMIT');
+            } else {
+                // Check not already registered (within transaction).
+                // Interest + Waitlist rows are NOT considered blocking here — they
+                // represent prior intent and get reactivated by RegistrationRepository::create().
+                $existing = $this->registrations->findByUserAndEdition($userId, $editionId);
+                $existingStatus = $existing ? RegistrationStatus::tryFrom($existing->status) : null;
+                $isReactivatable = in_array($existingStatus, [
+                    RegistrationStatus::Cancelled,
+                    RegistrationStatus::Interest,
+                    RegistrationStatus::Waitlist,
+                ], true);
+
+                if ($existing && !$isReactivatable && $existingStatus && $existingStatus->blocksDuplicate()) {
+                    $wpdb->query('ROLLBACK');
+                    ntdst_log('enrollment')->warning('Enrollment rejected: already registered', [
+                        'user_id' => $userId,
+                        'edition_id' => $editionId,
+                    ]);
+                    return new WP_Error('already_enrolled', 'User is already enrolled in this edition');
+                }
+
+                // Build registration data
+                $registrationData = [
+                    'user_id' => $userId,
+                    'edition_id' => $editionId,
+                    'status' => $initialStatus->value,
+                    'enrollment_path' => $options['enrollment_path'] ?? RegistrationRepository::PATH_INDIVIDUAL,
+                    'enrolled_by' => $options['enrolled_by'] ?? null,
+                    'voucher_code' => $options['voucher_code'] ?? null,
+                    'notes' => $options['notes'] ?? null,
+                    'enrollment_data' => $options['enrollment_data'] ?? null,
+                ];
+
+                // Propagate company_id from user meta if not explicitly provided
+                if (!isset($options['company_id'])) {
+                    $companyId = CompanyAffiliation::getCompanyId($userId);
+                    if ($companyId) {
+                        $registrationData['company_id'] = $companyId;
+                    }
+                } elseif ($options['company_id']) {
+                    $registrationData['company_id'] = $options['company_id'];
+                }
+
+                // Create registration
+                $registrationId = $this->registrations->create($registrationData);
+
+                if (is_wp_error($registrationId)) {
+                    $wpdb->query('ROLLBACK');
+                    return $registrationId;
+                }
+
+                $wpdb->query('COMMIT');
+            }
+        } catch (\Throwable $e) {
+            $wpdb->query('ROLLBACK');
+            throw $e;
         }
 
         // Grant LMS access only for confirmed registrations
         if ($initialStatus === RegistrationStatus::Confirmed) {
             $courseId = $this->editions->getCourseId($editionId);
-            if ($courseId) {
-                $this->lms->grantAccess($userId, $courseId);
+            if ($courseId && !$this->lms->grantAccess($userId, $courseId)) {
+                ntdst_log('enrollment')->warning('Enrollment created but grantAccess returned false', [
+                    'registration_id' => $registrationId,
+                    'user_id' => $userId,
+                    'edition_id' => $editionId,
+                    'course_id' => $courseId,
+                ]);
             }
         }
 
@@ -295,7 +389,9 @@ final class EnrollmentService extends AbstractService
                 return new WP_Error('invalid_edition', 'Edition does not exist');
             }
 
-            $status = $this->editions->getStatus($editionId);
+            // Effective status — accepts announcement-by-policy AND
+            // klassikaal-no-sessions editions that fall back to interest.
+            $status = $this->editions->getEffectiveStatus($editionId);
             if (!$status->allowsInterest()) {
                 return new WP_Error('interest_closed', 'Interest registration is not available for this edition');
             }
@@ -303,6 +399,23 @@ final class EnrollmentService extends AbstractService
             // Check not already registered (any active status)
             if ($this->hasActiveRegistration($userId, editionId: $editionId)) {
                 return new WP_Error('already_registered', 'Je hebt al interesse gemeld voor deze editie');
+            }
+        }
+
+        if ($trajectoryId) {
+            $trajectoryService = ntdst_get(\Stride\Modules\Trajectory\TrajectoryService::class);
+            $trajectory = $trajectoryService->getTrajectory($trajectoryId);
+            if (!$trajectory) {
+                return new WP_Error('invalid_trajectory', 'Trajectory does not exist');
+            }
+
+            $status = $trajectory['status_enum'] ?? null;
+            if (!$status || !$status->allowsInterest()) {
+                return new WP_Error('interest_closed', 'Interest registration is not available for this trajectory');
+            }
+
+            if ($this->hasActiveRegistration($userId, trajectoryId: $trajectoryId)) {
+                return new WP_Error('already_registered', 'Je hebt al interesse gemeld voor dit traject');
             }
         }
 
@@ -317,7 +430,7 @@ final class EnrollmentService extends AbstractService
         ];
 
         // Propagate company_id from user meta
-        $companyId = (int) get_user_meta($userId, '_stride_company_id', true);
+        $companyId = CompanyAffiliation::getCompanyId($userId);
         if ($companyId) {
             $registrationData['company_id'] = $companyId;
         }
@@ -337,6 +450,93 @@ final class EnrollmentService extends AbstractService
         ]);
 
         ntdst_log('enrollment')->info('Interest registered', [
+            'user_id' => $userId,
+            'edition_id' => $editionId,
+            'trajectory_id' => $trajectoryId,
+            'registration_id' => $registrationId,
+        ]);
+
+        return $registrationId;
+    }
+
+    /**
+     * Register on the waitlist for a full edition.
+     *
+     * Lightweight registration: no capacity checks, no LMS access, no quote.
+     * Mirrors registerInterest() but gated on OfferingStatus::Full instead of Announcement.
+     *
+     * @param array{edition_id?: int, trajectory_id?: int, notes?: string} $options
+     * @return int|WP_Error Registration ID or error
+     */
+    public function registerWaitlist(int $userId, array $options = []): int|WP_Error
+    {
+        $editionId = $options['edition_id'] ?? null;
+        $trajectoryId = $options['trajectory_id'] ?? null;
+
+        if (!$editionId && !$trajectoryId) {
+            return new WP_Error('invalid_input', 'Edition or trajectory ID is required');
+        }
+
+        if ($editionId) {
+            if (!$this->editions->exists($editionId)) {
+                return new WP_Error('invalid_edition', 'Edition does not exist');
+            }
+
+            $status = $this->editions->getStatus($editionId);
+            if (!$status->allowsWaitlist()) {
+                return new WP_Error('waitlist_closed', 'Waitlist registration is not available for this edition');
+            }
+
+            if ($this->hasActiveRegistration($userId, editionId: $editionId)) {
+                return new WP_Error('already_registered', 'Je staat al op de wachtlijst of bent al ingeschreven voor deze editie');
+            }
+        }
+
+        if ($trajectoryId) {
+            $trajectoryService = ntdst_get(\Stride\Modules\Trajectory\TrajectoryService::class);
+            $trajectory = $trajectoryService->getTrajectory($trajectoryId);
+            if (!$trajectory) {
+                return new WP_Error('invalid_trajectory', 'Trajectory does not exist');
+            }
+
+            $status = $trajectory['status_enum'] ?? null;
+            if (!$status || !$status->allowsWaitlist()) {
+                return new WP_Error('waitlist_closed', 'Waitlist registration is not available for this trajectory');
+            }
+
+            if ($this->hasActiveRegistration($userId, trajectoryId: $trajectoryId)) {
+                return new WP_Error('already_registered', 'Je staat al op de wachtlijst of bent al ingeschreven voor dit traject');
+            }
+        }
+
+        $registrationData = [
+            'user_id' => $userId,
+            'edition_id' => $editionId,
+            'trajectory_id' => $trajectoryId,
+            'status' => RegistrationStatus::Waitlist->value,
+            'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
+            'notes' => $options['notes'] ?? null,
+        ];
+
+        $companyId = CompanyAffiliation::getCompanyId($userId);
+        if ($companyId) {
+            $registrationData['company_id'] = $companyId;
+        }
+
+        $registrationId = $this->registrations->create($registrationData);
+
+        if (is_wp_error($registrationId)) {
+            return $registrationId;
+        }
+
+        $this->dispatch('registration/waitlisted', [
+            'registration_id' => $registrationId,
+            'user_id' => $userId,
+            'edition_id' => $editionId,
+            'trajectory_id' => $trajectoryId,
+        ]);
+
+        ntdst_log('enrollment')->info('Waitlist registered', [
             'user_id' => $userId,
             'edition_id' => $editionId,
             'trajectory_id' => $trajectoryId,
@@ -378,8 +578,13 @@ final class EnrollmentService extends AbstractService
         $editionId = (int) $registration->edition_id;
         if ($editionId) {
             $courseId = $this->editions->getCourseId($editionId);
-            if ($courseId) {
-                $this->lms->grantAccess((int) $registration->user_id, $courseId);
+            if ($courseId && !$this->lms->grantAccess((int) $registration->user_id, $courseId)) {
+                ntdst_log('enrollment')->warning('Registration confirmed but grantAccess returned false', [
+                    'registration_id' => $registrationId,
+                    'user_id' => (int) $registration->user_id,
+                    'edition_id' => $editionId,
+                    'course_id' => $courseId,
+                ]);
             }
         }
 
@@ -401,6 +606,10 @@ final class EnrollmentService extends AbstractService
 
     /**
      * Cancel enrollment.
+     *
+     * Cannot cancel a registration that is already in a terminal state.
+     * Completed registrations are immutable — they represent course completion
+     * and may have an attached certificate. Already-cancelled is a no-op error.
      */
     public function cancel(int $registrationId): bool|WP_Error
     {
@@ -412,6 +621,14 @@ final class EnrollmentService extends AbstractService
 
         if ($registration === null) {
             return new WP_Error('not_found', 'Registration not found');
+        }
+
+        $status = RegistrationStatus::tryFrom($registration->status);
+        if ($status === RegistrationStatus::Completed) {
+            return new WP_Error('already_completed', 'Cannot cancel a completed registration');
+        }
+        if ($status === RegistrationStatus::Cancelled) {
+            return new WP_Error('already_cancelled', 'Registration is already cancelled');
         }
 
         // Update status
@@ -463,9 +680,36 @@ final class EnrollmentService extends AbstractService
     }
 
     /**
+     * Edition ids where the user has a confirmed registration.
+     *
+     * The batch equivalent of isEnrolled() for catalog surfaces (Task G1 /
+     * audit 2.2): one per-request-cached query via
+     * RegistrationRepository::findByUser() instead of a lookup per card.
+     * Same contract as isEnrolled(): confirmed status only.
+     *
+     * @return list<int>
+     */
+    public function getEnrolledEditionIds(int $userId): array
+    {
+        if ($userId <= 0) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($this->registrations->findByUser($userId) as $row) {
+            $editionId = (int) ($row->edition_id ?? 0);
+            if ($editionId > 0 && ($row->status ?? '') === RegistrationStatus::Confirmed->value) {
+                $out[$editionId] = $editionId;
+            }
+        }
+
+        return array_values($out);
+    }
+
+    /**
      * Check if user has any active registration (blocks duplicate submissions).
      *
-     * Active = confirmed, pending, or interest (anything that isn't cancelled/withdrawn).
+     * Active = anything except cancelled (uses RegistrationStatus::blocksDuplicate).
      */
     public function hasActiveRegistration(int $userId, ?int $editionId = null, ?int $trajectoryId = null): bool
     {
@@ -485,23 +729,6 @@ final class EnrollmentService extends AbstractService
         return $status && $status->blocksDuplicate();
     }
 
-    /**
-     * Get user's enrollments.
-     *
-     * @return array<object>
-     */
-    public function getUserEnrollments(int $userId): array
-    {
-        return $this->registrations->findByUser($userId, RegistrationStatus::Confirmed->value);
-    }
-
-    /**
-     * Get registration by ID.
-     */
-    public function getRegistration(int $registrationId): \stdClass|WP_Error
-    {
-        return $this->registrations->find($registrationId);
-    }
 
     /**
      * Process enrollment from frontend form.
@@ -519,7 +746,7 @@ final class EnrollmentService extends AbstractService
      *   address?: string,
      *   postal_code?: string,
      *   city?: string,
-     *   gln_peppol?: string,
+     *   gln_number?: string,
      *   invoice_email?: string,
      *   po_number?: string,
      *   voucher_code?: string,
@@ -541,15 +768,17 @@ final class EnrollmentService extends AbstractService
         ]);
 
         // Determine participant and enrollment path
-        if ($enrollmentType === 'colleague') {
+        $isExistingColleague = false;
+        if (in_array($enrollmentType, ['colleague', 'collega'], true)) {
             // Check if user exists before resolving (to detect new user creation)
             $existingUser = get_user_by('email', $data['email']);
+            $isExistingColleague = ($existingUser instanceof \WP_User);
 
             // Colleague enrollment: find or create user by email
             $participantId = $this->resolveParticipant(
                 $data['email'],
                 $data['first_name'],
-                $data['last_name']
+                $data['last_name'],
             );
 
             if (is_wp_error($participantId)) {
@@ -580,12 +809,56 @@ final class EnrollmentService extends AbstractService
         // Store billing data for quote handler to use
         $this->storePendingBilling($data, $enrolledBy ?: $participantId);
 
-        // Perform enrollment
-        $registrationId = $this->enroll($participantId, $editionId, [
+        // Build enrollment options
+        $enrollOptions = [
             'enrollment_path' => $enrollmentPath,
             'enrolled_by' => $enrolledBy,
             'voucher_code' => $data['voucher_code'] ?? null,
-        ]);
+        ];
+
+        // Split extra_fields: known user meta fields get saved to user profile,
+        // remaining course-specific fields go to enrollment_data
+        if (!empty($data['extra_fields'])) {
+            $userMetaKeys = array_keys($this->getUserMetaMapping());
+            $profileFields = [];
+            $courseFields = [];
+
+            foreach ($data['extra_fields'] as $key => $value) {
+                if (in_array($key, $userMetaKeys, true)) {
+                    $profileFields[$key] = $value;
+                } else {
+                    $courseFields[$key] = $value;
+                }
+            }
+
+            // Never overwrite a pre-existing user's profile from a colleague
+            // enrolment — the enroller does not own that account. Persist the
+            // values per-registration only so the data still reaches the quote
+            // handler without mutating the victim's wp_users / user_meta rows.
+            if ($isExistingColleague && !empty($profileFields)) {
+                $courseFields = array_merge($profileFields, $courseFields);
+                $profileFields = [];
+            }
+
+            if (!empty($profileFields)) {
+                $this->updateUserProfile($participantId, $profileFields);
+            }
+            if (!empty($courseFields)) {
+                $actorId = get_current_user_id() ?: null;
+                $enrollOptions['enrollment_data'] = [
+                    'enrollment_personal' => RegistrationRepository::wrapStage($courseFields, $actorId),
+                ];
+            }
+        }
+
+        // Honor pre-wrapped enrollment_data set by the caller (e.g. EnrollmentFormHandler)
+        // when no extra_fields processing overrode it.
+        if (!isset($enrollOptions['enrollment_data']) && is_array($data['enrollment_data'] ?? null)) {
+            $enrollOptions['enrollment_data'] = $data['enrollment_data'];
+        }
+
+        // Perform enrollment
+        $registrationId = $this->enroll($participantId, $editionId, $enrollOptions);
 
         if (is_wp_error($registrationId)) {
             return $registrationId;
@@ -594,13 +867,37 @@ final class EnrollmentService extends AbstractService
         // Handle session selection if provided
         $selectedSessions = $data['selected_sessions'] ?? [];
         if (!empty($selectedSessions) && $this->sessionSelection) {
-            foreach ($selectedSessions as $sessionId) {
-                $this->sessionSelection->registerForSession(
-                    $registrationId,
-                    (int) $sessionId,
-                    $participantId
-                );
+            $sessionIds = array_map('intval', $selectedSessions);
+            $result = $this->sessionSelection->setSelections($registrationId, $sessionIds);
+            if (is_wp_error($result)) {
+                ntdst_log('enrollment')->warning('Session selection persistence failed', [
+                    'registration_id' => $registrationId,
+                    'session_ids' => $sessionIds,
+                    'code' => $result->get_error_code(),
+                    'message' => $result->get_error_message(),
+                ]);
             }
+        }
+
+        // Snapshot the original selection into enrollment_data (append-only).
+        // `none` type when no selection step ran; `edition` with session IDs otherwise.
+        // This records intent at enrollment time — distinct from the live `selections` column.
+        $hasSessions = !empty($selectedSessions) && $this->sessionSelection;
+        if ($hasSessions) {
+            $this->registrations->appendInitialSelectionPhase(
+                $registrationId,
+                [
+                    'phase'       => 'enrollment',
+                    'session_ids' => array_map('intval', $selectedSessions),
+                ],
+                'edition',
+            );
+        } else {
+            $this->registrations->appendInitialSelectionPhase(
+                $registrationId,
+                ['phase' => 'enrollment'],
+                'none',
+            );
         }
 
         // Get quote ID from registration (created by handler)
@@ -654,18 +951,48 @@ final class EnrollmentService extends AbstractService
     /**
      * Update user profile with enrollment form data.
      */
-    private function updateUserProfile(int $userId, array $data): void
+    /**
+     * Map of enrollment form field names → user meta keys.
+     *
+     * Single source of truth shared by:
+     * - {@see EnrollmentService::updateUserProfile()} (persistence)
+     * - {@see \Stride\Modules\Questionnaire\Admin\QuestionnaireSettingsPage} (admin "reserved name" warning)
+     *
+     * When a Questionnaire field name (4-stage form builder under
+     * "Formuliervelden") matches a key here, its value is automatically
+     * persisted to the corresponding user meta in addition to the
+     * per-enrollment `enrollment_data` JSON snapshot.
+     *
+     * Keys are also used by {@see \Stride\Modules\User\UserLifecycleService} to
+     * strip PII on anonymisation.
+     *
+     * @return array<string, string> inputKey => metaKey
+     */
+    public static function getUserMetaMapping(): array
     {
-        $metaFields = [
+        return [
+            // Personal identity
             'phone' => 'phone',
-            'company' => 'company',
-            'vat_number' => 'vat_number',
-            'address' => 'billing_address',
-            'postal_code' => 'billing_postal_code',
+            'organisation' => 'organisation',
+            'department' => 'department',
+            'national_id' => 'national_id',
+            'date_of_birth' => 'date_of_birth',
+            'professional_license_number' => 'professional_license_number',
+
+            // Billing
+            'vat_number' => 'billing_vat',
+            'address' => 'billing_address_1',
+            'postal_code' => 'billing_postcode',
             'city' => 'billing_city',
-            'gln_peppol' => 'gln_number',
             'invoice_email' => 'invoice_email',
+            'gln_number' => 'gln_number',
+            'company' => 'billing_company',
         ];
+    }
+
+    public function updateUserProfile(int $userId, array $data): void
+    {
+        $metaFields = self::getUserMetaMapping();
 
         foreach ($metaFields as $inputKey => $metaKey) {
             if (!empty($data[$inputKey])) {
@@ -696,7 +1023,7 @@ final class EnrollmentService extends AbstractService
             'postal_code' => $data['postal_code'] ?? '',
             'city' => $data['city'] ?? '',
             'vat_number' => $data['vat_number'] ?? '',
-            'gln_number' => $data['gln_peppol'] ?? '',
+            'gln_number' => $data['gln_number'] ?? '',
             'po_number' => $data['po_number'] ?? '',
             'voucher_code' => $data['voucher_code'] ?? '',
         ];

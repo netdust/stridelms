@@ -30,8 +30,8 @@ function activate_plugin(): void
 
     // Register CPTs and routes before flushing so they're included
     if (function_exists('ntdst_get')) {
-        ntdst_get(Data\LTIDataService::class);
-        ntdst_get(Platform\PlatformRouter::class);
+        ntdst_get(Shared\LTIDataService::class);
+        ntdst_get(Platform\Router::class);
     }
 
     flush_rewrite_rules();

@@ -1,1056 +1,1398 @@
 <?php
 /**
- * Admin Dashboard Template
+ * Admin Dashboard Template — Soft Violet
  *
- * Full-screen Alpine.js application for the Stride admin dashboard.
- * Contains views for: Dashboard, Trajectories, Editions, and Quotes.
+ * Full-screen Alpine.js application for Stride admin.
+ * Views: Dashboard, Opkomende Sessies, Offertes, Trajecten, Gebruikers
  *
- * @var string $admin_url Base admin URL for generating links
- *
+ * @var string $admin_url Base admin URL
+ * @var string $user_name Current user display name
  * @package Stride\Admin
  */
-
 defined('ABSPATH') || exit;
 ?>
-<div class="wrap stride-app" x-data="strideApp()">
-    <!-- Header -->
-    <header class="stride-header">
-        <div class="stride-header-left">
-            <h1>Stride</h1>
-            <nav class="stride-nav">
-                <a href="#/" class="stride-nav-item" :class="{ 'active': view === 'dashboard' }" @click.prevent="view = 'dashboard'">
-                    Dashboard
-                </a>
-                <a href="#/trajectories" class="stride-nav-item" :class="{ 'active': view === 'trajectories' }" @click.prevent="view = 'trajectories'">
-                    Trajecten
-                </a>
-                <a href="#/editions" class="stride-nav-item" :class="{ 'active': view === 'editions' }" @click.prevent="view = 'editions'">
-                    Editions
-                </a>
-                <a href="#/quotes" class="stride-nav-item" :class="{ 'active': view === 'quotes' }" @click.prevent="view = 'quotes'">
-                    Quotes
-                </a>
+<div class="wrap sd-app" x-data="strideApp()" x-cloak>
+
+    <!-- ============================================================
+         HEADER BAR
+         ============================================================ -->
+    <header class="sd-header">
+        <div class="sd-header__left">
+            <span class="sd-header__logo">Stride</span>
+            <nav class="sd-header__nav">
+                <button class="sd-header__tab"
+                        :class="{ 'sd-header__tab--active': view === 'dashboard' }"
+                        @click="switchView('dashboard')">Dashboard</button>
+                <button class="sd-header__tab"
+                        :class="{ 'sd-header__tab--active': view === 'edities' }"
+                        @click="switchView('edities')">Opkomende Sessies</button>
+                <button class="sd-header__tab"
+                        :class="{ 'sd-header__tab--active': view === 'offertes' }"
+                        @click="switchView('offertes')">Offertes</button>
+                <button class="sd-header__tab"
+                        :class="{ 'sd-header__tab--active': view === 'trajecten' }"
+                        @click="switchView('trajecten')">Trajecten</button>
+                <button class="sd-header__tab"
+                        :class="{ 'sd-header__tab--active': view === 'gebruikers' }"
+                        @click="switchView('gebruikers')">Gebruikers</button>
             </nav>
         </div>
-        <div class="stride-header-right">
-            <span class="stride-user-name" x-text="user.name"></span>
-            <a href="<?php echo esc_url($admin_url); ?>" class="stride-btn stride-btn-ghost">
-                WP Admin
-            </a>
+        <div class="sd-header__right">
+            <!-- Notification bell -->
+            <div class="sd-bell" @click.stop="toggleNotifications()">
+                <span class="sd-bell__icon">🔔</span>
+                <span class="sd-bell__badge" x-show="unreadCount > 0" x-text="unreadCount"></span>
+                <div class="sd-bell__dropdown" x-show="showNotifications" @click.outside="showNotifications = false" x-transition>
+                    <template x-for="notif in notifications" :key="notif.id">
+                        <div class="sd-bell__item" :class="{ 'sd-bell__item--unread': !notif.read }">
+                            <span class="sd-bell__text" x-text="notif.text"></span>
+                            <span class="sd-bell__time" x-text="formatRelativeTime(notif.timestamp)"></span>
+                        </div>
+                    </template>
+                    <div class="sd-bell__footer">
+                        <button class="sd-btn sd-btn--text" @click="markAllRead()">Alles gelezen</button>
+                    </div>
+                </div>
+            </div>
+            <!-- User avatar + name -->
+            <div class="sd-avatar" x-text="(config.user?.name || '?')[0].toUpperCase()"></div>
+            <span class="sd-header__user" x-text="config.user?.name"></span>
         </div>
     </header>
 
-    <!-- Content -->
-    <div class="stride-content">
-        <!-- Dashboard View -->
-        <template x-if="view === 'dashboard'">
-            <div>
-                <div class="stride-page-header">
-                    <h2 class="stride-page-title">Dashboard</h2>
-                </div>
+    <!-- ============================================================
+         CONTENT AREA
+         ============================================================ -->
+    <div class="sd-content">
 
-                <!-- Stats Grid -->
-                <div class="stride-stats">
-                    <div class="stride-stat-card">
-                        <div class="stride-stat-icon upcoming">
-                            <span class="dashicons dashicons-calendar-alt"></span>
-                        </div>
-                        <div class="stride-stat-info">
-                            <div class="stride-stat-value" x-text="stats.upcomingEditions">-</div>
-                            <div class="stride-stat-label">Komende Editions</div>
-                        </div>
-                    </div>
-                    <div class="stride-stat-card">
-                        <div class="stride-stat-icon registrations">
-                            <span class="dashicons dashicons-groups"></span>
-                        </div>
-                        <div class="stride-stat-info">
-                            <div class="stride-stat-value" x-text="stats.totalRegistrations">-</div>
-                            <div class="stride-stat-label">Actieve Inschrijvingen</div>
-                        </div>
-                    </div>
-                    <div class="stride-stat-card">
-                        <div class="stride-stat-icon pending">
-                            <span class="dashicons dashicons-media-document"></span>
-                        </div>
-                        <div class="stride-stat-info">
-                            <div class="stride-stat-value" x-text="stats.pendingQuotes">-</div>
-                            <div class="stride-stat-label">Openstaande Offertes</div>
-                        </div>
-                    </div>
-                    <div class="stride-stat-card">
-                        <div class="stride-stat-icon today">
-                            <span class="dashicons dashicons-clock"></span>
-                        </div>
-                        <div class="stride-stat-info">
-                            <div class="stride-stat-value" x-text="stats.todaySessions">-</div>
-                            <div class="stride-stat-label">Sessies Vandaag</div>
-                        </div>
-                    </div>
-                    <div class="stride-stat-card">
-                        <div class="stride-stat-icon trajectories">
-                            <span class="dashicons dashicons-networking"></span>
-                        </div>
-                        <div class="stride-stat-info">
-                            <div class="stride-stat-value" x-text="stats.openTrajectories">-</div>
-                            <div class="stride-stat-label">Open Trajecten</div>
-                        </div>
-                    </div>
-                    <div class="stride-stat-card">
-                        <div class="stride-stat-icon week-trend" :class="{ 'positive': stats.registrationsThisWeek >= stats.registrationsLastWeek, 'negative': stats.registrationsThisWeek < stats.registrationsLastWeek }">
-                            <span class="dashicons" :class="stats.registrationsThisWeek >= stats.registrationsLastWeek ? 'dashicons-arrow-up-alt' : 'dashicons-arrow-down-alt'"></span>
-                        </div>
-                        <div class="stride-stat-info">
-                            <div class="stride-stat-value" x-text="stats.registrationsThisWeek || 0">-</div>
-                            <div class="stride-stat-label">Deze week <span class="stride-stat-compare" x-text="'(vorige: ' + (stats.registrationsLastWeek || 0) + ')'"></span></div>
-                        </div>
-                    </div>
-                </div>
+        <!-- ========================================================
+             VIEW: DASHBOARD
+             ======================================================== -->
+        <div x-show="view === 'dashboard'">
 
-                <!-- Alerts Section -->
-                <template x-if="stats.alerts && stats.alerts.length > 0">
-                    <div class="stride-alerts-section">
-                        <template x-for="alert in stats.alerts" :key="alert.editionId + alert.type">
-                            <div class="stride-alert" :class="'stride-alert-' + alert.type">
-                                <span class="dashicons" :class="alert.type === 'almost_full' ? 'dashicons-warning' : 'dashicons-info'"></span>
-                                <div class="stride-alert-content">
-                                    <strong x-text="alert.editionTitle"></strong>
-                                    <span class="stride-alert-date" x-text="formatDate(alert.startDate)"></span>
-                                    <span class="stride-alert-message" x-text="alert.message"></span>
+            <!-- Greeting + date -->
+            <div class="sd-greeting">
+                <h2>Hi, <span x-text="config.user?.firstName || config.user?.name"></span></h2>
+                <span class="sd-greeting__date" x-text="formatDate(new Date())"></span>
+            </div>
+
+            <!-- KPI row -->
+            <div class="sd-kpi-row">
+                <div class="sd-kpi-card" @click="switchView('edities')">
+                    <span class="sd-kpi-card__label">Komende edities</span>
+                    <template x-if="statsLoaded">
+                        <span class="sd-kpi-card__value" x-text="stats.upcomingEditions ?? '—'"></span>
+                    </template>
+                    <template x-if="!statsLoaded">
+                        <span class="sd-skeleton sd-skeleton--kpi"></span>
+                    </template>
+                </div>
+                <div class="sd-kpi-card" @click="switchView('edities')">
+                    <span class="sd-kpi-card__label">Actieve inschrijvingen</span>
+                    <template x-if="statsLoaded">
+                        <span class="sd-kpi-card__value" x-text="stats.totalRegistrations ?? '—'"></span>
+                    </template>
+                    <template x-if="!statsLoaded">
+                        <span class="sd-skeleton sd-skeleton--kpi"></span>
+                    </template>
+                </div>
+                <div class="sd-kpi-card" @click="switchView('offertes')">
+                    <span class="sd-kpi-card__label">Openstaande offertes</span>
+                    <template x-if="statsLoaded">
+                        <span class="sd-kpi-card__value" x-text="stats.pendingQuotes ?? '—'"></span>
+                    </template>
+                    <template x-if="!statsLoaded">
+                        <span class="sd-skeleton sd-skeleton--kpi"></span>
+                    </template>
+                </div>
+                <div class="sd-kpi-card">
+                    <span class="sd-kpi-card__label">Sessies vandaag</span>
+                    <template x-if="statsLoaded">
+                        <span class="sd-kpi-card__value" x-text="stats.todaySessions ?? '—'"></span>
+                    </template>
+                    <template x-if="!statsLoaded">
+                        <span class="sd-skeleton sd-skeleton--kpi"></span>
+                    </template>
+                </div>
+                <div class="sd-kpi-card" :class="{ 'sd-kpi-card--alert': (stats.actionsNeeded ?? 0) > 0 }">
+                    <span class="sd-kpi-card__label">Acties nodig</span>
+                    <template x-if="statsLoaded">
+                        <span class="sd-kpi-card__value" x-text="stats.actionsNeeded ?? '—'"></span>
+                    </template>
+                    <template x-if="!statsLoaded">
+                        <span class="sd-skeleton sd-skeleton--kpi"></span>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Two-column layout -->
+            <div class="sd-layout">
+                <div class="sd-layout__primary">
+
+                    <!-- Unified Acties nodig panel: approvals + post-course sign-offs + stale pendings + system notifications -->
+                    <div class="sd-card" id="action-required-card">
+                        <div class="sd-card__header">
+                            <h3 class="sd-card__title">Acties nodig</h3>
+                        </div>
+                        <div class="sd-card__body">
+                            <!-- Tabs (always visible so admin can see "0 wachten" at a glance) -->
+                            <div class="sd-tabs" style="display:flex;gap:8px;margin-bottom:12px;border-bottom:1px solid var(--sd-border, #e5e7eb);">
+                                <!-- "Wacht op mij" merges both approval AND post_approval: in both cases admin's
+                                     job is to OK the registration to move it to the next phase. Row badge +
+                                     button label switch per item.type. -->
+                                <button
+                                    type="button"
+                                    class="sd-tab"
+                                    :class="{ 'sd-tab--active': pendingApprovalsTab === 'approval', 'sd-tab--empty': (pendingApprovals.counts.approval + pendingApprovals.counts.post_approval) === 0 }"
+                                    @click="pendingApprovalsTab = 'approval'">
+                                    Wacht op mij
+                                    <span class="sd-pill" :class="{ 'sd-pill--muted': (pendingApprovals.counts.approval + pendingApprovals.counts.post_approval) === 0 }" x-text="pendingApprovals.counts.approval + pendingApprovals.counts.post_approval"></span>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="sd-tab"
+                                    :class="{ 'sd-tab--active': pendingApprovalsTab === 'stale_user', 'sd-tab--empty': pendingApprovals.counts.stale_user === 0 }"
+                                    @click="pendingApprovalsTab = 'stale_user'">
+                                    Wacht op gebruiker
+                                    <span class="sd-pill" :class="pendingApprovals.counts.stale_user === 0 ? 'sd-pill--muted' : 'sd-pill--warn'" x-text="pendingApprovals.counts.stale_user"></span>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="sd-tab"
+                                    :class="{ 'sd-tab--active': pendingApprovalsTab === 'notifications', 'sd-tab--empty': actionQueue.length === 0 }"
+                                    @click="pendingApprovalsTab = 'notifications'">
+                                    Meldingen
+                                    <span class="sd-pill" :class="{ 'sd-pill--muted': actionQueue.length === 0 }" x-text="actionQueue.length"></span>
+                                </button>
+                            </div>
+
+                            <!-- Per-tab empty state -->
+                            <template x-if="!loading && pendingApprovalsTab === 'approval' && (pendingApprovals.counts.approval + pendingApprovals.counts.post_approval) === 0">
+                                <div class="sd-empty">
+                                    <span class="sd-empty__icon">✓</span>
+                                    <p class="sd-empty__text">Geen inschrijvingen wachten op jouw goedkeuring</p>
                                 </div>
-                                <div class="stride-alert-badge" x-text="alert.fillRate + '%'"></div>
-                            </div>
-                        </template>
-                    </div>
-                </template>
+                            </template>
+                            <template x-if="!loading && pendingApprovalsTab === 'stale_user' && pendingApprovals.counts.stale_user === 0">
+                                <div class="sd-empty">
+                                    <span class="sd-empty__icon">✓</span>
+                                    <p class="sd-empty__text">Geen hangende inschrijvingen</p>
+                                    <p class="sd-empty__hint">Inschrijvingen <span x-text="pendingApprovals.stale_threshold_days"></span> dagen of langer zonder activiteit verschijnen hier.</p>
+                                </div>
+                            </template>
+                            <template x-if="!loading && pendingApprovalsTab === 'notifications' && actionQueue.length === 0">
+                                <div class="sd-empty">
+                                    <span class="sd-empty__icon">✓</span>
+                                    <p class="sd-empty__text">Geen meldingen</p>
+                                </div>
+                            </template>
 
-                <!-- Pending Approvals -->
-                <template x-if="pendingApprovals.length > 0">
-                    <div class="stride-card" style="margin-bottom: 24px;">
-                        <div class="stride-card-header">
-                            <h3 class="stride-card-title">
-                                <span class="dashicons dashicons-shield"></span>
-                                Wachtend op goedkeuring
-                                <span class="stride-count-badge" x-text="pendingApprovals.length"></span>
-                            </h3>
-                        </div>
-                        <div class="stride-card-body" style="padding: 0;">
-                            <table class="stride-table" style="margin: 0;">
+                            <!-- Registration buckets (active tab only) -->
+                            <table class="sd-table" x-show="pendingApprovalsTab !== 'notifications' && (
+                                (pendingApprovalsTab === 'approval' && (pendingApprovals.counts.approval + pendingApprovals.counts.post_approval) > 0) ||
+                                (pendingApprovalsTab === 'stale_user' && pendingApprovals.counts.stale_user > 0)
+                            )">
                                 <thead>
                                     <tr>
-                                        <th style="padding: 10px 16px;">Deelnemer</th>
-                                        <th style="padding: 10px 16px;">Edition</th>
-                                        <th style="padding: 10px 16px;">Ingeschreven</th>
-                                        <th style="padding: 10px 16px;">Taken</th>
-                                        <th style="padding: 10px 16px; text-align: right;">Actie</th>
+                                        <th>Gebruiker</th>
+                                        <th>Editie</th>
+                                        <th>Status</th>
+                                        <th>Inschrijfdatum</th>
+                                        <th></th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <template x-for="approval in pendingApprovals" :key="approval.id">
+                                    <template x-for="item in pendingApprovals.items.filter(i => pendingApprovalsTab === 'approval' ? (i.type === 'approval' || i.type === 'post_approval') : i.type === pendingApprovalsTab)" :key="item.id">
                                         <tr>
-                                            <td style="padding: 10px 16px;">
-                                                <strong x-text="approval.user_name"></strong>
-                                                <br>
-                                                <small style="color: #646970;" x-text="approval.user_email"></small>
-                                            </td>
-                                            <td style="padding: 10px 16px;" x-text="approval.edition_title"></td>
-                                            <td style="padding: 10px 16px;" x-text="formatDate(approval.registered_at)"></td>
-                                            <td style="padding: 10px 16px;">
-                                                <span style="color: #00a32a;">
-                                                    <span class="dashicons dashicons-yes-alt" style="font-size: 16px; width: 16px; height: 16px; vertical-align: middle;"></span>
-                                                    Alle taken voltooid
-                                                </span>
-                                            </td>
-                                            <td style="padding: 10px 16px; text-align: right;">
-                                                <button class="stride-btn stride-btn-primary stride-btn-sm"
-                                                        @click="approveRegistration(approval.id)"
-                                                        :disabled="approval.approving">
-                                                    <span x-show="!approval.approving">Goedkeuren</span>
-                                                    <span x-show="approval.approving">Bezig...</span>
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </template>
-
-                <!-- Two Column Layout -->
-                <div class="stride-dashboard-grid">
-                    <!-- Left Column -->
-                    <div class="stride-dashboard-col">
-                        <!-- Today's Sessions -->
-                        <div class="stride-card">
-                            <div class="stride-card-header">
-                                <h3 class="stride-card-title">
-                                    <span class="dashicons dashicons-clock"></span>
-                                    Vandaag
-                                </h3>
-                            </div>
-                            <div class="stride-card-body">
-                                <template x-if="stats.todaySessionDetails && stats.todaySessionDetails.length > 0">
-                                    <div class="stride-today-sessions">
-                                        <template x-for="session in stats.todaySessionDetails" :key="session.id">
-                                            <div class="stride-today-session">
-                                                <div class="stride-session-time">
-                                                    <span x-text="session.startTime || '—'"></span>
-                                                    <span x-show="session.endTime"> - <span x-text="session.endTime"></span></span>
-                                                </div>
-                                                <div class="stride-session-info">
-                                                    <div class="stride-session-title" x-text="session.editionTitle || session.title"></div>
-                                                    <div class="stride-session-meta">
-                                                        <span class="dashicons dashicons-groups"></span>
-                                                        <span x-text="session.registeredCount + ' deelnemers'"></span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </template>
-                                    </div>
-                                </template>
-                                <template x-if="!stats.todaySessionDetails || stats.todaySessionDetails.length === 0">
-                                    <div class="stride-empty-state-sm">
-                                        <span class="dashicons dashicons-calendar"></span>
-                                        <p>Geen sessies vandaag</p>
-                                    </div>
-                                </template>
-                            </div>
-                        </div>
-
-                        <!-- Upcoming Editions -->
-                        <div class="stride-card">
-                            <div class="stride-card-header">
-                                <h3 class="stride-card-title">
-                                    <span class="dashicons dashicons-calendar-alt"></span>
-                                    Komende Editions
-                                </h3>
-                                <a href="#/editions" @click.prevent="view = 'editions'" class="stride-card-link">Bekijk alle</a>
-                            </div>
-                            <div class="stride-card-body">
-                                <template x-if="stats.upcomingEditionDetails && stats.upcomingEditionDetails.length > 0">
-                                    <div class="stride-upcoming-list">
-                                        <template x-for="edition in stats.upcomingEditionDetails" :key="edition.id">
-                                            <div class="stride-upcoming-item" @click="view = 'editions'; $nextTick(() => openEdition(edition.id))">
-                                                <div class="stride-upcoming-date">
-                                                    <div class="stride-upcoming-day" x-text="new Date(edition.startDate).getDate()"></div>
-                                                    <div class="stride-upcoming-month" x-text="new Date(edition.startDate).toLocaleDateString('nl-BE', { month: 'short' })"></div>
-                                                </div>
-                                                <div class="stride-upcoming-info">
-                                                    <div class="stride-upcoming-title" x-text="edition.title"></div>
-                                                    <div class="stride-upcoming-meta">
-                                                        <span x-text="edition.registeredCount + ' ingeschreven'"></span>
-                                                        <span x-show="edition.capacity > 0" class="stride-capacity-pill" :class="{ 'almost-full': edition.spotsLeft <= 3 && edition.spotsLeft > 0, 'full': edition.spotsLeft === 0 }">
-                                                            <span x-show="edition.spotsLeft > 0" x-text="edition.spotsLeft + ' vrij'"></span>
-                                                            <span x-show="edition.spotsLeft === 0">Volzet</span>
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </template>
-                                    </div>
-                                </template>
-                                <template x-if="!stats.upcomingEditionDetails || stats.upcomingEditionDetails.length === 0">
-                                    <div class="stride-empty-state-sm">
-                                        <span class="dashicons dashicons-calendar-alt"></span>
-                                        <p>Geen komende editions</p>
-                                    </div>
-                                </template>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Right Column -->
-                    <div class="stride-dashboard-col">
-                        <!-- Recent Registrations -->
-                        <div class="stride-card">
-                            <div class="stride-card-header">
-                                <h3 class="stride-card-title">
-                                    <span class="dashicons dashicons-groups"></span>
-                                    Recente Inschrijvingen
-                                </h3>
-                            </div>
-                            <div class="stride-card-body">
-                                <template x-if="stats.recentRegistrations && stats.recentRegistrations.length > 0">
-                                    <div class="stride-activity-feed">
-                                        <template x-for="reg in stats.recentRegistrations" :key="reg.id">
-                                            <div class="stride-activity-item">
-                                                <div class="stride-activity-avatar">
-                                                    <span x-text="reg.userName.charAt(0).toUpperCase()"></span>
-                                                </div>
-                                                <div class="stride-activity-content">
-                                                    <div class="stride-activity-text">
-                                                        <strong x-text="reg.userName"></strong>
-                                                        <span>schreef in voor</span>
-                                                        <strong x-text="reg.editionTitle"></strong>
-                                                    </div>
-                                                    <div class="stride-activity-time" x-text="formatRelativeTime(reg.createdAt)"></div>
-                                                </div>
-                                                <span class="stride-badge" :class="'stride-badge-' + reg.status" x-text="reg.status"></span>
-                                            </div>
-                                        </template>
-                                    </div>
-                                </template>
-                                <template x-if="!stats.recentRegistrations || stats.recentRegistrations.length === 0">
-                                    <div class="stride-empty-state-sm">
-                                        <span class="dashicons dashicons-groups"></span>
-                                        <p>Geen recente inschrijvingen</p>
-                                    </div>
-                                </template>
-                            </div>
-                        </div>
-
-                        <!-- Quick Actions -->
-                        <div class="stride-card">
-                            <div class="stride-card-header">
-                                <h3 class="stride-card-title">
-                                    <span class="dashicons dashicons-admin-tools"></span>
-                                    Snelle Acties
-                                </h3>
-                            </div>
-                            <div class="stride-card-body stride-quick-actions">
-                                <a href="<?php echo esc_url($admin_url . 'post-new.php?post_type=vad_edition'); ?>" class="stride-quick-action">
-                                    <span class="dashicons dashicons-plus-alt"></span>
-                                    <span>Nieuwe Edition</span>
-                                </a>
-                                <a href="<?php echo esc_url($admin_url . 'post-new.php?post_type=vad_trajectory'); ?>" class="stride-quick-action">
-                                    <span class="dashicons dashicons-networking"></span>
-                                    <span>Nieuw Traject</span>
-                                </a>
-                                <a href="#/quotes" @click.prevent="view = 'quotes'" class="stride-quick-action">
-                                    <span class="dashicons dashicons-media-document"></span>
-                                    <span>Bekijk Offertes</span>
-                                </a>
-                                <a href="<?php echo esc_url($admin_url . 'users.php'); ?>" class="stride-quick-action">
-                                    <span class="dashicons dashicons-admin-users"></span>
-                                    <span>Gebruikers</span>
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </template>
-
-        <!-- Editions View -->
-        <template x-if="view === 'editions'">
-            <div>
-                <div class="stride-page-header">
-                    <h2 class="stride-page-title">Editions</h2>
-                    <a href="<?php echo esc_url($admin_url . 'post-new.php?post_type=vad_edition'); ?>" class="stride-btn stride-btn-primary">
-                        <span class="dashicons dashicons-plus-alt2"></span>
-                        New Edition
-                    </a>
-                </div>
-
-                <!-- Filters -->
-                <div class="stride-card">
-                    <div class="stride-filters">
-                        <div class="stride-filter-group">
-                            <label class="stride-filter-label">Zoeken</label>
-                            <input type="text" class="stride-input" placeholder="Zoek editions..." x-model="editionFilters.search" @input.debounce.300ms="loadEditions()">
-                        </div>
-                        <div class="stride-filter-group">
-                            <label class="stride-filter-label">Status</label>
-                            <select class="stride-select" x-model="editionFilters.status" @change="loadEditions()">
-                                <option value="">Alle statussen</option>
-                                <option value="open">Open</option>
-                                <option value="full">Vol</option>
-                                <option value="cancelled">Geannuleerd</option>
-                                <option value="completed">Afgerond</option>
-                            </select>
-                        </div>
-                        <div class="stride-filter-group">
-                            <label class="stride-filter-label">Categorie</label>
-                            <select class="stride-select" x-model="editionFilters.courseTag" @change="loadEditions()">
-                                <option value="0">Alle categorieën</option>
-                                <template x-for="tag in courseTags" :key="tag.id">
-                                    <option :value="tag.id" x-text="tag.name"></option>
-                                </template>
-                            </select>
-                        </div>
-                        <div class="stride-filter-group">
-                            <label class="stride-filter-label">Periode</label>
-                            <input type="text" class="stride-input stride-date-range" x-ref="dateRange" placeholder="Selecteer periode...">
-                        </div>
-                        <div class="stride-filter-group stride-filter-actions">
-                            <button type="button" class="stride-btn stride-btn-text" @click="editionFilters = { search: '', status: '', dateFrom: '', dateTo: '', courseTag: 0 }; if(dateRangePicker) dateRangePicker.clear(); loadEditions();">
-                                <span class="dashicons dashicons-dismiss"></span> Reset
-                            </button>
-                        </div>
-                        <div class="stride-filter-group stride-view-toggle">
-                            <div class="stride-toggle-buttons">
-                                <button type="button" class="stride-toggle-btn" :class="{ 'active': editionView === 'agenda' }" @click="editionView = 'agenda'; editions = []; loadEditions();" title="Agenda weergave">
-                                    <span class="dashicons dashicons-calendar-alt"></span>
-                                </button>
-                                <button type="button" class="stride-toggle-btn" :class="{ 'active': editionView === 'list' }" @click="editionView = 'list'; editions = []; loadEditions();" title="Lijst weergave">
-                                    <span class="dashicons dashicons-list-view"></span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Table -->
-                    <div class="stride-table-wrapper">
-                        <template x-if="editionsLoading">
-                            <div class="stride-loading">Loading editions...</div>
-                        </template>
-                        <template x-if="!editionsLoading && editions.length === 0">
-                            <div class="stride-empty">
-                                <span class="dashicons dashicons-calendar-alt stride-empty-icon"></span>
-                                <p>No editions found</p>
-                            </div>
-                        </template>
-                        <!-- Agenda View Table -->
-                        <template x-if="!editionsLoading && editions.length > 0 && editionView === 'agenda'">
-                            <table class="stride-table stride-agenda-table">
-                                <thead>
-                                    <tr>
-                                        <th>Datum</th>
-                                        <th>Editie</th>
-                                        <th>Locatie</th>
-                                        <th>Capaciteit</th>
-                                        <th>Status</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <template x-for="item in editions" :key="item.sessionId || item.id">
-                                        <tr @click="openEdition(item.id)" class="stride-clickable" :class="{ 'stride-row-today': item.isToday, 'stride-row-past': item.isPast }">
-                                            <td class="stride-agenda-date">
-                                                <div class="stride-date-primary" x-text="formatDateFull(item.date)"></div>
-                                                <div class="stride-date-time" x-show="item.startTime">
-                                                    <span x-text="item.startTime"></span>
-                                                    <span x-show="item.endTime"> - <span x-text="item.endTime"></span></span>
-                                                </div>
-                                                <span x-show="item.isToday" class="stride-badge stride-badge-today">Vandaag</span>
-                                            </td>
                                             <td>
-                                                <div class="stride-edition-title" x-text="item.title"></div>
-                                                <div class="stride-session-subtitle" x-show="item.sessionTitle" x-text="item.sessionTitle"></div>
+                                                <a href="#" @click.prevent="viewUserInDetail(item.user_id)" x-text="item.user_name"></a>
+                                                <div style="font-size:11px;color:#646970;" x-text="item.user_email"></div>
                                             </td>
-                                            <td x-text="item.venue || '-'"></td>
+                                            <td x-text="item.edition_title"></td>
                                             <td>
-                                                <span class="stride-capacity" :class="{ 'full': item.registeredCount >= item.capacity }">
-                                                    <span x-text="item.registeredCount"></span>/<span x-text="item.capacity"></span>
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <span class="stride-badge" :class="'stride-badge-' + item.status" x-text="item.status"></span>
-                                            </td>
-                                            <td>
-                                                <a :href="item.editUrl" class="stride-btn stride-btn-sm stride-btn-outline" @click.stop>
-                                                    Edit
-                                                </a>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
-                        </template>
-
-                        <!-- List View Table -->
-                        <template x-if="!editionsLoading && editions.length > 0 && editionView === 'list'">
-                            <table class="stride-table">
-                                <thead>
-                                    <tr>
-                                        <th>Editie</th>
-                                        <th>Periode</th>
-                                        <th>Locatie</th>
-                                        <th>Capaciteit</th>
-                                        <th>Status</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <template x-for="edition in editions" :key="edition.id">
-                                        <tr @click="openEdition(edition.id)" class="stride-clickable" :class="{ 'stride-row-today': edition.isToday, 'stride-row-past': edition.isPast }">
-                                            <td>
-                                                <div class="stride-edition-title">
-                                                    <span x-text="edition.title"></span>
-                                                    <span x-show="edition.isToday" class="stride-badge stride-badge-today">Vandaag</span>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span x-text="formatDate(edition.startDate)"></span>
-                                                <template x-if="edition.endDate && edition.endDate !== edition.startDate">
-                                                    <span x-text="' - ' + formatDate(edition.endDate)"></span>
+                                                <template x-if="item.type === 'approval'">
+                                                    <span class="sd-status-badge sd-status-badge--pending">Klaar voor goedkeuring</span>
+                                                </template>
+                                                <template x-if="item.type === 'post_approval'">
+                                                    <span class="sd-status-badge sd-status-badge--pending">Aftekening vereist</span>
+                                                </template>
+                                                <template x-if="item.type === 'stale_user'">
+                                                    <span style="color:#b26200;">
+                                                        Wacht op: <strong x-text="item.open_task_label || 'taak'"></strong>
+                                                        <span style="color:#646970;font-size:11px;">— <span x-text="item.days_idle"></span>d openstaand</span>
+                                                    </span>
                                                 </template>
                                             </td>
-                                            <td x-text="edition.venue || '-'"></td>
-                                            <td>
-                                                <span class="stride-capacity" :class="{ 'full': edition.registeredCount >= edition.capacity }">
-                                                    <span x-text="edition.registeredCount"></span>/<span x-text="edition.capacity"></span>
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <span class="stride-badge" :class="'stride-badge-' + edition.status" x-text="edition.status"></span>
-                                            </td>
-                                            <td>
-                                                <a :href="edition.editUrl" class="stride-btn stride-btn-sm stride-btn-outline" @click.stop>
-                                                    Edit
-                                                </a>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
-                        </template>
-
-                        <!-- Pagination -->
-                        <template x-if="editionPages > 1">
-                            <div class="stride-pagination">
-                                <button class="stride-page-btn" @click="editionPage--; loadEditions()" :disabled="editionPage === 1">&laquo;</button>
-                                <span class="stride-page-info">Page <span x-text="editionPage"></span> of <span x-text="editionPages"></span></span>
-                                <button class="stride-page-btn" @click="editionPage++; loadEditions()" :disabled="editionPage >= editionPages">&raquo;</button>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
-                <!-- Edition Detail Slide-over -->
-                <template x-if="selectedEdition">
-                    <div class="stride-slideover-backdrop" @click.self="selectedEdition = null">
-                        <div class="stride-slideover">
-                            <div class="stride-slideover-header">
-                                <h3 x-text="selectedEdition.title"></h3>
-                                <button class="stride-slideover-close" @click="selectedEdition = null">&times;</button>
-                            </div>
-                            <div class="stride-slideover-tabs">
-                                <button class="stride-slideover-tab" :class="{ 'active': editionTab === 'students' }" @click="editionTab = 'students'">
-                                    Students
-                                </button>
-                                <button class="stride-slideover-tab" :class="{ 'active': editionTab === 'attendance' }" @click="editionTab = 'attendance'">
-                                    Attendance
-                                </button>
-                                <button class="stride-slideover-tab" :class="{ 'active': editionTab === 'info' }" @click="editionTab = 'info'">
-                                    Info
-                                </button>
-                            </div>
-                            <div class="stride-slideover-body">
-                                <!-- Students Tab -->
-                                <template x-if="editionTab === 'students'">
-                                    <div>
-                                        <template x-if="registrationsLoading">
-                                            <div class="stride-loading">Loading students...</div>
-                                        </template>
-                                        <template x-if="!registrationsLoading && registrations.length === 0">
-                                            <div class="stride-empty-sm">No students registered</div>
-                                        </template>
-                                        <template x-if="!registrationsLoading && registrations.length > 0">
-                                            <div class="stride-student-list">
-                                                <template x-for="reg in registrations" :key="reg.id">
-                                                    <div class="stride-student-item">
-                                                        <div class="stride-student-avatar" x-text="reg.name ? reg.name.charAt(0).toUpperCase() : '?'"></div>
-                                                        <div class="stride-student-info">
-                                                            <div class="stride-student-name" x-text="reg.name || 'Unknown'"></div>
-                                                            <div class="stride-student-email" x-text="reg.email || ''"></div>
-                                                        </div>
-                                                        <span class="stride-badge stride-badge-sm" :class="'stride-badge-' + reg.status" x-text="reg.status"></span>
-                                                    </div>
+                                            <td x-text="(item.registered_at || '').substring(0, 10)"></td>
+                                            <td style="white-space:nowrap;">
+                                                <template x-if="item.type === 'approval'">
+                                                    <button class="sd-btn sd-btn--primary" @click="approveFromRow(item)">Keur goed</button>
                                                 </template>
-                                            </div>
-                                        </template>
-                                    </div>
-                                </template>
-
-                                <!-- Attendance Tab -->
-                                <template x-if="editionTab === 'attendance'">
-                                    <div>
-                                        <template x-if="selectedEdition.sessions && selectedEdition.sessions.length > 0">
-                                            <div class="stride-attendance-grid">
-                                                <table class="stride-table stride-table-compact">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>Student</th>
-                                                            <template x-for="session in selectedEdition.sessions" :key="session.id">
-                                                                <th class="stride-attendance-header">
-                                                                    <div x-text="formatShortDate(session.date)"></div>
-                                                                </th>
-                                                            </template>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        <template x-for="reg in registrations" :key="reg.id">
-                                                            <tr>
-                                                                <td x-text="reg.name || 'Unknown'"></td>
-                                                                <template x-for="session in selectedEdition.sessions" :key="session.id">
-                                                                    <td class="stride-attendance-cell">
-                                                                        <button
-                                                                            class="stride-attendance-btn"
-                                                                            :class="{
-                                                                                'present': reg.attendance && reg.attendance[session.id] === 'present',
-                                                                                'absent': reg.attendance && reg.attendance[session.id] === 'absent',
-                                                                                'excused': reg.attendance && reg.attendance[session.id] === 'excused'
-                                                                            }"
-                                                                            @click="toggleAttendance(session.id, reg.userId, reg.attendance ? reg.attendance[session.id] : null)"
-                                                                        >
-                                                                            <template x-if="reg.attendance && reg.attendance[session.id] === 'present'">
-                                                                                <span class="dashicons dashicons-yes"></span>
-                                                                            </template>
-                                                                            <template x-if="reg.attendance && reg.attendance[session.id] === 'absent'">
-                                                                                <span class="dashicons dashicons-no"></span>
-                                                                            </template>
-                                                                            <template x-if="reg.attendance && reg.attendance[session.id] === 'excused'">
-                                                                                <span class="dashicons dashicons-clock"></span>
-                                                                            </template>
-                                                                            <template x-if="!reg.attendance || !reg.attendance[session.id]">
-                                                                                <span class="dashicons dashicons-minus"></span>
-                                                                            </template>
-                                                                        </button>
-                                                                    </td>
-                                                                </template>
-                                                            </tr>
-                                                        </template>
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </template>
-                                        <template x-if="!selectedEdition.sessions || selectedEdition.sessions.length === 0">
-                                            <div class="stride-empty-sm">No sessions defined</div>
-                                        </template>
-                                    </div>
-                                </template>
-
-                                <!-- Info Tab -->
-                                <template x-if="editionTab === 'info'">
-                                    <div class="stride-info-list">
-                                        <div class="stride-info-row">
-                                            <span class="stride-info-label">Start Date</span>
-                                            <span x-text="formatDate(selectedEdition.startDate)"></span>
-                                        </div>
-                                        <div class="stride-info-row">
-                                            <span class="stride-info-label">End Date</span>
-                                            <span x-text="formatDate(selectedEdition.endDate) || '-'"></span>
-                                        </div>
-                                        <div class="stride-info-row">
-                                            <span class="stride-info-label">Venue</span>
-                                            <span x-text="selectedEdition.venue || '-'"></span>
-                                        </div>
-                                        <div class="stride-info-row">
-                                            <span class="stride-info-label">Capacity</span>
-                                            <span x-text="selectedEdition.registeredCount + '/' + selectedEdition.capacity"></span>
-                                        </div>
-                                        <div class="stride-info-row">
-                                            <span class="stride-info-label">Status</span>
-                                            <span class="stride-badge" :class="'stride-badge-' + selectedEdition.status" x-text="selectedEdition.status"></span>
-                                        </div>
-                                    </div>
-                                </template>
-                            </div>
-                        </div>
-                    </div>
-                </template>
-            </div>
-        </template>
-
-        <!-- Quotes View -->
-        <template x-if="view === 'quotes'">
-            <div>
-                <div class="stride-page-header">
-                    <h2 class="stride-page-title">Quotes</h2>
-                </div>
-
-                <!-- Filters -->
-                <div class="stride-card">
-                    <div class="stride-filters">
-                        <div class="stride-filter-group">
-                            <label class="stride-filter-label">Search</label>
-                            <input type="text" class="stride-input" placeholder="Search user name or email..." x-model="quoteFilters.search" @input.debounce.300ms="loadQuotes()">
-                        </div>
-                        <div class="stride-filter-group">
-                            <label class="stride-filter-label">Edition</label>
-                            <select class="stride-select" x-model="quoteFilters.editionId" @change="loadQuotes()">
-                                <option value="">All Editions</option>
-                                <template x-for="edition in quoteEditions" :key="edition.id">
-                                    <option :value="edition.id" x-text="edition.title"></option>
-                                </template>
-                            </select>
-                        </div>
-                        <div class="stride-filter-group">
-                            <label class="stride-filter-label">Status</label>
-                            <select class="stride-select" x-model="quoteFilters.status" @change="loadQuotes()">
-                                <option value="">All Statuses</option>
-                                <option value="draft">Draft</option>
-                                <option value="sent">Sent</option>
-                                <option value="exported">Exported</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Table -->
-                    <div class="stride-table-wrapper">
-                        <template x-if="quotesLoading">
-                            <div class="stride-loading">Loading quotes...</div>
-                        </template>
-                        <template x-if="!quotesLoading && quotes.length === 0">
-                            <div class="stride-empty">
-                                <span class="dashicons dashicons-media-document stride-empty-icon"></span>
-                                <p>No quotes found</p>
-                            </div>
-                        </template>
-                        <template x-if="!quotesLoading && quotes.length > 0">
-                            <table class="stride-table">
-                                <thead>
-                                    <tr>
-                                        <th>Quote #</th>
-                                        <th>Customer</th>
-                                        <th>Edition</th>
-                                        <th>Date</th>
-                                        <th>Total</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <template x-for="quote in quotes" :key="quote.id">
-                                        <tr @click="openQuote(quote)" class="stride-clickable">
-                                            <td>
-                                                <span class="stride-quote-number" x-text="quote.number || '-'"></span>
-                                            </td>
-                                            <td>
-                                                <div class="stride-customer-name" x-text="quote.user?.name || 'Unknown'"></div>
-                                                <div class="stride-customer-email" x-text="quote.user?.email || ''"></div>
-                                            </td>
-                                            <td>
-                                                <div class="stride-edition-title" x-text="quote.edition?.title || '-'"></div>
-                                            </td>
-                                            <td x-text="formatDate(quote.date)"></td>
-                                            <td>
-                                                <span class="stride-amount" x-text="formatCurrency(quote.total)"></span>
-                                            </td>
-                                            <td>
-                                                <span class="stride-badge" :class="'stride-badge-' + quote.status" x-text="quote.status"></span>
+                                                <template x-if="item.type === 'post_approval'">
+                                                    <button class="sd-btn sd-btn--primary" @click="approveFromRow(item)">Teken af</button>
+                                                </template>
+                                                <template x-if="item.type === 'stale_user' && item.edition_id">
+                                                    <a :href="'<?php echo esc_url($admin_url); ?>post.php?post=' + item.edition_id + '&action=edit'"
+                                                       class="sd-btn sd-btn--ghost"
+                                                       target="_blank">Bekijk editie →</a>
+                                                </template>
+                                                <button class="sd-btn sd-btn--text" @click="viewUserInDetail(item.user_id)">Gebruiker →</button>
                                             </td>
                                         </tr>
                                     </template>
                                 </tbody>
                             </table>
-                        </template>
+                            <p style="margin-top:12px;font-size:12px;color:#646970;" x-show="pendingApprovalsTab === 'stale_user'">
+                                Inschrijvingen die <span x-text="pendingApprovals.stale_threshold_days"></span> dagen of langer geen activiteit hebben gehad.
+                                Capaciteit blijft gereserveerd zolang ze openstaan — beslis per geval om te contacteren of te annuleren.
+                            </p>
 
-                        <!-- Pagination -->
-                        <template x-if="quotePages > 1">
-                            <div class="stride-pagination">
-                                <button class="stride-page-btn" @click="quotePage--; loadQuotes()" :disabled="quotePage === 1">&laquo;</button>
-                                <span class="stride-page-info">Page <span x-text="quotePage"></span> of <span x-text="quotePages"></span></span>
-                                <button class="stride-page-btn" @click="quotePage++; loadQuotes()" :disabled="quotePage >= quotePages">&raquo;</button>
+                            <!-- Notifications bucket: the rule-driven action queue -->
+                            <div x-show="pendingApprovalsTab === 'notifications'">
+                                <template x-for="item in actionQueue" :key="item.rule + (item.subject_id || '')">
+                                    <div class="sd-action-item">
+                                        <span class="sd-badge--priority" :class="'sd-badge--priority-' + item.priority"></span>
+                                        <span class="sd-action-item__text" x-text="item.text"></span>
+                                        <a :href="item.url || '#'" class="sd-action-item__link" x-show="item.url" target="_blank">Bekijk →</a>
+                                        <button class="sd-action-item__dismiss" @click="dismissAction(item.rule, item.subject_id)" title="Negeren">×</button>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        <!-- Health checks footer -->
+                        <div class="sd-health-checks">
+                            <span class="sd-health-checks__label">Systeem</span>
+                            <span class="sd-health-checks__item">
+                                <span class="sd-health-dot" :class="'sd-health-dot--' + healthChecks.registration"></span>
+                                Inschrijvingen
+                            </span>
+                            <span class="sd-health-checks__item">
+                                <span class="sd-health-dot" :class="'sd-health-dot--' + healthChecks.mail"></span>
+                                E-mail
+                            </span>
+                            <span class="sd-health-checks__item" title="Rood: audit-plugin inactief — PII-inzages worden niet gelogd">
+                                <span class="sd-health-dot" :class="'sd-health-dot--' + (healthChecks.audit || 'green')"></span>
+                                Audittrail
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Komende sessies -->
+                    <div class="sd-card">
+                        <div class="sd-card__header">
+                            <h3 class="sd-card__title">Komende sessies</h3>
+                            <a href="#" class="sd-card__link" @click.prevent="switchView('edities')">Alles bekijken →</a>
+                        </div>
+                        <table class="sd-table">
+                            <thead>
+                                <tr>
+                                    <th>Editie</th>
+                                    <th>Datum</th>
+                                    <th>Tijd</th>
+                                    <th>Locatie</th>
+                                    <th>Capaciteit</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-if="loading && upcomingSessions.length === 0">
+                                    <template x-for="i in 4" :key="'sk-up-' + i">
+                                        <tr class="sd-skeleton-row">
+                                            <td><span class="sd-skeleton sd-skeleton--line"></span></td>
+                                            <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                            <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                            <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                            <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                            <td><span class="sd-skeleton sd-skeleton--badge"></span></td>
+                                        </tr>
+                                    </template>
+                                </template>
+                                <template x-for="session in upcomingSessions" :key="session.sessionId || session.id">
+                                    <tr :class="{'sd-table__row--today': session.isToday, 'sd-table__row--past': session.isPast}">
+                                        <td><a :href="'<?php echo esc_url($admin_url); ?>post.php?post=' + session.edition_id + '&action=edit'" x-text="session.edition_title"></a></td>
+                                        <td x-text="formatDate(session.date)"></td>
+                                        <td x-text="session.time"></td>
+                                        <td x-text="session.venue || '—'"></td>
+                                        <td><span class="sd-capacity" x-text="session.registered + '/' + (session.capacity || '∞')"></span></td>
+                                        <td><span class="sd-badge" :class="'sd-badge--' + session.status" x-text="session.status_label"></span></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                        <template x-if="upcomingSessions.length === 0 && !loading">
+                            <div class="sd-empty">
+                                <span class="sd-empty__icon">📅</span>
+                                <p class="sd-empty__text">Geen komende sessies</p>
+                                <p class="sd-empty__hint">Er staan geen sessies gepland voor de komende dagen.</p>
                             </div>
                         </template>
                     </div>
-                </div>
 
-                <!-- Quote Detail Slide-over -->
-                <template x-if="selectedQuote">
-                    <div class="stride-slideover-backdrop" @click.self="selectedQuote = null">
-                        <div class="stride-slideover">
-                            <div class="stride-slideover-header">
-                                <h3>Quote <span x-text="selectedQuote.number || '#' + selectedQuote.id"></span></h3>
-                                <button class="stride-slideover-close" @click="selectedQuote = null">&times;</button>
+                </div><!-- /.sd-layout__primary -->
+
+                <div class="sd-layout__secondary">
+
+                    <!-- Quick actions -->
+                    <div class="sd-card">
+                        <div class="sd-card__header">
+                            <h3 class="sd-card__title">Snelle acties</h3>
+                        </div>
+                        <div class="sd-card__body">
+                            <div class="sd-quick-actions">
+                                <a href="<?php echo esc_url($admin_url); ?>post-new.php?post_type=vad_edition" class="sd-btn sd-btn--ghost sd-btn--block">+ Nieuwe editie</a>
+                                <a href="<?php echo esc_url($admin_url); ?>post-new.php?post_type=vad_trajectory" class="sd-btn sd-btn--ghost sd-btn--block">+ Nieuw traject</a>
+                                <a href="#" @click.prevent="switchView('offertes')" class="sd-btn sd-btn--ghost sd-btn--block">Offertes beheren</a>
+                                <button class="sd-btn sd-btn--ghost sd-btn--block" @click="exportRegistrations()">Inschrijvingen exporteren</button>
                             </div>
-                            <div class="stride-slideover-tabs">
-                                <button class="stride-slideover-tab" :class="{ 'active': quoteTab === 'details' }" @click="quoteTab = 'details'">
-                                    Details
-                                </button>
-                                <button class="stride-slideover-tab" :class="{ 'active': quoteTab === 'items' }" @click="quoteTab = 'items'">
-                                    Items
-                                </button>
+                        </div>
+                    </div>
+
+                    <!-- Activity feed -->
+                    <div class="sd-card">
+                        <div class="sd-card__header">
+                            <h3 class="sd-card__title">Recente activiteit</h3>
+                        </div>
+                        <div class="sd-card__body">
+                            <template x-for="entry in activityFeed" :key="entry.id">
+                                <div class="sd-activity-item">
+                                    <div class="sd-activity-icon" :class="'sd-activity-icon--' + (entry.type || 'action')" :title="entry.actor_name || ''" x-html="activityIcon(entry.type)"></div>
+                                    <div class="sd-activity-item__content">
+                                        <template x-if="entry.target_url">
+                                            <a class="sd-activity-item__text sd-activity-item__text--link" :href="entry.target_url" x-text="entry.text"></a>
+                                        </template>
+                                        <template x-if="!entry.target_url">
+                                            <span class="sd-activity-item__text" x-text="entry.text"></span>
+                                        </template>
+                                        <span class="sd-activity-item__time" x-text="formatRelativeTime(entry.timestamp)"></span>
+                                    </div>
+                                </div>
+                            </template>
+                            <template x-if="activityFeed.length === 0 && !loading">
+                                <div class="sd-empty">
+                                    <span class="sd-empty__icon">·</span>
+                                    <p class="sd-empty__text">Nog geen activiteit</p>
+                                </div>
+                            </template>
+                            <!-- Activity feed shows last 10 items; no dedicated view yet -->
+                        </div>
+                    </div>
+
+                    <!-- User search widget -->
+                    <div class="sd-card">
+                        <div class="sd-card__header">
+                            <h3 class="sd-card__title">Gebruiker zoeken</h3>
+                        </div>
+                        <div class="sd-card__body">
+                            <input type="text"
+                                   class="sd-input"
+                                   placeholder="Zoek op naam of e-mail…"
+                                   @input.debounce.300ms="dashboardUserSearch($event.target.value)">
+                            <div class="sd-search-results" x-show="dashboardUserResults.length > 0">
+                                <template x-for="user in dashboardUserResults" :key="user.id">
+                                    <div class="sd-search-results__item" @click="selectUser(user); switchView('gebruikers')">
+                                        <div class="sd-avatar sd-avatar--sm" x-text="(user.name || '?')[0].toUpperCase()"></div>
+                                        <div>
+                                            <div class="sd-search-results__name" x-text="user.name"></div>
+                                            <div class="sd-search-results__email" x-text="user.email"></div>
+                                        </div>
+                                    </div>
+                                </template>
                             </div>
-                            <div class="stride-slideover-body">
-                                <!-- Details Tab -->
-                                <template x-if="quoteTab === 'details'">
-                                    <div class="stride-info-list">
-                                        <div class="stride-info-row">
-                                            <span class="stride-info-label">Status</span>
-                                            <span class="stride-badge" :class="'stride-badge-' + selectedQuote.status" x-text="selectedQuote.statusLabel || selectedQuote.status"></span>
-                                        </div>
-                                        <div class="stride-info-row">
-                                            <span class="stride-info-label">Customer</span>
-                                            <div>
-                                                <div x-text="selectedQuote.user?.name || 'Unknown'"></div>
-                                                <div class="stride-text-muted" x-text="selectedQuote.user?.email || ''"></div>
-                                            </div>
-                                        </div>
-                                        <div class="stride-info-row">
-                                            <span class="stride-info-label">Edition</span>
-                                            <span x-text="selectedQuote.edition?.title || '-'"></span>
-                                        </div>
-                                        <div class="stride-info-row">
-                                            <span class="stride-info-label">Created</span>
-                                            <span x-text="formatDate(selectedQuote.date)"></span>
-                                        </div>
-                                        <div class="stride-info-row" x-show="selectedQuote.sentAt">
-                                            <span class="stride-info-label">Sent</span>
-                                            <span x-text="formatDate(selectedQuote.sentAt)"></span>
-                                        </div>
-                                        <div class="stride-info-row" x-show="selectedQuote.validUntil">
-                                            <span class="stride-info-label">Valid Until</span>
-                                            <span x-text="formatDate(selectedQuote.validUntil)"></span>
-                                        </div>
-                                        <div class="stride-info-row stride-info-divider">
-                                            <span class="stride-info-label">Subtotal</span>
-                                            <span x-text="formatCurrency(selectedQuote.subtotal)"></span>
-                                        </div>
-                                        <div class="stride-info-row">
-                                            <span class="stride-info-label">BTW (21%)</span>
-                                            <span x-text="formatCurrency(selectedQuote.tax)"></span>
-                                        </div>
-                                        <div class="stride-info-row stride-info-total">
-                                            <span class="stride-info-label">Total</span>
-                                            <span class="stride-amount-lg" x-text="formatCurrency(selectedQuote.total)"></span>
-                                        </div>
-                                        <div class="stride-info-actions">
-                                            <a :href="selectedQuote.editUrl" class="stride-btn stride-btn-primary">
-                                                Edit in WP Admin
+                        </div>
+                    </div>
+
+                    <?php $tools = function_exists('stride_tools_menu_items') ? stride_tools_menu_items() : []; ?>
+                    <?php if (!empty($tools)): ?>
+                        <!-- Stride Tools quick links -->
+                        <div class="sd-card sd-tools-card">
+                            <div class="sd-card__header">
+                                <h3 class="sd-card__title">Tools</h3>
+                                <a class="sd-card__link"
+                                   href="<?php echo esc_url(admin_url('admin.php?page=stride-tools')); ?>">Alles bekijken →</a>
+                            </div>
+                            <div class="sd-card__body">
+                                <ul class="sd-tools-card__list">
+                                    <?php foreach ($tools as $tool):
+                                        $url  = admin_url('admin.php?page=' . urlencode($tool['slug']));
+                                        $icon = (string) ($tool['icon'] ?? 'dashicons-admin-generic');
+                                        ?>
+                                        <li>
+                                            <a href="<?php echo esc_url($url); ?>" class="sd-tools-card__item">
+                                                <span class="dashicons <?php echo esc_attr($icon); ?>"></span>
+                                                <span><?php echo esc_html($tool['label']); ?></span>
                                             </a>
-                                        </div>
-                                    </div>
-                                </template>
-
-                                <!-- Items Tab -->
-                                <template x-if="quoteTab === 'items'">
-                                    <div>
-                                        <template x-if="selectedQuote.lineItems && selectedQuote.lineItems.length > 0">
-                                            <div class="stride-quote-items">
-                                                <template x-for="(item, index) in selectedQuote.lineItems" :key="index">
-                                                    <div class="stride-quote-item">
-                                                        <div class="stride-quote-item-title" x-text="item.title || item.description || 'Item'"></div>
-                                                        <div class="stride-quote-item-details">
-                                                            <span class="stride-quote-item-type" x-text="item.type || ''"></span>
-                                                            <span class="stride-quote-item-price" x-text="formatCurrency(item.price || item.amount || 0)"></span>
-                                                        </div>
-                                                    </div>
-                                                </template>
-                                            </div>
-                                        </template>
-                                        <template x-if="!selectedQuote.lineItems || selectedQuote.lineItems.length === 0">
-                                            <div class="stride-empty-sm">No line items</div>
-                                        </template>
-                                    </div>
-                                </template>
+                                        </li>
+                                    <?php endforeach; ?>
+                                </ul>
                             </div>
                         </div>
+                    <?php endif; ?>
+
+                </div><!-- /.sd-layout__secondary -->
+            </div><!-- /.sd-layout -->
+
+        </div><!-- /view: dashboard -->
+
+        <!-- ========================================================
+             VIEW: EDITIES
+             ======================================================== -->
+        <div x-show="view === 'edities'">
+
+            <!-- Filters bar -->
+            <div class="sd-filters">
+                <input type="text"
+                       class="sd-input"
+                       placeholder="Zoek editie…"
+                       x-model="editionFilters.search"
+                       @input.debounce.300ms="loadEditions()">
+                <select class="sd-select" x-model="editionFilters.status" @change="loadEditions()">
+                    <option value="">Alle statussen</option>
+                    <option value="open">Open</option>
+                    <option value="full">Vol</option>
+                    <option value="cancelled">Geannuleerd</option>
+                    <option value="completed">Afgelopen</option>
+                    <option value="closed">Gesloten</option>
+                    <option value="announcement">Aankondiging</option>
+                </select>
+                <input type="text"
+                       class="sd-input"
+                       placeholder="Datumbereik"
+                       x-ref="dateRange">
+                <select class="sd-select" x-model="editionFilters.theme" @change="loadEditions()">
+                    <option value="0">Alle onderwerpen</option>
+                    <template x-for="term in editionTaxonomies.theme" :key="term.id">
+                        <option :value="term.id" x-text="term.name"></option>
+                    </template>
+                </select>
+                <select class="sd-select" x-model="editionFilters.format" @change="loadEditions()">
+                    <option value="0">Alle vormen</option>
+                    <template x-for="term in editionTaxonomies.format" :key="term.id">
+                        <option :value="term.id" x-text="term.name"></option>
+                    </template>
+                </select>
+                <select class="sd-select" x-model="editionFilters.tag" @change="loadEditions()" x-show="editionTaxonomies.tag.length > 0">
+                    <option value="0">Alle tags</option>
+                    <template x-for="term in editionTaxonomies.tag" :key="term.id">
+                        <option :value="term.id" x-text="term.name"></option>
+                    </template>
+                </select>
+                <button class="sd-btn sd-btn--ghost" @click="resetEditionFilters()">Reset</button>
+            </div>
+
+            <!-- Error state -->
+            <template x-if="errors.edities">
+                <div class="sd-error">
+                    <span class="sd-error__icon">!</span>
+                    <p class="sd-error__title" x-text="errors.edities"></p>
+                    <button class="sd-btn sd-btn--ghost sd-btn--sm" @click="loadEditions()">Opnieuw proberen</button>
+                </div>
+            </template>
+
+            <!-- Session table -->
+            <div class="sd-card" x-show="!errors.edities">
+                <table class="sd-table">
+                    <thead>
+                        <tr>
+                            <th>Editie</th>
+                            <th>Sessie</th>
+                            <th>Datum</th>
+                            <th>Tijd</th>
+                            <th>Locatie</th>
+                            <th>Capaciteit</th>
+                            <th>Status</th>
+                            <th>Acties</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Skeleton rows while loading (no data yet) -->
+                        <template x-if="loading && editionSessions.length === 0">
+                            <template x-for="i in 5" :key="'sk-' + i">
+                                <tr class="sd-skeleton-row">
+                                    <td><span class="sd-skeleton sd-skeleton--line"></span></td>
+                                    <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                    <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                    <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                    <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                    <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                    <td><span class="sd-skeleton sd-skeleton--badge"></span></td>
+                                    <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                </tr>
+                            </template>
+                        </template>
+                        <template x-for="session in editionSessions" :key="session.sessionId || session.id">
+                            <tr :class="{'sd-table__row--today': session.isToday, 'sd-table__row--past': session.isPast}"
+                                @click="openEdition(session.edition_id)">
+                                <td x-text="session.edition_title"></td>
+                                <td x-text="session.session_title || '—'"></td>
+                                <td x-text="formatDate(session.date)"></td>
+                                <td x-text="session.time"></td>
+                                <td x-text="session.venue || '—'"></td>
+                                <td><span class="sd-capacity" x-text="session.registered + '/' + (session.capacity || '∞')"></span></td>
+                                <td><span class="sd-badge" :class="'sd-badge--' + session.status" x-text="session.status_label"></span></td>
+                                <td>
+                                    <a :href="'<?php echo esc_url($admin_url); ?>post.php?post=' + session.edition_id + '&action=edit'"
+                                       class="sd-btn sd-btn--text"
+                                       @click.stop
+                                       title="Bewerken">✎</a>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <template x-if="editionSessions.length === 0 && !loading">
+                    <div class="sd-empty">
+                        <span class="sd-empty__icon">📅</span>
+                        <p class="sd-empty__text">Geen edities gevonden</p>
+                        <p class="sd-empty__hint">Probeer een ander filter of bereik.</p>
                     </div>
                 </template>
             </div>
-        </template>
 
-        <!-- Trajectories View -->
-        <template x-if="view === 'trajectories'">
-            <div>
-                <div class="stride-page-header">
-                    <h2 class="stride-page-title">Trajecten</h2>
-                </div>
+            <!-- Pagination -->
+            <div class="sd-pagination" x-show="editionPagination.totalPages > 1">
+                <button class="sd-btn sd-btn--ghost"
+                        :disabled="editionPagination.page <= 1"
+                        @click="editionPagination.page--; loadEditions()">← Vorige</button>
+                <span class="sd-pagination__info" x-text="'Pagina ' + editionPagination.page + ' van ' + editionPagination.totalPages"></span>
+                <button class="sd-btn sd-btn--ghost"
+                        :disabled="editionPagination.page >= editionPagination.totalPages"
+                        @click="editionPagination.page++; loadEditions()">Volgende →</button>
+            </div>
 
-                <!-- Filters -->
-                <div class="stride-card">
-                    <div class="stride-filters">
-                        <div class="stride-filter-group">
-                            <label class="stride-filter-label">Zoeken</label>
-                            <input type="text" class="stride-input" placeholder="Naam traject..." x-model="trajectoryFilters.search" @input.debounce.300ms="loadTrajectories()">
-                        </div>
-                        <div class="stride-filter-group">
-                            <label class="stride-filter-label">Status</label>
-                            <select class="stride-select" x-model="trajectoryFilters.status" @change="loadTrajectories()">
-                                <option value="">Alle Statussen</option>
-                                <option value="open">Open</option>
-                                <option value="closed">Gesloten</option>
-                                <option value="full">Volzet</option>
-                                <option value="draft">Concept</option>
-                            </select>
+            <!-- Edition slide-over -->
+            <div class="sd-slideout" x-show="slideoverOpen && selectedEdition" x-transition:enter="sd-slideout--enter" x-transition:leave="sd-slideout--leave">
+                <div class="sd-slideout__overlay" @click="closeSlideOver()"></div>
+                <div class="sd-slideout__panel">
+                    <div class="sd-slideout__header">
+                        <h3 x-text="selectedEdition?.title"></h3>
+                        <div class="sd-slideout__header-actions">
+                            <div class="sd-kebab" @click.outside="kebabOpen = null" x-show="selectedEdition?.id">
+                                <button class="sd-kebab__trigger"
+                                        @click="kebabOpen = kebabOpen === 'edition' ? null : 'edition'"
+                                        :aria-expanded="kebabOpen === 'edition' ? 'true' : 'false'"
+                                        aria-label="Meer acties">⋮</button>
+                                <div class="sd-kebab__menu" x-show="kebabOpen === 'edition'" x-cloak>
+                                    <a :href="selectedEdition?.editUrl || '#'" class="sd-kebab__item" target="_blank" @click="kebabOpen = null">Bewerk in WP →</a>
+                                    <div class="sd-kebab__divider"></div>
+                                    <a :href="editionExportUrl('excel')" class="sd-kebab__item" target="_blank" @click="kebabOpen = null">Exporteer studenten (Excel)</a>
+                                    <a :href="editionExportUrl('attendance')" class="sd-kebab__item" target="_blank" @click="kebabOpen = null">Exporteer aanwezigheid</a>
+                                    <a :href="editionExportUrl('namecards')" class="sd-kebab__item" target="_blank" @click="kebabOpen = null">Naamkaartjes (PDF)</a>
+                                    <div class="sd-kebab__divider"></div>
+                                    <a :href="selectedEdition?.editUrl || '#'" class="sd-kebab__item" target="_blank" @click="kebabOpen = null">Dupliceer / Annuleer in WP →</a>
+                                </div>
+                            </div>
+
+                            <button @click="closeSlideOver()" class="sd-slideout__close">×</button>
                         </div>
                     </div>
+                    <!-- Tabs -->
+                    <div class="sd-slideout__tabs">
+                        <button class="sd-slideout__tab" :class="{'active': editionTab === 'students'}" @click="editionTab = 'students'">Studenten</button>
+                        <button class="sd-slideout__tab" :class="{'active': editionTab === 'attendance'}" @click="editionTab = 'attendance'">Aanwezigheid</button>
+                        <button class="sd-slideout__tab" :class="{'active': editionTab === 'info'}" @click="editionTab = 'info'">Info</button>
+                    </div>
+                    <!-- Tab content -->
+                    <div class="sd-slideout__body">
 
-                    <!-- Table -->
-                    <div class="stride-table-wrapper">
-                        <template x-if="trajectoriesLoading">
-                            <div class="stride-loading">Trajecten laden...</div>
-                        </template>
-                        <template x-if="!trajectoriesLoading && trajectories.length === 0">
-                            <div class="stride-empty">
-                                <span class="dashicons dashicons-networking stride-empty-icon"></span>
-                                <p>Geen trajecten gevonden</p>
-                            </div>
-                        </template>
-                        <template x-if="!trajectoriesLoading && trajectories.length > 0">
-                            <table class="stride-table">
+                        <!-- Students tab -->
+                        <div x-show="editionTab === 'students'">
+                            <template x-for="reg in editionRegistrations" :key="reg.id">
+                                <div class="sd-student-row">
+                                    <div class="sd-avatar" x-text="(reg.name || '?')[0].toUpperCase()"></div>
+                                    <div>
+                                        <div class="sd-student-row__name">
+                                            <span x-text="reg.name"></span>
+                                            <em x-show="reg.anonymous" class="sd-anon-tag">(anoniem)</em>
+                                        </div>
+                                        <div class="sd-student-row__email" x-text="reg.email"></div>
+                                    </div>
+                                    <span class="sd-badge" :class="'sd-badge--' + reg.status" x-text="reg.status_label"></span>
+                                </div>
+                            </template>
+                            <template x-if="editionRegistrations.length === 0">
+                                <div class="sd-empty">
+                                    <span class="sd-empty__icon">👤</span>
+                                    <p class="sd-empty__text">Nog geen inschrijvingen</p>
+                                    <p class="sd-empty__hint">Zodra iemand zich inschrijft verschijnt die hier.</p>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Attendance tab -->
+                        <div x-show="editionTab === 'attendance'">
+                            <table class="sd-attendance-grid">
                                 <thead>
                                     <tr>
-                                        <th>Traject</th>
-                                        <th>Modus</th>
-                                        <th>Cursussen</th>
-                                        <th>Ingeschreven</th>
+                                        <th>Deelnemer</th>
+                                        <template x-for="session in editionSessionList" :key="session.id">
+                                            <th class="sd-attendance-grid__session" x-text="formatShortDate(session.date)"></th>
+                                        </template>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="reg in editionRegistrations" :key="reg.id">
+                                        <tr>
+                                            <td x-text="reg.name"></td>
+                                            <template x-for="session in editionSessionList" :key="session.id">
+                                                <td>
+                                                    <button
+                                                        class="sd-attendance-cell"
+                                                        :class="'sd-attendance-cell--' + (reg.attendance?.[session.id] || 'none')"
+                                                        @click="config.canManage && !session.isFuture && toggleAttendance(session.id, reg.user_id, reg.attendance?.[session.id])"
+                                                        :disabled="!config.canManage || session.isFuture"
+                                                        x-text="attendanceLabel(reg.attendance?.[session.id])">
+                                                    </button>
+                                                </td>
+                                            </template>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Info tab -->
+                        <div x-show="editionTab === 'info'">
+                            <dl class="sd-detail-list">
+                                <dt>Status</dt>
+                                <dd><span class="sd-badge" :class="'sd-badge--' + selectedEdition?.status" x-text="selectedEdition?.status_label"></span></dd>
+                                <dt>Periode</dt>
+                                <dd x-text="selectedEdition?.period"></dd>
+                                <dt>Locatie</dt>
+                                <dd x-text="selectedEdition?.venue || '—'"></dd>
+                                <dt>Prijs</dt>
+                                <dd x-text="formatCurrency(selectedEdition?.price)"></dd>
+                                <dt>Capaciteit</dt>
+                                <dd x-text="(selectedEdition?.registered || 0) + '/' + (selectedEdition?.capacity || '∞')"></dd>
+                            </dl>
+                        </div>
+
+                    </div><!-- /.sd-slideout__body -->
+                </div><!-- /.sd-slideout__panel -->
+            </div><!-- /.sd-slideout -->
+
+        </div><!-- /view: edities -->
+
+        <!-- ========================================================
+             VIEW: OFFERTES
+             ======================================================== -->
+        <div x-show="view === 'offertes'">
+
+            <!-- Filters bar -->
+            <div class="sd-filters">
+                <input type="text"
+                       class="sd-input"
+                       placeholder="Zoek offerte…"
+                       x-model="quoteFilters.search"
+                       @input.debounce.300ms="loadQuotes()">
+                <select class="sd-select" x-model="quoteFilters.status" @change="loadQuotes()">
+                    <option value="">Alle statussen</option>
+                    <option value="draft">Concept</option>
+                    <option value="sent">Verzonden</option>
+                    <option value="exported">Geëxporteerd</option>
+                    <option value="cancelled">Geannuleerd</option>
+                </select>
+                <select class="sd-select" x-model="quoteFilters.edition_id" @change="loadQuotes()">
+                    <option value="">Alle edities</option>
+                    <template x-for="ed in editionOptions" :key="ed.id">
+                        <option :value="ed.id" x-text="ed.title"></option>
+                    </template>
+                </select>
+                <button class="sd-btn sd-btn--ghost" @click="resetQuoteFilters()">Reset</button>
+            </div>
+
+            <!-- Error state -->
+            <template x-if="errors.offertes">
+                <div class="sd-error">
+                    <span class="sd-error__icon">!</span>
+                    <p class="sd-error__title" x-text="errors.offertes"></p>
+                    <button class="sd-btn sd-btn--ghost sd-btn--sm" @click="loadQuotes()">Opnieuw proberen</button>
+                </div>
+            </template>
+
+            <!-- Quotes table -->
+            <div class="sd-card" x-show="!errors.offertes">
+                <table class="sd-table">
+                    <thead>
+                        <tr>
+                            <th>Offerte #</th>
+                            <th>Klant</th>
+                            <th>E-mail</th>
+                            <th>Editie</th>
+                            <th>Datum</th>
+                            <th>Bedrag</th>
+                            <th>Status</th>
+                            <th>Acties</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="quote in quotes" :key="quote.id">
+                            <tr @click="openQuote(quote.id)">
+                                <td x-text="quote.number"></td>
+                                <td x-text="quote.client_name"></td>
+                                <td x-text="quote.client_email"></td>
+                                <td x-text="quote.edition_title || '—'"></td>
+                                <td x-text="formatDate(quote.date)"></td>
+                                <td x-text="formatCurrency(quote.total)"></td>
+                                <td><span class="sd-badge" :class="'sd-badge--' + quote.status" x-text="quote.status_label"></span></td>
+                                <td @click.stop>
+                                    <a :href="'<?php echo esc_url($admin_url); ?>post.php?post=' + quote.id + '&action=edit'"
+                                       class="sd-btn sd-btn--text"
+                                       title="Bewerken">✎</a>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <template x-if="quotes.length === 0 && !loading">
+                    <div class="sd-empty">
+                        <span class="sd-empty__icon">€</span>
+                        <p class="sd-empty__text">Geen offertes gevonden</p>
+                        <p class="sd-empty__hint">Probeer een ander filter of zoekterm.</p>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Pagination -->
+            <div class="sd-pagination" x-show="quotePagination.totalPages > 1">
+                <button class="sd-btn sd-btn--ghost"
+                        :disabled="quotePagination.page <= 1"
+                        @click="quotePagination.page--; loadQuotes()">← Vorige</button>
+                <span class="sd-pagination__info" x-text="'Pagina ' + quotePagination.page + ' van ' + quotePagination.totalPages"></span>
+                <button class="sd-btn sd-btn--ghost"
+                        :disabled="quotePagination.page >= quotePagination.totalPages"
+                        @click="quotePagination.page++; loadQuotes()">Volgende →</button>
+            </div>
+
+            <!-- Quote slide-over -->
+            <div class="sd-slideout" x-show="slideoverOpen && selectedQuote" x-transition:enter="sd-slideout--enter" x-transition:leave="sd-slideout--leave">
+                <div class="sd-slideout__overlay" @click="closeSlideOver()"></div>
+                <div class="sd-slideout__panel">
+                    <div class="sd-slideout__header">
+                        <h3>Offerte <span x-text="selectedQuote?.number"></span></h3>
+                        <div class="sd-slideout__header-actions">
+                            <div class="sd-kebab" @click.outside="kebabOpen = null" x-show="selectedQuote?.id">
+                                <button class="sd-kebab__trigger"
+                                        @click="kebabOpen = kebabOpen === 'quote' ? null : 'quote'"
+                                        :aria-expanded="kebabOpen === 'quote' ? 'true' : 'false'"
+                                        aria-label="Meer acties">⋮</button>
+                                <div class="sd-kebab__menu" x-show="kebabOpen === 'quote'" x-cloak>
+                                    <a :href="selectedQuote?.editUrl || '#'" class="sd-kebab__item" target="_blank" @click="kebabOpen = null">Bewerk in WP →</a>
+                                    <div class="sd-kebab__divider"></div>
+                                    <a :href="selectedQuote?.editUrl || '#'" class="sd-kebab__item" target="_blank" @click="kebabOpen = null">PDF tonen / verzenden →</a>
+                                    <a :href="selectedQuote?.editUrl || '#'" class="sd-kebab__item" target="_blank" @click="kebabOpen = null">Markeer geëxporteerd →</a>
+                                    <div class="sd-kebab__divider" x-show="config.canManage && selectedQuote?.status !== 'cancelled'"></div>
+                                    <a :href="selectedQuote?.editUrl || '#'"
+                                       class="sd-kebab__item sd-kebab__item--danger"
+                                       target="_blank"
+                                       @click="kebabOpen = null"
+                                       x-show="config.canManage && selectedQuote?.status !== 'cancelled'">Annuleer offerte →</a>
+                                </div>
+                            </div>
+
+                            <button @click="closeSlideOver()" class="sd-slideout__close">×</button>
+                        </div>
+                    </div>
+                    <!-- Tabs -->
+                    <div class="sd-slideout__tabs">
+                        <button class="sd-slideout__tab" :class="{'active': quoteTab === 'details'}" @click="quoteTab = 'details'">Details</button>
+                        <button class="sd-slideout__tab" :class="{'active': quoteTab === 'items'}" @click="quoteTab = 'items'">Regels</button>
+                    </div>
+                    <!-- Tab content -->
+                    <div class="sd-slideout__body">
+
+                        <!-- Details tab -->
+                        <div x-show="quoteTab === 'details'">
+                            <dl class="sd-detail-list">
+                                <dt>Status</dt>
+                                <dd><span class="sd-badge" :class="'sd-badge--' + selectedQuote?.status" x-text="selectedQuote?.status_label"></span></dd>
+                                <dt>Klant</dt>
+                                <dd x-text="selectedQuote?.client_name"></dd>
+                                <dt>E-mail</dt>
+                                <dd x-text="selectedQuote?.client_email"></dd>
+                                <dt>Editie</dt>
+                                <dd x-text="selectedQuote?.edition_title || '—'"></dd>
+                                <dt>Datum</dt>
+                                <dd x-text="formatDate(selectedQuote?.date)"></dd>
+                                <dt>Subtotaal</dt>
+                                <dd x-text="formatCurrency(selectedQuote?.subtotal)"></dd>
+                                <dt>BTW</dt>
+                                <dd x-text="formatCurrency(selectedQuote?.tax)"></dd>
+                                <dt>Totaal</dt>
+                                <dd x-text="formatCurrency(selectedQuote?.total)"></dd>
+                            </dl>
+                        </div>
+
+                        <!-- Items tab -->
+                        <div x-show="quoteTab === 'items'">
+                            <table class="sd-table">
+                                <thead>
+                                    <tr>
+                                        <th>Omschrijving</th>
+                                        <th>Aantal</th>
                                         <th>Prijs</th>
-                                        <th>Status</th>
+                                        <th>Totaal</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <template x-for="trajectory in trajectories" :key="trajectory.id">
-                                        <tr @click="openTrajectory(trajectory)" class="stride-clickable">
-                                            <td>
-                                                <div class="stride-trajectory-name" x-text="trajectory.title"></div>
-                                                <div class="stride-trajectory-deadline" x-show="trajectory.enrollmentDeadline">
-                                                    Deadline: <span x-text="formatDate(trajectory.enrollmentDeadline)"></span>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span class="stride-badge stride-badge-info" x-text="trajectory.modeLabel"></span>
-                                            </td>
-                                            <td x-text="trajectory.courseCount + ' cursussen'"></td>
-                                            <td>
-                                                <span x-text="trajectory.enrolledCount"></span>
-                                                <span x-show="trajectory.capacity > 0" class="stride-capacity-indicator">
-                                                    / <span x-text="trajectory.capacity"></span>
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <span class="stride-amount" x-text="'€ ' + trajectory.priceFormatted"></span>
-                                            </td>
-                                            <td>
-                                                <span class="stride-badge" :class="'stride-badge-' + trajectory.status" x-text="trajectory.statusLabel"></span>
-                                            </td>
+                                    <template x-for="item in selectedQuote?.items || []" :key="item.id">
+                                        <tr>
+                                            <td x-text="item.description"></td>
+                                            <td x-text="item.quantity"></td>
+                                            <td x-text="formatCurrency(item.price)"></td>
+                                            <td x-text="formatCurrency(item.total)"></td>
                                         </tr>
                                     </template>
                                 </tbody>
                             </table>
-                        </template>
+                        </div>
 
-                        <!-- Pagination -->
-                        <template x-if="trajectoryPages > 1">
-                            <div class="stride-pagination">
-                                <button class="stride-page-btn" @click="trajectoryPage--; loadTrajectories()" :disabled="trajectoryPage === 1">&laquo;</button>
-                                <span class="stride-page-info">Pagina <span x-text="trajectoryPage"></span> van <span x-text="trajectoryPages"></span></span>
-                                <button class="stride-page-btn" @click="trajectoryPage++; loadTrajectories()" :disabled="trajectoryPage >= trajectoryPages">&raquo;</button>
-                            </div>
-                        </template>
-                    </div>
+                    </div><!-- /.sd-slideout__body -->
+                </div><!-- /.sd-slideout__panel -->
+            </div><!-- /.sd-slideout -->
+
+        </div><!-- /view: offertes -->
+
+        <!-- ========================================================
+             VIEW: TRAJECTEN
+             ======================================================== -->
+        <div x-show="view === 'trajecten'">
+
+            <!-- Filters bar -->
+            <div class="sd-filters">
+                <input type="text"
+                       class="sd-input"
+                       placeholder="Zoek traject…"
+                       x-model="trajectoryFilters.search"
+                       @input.debounce.300ms="loadTrajectories()">
+                <select class="sd-select" x-model="trajectoryFilters.status" @change="loadTrajectories()">
+                    <option value="">Alle statussen</option>
+                    <option value="open">Open</option>
+                    <option value="closed">Gesloten</option>
+                    <option value="full">Volzet</option>
+                    <option value="draft">Concept</option>
+                    <option value="archived">Gearchiveerd</option>
+                </select>
+                <button class="sd-btn sd-btn--ghost" @click="resetTrajectoryFilters()">Reset</button>
+            </div>
+
+            <!-- Error state -->
+            <template x-if="errors.trajecten">
+                <div class="sd-error">
+                    <span class="sd-error__icon">!</span>
+                    <p class="sd-error__title" x-text="errors.trajecten"></p>
+                    <button class="sd-btn sd-btn--ghost sd-btn--sm" @click="loadTrajectories()">Opnieuw proberen</button>
                 </div>
+            </template>
 
-                <!-- Trajectory Detail Slide-over -->
-                <template x-if="selectedTrajectory">
-                    <div class="stride-slideover-backdrop" @click.self="selectedTrajectory = null">
-                        <div class="stride-slideover stride-slideover-wide">
-                            <div class="stride-slideover-header">
-                                <h3 x-text="selectedTrajectory.title"></h3>
-                                <button class="stride-slideover-close" @click="selectedTrajectory = null">&times;</button>
-                            </div>
-                            <div class="stride-slideover-tabs">
-                                <button class="stride-slideover-tab" :class="{ 'active': trajectoryTab === 'details' }" @click="trajectoryTab = 'details'">
-                                    Details
-                                </button>
-                                <button class="stride-slideover-tab" :class="{ 'active': trajectoryTab === 'courses' }" @click="trajectoryTab = 'courses'">
-                                    Cursussen
-                                </button>
-                                <button class="stride-slideover-tab" :class="{ 'active': trajectoryTab === 'students' }" @click="trajectoryTab = 'students'">
-                                    Studenten
-                                </button>
-                            </div>
-                            <div class="stride-slideover-body">
-                                <!-- Details Tab -->
-                                <template x-if="trajectoryTab === 'details'">
-                                    <div class="stride-info-list">
-                                        <div class="stride-info-row">
-                                            <span class="stride-info-label">Status</span>
-                                            <span class="stride-badge" :class="'stride-badge-' + selectedTrajectory.status" x-text="selectedTrajectory.statusLabel"></span>
-                                        </div>
-                                        <div class="stride-info-row">
-                                            <span class="stride-info-label">Modus</span>
-                                            <span class="stride-badge stride-badge-info" x-text="selectedTrajectory.modeLabel"></span>
-                                        </div>
-                                        <div class="stride-info-row">
-                                            <span class="stride-info-label">Capaciteit</span>
-                                            <span x-text="selectedTrajectory.capacity > 0 ? selectedTrajectory.capacity + ' plaatsen' : 'Onbeperkt'"></span>
-                                        </div>
-                                        <div class="stride-info-row">
-                                            <span class="stride-info-label">Ingeschreven</span>
-                                            <span x-text="selectedTrajectory.enrolledCount + ' studenten'"></span>
-                                        </div>
-                                        <div class="stride-info-row stride-info-divider">
-                                            <span class="stride-info-label">Prijs (lid)</span>
-                                            <span class="stride-amount" x-text="'€ ' + selectedTrajectory.priceFormatted"></span>
-                                        </div>
-                                        <div class="stride-info-row" x-show="selectedTrajectory.priceNonMember > 0">
-                                            <span class="stride-info-label">Prijs (niet-lid)</span>
-                                            <span class="stride-amount" x-text="'€ ' + selectedTrajectory.priceNonMemberFormatted"></span>
-                                        </div>
-                                        <div class="stride-info-row stride-info-divider" x-show="selectedTrajectory.enrollmentDeadline">
-                                            <span class="stride-info-label">Inschrijfdeadline</span>
-                                            <span x-text="formatDate(selectedTrajectory.enrollmentDeadline)"></span>
-                                        </div>
-                                        <div class="stride-info-row" x-show="selectedTrajectory.choiceAvailableDate">
-                                            <span class="stride-info-label">Keuzemoment start</span>
-                                            <span x-text="formatDate(selectedTrajectory.choiceAvailableDate)"></span>
-                                        </div>
-                                        <div class="stride-info-row" x-show="selectedTrajectory.choiceDeadline">
-                                            <span class="stride-info-label">Keuzemoment deadline</span>
-                                            <span x-text="formatDate(selectedTrajectory.choiceDeadline)"></span>
-                                        </div>
-                                        <div class="stride-info-actions">
-                                            <a :href="selectedTrajectory.editUrl" class="stride-btn stride-btn-primary">
-                                                Bewerken in WP Admin
-                                            </a>
-                                        </div>
-                                    </div>
-                                </template>
+            <!-- Trajectory table -->
+            <div class="sd-card" x-show="!errors.trajecten">
+                <table class="sd-table">
+                    <thead>
+                        <tr>
+                            <th>Traject</th>
+                            <th>Modus</th>
+                            <th>Cursussen</th>
+                            <th>Ingeschreven</th>
+                            <th>Prijs</th>
+                            <th>Deadline</th>
+                            <th>Status</th>
+                            <th>Acties</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="traj in trajectories" :key="traj.id">
+                            <tr @click="openTrajectory(traj.id)">
+                                <td x-text="traj.title"></td>
+                                <td x-text="traj.modeLabel || traj.mode || '—'"></td>
+                                <td x-text="traj.course_count"></td>
+                                <td x-text="traj.registered"></td>
+                                <td x-text="formatCurrency(traj.price)"></td>
+                                <td x-text="traj.deadline ? formatDate(traj.deadline) : '—'"></td>
+                                <td><span class="sd-badge" :class="'sd-badge--' + traj.status" x-text="traj.status_label"></span></td>
+                                <td @click.stop>
+                                    <a :href="'<?php echo esc_url($admin_url); ?>post.php?post=' + traj.id + '&action=edit'"
+                                       class="sd-btn sd-btn--text"
+                                       title="Bewerken">✎</a>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <template x-if="trajectories.length === 0 && !loading">
+                    <div class="sd-empty">
+                        <span class="sd-empty__icon">🗂</span>
+                        <p class="sd-empty__text">Geen trajecten gevonden</p>
+                        <p class="sd-empty__hint">Probeer een ander filter of maak een nieuw traject aan.</p>
+                    </div>
+                </template>
+            </div>
 
-                                <!-- Courses Tab -->
-                                <template x-if="trajectoryTab === 'courses'">
+            <!-- Pagination -->
+            <div class="sd-pagination" x-show="trajectoryPagination.totalPages > 1">
+                <button class="sd-btn sd-btn--ghost"
+                        :disabled="trajectoryPagination.page <= 1"
+                        @click="trajectoryPagination.page--; loadTrajectories()">← Vorige</button>
+                <span class="sd-pagination__info" x-text="'Pagina ' + trajectoryPagination.page + ' van ' + trajectoryPagination.totalPages"></span>
+                <button class="sd-btn sd-btn--ghost"
+                        :disabled="trajectoryPagination.page >= trajectoryPagination.totalPages"
+                        @click="trajectoryPagination.page++; loadTrajectories()">Volgende →</button>
+            </div>
+
+            <!-- Trajectory slide-over -->
+            <div class="sd-slideout" x-show="slideoverOpen && selectedTrajectory" x-transition:enter="sd-slideout--enter" x-transition:leave="sd-slideout--leave">
+                <div class="sd-slideout__overlay" @click="closeSlideOver()"></div>
+                <div class="sd-slideout__panel">
+                    <div class="sd-slideout__header">
+                        <h3 x-text="selectedTrajectory?.title"></h3>
+                        <div class="sd-slideout__header-actions">
+                            <div class="sd-kebab" @click.outside="kebabOpen = null" x-show="selectedTrajectory?.id">
+                                <button class="sd-kebab__trigger"
+                                        @click="kebabOpen = kebabOpen === 'trajectory' ? null : 'trajectory'"
+                                        :aria-expanded="kebabOpen === 'trajectory' ? 'true' : 'false'"
+                                        aria-label="Meer acties">⋮</button>
+                                <div class="sd-kebab__menu" x-show="kebabOpen === 'trajectory'" x-cloak>
+                                    <a :href="selectedTrajectory?.editUrl || '#'" class="sd-kebab__item" target="_blank" @click="kebabOpen = null">Bewerk in WP →</a>
+                                    <div class="sd-kebab__divider"></div>
+                                    <a :href="selectedTrajectory?.editUrl || '#'" class="sd-kebab__item sd-kebab__item--danger" target="_blank" @click="kebabOpen = null">Annuleer in WP →</a>
+                                </div>
+                            </div>
+
+                            <button @click="closeSlideOver()" class="sd-slideout__close">×</button>
+                        </div>
+                    </div>
+                    <!-- Tabs -->
+                    <div class="sd-slideout__tabs">
+                        <button class="sd-slideout__tab" :class="{'active': trajectoryTab === 'details'}" @click="trajectoryTab = 'details'">Details</button>
+                        <button class="sd-slideout__tab" :class="{'active': trajectoryTab === 'courses'}" @click="trajectoryTab = 'courses'">Cursussen</button>
+                        <button class="sd-slideout__tab" :class="{'active': trajectoryTab === 'students'}" @click="trajectoryTab = 'students'">Studenten</button>
+                    </div>
+                    <!-- Tab content -->
+                    <div class="sd-slideout__body">
+
+                        <!-- Details tab -->
+                        <div x-show="trajectoryTab === 'details'">
+                            <dl class="sd-detail-list">
+                                <dt>Status</dt>
+                                <dd><span class="sd-badge" :class="'sd-badge--' + selectedTrajectory?.status" x-text="selectedTrajectory?.status_label"></span></dd>
+                                <dt>Modus</dt>
+                                <dd x-text="selectedTrajectory?.modeLabel || selectedTrajectory?.mode || '—'"></dd>
+                                <dt>Prijs</dt>
+                                <dd x-text="formatCurrency(selectedTrajectory?.price)"></dd>
+                                <dt>Deadline</dt>
+                                <dd x-text="selectedTrajectory?.deadline ? formatDate(selectedTrajectory.deadline) : '—'"></dd>
+                                <dt>Ingeschreven</dt>
+                                <dd x-text="selectedTrajectory?.registered"></dd>
+                            </dl>
+                        </div>
+
+                        <!-- Courses tab -->
+                        <div x-show="trajectoryTab === 'courses'">
+                            <template x-for="course in trajectoryCourses" :key="course.id">
+                                <div class="sd-student-row">
                                     <div>
-                                        <template x-if="selectedTrajectory.courses && selectedTrajectory.courses.length > 0">
-                                            <div class="stride-course-list">
-                                                <template x-for="(course, index) in selectedTrajectory.courses" :key="index">
-                                                    <div class="stride-course-item">
-                                                        <div class="stride-course-item-header">
-                                                            <span class="stride-course-item-title" x-text="course.title || 'Edition #' + course.editionId"></span>
-                                                            <span class="stride-badge" :class="course.type === 'required' ? 'stride-badge-primary' : 'stride-badge-info'" x-text="course.type === 'required' ? 'Verplicht' : 'Keuze'"></span>
-                                                        </div>
-                                                    </div>
-                                                </template>
-                                            </div>
-                                        </template>
-                                        <template x-if="!selectedTrajectory.courses || selectedTrajectory.courses.length === 0">
-                                            <div class="stride-empty-sm">Geen cursussen gekoppeld</div>
-                                        </template>
+                                        <div class="sd-student-row__name" x-text="course.title"></div>
+                                        <div class="sd-student-row__email" x-text="course.edition_count + ' editie(s)'"></div>
                                     </div>
-                                </template>
+                                </div>
+                            </template>
+                            <template x-if="trajectoryCourses.length === 0">
+                                <div class="sd-empty">
+                                    <span class="sd-empty__icon">📚</span>
+                                    <p class="sd-empty__text">Geen cursussen gekoppeld</p>
+                                    <p class="sd-empty__hint">Voeg cursussen toe aan dit traject in de WordPress-editor.</p>
+                                </div>
+                            </template>
+                        </div>
 
-                                <!-- Students Tab -->
-                                <template x-if="trajectoryTab === 'students'">
+                        <!-- Students tab -->
+                        <div x-show="trajectoryTab === 'students'">
+                            <template x-for="reg in trajectoryRegistrations" :key="reg.id">
+                                <div class="sd-student-row">
+                                    <div class="sd-avatar" x-text="(reg.name || '?')[0].toUpperCase()"></div>
                                     <div>
-                                        <template x-if="selectedTrajectory.enrolledUsers && selectedTrajectory.enrolledUsers.length > 0">
-                                            <table class="stride-table stride-table-compact">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Naam</th>
-                                                        <th>Email</th>
-                                                        <th>Status</th>
-                                                        <th>Ingeschreven</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    <template x-for="student in selectedTrajectory.enrolledUsers" :key="student.id">
-                                                        <tr>
-                                                            <td x-text="student.name"></td>
-                                                            <td>
-                                                                <a :href="'mailto:' + student.email" class="stride-link" x-text="student.email"></a>
-                                                            </td>
-                                                            <td>
-                                                                <span class="stride-badge" :class="'stride-badge-' + student.status" x-text="student.status"></span>
-                                                            </td>
-                                                            <td x-text="formatDate(student.enrolledAt)"></td>
-                                                        </tr>
-                                                    </template>
-                                                </tbody>
-                                            </table>
-                                        </template>
-                                        <template x-if="!selectedTrajectory.enrolledUsers || selectedTrajectory.enrolledUsers.length === 0">
-                                            <div class="stride-empty-sm">Nog geen studenten ingeschreven</div>
-                                        </template>
+                                        <div class="sd-student-row__name" x-text="reg.name"></div>
+                                        <div class="sd-student-row__email" x-text="reg.email"></div>
                                     </div>
-                                </template>
-                            </div>
+                                    <span class="sd-badge" :class="'sd-badge--' + reg.status" x-text="reg.status_label"></span>
+                                </div>
+                            </template>
+                            <template x-if="trajectoryRegistrations.length === 0">
+                                <div class="sd-empty">
+                                    <span class="sd-empty__icon">👤</span>
+                                    <p class="sd-empty__text">Nog geen inschrijvingen</p>
+                                </div>
+                            </template>
+                        </div>
+
+                    </div><!-- /.sd-slideout__body -->
+                </div><!-- /.sd-slideout__panel -->
+            </div><!-- /.sd-slideout -->
+
+        </div><!-- /view: trajecten -->
+
+        <!-- ========================================================
+             VIEW: GEBRUIKERS
+             ======================================================== -->
+        <div x-show="view === 'gebruikers'">
+
+            <!-- Search bar -->
+            <div class="sd-filters">
+                <input type="text"
+                       class="sd-input sd-input--lg"
+                       placeholder="Zoek gebruiker op naam, e-mail of organisatie…"
+                       @input.debounce.300ms="searchUsers($event.target.value)">
+            </div>
+
+            <!-- Search results (mini cards) -->
+            <div class="sd-user-results" x-show="userSearchResults.length > 0 && !selectedUser">
+                <template x-for="user in userSearchResults" :key="user.id">
+                    <div class="sd-user-results__card" @click="selectUser(user)">
+                        <div class="sd-avatar" x-text="(user.name || '?')[0].toUpperCase()"></div>
+                        <div>
+                            <div class="sd-user-results__name" x-text="user.name"></div>
+                            <div class="sd-user-results__email" x-text="user.email"></div>
+                            <div class="sd-user-results__org" x-text="user.organisation || ''" x-show="user.organisation"></div>
                         </div>
                     </div>
                 </template>
             </div>
-        </template>
+
+            <!-- User detail (two-column) -->
+            <div class="sd-layout" x-show="selectedUser">
+
+                <div class="sd-layout__primary">
+
+                    <!-- User header card (click-to-expand profile details) -->
+                    <div class="sd-card sd-user-card" :class="{ 'sd-user-card--open': userProfileOpen }">
+                        <div class="sd-card__body">
+                            <div class="sd-user-header sd-user-header--toggle"
+                                 @click="toggleUserProfile()"
+                                 role="button"
+                                 :aria-expanded="userProfileOpen ? 'true' : 'false'">
+                                <div class="sd-avatar sd-avatar--lg" x-text="(selectedUser?.name || '?')[0].toUpperCase()"></div>
+                                <div class="sd-user-header__info">
+                                    <h3 x-text="selectedUser?.name"></h3>
+                                    <div x-text="selectedUser?.email"></div>
+                                    <div x-text="selectedUser?.organisation || ''" x-show="selectedUser?.organisation"></div>
+                                </div>
+                                <div class="sd-user-header__actions" @click.stop>
+                                    <button class="sd-btn sd-btn--ghost" @click="impersonateUser(selectedUser?.id)" x-show="config.canManage && !selectedUser?.isAnonymised">Bekijk als gebruiker</button>
+                                    <a :href="selectedUser?.anonymiseUrl || '#'"
+                                       class="sd-btn sd-btn--ghost"
+                                       x-show="config.canManage && selectedUser?.id && !selectedUser?.isAnonymised && selectedUser?.anonymiseUrl"
+                                       @click="if (!confirmAnonymise()) { $event.preventDefault(); }">Anonimiseer</a>
+                                    <span class="sd-tag sd-tag--muted" x-show="selectedUser?.isAnonymised" x-text="selectedUser?.anonymisedLabel"></span>
+                                    <button class="sd-btn sd-btn--text" @click="closeUserDetail()" x-text="userDetailReturnTo === 'dashboard' ? '← Terug naar dashboard' : '← Terug'"></button>
+                                </div>
+                                <span class="sd-user-header__caret" aria-hidden="true">▾</span>
+                            </div>
+
+                            <!-- Collapsible profile sections -->
+                            <div class="sd-user-profile" x-show="userProfileOpen" x-cloak>
+
+                                <!-- Persoonlijke gegevens -->
+                                <div class="sd-profile-section">
+                                    <div class="sd-profile-section__header">
+                                        <h4 class="sd-profile-section__title">Persoonsgegevens</h4>
+                                        <div class="sd-profile-section__actions" x-show="config.canManage && !selectedUser?.isAnonymised">
+                                            <template x-if="profileEdit.personal">
+                                                <span>
+                                                    <button class="sd-btn sd-btn--primary sd-btn--sm" @click="saveProfile('personal')" :disabled="profileSaving">
+                                                        <span x-show="!profileSaving">Opslaan</span>
+                                                        <span x-show="profileSaving">Bezig…</span>
+                                                    </button>
+                                                    <button class="sd-btn sd-btn--ghost sd-btn--sm" @click="cancelProfileEdit('personal')" :disabled="profileSaving">Annuleer</button>
+                                                </span>
+                                            </template>
+                                            <template x-if="!profileEdit.personal">
+                                                <button class="sd-btn sd-btn--ghost sd-btn--sm" @click="startProfileEdit('personal')">Bewerken</button>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                    <!-- Read mode -->
+                                    <dl class="sd-profile-grid" x-show="!profileEdit.personal">
+                                        <div><dt>Voornaam</dt><dd x-text="selectedUser?.first_name || '—'"></dd></div>
+                                        <div><dt>Achternaam</dt><dd x-text="selectedUser?.last_name || '—'"></dd></div>
+                                        <div><dt>E-mail</dt><dd x-text="selectedUser?.email || '—'"></dd></div>
+                                        <div><dt>Telefoon</dt>
+                                            <dd>
+                                                <span x-text="selectedUser?.phone || '—'"></span>
+                                            </dd>
+                                        </div>
+                                        <div><dt>Organisatie</dt><dd x-text="selectedUser?.organisation || '—'"></dd></div>
+                                        <div><dt>Afdeling</dt><dd x-text="selectedUser?.department || '—'"></dd></div>
+                                        <div>
+                                            <dt>Rijksregisternummer</dt>
+                                            <dd>
+                                                <span x-show="!selectedUser?.national_id_present">—</span>
+                                                <span x-show="selectedUser?.national_id_present" class="sd-sensitive">
+                                                    <span x-text="revealed.national_id || selectedUser?.national_id"></span>
+                                                    <button class="sd-btn sd-btn--text sd-btn--xs"
+                                                            @click="revealField('national_id')"
+                                                            x-show="!revealed.national_id">Toon</button>
+                                                </span>
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt>Geboortedatum</dt>
+                                            <dd>
+                                                <span x-show="!selectedUser?.date_of_birth_present">—</span>
+                                                <span x-show="selectedUser?.date_of_birth_present" class="sd-sensitive">
+                                                    <span x-text="revealed.date_of_birth || selectedUser?.date_of_birth"></span>
+                                                    <button class="sd-btn sd-btn--text sd-btn--xs"
+                                                            @click="revealField('date_of_birth')"
+                                                            x-show="!revealed.date_of_birth">Toon</button>
+                                                </span>
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt>RIZIV-nummer</dt>
+                                            <dd>
+                                                <span x-show="!selectedUser?.professional_license_number_present">—</span>
+                                                <span x-show="selectedUser?.professional_license_number_present" class="sd-sensitive">
+                                                    <span x-text="revealed.professional_license_number || selectedUser?.professional_license_number"></span>
+                                                    <button class="sd-btn sd-btn--text sd-btn--xs"
+                                                            @click="revealField('professional_license_number')"
+                                                            x-show="!revealed.professional_license_number">Toon</button>
+                                                </span>
+                                            </dd>
+                                        </div>
+                                    </dl>
+
+                                    <!-- Edit mode -->
+                                    <div class="sd-profile-grid sd-profile-grid--edit" x-show="profileEdit.personal">
+                                        <div><label>Voornaam</label><input type="text" class="sd-input" x-model="profileDraft.first_name"></div>
+                                        <div><label>Achternaam</label><input type="text" class="sd-input" x-model="profileDraft.last_name"></div>
+                                        <div><label>E-mail</label><input type="email" class="sd-input" x-model="profileDraft.email"></div>
+                                        <div><label>Telefoon</label><input type="text" class="sd-input" x-model="profileDraft.phone"></div>
+                                        <div><label>Organisatie</label><input type="text" class="sd-input" x-model="profileDraft.organisation"></div>
+                                        <div><label>Afdeling</label><input type="text" class="sd-input" x-model="profileDraft.department"></div>
+                                        <div><label>Rijksregisternummer</label><input type="text" class="sd-input" x-model="profileDraft.national_id" :placeholder="selectedUser?.national_id_present ? '(ongewijzigd laten? leeg laten)' : ''"></div>
+                                        <div><label>Geboortedatum</label><input type="date" class="sd-input" x-model="profileDraft.date_of_birth"></div>
+                                        <div><label>RIZIV-nummer</label><input type="text" class="sd-input" x-model="profileDraft.professional_license_number"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Facturatie -->
+                                <div class="sd-profile-section">
+                                    <div class="sd-profile-section__header">
+                                        <h4 class="sd-profile-section__title">Facturatiegegevens</h4>
+                                        <div class="sd-profile-section__actions" x-show="config.canManage && !selectedUser?.isAnonymised">
+                                            <template x-if="profileEdit.billing">
+                                                <span>
+                                                    <button class="sd-btn sd-btn--primary sd-btn--sm" @click="saveProfile('billing')" :disabled="profileSaving">
+                                                        <span x-show="!profileSaving">Opslaan</span>
+                                                        <span x-show="profileSaving">Bezig…</span>
+                                                    </button>
+                                                    <button class="sd-btn sd-btn--ghost sd-btn--sm" @click="cancelProfileEdit('billing')" :disabled="profileSaving">Annuleer</button>
+                                                </span>
+                                            </template>
+                                            <template x-if="!profileEdit.billing">
+                                                <button class="sd-btn sd-btn--ghost sd-btn--sm" @click="startProfileEdit('billing')">Bewerken</button>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                    <dl class="sd-profile-grid" x-show="!profileEdit.billing">
+                                        <div><dt>Bedrijfsnaam</dt><dd x-text="selectedUser?.billing_company || '—'"></dd></div>
+                                        <div><dt>BTW-nummer</dt><dd x-text="selectedUser?.billing_vat || '—'"></dd></div>
+                                        <div><dt>Adres</dt><dd x-text="selectedUser?.billing_address_1 || '—'"></dd></div>
+                                        <div><dt>Postcode</dt><dd x-text="selectedUser?.billing_postcode || '—'"></dd></div>
+                                        <div><dt>Stad</dt><dd x-text="selectedUser?.billing_city || '—'"></dd></div>
+                                        <div><dt>Facturatie-e-mail</dt><dd x-text="selectedUser?.invoice_email || '—'"></dd></div>
+                                        <div><dt>GLN-nummer</dt><dd x-text="selectedUser?.gln_number || '—'"></dd></div>
+                                    </dl>
+
+                                    <div class="sd-profile-grid sd-profile-grid--edit" x-show="profileEdit.billing">
+                                        <div><label>Bedrijfsnaam</label><input type="text" class="sd-input" x-model="profileDraft.company"></div>
+                                        <div><label>BTW-nummer</label><input type="text" class="sd-input" x-model="profileDraft.vat_number"></div>
+                                        <div><label>Adres</label><input type="text" class="sd-input" x-model="profileDraft.address"></div>
+                                        <div><label>Postcode</label><input type="text" class="sd-input" x-model="profileDraft.postal_code"></div>
+                                        <div><label>Stad</label><input type="text" class="sd-input" x-model="profileDraft.city"></div>
+                                        <div><label>Facturatie-e-mail</label><input type="email" class="sd-input" x-model="profileDraft.invoice_email"></div>
+                                        <div><label>GLN-nummer</label><input type="text" class="sd-input" x-model="profileDraft.gln_number"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- User registrations — pure enrollment info -->
+                    <div class="sd-card">
+                        <div class="sd-card__header">
+                            <h3 class="sd-card__title">Inschrijvingen</h3>
+                        </div>
+                        <table class="sd-table">
+                            <thead>
+                                <tr>
+                                    <th>Editie</th>
+                                    <th>Inschrijfdatum</th>
+                                    <th>Status</th>
+                                    <th>Pad</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="reg in userRegistrations" :key="reg.id">
+                                    <tr>
+                                        <td><a :href="'<?php echo esc_url($admin_url); ?>post.php?post=' + reg.edition_id + '&action=edit'" x-text="reg.edition_title"></a></td>
+                                        <td x-text="formatDate(reg.date)"></td>
+                                        <td><span class="sd-badge" :class="'sd-badge--' + reg.status" x-text="reg.status_label"></span></td>
+                                        <td x-text="enrollmentPathLabel(reg.enrollment_path)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                        <template x-if="userRegistrations.length === 0">
+                            <div class="sd-empty">
+                                <span class="sd-empty__icon">📝</span>
+                                <p class="sd-empty__text">Nog geen inschrijvingen</p>
+                                <p class="sd-empty__hint">Deze gebruiker heeft zich nog niet ingeschreven voor een editie.</p>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Attendance + progress (one row per sessioned edition) -->
+                    <div class="sd-card">
+                        <div class="sd-card__header">
+                            <h3 class="sd-card__title">Aanwezigheid</h3>
+                        </div>
+                        <table class="sd-table">
+                            <thead>
+                                <tr>
+                                    <th>Editie</th>
+                                    <th>Aanwezigheid</th>
+                                    <th>Uren</th>
+                                    <th>Voortgang</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="reg in sessionedRegistrations" :key="reg.id">
+                                    <tr>
+                                        <td x-text="reg.edition_title"></td>
+                                        <td>
+                                            <div class="sd-attendance-cell-stack">
+                                                <div class="sd-attendance-cell-stack__count">
+                                                    <span x-text="attendancePresent(reg) + '/' + attendanceTotal(reg) + ' sessies'"></span>
+                                                    <span class="sd-attendance-pct" :class="attendancePctClass(reg)" x-text="attendancePct(reg.attendance) + '%'"></span>
+                                                </div>
+                                                <div class="sd-attendance-cell-stack__bar">
+                                                    <div class="sd-attendance-cell-stack__bar-fill"
+                                                         :class="attendanceBarClass(reg.attendance)"
+                                                         :style="'width:' + attendancePct(reg.attendance) + '%'"></div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td x-text="(reg.attendance?.hours ?? 0) + 'u'"></td>
+                                        <td x-text="progressLabel(reg)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                        <template x-if="sessionedRegistrations.length === 0">
+                            <div class="sd-empty">
+                                <span class="sd-empty__icon">⏱</span>
+                                <p class="sd-empty__text">Geen edities met sessies</p>
+                                <p class="sd-empty__hint">Deze gebruiker heeft geen klassikale of blended edities.</p>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- User quotes / invoices -->
+                    <div class="sd-card">
+                        <div class="sd-card__header">
+                            <h3 class="sd-card__title">Offertes</h3>
+                        </div>
+                        <table class="sd-table">
+                            <thead>
+                                <tr>
+                                    <th>Offerte #</th>
+                                    <th>Editie</th>
+                                    <th>Bedrag</th>
+                                    <th>Status</th>
+                                    <th>Verzonden</th>
+                                    <th>Betaald</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="quote in userQuotes" :key="quote.id">
+                                    <tr>
+                                        <td x-text="quote.number"></td>
+                                        <td x-text="quote.edition_title || '—'"></td>
+                                        <td x-text="formatCurrency(quote.total)"></td>
+                                        <td><span class="sd-badge" :class="'sd-badge--' + quote.status" x-text="quote.status_label"></span></td>
+                                        <td x-text="quote.sent_at ? formatShortDate(quote.sent_at) : '—'"></td>
+                                        <td x-text="quote.paid_at ? formatShortDate(quote.paid_at) : '—'"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                        <template x-if="userQuotes.length === 0">
+                            <div class="sd-empty">
+                                <span class="sd-empty__icon">€</span>
+                                <p class="sd-empty__text">Geen offertes</p>
+                                <p class="sd-empty__hint">Voor deze gebruiker is nog geen offerte aangemaakt.</p>
+                            </div>
+                        </template>
+                    </div>
+
+                </div><!-- /.sd-layout__primary -->
+
+                <div class="sd-layout__secondary">
+
+                    <!-- Audit timeline (capped at 30 — link below for full log) -->
+                    <div class="sd-card">
+                        <div class="sd-card__header">
+                            <h3 class="sd-card__title">Audit log</h3>
+                        </div>
+                        <div class="sd-card__body">
+                            <template x-for="entry in userAuditLog" :key="entry.id">
+                                <div class="sd-activity-item">
+                                    <div class="sd-activity-icon" :class="'sd-activity-icon--' + (entry.type || 'action')" :title="entry.actor_name || ''" x-html="activityIcon(entry.type)"></div>
+                                    <div class="sd-activity-item__content">
+                                        <template x-if="entry.target_url">
+                                            <a class="sd-activity-item__text sd-activity-item__text--link" :href="entry.target_url" x-text="entry.text"></a>
+                                        </template>
+                                        <template x-if="!entry.target_url">
+                                            <span class="sd-activity-item__text" x-text="entry.text"></span>
+                                        </template>
+                                        <span class="sd-activity-item__time" x-text="formatRelativeTime(entry.timestamp)"></span>
+                                    </div>
+                                </div>
+                            </template>
+                            <template x-if="userAuditLog.length === 0">
+                                <div class="sd-empty">
+                                    <span class="sd-empty__icon">·</span>
+                                    <p class="sd-empty__text">Geen audit items</p>
+                                </div>
+                            </template>
+                        </div>
+                        <div class="sd-card__footer" x-show="selectedUser?.id">
+                            <a :href="'<?php echo esc_url($admin_url); ?>admin.php?page=ntdst-audit-log&actor_id=' + selectedUser.id"
+                               class="sd-btn sd-btn--text sd-btn--block">
+                                <span x-show="userAuditLogTotal > 30">Toon alle <span x-text="userAuditLogTotal"></span> items in volledige audit log →</span>
+                                <span x-show="userAuditLogTotal <= 30">Open in volledige audit log →</span>
+                            </a>
+                        </div>
+                    </div>
+
+
+                </div><!-- /.sd-layout__secondary -->
+
+            </div><!-- /.sd-layout -->
+
+        </div><!-- /view: gebruikers -->
+
+    </div><!-- /.sd-content -->
+
+    <!-- ============================================================
+         TOAST CONTAINER
+         ============================================================ -->
+    <div class="sd-toast-container" x-show="toast" x-transition>
+        <div class="sd-toast" :class="'sd-toast--' + (toast?.type || 'info')">
+            <span x-text="toast?.message"></span>
+            <button @click="toast = null">×</button>
+        </div>
     </div>
-</div>
+
+</div><!-- /.sd-app -->

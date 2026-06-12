@@ -56,7 +56,10 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 				ob_start();
 				include ld_propanel_get_template( 'ld-propanel-reporting-choose-filter.php' );
 				$output = ob_get_clean();
-			} elseif ( ( 'activity-courses' == $template ) || ( 'activity-quizzes' == $template ) ) {
+			} elseif (
+				'activity-courses' == $template
+				|| 'activity-quizzes' == $template
+			) {
 				// To handle the Activity Courses and Quizzes report output we hook into the LearnDash core reporting function.
 				// It does all the heave processing for us.
 				$reply_data = array( 'status' => false );
@@ -67,11 +70,15 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 				}
 
 				$report_post_args = array();
-				if ( isset( $_GET['args'] ) ) {
+				if (
+					isset( $_GET['args'] ) ) {
 					$report_post_args = array_merge( $report_post_args, $_GET['args'] );
 				}
 
-				if ( ( isset( $report_post_args['init'] ) ) && ( $report_post_args['init'] == '1' ) ) {
+				if (
+					isset( $report_post_args['init'] )
+					&& $report_post_args['init'] == '1'
+				) {
 					$_GET['filters'] = $_GET['args']['filters'];
 					$post_data       = ld_propanel_load_post_data( $post_data );
 
@@ -84,7 +91,10 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 					$activity_query_args = ld_propanel_load_activity_query_args( $activity_query_args, $post_data );
 
 					if ( ! empty( $activity_query_args ) ) {
-						if ( ( ! isset( $report_post_args['filters']['users_ids'] ) ) && ( isset( $activity_query_args['user_ids'] ) ) ) {
+						if (
+							! isset( $report_post_args['filters']['users_ids'] )
+							&& isset( $activity_query_args['user_ids'] )
+						) {
 							$report_post_args['filters']['users_ids'] = $activity_query_args['user_ids'];
 							// unset( $report_post_args['filters']['user_ids'] );
 						} else {
@@ -112,11 +122,17 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 							);
 						}
 
-						if ( ( isset( $post_data['filters']['time_start'] ) ) && ( ! empty( $post_data['filters']['time_start'] ) ) ) {
+						if (
+							isset( $post_data['filters']['time_start'] )
+							&& ! empty( $post_data['filters']['time_start'] )
+						) {
 							$report_post_args['filters']['time_start'] = esc_attr( $post_data['filters']['time_start'] );
 						}
 
-						if ( ( isset( $post_data['filters']['time_end'] ) ) && ( ! empty( $post_data['filters']['time_end'] ) ) ) {
+						if (
+							isset( $post_data['filters']['time_end'] )
+							&& ! empty( $post_data['filters']['time_end'] )
+						) {
 							$report_post_args['filters']['time_end'] = esc_attr( $post_data['filters']['time_end'] );
 						}
 
@@ -141,7 +157,10 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 						}
 						*/
 
-						if ( ( ! isset( $report_post_args['filters']['posts_ids'] ) ) && ( isset( $activity_query_args['post_ids'] ) ) ) {
+						if (
+							! isset( $report_post_args['filters']['posts_ids'] )
+							&& isset( $activity_query_args['post_ids'] )
+						) {
 							$_process_legacy = true;
 
 							// If the admin has performed the needed upgrade on the courses and quizzes...
@@ -149,11 +168,19 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 							if ( version_compare( LEARNDASH_VERSION, '2.4.9.9' ) >= 0 ) {
 								if ( class_exists( 'Learndash_Admin_Data_Upgrades' ) ) {
 									$ld_data_upgrade = Learndash_Admin_Data_Upgrades::get_instance();
-									if ( ( $ld_data_upgrade ) && ( is_a( $ld_data_upgrade, 'Learndash_Admin_Data_Upgrades' ) ) ) {
+									if (
+										$ld_data_upgrade
+										&& is_a( $ld_data_upgrade, 'Learndash_Admin_Data_Upgrades' )
+									) {
 										$data_settings_courses = $ld_data_upgrade->get_data_settings( 'user-meta-courses' );
 										$data_settings_quizzes = $ld_data_upgrade->get_data_settings( 'user-meta-quizzes' );
 
-										if ( ( isset( $data_settings_courses['version'] ) ) && ( version_compare( $data_settings_courses['version'], '2.5', '>=' ) ) && ( isset( $data_settings_quizzes['version'] ) ) && ( version_compare( $data_settings_quizzes['version'], '2.5', '>=' ) ) ) {
+										if (
+											isset( $data_settings_courses['version'] )
+											&& version_compare( $data_settings_courses['version'], '2.5', '>=' )
+											&& isset( $data_settings_quizzes['version'] )
+											&& version_compare( $data_settings_quizzes['version'], '2.5', '>=' )
+										) {
 											// we can simple query by course_id since that column will be filled in now.
 											$report_post_args['filters']['course_ids'] = $activity_query_args['post_ids'];
 											$_process_legacy                           = false;
@@ -299,7 +326,10 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 		 * @return string
 		 */
 		public function activity_template_rows( $output, $template ) {
-			if ( ( 'activity_rows' == $template ) || ( 'activity' == $template ) ) {
+			if (
+				'activity_rows' == $template
+				|| 'activity' == $template
+			) {
 				$output = '';
 
 				// if ( ld_propanel_count_post_type( 'sfwd-courses' ) ) {
@@ -334,16 +364,41 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 					);
 
 					foreach ( $activity_query_args as $key => $val ) {
-						if ( isset( $_GET['filters'][ $key ] ) ) {
-							$activity_query_args[ $key ] = stripslashes_deep( $_GET['filters'][ $key ] );
+						if ( ! isset( $_GET['filters'][ $key ] ) ) {
+							continue;
 						}
+
+						if ( 'orderby_order' === $key ) {
+							if ( isset( $_GET['filters']['orderby_order'] ) ) {
+								// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Full ORDER BY expression from ProPanel filters (admin).
+								$activity_query_args['orderby_order'] = stripslashes_deep( wp_unslash( $_GET['filters']['orderby_order'] ) );
+							}
+							continue;
+						}
+
+						// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Unslashed then sanitized below.
+						$unslashed                   = wp_unslash( $_GET['filters'][ $key ] );
+						$activity_query_args[ $key ] = is_array( $unslashed )
+							? array_map( 'sanitize_text_field', $unslashed )
+							: sanitize_text_field( $unslashed );
 					}
 
-					if ( ( isset( $_GET['container_type'] ) ) && ( $_GET['container_type'] == 'shortcode' ) ) {
-						if ( ( ! isset( $_GET['filters']['export_buttons'] ) ) || ( $_GET['filters']['export_buttons'] !== '1' ) && ( $_GET['filters']['export_buttons'] !== 'true' ) ) {
+					if (
+						isset( $_GET['container_type'] )
+						&& $_GET['container_type'] == 'shortcode'
+					) {
+						if (
+							! isset( $_GET['filters']['export_buttons'] )
+							|| ( $_GET['filters']['export_buttons'] !== '1'
+								&& $_GET['filters']['export_buttons'] !== 'true' )
+						) {
 							unset( $activity_query_args['export_buttons'] );
 						}
-						if ( ( ! isset( $_GET['filters']['nav_top'] ) ) || ( $_GET['filters']['nav_top'] !== '1' ) && ( $_GET['filters']['nav_top'] !== 'true' ) ) {
+						if (
+							! isset( $_GET['filters']['nav_top'] )
+							|| ( $_GET['filters']['nav_top'] !== '1'
+								&& $_GET['filters']['nav_top'] !== 'true' )
+						) {
 							unset( $activity_query_args['nav_top'] );
 						}
 					}
@@ -362,7 +417,10 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 						$activity_query_args = ld_propanel_convert_fewer_users( $activity_query_args );
 
 						// If specific post_ids are provided we want to include in all the lessons, topics, quizzes for display
-						if ( ( isset( $activity_query_args['post_ids'] ) ) && ( ! empty( $activity_query_args['post_ids'] ) ) ) {
+						if (
+							isset( $activity_query_args['post_ids'] )
+							&& ! empty( $activity_query_args['post_ids'] )
+						) {
 							// @phpstan-ignore-next-line -- Should be checked later.
 							if ( version_compare( LEARNDASH_VERSION, '2.4.9.9' ) >= 0 ) {
 								$activity_query_args['course_ids'] = $activity_query_args['post_ids'];
@@ -385,7 +443,10 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 
 						$paged = 1;
 
-						if ( isset( $_GET['args']['paged'] ) && ! empty( $_GET['args']['paged'] ) ) {
+						if (
+							isset( $_GET['args']['paged'] )
+							&& ! empty( $_GET['args']['paged'] )
+						) {
 							$activity_query_args['paged'] = abs( intval( $_GET['args']['paged'] ) );
 							$paged                        = intval( $_GET['args']['paged'] );
 						}
@@ -394,26 +455,44 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 						if ( learndash_is_admin_user( get_current_user_id() ) ) {
 							// Admin will see all groups.
 						} elseif ( learndash_is_group_leader_user() ) {
-							if ( ( ! isset( $activity_query_args['user_ids'] ) ) || ( empty( $activity_query_args['user_ids'] ) ) ) {
+							if (
+								! isset( $activity_query_args['user_ids'] )
+								|| empty( $activity_query_args['user_ids'] )
+							) {
 								$activity_query_args = array();
 							}
 
 							// @phpstan-ignore-next-line -- Should be checked later.
 							if ( version_compare( LEARNDASH_VERSION, '2.4.9.9' ) >= 0 ) {
-								if ( ( ! isset( $activity_query_args['course_ids'] ) ) || ( empty( $activity_query_args['course_ids'] ) ) ) {
+								if (
+									! isset( $activity_query_args['course_ids'] )
+									|| empty( $activity_query_args['course_ids'] )
+								) {
 									$activity_query_args = array();
 								}
-							} elseif ( ( ! isset( $activity_query_args['post_ids'] ) ) || ( empty( $activity_query_args['post_ids'] ) ) ) {
+							} elseif (
+								! isset( $activity_query_args['post_ids'] )
+								|| empty( $activity_query_args['post_ids'] )
+							) {
 									$activity_query_args = array();
 							}
-						} elseif ( ( ! isset( $activity_query_args['user_ids'] ) ) || ( empty( $activity_query_args['user_ids'] ) ) ) {    // Regular student user
+						} elseif (
+							! isset( $activity_query_args['user_ids'] )
+							|| empty( $activity_query_args['user_ids'] )
+						) {    // Regular student user.
 								$activity_query_args = array();
 							// @phpstan-ignore-next-line -- Should be checked later.
 						} elseif ( version_compare( LEARNDASH_VERSION, '2.4.9.9' ) >= 0 ) {
-							if ( ( ! isset( $activity_query_args['course_ids'] ) ) || ( empty( $activity_query_args['course_ids'] ) ) ) {
+							if (
+								! isset( $activity_query_args['course_ids'] )
+								|| empty( $activity_query_args['course_ids'] )
+							) {
 								$activity_query_args = array();
 							}
-						} elseif ( ( ! isset( $activity_query_args['post_ids'] ) ) || ( empty( $activity_query_args['post_ids'] ) ) ) {
+						} elseif (
+							! isset( $activity_query_args['post_ids'] )
+							|| empty( $activity_query_args['post_ids'] )
+						) {
 								$activity_query_args = array();
 						}
 
@@ -536,7 +615,10 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 		 * @return array|null|WP_Post
 		 */
 		function get_activity_course( $activity ) {
-			if ( ( isset( $activity->activity_course_id ) ) && ( ! empty( $activity->activity_course_id ) ) ) {
+			if (
+				isset( $activity->activity_course_id )
+				&& ! empty( $activity->activity_course_id )
+			) {
 				$course_id = intval( $activity->activity_course_id );
 			} else {
 				$course_id = learndash_get_course_id( $activity->post_id );
@@ -544,7 +626,10 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 
 			if ( ! empty( $course_id ) ) {
 				$course = get_post( $course_id );
-				if ( ( $course ) && ( $course instanceof WP_Post ) ) {
+				if (
+					$course
+					&& $course instanceof WP_Post
+				) {
 					return $course;
 				}
 			}
@@ -556,10 +641,13 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 		 * @return bool
 		 */
 		function quiz_activity_is_pending( $activity ) {
-			if ( ( ! empty( $activity ) ) && ( property_exists( $activity, 'activity_meta' ) ) ) {
-				if ( ( isset( $activity->activity_meta['has_graded'] ) )
-					&& ( true === $activity->activity_meta['has_graded'] )
-					&& ( true === LD_QuizPro::quiz_attempt_has_ungraded_question( $activity->activity_meta ) ) ) {
+			if (
+				! empty( $activity )
+				&& property_exists( $activity, 'activity_meta' )
+			) {
+				if ( isset( $activity->activity_meta['has_graded'] )
+					&& true === $activity->activity_meta['has_graded']
+					&& true === LD_QuizPro::quiz_attempt_has_ungraded_question( $activity->activity_meta ) ) {
 					return true;
 				}
 			}
@@ -573,7 +661,10 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 		 * @return bool
 		 */
 		function quiz_activity_is_passing( $activity ) {
-			if ( ( ! empty( $activity ) ) && ( property_exists( $activity, 'activity_meta' ) ) ) {
+			if (
+				! empty( $activity )
+				&& property_exists( $activity, 'activity_meta' )
+			) {
 				if ( isset( $activity->activity_meta['pass'] ) ) {
 					return (bool) $activity->activity_meta['pass'];
 				}
@@ -588,7 +679,10 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 		 * @return mixed
 		 */
 		function quiz_activity_score( $activity ) {
-			if ( ( ! empty( $activity ) ) && ( property_exists( $activity, 'activity_meta' ) ) ) {
+			if (
+				! empty( $activity )
+				&& property_exists( $activity, 'activity_meta' )
+			) {
 				if ( isset( $activity->activity_meta['score'] ) ) {
 					return $activity->activity_meta['score'];
 				}
@@ -601,7 +695,10 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 		 * @return mixed
 		 */
 		function quiz_activity_total_points( $activity ) {
-			if ( ( ! empty( $activity ) ) && ( property_exists( $activity, 'activity_meta' ) ) ) {
+			if (
+				! empty( $activity )
+				&& property_exists( $activity, 'activity_meta' )
+			) {
 				if ( isset( $activity->activity_meta['total_points'] ) ) {
 					return intval( $activity->activity_meta['total_points'] );
 				}
@@ -614,7 +711,10 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 		 * @return mixed
 		 */
 		function quiz_activity_awarded_points( $activity ) {
-			if ( ( ! empty( $activity ) ) && ( property_exists( $activity, 'activity_meta' ) ) ) {
+			if (
+				! empty( $activity )
+				&& property_exists( $activity, 'activity_meta' )
+			) {
 				if ( isset( $activity->activity_meta['points'] ) ) {
 					return intval( $activity->activity_meta['points'] );
 				}
@@ -629,7 +729,10 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 		function quiz_activity_points_percentage( $activity ) {
 			$awarded_points = intval( $this->quiz_activity_awarded_points( $activity ) );
 			$total_points   = intval( $this->quiz_activity_total_points( $activity ) );
-			if ( ( ! empty( $awarded_points ) ) && ( ! empty( $total_points ) ) ) {
+			if (
+				! empty( $awarded_points )
+				&& ! empty( $total_points )
+			) {
 				return round( 100 * ( intval( $awarded_points ) / intval( $total_points ) ) );
 			}
 		}
@@ -643,7 +746,10 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 		 * @return mixed
 		 */
 		function quiz_activity_total_score( $activity ) {
-			if ( ( ! empty( $activity ) ) && ( property_exists( $activity, 'activity_meta' ) ) ) {
+			if (
+				! empty( $activity )
+				&& property_exists( $activity, 'activity_meta' )
+			) {
 				if ( isset( $activity->activity_meta['count'] ) ) {
 					return intval( $activity->activity_meta['count'] );
 				}
@@ -656,7 +762,10 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 		 * @return mixed
 		 */
 		function quiz_activity_awarded_score( $activity ) {
-			if ( ( ! empty( $activity ) ) && ( property_exists( $activity, 'activity_meta' ) ) ) {
+			if (
+				! empty( $activity )
+				&& property_exists( $activity, 'activity_meta' )
+			) {
 				if ( isset( $activity->activity_meta['score'] ) ) {
 					return intval( $activity->activity_meta['score'] );
 				}
@@ -671,7 +780,10 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 		function quiz_activity_score_percentage( $activity ) {
 			$awarded_score = intval( $this->quiz_activity_awarded_score( $activity ) );
 			$total_score   = intval( $this->quiz_activity_total_score( $activity ) );
-			if ( ( ! empty( $awarded_score ) ) && ( ! empty( $total_score ) ) ) {
+			if (
+				! empty( $awarded_score )
+				&& ! empty( $total_score )
+			) {
 				return round( 100 * ( intval( $awarded_score ) / intval( $total_score ) ) );
 			}
 		}
@@ -685,8 +797,15 @@ if ( ! class_exists( 'LearnDash_ProPanel_Activity' ) ) {
 		function get_quiz_statistics_link( $activity ) {
 			$stats_url = '';
 
-			if ( ( $activity->user_id == get_current_user_id() ) || ( learndash_is_admin_user() ) || ( learndash_is_group_leader_user() ) ) {
-				if ( ( isset( $activity->activity_meta['statistic_ref_id'] ) ) && ( ! empty( $activity->activity_meta['statistic_ref_id'] ) ) ) {
+			if (
+				$activity->user_id == get_current_user_id()
+				|| learndash_is_admin_user()
+				|| learndash_is_group_leader_user()
+			) {
+				if (
+					isset( $activity->activity_meta['statistic_ref_id'] )
+					&& ! empty( $activity->activity_meta['statistic_ref_id'] )
+				) {
 					if ( ! isset( $activity->activity_meta['quiz'] ) ) {
 						if ( isset( $activity->post_id ) ) {
 							$activity->activity_meta['quiz'] = absint( $activity->post_id );

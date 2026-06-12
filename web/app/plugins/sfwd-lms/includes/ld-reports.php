@@ -1215,11 +1215,11 @@ function learndash_reports_get_activity( $query_args = array(), $current_user_id
 
 	if ( ! empty( $query_args['s'] ) ) {
 		if ( 'post_title' == $query_args['s_context'] ) {
-			$sql_str_where .= " AND posts.post_title LIKE '" . $query_args['s'] . "' ";
+			$sql_str_where .= $wpdb->prepare( ' AND posts.post_title LIKE %s ', $query_args['s'] );
 		} elseif ( 'display_name' == $query_args['s_context'] ) {
-			$sql_str_where .= " AND users.display_name LIKE '" . $query_args['s'] . "' ";
+			$sql_str_where .= $wpdb->prepare( ' AND users.display_name LIKE %s ', $query_args['s'] );
 		} else {
-			$sql_str_where .= " AND (posts.post_title LIKE '" . $query_args['s'] . "' OR users.display_name LIKE '" . $query_args['s'] . "') ";
+			$sql_str_where .= $wpdb->prepare( ' AND (posts.post_title LIKE %s OR users.display_name LIKE %s) ', $query_args['s'], $query_args['s'] );
 		}
 	}
 
@@ -1230,7 +1230,13 @@ function learndash_reports_get_activity( $query_args = array(), $current_user_id
 	}
 
 	if ( ! empty( $query_args['orderby_order'] ) ) {
-		$sql_str_order = ' ORDER BY ' . $query_args['orderby_order'] . ' ';
+		$orderby_order = trim( $query_args['orderby_order'] );
+		// Allow only table.column identifiers with optional ASC/DESC, comma-separated.
+		if ( preg_match( '/^[a-zA-Z_][a-zA-Z0-9_.]*(\s+(ASC|DESC))?(\s*,\s*[a-zA-Z_][a-zA-Z0-9_.]*(\s+(ASC|DESC))?)*$/i', $orderby_order ) ) {
+			$sql_str_order = ' ORDER BY ' . $orderby_order . ' ';
+		} else {
+			$sql_str_order = ' ORDER BY ld_user_activity.activity_updated DESC ';
+		}
 	} else {
 		$sql_str_order = '';
 	}

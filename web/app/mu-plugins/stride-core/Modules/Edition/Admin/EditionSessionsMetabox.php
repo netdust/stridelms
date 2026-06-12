@@ -43,7 +43,6 @@ final class EditionSessionsMetabox
         if (is_string($sessionSlots)) {
             $sessionSlots = json_decode($sessionSlots, true) ?: [];
         }
-        $selectionDeadline = $this->editionRepository->getField($post->ID, 'selection_deadline', '');
         ?>
         <div class="stride-sessions-admin">
             <!-- Header with Add button -->
@@ -61,15 +60,16 @@ final class EditionSessionsMetabox
                         <th class="column-date"><?php esc_html_e('Datum', 'stride'); ?></th>
                         <th class="column-time"><?php esc_html_e('Tijd', 'stride'); ?></th>
                         <th class="column-type"><?php esc_html_e('Type', 'stride'); ?></th>
-                        <th class="column-slot"><?php esc_html_e('Slot', 'stride'); ?></th>
+                        <th class="column-slot"><?php esc_html_e('Groep', 'stride'); ?></th>
                         <th class="column-location"><?php esc_html_e('Locatie', 'stride'); ?></th>
+                        <th class="column-price-mod" style="min-width: 90px; white-space: nowrap;"><?php esc_html_e('€ ±', 'stride'); ?></th>
                         <th class="column-actions"><?php esc_html_e('Acties', 'stride'); ?></th>
                     </tr>
                 </thead>
                 <tbody id="stride-sessions-body">
                     <?php if (empty($sessions)): ?>
                         <tr class="no-sessions-row">
-                            <td colspan="6" class="no-sessions">
+                            <td colspan="7" class="no-sessions">
                                 <?php esc_html_e('Nog geen sessies toegevoegd.', 'stride'); ?>
                             </td>
                         </tr>
@@ -82,7 +82,7 @@ final class EditionSessionsMetabox
             </table>
 
             <!-- Slot Configuration -->
-            <?php $this->renderSlotConfiguration($selectionDeadline, $sessionSlots); ?>
+            <?php $this->renderSlotConfiguration($post->ID, $sessionSlots); ?>
         </div>
 
         <!-- Session Form Template (hidden, used by JS) -->
@@ -118,6 +118,12 @@ final class EditionSessionsMetabox
                 $slotLabel = $slotValue; // Fallback to slot key if label not found
             }
         }
+
+        // Prepare lesson_ids as comma-separated string
+        $lessonIds = '';
+        if (!empty($session['lesson_ids']) && is_array($session['lesson_ids'])) {
+            $lessonIds = implode(',', array_map('intval', $session['lesson_ids']));
+        }
         ?>
         <tr class="session-row"
             data-session-id="<?php echo esc_attr($session['id']); ?>"
@@ -126,7 +132,12 @@ final class EditionSessionsMetabox
             data-end-time="<?php echo esc_attr($session['end_time']); ?>"
             data-location="<?php echo esc_attr($session['location'] ?? ''); ?>"
             data-session-type="<?php echo esc_attr($session['type']); ?>"
-            data-session-slot="<?php echo esc_attr($session['slot'] ?? ''); ?>">
+            data-session-slot="<?php echo esc_attr($session['slot'] ?? ''); ?>"
+            data-title="<?php echo esc_attr($session['title'] ?? ''); ?>"
+            data-description="<?php echo esc_attr($session['description'] ?? ''); ?>"
+            data-webinar-link="<?php echo esc_attr($session['webinar_link'] ?? ''); ?>"
+            data-lesson-ids="<?php echo esc_attr($lessonIds); ?>"
+            data-price-modifier="<?php echo esc_attr((string) ($session['price_modifier'] ?? 0)); ?>">
             <td class="column-date"><?php echo esc_html($dateFormatted); ?></td>
             <td class="column-time"><?php echo esc_html($timeFormatted ?: '-'); ?></td>
             <td class="column-type">
@@ -134,8 +145,19 @@ final class EditionSessionsMetabox
                     <?php echo esc_html($type->label()); ?>
                 </span>
             </td>
-            <td class="column-slot"><?php echo esc_html($slotLabel ?: '-'); ?></td>
-            <td class="column-location"><?php echo esc_html($session['location'] ?: '-'); ?></td>
+            <td class="column-slot"><?php echo $slotLabel ? esc_html($slotLabel) : '<span style="color:#a7aaad;">—</span>'; ?></td>
+            <td class="column-location"><?php echo $session['location'] ? esc_html($session['location']) : '<span style="color:#a7aaad;">—</span>'; ?></td>
+            <td class="column-price-mod" style="white-space: nowrap;">
+                <?php
+                $modifier = (int) ($session['price_modifier'] ?? 0);
+        if ($modifier !== 0):
+            $sign = $modifier > 0 ? '+' : '';
+            echo esc_html($sign . number_format($modifier / 100, 2, ',', '.'));
+        else:
+            echo '-';
+        endif;
+        ?>
+            </td>
             <td class="column-actions">
                 <button type="button" class="button-link stride-edit-session" title="<?php esc_attr_e('Bewerken', 'stride'); ?>">
                     <span class="dashicons dashicons-edit"></span>
@@ -152,7 +174,7 @@ final class EditionSessionsMetabox
     {
         ?>
         <tr class="stride-session-form-row">
-            <td colspan="6">
+            <td colspan="7">
                 <div class="stride-session-form">
                     <input type="hidden" name="session_id" value="">
 
@@ -172,9 +194,9 @@ final class EditionSessionsMetabox
                         </div>
                         <?php if (!empty($sessionSlots)): ?>
                             <div class="stride-field stride-slot-field">
-                                <label><?php esc_html_e('Slot', 'stride'); ?></label>
+                                <label><?php esc_html_e('Groep', 'stride'); ?></label>
                                 <select name="session_slot" id="stride-session-slot-select">
-                                    <option value=""><?php esc_html_e('Geen slot', 'stride'); ?></option>
+                                    <option value=""><?php esc_html_e('Geen groep', 'stride'); ?></option>
                                     <?php foreach ($sessionSlots as $slot): ?>
                                         <option value="<?php echo esc_attr($slot['slot']); ?>">
                                             <?php echo esc_html($slot['label'] ?: $slot['slot']); ?>
@@ -183,6 +205,14 @@ final class EditionSessionsMetabox
                                 </select>
                             </div>
                         <?php endif; ?>
+                        <div class="stride-field">
+                            <label><?php esc_html_e('Prijswijziging (€)', 'stride'); ?></label>
+                            <input type="number" name="session_price_modifier" step="0.01" placeholder="0,00"
+                                   style="width: 100px;">
+                            <p class="description" id="stride-price-modifier-hint" style="display: none; font-size: 11px; color: #646970;">
+                                <?php esc_html_e('Alleen actief bij sessiekeuze', 'stride'); ?>
+                            </p>
+                        </div>
                     </div>
 
                     <!-- Session Type Section -->
@@ -282,22 +312,45 @@ final class EditionSessionsMetabox
         };
     }
 
-    private function renderSlotConfiguration(string $selectionDeadline, array $sessionSlots): void
+    private function renderSlotConfiguration(int $editionId, array $sessionSlots): void
     {
+        $selectionOpen     = (bool) $this->editionRepository->getField($editionId, 'selection_open');
+        $selectionDeadline = $this->editionRepository->getField($editionId, 'selection_deadline', '') ?: '';
+        $hasSlots          = !empty($sessionSlots);
+        $hasRequiredSlot   = false;
+        foreach ($sessionSlots as $slot) {
+            if (!empty($slot['required'])) {
+                $hasRequiredSlot = true;
+                break;
+            }
+        }
+        $deadlinePassed = $selectionDeadline !== '' && strtotime($selectionDeadline) < time();
         ?>
-        <div class="stride-session-slots-config">
-            <h4><?php esc_html_e('Sessie Slots', 'stride'); ?></h4>
-            <p class="description">
-                <?php esc_html_e('Definieer tijdslots zodat deelnemers kunnen kiezen welke sessies ze volgen.', 'stride'); ?>
+        <div class="stride-keuzegroepen">
+            <h4><?php esc_html_e('Keuzegroepen', 'stride'); ?></h4>
+            <p class="description" style="margin-bottom: 12px;">
+                <?php esc_html_e('Optioneel. Maak groepen aan waaruit deelnemers moeten kiezen — bijvoorbeeld "Kies één voormiddagsessie en één namiddagsessie".', 'stride'); ?>
             </p>
 
-            <div class="stride-field-row">
-                <div class="stride-field" style="max-width: 250px;">
-                    <label for="edition_selection_deadline"><?php esc_html_e('Selectie deadline', 'stride'); ?></label>
-                    <input type="date" name="ntdst_fields[selection_deadline]" id="edition_selection_deadline"
-                           value="<?php echo esc_attr($selectionDeadline); ?>">
-                </div>
-            </div>
+            <?php
+            $stateLabel = '';
+        $stateClass = '';
+        if (!$hasRequiredSlot) {
+            $stateLabel = __('Optioneel', 'stride');
+            $stateClass = 'is-neutral';
+        } elseif ($deadlinePassed) {
+            $stateLabel = __('Deadline verstreken', 'stride');
+            $stateClass = 'is-warning';
+        } elseif ($selectionOpen) {
+            $stateLabel = __('Actief', 'stride');
+            $stateClass = 'is-active';
+        }
+        ?>
+            <span class="stride-keuzegroepen-state <?= esc_attr($stateClass) ?>"
+                  id="stride-keuzegroepen-state"
+                  style="<?= $stateLabel === '' ? 'display:none;' : '' ?>">
+                <?= esc_html($stateLabel) ?>
+            </span>
 
             <div class="stride-session-slots-wrapper">
                 <div id="stride-session-slots-list">
@@ -308,8 +361,34 @@ final class EditionSessionsMetabox
 
                 <button type="button" class="button" id="stride-add-slot-btn">
                     <span class="dashicons dashicons-plus-alt2"></span>
-                    <?php esc_html_e('Slot toevoegen', 'stride'); ?>
+                    <?php esc_html_e('Groep toevoegen', 'stride'); ?>
                 </button>
+            </div>
+
+            <div id="stride-selection-window"
+                 class="stride-window-form"
+                 style="<?= $hasSlots ? '' : 'display:none;' ?>">
+                <div class="stride-window-row">
+                    <label for="stride-selection-open" class="stride-window-label">
+                        <?php esc_html_e('Keuze geopend voor deelnemers', 'stride'); ?>
+                    </label>
+                    <div class="stride-window-control">
+                        <input type="hidden" name="ntdst_fields[selection_open]" value="0">
+                        <input type="checkbox" id="stride-selection-open"
+                               name="ntdst_fields[selection_open]" value="1"
+                               <?php checked($selectionOpen); ?>>
+                    </div>
+                </div>
+                <div class="stride-window-row">
+                    <label for="stride-selection-deadline" class="stride-window-label">
+                        <?php esc_html_e('Deadline (optioneel)', 'stride'); ?>
+                    </label>
+                    <div class="stride-window-control">
+                        <input type="date" id="stride-selection-deadline"
+                               name="ntdst_fields[selection_deadline]"
+                               value="<?= esc_attr($selectionDeadline) ?>">
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -326,35 +405,67 @@ final class EditionSessionsMetabox
         $label = $slot['label'] ?? '';
         $maxSelections = $slot['max_selections'] ?? 1;
         $required = $slot['required'] ?? false;
+        $isNew = empty($slotId) && empty($label);
         ?>
-        <div class="stride-slot-row" data-slot-index="<?php echo esc_attr($index); ?>">
-            <div class="stride-field-row four-col">
-                <div class="stride-field">
-                    <label><?php esc_html_e('Slot ID', 'stride'); ?></label>
-                    <input type="text" name="ntdst_fields[session_slots][<?php echo esc_attr($index); ?>][slot]"
-                           value="<?php echo esc_attr($slotId); ?>"
-                           placeholder="<?php esc_attr_e('bijv. dag1_vm', 'stride'); ?>">
+        <div class="stride-slot-row<?php echo $required ? ' is-required' : ''; ?><?php echo $isNew ? ' is-editing' : ''; ?>"
+             data-slot-index="<?php echo esc_attr($index); ?>">
+
+            <!-- Compact view (read-only summary) -->
+            <div class="stride-slot-summary">
+                <div class="stride-slot-summary-main">
+                    <span class="stride-slot-summary-label"><?php echo esc_html($label ?: $slotId ?: __('(Nieuwe groep)', 'stride')); ?></span>
+                    <span class="stride-slot-summary-meta">
+                        <?php printf(
+                            /* translators: %d: count of allowed selections */
+                            esc_html(_n('Kies %d', 'Kies %d', (int) $maxSelections, 'stride')),
+                            (int) $maxSelections,
+                        ); ?>
+                        <?php if ($slotId): ?>
+                            · <code><?php echo esc_html($slotId); ?></code>
+                        <?php endif; ?>
+                    </span>
                 </div>
-                <div class="stride-field">
-                    <label><?php esc_html_e('Label', 'stride'); ?></label>
-                    <input type="text" name="ntdst_fields[session_slots][<?php echo esc_attr($index); ?>][label]"
-                           value="<?php echo esc_attr($label); ?>"
-                           placeholder="<?php esc_attr_e('bijv. Dag 1 - Voormiddag', 'stride'); ?>">
-                </div>
-                <div class="stride-field">
-                    <label><?php esc_html_e('Max selecties', 'stride'); ?></label>
-                    <input type="number" name="ntdst_fields[session_slots][<?php echo esc_attr($index); ?>][max_selections]"
-                           value="<?php echo esc_attr($maxSelections); ?>" min="1">
-                </div>
-                <div class="stride-slot-actions">
-                    <label>
-                        <input type="checkbox" name="ntdst_fields[session_slots][<?php echo esc_attr($index); ?>][required]"
-                               value="1" <?php checked($required); ?>>
-                        <?php esc_html_e('Verplicht', 'stride'); ?>
-                    </label>
+                <div class="stride-slot-summary-actions">
+                    <?php if ($required): ?>
+                        <span class="stride-slot-summary-badge"><?php esc_html_e('Verplicht', 'stride'); ?></span>
+                    <?php endif; ?>
+                    <button type="button" class="button-link stride-edit-slot" title="<?php esc_attr_e('Bewerken', 'stride'); ?>">
+                        <span class="dashicons dashicons-edit"></span>
+                    </button>
                     <button type="button" class="button-link stride-remove-slot" title="<?php esc_attr_e('Verwijderen', 'stride'); ?>">
                         <span class="dashicons dashicons-trash"></span>
                     </button>
+                </div>
+            </div>
+
+            <!-- Expanded view (edit form) -->
+            <div class="stride-slot-edit">
+                <div class="stride-field-row four-col">
+                    <div class="stride-field">
+                        <label><?php esc_html_e('Naam', 'stride'); ?></label>
+                        <input type="text" name="ntdst_fields[session_slots][<?php echo esc_attr($index); ?>][label]"
+                               value="<?php echo esc_attr($label); ?>"
+                               placeholder="<?php esc_attr_e('bijv. Dag 1 - Voormiddag', 'stride'); ?>">
+                    </div>
+                    <div class="stride-field">
+                        <label><?php esc_html_e('Code', 'stride'); ?></label>
+                        <input type="text" name="ntdst_fields[session_slots][<?php echo esc_attr($index); ?>][slot]"
+                               value="<?php echo esc_attr($slotId); ?>"
+                               placeholder="<?php esc_attr_e('dag1_vm', 'stride'); ?>">
+                    </div>
+                    <div class="stride-field">
+                        <label><?php esc_html_e('Aantal kiezen', 'stride'); ?></label>
+                        <input type="number" name="ntdst_fields[session_slots][<?php echo esc_attr($index); ?>][max_selections]"
+                               value="<?php echo esc_attr($maxSelections); ?>" min="1">
+                    </div>
+                    <div class="stride-slot-actions">
+                        <label class="stride-slot-required-toggle">
+                            <input type="checkbox" class="stride-slot-required" name="ntdst_fields[session_slots][<?php echo esc_attr($index); ?>][required]"
+                                   value="1" <?php checked($required); ?>>
+                            <?php esc_html_e('Verplicht', 'stride'); ?>
+                        </label>
+                        <button type="button" class="button button-small stride-slot-done"><?php esc_html_e('Klaar', 'stride'); ?></button>
+                    </div>
                 </div>
             </div>
         </div>

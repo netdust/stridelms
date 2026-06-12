@@ -4,15 +4,13 @@ declare(strict_types=1);
 
 namespace Stride\Integrations\LearnDash;
 
-use Stride\Contracts\LMSAdapterInterface;
-
 /**
  * LearnDash Template Helper
  *
- * Presentation logic for LearnDash course templates.
- * Handles course access modes, CTAs, progress display, and lesson lists.
+ * Read-only presentation logic for LearnDash course data.
+ * Handles access checks, CTAs, progress, lessons, certificates, and course metadata.
  *
- * For business operations (grant/revoke access, completion), use LMSAdapterInterface.
+ * For write operations (grant/revoke access), use LMSAdapterInterface.
  *
  * @see https://developers.learndash.com/function/sfwd_lms_has_access/
  * @see https://developers.learndash.com/function/learndash_get_setting/
@@ -42,6 +40,13 @@ final class LearnDashHelper
     public static function hasAccess(int $courseId, ?int $userId = null): bool
     {
         if (!self::isActive()) {
+            return false;
+        }
+
+        // Guard against non-existent / deleted courses. `sfwd_lms_has_access`
+        // returns true permissively for unknown IDs, which lets orphan
+        // enrollment IDs render as if active.
+        if (get_post_type($courseId) !== 'sfwd-courses') {
             return false;
         }
 
@@ -76,13 +81,16 @@ final class LearnDashHelper
             return false;
         }
 
-        // Open courses: check for enrollment record OR existing progress
-        if (self::getAccessMode($courseId) === self::MODE_OPEN) {
-            if (!empty(get_user_meta($userId, 'course_' . $courseId . '_access_from', true))) {
-                return true;
-            }
-            // User started the course (has progress) but no explicit enrollment
-            return self::getProgress($courseId, $userId) > 0;
+        // course_X_access_from is LD's universal enrollment marker — applies to
+        // every access mode (open, free, paynow, subscribe). Access-window
+        // expiry is a separate question from enrollment state, so don't defer
+        // to sfwd_lms_has_access() here: a user who enrolled and then let their
+        // access lapse is still enrolled.
+        if (!empty(get_user_meta($userId, 'course_' . $courseId . '_access_from', true))) {
+            return true;
+        }
+        if (self::getProgress($courseId, $userId) > 0) {
+            return true;
         }
 
         return sfwd_lms_has_access($courseId, $userId);
@@ -260,6 +268,23 @@ final class LearnDashHelper
     }
 
     /**
+     * Check if user has completed a course.
+     */
+    public static function isComplete(int $courseId, ?int $userId = null): bool
+    {
+        if (!self::isActive() || !function_exists('learndash_course_completed')) {
+            return false;
+        }
+
+        $userId = $userId ?? get_current_user_id();
+        if (!$userId) {
+            return false;
+        }
+
+        return learndash_course_completed($userId, $courseId);
+    }
+
+    /**
      * Get user progress for a course.
      */
     public static function getProgress(int $courseId, ?int $userId = null): int
@@ -279,7 +304,64 @@ final class LearnDashHelper
             'array' => true,
         ]);
 
-        return (int) ($progress['percentage'] ?? 0);
+        $pct = (int) ($progress['percentage'] ?? 0);
+        if ($pct > 0) {
+            return $pct;
+        }
+
+        // Fallback: learndash_course_progress can return 0 when user meta
+        // has actual progress data. Calculate from _sfwd-course_progress meta.
+        $meta = get_user_meta($userId, '_sfwd-course_progress', true);
+        if (is_array($meta) && isset($meta[$courseId])) {
+            $total = (int) ($meta[$courseId]['total'] ?? 0);
+            $completed = (int) ($meta[$courseId]['completed'] ?? 0);
+            if ($total > 0) {
+                return (int) round(($completed / $total) * 100);
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * Get all course IDs the user is enrolled in.
+     *
+     * @return int[]
+     */
+    public static function getEnrolledCourses(?int $userId = null): array
+    {
+        if (!self::isActive() || !function_exists('learndash_user_get_enrolled_courses')) {
+            return [];
+        }
+
+        $userId = $userId ?? get_current_user_id();
+        if (!$userId) {
+            return [];
+        }
+
+        return learndash_user_get_enrolled_courses($userId);
+    }
+
+    /**
+     * Get course completion timestamp.
+     *
+     * @return int|null Unix timestamp, or null if not completed
+     */
+    public static function getCompletionDate(int $courseId, ?int $userId = null): ?int
+    {
+        $userId = $userId ?? get_current_user_id();
+
+        if (!self::isComplete($courseId, $userId)) {
+            return null;
+        }
+
+        if (!function_exists('learndash_user_get_course_completed_date')) {
+            return null;
+        }
+
+        $timestamp = learndash_user_get_course_completed_date($userId, $courseId);
+
+        return $timestamp ? (int) $timestamp : null;
     }
 
     /**
@@ -391,39 +473,20 @@ final class LearnDashHelper
 
     /**
      * Get certificate link if user completed course.
-     *
-     * Delegates to LMSAdapterInterface for the actual link retrieval.
      */
     public static function getCertificateLink(int $courseId, ?int $userId = null): string
     {
+        if (!self::isActive() || !function_exists('learndash_get_course_certificate_link')) {
+            return '';
+        }
+
         $userId = $userId ?? get_current_user_id();
 
-        if (!$userId || self::getProgress($courseId, $userId) < 100) {
+        if (!$userId || !self::isComplete($courseId, $userId)) {
             return '';
         }
 
-        $adapter = self::getAdapter();
-        if (!$adapter) {
-            return '';
-        }
-
-        return $adapter->getCertificateLink($userId, $courseId) ?? '';
-    }
-
-    /**
-     * Get the LMS adapter instance.
-     */
-    private static function getAdapter(): ?LMSAdapterInterface
-    {
-        if (!function_exists('ntdst_get')) {
-            return null;
-        }
-
-        try {
-            return ntdst_get(LMSAdapterInterface::class);
-        } catch (\Throwable) {
-            return null;
-        }
+        return learndash_get_course_certificate_link($courseId, $userId) ?: '';
     }
 
     /**
@@ -689,6 +752,28 @@ final class LearnDashHelper
         }
 
         return $result;
+    }
+
+    /**
+     * Get the user's last activity timestamp for a course.
+     */
+    public static function getLastActivityDate(int $courseId, ?int $userId = null): ?int
+    {
+        global $wpdb;
+
+        $userId = $userId ?? get_current_user_id();
+        if (!$userId) {
+            return null;
+        }
+
+        $table = $wpdb->prefix . 'learndash_user_activity';
+        $timestamp = $wpdb->get_var($wpdb->prepare(
+            "SELECT MAX(activity_updated) FROM {$table} WHERE user_id = %d AND course_id = %d",
+            $userId,
+            $courseId,
+        ));
+
+        return $timestamp ? (int) $timestamp : null;
     }
 
     // ──────────────────────────────────────────────────────────

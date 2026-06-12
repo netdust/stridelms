@@ -13,6 +13,11 @@
 @import './learndash.css';
 
 @layer base {
+  /* ── Alpine.js cloak ── */
+  [x-cloak] {
+    display: none !important;
+  }
+
   /* ── Reset ── */
   *,
   *::before,
@@ -61,9 +66,12 @@
     @apply text-primary hover:text-primary-dark transition-colors duration-fast;
   }
 
-  /* ── Focus Styles ── */
+  /* ── Focus Styles ──
+     One visible focus style everywhere (see tokens.css v2):
+     2px ring in the focus token color, offset from the element. */
   :focus-visible {
-    @apply outline-none ring-2 ring-primary/50 ring-offset-2;
+    outline: 2px solid rgb(var(--color-focus));
+    outline-offset: 2px;
   }
 
   /* ── Selection ── */
@@ -80,4 +88,37 @@
   nav ul {
     @apply list-none p-0 m-0;
   }
+
+  /* ── Editorial Utilities ── */
+  .glass-nav {
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    background: rgb(var(--color-surface) / 0.8);
+  }
+
+  .blur-blob {
+    filter: blur(80px);
+    opacity: 0.12;
+    pointer-events: none;
+  }
+}
+
+/* ── Spinner Keyframes ──
+   Rotation used by loading buttons/spinners (design component sheet:
+   `animation: st-spin 700ms linear infinite`). Defined outside @layer
+   so the keyframes always ship regardless of utility tree-shaking. */
+@keyframes st-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* scrollbar-hide: used by tab bars (edition, course, trajectory, dashboard) —
+   Tailwind has no native utility for this. Defined outside @layer so it
+   always ships regardless of utility tree-shaking (same precedent as st-spin). */
+.scrollbar-hide {
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }

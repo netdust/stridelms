@@ -70,7 +70,7 @@ class LTIDataServiceTest extends TestCase
         $this->assertFalse($config['show_in_menu']);
         $this->assertTrue($config['show_in_rest']);
         $this->assertEquals('lti-platforms', $config['rest_base']);
-        $this->assertEquals(['title'], $config['supports']);
+        $this->assertEquals(['title', 'custom-fields'], $config['supports']);
     }
 
     public function test_platform_cpt_has_required_fields(): void

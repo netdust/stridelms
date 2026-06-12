@@ -124,6 +124,13 @@ if ( ! class_exists( 'LearnDash_ProPanel_Reporting' ) ) {
 		function get_result_rows() {
 			check_ajax_referer( 'ld-propanel', 'nonce' );
 
+			if (
+				! learndash_is_admin_user()
+				&& ! learndash_is_group_leader_user()
+				&& ! current_user_can( 'propanel_widgets' ) ) {
+				wp_send_json_error( array( 'message' => 'Insufficient permissions.' ), 403 );
+			}
+
 			$registered_filters = LearnDash_ProPanel::get_instance()->filtering_widget->get_filters();
 
 			$this->post_data           = ld_propanel_load_post_data();
@@ -157,7 +164,7 @@ if ( ! class_exists( 'LearnDash_ProPanel_Reporting' ) ) {
 		}
 
 		/**
-		 * @param array   $user_ids
+		 * @param array $user_ids
 		 * @param $subject
 		 * @param $message
 		 *
@@ -188,7 +195,10 @@ if ( ! class_exists( 'LearnDash_ProPanel_Reporting' ) ) {
 
 						$mail_ret = false;
 
-						$email_sql_str   = 'SELECT user_email from ' . $wpdb->users . ' WHERE ID IN (' . implode( ',', $user_ids_part ) . ')';
+						$email_sql_str   = $wpdb->prepare(
+							'SELECT user_email FROM ' . $wpdb->users . ' WHERE ID IN (' . implode( ', ', array_fill( 0, count( $user_ids_part ), '%d' ) ) . ')',
+							...array_values( $user_ids_part )
+						);
 						$email_addresses = $wpdb->get_col( $email_sql_str );
 
 						if ( $email_addresses ) {
@@ -234,6 +244,13 @@ if ( ! class_exists( 'LearnDash_ProPanel_Reporting' ) ) {
 		function ajax_email_users() {
 			check_ajax_referer( 'ld-propanel', 'nonce' );
 
+			if (
+				! learndash_is_admin_user()
+				&& ! learndash_is_group_leader_user()
+				&& ! current_user_can( 'propanel_widgets' ) ) {
+				wp_send_json_error( array( 'message' => 'Insufficient permissions.' ), 403 );
+			}
+
 			$user_ids       = isset( $_POST['user_ids'] ) ? $_POST['user_ids'] : null;
 			$filter         = isset( $_POST['filter'] ) ? $_POST['filter'] : null;
 			$subject        = isset( $_POST['subject'] ) ? sanitize_text_field( stripslashes( $_POST['subject'] ) ) : '';
@@ -261,7 +278,10 @@ if ( ! class_exists( 'LearnDash_ProPanel_Reporting' ) ) {
 
 				while ( true ) {
 					$activities = learndash_reports_get_activity( $this->activity_query_args );
-					if ( ( isset( $activities['results'] ) ) && ( ! empty( $activities['results'] ) ) ) {
+					if (
+						isset( $activities['results'] )
+						&& ! empty( $activities['results'] )
+					) {
 						$user_ids                            = array_merge( $user_ids, wp_list_pluck( $activities['results'], 'user_id' ) );
 						$this->activity_query_args['paged'] += 1;
 					} else {
@@ -270,7 +290,11 @@ if ( ! class_exists( 'LearnDash_ProPanel_Reporting' ) ) {
 				}
 			}
 
-			if ( ( ! empty( $user_ids ) ) && ( ! empty( $subject ) ) && ( ! empty( $message ) ) ) {
+			if (
+				! empty( $user_ids )
+				&& ! empty( $subject )
+				&& ! empty( $message )
+			) {
 				$user_ids = array_unique( $user_ids );
 				$result   = $this->email_users( $user_ids, $subject, $message, $filter );
 				if ( $result ) {

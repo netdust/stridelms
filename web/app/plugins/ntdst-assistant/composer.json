@@ -1,0 +1,14 @@
+{
+    "name": "ntdst/ntdst-assistant",
+    "description": "AI chat assistant for WordPress admins using Abilities API",
+    "type": "wordpress-plugin",
+    "require": {
+        "php": ">=8.1",
+        "erusev/parsedown": "^1.7"
+    },
+    "autoload": {
+        "psr-4": {
+            "NtdstAssistant\\": "src/"
+        }
+    }
+}

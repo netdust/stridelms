@@ -1,0 +1,422 @@
+{
+  "meta": {
+    "generated": "2026-05-16",
+    "version": "phase-1",
+    "source": "stride-core mu-plugin + stridence theme",
+    "scope": "Domain-driven onboarding map. Phase 1 launch focus; trajectories + partner_api tagged post-launch."
+  },
+  "domain_order": [
+    "edition", "enrollment", "invoicing", "attendance", "questionnaire",
+    "notification", "user", "mail", "audit", "membership", "reporting",
+    "assistant", "admin", "learndash", "trajectory", "partner_api"
+  ],
+  "domains": {
+    "edition": {
+      "name": "Edition",
+      "status": "launch",
+      "purpose": "Scheduled course offerings — dates, pricing, capacity, sessions. LearnDash courses are content; editions are bookable instances.",
+      "depends_on": ["learndash"],
+      "services": [
+        {
+          "class": "Stride\\Modules\\Edition\\EditionService",
+          "file": "web/app/mu-plugins/stride-core/Modules/Edition/EditionService.php",
+          "priority": 10,
+          "responsibilities": ["Get registered count", "Get capacity", "Get status", "Get course id", "Get enrollment form"]
+        }
+      ],
+      "data": {
+        "cpts": [{ "slug": "vad_edition", "registered_in": "Modules/Edition/EditionCPT.php", "purpose": "Scheduled course offerings" }],
+        "tables": [],
+        "user_meta": [],
+        "taxonomies": [
+          { "slug": "stride_audience", "post_types": ["sfwd-courses"], "registered_in": "Integrations/LearnDash/CourseTaxonomies.php" },
+          { "slug": "stride_theme", "post_types": ["sfwd-courses"], "registered_in": "Integrations/LearnDash/CourseTaxonomies.php" },
+          { "slug": "stride_format", "post_types": ["sfwd-courses"], "registered_in": "Integrations/LearnDash/CourseTaxonomies.php" }
+        ]
+      },
+      "endpoints": {
+        "rest": [],
+        "ajax": [
+          { "action": "stride_add_session", "auth": "logged_in" },
+          { "action": "stride_approve_post_course", "auth": "logged_in" },
+          { "action": "stride_bulk_attendance", "auth": "logged_in" },
+          { "action": "stride_bulk_lock_quotes", "auth": "logged_in" },
+          { "action": "stride_confirm_registration", "auth": "logged_in" },
+          { "action": "stride_delete_session", "auth": "logged_in" },
+          { "action": "stride_export_registrations", "auth": "logged_in" },
+          { "action": "stride_get_course_lessons", "auth": "logged_in" },
+          { "action": "stride_mark_attendance", "auth": "logged_in" },
+          { "action": "stride_reject_registration", "auth": "logged_in" },
+          { "action": "stride_update_session", "auth": "logged_in" }
+        ],
+        "admin": [],
+        "frontend": []
+      }
+    },
+    "enrollment": {
+      "name": "Enrollment",
+      "status": "launch",
+      "purpose": "Users register for editions. Lifecycle: interest → confirmed → cancelled. Maps form fields to user meta on enroll.",
+      "depends_on": ["edition", "user", "invoicing", "learndash", "questionnaire"],
+      "services": [
+        {
+          "class": "Stride\\Modules\\Enrollment\\EnrollmentService",
+          "file": "web/app/mu-plugins/stride-core/Modules/Enrollment/EnrollmentService.php",
+          "priority": 15,
+          "responsibilities": ["Enroll", "Register interest", "Confirm registration", "Quote cancelled", "Maybe enroll lesson access"]
+        },
+        { "class": "Stride\\Handlers\\CompletionTaskHandler", "file": "web/app/mu-plugins/stride-core/Handlers/CompletionTaskHandler.php", "priority": null, "responsibilities": ["AJAX: completion task lifecycle"] },
+        { "class": "Stride\\Handlers\\EnrollmentFormHandler", "file": "web/app/mu-plugins/stride-core/Handlers/EnrollmentFormHandler.php", "priority": null, "responsibilities": ["AJAX: enrollment form submission"] },
+        { "class": "Stride\\Handlers\\EnrollmentQuoteHandler", "file": "web/app/mu-plugins/stride-core/Handlers/EnrollmentQuoteHandler.php", "priority": null, "responsibilities": ["AJAX: enrollment-driven quote actions"] }
+      ],
+      "data": {
+        "cpts": [],
+        "tables": [{ "name": "wp_vad_registrations", "owner": "Modules/Enrollment/RegistrationTable.php", "purpose": "Edition + trajectory enrollments with status, completion tasks, enrollment data" }],
+        "user_meta": [
+          { "key": "phone", "source": "EnrollmentService::getUserMetaMapping()" },
+          { "key": "organisation", "source": "EnrollmentService::getUserMetaMapping()" },
+          { "key": "department", "source": "EnrollmentService::getUserMetaMapping()" },
+          { "key": "national_id", "source": "EnrollmentService::getUserMetaMapping()" },
+          { "key": "date_of_birth", "source": "EnrollmentService::getUserMetaMapping()" },
+          { "key": "professional_license_number", "source": "EnrollmentService::getUserMetaMapping()" },
+          { "key": "_stride_company_id", "source": "EnrollmentService::enroll() + PartnerAPI" }
+        ],
+        "taxonomies": []
+      },
+      "endpoints": {
+        "rest": [],
+        "ajax": [],
+        "admin": [],
+        "frontend": [{ "tag": "stride_evaluation", "registered_in": "themes/stridence/services/frontend/shortcodes/EvaluationShortcodes.php" }]
+      }
+    },
+    "invoicing": {
+      "name": "Invoicing",
+      "status": "launch",
+      "purpose": "Quotes + vouchers. PDF generation via DOMPDF. Stride creates quotes; Exact Online handles actual invoicing.",
+      "depends_on": ["enrollment", "user"],
+      "services": [
+        {
+          "class": "Stride\\Modules\\Invoicing\\QuoteService",
+          "file": "web/app/mu-plugins/stride-core/Modules/Invoicing/QuoteService.php",
+          "priority": 20,
+          "responsibilities": ["Create quote", "Get quote", "Get user quotes", "Registration cancelled", "Session selection completed"]
+        },
+        { "class": "Stride\\Handlers\\QuoteUpdateHandler", "file": "web/app/mu-plugins/stride-core/Handlers/QuoteUpdateHandler.php", "priority": null, "responsibilities": ["AJAX: update quote line items / billing"] }
+      ],
+      "data": {
+        "cpts": [{ "slug": "vad_quote", "registered_in": "Modules/Invoicing/QuoteCPT.php", "purpose": "Quote/invoice records" }, { "slug": "vad_voucher", "registered_in": "Modules/Invoicing/VoucherCPT.php", "purpose": "Discount codes" }],
+        "tables": [],
+        "user_meta": [
+          { "key": "billing_company", "source": "EnrollmentService::getUserMetaMapping()" },
+          { "key": "billing_vat", "source": "EnrollmentService::getUserMetaMapping()" },
+          { "key": "billing_address_1", "source": "EnrollmentService::getUserMetaMapping()" },
+          { "key": "billing_postcode", "source": "EnrollmentService::getUserMetaMapping()" },
+          { "key": "billing_city", "source": "EnrollmentService::getUserMetaMapping()" },
+          { "key": "invoice_email", "source": "EnrollmentService::getUserMetaMapping()" },
+          { "key": "gln_number", "source": "EnrollmentService::getUserMetaMapping()" }
+        ],
+        "taxonomies": []
+      },
+      "endpoints": {
+        "rest": [],
+        "ajax": [{ "action": "stride_get_user_data", "auth": "logged_in" }],
+        "admin": [],
+        "frontend": []
+      }
+    },
+    "attendance": {
+      "name": "Attendance",
+      "status": "launch",
+      "purpose": "Per-session presence tracking. Bulk + per-row marking from edition admin. iCal feeds for users.",
+      "depends_on": ["edition", "enrollment"],
+      "services": [
+        {
+          "class": "Stride\\Modules\\Attendance\\AttendanceService",
+          "file": "web/app/mu-plugins/stride-core/Modules/Attendance/AttendanceService.php",
+          "priority": 25,
+          "responsibilities": ["Mark present", "Mark absent", "Mark excused", "Get status", "Get repository"]
+        },
+        { "class": "Stride\\Handlers\\ICalHandler", "file": "web/app/mu-plugins/stride-core/Handlers/ICalHandler.php", "priority": null, "responsibilities": ["Serve .ics feed of user sessions"] }
+      ],
+      "data": {
+        "cpts": [{ "slug": "vad_session", "registered_in": "Modules/Edition/SessionCPT.php", "purpose": "Meeting days within an edition" }],
+        "tables": [{ "name": "wp_vad_attendance", "owner": "Modules/Attendance/AttendanceTable.php", "purpose": "Session attendance (present/absent/excused)" }],
+        "user_meta": [],
+        "taxonomies": []
+      },
+      "endpoints": { "rest": [], "ajax": [], "admin": [], "frontend": [] }
+    },
+    "questionnaire": {
+      "name": "Questionnaire",
+      "status": "launch",
+      "purpose": "Intake + evaluation forms. Custom field names matching EnrollmentService::getUserMetaMapping() auto-persist to wp_usermeta.",
+      "depends_on": ["enrollment", "user"],
+      "services": [
+        { "class": "Stride\\Modules\\Questionnaire\\QuestionnaireService", "file": "web/app/mu-plugins/stride-core/Modules/Questionnaire/QuestionnaireService.php", "priority": 12, "responsibilities": ["Define questionnaire schema", "Render forms", "Persist responses"] }
+      ],
+      "data": { "cpts": [], "tables": [], "user_meta": [], "taxonomies": [] },
+      "endpoints": {
+        "rest": [],
+        "ajax": [],
+        "admin": [{ "title": "Formuliervelden", "slug": "stride-questionnaire-settings", "parent": "stride-dashboard" }],
+        "frontend": [{ "tag": "stride_intake", "registered_in": "themes/stridence/services/frontend/shortcodes/IntakeShortcodes.php" }]
+      }
+    },
+    "notification": {
+      "name": "Notification",
+      "status": "launch",
+      "purpose": "In-app notification list. FluentCRM bridge handled by Mail. Read-state stored per user.",
+      "depends_on": [],
+      "services": [
+        { "class": "Stride\\Modules\\Notification\\NotificationService", "file": "web/app/mu-plugins/stride-core/Modules/Notification/NotificationService.php", "priority": 20, "responsibilities": ["Get notifications", "Get unread count", "Mark read", "Mark all read"] }
+      ],
+      "data": {
+        "cpts": [],
+        "tables": [],
+        "user_meta": [{ "key": "_stride_notifications_read", "source": "NotificationService", "format": "JSON-encoded map of read notification IDs" }],
+        "taxonomies": []
+      },
+      "endpoints": { "rest": [], "ajax": [], "admin": [], "frontend": [] }
+    },
+    "user": {
+      "name": "User",
+      "status": "launch",
+      "purpose": "Profile types, lifecycle (anonymisation, GDPR), self-service profile editing. Personal meta separate from billing meta.",
+      "depends_on": [],
+      "services": [
+        { "class": "Stride\\Modules\\User\\ProfileTypeService", "file": "web/app/mu-plugins/stride-core/Modules/User/ProfileTypeService.php", "priority": 3, "responsibilities": ["Get types", "Get user type", "Set user type"] },
+        { "class": "Stride\\Modules\\User\\UserLifecycleService", "file": "web/app/mu-plugins/stride-core/Modules/User/UserLifecycleService.php", "priority": 4, "responsibilities": ["Anonymise user", "Render admin notices", "Filter row actions"] },
+        { "class": "Stride\\Handlers\\ProfileHandler", "file": "web/app/mu-plugins/stride-core/Handlers/ProfileHandler.php", "priority": null, "responsibilities": ["AJAX: update profile + notification prefs"] }
+      ],
+      "data": {
+        "cpts": [],
+        "tables": [],
+        "user_meta": [
+          { "key": "_stride_profile_type", "source": "ProfileTypeService" },
+          { "key": "_stride_anonymised_at", "source": "UserLifecycleService", "purpose": "GDPR anonymisation timestamp" },
+          { "key": "stride_notify_reminders", "source": "ProfileHandler" },
+          { "key": "stride_notify_new_courses", "source": "ProfileHandler" },
+          { "key": "stride_notify_newsletter", "source": "ProfileHandler" },
+          { "key": "stride_communication_language", "source": "ProfileHandler", "values": ["nl", "fr", "en"] }
+        ],
+        "taxonomies": []
+      },
+      "endpoints": {
+        "rest": [],
+        "ajax": [],
+        "admin": [],
+        "frontend": [
+          { "tag": "stride_my_quotes", "registered_in": "Modules/User/QuotesShortcode.php" },
+          { "tag": "stride_my_courses", "registered_in": "Modules/User/DashboardShortcode.php" }
+        ]
+      }
+    },
+    "mail": {
+      "name": "Mail",
+      "status": "launch",
+      "purpose": "FluentCRM bridge — registers smart codes + triggers for lifecycle emails. Admin notifications scheduled here.",
+      "depends_on": ["enrollment", "attendance", "user"],
+      "services": [
+        { "class": "Stride\\Modules\\Mail\\StrideMailBridge", "file": "web/app/mu-plugins/stride-core/Modules/Mail/StrideMailBridge.php", "priority": 25, "responsibilities": ["Register smart codes", "Register triggers", "Schedule admin notify", "Registration created admin notify", "Task completed"] }
+      ],
+      "data": { "cpts": [], "tables": [], "user_meta": [], "taxonomies": [] },
+      "endpoints": { "rest": [], "ajax": [], "admin": [], "frontend": [] }
+    },
+    "audit": {
+      "name": "Audit",
+      "status": "launch",
+      "purpose": "Centralised audit trail. Hooks domain events (registration, attendance, session notes, assistant execute) into NTDST audit log.",
+      "depends_on": ["enrollment", "attendance", "assistant"],
+      "services": [
+        { "class": "Stride\\Modules\\Audit\\AuditBridge", "file": "web/app/mu-plugins/stride-core/Modules/Audit/AuditBridge.php", "priority": 99, "responsibilities": ["Registration created", "Registration cancelled", "Attendance marked", "Session note updated", "Assistant execute"] }
+      ],
+      "data": {
+        "cpts": [],
+        "tables": [{ "name": "wp_audit_log", "owner": "NTDST Audit Service", "purpose": "Event audit log (impersonation, registrations, user actions)" }],
+        "user_meta": [],
+        "taxonomies": []
+      },
+      "endpoints": {
+        "rest": [],
+        "ajax": [],
+        "admin": [],
+        "frontend": [{ "tag": "stride_my_activity", "registered_in": "Modules/Audit/ActivityShortcode.php" }]
+      }
+    },
+    "membership": {
+      "name": "Membership",
+      "status": "launch",
+      "purpose": "Membership service — gate access / role-based features.",
+      "depends_on": ["user"],
+      "services": [
+        { "class": "Stride\\Modules\\Membership\\MembershipService", "file": "web/app/mu-plugins/stride-core/Modules/Membership/MembershipService.php", "priority": 4, "responsibilities": ["Membership rule registration"] }
+      ],
+      "data": { "cpts": [], "tables": [], "user_meta": [], "taxonomies": [] },
+      "endpoints": { "rest": [], "ajax": [], "admin": [], "frontend": [] }
+    },
+    "reporting": {
+      "name": "Reporting (Jaarrapport)",
+      "status": "launch",
+      "purpose": "Annual report: KPIs, charts, CSV + PDF export. Built from enrollment + attendance data.",
+      "depends_on": ["enrollment", "attendance", "edition"],
+      "services": [
+        { "class": "Stride\\Modules\\Reporting\\AnnualReportService", "file": "web/app/mu-plugins/stride-core/Modules/Reporting/AnnualReportService.php", "priority": 50, "responsibilities": ["Build report", "Available years"] },
+        { "class": "Stride\\Modules\\Reporting\\AnnualReportPdfGenerator", "file": "web/app/mu-plugins/stride-core/Modules/Reporting/AnnualReportPdfGenerator.php", "priority": 60, "responsibilities": ["Generate PDF via DOMPDF"] },
+        { "class": "Stride\\Modules\\Reporting\\Admin\\AnnualReportPage", "file": "web/app/mu-plugins/stride-core/Modules/Reporting/Admin/AnnualReportPage.php", "priority": 60, "responsibilities": ["Register submenu", "Enqueue assets", "Render"] },
+        { "class": "Stride\\Handlers\\AnnualReportHandler", "file": "web/app/mu-plugins/stride-core/Handlers/AnnualReportHandler.php", "priority": null, "responsibilities": ["AJAX: CSV download", "AJAX: PDF download"] }
+      ],
+      "data": { "cpts": [], "tables": [], "user_meta": [], "taxonomies": [] },
+      "endpoints": {
+        "rest": [],
+        "ajax": [
+          { "action": "stride_annual_report_csv", "auth": "logged_in" },
+          { "action": "stride_annual_report_pdf", "auth": "logged_in" }
+        ],
+        "admin": [{ "title": "Jaarrapport", "slug": "stride-annual-report", "parent": "stride-dashboard" }],
+        "frontend": []
+      }
+    },
+    "assistant": {
+      "name": "Assistant",
+      "status": "launch",
+      "purpose": "AI assistant abilities (read + write). Read: search users, editions. Write: enroll, unenroll, mark attendance.",
+      "depends_on": ["user", "edition", "enrollment", "attendance"],
+      "services": [
+        { "class": "Stride\\Modules\\Assistant\\ReadAbilityRegistrar", "file": "web/app/mu-plugins/stride-core/Modules/Assistant/ReadAbilityRegistrar.php", "priority": 90, "responsibilities": ["Register categories", "Register abilities", "Search users", "Get edition(s)"] },
+        { "class": "Stride\\Modules\\Assistant\\WriteAbilityRegistrar", "file": "web/app/mu-plugins/stride-core/Modules/Assistant/WriteAbilityRegistrar.php", "priority": 90, "responsibilities": ["Enroll user", "Unenroll user", "Mark attendance"] }
+      ],
+      "data": { "cpts": [], "tables": [], "user_meta": [], "taxonomies": [] },
+      "endpoints": { "rest": [], "ajax": [], "admin": [], "frontend": [] }
+    },
+    "admin": {
+      "name": "Admin Dashboard",
+      "status": "launch",
+      "purpose": "Unified Stride admin SPA. REST API powers dashboard stats, editions list, user search/detail, action queue, impersonation.",
+      "depends_on": ["edition", "enrollment", "user", "invoicing", "trajectory", "audit", "notification"],
+      "services": [
+        { "class": "Stride\\Admin\\AdminDashboardService", "file": "web/app/mu-plugins/stride-core/Admin/AdminDashboardService.php", "priority": 5, "responsibilities": ["Register admin page", "Reorder submenus", "Enqueue assets", "Inject styles"] }
+      ],
+      "data": {
+        "cpts": [],
+        "tables": [],
+        "user_meta": [{ "key": "stride_last_read_notification_id", "source": "AdminAPIController" }],
+        "taxonomies": []
+      },
+      "endpoints": {
+        "rest": [
+          { "namespace": "stride/v1", "route": "/admin/stats", "methods": "GET" },
+          { "namespace": "stride/v1", "route": "/admin/editions", "methods": "GET" },
+          { "namespace": "stride/v1", "route": "/admin/editions/(?P<id>\\d+)", "methods": "GET" },
+          { "namespace": "stride/v1", "route": "/admin/editions/(?P<id>\\d+)/registrations", "methods": "GET" },
+          { "namespace": "stride/v1", "route": "/admin/course-tags", "methods": "GET" },
+          { "namespace": "stride/v1", "route": "/admin/attendance", "methods": "POST" },
+          { "namespace": "stride/v1", "route": "/admin/quotes", "methods": "GET" },
+          { "namespace": "stride/v1", "route": "/admin/trajectories", "methods": "GET" },
+          { "namespace": "stride/v1", "route": "/admin/trajectories/(?P<id>\\d+)", "methods": "GET" },
+          { "namespace": "stride/v1", "route": "/admin/pending-approvals", "methods": "GET" },
+          { "namespace": "stride/v1", "route": "/admin/approve-registration", "methods": "POST" },
+          { "namespace": "stride/v1", "route": "/admin/approve-post-course", "methods": "POST" },
+          { "namespace": "stride/v1", "route": "/admin/action-queue", "methods": "GET" },
+          { "namespace": "stride/v1", "route": "/admin/action-queue/dismiss", "methods": "POST" },
+          { "namespace": "stride/v1", "route": "/admin/health-checks", "methods": "GET" },
+          { "namespace": "stride/v1", "route": "/admin/activity", "methods": "GET" },
+          { "namespace": "stride/v1", "route": "/admin/users/search", "methods": "GET" },
+          { "namespace": "stride/v1", "route": "/admin/users/(?P<id>\\d+)/detail", "methods": "GET" },
+          { "namespace": "stride/v1", "route": "/admin/users/(?P<id>\\d+)/profile", "methods": "POST" },
+          { "namespace": "stride/v1", "route": "/admin/users/(?P<id>\\d+)/reveal", "methods": "GET" },
+          { "namespace": "stride/v1", "route": "/admin/users/(?P<id>\\d+)/impersonate", "methods": "POST" },
+          { "namespace": "stride/v1", "route": "/admin/impersonate/end", "methods": "GET,POST" },
+          { "namespace": "stride/v1", "route": "/admin/notifications", "methods": "GET" },
+          { "namespace": "stride/v1", "route": "/admin/notifications/read", "methods": "POST" },
+          { "namespace": "stride/v1", "route": "/admin/export/registrations", "methods": "GET" }
+        ],
+        "ajax": [],
+        "admin": [
+          { "title": "Stride", "slug": "stride-dashboard", "parent": null },
+          { "title": "Dashboard", "slug": "stride-dashboard", "parent": "stride-dashboard" },
+          { "title": "Handleiding", "slug": "stride-guide", "parent": "stride-dashboard" },
+          { "title": "Instellingen", "slug": "stride-settings", "parent": "stride-dashboard" }
+        ],
+        "frontend": [
+          { "tag": "stride_interest", "registered_in": "themes/stridence/services/frontend/shortcodes/InterestShortcodes.php" },
+          { "tag": "stride_enrollment", "registered_in": "themes/stridence/services/frontend/shortcodes/EnrollmentShortcode.php" }
+        ]
+      }
+    },
+    "learndash": {
+      "name": "LearnDash Integration",
+      "status": "launch",
+      "purpose": "Adapter to LearnDash. Business ops only: grantAccess, revokeAccess, isComplete. Read-only template helpers live in LearnDashHelper.",
+      "depends_on": [],
+      "services": [
+        { "class": "Stride\\Integrations\\LearnDash\\LearnDashService", "file": "web/app/mu-plugins/stride-core/Integrations/LearnDash/LearnDashService.php", "priority": 5, "responsibilities": ["Grant access", "Revoke access", "Is complete"] }
+      ],
+      "data": {
+        "cpts": [],
+        "tables": [],
+        "user_meta": [
+          { "key": "course_{courseId}_access_from", "source": "LearnDashHelper", "purpose": "LearnDash course access timestamp" },
+          { "key": "_sfwd-course_progress", "source": "LearnDashHelper", "purpose": "LearnDash course progress tracking" }
+        ],
+        "taxonomies": []
+      },
+      "endpoints": { "rest": [], "ajax": [], "admin": [], "frontend": [] }
+    },
+    "trajectory": {
+      "name": "Trajectory",
+      "status": "post-launch",
+      "purpose": "Multi-edition learning paths. Dimmed by default — post-launch scope per project_production_priorities.",
+      "depends_on": ["edition", "enrollment"],
+      "services": [
+        { "class": "Stride\\Modules\\Trajectory\\TrajectoryService", "file": "web/app/mu-plugins/stride-core/Modules/Trajectory/TrajectoryService.php", "priority": 20, "responsibilities": ["Create trajectory", "Get trajectory", "Update trajectory", "Get active trajectories", "Get open trajectories"] }
+      ],
+      "data": { "cpts": [], "tables": [], "user_meta": [], "taxonomies": [] },
+      "endpoints": {
+        "rest": [],
+        "ajax": [
+          { "action": "stride_get_trajectory_enrollments", "auth": "logged_in" },
+          { "action": "stride_search_courses", "auth": "logged_in" },
+          { "action": "stride_search_courses_editions", "auth": "logged_in" }
+        ],
+        "admin": [],
+        "frontend": []
+      }
+    },
+    "partner_api": {
+      "name": "Partner API",
+      "status": "post-launch",
+      "purpose": "REST API for partner organisations. Application Passwords auth, scoped by _stride_company_id. Post-launch scope.",
+      "depends_on": ["enrollment", "user", "attendance"],
+      "services": [
+        { "class": "Stride\\Modules\\PartnerAPI\\PartnerAPIController", "file": "web/app/mu-plugins/stride-core/Modules/PartnerAPI/PartnerAPIController.php", "priority": null, "responsibilities": ["Register routes", "Auth + company scoping", "List users / enrollments / certificates / attendance", "Create enrollment"] }
+      ],
+      "data": {
+        "cpts": [],
+        "tables": [],
+        "user_meta": [{ "key": "_stride_company_id", "source": "PartnerAPIController" }],
+        "taxonomies": []
+      },
+      "endpoints": {
+        "rest": [
+          { "namespace": "stride/v1", "route": "/partner/users", "methods": "GET" },
+          { "namespace": "stride/v1", "route": "/partner/enrollments", "methods": "GET" },
+          { "namespace": "stride/v1", "route": "/partner/enrollments/(?P<id>\\d+)", "methods": "GET" },
+          { "namespace": "stride/v1", "route": "/partner/certificates", "methods": "GET" },
+          { "namespace": "stride/v1", "route": "/partner/attendance", "methods": "GET" },
+          { "namespace": "stride/v1", "route": "/partner/enrollments", "methods": "POST" }
+        ],
+        "ajax": [],
+        "admin": [],
+        "frontend": []
+      }
+    }
+  },
+  "integrations": [
+    { "id": "learndash", "name": "LearnDash", "adapter": "Stride\\Integrations\\LearnDash\\LearnDashService", "purpose": "LMS content + access control" },
+    { "id": "fluent_crm", "name": "FluentCRM", "adapter": "Stride\\Modules\\Mail\\StrideMailBridge", "purpose": "Email triggers + smart codes" },
+    { "id": "fluent_forms", "name": "FluentForms", "adapter": "Stride\\Modules\\Questionnaire\\QuestionnaireService", "purpose": "Intake + evaluation forms" },
+    { "id": "dompdf", "name": "DOMPDF", "adapter": "Stride\\Modules\\Invoicing\\QuoteService + AnnualReportPdfGenerator", "purpose": "Quote + report PDF generation" },
+    { "id": "ntdst_core", "name": "NTDST Core", "adapter": "Framework", "purpose": "DI container, bootstrap, router, audit log" }
+  ]
+}

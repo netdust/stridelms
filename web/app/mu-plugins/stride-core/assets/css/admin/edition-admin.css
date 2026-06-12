@@ -8,6 +8,35 @@
  */
 
 /* ==========================================================================
+   Icon Buttons
+   ========================================================================== */
+
+/* Core buttons.css centers dashicons assuming their default 20px size
+   (line-height 1.9 in the 38px button line box); our 16px override breaks
+   that math, so inline-align tricks always sit a few px off. Flex-center
+   the button content instead — exact at any button height. Verified 0px
+   offset in-browser 2026-06-12. This stylesheet only loads on edition
+   screens, so the generic selector is page-scoped. */
+.button:has(> .dashicons) {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.wp-core-ui .button > .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    line-height: 1;
+    margin: 0;
+}
+
+/* Speakers repeater rows */
+.wp-core-ui .stride-speaker-remove {
+    text-decoration: none;
+}
+
+/* ==========================================================================
    Edition Admin Container
    ========================================================================== */
 
@@ -200,14 +229,6 @@
     display: flex;
     justify-content: flex-end;
     margin-bottom: 12px;
-}
-
-.stride-sessions-header .button .dashicons {
-    font-size: 16px;
-    width: 16px;
-    height: 16px;
-    vertical-align: text-top;
-    margin-right: 2px;
 }
 
 /* ==========================================================================
@@ -945,17 +966,106 @@
     background: #fff;
     border: 1px solid #ddd;
     border-radius: 3px;
-    padding: 12px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
+    overflow: hidden;
 }
 
 .stride-slot-row:last-child {
     margin-bottom: 0;
 }
 
+.stride-slot-row.is-required {
+    border-left: 3px solid #dba617;
+}
+
+/* Compact summary row */
+.stride-slot-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    gap: 12px;
+}
+
+.stride-slot-summary-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.stride-slot-summary-label {
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.stride-slot-summary-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: #fcf0e0;
+    color: #8a4b00;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.stride-slot-summary-meta {
+    font-size: 12px;
+    color: #646970;
+}
+
+.stride-slot-summary-meta code {
+    font-size: 11px;
+    background: #f0f0f1;
+    padding: 1px 6px;
+    border-radius: 2px;
+}
+
+.stride-slot-summary-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.stride-slot-summary-actions .button-link {
+    padding: 4px;
+    line-height: 1;
+    color: #2271b1;
+    text-decoration: none;
+    box-shadow: none;
+}
+
+.stride-slot-summary-actions .button-link:hover,
+.stride-slot-summary-actions .button-link:focus {
+    text-decoration: none;
+    box-shadow: none;
+}
+
+.stride-slot-summary-actions .stride-remove-slot {
+    color: #a00;
+}
+
+/* Expanded edit panel — hidden by default, shown when row has .is-editing */
+.stride-slot-edit {
+    display: none;
+    padding: 12px;
+    border-top: 1px solid #eee;
+    background: #f9f9f9;
+}
+
+.stride-slot-row.is-editing .stride-slot-edit {
+    display: block;
+}
+
+.stride-slot-row.is-editing .stride-slot-summary {
+    display: none;
+}
+
 .stride-field-row.four-col {
     display: grid;
-    grid-template-columns: 1fr 1.5fr 0.8fr auto;
+    grid-template-columns: 1.5fr 1fr 0.8fr auto;
     gap: 12px;
     align-items: end;
 }
@@ -975,10 +1085,75 @@
     white-space: nowrap;
 }
 
+.stride-slot-actions .stride-slot-required-toggle {
+    font-weight: 600 !important;
+    padding: 4px 8px;
+    border-radius: 3px;
+    transition: background-color 0.15s ease;
+    cursor: pointer;
+}
+
+.stride-slot-row.is-required .stride-slot-required-toggle {
+    background: #fcf0e0;
+    color: #8a4b00;
+}
+
 .stride-remove-slot {
     color: #a00;
     padding: 4px;
     line-height: 1;
+}
+
+/* Window form (Sessiekeuze) — labels left, controls right */
+.stride-window-form {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid #e0e0e0;
+}
+
+.stride-window-row {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 0;
+}
+
+.stride-window-label {
+    font-weight: 600;
+    font-size: 12px;
+    color: #1d2327;
+}
+
+.stride-window-control input[type="date"] {
+    max-width: 200px;
+    font-size: 12px;
+}
+
+/* State pill at top of Keuzegroepen */
+.stride-keuzegroepen-state {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 3px 10px;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    background: #f0f0f1;
+    color: #50575e;
+}
+.stride-keuzegroepen-state.is-active {
+    background: #edfaef;
+    color: #1a4731;
+}
+.stride-keuzegroepen-state.is-warning {
+    background: #fcf0e0;
+    color: #8a4b00;
+}
+.stride-keuzegroepen-state.is-neutral {
+    background: #f0f0f1;
+    color: #50575e;
 }
 
 .stride-remove-slot:hover {
@@ -993,14 +1168,6 @@
 
 #stride-add-slot-btn {
     margin-top: 8px;
-}
-
-#stride-add-slot-btn .dashicons {
-    font-size: 16px;
-    width: 16px;
-    height: 16px;
-    vertical-align: text-top;
-    margin-right: 2px;
 }
 
 /* Sessions Table with Slot Column */
@@ -1725,4 +1892,136 @@ tr.stride-toggle-detail.expanded .stride-detail-arrow {
     .stride-registration-table .column-org {
         display: none;
     }
+}
+
+/* ============ Deelnemers — action icons ============ */
+
+.stride-registration-table .column-actions .button-link {
+    margin-right: 4px;
+    color: #50575e;
+}
+.stride-registration-table .column-actions .button-link:hover,
+.stride-registration-table .column-actions .button-link:focus { color: #2271b1; }
+
+.stride-registration-table .column-actions .button-link.disabled,
+.stride-registration-table .column-actions [aria-disabled="true"] {
+    color: #c3c4c7;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.stride-action-divider {
+    display: inline-block;
+    width: 1px;
+    height: 14px;
+    background: #dcdcde;
+    vertical-align: middle;
+    margin: 0 6px;
+}
+
+/* ============ Modal ============ */
+
+body.stride-modal-open { overflow: hidden; }
+
+.stride-modal[hidden] { display: none; }
+
+.stride-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100100;
+}
+
+.stride-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.stride-modal-dialog {
+    position: relative;
+    margin: 5vh auto;
+    width: min(880px, calc(100% - 32px));
+    max-height: 90vh;
+    background: #fff;
+    border-radius: 4px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+}
+
+.stride-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid #dcdcde;
+}
+
+.stride-modal-title { margin: 0; font-size: 16px; }
+
+.stride-modal-close {
+    background: none;
+    border: 0;
+    cursor: pointer;
+    padding: 4px;
+    color: #50575e;
+}
+
+.stride-modal-content {
+    padding: 16px 20px;
+    overflow-y: auto;
+}
+
+.stride-modal-skeleton {
+    padding: 24px 20px;
+    color: #646970;
+    font-style: italic;
+}
+
+.stride-modal-error { color: #b32d2e; }
+
+.stride-modal-section + .stride-modal-section { margin-top: 20px; }
+
+.stride-modal-section-title {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #1d2327;
+    margin: 0 0 8px;
+}
+
+.stride-modal-dl { margin: 0; }
+.stride-modal-dl .stride-form-row { display: flex; gap: 12px; padding: 4px 0; }
+.stride-modal-dl dt { min-width: 180px; font-weight: 600; color: #1d2327; }
+.stride-modal-dl dd { margin: 0; color: #1d2327; }
+
+.stride-modal-sessions { list-style: none; margin: 0; padding: 0; }
+.stride-modal-session { padding: 6px 0; border-bottom: 1px solid #f0f0f1; display: flex; gap: 12px; align-items: baseline; }
+.stride-modal-slot-label { font-weight: 600; color: #50575e; }
+
+.stride-modal-qa { padding-left: 18px; }
+.stride-modal-qa-item + .stride-modal-qa-item { margin-top: 10px; }
+.stride-modal-qa-q { font-weight: 600; }
+.stride-modal-qa-a { color: #50575e; }
+
+.stride-modal-docs { list-style: none; margin: 0; padding: 0; }
+.stride-modal-doc { padding: 6px 0; border-bottom: 1px solid #f0f0f1; }
+.stride-modal-doc a .dashicons { vertical-align: middle; margin-right: 4px; }
+.stride-modal-doc-date { color: #8c8f94; margin-left: 8px; font-size: 12px; }
+
+.stride-modal-task-table { width: 100%; border-collapse: collapse; }
+.stride-modal-task-table th, .stride-modal-task-table td {
+    padding: 6px 8px; text-align: left; border-bottom: 1px solid #f0f0f1;
+}
+.stride-modal-progress { display: flex; align-items: center; gap: 12px; }
+.stride-modal-progress-bar { flex: 1; height: 8px; background: #f0f0f1; border-radius: 4px; overflow: hidden; }
+.stride-modal-progress-fill { height: 100%; background: #2271b1; }
+
+.stride-modal-empty { color: #8c8f94; font-style: italic; margin: 0; }
+
+/* Export menu divider — separates Excel/Word from ZIP exports */
+.stride-export-menu .stride-export-divider {
+    height: 1px;
+    background: #dcdcde;
+    margin: 4px 0;
 }

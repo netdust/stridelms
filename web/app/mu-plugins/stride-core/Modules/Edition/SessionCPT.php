@@ -69,6 +69,19 @@ final class SessionCPT
                 'label' => 'Type',
                 'description' => 'in_person, webinar, online, assignment',
             ],
+            'description' => [
+                'type' => 'textarea',
+                'label' => 'Omschrijving',
+            ],
+            'webinar_link' => [
+                'type' => 'url',
+                'label' => 'Webinar link',
+            ],
+            'lesson_ids' => [
+                'type' => 'relation',
+                'label' => 'Lessen',
+                'description' => 'Linked LearnDash lessons',
+            ],
             'capacity' => [
                 'type' => 'int',
                 'label' => 'Capaciteit',
@@ -78,6 +91,11 @@ final class SessionCPT
                 'type' => 'boolean',
                 'label' => 'Optioneel',
                 'description' => 'User can opt out',
+            ],
+            'price_modifier' => [
+                'type' => 'int',
+                'label' => 'Prijswijziging',
+                'description' => 'Price modifier in cents (positive = surcharge, negative = discount)',
             ],
         ];
     }

@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Stride\Contracts;
 
 /**
- * LearnDash integration contract.
+ * LMS integration contract.
  *
- * 7 touch points with the LMS - keeps coupling minimal.
+ * Business operations only — the write/critical-read points with the LMS.
+ * For read-only presentation data (progress, certificates, lessons),
+ * use LearnDashHelper static methods.
  */
 interface LMSAdapterInterface
 {
@@ -27,24 +29,22 @@ interface LMSAdapterInterface
     public function isComplete(int $userId, int $courseId): bool;
 
     /**
-     * Get certificate download link if available.
-     */
-    public function getCertificateLink(int $userId, int $courseId): ?string;
-
-    /**
-     * Get all course IDs the user is enrolled in.
+     * Request the LMS to mark the course complete for the user.
      *
-     * @return int[]
+     * Note: the LMS may enforce its own completion rules (required lessons,
+     * quizzes, etc.) and treat this as a no-op when they aren't satisfied.
+     * Returns true when the call was dispatched to the LMS, false when the
+     * LMS isn't available or the course is invalid — NOT a guarantee that
+     * the user is now marked complete.
      */
-    public function getEnrolledCourses(int $userId): array;
+    public function markComplete(int $userId, int $courseId): bool;
 
     /**
-     * Get course progress percentage (0-100).
+     * Is the course configured as "open" (auto-enroll on lesson access,
+     * no enrollment record required)?
+     *
+     * Encapsulates the LMS's course-pricing-type concept so callers don't
+     * have to reach into the LMS's internal meta shape.
      */
-    public function getProgress(int $userId, int $courseId): int;
-
-    /**
-     * Get course completion timestamp, or null if not completed.
-     */
-    public function getCompletionDate(int $userId, int $courseId): ?int;
+    public function isOpenCourse(int $courseId): bool;
 }

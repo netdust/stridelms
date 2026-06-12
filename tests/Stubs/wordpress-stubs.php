@@ -8,6 +8,9 @@
  */
 
 // WordPress time constants
+if (!defined('MINUTE_IN_SECONDS')) {
+    define('MINUTE_IN_SECONDS', 60);
+}
 if (!defined('DAY_IN_SECONDS')) {
     define('DAY_IN_SECONDS', 86400);
 }
@@ -66,6 +69,8 @@ if (!class_exists('WP_User')) {
         public string $display_name = '';
         public string $first_name = '';
         public string $last_name = '';
+        public string $nickname = '';
+        public string $description = '';
         public array $roles = [];
 
         public function __construct($id = 0, $name = '', $site_id = '')
@@ -171,6 +176,70 @@ if (!function_exists('__')) {
     }
 }
 
+if (!function_exists('_n')) {
+    function _n(string $single, string $plural, int $number, string $domain = 'default'): string
+    {
+        return $number === 1 ? $single : $plural;
+    }
+}
+
+if (!function_exists('get_post_thumbnail_id')) {
+    function get_post_thumbnail_id($post = null, ?string $size = null)
+    {
+        global $_test_post_meta;
+        $postId = is_object($post) ? $post->ID : (int) $post;
+        return $_test_post_meta[$postId]['_thumbnail_id'][0] ?? 0;
+    }
+}
+
+if (!function_exists('has_excerpt')) {
+    function has_excerpt($post = null): bool
+    {
+        global $_test_posts;
+        $postId = is_object($post) ? $post->ID : (int) $post;
+        $p = $_test_posts[$postId] ?? null;
+        return !empty($p->post_excerpt ?? '');
+    }
+}
+
+if (!function_exists('get_the_excerpt')) {
+    function get_the_excerpt($post = null): string
+    {
+        global $_test_posts;
+        $postId = is_object($post) ? $post->ID : (int) $post;
+        $p = $_test_posts[$postId] ?? null;
+        return $p->post_excerpt ?? '';
+    }
+}
+
+if (!function_exists('get_post_field')) {
+    function get_post_field(string $field, $post = null, string $context = 'edit'): string
+    {
+        global $_test_posts;
+        $postId = is_object($post) ? $post->ID : (int) $post;
+        $p = $_test_posts[$postId] ?? null;
+        return (string) ($p->$field ?? '');
+    }
+}
+
+if (!function_exists('wp_trim_words')) {
+    function wp_trim_words(string $text, int $num_words = 55, ?string $more = null): string
+    {
+        if ($more === null) {
+            $more = '&hellip;';
+        }
+        $words = preg_split("/[\n\r\t ]+/", $text, $num_words + 1, PREG_SPLIT_NO_EMPTY);
+        if (!is_array($words)) {
+            return $text;
+        }
+        if (count($words) > $num_words) {
+            array_pop($words);
+            return implode(' ', $words) . $more;
+        }
+        return implode(' ', $words);
+    }
+}
+
 if (!function_exists('esc_html')) {
     function esc_html(string $text): string
     {
@@ -186,13 +255,36 @@ if (!function_exists('sanitize_text_field')) {
 }
 
 if (!function_exists('sanitize_title')) {
+    /**
+     * Simplified stub of WP sanitize_title.
+     * NOT byte-identical to real WP: converts `_` to `-` (real WP preserves
+     * underscores), doesn't handle entities, periods, or UTF-8. Sufficient
+     * for the tests in this repo; do not rely on for entity/period inputs.
+     */
     function sanitize_title(string $title, string $fallback_title = '', string $context = 'save'): string
     {
         $title = strtolower($title);
-        $title = preg_replace('/[^a-z0-9\s-]/', '', $title);
         $title = preg_replace('/[\s_]+/', '-', $title);
+        $title = preg_replace('/[^a-z0-9-]/', '', $title);
+        $title = preg_replace('/-+/', '-', $title);
         $title = trim($title, '-');
         return $title ?: $fallback_title;
+    }
+}
+
+if (!function_exists('sanitize_file_name')) {
+    function sanitize_file_name(string $filename): string
+    {
+        // Match WP behaviour closely enough for tests: strip special chars
+        // that filesystems dislike, collapse whitespace to dashes, preserve
+        // the rest (including dots, underscores, dashes).
+        $special_chars = ["?", "[", "]", "/", "\\", "=", "<", ">", ":", ";", ",",
+            "'", '"', "&", "\$", "#", "*", "(", ")", "|", "~", "`", "!", "{", "}",
+            "%", "+", "\xc2\xa0", chr(0)];
+        $filename = str_replace($special_chars, '', $filename);
+        $filename = preg_replace('/[\s-]+/', '-', $filename);
+        $filename = trim($filename, '.-_');
+        return $filename;
     }
 }
 
@@ -286,6 +378,20 @@ if (!function_exists('get_current_user_id')) {
     {
         global $_test_current_user_id;
         return $_test_current_user_id;
+    }
+}
+
+if (!function_exists('get_locale')) {
+    function get_locale(): string
+    {
+        return 'en_US';
+    }
+}
+
+if (!function_exists('admin_url')) {
+    function admin_url(string $path = ''): string
+    {
+        return 'http://example.test/wp-admin/' . ltrim($path, '/');
     }
 }
 
@@ -638,6 +744,21 @@ if (!function_exists('get_the_title')) {
     }
 }
 
+if (!function_exists('get_permalink')) {
+    function get_permalink($post = null): string|false
+    {
+        $post = get_post($post);
+        if (!$post) {
+            return false;
+        }
+        return home_url('/?p=' . $post->ID);
+    }
+}
+
+// stride_format_date is NOT stubbed: the real definition is core-owned
+// (stride-core/Support/formatting.php, loaded by tests/bootstrap.php). The
+// old stub here returned English month names — a silent format fork.
+
 if (!function_exists('get_stylesheet_directory')) {
     function get_stylesheet_directory(): string
     {
@@ -668,6 +789,59 @@ if (!function_exists('nocache_headers')) {
 
 if (!function_exists('http_response_code')) {
     // Already exists in PHP, no stub needed
+}
+
+// Admin-context flag (settable by tests)
+global $_test_is_admin;
+$_test_is_admin = false;
+
+if (!function_exists('is_admin')) {
+    function is_admin(): bool
+    {
+        global $_test_is_admin;
+        return (bool) $_test_is_admin;
+    }
+}
+
+if (!function_exists('is_user_logged_in')) {
+    function is_user_logged_in(): bool
+    {
+        return get_current_user_id() > 0;
+    }
+}
+
+if (!function_exists('sanitize_key')) {
+    function sanitize_key(string $key): string
+    {
+        $key = strtolower($key);
+        return preg_replace('/[^a-z0-9_\-]/', '', $key);
+    }
+}
+
+if (!function_exists('sanitize_textarea_field')) {
+    function sanitize_textarea_field($value): string
+    {
+        $value = is_string($value) ? $value : '';
+        // Strip tags but preserve newlines (WP behavior approximation)
+        return trim(strip_tags($value));
+    }
+}
+
+if (!function_exists('site_url')) {
+    function site_url(string $path = '', ?string $scheme = null): string
+    {
+        global $_test_options;
+        $url = $_test_options['siteurl'] ?? 'https://example.com';
+        return rtrim($url, '/') . '/' . ltrim($path, '/');
+    }
+}
+
+if (!function_exists('has_filter')) {
+    function has_filter(string $hook, $callback = false): bool
+    {
+        global $_test_filters;
+        return !empty($_test_filters[$hook]);
+    }
 }
 
 // Options storage
@@ -742,6 +916,21 @@ if (!function_exists('register_post_type')) {
     }
 }
 
+if (!function_exists('get_post_type')) {
+    function get_post_type($post = null)
+    {
+        global $_test_posts;
+        if (is_numeric($post)) {
+            $p = $_test_posts[(int) $post] ?? null;
+            return $p->post_type ?? false;
+        }
+        if (is_object($post) && isset($post->post_type)) {
+            return $post->post_type;
+        }
+        return false;
+    }
+}
+
 if (!function_exists('register_post_meta')) {
     function register_post_meta(string $post_type, string $meta_key, array $args = []): bool
     {
@@ -751,6 +940,13 @@ if (!function_exists('register_post_meta')) {
         }
         $_test_registered_post_meta[$post_type][$meta_key] = $args;
         return true;
+    }
+}
+
+if (!function_exists('wp_hash')) {
+    function wp_hash(string $data, string $scheme = 'auth'): string
+    {
+        return hash('sha256', $data . $scheme);
     }
 }
 
@@ -1159,6 +1355,19 @@ if (!function_exists('ntdst_data')) {
                         return true;
                     }
 
+                    public function updateMeta(int $postId, string $key, mixed $value): bool
+                    {
+                        global $_test_data_manager_meta;
+                        if (!isset($_test_data_manager_meta[$this->postType])) {
+                            $_test_data_manager_meta[$this->postType] = [];
+                        }
+                        if (!isset($_test_data_manager_meta[$this->postType][$postId])) {
+                            $_test_data_manager_meta[$this->postType][$postId] = [];
+                        }
+                        $_test_data_manager_meta[$this->postType][$postId][$key] = $value;
+                        return true;
+                    }
+
                     public function find(int $postId): \WP_Post|\WP_Error|null
                     {
                         global $_test_posts, $_test_data_manager_meta;
@@ -1510,6 +1719,14 @@ if (!function_exists('get_attached_file')) {
     }
 }
 
+if (!function_exists('wp_get_attachment_url')) {
+    function wp_get_attachment_url($attachment_id = 0)
+    {
+        global $_test_attachment_urls;
+        return $_test_attachment_urls[$attachment_id] ?? false;
+    }
+}
+
 // Admin menu functions
 if (!function_exists('add_submenu_page')) {
     function add_submenu_page($parent_slug, $page_title, $menu_title, $capability, $menu_slug, $callback = '', $position = null)
@@ -1615,6 +1832,13 @@ if (!function_exists('wp_nonce_field')) {
     }
 }
 
+if (!function_exists('wp_salt')) {
+    function wp_salt(string $scheme = 'auth'): string
+    {
+        return 'test-salt-' . $scheme;
+    }
+}
+
 if (!function_exists('wp_create_nonce')) {
     function wp_create_nonce($action = -1)
     {
@@ -1641,6 +1865,13 @@ if (!function_exists('esc_html__')) {
     function esc_html__(string $text, string $domain = 'default'): string
     {
         return esc_html($text);
+    }
+}
+
+if (!function_exists('esc_html_e')) {
+    function esc_html_e(string $text, string $domain = 'default'): void
+    {
+        echo esc_html($text);
     }
 }
 
@@ -1873,5 +2104,236 @@ if (!function_exists('wp_unique_id')) {
     {
         static $counter = 0;
         return $prefix . (string) ++$counter;
+    }
+}
+
+if (!function_exists('add_options_page')) {
+    function add_options_page(string $page_title, string $menu_title, string $capability, string $menu_slug, callable $callback = null, int $position = null): string
+    {
+        global $_test_options_pages;
+        if (!isset($_test_options_pages)) {
+            $_test_options_pages = [];
+        }
+        $_test_options_pages[$menu_slug] = [
+            'page_title' => $page_title,
+            'menu_title' => $menu_title,
+            'capability' => $capability,
+            'menu_slug' => $menu_slug,
+            'callback' => $callback,
+        ];
+        return 'settings_page_' . $menu_slug;
+    }
+}
+
+if (!function_exists('get_current_screen')) {
+    function get_current_screen(): ?object
+    {
+        return null;
+    }
+}
+
+if (!function_exists('wp_enqueue_editor')) {
+    function wp_enqueue_editor(): void
+    {
+        // Stub
+    }
+}
+
+if (!function_exists('rest_url')) {
+    function rest_url(string $path = ''): string
+    {
+        return 'https://example.com/wp-json/' . ltrim($path, '/');
+    }
+}
+
+if (!function_exists('ntdst_enqueue_admin_toolkit')) {
+    function ntdst_enqueue_admin_toolkit(): void
+    {
+        // Stub
+    }
+}
+
+if (!class_exists('WP_Theme')) {
+    class WP_Theme {
+        private string $stylesheet;
+        public function __construct(string $stylesheet = '') {
+            $this->stylesheet = $stylesheet;
+        }
+        public function get_stylesheet(): string {
+            return $this->stylesheet;
+        }
+    }
+}
+
+if (!function_exists('wp_upload_dir')) {
+    function wp_upload_dir(): array
+    {
+        return [
+            'basedir' => WP_CONTENT_DIR . '/uploads',
+            'baseurl' => '/wp-content/uploads',
+        ];
+    }
+}
+
+if (!function_exists('wp_mkdir_p')) {
+    function wp_mkdir_p(string $target): bool
+    {
+        if (is_dir($target)) return true;
+        return mkdir($target, 0755, true);
+    }
+}
+
+if (!function_exists('date_i18n')) {
+    function date_i18n(string $format, $timestamp = false): string
+    {
+        if ($timestamp === false) $timestamp = time();
+        return date($format, $timestamp);
+    }
+}
+
+if (!function_exists('number_format_i18n')) {
+    function number_format_i18n($number, int $decimals = 0): string
+    {
+        return number_format((float) $number, $decimals, ',', '.');
+    }
+}
+
+if (!function_exists('content_url')) {
+    function content_url(string $path = ''): string
+    {
+        $url = '/wp-content';
+        return $path ? $url . '/' . ltrim($path, '/') : $url;
+    }
+}
+
+// --- Abilities API Stubs (WP 6.9) ---
+
+if (!class_exists('WP_Ability')) {
+    class WP_Ability {
+        private string $name;
+        private array $args;
+
+        public function __construct(string $name, array $args) {
+            $this->name = $name;
+            $this->args = $args;
+        }
+
+        public function get_name(): string { return $this->name; }
+        public function get_label(): string { return $this->args['label'] ?? ''; }
+        public function get_description(): string { return $this->args['description'] ?? ''; }
+        public function get_category(): string { return $this->args['category'] ?? ''; }
+        public function get_input_schema(): array { return $this->args['input_schema'] ?? []; }
+        public function get_output_schema(): array { return $this->args['output_schema'] ?? []; }
+        public function get_meta(): array { return $this->args['meta'] ?? []; }
+
+        public function get_meta_item(string $key, $default = null): mixed {
+            return $this->args['meta'][$key] ?? $default;
+        }
+
+        public function check_permissions($input = null): bool|\WP_Error {
+            if (isset($this->args['permission_callback'])) {
+                return call_user_func($this->args['permission_callback'], $input);
+            }
+            return true;
+        }
+
+        public function execute($input = null): mixed {
+            if (isset($this->args['execute_callback'])) {
+                do_action('wp_before_execute_ability', $this->name, $input);
+                $result = call_user_func($this->args['execute_callback'], $input);
+                do_action('wp_after_execute_ability', $this->name, $input, $result);
+                return $result;
+            }
+            return new \WP_Error('no_callback', 'No execute callback.');
+        }
+    }
+}
+
+if (!class_exists('WP_Ability_Category')) {
+    class WP_Ability_Category {
+        private string $slug;
+        private array $args;
+
+        public function __construct(string $slug, array $args) {
+            $this->slug = $slug;
+            $this->args = $args;
+        }
+
+        public function get_slug(): string { return $this->slug; }
+        public function get_label(): string { return $this->args['label'] ?? ''; }
+    }
+}
+
+// Global registries for Abilities API stubs
+global $_test_abilities, $_test_ability_categories;
+$_test_abilities = $_test_abilities ?? [];
+$_test_ability_categories = $_test_ability_categories ?? [];
+
+if (!function_exists('wp_register_ability_category')) {
+    function wp_register_ability_category(string $slug, array $args): ?WP_Ability_Category {
+        global $_test_ability_categories;
+        $cat = new WP_Ability_Category($slug, $args);
+        $_test_ability_categories[$slug] = $cat;
+        return $cat;
+    }
+}
+
+if (!function_exists('wp_has_ability_category')) {
+    function wp_has_ability_category(string $slug): bool {
+        global $_test_ability_categories;
+        return isset($_test_ability_categories[$slug]);
+    }
+}
+
+if (!function_exists('wp_get_ability_category')) {
+    function wp_get_ability_category(string $slug): ?WP_Ability_Category {
+        global $_test_ability_categories;
+        return $_test_ability_categories[$slug] ?? null;
+    }
+}
+
+if (!function_exists('wp_get_ability_categories')) {
+    function wp_get_ability_categories(): array {
+        global $_test_ability_categories;
+        return $_test_ability_categories;
+    }
+}
+
+if (!function_exists('wp_register_ability')) {
+    function wp_register_ability(string $name, array $args): ?WP_Ability {
+        global $_test_abilities;
+        $ability = new WP_Ability($name, $args);
+        $_test_abilities[$name] = $ability;
+        return $ability;
+    }
+}
+
+if (!function_exists('wp_unregister_ability')) {
+    function wp_unregister_ability(string $name): ?WP_Ability {
+        global $_test_abilities;
+        $ability = $_test_abilities[$name] ?? null;
+        unset($_test_abilities[$name]);
+        return $ability;
+    }
+}
+
+if (!function_exists('wp_has_ability')) {
+    function wp_has_ability(string $name): bool {
+        global $_test_abilities;
+        return isset($_test_abilities[$name]);
+    }
+}
+
+if (!function_exists('wp_get_ability')) {
+    function wp_get_ability(string $name): ?WP_Ability {
+        global $_test_abilities;
+        return $_test_abilities[$name] ?? null;
+    }
+}
+
+if (!function_exists('wp_get_abilities')) {
+    function wp_get_abilities(): array {
+        global $_test_abilities;
+        return $_test_abilities;
     }
 }

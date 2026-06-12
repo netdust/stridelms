@@ -62,11 +62,11 @@ final class Config
     {
         return [
             // URLs
-            'login_url' => '/login',
-            'register_url' => '/register',
-            'activate_url' => '/activate',
+            'login_url' => '/aanmelden',
+            'register_url' => '/registreren',
+            'activate_url' => '/account-activeren',
             'redirect_after_login' => '/',
-            'redirect_after_logout' => '/login',
+            'redirect_after_logout' => '/aanmelden',
 
             // Authentication methods
             'enable_magic_link' => true,

@@ -17,10 +17,10 @@ class AdminQuoteCest
     public function _before(AcceptanceTester $I): void
     {
         // Get admin user ID
-        $this->adminId = (int) $I->grabFromDatabase('stride_users', 'ID', ['user_login' => 'admin']);
+        $this->adminId = $I->grabAdminUserId();
 
         if (!$this->adminId) {
-            $I->fail('Admin user not found in database');
+            throw new \RuntimeException('Admin user not found in database');
         }
 
         // Login as admin
@@ -74,7 +74,7 @@ class AdminQuoteCest
         $I->wantTo('view an existing quote');
 
         // Get an existing quote from database
-        $quoteId = $I->grabFromDatabase('stride_posts', 'ID', [
+        $quoteId = $I->grabFromDatabase($I->grabPrefixedTableNameFor('posts'), 'ID', [
             'post_type' => 'vad_quote',
             'post_status' => 'publish',
         ]);
@@ -107,7 +107,7 @@ class AdminQuoteCest
         $I->wantTo('verify quote edit page loads correctly');
 
         // Get an existing quote
-        $quoteId = $I->grabFromDatabase('stride_posts', 'ID', [
+        $quoteId = $I->grabFromDatabase($I->grabPrefixedTableNameFor('posts'), 'ID', [
             'post_type' => 'vad_quote',
             'post_status' => 'publish',
         ]);

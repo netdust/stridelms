@@ -12,6 +12,17 @@ use Tests\Support\AcceptanceTester;
  */
 class AuthPluginCest
 {
+    public function _before(AcceptanceTester $I): void
+    {
+        // Rate-limit counters live in transients and persist across suite
+        // runs — saturated register/login counters from a previous run would
+        // block this run's attempts with 'rate_limited' instead of success.
+        $I->dontHaveInDatabase(
+            $I->grabPrefixedTableNameFor('options'),
+            ['option_name like' => '_transient%ntdst_rate_%']
+        );
+    }
+
     // -------------------------------------------------------------------------
     // Login Page Tests
     // -------------------------------------------------------------------------
@@ -19,13 +30,13 @@ class AuthPluginCest
     /**
      * SCENARIO: Login page loads correctly
      *   GIVEN: I am not logged in
-     *   WHEN: I visit /login
+     *   WHEN: I visit /aanmelden
      *   THEN: I see the login page with email form
      */
     public function loginPageLoads(AcceptanceTester $I): void
     {
         $I->wantTo('verify the custom login page loads');
-        $I->amOnPage('/login');
+        $I->amOnPage('/aanmelden');
         $I->seeElement('input[type="email"]');
         $I->seeElement('button[type="submit"]');
         $I->dontSee('Fatal error');
@@ -34,14 +45,16 @@ class AuthPluginCest
 
     /**
      * SCENARIO: Login page shows magic link form by default
-     *   GIVEN: I am on /login
+     *   GIVEN: I am on /aanmelden
      *   THEN: I see magic link request form
      */
     public function loginPageShowsMagicLinkForm(AcceptanceTester $I): void
     {
         $I->wantTo('verify login page shows magic link form');
-        $I->amOnPage('/login');
-        $I->see('Stride LMS');
+        $I->amOnPage('/aanmelden');
+        // Structural signal that this is the Stride custom login page (not wp-login.php):
+        // the magic-link form has an Alpine @submit handler unique to our auth plugin.
+        $I->seeInSource('requestMagicLink');
         $I->see('Email');
         $I->seeElement('input[type="email"]');
         $I->seeElement('button[type="submit"]');
@@ -54,13 +67,13 @@ class AuthPluginCest
     /**
      * SCENARIO: Register page loads correctly
      *   GIVEN: I am not logged in
-     *   WHEN: I visit /register
+     *   WHEN: I visit /registreren
      *   THEN: I see the registration form elements
      */
     public function registerPageLoads(AcceptanceTester $I): void
     {
         $I->wantTo('verify the custom register page loads');
-        $I->amOnPage('/register');
+        $I->amOnPage('/registreren');
         $I->seeElement('input[type="email"]');
         $I->seeElement('input[type="checkbox"]');
         $I->seeElement('button[type="submit"]');
@@ -73,20 +86,33 @@ class AuthPluginCest
 
     /**
      * SCENARIO: Magic link request shows success regardless of email existence
-     *   GIVEN: I am on /login
-     *   WHEN: I enter any email and submit
+     *   GIVEN: I am on /aanmelden
+     *   WHEN: I switch to magic link tab, enter any email and submit
      *   THEN: I see success message (anti-enumeration)
+     *
+     * When password auth is enabled (current DB config), the login page defaults
+     * to password mode. Click "Sign in with email link instead" to switch to
+     * magic link mode, which shows the #email-magic input.
      */
     public function magicLinkRequestShowsSuccessForAnyEmail(AcceptanceTester $I): void
     {
         $I->wantTo('verify magic link request shows success for any email');
-        $I->amOnPage('/login');
+        $I->amOnPage('/aanmelden');
 
-        // Fill the email input by id
-        $I->fillField('#email', 'nonexistent-email-12345@example.com');
-        $I->click('button[type="submit"]');
+        // Wait for Alpine.js to initialize
+        $I->waitForElement('input[type="email"]', 5);
 
-        // Wait for AJAX response - message is "If an account exists with this email, you will receive a login link shortly."
+        // Drive the Alpine component directly — works whether the page is in
+        // magic-only mode (current config: enable_password=false, field
+        // id="email") or dual mode with a toggle (field id="email-magic").
+        $I->executeJS("
+            const container = document.querySelector('[x-data]');
+            const comp = Alpine.\$data(container);
+            comp.email = 'nonexistent-email-12345@example.com';
+            comp.requestMagicLink();
+        ");
+
+        // Wait for AJAX response
         $I->waitForText('login link', 10);
         $I->see('login link');
         $I->dontSee('not found');
@@ -99,29 +125,123 @@ class AuthPluginCest
 
     /**
      * SCENARIO: Registration shows success message
-     *   GIVEN: I am on /register
-     *   WHEN: I fill required fields and accept terms
+     *   GIVEN: I am on /registreren
+     *   WHEN: I fill required fields (including profile type) and accept terms
      *   THEN: I see "inbox" message
+     *
+     * Register form IDs: #first_name, #last_name, #email, #profile_type,
+     *   #consent_terms, #consent_privacy
+     * Alpine component: authRegister() submits via AJAX to ntdst_auth_register action.
+     * Profile type select is required when ProfileTypeService has types configured.
      */
     public function registrationShowsSuccessMessage(AcceptanceTester $I): void
     {
         $I->wantTo('verify registration shows success message');
-        $I->amOnPage('/register');
+
+        // Clear rate limits to avoid being blocked by previous test runs
+        $I->dontHaveInDatabase($I->grabPrefixedTableNameFor('options'), ['option_name LIKE' => '%ntdst_auth_rate%']);
+
+        $I->amOnPage('/registreren');
+
+        // Wait for Alpine.js to initialize
+        $I->waitForElement('#email', 5);
 
         // Generate unique email for this test
         $testEmail = 'test-' . time() . '@example.com';
 
-        // Fill fields by id
-        $I->fillField('#email', $testEmail);
+        // Fill fields by id (Alpine x-model binds to these)
         $I->fillField('#first_name', 'Test');
         $I->fillField('#last_name', 'User');
+        $I->fillField('#email', $testEmail);
+
+        // Select profile type if the select exists (required when ProfileTypeService has types)
+        $profileTypeSelects = $I->grabMultiple('#profile_type');
+        if (!empty($profileTypeSelects)) {
+            // Select the first non-empty option via JS
+            $I->executeJS("
+                const select = document.getElementById('profile_type');
+                if (select && select.options.length > 1) {
+                    select.value = select.options[1].value;
+                    select.dispatchEvent(new Event('input', { bubbles: true }));
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            ");
+        }
+
+        // Accept terms checkboxes
         $I->checkOption('#consent_terms');
         $I->checkOption('#consent_privacy');
+
+        // Submit form
+        $this->submitRegistrationAndAwaitInbox($I);
+        $I->see('inbox');
+    }
+
+    /**
+     * Submit the registration form and wait for the success message.
+     *
+     * Under full-suite load the DDEV PHP-FPM pool gets saturated by LearnDash
+     * ProPanel reporting AJAX fired from wp-admin pages other Cests opened —
+     * the registration fetch then fails CLIENT-side and Alpine renders
+     * "Network error". One retry distinguishes pool saturation from a real
+     * registration failure; anything other than a network error still throws.
+     */
+    private function submitRegistrationAndAwaitInbox(AcceptanceTester $I): void
+    {
         $I->click('button[type="submit"]');
 
-        // Wait for AJAX response - message is "Check your inbox for instructions..."
-        $I->waitForText('inbox', 10);
-        $I->see('inbox');
+        try {
+            $I->waitForText('inbox', 20);
+        } catch (\Exception $e) {
+            $message = (string) $I->executeJS(
+                'const el = document.querySelector("[x-data]"); return el ? (Alpine.$data(el).message || "") : "";'
+            );
+            // Under full-suite load the first submit can fail client-side
+            // ("network") or trip the per-IP rate limiter from a half-completed
+            // attempt ("te veel"/"too many"). Both are environmental — clear
+            // the rate counters and retry once. A real validation failure
+            // (any other message) still throws.
+            $transient = stripos($message, 'network') !== false
+                || stripos($message, 'te veel') !== false
+                || stripos($message, 'too many') !== false
+                || stripos($message, 'rate') !== false;
+            if (!$transient) {
+                throw $e;
+            }
+            $I->comment('Transient submit failure under load — clearing rate limits and retrying once');
+            $I->dontHaveInDatabase($I->grabPrefixedTableNameFor('options'), ['option_name like' => '_transient%ntdst_rate_%']);
+            $I->reloadPage();
+            $I->waitForElement('#email', 5);
+            $this->refillRegistrationForm($I);
+            $I->click('button[type="submit"]');
+            $I->waitForText('inbox', 25);
+        }
+    }
+
+    /**
+     * Re-fill the registration form after a reload (used by the retry path).
+     * Mirrors the field set both registration tests use.
+     */
+    private function refillRegistrationForm(AcceptanceTester $I): void
+    {
+        $I->fillField('#first_name', 'Retry');
+        $I->fillField('#last_name', 'User');
+        $I->fillField('#email', 'retry-' . time() . '-' . random_int(1000, 9999) . '@example.com');
+
+        $profileTypeSelects = $I->grabMultiple('#profile_type');
+        if (!empty($profileTypeSelects)) {
+            $I->executeJS("
+                const select = document.getElementById('profile_type');
+                if (select && select.options.length > 1) {
+                    select.value = select.options[1].value;
+                    select.dispatchEvent(new Event('input', { bubbles: true }));
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            ");
+        }
+
+        $I->checkOption('#consent_terms');
+        $I->checkOption('#consent_privacy');
     }
 
     // -------------------------------------------------------------------------
@@ -201,7 +321,7 @@ class AuthPluginCest
     {
         $I->wantTo('verify auth/logout route redirects to login');
         $I->amOnPage('/auth/logout');
-        $I->seeInCurrentUrl('/login');
+        $I->seeInCurrentUrl('/aanmelden');
     }
 
     // -------------------------------------------------------------------------
@@ -212,14 +332,16 @@ class AuthPluginCest
      * SCENARIO: wp-login.php redirects to custom login
      *   GIVEN: The redirect_wp_login setting is enabled
      *   WHEN: I visit wp-login.php
-     *   THEN: I am redirected to /login
+     *   THEN: I am redirected to /aanmelden
      */
     public function wpLoginRedirectsToCustomLogin(AcceptanceTester $I): void
     {
         $I->wantTo('verify wp-login.php redirects to custom login');
         $I->amOnPage('/wp/wp-login.php');
-        $I->seeInCurrentUrl('/login');
-        $I->see('Stride LMS');
+        $I->seeInCurrentUrl('/aanmelden');
+        // Custom login page exposes the Alpine-driven magic link form;
+        // wp-login.php does not. Brand-name-agnostic.
+        $I->seeInSource('requestMagicLink');
     }
 
     /**
@@ -248,5 +370,88 @@ class AuthPluginCest
         $I->amOnPage('/wp/wp-login.php?action=lostpassword');
         // Should stay on wp-login.php for password reset
         $I->seeInCurrentUrl('wp-login.php');
+    }
+
+    // -------------------------------------------------------------------------
+    // Rate Limiting Tests
+    // -------------------------------------------------------------------------
+
+    /**
+     * SCENARIO: Password login attempt increments rate limit counter
+     *   GIVEN: I am on /aanmelden with password auth enabled
+     *   WHEN: I submit invalid credentials
+     *   THEN: A rate limit transient is created for my IP
+     *
+     * This verifies the rate limit counter is actually incremented,
+     * preventing brute-force attacks on the password login endpoint.
+     */
+    public function passwordLoginIncrementsRateLimit(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify password login attempt increments rate limit counter');
+        $I->amOnPage('/aanmelden');
+        $I->waitForElement('input[type="email"]', 5);
+
+        // Submit invalid credentials via the password form
+        $I->executeJS("
+            const container = document.querySelector('[x-data]');
+            const comp = Alpine.\$data(container);
+            comp.email = 'nonexistent@example.com';
+            comp.password = 'wrong-password';
+            comp.loginPassword();
+        ");
+
+        // Wait for AJAX to complete
+        $I->wait(2);
+
+        // A rate limit transient should exist in the options table
+        // Transient key pattern: _transient_ntdst_auth_rate_{md5('login_ip_' + ip)}
+        $I->seeInDatabase($I->grabPrefixedTableNameFor('options'), [
+            'option_name LIKE' => '%ntdst_auth_rate%',
+        ]);
+    }
+
+    /**
+     * SCENARIO: Registration attempt increments rate limit counter
+     *   GIVEN: I am on /registreren
+     *   WHEN: I submit a registration form
+     *   THEN: A rate limit transient is created for my IP
+     */
+    public function registrationIncrementsRateLimit(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify registration attempt increments rate limit counter');
+
+        // Clear any existing rate limit transients so this test isn't blocked
+        $I->dontHaveInDatabase($I->grabPrefixedTableNameFor('options'), ['option_name LIKE' => '%ntdst_auth_rate%']);
+
+        $I->amOnPage('/registreren');
+        $I->waitForElement('#email', 5);
+
+        $testEmail = 'ratelimit-test-' . time() . '@example.com';
+
+        $I->fillField('#first_name', 'Rate');
+        $I->fillField('#last_name', 'Test');
+        $I->fillField('#email', $testEmail);
+
+        // Select profile type if present
+        $profileTypeSelects = $I->grabMultiple('#profile_type');
+        if (!empty($profileTypeSelects)) {
+            $I->executeJS("
+                const select = document.getElementById('profile_type');
+                if (select && select.options.length > 1) {
+                    select.value = select.options[1].value;
+                    select.dispatchEvent(new Event('input', { bubbles: true }));
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            ");
+        }
+
+        $I->checkOption('#consent_terms');
+        $I->checkOption('#consent_privacy');
+        $this->submitRegistrationAndAwaitInbox($I);
+
+        // A rate limit transient should exist for registration
+        $I->seeInDatabase($I->grabPrefixedTableNameFor('options'), [
+            'option_name LIKE' => '%ntdst_auth_rate%',
+        ]);
     }
 }

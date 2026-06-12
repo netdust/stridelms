@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace NetdustLTI\Platform;
 
 use ceLTIc\LTI\Jwt\FirebaseClient;
-use NetdustLTI\Repositories\ToolRepository;
+use NetdustLTI\Platform\ToolRepository;
 use WP_Error;
 use WP_User;
 
@@ -26,16 +26,17 @@ use function get_user_by;
 use function esc_url;
 use function esc_attr;
 use function wp_parse_url;
+use function esc_url_raw;
 
 /**
  * Builds and signs JWTs for LTI 1.3 tool launches.
  *
  * Handles the auth callback from an LTI tool by:
- * 1. Validating the state parameter against session
+ * 1. Receiving the auth request from the Tool (form_post)
  * 2. Loading tool configuration
- * 3. Building LTI claims
+ * 3. Building LTI claims with Tool's nonce
  * 4. Signing the JWT with platform RSA key
- * 5. Outputting auto-submit form to tool's launch URL
+ * 5. Outputting auto-submit form to tool's redirect_uri
  */
 final class JWTBuilder
 {
@@ -47,24 +48,57 @@ final class JWTBuilder
      * Handle the auth callback from the LTI tool.
      *
      * After the tool's OIDC endpoint validates the login request,
-     * it redirects back here with the state parameter. We validate state,
-     * build the LTI claims, sign a JWT, and POST it to the tool's launch URL.
+     * it POSTs back here (form_post response mode) with:
+     * - state: Tool's state (for Tool's CSRF protection)
+     * - nonce: Tool's nonce (must be included in JWT)
+     * - client_id: Identifies the Tool
+     * - lti_message_hint: Echoed from login request (contains our tool_id)
+     * - redirect_uri: Where to POST the JWT
+     *
+     * We then create the JWT with the Tool's nonce and POST it to redirect_uri.
      */
     public function handleAuthCallback(): void
     {
-        // Validate state
-        $state = sanitize_text_field($_GET['state'] ?? '');
-        $sessionState = $_SESSION['lti_platform_state'] ?? '';
+        // The Tool POSTs to us (form_post), so check POST params
+        // Also check GET for backwards compatibility
+        $state = sanitize_text_field($_POST['state'] ?? $_GET['state'] ?? '');
+        $nonce = sanitize_text_field($_POST['nonce'] ?? $_GET['nonce'] ?? '');
+        $redirectUri = esc_url_raw($_POST['redirect_uri'] ?? $_GET['redirect_uri'] ?? '');
+        $clientId = sanitize_text_field($_POST['client_id'] ?? $_GET['client_id'] ?? '');
+        $ltiMessageHint = sanitize_text_field($_POST['lti_message_hint'] ?? $_GET['lti_message_hint'] ?? '');
 
-        if (empty($state) || empty($sessionState) || !hash_equals($sessionState, $state)) {
-            wp_die('Invalid state parameter', 'LTI Platform Error', ['response' => 400]);
+        // Validate required parameters
+        if (empty($nonce) || empty($redirectUri)) {
+            wp_die(
+                'Missing required parameters.<br>nonce: ' . esc_html($nonce ?: '(empty)') .
+                '<br>redirect_uri: ' . esc_html($redirectUri ?: '(empty)'),
+                'LTI Platform Error',
+                ['response' => 400]
+            );
         }
 
-        // Get session data
-        $toolId = absint($_SESSION['lti_platform_tool_id'] ?? 0);
-        $nonce = $_SESSION['lti_platform_nonce'] ?? '';
-        $resourceLinkId = $_SESSION['lti_platform_resource_link_id'] ?? '';
+        // Get tool_id from lti_message_hint (echoed from our login request)
+        // or fall back to session
+        $toolId = 0;
+        $resourceLinkId = '';
+        if (!empty($ltiMessageHint)) {
+            $hintData = json_decode($ltiMessageHint, true);
+            if (is_array($hintData)) {
+                $toolId = absint($hintData['tool_id'] ?? 0);
+                $resourceLinkId = sanitize_text_field($hintData['resource_link_id'] ?? '');
+            }
+        }
+
+        // Fall back to session data if lti_message_hint not available
+        if (!$toolId) {
+            $toolId = absint($_SESSION['lti_platform_tool_id'] ?? 0);
+            $resourceLinkId = $_SESSION['lti_platform_resource_link_id'] ?? '';
+        }
+
         $targetLinkUri = $_SESSION['lti_platform_target_link_uri'] ?? '';
+        $messageType = $_SESSION['lti_platform_message_type'] ?? 'LtiResourceLinkRequest';
+        $courseId = $_SESSION['lti_platform_resource_course_id'] ?? '';
+        $customParams = $_SESSION['lti_platform_resource_custom'] ?? [];
 
         // Clear session data
         unset($_SESSION['lti_platform_state']);
@@ -72,6 +106,9 @@ final class JWTBuilder
         unset($_SESSION['lti_platform_tool_id']);
         unset($_SESSION['lti_platform_resource_link_id']);
         unset($_SESSION['lti_platform_target_link_uri']);
+        unset($_SESSION['lti_platform_message_type']);
+        unset($_SESSION['lti_platform_resource_course_id']);
+        unset($_SESSION['lti_platform_resource_custom']);
 
         // Get tool configuration
         $tool = $this->toolRepository->find($toolId);
@@ -88,25 +125,52 @@ final class JWTBuilder
             $user = $this->createTestUser();
         }
 
+        // Use redirect_uri from auth request, or fall back to tool's launch_url
+        $launchUrl = $redirectUri ?: $tool->fields['launch_url'];
+
+        // Build custom claims array (merge course_id with any other custom params)
+        $custom = $customParams;
+        if (!empty($courseId)) {
+            $custom['ld_course_id'] = $courseId;
+        }
+
         // Build JWT claims
         $claims = $this->buildLTIClaims(
             $user,
             $resourceLinkId ?: 'resource-' . $toolId,
-            $targetLinkUri ?: $tool->fields['launch_url']
+            $targetLinkUri ?: $tool->fields['launch_url'],
+            $custom
         );
 
         // Add tool-specific claims
-        $claims['aud'] = $tool->fields['client_id'];
-        $claims['azp'] = $tool->fields['client_id'];
+        // Use client_id from auth request, or fall back to tool config
+        $claims['aud'] = $clientId ?: $tool->fields['client_id'];
+        $claims['azp'] = $clientId ?: $tool->fields['client_id'];
+        // Use Tool's nonce from auth request (required by LTI 1.3)
         $claims['nonce'] = $nonce;
         $claims['https://purl.imsglobal.org/spec/lti/claim/deployment_id'] =
             $tool->fields['deployment_id'] ?: '1';
 
+        // Override message type if deep linking
+        $claims['https://purl.imsglobal.org/spec/lti/claim/message_type'] = $messageType;
+
+        // Add deep linking claims if this is a deep linking request
+        if ($messageType === 'LtiDeepLinkingRequest') {
+            $claims['https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings'] = [
+                'deep_link_return_url' => home_url('/lti/platform/deep-link-return'),
+                'accept_types' => ['ltiResourceLink'],
+                'accept_presentation_document_targets' => ['iframe', 'window'],
+                'accept_multiple' => false,
+            ];
+            // Remove resource_link claim for deep linking (not applicable)
+            unset($claims['https://purl.imsglobal.org/spec/lti/claim/resource_link']);
+        }
+
         // Sign JWT
         $idToken = $this->signJWT($claims);
 
-        // Output auto-submit form to tool's launch URL
-        $this->outputLaunchForm($tool->fields['launch_url'], $idToken, $state);
+        // Output auto-submit form to POST JWT to Tool's redirect_uri
+        $this->outputLaunchForm($launchUrl, $idToken, $state);
     }
 
     /**
@@ -115,13 +179,14 @@ final class JWTBuilder
      * @param object $user WordPress user object (or similar with ID, user_email, display_name)
      * @param string $resourceLinkId Unique identifier for this resource link
      * @param string $targetLinkUri The tool's target URL for the launch
+     * @param array $custom Custom parameters to include in the launch (e.g., ld_course_id)
      * @return array LTI claims for the JWT payload
      */
-    public function buildLTIClaims(object $user, string $resourceLinkId, string $targetLinkUri): array
+    public function buildLTIClaims(object $user, string $resourceLinkId, string $targetLinkUri, array $custom = []): array
     {
         $now = time();
 
-        return [
+        $claims = [
             'iss' => home_url(),
             'sub' => (string) $user->ID,
             'iat' => $now,
@@ -159,6 +224,13 @@ final class JWTBuilder
                 'lineitem' => home_url('/lti/platform/grades'),
             ],
         ];
+
+        // Add custom parameters if provided (e.g., ld_course_id for course-specific launches)
+        if (!empty($custom)) {
+            $claims['https://purl.imsglobal.org/spec/lti/claim/custom'] = $custom;
+        }
+
+        return $claims;
     }
 
     /**

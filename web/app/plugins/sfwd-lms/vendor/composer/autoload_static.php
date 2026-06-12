@@ -4,7 +4,7 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInit510ff1a520818825f667f6361886077d
+class ComposerStaticInit0092cc9b60c9bf7d31d9b375fb985444
 {
     public static $prefixLengthsPsr4 = array (
         'L' =>
@@ -48,6 +48,8 @@ class ComposerStaticInit510ff1a520818825f667f6361886077d
         'LearnDash\\Core\\Infrastructure\\File_Protection\\Provider' => __DIR__ . '/../..' . '/src/Core/Infrastructure/File_Protection/Provider.php',
         'LearnDash\\Core\\Infrastructure\\Provider' => __DIR__ . '/../..' . '/src/Core/Infrastructure/Provider.php',
         'LearnDash\\Core\\Libraries\\Assets\\Provider' => __DIR__ . '/../..' . '/src/Core/Libraries/Assets/Provider.php',
+        'LearnDash\\Core\\Libraries\\Harbor\\Addon_Legacy_Licenses' => __DIR__ . '/../..' . '/src/Core/Libraries/Harbor/Addon_Legacy_Licenses.php',
+        'LearnDash\\Core\\Libraries\\Harbor\\Provider' => __DIR__ . '/../..' . '/src/Core/Libraries/Harbor/Provider.php',
         'LearnDash\\Core\\Libraries\\Provider' => __DIR__ . '/../..' . '/src/Core/Libraries/Provider.php',
         'LearnDash\\Core\\Licensing\\Provider' => __DIR__ . '/../..' . '/src/Core/Licensing/Provider.php',
         'LearnDash\\Core\\Licensing\\Status_Checker' => __DIR__ . '/../..' . '/src/Core/Licensing/Status_Checker.php',
@@ -502,9 +504,9 @@ class ComposerStaticInit510ff1a520818825f667f6361886077d
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->prefixLengthsPsr4 = ComposerStaticInit510ff1a520818825f667f6361886077d::$prefixLengthsPsr4;
-            $loader->prefixDirsPsr4 = ComposerStaticInit510ff1a520818825f667f6361886077d::$prefixDirsPsr4;
-            $loader->classMap = ComposerStaticInit510ff1a520818825f667f6361886077d::$classMap;
+            $loader->prefixLengthsPsr4 = ComposerStaticInit0092cc9b60c9bf7d31d9b375fb985444::$prefixLengthsPsr4;
+            $loader->prefixDirsPsr4 = ComposerStaticInit0092cc9b60c9bf7d31d9b375fb985444::$prefixDirsPsr4;
+            $loader->classMap = ComposerStaticInit0092cc9b60c9bf7d31d9b375fb985444::$classMap;
 
         }, null, ClassLoader::class);
     }

@@ -33,6 +33,7 @@ final class AdminController implements \NTDST_Service_Meta
         add_action('admin_head', [$this, 'injectStyles']);
         add_action('admin_footer', [$this, 'injectScripts']);
         add_action('wp_ajax_ntdst_audit_export_csv', [$this, 'exportCsv']);
+        add_filter('stride_tools_menu_items', [$this, 'registerToolsCard']);
     }
 
     private function getCapability(): string
@@ -40,8 +41,28 @@ final class AdminController implements \NTDST_Service_Meta
         return apply_filters('ntdst/audit/capability', 'manage_options');
     }
 
+    private function hasStrideTools(): bool
+    {
+        return class_exists('\Stride\Admin\StrideToolsService');
+    }
+
+    /**
+     * Register under Stride Tools when available, fall back to WP Tools.
+     */
     public function registerAdminPage(): void
     {
+        if ($this->hasStrideTools()) {
+            add_submenu_page(
+                'stride-tools',
+                'Audit Log',
+                'Audit',
+                $this->getCapability(),
+                self::MENU_SLUG,
+                [$this, 'renderPage']
+            );
+            return;
+        }
+
         add_management_page(
             'Audit Log',
             'Audit Log',
@@ -51,21 +72,40 @@ final class AdminController implements \NTDST_Service_Meta
         );
     }
 
+    /**
+     * Surface this tool on the Stride Tools index + dashboard card.
+     */
+    public function registerToolsCard(array $items): array
+    {
+        $items[] = [
+            'slug'        => self::MENU_SLUG,
+            'label'       => 'Audit',
+            'description' => 'Activiteitenlogboek en CSV-export.',
+            'icon'        => 'dashicons-shield',
+            'capability'  => $this->getCapability(),
+        ];
+        return $items;
+    }
+
     public function enqueueAssets(string $hook): void
     {
         if (!str_contains($hook, self::MENU_SLUG)) {
             return;
         }
 
-        wp_enqueue_style('flatpickr', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css', [], '4.6.13');
-        wp_enqueue_script('flatpickr', 'https://cdn.jsdelivr.net/npm/flatpickr', [], '4.6.13', true);
-        wp_enqueue_script('flatpickr-nl', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/nl.js', ['flatpickr'], '4.6.13', true);
+        ntdst_enqueue_admin_toolkit();
+
+        $pluginUrl = plugin_dir_url(dirname(__DIR__));
+
+        wp_enqueue_style('flatpickr', $pluginUrl . 'assets/css/flatpickr.min.css', [], '4.6.13');
+        wp_enqueue_script('flatpickr', $pluginUrl . 'assets/js/flatpickr.min.js', [], '4.6.13', true);
+        wp_enqueue_script('flatpickr-nl', $pluginUrl . 'assets/js/flatpickr-nl.js', ['flatpickr'], '4.6.13', true);
 
         wp_enqueue_script(
             'alpinejs',
-            'https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js',
+            $pluginUrl . 'assets/js/alpine.min.js',
             ['flatpickr'],
-            '3.14.0',
+            '3.14.9',
             ['strategy' => 'defer']
         );
 

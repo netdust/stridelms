@@ -18,35 +18,29 @@ final class QuoteCalculator
     /**
      * Calculate totals from items.
      *
+     * Money-based wrapper over deriveTotalsFromCents() — the single
+     * subtotal -> discount -> tax -> total derivation (CR-C2). The returned
+     * discount is the clamped value ([0, subtotal]), identical to what the
+     * cents-level write paths persist.
+     *
      * @param array<array{title: string, quantity: int, unit_price: Money}> $items
      * @return array{subtotal: Money, discount: Money, tax: Money, total: Money}
      */
     public static function calculateTotals(array $items, ?Money $discount = null): array
     {
-        $subtotal = Money::zero();
+        $subtotalCents = 0;
 
         foreach ($items as $item) {
-            $itemTotal = $item['unit_price']->multiply($item['quantity']);
-            $subtotal = $subtotal->add($itemTotal);
+            $subtotalCents += $item['unit_price']->multiply($item['quantity'])->inCents();
         }
 
-        // Apply discount
-        $discountAmount = $discount ?? Money::zero();
-        $discountedSubtotal = $subtotal;
-
-        if (!$discountAmount->isZero() && !$subtotal->isZero()) {
-            $discountedSubtotal = $subtotal->subtract($discountAmount);
-        }
-
-        // Calculate tax on discounted subtotal
-        $tax = self::calculateTax($discountedSubtotal);
-        $total = $discountedSubtotal->add($tax);
+        $totals = self::deriveTotalsFromCents($subtotalCents, $discount?->inCents() ?? 0);
 
         return [
-            'subtotal' => $subtotal,
-            'discount' => $discountAmount,
-            'tax' => $tax,
-            'total' => $total,
+            'subtotal' => Money::cents($totals['subtotal']),
+            'discount' => Money::cents($totals['discount']),
+            'tax' => Money::cents($totals['tax']),
+            'total' => Money::cents($totals['total']),
         ];
     }
 
@@ -56,6 +50,32 @@ final class QuoteCalculator
     public static function calculateTax(Money $amount): Money
     {
         return $amount->multiply(self::TAX_RATE / 100);
+    }
+
+    /**
+     * Derive the full subtotal -> discount -> tax -> total chain in cents.
+     *
+     * Single source for the 21% BTW derivation used by every quote write
+     * path (storage representation is int cents; see audit H-5). The
+     * discount is clamped to [0, subtotal] and tax applies to the
+     * discounted subtotal; the taxable base never goes below zero. The
+     * input subtotal is passed through unchanged — callers decide whether
+     * to persist the clamped discount or keep their stored value.
+     *
+     * @return array{subtotal: int, discount: int, tax: int, total: int}
+     */
+    public static function deriveTotalsFromCents(int $subtotalCents, int $discountCents = 0): array
+    {
+        $discountCents = min(max(0, $discountCents), max(0, $subtotalCents));
+        $taxableCents = max(0, $subtotalCents - $discountCents);
+        $taxCents = self::calculateTax(Money::cents($taxableCents))->inCents();
+
+        return [
+            'subtotal' => $subtotalCents,
+            'discount' => $discountCents,
+            'tax' => $taxCents,
+            'total' => $taxableCents + $taxCents,
+        ];
     }
 
     /**

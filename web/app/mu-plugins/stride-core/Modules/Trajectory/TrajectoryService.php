@@ -54,9 +54,198 @@ final class TrajectoryService extends AbstractService
             $this,
             $this->repository,
             $this->registrations,
-            ntdst_get(\Stride\Modules\Edition\EditionService::class),
             ntdst_get(\Stride\Modules\Edition\EditionRepository::class),
         );
+
+        // Cascade lifecycle listeners. EnrollmentService fires
+        // stride/registration/{cancelled,confirmed} for every registration; we
+        // only act on trajectory parents (trajectory_id set, no parent).
+        add_action('stride/registration/cancelled', [$this, 'onRegistrationCancelled']);
+        add_action('stride/registration/confirmed', [$this, 'onRegistrationConfirmed']);
+
+        if (defined('WP_CLI') && WP_CLI) {
+            \WP_CLI::add_command('stride trajectory backfill-cascade', [$this, 'cliBackfillCascade']);
+        }
+    }
+
+    /**
+     * Cascade-cancel children when a trajectory parent is cancelled.
+     *
+     * Listens to the generic enrollment cancellation event so EnrollmentService
+     * doesn't need to know about trajectories. Edition-only registrations
+     * (parent_registration_id set, or no trajectory_id) are ignored.
+     *
+     * @param array{registration_id: int, user_id: int, edition_id: int} $data
+     */
+    public function onRegistrationCancelled(array $data): void
+    {
+        $registrationId = (int) ($data['registration_id'] ?? 0);
+        if ($registrationId <= 0 || !$this->isTrajectoryParent($registrationId)) {
+            return;
+        }
+
+        ntdst_get(TrajectoryCascadeService::class)->cascadeOnCancellation($registrationId);
+    }
+
+    /**
+     * Cascade-propagate parent status to children when a trajectory parent is
+     * confirmed (admin approves a pending trajectory enrollment).
+     *
+     * @param array{registration_id: int, user_id: int, edition_id: int} $data
+     */
+    public function onRegistrationConfirmed(array $data): void
+    {
+        $registrationId = (int) ($data['registration_id'] ?? 0);
+        if ($registrationId <= 0 || !$this->isTrajectoryParent($registrationId)) {
+            return;
+        }
+
+        ntdst_get(TrajectoryCascadeService::class)->cascadeOnStatusChange(
+            $registrationId,
+            \Stride\Domain\RegistrationStatus::Confirmed->value,
+        );
+    }
+
+    /**
+     * A registration is a trajectory parent when it has trajectory_id set,
+     * no edition_id, and no parent_registration_id (parents aren't themselves
+     * children of a higher parent).
+     */
+    private function isTrajectoryParent(int $registrationId): bool
+    {
+        $registration = $this->registrations->find($registrationId);
+        if (!$registration) {
+            return false;
+        }
+        return !empty($registration->trajectory_id)
+            && empty($registration->edition_id)
+            && empty($registration->parent_registration_id);
+    }
+
+    /**
+     * Backfill cascade children for existing trajectory parent enrollments.
+     *
+     * Walks confirmed + pending trajectory-parent rows and materialises the
+     * child registrations that the cascade would have created if it had
+     * been live at enrollment time. Dry-run by default; pass `--commit` to
+     * actually run.
+     *
+     * ## OPTIONS
+     *
+     * [--commit]
+     * : Apply changes. Without this flag the command only reports what would happen.
+     *
+     * [--trajectory=<id>]
+     * : Limit the run to a single trajectory's parent rows.
+     *
+     * ## EXAMPLES
+     *
+     *   wp stride trajectory backfill-cascade
+     *   wp stride trajectory backfill-cascade --commit
+     *   wp stride trajectory backfill-cascade --trajectory=42 --commit
+     *
+     * @param array<int, string> $args
+     * @param array<string, string> $assocArgs
+     */
+    public function cliBackfillCascade(array $args, array $assocArgs): void
+    {
+        global $wpdb;
+        $commit = isset($assocArgs['commit']);
+        $trajectoryFilter = isset($assocArgs['trajectory']) ? (int) $assocArgs['trajectory'] : 0;
+
+        $table = $wpdb->prefix . 'vad_registrations';
+        $eligibleStatuses = [
+            \Stride\Domain\RegistrationStatus::Confirmed->value,
+            \Stride\Domain\RegistrationStatus::Pending->value,
+        ];
+        $statusPlaceholders = implode(',', array_fill(0, count($eligibleStatuses), '%s'));
+
+        $sql = "SELECT id, trajectory_id, user_id, status
+                FROM {$table}
+                WHERE trajectory_id IS NOT NULL
+                  AND trajectory_id > 0
+                  AND edition_id IS NULL
+                  AND parent_registration_id IS NULL
+                  AND status IN ({$statusPlaceholders})";
+        $params = $eligibleStatuses;
+        if ($trajectoryFilter > 0) {
+            $sql .= ' AND trajectory_id = %d';
+            $params[] = $trajectoryFilter;
+        }
+        $sql .= ' ORDER BY id ASC';
+
+        $parents = $wpdb->get_results($wpdb->prepare($sql, ...$params));
+
+        if (empty($parents)) {
+            \WP_CLI::success('No eligible trajectory parents found.');
+            return;
+        }
+
+        \WP_CLI::log(sprintf(
+            '%s on %d trajectory parent registration(s)%s.',
+            $commit ? 'Backfilling' : 'Dry-run',
+            count($parents),
+            $trajectoryFilter > 0 ? " (trajectory={$trajectoryFilter})" : '',
+        ));
+
+        if (!$commit) {
+            \WP_CLI::log('Re-run with --commit to apply changes.');
+            // Still emit per-parent diagnostics in dry-run mode.
+        }
+
+        $cascade = ntdst_get(TrajectoryCascadeService::class);
+        $totalChildrenCreated = 0;
+        $totalErrors = 0;
+
+        foreach ($parents as $parent) {
+            $parentId = (int) $parent->id;
+            $existingChildren = $this->registrations->findByParent($parentId);
+            $existingCount = count($existingChildren);
+
+            if (!$commit) {
+                \WP_CLI::log(sprintf(
+                    '  parent=%d traject=%d user=%d status=%s existing_children=%d',
+                    $parentId,
+                    (int) $parent->trajectory_id,
+                    (int) $parent->user_id,
+                    (string) $parent->status,
+                    $existingCount,
+                ));
+                continue;
+            }
+
+            $report = $cascade->backfillParent($parentId);
+            $added = $report['children_after'] - $report['children_before'];
+            $totalChildrenCreated += max(0, $added);
+
+            if ($report['error'] !== null) {
+                $totalErrors++;
+                \WP_CLI::warning(sprintf(
+                    'parent=%d: %s (children: %d → %d)',
+                    $parentId,
+                    $report['error'],
+                    $report['children_before'],
+                    $report['children_after'],
+                ));
+            } else {
+                \WP_CLI::log(sprintf(
+                    '  parent=%d: children %d → %d (+%d)',
+                    $parentId,
+                    $report['children_before'],
+                    $report['children_after'],
+                    $added,
+                ));
+            }
+        }
+
+        if ($commit) {
+            \WP_CLI::success(sprintf(
+                'Backfill complete. Parents processed: %d. Children created: %d. Errors: %d.',
+                count($parents),
+                $totalChildrenCreated,
+                $totalErrors,
+            ));
+        }
     }
 
     // === CRUD ===
@@ -140,36 +329,6 @@ final class TrajectoryService extends AbstractService
     }
 
     /**
-     * Get course configuration for trajectory.
-     *
-     * @return array<array<string, mixed>>
-     */
-    public function getCourses(int $trajectoryId): array
-    {
-        return $this->repository->getCourses($trajectoryId);
-    }
-
-    /**
-     * Get required courses.
-     *
-     * @return array<array<string, mixed>>
-     */
-    public function getRequiredCourses(int $trajectoryId): array
-    {
-        return $this->repository->getRequiredCourses($trajectoryId);
-    }
-
-    /**
-     * Get elective groups.
-     *
-     * @return array<string, array<array<string, mixed>>>
-     */
-    public function getElectiveGroups(int $trajectoryId): array
-    {
-        return $this->repository->getElectiveGroups($trajectoryId);
-    }
-
-    /**
      * Get total course count.
      */
     public function getCourseCount(int $trajectoryId): int
@@ -188,19 +347,23 @@ final class TrajectoryService extends AbstractService
     // === User Enrollment ===
 
     /**
-     * Check if user is enrolled in trajectory.
-     */
-    public function isUserEnrolled(int $userId, int $trajectoryId): bool
-    {
-        return $this->registrations->existsForTrajectory($userId, $trajectoryId);
-    }
-
-    /**
      * Check if trajectory requires admin approval for enrollment.
      */
     public function requiresApproval(int $trajectoryId): bool
     {
         return (bool) $this->repository->getField($trajectoryId, 'requires_approval', false);
+    }
+
+    /**
+     * Get the enrollment form key for this trajectory.
+     *
+     * Mirrors EditionService::getEnrollmentForm so EnrollmentRouter can pass
+     * `form_type` to the shared enrollment template — the template hides the
+     * billing step when form_type === 'minimal'.
+     */
+    public function getEnrollmentForm(int $trajectoryId): string
+    {
+        return (string) $this->repository->getField($trajectoryId, 'enrollment_form', 'default');
     }
 
     // === Deadline Checks ===

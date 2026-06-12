@@ -1,8 +1,13 @@
 <?php
 /**
- * Trajectory Tab: Berichten (Messages)
+ * Trajectory Tab: Berichten (Messages) — Helder Tij
  *
  * Read-only announcement board from supervisors.
+ *
+ * Restyle only: white bordered rows with a 34px initials avatar, bold
+ * author name + type chip, faint date on the right and relaxed body
+ * text. Data source and rendering logic unchanged — the data carries
+ * no read/unread state, so every row uses the neutral card style.
  *
  * @param array $args {
  *     @type WP_Post $trajectory
@@ -27,17 +32,14 @@ $messages = $dashboardService->getMessages($trajectory->ID);
 $messageTypes = [
     'announcement' => [
         'label' => __('Aankondiging', 'stridence'),
-        'icon' => 'bell',
-        'class' => 'bg-primary/10 text-primary',
+        'class' => 'bg-accent-subtle text-accent-hover',
     ],
     'faq' => [
         'label' => __('FAQ', 'stridence'),
-        'icon' => 'help-circle',
-        'class' => 'bg-accent/10 text-accent',
+        'class' => 'bg-surface-alt text-text-muted',
     ],
     'update' => [
         'label' => __('Update', 'stridence'),
-        'icon' => 'info',
         'class' => 'bg-success/10 text-success',
     ],
 ];
@@ -45,11 +47,11 @@ $messageTypes = [
 
 <div class="space-y-6">
     <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-text">
+        <h2 class="text-lg font-bold text-text">
             <?php esc_html_e('Berichten', 'stridence'); ?>
         </h2>
         <?php if (!empty($messages)) : ?>
-            <span class="text-sm text-text-muted">
+            <span class="text-[13px] text-text-faint">
                 <?php printf(esc_html__('%d berichten', 'stridence'), count($messages)); ?>
             </span>
         <?php endif; ?>
@@ -57,14 +59,14 @@ $messageTypes = [
 
     <?php if (empty($messages)) : ?>
         <?php
-        get_template_part('partials/empty-state', null, [
+        stridence_template_part('partials/empty-state', null, [
             'icon' => 'bell',
             'title' => __('Geen berichten', 'stridence'),
             'message' => __('Er zijn nog geen berichten geplaatst voor dit traject.', 'stridence'),
         ]);
         ?>
     <?php else : ?>
-        <div class="space-y-4">
+        <div class="flex flex-col gap-3">
             <?php foreach ($messages as $message) :
                 $type = $message['type'] ?? 'announcement';
                 $typeConfig = $messageTypes[$type] ?? $messageTypes['announcement'];
@@ -72,30 +74,37 @@ $messageTypes = [
                 $author = $authorId ? get_userdata($authorId) : null;
                 $authorName = $author ? ($author->display_name ?: $author->user_login) : __('Beheerder', 'stridence');
                 $date = $message['date'] ?? '';
-            ?>
-                <article class="card p-4">
-                    <header class="flex items-start justify-between gap-4 mb-3">
-                        <div class="flex items-center gap-3">
-                            <span class="shrink-0 w-10 h-10 rounded-full <?php echo esc_attr($typeConfig['class']); ?> flex items-center justify-center">
-                                <?php echo stridence_icon($typeConfig['icon'], 'w-5 h-5'); ?>
-                            </span>
-                            <div>
-                                <span class="text-xs font-medium <?php echo esc_attr($typeConfig['class']); ?> px-2 py-0.5 rounded">
+
+                // Avatar initials: first + last word of the author name (presentation only)
+                $nameParts = preg_split('/\s+/', trim($authorName)) ?: [];
+                $initials = mb_strtoupper(mb_substr($nameParts[0] ?? '', 0, 1));
+                if (count($nameParts) > 1) {
+                    $initials .= mb_strtoupper(mb_substr(end($nameParts), 0, 1));
+                }
+                ?>
+                <article class="bg-surface-card border border-border-soft rounded-[12px] p-4 flex items-start gap-3.5">
+                    <span class="shrink-0 w-[34px] h-[34px] rounded-full bg-accent-subtle text-accent-hover flex items-center justify-center text-[13px] font-extrabold">
+                        <?php echo esc_html($initials); ?>
+                    </span>
+
+                    <div class="flex-1 min-w-0">
+                        <div class="flex flex-wrap items-baseline justify-between gap-x-2.5 gap-y-0.5">
+                            <span class="text-[13px] font-bold text-text">
+                                <?php echo esc_html($authorName); ?>
+                                <span class="ml-1.5 inline-block align-middle text-[11px] font-bold px-1.5 py-px rounded-[6px] <?php echo esc_attr($typeConfig['class']); ?>">
                                     <?php echo esc_html($typeConfig['label']); ?>
                                 </span>
-                                <p class="text-sm text-text-muted mt-1">
-                                    <?php echo esc_html($authorName); ?>
-                                    <?php if ($date) : ?>
-                                        <span class="mx-1">&middot;</span>
-                                        <?php echo esc_html(date_i18n('j F Y', strtotime($date))); ?>
-                                    <?php endif; ?>
-                                </p>
-                            </div>
+                            </span>
+                            <?php if ($date) : ?>
+                                <span class="text-[12px] text-text-faint">
+                                    <?php echo esc_html(date_i18n('j F Y', strtotime($date))); ?>
+                                </span>
+                            <?php endif; ?>
                         </div>
-                    </header>
 
-                    <div class="prose prose-sm max-w-none text-text">
-                        <?php echo wp_kses_post(nl2br(esc_html($message['content'] ?? ''))); ?>
+                        <div class="text-[14px] text-text leading-relaxed mt-1">
+                            <?php echo wp_kses_post(nl2br(esc_html($message['content'] ?? ''))); ?>
+                        </div>
                     </div>
                 </article>
             <?php endforeach; ?>

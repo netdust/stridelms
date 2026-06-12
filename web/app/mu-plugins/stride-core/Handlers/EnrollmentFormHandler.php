@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace Stride\Handlers;
 
 use Stride\Domain\Money;
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionSelection;
 use Stride\Modules\Enrollment\EnrollmentService;
+use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Invoicing\QuoteService;
 use Stride\Modules\Invoicing\VoucherService;
+use Stride\Modules\Questionnaire\QuestionnaireRepository;
+use Stride\Modules\Questionnaire\QuestionnaireValidator;
 use Stride\Modules\Trajectory\TrajectorySelection;
 use Stride\Modules\Trajectory\TrajectoryService;
 use WP_Error;
@@ -31,24 +35,8 @@ final class EnrollmentFormHandler
     {
         // Register API action handlers
         add_filter('ntdst/api_data/stride_submit_enrollment', [$this, 'handleSubmitEnrollment'], 10, 2);
-        add_filter('ntdst/api_data/stride_register_interest', [$this, 'handleRegisterInterest'], 10, 2);
         add_filter('ntdst/api_data/stride_validate_voucher', [$this, 'handleValidateVoucher'], 10, 2);
         add_filter('ntdst/api_data/stride_save_session_selection', [$this, 'handleSaveSessionSelection'], 10, 2);
-
-        // Register voucher validation as public action (can validate before login)
-        add_filter('ntdst/api/public_actions', [$this, 'registerPublicActions']);
-    }
-
-    /**
-     * Register public API actions that don't require authentication.
-     *
-     * @param array<string> $actions Existing public actions
-     * @return array<string>
-     */
-    public function registerPublicActions(array $actions): array
-    {
-        $actions[] = 'stride_validate_voucher';
-        return $actions;
     }
 
     /**
@@ -78,68 +66,6 @@ final class EnrollmentFormHandler
             'trajectory' => $this->processTrajectoryEnrollment($params, $userId),
             default => $this->processEditionEnrollment($params, $userId),
         };
-    }
-
-    /**
-     * Handle interest registration.
-     *
-     * @param mixed $data Existing data (unused)
-     * @param array<string, mixed> $params Request parameters
-     * @return array<string, mixed>|WP_Error
-     */
-    public function handleRegisterInterest(mixed $data, array $params): array|WP_Error
-    {
-        $userId = get_current_user_id();
-        if (!$userId) {
-            return new WP_Error('not_logged_in', __('Je moet ingelogd zijn om je interesse te melden.', 'stride'));
-        }
-
-        $itemType = sanitize_text_field($params['item_type'] ?? 'edition');
-        $editionId = absint($params['edition_id'] ?? 0);
-        $trajectoryId = absint($params['trajectory_id'] ?? 0);
-
-        // Update user profile with provided info
-        $firstName = sanitize_text_field($params['first_name'] ?? '');
-        $lastName = sanitize_text_field($params['last_name'] ?? '');
-        $phone = sanitize_text_field($params['phone'] ?? '');
-        $organisation = sanitize_text_field($params['company'] ?? '');
-        $message = sanitize_textarea_field($params['message'] ?? '');
-
-        if (empty($firstName) || empty($lastName)) {
-            return new WP_Error('validation_error', __('Voornaam en achternaam zijn vereist.', 'stride'));
-        }
-
-        // Update user meta
-        wp_update_user([
-            'ID' => $userId,
-            'first_name' => $firstName,
-            'last_name' => $lastName,
-        ]);
-        if ($phone) {
-            update_user_meta($userId, 'phone', $phone);
-        }
-        if ($organisation) {
-            update_user_meta($userId, 'company', $organisation);
-        }
-
-        // Register interest
-        $enrollment = ntdst_get(EnrollmentService::class);
-        $result = $enrollment->registerInterest($userId, [
-            'edition_id' => $editionId ?: null,
-            'trajectory_id' => $trajectoryId ?: null,
-            'notes' => $message,
-        ]);
-
-        if (is_wp_error($result)) {
-            return $result;
-        }
-
-        return [
-            'success' => true,
-            'message' => __('Je interesse is geregistreerd. We houden je op de hoogte!', 'stride'),
-            'registration_id' => $result,
-            'redirect_url' => home_url('/mijn-account/'),
-        ];
     }
 
     /**
@@ -180,6 +106,41 @@ final class EnrollmentFormHandler
             return $validation;
         }
 
+        // Split extra fields into stage-keyed structure and validate each stage
+        $stageData = $this->splitExtraFieldsByStage(
+            $enrollmentData['extra_fields'] ?? [],
+            $editionId,
+            'vad_edition',
+        );
+
+        $validator = ntdst_get(QuestionnaireValidator::class);
+
+        $personalResult = $validator->validate(
+            $stageData['enrollment_personal'] ?? [],
+            $editionId,
+            'enrollment_personal',
+        );
+        if (is_wp_error($personalResult)) {
+            return $personalResult;
+        }
+
+        $billingResult = $validator->validate(
+            $stageData['enrollment_billing'] ?? [],
+            $editionId,
+            'enrollment_billing',
+        );
+        if (is_wp_error($billingResult)) {
+            return $billingResult;
+        }
+
+        // Replace flat extra_fields with stage-keyed, wrapped enrollment_data
+        unset($enrollmentData['extra_fields']);
+        $actorId = get_current_user_id() ?: null;
+        $enrollmentData['enrollment_data'] = [
+            'enrollment_personal' => RegistrationRepository::wrapStage($stageData['enrollment_personal'] ?? [], $actorId),
+            'enrollment_billing'  => RegistrationRepository::wrapStage($stageData['enrollment_billing']  ?? [], $actorId),
+        ];
+
         $enrollment = ntdst_get(EnrollmentService::class);
         $result = $enrollment->processEnrollment($enrollmentData);
         if (is_wp_error($result)) {
@@ -194,16 +155,27 @@ final class EnrollmentFormHandler
         // Determine response message based on resulting registration status
         $registrationId = $result['registration_id'] ?? null;
         $isPending = false;
+        $hasTasks = false;
         if ($registrationId) {
-            $reg = $enrollment->getRegistration($registrationId);
-            if (!is_wp_error($reg) && $reg->status === 'pending') {
+            $reg = ntdst_get(RegistrationRepository::class)->find((int) $registrationId);
+            if ($reg !== null && $reg->status === 'pending') {
                 $isPending = true;
+                $hasTasks = !empty($reg->completion_tasks);
             }
         }
 
-        $message = $isPending
-            ? __('Je inschrijving is ontvangen en wacht op goedkeuring.', 'stride')
-            : __('Je inschrijving is succesvol verwerkt!', 'stride');
+        if ($hasTasks) {
+            $message = __('Je inschrijving is ontvangen. Er zijn nog een aantal stappen nodig om je inschrijving te voltooien.', 'stride');
+            $edition = ntdst_get(EditionRepository::class)->find($editionId);
+            $slug = is_wp_error($edition) ? '' : ($edition->post_name ?? '');
+            $redirectUrl = home_url('/edities/' . $slug . '/voltooien/');
+        } elseif ($isPending) {
+            $message = __('Je inschrijving is ontvangen en wacht op goedkeuring.', 'stride');
+            $redirectUrl = home_url('/mijn-account/?tab=inschrijvingen');
+        } else {
+            $message = __('Je inschrijving is succesvol verwerkt!', 'stride');
+            $redirectUrl = home_url('/mijn-account/?tab=inschrijvingen');
+        }
 
         return [
             'success' => true,
@@ -211,7 +183,7 @@ final class EnrollmentFormHandler
             'registration_id' => $registrationId,
             'quote_id' => $result['quote_id'] ?? null,
             'status' => $isPending ? 'pending' : 'confirmed',
-            'redirect_url' => home_url('/mijn-account/mijn-cursussen/'),
+            'redirect_url' => $redirectUrl,
         ];
     }
 
@@ -241,7 +213,7 @@ final class EnrollmentFormHandler
         }
 
         // Check user not already enrolled
-        if ($trajectoryService->isUserEnrolled($userId, $trajectoryId)) {
+        if (ntdst_get(RegistrationRepository::class)->existsForTrajectory($userId, $trajectoryId)) {
             return new WP_Error('already_enrolled', __('Je bent al ingeschreven voor dit traject.', 'stride'));
         }
 
@@ -258,6 +230,42 @@ final class EnrollmentFormHandler
             ]);
             return $validation;
         }
+
+        // Split extra fields into stage-keyed structure and validate each stage
+        $stageData = $this->splitExtraFieldsByStage(
+            $billingData['extra_fields'] ?? [],
+            $trajectoryId,
+            'vad_trajectory',
+        );
+
+        $validator = ntdst_get(QuestionnaireValidator::class);
+
+        $personalResult = $validator->validate(
+            $stageData['enrollment_personal'] ?? [],
+            $trajectoryId,
+            'enrollment_personal',
+            'vad_trajectory',
+        );
+        if (is_wp_error($personalResult)) {
+            return $personalResult;
+        }
+
+        $billingResult = $validator->validate(
+            $stageData['enrollment_billing'] ?? [],
+            $trajectoryId,
+            'enrollment_billing',
+            'vad_trajectory',
+        );
+        if (is_wp_error($billingResult)) {
+            return $billingResult;
+        }
+
+        unset($billingData['extra_fields']);
+        $actorId = get_current_user_id() ?: null;
+        $billingData['enrollment_data'] = [
+            'enrollment_personal' => RegistrationRepository::wrapStage($stageData['enrollment_personal'] ?? [], $actorId),
+            'enrollment_billing'  => RegistrationRepository::wrapStage($stageData['enrollment_billing']  ?? [], $actorId),
+        ];
 
         // Create enrollment via TrajectorySelection
         $selectionService = ntdst_get(TrajectorySelection::class);
@@ -281,7 +289,7 @@ final class EnrollmentFormHandler
             $enrollmentId,
             $trajectoryId,
             $billingData,
-            $params['voucher_code'] ?? ''
+            $params['voucher_code'] ?? '',
         );
 
         if (is_wp_error($quoteId)) {
@@ -291,7 +299,17 @@ final class EnrollmentFormHandler
                 'enrollment_id' => $enrollmentId,
                 'error' => $quoteId->get_error_message(),
             ]);
-            // Don't fail enrollment if quote creation fails, but log it
+
+            // Roll back the enrollment so a missing quote can never let the
+            // user walk past payment. The user can retry; an admin sees the
+            // cancellation in the audit trail.
+            $enrollmentService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class);
+            $enrollmentService->cancel($enrollmentId);
+
+            return new WP_Error(
+                'quote_creation_failed',
+                __('De inschrijving kon niet worden afgerond omdat de offerte niet aangemaakt werd. Probeer opnieuw of contacteer ons.', 'stride'),
+            );
         }
 
         ntdst_log('enrollment')->info('Trajectory enrollment completed', [
@@ -313,7 +331,7 @@ final class EnrollmentFormHandler
             'enrollment_id' => $enrollmentId,
             'quote_id' => is_wp_error($quoteId) ? null : $quoteId,
             'status' => $requiresApproval ? 'pending' : 'confirmed',
-            'redirect_url' => home_url('/mijn-account/mijn-trajecten/'),
+            'redirect_url' => home_url('/mijn-account/?tab=inschrijvingen'),
         ];
     }
 
@@ -327,7 +345,7 @@ final class EnrollmentFormHandler
         int $enrollmentId,
         int $trajectoryId,
         array $billingData,
-        string $voucherCode
+        string $voucherCode,
     ): int|WP_Error {
         $trajectoryService = ntdst_get(TrajectoryService::class);
         $trajectory = $trajectoryService->getTrajectory($trajectoryId);
@@ -372,13 +390,13 @@ final class EnrollmentFormHandler
 
         // Format billing for quote
         $billing = [
-            'organisation' => $billingData['company'] ?? '',
+            'company' => $billingData['company'] ?? '',
             'email' => $billingData['invoice_email'] ?? $billingData['email'] ?? '',
             'address' => $billingData['address'] ?? '',
             'postal_code' => $billingData['postal_code'] ?? '',
             'city' => $billingData['city'] ?? '',
             'vat_number' => $billingData['vat_number'] ?? '',
-            'gln_number' => $billingData['gln_peppol'] ?? '',
+            'gln_number' => $billingData['gln_number'] ?? '',
         ];
 
         // Use QuoteService to create quote
@@ -394,7 +412,7 @@ final class EnrollmentFormHandler
             $items,
             $billing,
             $appliedVoucherCode,
-            $discount
+            $discount,
         );
     }
 
@@ -407,9 +425,13 @@ final class EnrollmentFormHandler
      */
     public function handleValidateVoucher(mixed $data, array $params): array|WP_Error
     {
+        if (!get_current_user_id()) {
+            return new WP_Error('not_logged_in', __('Je moet ingelogd zijn.', 'stride'));
+        }
+
         $code = sanitize_text_field($params['code'] ?? '');
         $itemType = sanitize_text_field($params['item_type'] ?? 'edition');
-        $itemId = absint($params['edition_id'] ?? $params['trajectory_id'] ?? 0);
+        $itemId = absint($params['item_id'] ?? $params['edition_id'] ?? $params['trajectory_id'] ?? 0);
 
         if (empty($code)) {
             return new WP_Error('invalid_input', __('Vouchercode is vereist.', 'stride'));
@@ -437,8 +459,7 @@ final class EnrollmentFormHandler
             return new WP_Error('invalid_item', __('Item niet gevonden.', 'stride'));
         }
 
-        $subtotal = Money::cents((int) round($price * 100));
-        $discount = $vouchers->calculateDiscount($validation, $subtotal);
+        $discount = $vouchers->calculateDiscount($validation, $price, $editionIdForValidation);
 
         ntdst_log('enrollment')->info('Voucher validated', [
             'item_type' => $itemType,
@@ -451,7 +472,6 @@ final class EnrollmentFormHandler
             'valid' => true,
             'discount' => $discount->inCents() / 100,
             'discount_formatted' => '€ ' . number_format($discount->inCents() / 100, 2, ',', '.'),
-            'discount_type' => $validation['discount_type'],
             'message' => sprintf(__('Korting toegepast: -€ %s', 'stride'), number_format($discount->inCents() / 100, 2, ',', '.')),
         ];
     }
@@ -459,17 +479,19 @@ final class EnrollmentFormHandler
     /**
      * Get price for an item (edition or trajectory).
      */
-    private function getItemPrice(string $itemType, int $itemId): ?float
+    private function getItemPrice(string $itemType, int $itemId): ?Money
     {
         if ($itemType === 'trajectory') {
             $trajectoryService = ntdst_get(TrajectoryService::class);
             $trajectory = $trajectoryService->getTrajectory($itemId);
-            return $trajectory ? (float) $trajectory['price'] : null;
+            return $trajectory ? Money::eur((float) $trajectory['price']) : null;
         }
 
-        // Default: edition
+        // Default: edition — pass current user for member pricing
         $editions = ntdst_get(EditionService::class);
-        return $editions->getPrice($itemId);
+        $userId = get_current_user_id() ?: null;
+
+        return $editions->getPrice($itemId, $userId);
     }
 
     /**
@@ -489,12 +511,23 @@ final class EnrollmentFormHandler
             return new WP_Error('invalid_input', __('Geen registratie opgegeven.', 'stride'));
         }
 
+        $userId = get_current_user_id();
+        if (!$userId) {
+            return new WP_Error('not_logged_in', __('Je moet ingelogd zijn.', 'stride'));
+        }
+
+        $repo = ntdst_get(RegistrationRepository::class);
+        $reg = $repo->find($registrationId);
+        if (!$reg || (int) $reg->user_id !== $userId) {
+            return new WP_Error('forbidden', __('Geen toegang.', 'stride'));
+        }
+
         $sessionSelection = ntdst_get(SessionSelection::class);
         if (!$sessionSelection) {
             return new WP_Error('service_unavailable', __('Service niet beschikbaar.', 'stride'));
         }
 
-        $result = $sessionSelection->selectSessions($registrationId, array_map('intval', $sessionIds));
+        $result = $sessionSelection->setSelections($registrationId, array_map('intval', $sessionIds));
         if (is_wp_error($result)) {
             ntdst_log('enrollment')->error('Session selection failed', [
                 'registration_id' => $registrationId,
@@ -528,15 +561,78 @@ final class EnrollmentFormHandler
             'last_name' => sanitize_text_field($params['last_name'] ?? ''),
             'email' => sanitize_email($params['email'] ?? ''),
             'phone' => sanitize_text_field($params['phone'] ?? ''),
-            'company' => sanitize_text_field($params['company'] ?? ''),
+            'organisation' => sanitize_text_field($params['organisation'] ?? ''),
+            'department' => sanitize_text_field($params['department'] ?? ''),
+            'message' => sanitize_textarea_field($params['message'] ?? ''),
             'vat_number' => sanitize_text_field($params['vat_number'] ?? ''),
             'address' => sanitize_text_field($params['address'] ?? ''),
             'postal_code' => sanitize_text_field($params['postal_code'] ?? ''),
             'city' => sanitize_text_field($params['city'] ?? ''),
-            'gln_peppol' => sanitize_text_field($params['gln_peppol'] ?? ''),
+            'company' => sanitize_text_field($params['company'] ?? ''),
             'invoice_email' => sanitize_email($params['invoice_email'] ?? ''),
+            'gln_number' => sanitize_text_field($params['gln_number'] ?? ''),
             'po_number' => sanitize_text_field($params['po_number'] ?? ''),
+            'extra_fields' => $this->sanitizeExtraFields($params['extra_fields'] ?? []),
         ];
+    }
+
+    /**
+     * Sanitize dynamic extra fields from field groups.
+     *
+     * @return array<string, string|bool>
+     */
+    private function sanitizeExtraFields(array|string $fields): array
+    {
+        if (is_string($fields)) {
+            if (strlen($fields) > 10000) {
+                return [];
+            }
+            $fields = json_decode($fields, true) ?: [];
+        }
+
+        $sanitized = [];
+        foreach ($fields as $key => $value) {
+            $safeKey = sanitize_key($key);
+            $sanitized[$safeKey] = is_bool($value) ? $value : sanitize_text_field((string) $value);
+        }
+
+        return $sanitized;
+    }
+
+    /**
+     * Split flat extra fields into stage-keyed structure.
+     *
+     * Fields belonging to 'enrollment_billing' are placed under that key;
+     * everything else defaults to 'enrollment_personal'.
+     *
+     * @param array<string, string|bool> $extraFields Sanitized extra field values
+     * @param int    $postId   Edition or trajectory post ID
+     * @param string $postType Post type — 'vad_edition' or 'vad_trajectory'
+     * @return array{enrollment_personal: array<string, mixed>, enrollment_billing: array<string, mixed>}
+     */
+    private function splitExtraFieldsByStage(array $extraFields, int $postId, string $postType): array
+    {
+        $questionnaireRepo = ntdst_get(QuestionnaireRepository::class);
+
+        $billingFieldNames = array_column(
+            $questionnaireRepo->getFlatFieldsForStage($postId, 'enrollment_billing', $postType),
+            'name',
+        );
+
+        $stageData = [
+            'enrollment_personal' => [],
+            'enrollment_billing'  => [],
+        ];
+
+        foreach ($extraFields as $key => $value) {
+            if (in_array($key, $billingFieldNames, true)) {
+                $stageData['enrollment_billing'][$key] = $value;
+            } else {
+                $stageData['enrollment_personal'][$key] = $value;
+            }
+        }
+
+        return $stageData;
     }
 
     /**
@@ -610,34 +706,13 @@ final class EnrollmentFormHandler
     /**
      * Update user billing info from enrollment form.
      *
+     * Delegates to EnrollmentService to keep meta key mappings consistent.
+     *
      * @param array<string, string> $billingData
      */
     private function updateUserBillingInfo(int $userId, array $billingData): void
     {
-        $metaFields = [
-            'phone' => 'phone',
-            'company' => 'company',
-            'vat_number' => 'vat_number',
-            'address' => 'billing_address',
-            'postal_code' => 'billing_postal_code',
-            'city' => 'billing_city',
-            'gln_peppol' => 'gln_number',
-            'invoice_email' => 'invoice_email',
-        ];
-
-        foreach ($metaFields as $inputKey => $metaKey) {
-            if (!empty($billingData[$inputKey])) {
-                update_user_meta($userId, $metaKey, $billingData[$inputKey]);
-            }
-        }
-
-        // Update core user fields if provided
-        if (!empty($billingData['first_name']) || !empty($billingData['last_name'])) {
-            wp_update_user([
-                'ID' => $userId,
-                'first_name' => $billingData['first_name'] ?? '',
-                'last_name' => $billingData['last_name'] ?? '',
-            ]);
-        }
+        $enrollment = ntdst_get(EnrollmentService::class);
+        $enrollment->updateUserProfile($userId, $billingData);
     }
 }

@@ -17,6 +17,9 @@ use WP_Error;
  */
 final class ICalHandler
 {
+    /** @var array<int, array{courseTitle: string, venue: string}> Per-edition cache */
+    private array $editionCache = [];
+
     public function __construct()
     {
         $this->init();
@@ -62,6 +65,7 @@ final class ICalHandler
 
         $sessionService = ntdst_get(SessionService::class);
         $editionService = ntdst_get(EditionService::class);
+        $editionRepository = ntdst_get(EditionRepository::class);
         $registrationRepo = ntdst_get(RegistrationRepository::class);
 
         if ($sessionId) {
@@ -73,7 +77,7 @@ final class ICalHandler
                 if (!$registration) {
                     return $this->buildIcal([]); // Return empty calendar if not enrolled
                 }
-                $events[] = $this->sessionToEvent($session, $editionService);
+                $events[] = $this->sessionToEvent($session, $editionService, $editionRepository);
             }
         } elseif ($editionId) {
             // Security: Verify user is enrolled in this edition
@@ -81,19 +85,41 @@ final class ICalHandler
             if (!$registration) {
                 return $this->buildIcal([]); // Return empty calendar if not enrolled
             }
-            // All sessions for edition
+            $selectedIds = array_map('intval', $registration->selections ?? []);
             $sessions = $sessionService->getSessionsForEdition($editionId);
             foreach ($sessions as $session) {
-                $events[] = $this->sessionToEvent($session, $editionService);
+                if (!$this->isScheduledSession($session)) {
+                    continue;
+                }
+                // If user has selections, only include selected + non-slot sessions
+                if (!empty($selectedIds) && !empty($session['slot']) && !in_array((int) $session['id'], $selectedIds, true)) {
+                    continue;
+                }
+                $events[] = $this->sessionToEvent($session, $editionService, $editionRepository);
             }
         } else {
-            // All user's upcoming sessions (already filtered by user's registrations)
-            $registrations = $registrationRepo->findByUser($userId, 'confirmed');
+            // All user's upcoming scheduled sessions (pending + confirmed)
+            $registrations = $registrationRepo->findByUser($userId);
+            $activeStatuses = ['pending', 'confirmed'];
 
             foreach ($registrations as $reg) {
-                $sessions = $sessionService->getSessionsForEdition((int) $reg->edition_id);
+                if (!in_array($reg->status ?? '', $activeStatuses, true)) {
+                    continue;
+                }
+                $edId = (int) ($reg->edition_id ?? 0);
+                if (!$edId) {
+                    continue;
+                }
+                $selectedIds = array_map('intval', $reg->selections ?? []);
+                $sessions = $sessionService->getSessionsForEdition($edId);
                 foreach ($sessions as $session) {
-                    $events[] = $this->sessionToEvent($session, $editionService);
+                    if (!$this->isScheduledSession($session)) {
+                        continue;
+                    }
+                    if (!empty($selectedIds) && !empty($session['slot']) && !in_array((int) $session['id'], $selectedIds, true)) {
+                        continue;
+                    }
+                    $events[] = $this->sessionToEvent($session, $editionService, $editionRepository);
                 }
             }
         }
@@ -107,26 +133,36 @@ final class ICalHandler
      * @param array<string, mixed> $session
      * @return array<string, mixed>
      */
-    private function sessionToEvent(array $session, EditionService $editionService): array
+    private function sessionToEvent(array $session, EditionService $editionService, EditionRepository $editionRepository): array
     {
-        $edition = $editionService->getEdition($session['edition_id']);
-        $courseId = is_wp_error($edition) ? 0 : $editionService->getCourseId($session['edition_id']);
-        $course = $courseId ? get_post($courseId) : null;
+        $editionId = (int) $session['edition_id'];
 
-        // Get venue from edition via repository
-        $venue = '';
-        if (!is_wp_error($edition)) {
-            $editionRepository = ntdst_get(EditionRepository::class);
-            $venue = $editionRepository->getField($edition->ID, 'venue', '');
+        if (!isset($this->editionCache[$editionId])) {
+            $edition = $editionRepository->find($editionId);
+            $courseId = is_wp_error($edition) ? 0 : $editionService->getCourseId($editionId);
+            $course = $courseId ? get_post($courseId) : null;
+            $venue = !is_wp_error($edition)
+                ? $editionRepository->getField($edition->ID, 'venue', '')
+                : '';
+
+            $this->editionCache[$editionId] = [
+                'courseTitle' => $course ? $course->post_title : 'Stride Training',
+                'venue' => $venue,
+            ];
         }
+
+        $cached = $this->editionCache[$editionId];
+        $date = $session['date'] ?? '';
+        $startTime = $session['start_time'] ?? '';
+        $endTime = $session['end_time'] ?? '';
 
         return [
             'uid' => 'session-' . $session['id'] . '@stride',
-            'summary' => $course ? $course->post_title : 'Stride Training',
+            'summary' => $cached['courseTitle'],
             'description' => $session['description'] ?? '',
-            'location' => $session['location'] ?: $venue,
-            'start' => $session['start_time'] ?? '',
-            'end' => $session['end_time'] ?? '',
+            'location' => $session['location'] ?: $cached['venue'],
+            'start' => $date && $startTime ? ($date . ' ' . $startTime) : '',
+            'end' => $date && $endTime ? ($date . ' ' . $endTime) : '',
         ];
     }
 
@@ -171,6 +207,19 @@ final class ICalHandler
     }
 
     /**
+     * Check if session has a scheduled date+time (not self-paced online/assignment).
+     */
+    private function isScheduledSession(array $session): bool
+    {
+        $type = $session['type'] ?? 'in_person';
+        if (in_array($type, ['online', 'assignment'], true)) {
+            return false;
+        }
+
+        return !empty($session['date']) && !empty($session['start_time']);
+    }
+
+    /**
      * Escape string for iCal.
      */
     private function escapeIcal(string $text): string
@@ -184,6 +233,6 @@ final class ICalHandler
     private function formatIcalDate(string $datetime): string
     {
         $timestamp = strtotime($datetime);
-        return gmdate('Ymd\THis\Z', $timestamp);
+        return $timestamp ? gmdate('Ymd\THis\Z', $timestamp) : '';
     }
 }

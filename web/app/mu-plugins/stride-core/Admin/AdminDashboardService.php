@@ -18,7 +18,7 @@ class AdminDashboardService extends AbstractService
     private const MENU_SLUG = 'stride-dashboard';
 
     /** Capability required to access */
-    private const CAPABILITY = 'edit_others_posts';
+    private const CAPABILITY = 'stride_view';
 
     /**
      * {@inheritDoc}
@@ -54,6 +54,36 @@ class AdminDashboardService extends AbstractService
             ntdst_get(\Stride\Modules\Edition\SessionRepository::class),
         );
 
+        // Admin guide page (registers own menu hook)
+        new AdminGuidePage();
+
+        // Impersonation admin bar hook
+        $impersonation = new ImpersonationHandler();
+        if ($impersonation->isActive()) {
+            add_filter('show_admin_bar', '__return_true', 999);
+            add_action('admin_bar_menu', function (\WP_Admin_Bar $bar) use ($impersonation) {
+                $token = $impersonation->getTokenFromCookie();
+                $adminId = $impersonation->getOriginalAdmin($token);
+                if ($adminId > 0) {
+                    $adminUser = get_userdata($adminId);
+                    $bar->add_node([
+                        'id' => 'stride-end-impersonation',
+                        'title' => sprintf('← Terug naar %s', $adminUser ? $adminUser->display_name : 'admin'),
+                        'href' => rest_url('stride/v1/admin/impersonate/end') . '?token=' . urlencode($token) . '&_wpnonce=' . wp_create_nonce('wp_rest'),
+                        'meta' => ['class' => 'stride-impersonation-notice'],
+                    ]);
+                }
+            }, 999);
+        }
+
+        // Cache invalidation for action queue transient
+        $invalidateQueue = fn() => delete_transient('stride_action_queue');
+        add_action('stride/registration/created', $invalidateQueue);
+        add_action('stride/registration/confirmed', $invalidateQueue);
+        add_action('stride/registration/cancelled', $invalidateQueue);
+        add_action('stride/attendance/marked', $invalidateQueue);
+        add_action('save_post_vad_quote', $invalidateQueue);
+
         add_action('admin_menu', [$this, 'registerAdminPage']);
         add_action('admin_menu', [$this, 'reorderSubmenus'], 999);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
@@ -74,7 +104,7 @@ class AdminDashboardService extends AbstractService
             self::MENU_SLUG,
             [$this, 'renderDashboard'],
             'dashicons-welcome-learn-more',
-            2
+            2,
         );
 
         // Add explicit Dashboard submenu as first item
@@ -84,7 +114,7 @@ class AdminDashboardService extends AbstractService
             'Dashboard',
             self::CAPABILITY,
             self::MENU_SLUG,
-            [$this, 'renderDashboard']
+            [$this, 'renderDashboard'],
         );
     }
 
@@ -148,41 +178,53 @@ class AdminDashboardService extends AbstractService
             'flatpickr',
             'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css',
             [],
-            '4.6.13'
+            '4.6.13',
         );
         wp_enqueue_script(
             'flatpickr',
             'https://cdn.jsdelivr.net/npm/flatpickr',
             [],
             '4.6.13',
-            true
+            true,
         );
         wp_enqueue_script(
             'flatpickr-nl',
             'https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/nl.js',
             ['flatpickr'],
             '4.6.13',
-            true
+            true,
         );
 
         wp_enqueue_script(
             'alpinejs',
-            'https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js',
+            'https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js',
             ['flatpickr'],
-            '3.14.0',
-            ['strategy' => 'defer']
+            '3.14.9',
+            ['strategy' => 'defer'],
         );
+
+        // Add crossorigin for CDN scripts (required for SRI)
+        add_filter('script_loader_tag', function (string $tag, string $handle): string {
+            if (in_array($handle, ['alpinejs', 'flatpickr', 'flatpickr-nl'], true)) {
+                return str_replace(' src=', ' crossorigin="anonymous" src=', $tag);
+            }
+            return $tag;
+        }, 10, 2);
 
         $user = wp_get_current_user();
 
         wp_localize_script('alpinejs', 'StrideConfig', [
             'apiUrl' => rest_url('stride/v1'),
+            'adminUrl' => admin_url(),
             'nonce' => wp_create_nonce('wp_rest'),
+            'exportNonce' => wp_create_nonce('stride_edition_admin'),
             'user' => [
                 'id' => $user->ID,
                 'name' => $user->display_name,
                 'email' => $user->user_email,
+                'firstName' => $user->first_name ?: $user->display_name,
             ],
+            'canManage' => current_user_can('stride_manage'),
         ]);
     }
 

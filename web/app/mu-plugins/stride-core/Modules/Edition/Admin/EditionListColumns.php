@@ -146,7 +146,7 @@ final class EditionListColumns
             '<span style="display:inline-block;padding:2px 8px;border-radius:3px;background:%s20;color:%s;font-size:12px;">%s</span>',
             $config['color'],
             $config['color'],
-            esc_html($config['label'])
+            esc_html($config['label']),
         );
     }
 

@@ -36,7 +36,7 @@ abstract class AbstractRepository implements RepositoryInterface
         if ($post === null || is_wp_error($post)) {
             return new WP_Error(
                 'not_found',
-                sprintf('%s with ID %d not found', $this->postType, $id)
+                sprintf('%s with ID %d not found', $this->postType, $id),
             );
         }
 
@@ -74,6 +74,36 @@ abstract class AbstractRepository implements RepositoryInterface
         }
 
         return true;
+    }
+
+    /**
+     * Read a single registered field value (typed per schema).
+     */
+    public function getField(int $id, string $field, mixed $default = null): mixed
+    {
+        return $this->model()->getMeta($id, $field, $default);
+    }
+
+    /**
+     * Read all registered field values for a post (typed per schema).
+     *
+     * @return array<string, mixed>
+     */
+    public function findFields(int $id): array
+    {
+        return $this->model()->getMeta($id);
+    }
+
+    /**
+     * The model's meta prefix (e.g. '_ntdst_').
+     *
+     * Needed when callers read batch query results from getPostsFast() / withMeta()
+     * — those return meta nested under a 'meta' key, with raw prefixed keys.
+     * Pull the prefix from here rather than hardcoding the string at the call site.
+     */
+    public function getMetaPrefix(): string
+    {
+        return $this->model()->getMetaPrefix();
     }
 
     /**

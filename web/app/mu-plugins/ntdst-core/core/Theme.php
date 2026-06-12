@@ -1,13 +1,40 @@
 <?php
 
+declare(strict_types=1);
+
+defined('ABSPATH') || exit;
+
 // ========================================
 // THEME BOOTSTRAP CLASS
 // ========================================
 
+/**
+ * Hook + filter naming conventions:
+ *  - Actions: `ntdst_*` for new code
+ *  - Module filters (config / enabled / before / after): `netdust_{module}_*` —
+ *    historical, kept for compatibility with Bootstrap.php. Do not propagate
+ *    this naming to new APIs.
+ *
+ * Mixin rules:
+ *  - Method-injection mixins are dispatched via __call(), so they cannot
+ *    override methods that already exist on NTDST_Theme. To override a
+ *    built-in method, extend the class instead.
+ *  - $theme->module('slug')->get() resolves the slug through the DI
+ *    container. Stride registers services by FQCN, not slug, so get() only
+ *    works for modules that explicitly bind by slug.
+ *  - $theme->module('slug')->disable() registers an enabled-false filter at
+ *    priority 999, which is intentionally overridable. A later filter at
+ *    priority 1000+ wins.
+ *
+ * I18n note: register_nav_menus receives translated labels via __($desc).
+ * Because the descriptions come from a variable, xgettext/wp i18n make-pot
+ * cannot extract them. Put the literal strings somewhere static for
+ * translators if you need full coverage.
+ */
 class NTDST_Theme
 {
-    private $config;
-    private $mixins = [];
+    private array $config;
+    private array $mixins = [];
 
     public function __construct(array $config = [])
     {
@@ -25,20 +52,32 @@ class NTDST_Theme
     }
 
     /**
-     * Wire up NTDST service instances as mixins
-     * Called automatically in constructor
+     * Wire up NTDST service instances as mixins.
+     * Called automatically in constructor.
+     *
+     * Each helper is guarded so missing optional services (e.g. ntdst_mail
+     * when the mail plugin isn't installed) don't break theme construction.
      */
     private function wireMixins(): void
     {
-        $this
-            ->mixin('data', ntdst_data())         // ORM: $theme->data()->get('model')->register()
-            ->mixin('router', ntdst_router())     // Routing: $theme->router()->single()
-            ->mixin('response', ntdst_response()) // Response: $theme->response()->json()
-            ->mixin('log', ntdst_log())           // Logger: $theme->log()->info()
-            ->mixin('mail', ntdst_mail());        // Mailer: $theme->mail()->to()->send()
+        if (function_exists('ntdst_data')) {
+            $this->mixin('data', ntdst_data());
+        }
+        if (function_exists('ntdst_router')) {
+            $this->mixin('router', ntdst_router());
+        }
+        if (function_exists('ntdst_response')) {
+            $this->mixin('response', ntdst_response());
+        }
+        if (function_exists('ntdst_log')) {
+            $this->mixin('log', ntdst_log());
+        }
+        if (function_exists('ntdst_mail')) {
+            $this->mixin('mail', ntdst_mail());
+        }
     }
 
-    private function init()
+    private function init(): void
     {
         // Theme setup
         add_action('after_setup_theme', [$this, 'setup_theme']);
@@ -47,7 +86,7 @@ class NTDST_Theme
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets'], 9999);
     }
 
-    public function setup_theme()
+    public function setup_theme(): void
     {
         // Load text domain for translations
         if (!empty($this->config['textdomain'])) {
@@ -115,94 +154,9 @@ class NTDST_Theme
         });
     }
 
-    public function enqueue_assets()
+    public function enqueue_assets(): void
     {
-        // Allow filtering assets before enqueueing
-        $assets = apply_filters('ntdst_theme_assets', $this->config['assets']);
-
-        // Store script/style attributes for later filtering
-        $script_attrs = [];
-        $style_attrs = [];
-
-        // Enqueue styles
-        foreach ($assets['styles'] ?? [] as $handle => $asset) {
-            // Skip if disabled
-            if (isset($asset['enabled']) && !$asset['enabled']) {
-                continue;
-            }
-
-            wp_enqueue_style(
-                sanitize_key($handle),
-                esc_url($asset['src']),
-                array_map('sanitize_key', $asset['deps'] ?? []),
-                esc_attr($asset['version'] ?? ''),
-                esc_attr($asset['media'] ?? 'all'),
-            );
-
-            // Store attributes if provided
-            if (!empty($asset['attrs'])) {
-                $style_attrs[sanitize_key($handle)] = $asset['attrs'];
-            }
-        }
-
-        // Enqueue scripts
-        foreach ($assets['scripts'] ?? [] as $handle => $asset) {
-            // Skip if disabled
-            if (isset($asset['enabled']) && !$asset['enabled']) {
-                continue;
-            }
-
-            wp_enqueue_script(
-                sanitize_key($handle),
-                esc_url($asset['src']),
-                array_map('sanitize_key', $asset['deps'] ?? []),
-                esc_attr($asset['version'] ?? ''),
-                (bool) ($asset['in_footer'] ?? true),
-            );
-
-            // Store attributes if provided
-            if (!empty($asset['attrs'])) {
-                $script_attrs[sanitize_key($handle)] = $asset['attrs'];
-            }
-        }
-
-        // Add script attributes via filter
-        if (!empty($script_attrs)) {
-            add_filter('script_loader_tag', function ($tag, $handle, $src) use ($script_attrs) {
-                if (isset($script_attrs[$handle])) {
-                    foreach ($script_attrs[$handle] as $attr => $value) {
-                        // Boolean attributes (e.g., defer, async, nomodule)
-                        if ($value === true || $value === '') {
-                            $tag = str_replace(' src', ' ' . esc_attr($attr) . ' src', $tag);
-                        }
-                        // Attributes with values (e.g., type="module", crossorigin="anonymous")
-                        else {
-                            $tag = str_replace(' src', ' ' . esc_attr($attr) . '="' . esc_attr($value) . '" src', $tag);
-                        }
-                    }
-                }
-                return $tag;
-            }, 10, 3);
-        }
-
-        // Add style attributes via filter
-        if (!empty($style_attrs)) {
-            add_filter('style_loader_tag', function ($html, $handle, $href, $media) use ($style_attrs) {
-                if (isset($style_attrs[$handle])) {
-                    foreach ($style_attrs[$handle] as $attr => $value) {
-                        // Boolean attributes
-                        if ($value === true || $value === '') {
-                            $html = str_replace(' href', ' ' . esc_attr($attr) . ' href', $html);
-                        }
-                        // Attributes with values
-                        else {
-                            $html = str_replace(' href', ' ' . esc_attr($attr) . '="' . esc_attr($value) . '" href', $html);
-                        }
-                    }
-                }
-                return $html;
-            }, 10, 4);
-        }
+        $this->enqueueAssetsFor('frontend');
 
         // Localize script with secure data (use different variable name to avoid conflicts)
         wp_localize_script('ntdst-theme', 'ntdstConfig', [
@@ -211,23 +165,30 @@ class NTDST_Theme
         ]);
     }
 
-    public function enqueue_admin_assets()
+    public function enqueue_admin_assets(): void
     {
-        // Allow filtering assets before enqueueing
-        $assets = apply_filters('ntdst_theme_assets', $this->config['assets']);
+        $this->enqueueAssetsFor('admin');
+    }
 
-        // Store script/style attributes for later filtering
+    /**
+     * Shared enqueue logic for frontend and admin contexts.
+     *
+     * Admin context requires assets to be marked `'admin' => true`; frontend
+     * picks up everything not disabled. Both branches collect attrs into
+     * script_loader_tag / style_loader_tag filters.
+     */
+    private function enqueueAssetsFor(string $context): void
+    {
+        $assets = apply_filters('ntdst_theme_assets', $this->config['assets']);
+        $isAdmin = $context === 'admin';
+
         $script_attrs = [];
         $style_attrs = [];
 
-        // Enqueue styles marked for admin
         foreach ($assets['styles'] ?? [] as $handle => $asset) {
-            // Skip if not for admin
-            if (!isset($asset['admin']) || !$asset['admin']) {
+            if ($isAdmin && empty($asset['admin'])) {
                 continue;
             }
-
-            // Skip if disabled
             if (isset($asset['enabled']) && !$asset['enabled']) {
                 continue;
             }
@@ -240,20 +201,15 @@ class NTDST_Theme
                 esc_attr($asset['media'] ?? 'all'),
             );
 
-            // Store attributes if provided
             if (!empty($asset['attrs'])) {
                 $style_attrs[sanitize_key($handle)] = $asset['attrs'];
             }
         }
 
-        // Enqueue scripts marked for admin
         foreach ($assets['scripts'] ?? [] as $handle => $asset) {
-            // Skip if not for admin
-            if (!isset($asset['admin']) || !$asset['admin']) {
+            if ($isAdmin && empty($asset['admin'])) {
                 continue;
             }
-
-            // Skip if disabled
             if (isset($asset['enabled']) && !$asset['enabled']) {
                 continue;
             }
@@ -266,13 +222,11 @@ class NTDST_Theme
                 (bool) ($asset['in_footer'] ?? true),
             );
 
-            // Store attributes if provided
             if (!empty($asset['attrs'])) {
                 $script_attrs[sanitize_key($handle)] = $asset['attrs'];
             }
         }
 
-        // Add script attributes via filter (same as frontend)
         if (!empty($script_attrs)) {
             add_filter('script_loader_tag', function ($tag, $handle, $src) use ($script_attrs) {
                 if (isset($script_attrs[$handle])) {
@@ -288,7 +242,6 @@ class NTDST_Theme
             }, 10, 3);
         }
 
-        // Add style attributes via filter (same as frontend)
         if (!empty($style_attrs)) {
             add_filter('style_loader_tag', function ($html, $handle, $href, $media) use ($style_attrs) {
                 if (isset($style_attrs[$handle])) {
@@ -330,23 +283,37 @@ class NTDST_Theme
             ],
         ];
 
+        // Force expected shapes for keys we iterate later — fail upfront
+        // instead of crashing inside a foreach with a confusing message.
+        foreach (['theme_support', 'image_sizes', 'menus', 'sidebars'] as $arrayKey) {
+            if (isset($config[$arrayKey]) && !is_array($config[$arrayKey])) {
+                throw new InvalidArgumentException(
+                    "NTDST_Theme config['{$arrayKey}'] must be an array",
+                );
+            }
+        }
+
         // Merge config with defaults
         $merged = array_merge($defaults, $config);
 
         // Ensure assets has both styles and scripts keys
-        if (isset($merged['assets'])) {
+        if (isset($merged['assets']) && is_array($merged['assets'])) {
             $merged['assets'] = array_merge(
                 ['styles' => [], 'scripts' => []],
                 $merged['assets'],
             );
+        } else {
+            $merged['assets'] = ['styles' => [], 'scripts' => []];
         }
 
         // Ensure module_settings has all keys
-        if (isset($merged['module_settings'])) {
+        if (isset($merged['module_settings']) && is_array($merged['module_settings'])) {
             $merged['module_settings'] = array_merge(
                 $defaults['module_settings'],
                 $merged['module_settings'],
             );
+        } else {
+            $merged['module_settings'] = $defaults['module_settings'];
         }
 
         return $merged;
@@ -377,13 +344,13 @@ class NTDST_Theme
      *       return $config;
      *   });
      */
-    public function module(string $module)
+    public function module(string $module): object
     {
         return new class ($module, $this) {
-            private $module;
-            private $theme;
+            private readonly string $module;
+            private readonly NTDST_Theme $theme;
 
-            public function __construct($module, $theme)
+            public function __construct(string $module, NTDST_Theme $theme)
             {
                 $this->module = sanitize_key($module);
                 $this->theme = $theme;
@@ -406,42 +373,42 @@ class NTDST_Theme
             }
 
             // Configure module settings
-            public function config(callable $callback, int $priority = 20)
+            public function config(callable $callback, int $priority = 20): NTDST_Theme
             {
                 add_filter("netdust_{$this->module}_config", $callback, $priority);
                 return $this->theme;
             }
 
             // Customize module asset path
-            public function path(callable $callback, int $priority = 10)
+            public function path(callable $callback, int $priority = 10): NTDST_Theme
             {
                 add_filter("netdust_{$this->module}_path", $callback, $priority);
                 return $this->theme;
             }
 
             // Add custom actions before module initialization
-            public function before(callable $callback, int $priority = 10)
+            public function before(callable $callback, int $priority = 10): NTDST_Theme
             {
                 add_action("netdust_{$this->module}_before", $callback, $priority);
                 return $this->theme;
             }
 
             // Add custom actions after module initialization
-            public function after(callable $callback, int $priority = 10)
+            public function after(callable $callback, int $priority = 10): NTDST_Theme
             {
                 add_action("netdust_{$this->module}_after", $callback, $priority);
                 return $this->theme;
             }
 
             // Disable module programmatically
-            public function disable()
+            public function disable(): NTDST_Theme
             {
                 add_filter("netdust_{$this->module}_enabled", '__return_false', 999);
                 return $this->theme;
             }
 
             // Enable module programmatically
-            public function enable()
+            public function enable(): NTDST_Theme
             {
                 add_filter("netdust_{$this->module}_enabled", '__return_true', 999);
                 return $this->theme;
@@ -471,7 +438,7 @@ class NTDST_Theme
      *       echo '<div>Footer content</div>';
      *   });
      */
-    public function on(string $action, callable $callback, int $priority = 10, int $args = 1)
+    public function on(string $action, callable $callback, int $priority = 10, int $args = 1): self
     {
         add_action(sanitize_key($action), $callback, $priority, $args);
         return $this;
@@ -492,7 +459,7 @@ class NTDST_Theme
      *       return $classes;
      *   });
      */
-    public function filter(string $filter, callable $callback, int $priority = 10, int $args = 1)
+    public function filter(string $filter, callable $callback, int $priority = 10, int $args = 1): self
     {
         add_filter(sanitize_key($filter), $callback, $priority, $args);
         return $this;
@@ -510,7 +477,7 @@ class NTDST_Theme
      *       $theme->module('barba')->config(fn($c) => array_merge($c, ['animationDuration' => 400]));
      *   });
      */
-    public function when(callable $condition, callable $callback)
+    public function when(callable $condition, callable $callback): self
     {
         if ($condition()) {
             $callback($this);
@@ -543,7 +510,7 @@ class NTDST_Theme
      *   ntdstAPI.call('get_portfolio', { category: 'design' })
      *       .then(data => console.log(data.posts));
      */
-    public function apiAction(string $action, callable $callback, $args = 10): self
+    public function apiAction(string $action, callable $callback, array|int $args = 10): self
     {
         // Parse arguments
         $priority = 10;
@@ -556,14 +523,14 @@ class NTDST_Theme
             $priority = $args;
         }
 
-        // Wrap callback with capability check if needed
+        // Wrap callback with capability check if needed. Capability failures
+        // return a WP_Error so Endpoints::handle_action sends a proper error
+        // response — returning an array would look like a success body.
         $wrapped_callback = function ($data, $params) use ($callback, $capability) {
-            // Check capability if specified
             if ($capability && !current_user_can($capability)) {
-                return ['error' => 'Insufficient permissions', 'code' => 'forbidden'];
+                return new \WP_Error('forbidden', 'Insufficient permissions', ['status' => 403]);
             }
 
-            // Execute the actual callback
             return $callback($data, $params);
         };
 
@@ -607,7 +574,7 @@ class NTDST_Theme
      *       'hierarchical' => true,
      *   ]);
      */
-    public function taxonomy(string $taxonomy, $post_types, array $args = []): self
+    public function taxonomy(string $taxonomy, string|array $post_types, array $args = []): self
     {
         $defaults = [
             'public' => true,
@@ -653,7 +620,7 @@ class NTDST_Theme
      *       return ntdst_response()->with('project', $post)->template('project/detail');
      *   });
      */
-    public function single($post_type = null, ?callable $callback = null): self
+    public function single(string|callable|null $post_type = null, ?callable $callback = null): self
     {
         $this->router()->single($post_type, $callback);
         return $this;
@@ -671,7 +638,7 @@ class NTDST_Theme
      *       return get_template_directory() . '/templates/about.php';
      *   });
      */
-    public function page($slug, ?callable $callback = null): self
+    public function page(string|callable $slug, ?callable $callback = null): self
     {
         $this->router()->page($slug, $callback);
         return $this;
@@ -690,7 +657,7 @@ class NTDST_Theme
      *       return ntdst_response()->with('projects', $projects)->template('project/archive');
      *   });
      */
-    public function archive($post_type = null, ?callable $callback = null): self
+    public function archive(string|callable|null $post_type = null, ?callable $callback = null): self
     {
         $this->router()->archive($post_type, $callback);
         return $this;
@@ -722,7 +689,7 @@ class NTDST_Theme
      *   $theme->mixin(new ThemeHelpers());
      *   $theme->formatDate('2024-01-01');  // Direct method call
      */
-    public function mixin($nameOrInstance, ?object $instance = null): self
+    public function mixin(string|object $nameOrInstance, ?object $instance = null): self
     {
         // Pattern 1: Instance proxying (named)
         if (is_string($nameOrInstance) && $instance !== null) {
@@ -749,9 +716,11 @@ class NTDST_Theme
             return $this;
         }
 
-        // Invalid usage
-        trigger_error('Invalid mixin usage. Use either mixin($name, $instance) or mixin($object)', E_USER_WARNING);
-        return $this;
+        // Invalid usage — fail loud rather than emit a warning that gets
+        // swallowed outside of WP_DEBUG_LOG.
+        throw new InvalidArgumentException(
+            'Invalid mixin usage. Use either mixin($name, $instance) or mixin($object)',
+        );
     }
 
     /**
@@ -761,7 +730,7 @@ class NTDST_Theme
      * @param array $arguments Method arguments
      * @return mixed
      */
-    public function __call(string $name, array $arguments)
+    public function __call(string $name, array $arguments): mixed
     {
         if (!isset($this->mixins[$name])) {
             throw new BadMethodCallException("Method or mixin '{$name}' does not exist on " . static::class);

@@ -17,6 +17,8 @@ use WP_Post;
  */
 final class QuoteService extends AbstractService
 {
+    private VoucherService $voucherService;
+
     public function __construct(
         private readonly QuoteRepository $repository,
         private readonly EditionQueryInterface $editions,
@@ -44,23 +46,35 @@ final class QuoteService extends AbstractService
         VoucherCPT::register();
 
         // Register sub-components as singletons
-        $voucherService = new VoucherService(ntdst_get(VoucherRepository::class));
-        ntdst_set(VoucherService::class, fn() => $voucherService);
+        $voucherRepo = ntdst_get(VoucherRepository::class);
+        $this->voucherService = new VoucherService(
+            $voucherRepo,
+            new Helpers\VoucherScopeValidator(),
+            new Helpers\VoucherProrater(),
+            ntdst_get(\Stride\Modules\Edition\SessionService::class),
+        );
+        ntdst_set(VoucherService::class, fn() => $this->voucherService);
 
         // Admin UI (registers own hooks in constructor)
         new Admin\QuoteAdminController(
             $this,
             $this->repository,
-            $voucherService,
+            $this->voucherService,
             ntdst_get(\Stride\Modules\Edition\EditionRepository::class),
         );
         new Admin\VoucherAdminController(
-            $voucherService,
-            ntdst_get(VoucherRepository::class),
+            $this->voucherService,
+            $voucherRepo,
         );
+
+        // PDF generator (registers own hooks)
+        new QuotePDFGenerator($this, $this->repository);
 
         // Cancel quote when registration is cancelled
         add_action('stride/registration/cancelled', [$this, 'onRegistrationCancelled']);
+
+        // Update quote modifiers when session selection changes
+        add_action('stride/enrollment/task_completed', [$this, 'onSessionSelectionCompleted']);
     }
 
     /**
@@ -108,6 +122,208 @@ final class QuoteService extends AbstractService
                 'quote_id' => $quoteId,
             ]);
         }
+    }
+
+    /**
+     * Handle session selection completion — update quote with price modifiers.
+     *
+     * When a user completes (or re-submits) session selection, this recalculates
+     * the quote line items based on selected sessions' price modifiers.
+     *
+     * @param array{registration_id: int, task_type: string, tasks: array} $data Event data
+     */
+    public function onSessionSelectionCompleted(array $data): void
+    {
+        // Only handle session_selection task completions
+        if (($data['task_type'] ?? '') !== 'session_selection') {
+            return;
+        }
+
+        $registrationId = (int) ($data['registration_id'] ?? 0);
+        if (!$registrationId) {
+            return;
+        }
+
+        $sessionIds = $data['tasks']['session_selection']['data']['session_ids'] ?? [];
+        if (!is_array($sessionIds)) {
+            return;
+        }
+        $sessionIds = array_map('intval', $sessionIds);
+
+        // Find quote for this registration
+        $quote = $this->getQuoteByRegistration($registrationId);
+
+        if (!$quote) {
+            ntdst_log('invoicing')->info('No quote found for session selection update', [
+                'registration_id' => $registrationId,
+            ]);
+            return;
+        }
+
+        $quoteId = (int) $quote['id'];
+        $status = $quote['status_enum'] ?? QuoteStatus::tryFrom($quote['status'] ?? '');
+
+        // Cancelled quotes — silent return
+        if ($status === QuoteStatus::Cancelled) {
+            return;
+        }
+
+        // Get registration to determine edition
+        $registration = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class)?->find($registrationId);
+        if (!$registration) {
+            return;
+        }
+        $editionId = (int) ($registration->edition_id ?? $registration->fields['edition_id'] ?? 0);
+        if (!$editionId) {
+            return;
+        }
+
+        // Get all sessions for the edition
+        $allSessions = ntdst_get(\Stride\Modules\Edition\SessionService::class)?->getSessionsForEdition($editionId) ?? [];
+
+        // Build modifier items from selected sessions
+        $modifierItems = $this->buildModifierItems($sessionIds, $allSessions, $editionId);
+
+        // Non-draft quotes: block changes, fire event for manual resolution
+        if ($status !== QuoteStatus::Draft) {
+            if (!empty($modifierItems)) {
+                $modifiers = array_map(fn(array $item) => [
+                    'session_id' => $item['id'],
+                    'title' => $item['title'],
+                    'amount_cents' => $item['unit_price'],
+                ], $modifierItems);
+
+                do_action('stride/quote/session_modifier_blocked', [
+                    'quote_id' => $quoteId,
+                    'registration_id' => $registrationId,
+                    'user_id' => (int) ($quote['user_id'] ?? 0),
+                    'modifiers' => $modifiers,
+                ]);
+
+                ntdst_log('invoicing')->warning('Session modifier change blocked: quote not in draft', [
+                    'quote_id' => $quoteId,
+                    'registration_id' => $registrationId,
+                    'status' => $status->value ?? $status,
+                ]);
+            }
+            return;
+        }
+
+        // Get existing items and check if there are current modifiers
+        $existingItems = $quote['items'] ?? [];
+        if (is_string($existingItems)) {
+            $existingItems = json_decode($existingItems, true) ?: [];
+        }
+
+        $hadModifiers = !empty(array_filter($existingItems, fn(array $item) => ($item['type'] ?? 'edition') === 'session_modifier'));
+
+        // Nothing to do if no modifiers exist and none to add
+        if (!$hadModifiers && empty($modifierItems)) {
+            return;
+        }
+
+        // Replace modifier items, preserving edition items
+        $updatedItems = $this->replaceModifierItems($existingItems, $modifierItems);
+
+        // Recalculate totals from raw cents (supports negative modifiers)
+        $subtotalCents = 0;
+        foreach ($updatedItems as $item) {
+            $subtotalCents += (int) ($item['unit_price'] ?? 0) * (int) ($item['quantity'] ?? 1);
+        }
+
+        $discountCents = (int) ($quote['discount'] ?? 0);
+        $totals = QuoteCalculator::deriveTotalsFromCents($subtotalCents, $discountCents);
+
+        // Update quote (stored discount stays untouched — only re-derived
+        // tax/total are written; characterization-pinned behavior)
+        $this->repository->updateMeta($quoteId, [
+            'items' => $updatedItems,
+            'subtotal' => $subtotalCents,
+            'tax' => $totals['tax'],
+            'total' => $totals['total'],
+        ]);
+
+        ntdst_log('invoicing')->info('Quote updated with session modifiers', [
+            'quote_id' => $quoteId,
+            'registration_id' => $registrationId,
+            'modifier_count' => count($modifierItems),
+            'new_subtotal' => $subtotalCents,
+            'new_total' => $totals['total'],
+        ]);
+
+        $this->dispatch('quote/modifiers_applied', [
+            'quote_id' => $quoteId,
+            'registration_id' => $registrationId,
+            'modifier_count' => count($modifierItems),
+            'subtotal' => $subtotalCents,
+            'total' => $totals['total'],
+        ]);
+    }
+
+    /**
+     * Build modifier line items from selected sessions.
+     *
+     * Only sessions that belong to the edition, have a non-empty slot,
+     * and have a non-zero price_modifier produce items.
+     *
+     * @param int[]   $selectedIds  Session IDs the user selected
+     * @param array[] $allSessions  All sessions for the edition
+     * @param int     $editionId    The edition to scope to
+     * @return array[] Line items with type=session_modifier
+     */
+    private function buildModifierItems(array $selectedIds, array $allSessions, int $editionId): array
+    {
+        $selectedSet = array_flip($selectedIds);
+        $items = [];
+
+        foreach ($allSessions as $session) {
+            $sessionId = (int) $session['id'];
+
+            if (!isset($selectedSet[$sessionId])) {
+                continue;
+            }
+
+            if ((int) $session['edition_id'] !== $editionId) {
+                continue;
+            }
+
+            if (empty($session['slot'])) {
+                continue;
+            }
+
+            $modifier = (int) $session['price_modifier'];
+            if ($modifier === 0) {
+                continue;
+            }
+
+            $items[] = [
+                'id' => $sessionId,
+                'type' => 'session_modifier',
+                'title' => 'Sessie: ' . ($session['title'] ?? ''),
+                'quantity' => 1,
+                'unit_price' => $modifier,
+                'total' => $modifier,
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
+     * Replace session_modifier items in existing quote items.
+     *
+     * Strips all old session_modifier items and appends the new ones.
+     * Non-modifier items (edition, etc.) are preserved in original order.
+     *
+     * @param array[] $existingItems Current quote items
+     * @param array[] $newModifiers  New modifier items to append
+     * @return array[] Updated items list
+     */
+    private function replaceModifierItems(array $existingItems, array $newModifiers): array
+    {
+        $kept = array_filter($existingItems, fn(array $item) => ($item['type'] ?? 'edition') !== 'session_modifier');
+
+        return array_values(array_merge($kept, $newModifiers));
     }
 
     /**
@@ -187,6 +403,10 @@ final class QuoteService extends AbstractService
             'total' => $totals['total']->inCents(),
         ]);
 
+        // PDF is rendered lazily — QuotePDFGenerator::resolveForEmail() generates
+        // on first email-attachment request and admin "regenerate" stays manual.
+        // Skipping the eager DOMPDF render here shaves 300-800ms off enrollment.
+
         return $quoteId;
     }
 
@@ -262,6 +482,79 @@ final class QuoteService extends AbstractService
     }
 
     /**
+     * Set a quote's `locked` flag.
+     *
+     * Used as the building block for bulk locking from the edition admin.
+     * Idempotent: silently no-ops when the requested state is already set.
+     */
+    public function setLocked(int $quoteId, bool $locked): bool
+    {
+        $current = (bool) $this->repository->getField($quoteId, 'locked', false);
+        if ($current === $locked) {
+            return true;
+        }
+
+        $result = $this->repository->updateMeta($quoteId, ['locked' => $locked]);
+
+        if ($result) {
+            $this->dispatch($locked ? 'quote/locked' : 'quote/unlocked', [
+                'quote_id' => $quoteId,
+            ]);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Bulk lock or unlock every quote linked to an edition.
+     *
+     * Returns a summary of what changed: how many quotes were inspected,
+     * how many actually flipped, and how many were already in the target
+     * state. The caller (admin AJAX handler) renders this as a status line.
+     *
+     * @return array{total:int, changed:int, unchanged:int}
+     */
+    public function bulkSetLockedByEdition(int $editionId, bool $locked): array
+    {
+        $quotes = $this->repository->findByEdition($editionId);
+
+        $changed = 0;
+        foreach ($quotes as $quote) {
+            // Repository returns meta nested under 'meta' key; setLocked() will
+            // re-read authoritatively so we don't depend on the in-memory shape.
+            $quoteId = (int) ($quote['id'] ?? 0);
+            if ($quoteId === 0) {
+                continue;
+            }
+            $current = (bool) $this->repository->getField($quoteId, 'locked', false);
+            if ($current === $locked) {
+                continue;
+            }
+            $this->setLocked($quoteId, $locked);
+            $changed++;
+        }
+
+        ntdst_log('invoicing')->info('Bulk lock applied to edition quotes', [
+            'edition_id' => $editionId,
+            'locked' => $locked,
+            'total' => count($quotes),
+            'changed' => $changed,
+        ]);
+
+        $this->dispatch('quote/bulk_locked', [
+            'edition_id' => $editionId,
+            'locked' => $locked,
+            'changed' => $changed,
+        ]);
+
+        return [
+            'total' => count($quotes),
+            'changed' => $changed,
+            'unchanged' => count($quotes) - $changed,
+        ];
+    }
+
+    /**
      * Cancel quote.
      */
     public function cancel(int $quoteId): bool|WP_Error
@@ -284,6 +577,15 @@ final class QuoteService extends AbstractService
         $result = $this->repository->updateStatus($quoteId, QuoteStatus::Cancelled);
 
         if ($result) {
+            // Release any voucher attached to the cancelled quote so its
+            // used_count is reversed. Otherwise quota silently drains.
+            $meta = $quote->meta ?? [];
+            $voucherCode = (string) ($meta['voucher_code'] ?? '');
+            $userId = (int) ($meta['user_id'] ?? 0);
+            if ($voucherCode !== '' && $userId > 0) {
+                $this->voucherService->releaseVoucher($voucherCode, $userId, $quoteId);
+            }
+
             ntdst_log('invoicing')->info('Quote cancelled', [
                 'quote_id' => $quoteId,
             ]);
@@ -317,7 +619,7 @@ final class QuoteService extends AbstractService
         }
 
         // Validate and get voucher through VoucherService
-        $voucherService = ntdst_get(VoucherService::class);
+        $voucherService = $this->voucherService;
         $editionId = (int) ($meta['edition_id'] ?? 0);
         $voucher = $voucherService->validateVoucher($voucherCode, $editionId);
 
@@ -330,23 +632,34 @@ final class QuoteService extends AbstractService
             return $voucher;
         }
 
+        // If the quote already has a voucher, release it first so the
+        // previous redemption + used_count are reversed. Without this the
+        // replaced voucher stays "redeemed" against the quote forever and
+        // its quota silently drains.
+        $previousCode = (string) ($meta['voucher_code'] ?? '');
+        $userIdForRedemption = (int) ($meta['user_id'] ?? 0);
+        if ($previousCode !== '' && $previousCode !== $voucherCode && $userIdForRedemption > 0) {
+            $voucherService->releaseVoucher($previousCode, $userIdForRedemption, $quoteId);
+        }
+
         // Calculate discount
         $subtotalCents = (int) ($meta['subtotal'] ?? 0);
         $subtotal = Money::cents($subtotalCents);
-        $discount = $voucherService->calculateDiscount($voucher, $subtotal);
+        $discount = $voucherService->calculateDiscount($voucher, $subtotal, $editionId > 0 ? $editionId : null);
 
-        // Recalculate totals
-        $newSubtotal = $subtotal;
-        $newDiscount = $discount;
-        $newTax = Money::cents((int) round(($newSubtotal->inCents() - $newDiscount->inCents()) * 0.21));
-        $newTotal = Money::cents($newSubtotal->inCents() - $newDiscount->inCents() + $newTax->inCents());
+        // Recalculate totals. Fixed/Full/Percentage discounts are pre-capped
+        // by VoucherService::calculateDiscount, but the clamp inside
+        // deriveTotalsFromCents is NOT a removable no-op: it independently
+        // guards misconfigured >100% Percentage vouchers (pre-2026-06 code
+        // persisted negative tax/total on that edge).
+        $totals = QuoteCalculator::deriveTotalsFromCents($subtotalCents, $discount->inCents());
 
         // Update quote
         $result = $this->repository->updateMeta($quoteId, [
             'voucher_code' => $voucherCode,
-            'discount' => $newDiscount->inCents(),
-            'tax' => $newTax->inCents(),
-            'total' => $newTotal->inCents(),
+            'discount' => $totals['discount'],
+            'tax' => $totals['tax'],
+            'total' => $totals['total'],
         ]);
 
         if (!$result) {
@@ -374,13 +687,13 @@ final class QuoteService extends AbstractService
         ntdst_log('invoicing')->info('Voucher applied to quote', [
             'quote_id' => $quoteId,
             'voucher_code' => $voucherCode,
-            'discount' => $newDiscount->inCents(),
+            'discount' => $totals['discount'],
         ]);
 
         $this->dispatch('quote/voucher_applied', [
             'quote_id' => $quoteId,
             'voucher_code' => $voucherCode,
-            'discount' => $newDiscount->inCents(),
+            'discount' => $totals['discount'],
         ]);
 
         return true;

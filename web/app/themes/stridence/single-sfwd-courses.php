@@ -3,7 +3,19 @@
  * Course Detail Template
  *
  * Single template for LearnDash courses (sfwd-courses post type).
- * Two-column layout with sticky tab navigation and edition sidebar.
+ *
+ * /opleidingen/<course-slug>/ — owned by LD, decorated by Stride. Branches on
+ * active-edition presence:
+ *
+ *  - Online, active edition(s) → sidebar CTA targets the primary edition
+ *    (status-gated): /edities/<edition-slug>/inschrijving/, or
+ *    interest/waitlist per OfferingStatus.
+ *  - Online, 0 editions → Stride self-enroll CTA on the sidebar.
+ *    "?enroll=1" handler grants LD access (free) + bounces to first lesson.
+ *  - Klassikaal, active edition(s) → editions list wins.
+ *  - Klassikaal, 0 editions → info only, "Geen actieve edities" notice.
+ *
+ * See tasks/url-structure-rework.md for the full decision rules.
  *
  * @package stridence
  */
@@ -12,27 +24,64 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
+use Stride\Integrations\LearnDash\LearnDashHelper;
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
+use Stride\Modules\Enrollment\RegistrationRepository;
 
 $course_id = get_the_ID();
+$is_online = stridence_is_online_course($course_id);
 
-// Get editions via EditionService
-$editionService = ntdst_get(EditionService::class);
-$editions = $editionService->getEditionsForCourse($course_id);
+$editionRepository = ntdst_get(EditionRepository::class);
+$editions = $editionRepository->findByCourse($course_id);
+$active_edition_ids = $editionRepository->findActiveIdsByCourse($course_id);
+$has_active_edition = !empty($active_edition_ids);
 
-// Get first enrollable edition for mobile CTA
-$first_edition  = null;
-$enrollment_url = '';
-foreach ($editions as $edition) {
-    $edition_id = (int) ($edition['id'] ?? $edition['ID'] ?? 0);
-    if ($edition_id && $editionService->canEnroll($edition_id)) {
-        $first_edition  = $edition;
-        $enrollment_url = stride_enrollment_url($edition_id);
-        break;
-    }
+// Course lessons fetched ONCE and passed down (mirrors $editions) — content,
+// sidebar-online and mobile-cta each used to call LearnDashHelper::getLessons
+// themselves (up to 3x per request). Only online pages render lesson data.
+$lessons = $is_online
+    ? LearnDashHelper::getLessons($course_id, get_current_user_id() ?: null)
+    : [];
+
+// Online courses always get the CTA sidebar. Pure-LD courses self-enroll;
+// edition-backed online courses route to the primary edition (previously
+// this case rendered NO CTA at all — info page with no path to enroll).
+$show_online_sidebar = $is_online;
+
+$online_sidebar_args = [
+    'course_id'              => $course_id,
+    'lessons'                => $lessons,
+    'enrollment_url'         => '',
+    'user_enrolled'          => false,
+    'edition_price'          => null,
+    'primary_edition_id'     => 0,
+    'primary_edition_status' => null,
+];
+
+if ($is_online && $has_active_edition) {
+    $editionService   = ntdst_get(EditionService::class);
+    $primaryEditionId = (int) $active_edition_ids[0];
+    $primaryStatus    = $editionService->getEffectiveStatus($primaryEditionId);
+    $viewerId         = get_current_user_id();
+
+    $registration = $viewerId
+        ? ntdst_get(RegistrationRepository::class)->findByUserAndEdition($viewerId, $primaryEditionId)
+        : null;
+
+    $online_sidebar_args = [
+        'course_id'              => $course_id,
+        'lessons'                => $lessons,
+        'enrollment_url'         => $primaryStatus->allowsEnrollment()
+            ? stride_enrollment_url($primaryEditionId)
+            : '',
+        'user_enrolled'          => $registration !== null && ($registration->status ?? '') !== 'cancelled',
+        'edition_price'          => $editionService->getPrice($primaryEditionId, $viewerId ?: null),
+        'primary_edition_id'     => $primaryEditionId,
+        'primary_edition_status' => $primaryStatus,
+    ];
 }
 
-// Breadcrumb items
 $breadcrumbs = [
     ['label' => __('Opleidingen', 'stridence'), 'url' => get_post_type_archive_link('sfwd-courses')],
     ['label' => get_the_title()],
@@ -41,139 +90,80 @@ $breadcrumbs = [
 get_header();
 ?>
 
-<article <?php post_class('pb-12 lg:pb-16'); ?>>
-    <!-- Header Section -->
-    <div class="bg-surface-alt border-b border-border">
-        <div class="container py-8 lg:py-12">
-            <?php
-            get_template_part('partials/breadcrumb', null, [
-                'items' => $breadcrumbs,
-            ]);
+<article <?php post_class($show_online_sidebar ? 'pb-24 lg:pb-0' : 'pb-12 lg:pb-16'); ?>>
+    <?php
+    stridence_template_part('templates/course/header', null, [
+        'course_id'   => $course_id,
+        'breadcrumbs' => $breadcrumbs,
+        'is_online'   => $is_online,
+        'editions'    => $editions,
+    ]);
+?>
+
+    <?php if (!$is_online) : ?>
+        <?php
+        // Helder Tij: the online detail page is a single focused scroll
+        // (intro + lesson list + sidebar) — no tab nav. Klassikaal keeps it.
+        stridence_template_part('templates/course/tabs', null, [
+            'is_online' => $is_online,
+        ]);
+        ?>
+    <?php endif; ?>
+
+    <div class="container py-8 lg:py-12">
+        <?php if ($show_online_sidebar) : ?>
+            <!-- Online course: two-column with CTA sidebar (self-enroll for
+                 pure-LD, primary-edition CTA when an active edition exists) -->
+            <div class="grid lg:grid-cols-3 gap-8 lg:gap-12">
+                <div class="lg:col-span-2 space-y-12">
+                    <?php
+                stridence_template_part('templates/course/content', null, [
+                    'course_id'     => $course_id,
+                    'is_online'     => true,
+                    'editions'      => $editions,
+                    'lessons'       => $lessons,
+                    'show_editions' => $has_active_edition,
+                ]);
+            ?>
+                </div>
+                <div class="lg:col-span-1">
+                    <?php stridence_template_part('templates/course/sidebar-online', null, $online_sidebar_args); ?>
+                </div>
+            </div>
+        <?php else : ?>
+            <!-- Edition surface wins (klassikaal or online-with-edition), OR
+                 klassikaal with no active editions (info-only). -->
+            <div class="max-w-3xl space-y-12">
+                <?php
+                stridence_template_part('templates/course/content', null, [
+                    'course_id' => $course_id,
+                    'is_online' => $is_online,
+                    'editions'  => $editions,
+                    'lessons'   => $lessons,
+                ]);
             ?>
 
-            <h1 class="font-heading text-3xl lg:text-4xl font-bold text-text mb-4">
-                <?php the_title(); ?>
-            </h1>
-
-            <?php if (has_excerpt()) : ?>
-                <p class="text-lg text-text-muted max-w-3xl">
-                    <?php echo esc_html(get_the_excerpt()); ?>
-                </p>
-            <?php endif; ?>
-        </div>
-    </div>
-
-    <!-- Sticky Tab Bar -->
-    <div class="sticky top-16 lg:top-20 bg-surface border-b border-border z-30" x-data="courseDetailTabs()">
-        <div class="container">
-            <nav class="flex gap-6 overflow-x-auto -mb-px scrollbar-hide" aria-label="<?php esc_attr_e('Cursus secties', 'stridence'); ?>">
-                <a href="#overzicht"
-                   class="tab-link"
-                   :class="{ 'tab-active': activeTab === 'overzicht' }"
-                   @click.prevent="scrollTo('overzicht')">
-                    <?php esc_html_e('Overzicht', 'stridence'); ?>
-                </a>
-                <a href="#programma"
-                   class="tab-link"
-                   :class="{ 'tab-active': activeTab === 'programma' }"
-                   @click.prevent="scrollTo('programma')">
-                    <?php esc_html_e('Programma', 'stridence'); ?>
-                </a>
-                <a href="#sprekers"
-                   class="tab-link"
-                   :class="{ 'tab-active': activeTab === 'sprekers' }"
-                   @click.prevent="scrollTo('sprekers')">
-                    <?php esc_html_e('Sprekers', 'stridence'); ?>
-                </a>
-                <a href="#praktisch"
-                   class="tab-link"
-                   :class="{ 'tab-active': activeTab === 'praktisch' }"
-                   @click.prevent="scrollTo('praktisch')">
-                    <?php esc_html_e('Praktisch', 'stridence'); ?>
-                </a>
-            </nav>
-        </div>
-    </div>
-
-    <!-- Two Column Layout -->
-    <div class="container py-8 lg:py-12">
-        <div class="grid lg:grid-cols-3 gap-8 lg:gap-12">
-            <!-- Main Content (2/3) -->
-            <div class="lg:col-span-2 space-y-12">
-                <!-- Overzicht Section -->
-                <section id="overzicht" class="scroll-mt-32">
-                    <div class="prose-stride max-w-none">
-                        <?php the_content(); ?>
+                <?php if (!$is_online && !$has_active_edition) : ?>
+                    <!-- Klassikaal, 0 active editions: notice only -->
+                    <div class="card p-6 bg-surface-alt border border-border">
+                        <h3 class="font-heading font-semibold text-lg mb-2">
+                            <?php esc_html_e('Geen actieve edities', 'stridence'); ?>
+                        </h3>
+                        <p class="text-sm text-text-muted">
+                            <?php esc_html_e('Op dit moment zijn er geen geplande edities van deze opleiding. Hou deze pagina in de gaten of bekijk ons volledige aanbod.', 'stridence'); ?>
+                        </p>
                     </div>
-                </section>
-
-                <!-- Programma Section -->
-                <section id="programma" class="scroll-mt-32">
-                    <h2 class="font-heading text-2xl font-bold text-text mb-6">
-                        <?php esc_html_e('Programma', 'stridence'); ?>
-                    </h2>
-                    <div class="learndash-course-content">
-                        <?php echo do_shortcode('[course_content course_id="' . esc_attr($course_id) . '"]'); ?>
-                    </div>
-                </section>
-
-                <!-- Sprekers Section -->
-                <section id="sprekers" class="scroll-mt-32">
-                    <h2 class="font-heading text-2xl font-bold text-text mb-6">
-                        <?php esc_html_e('Sprekers', 'stridence'); ?>
-                    </h2>
-                    <p class="text-text-muted">
-                        <?php esc_html_e('Informatie over sprekers wordt binnenkort toegevoegd.', 'stridence'); ?>
-                    </p>
-                </section>
-
-                <!-- Praktisch Section -->
-                <section id="praktisch" class="scroll-mt-32">
-                    <h2 class="font-heading text-2xl font-bold text-text mb-6">
-                        <?php esc_html_e('Praktische informatie', 'stridence'); ?>
-                    </h2>
-                    <div class="grid sm:grid-cols-2 gap-4">
-                        <div class="card-bordered p-5">
-                            <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
-                                <?php echo stridence_icon('users', 'w-5 h-5 text-primary'); ?>
-                                <?php esc_html_e('Doelgroep', 'stridence'); ?>
-                            </h3>
-                            <p class="text-text-muted text-sm">
-                                <?php esc_html_e('Zorgprofessionals', 'stridence'); ?>
-                            </p>
-                        </div>
-                        <div class="card-bordered p-5">
-                            <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
-                                <?php echo stridence_icon('award', 'w-5 h-5 text-primary'); ?>
-                                <?php esc_html_e('Accreditatie', 'stridence'); ?>
-                            </h3>
-                            <p class="text-text-muted text-sm">
-                                <?php esc_html_e('In aanvraag', 'stridence'); ?>
-                            </p>
-                        </div>
-                    </div>
-                </section>
+                <?php endif; ?>
             </div>
-
-            <!-- Sidebar (1/3) -->
-            <div class="lg:col-span-1">
-                <?php
-                get_template_part('templates/course/sidebar-edition', null, [
-                    'editions'  => $editions,
-                    'course_id' => $course_id,
-                ]);
-                ?>
-            </div>
-        </div>
+        <?php endif; ?>
     </div>
 
-    <!-- Mobile Sticky CTA (hidden on lg+) -->
-    <?php if (!empty($editions) && $enrollment_url) : ?>
-        <div class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 lg:hidden z-40 safe-area-bottom">
-            <a href="<?php echo esc_url($enrollment_url); ?>" class="btn-primary w-full text-center">
-                <?php esc_html_e('Inschrijven', 'stridence'); ?>
-            </a>
-        </div>
+    <?php if ($show_online_sidebar) : ?>
+        <?php
+        stridence_template_part('templates/course/mobile-cta', null, array_merge($online_sidebar_args, [
+            'is_online' => true,
+        ]));
+        ?>
     <?php endif; ?>
 </article>
 

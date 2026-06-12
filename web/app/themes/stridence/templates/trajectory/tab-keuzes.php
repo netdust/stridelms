@@ -1,8 +1,13 @@
 <?php
 /**
- * Trajectory Tab: Keuzes (Elective Selection)
+ * Trajectory Tab: Keuzes (Elective Selection) — Helder Tij
  *
  * Handles elective course selection with choice window states.
+ *
+ * Restyle only: intro line with the deadline, selectable white cards
+ * (border ring + filled radio when chosen, via :has(:checked)) and a
+ * primary confirm button. The selection mechanism itself — form id,
+ * input names/values, server-side window logic — is unchanged.
  *
  * @param array $args {
  *     @type WP_Post $trajectory
@@ -17,6 +22,7 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
+use Stride\Modules\Trajectory\TrajectoryRepository;
 use Stride\Modules\Trajectory\TrajectoryService;
 
 $trajectory = $args['trajectory'];
@@ -28,7 +34,7 @@ $trajectoryService = ntdst_get(TrajectoryService::class);
 $trajectoryData = $trajectoryService->getTrajectory($trajectory->ID);
 
 // Get elective groups
-$electiveGroups = $trajectoryService->getElectiveGroups($trajectory->ID);
+$electiveGroups = ntdst_get(TrajectoryRepository::class)->getElectiveGroups($trajectory->ID);
 
 // Check choice window status
 $choiceAvailable = $trajectoryData['choice_available_date'] ?? '';
@@ -52,18 +58,27 @@ if (!empty($choiceAvailable) && !empty($choiceDeadline)) {
     }
 }
 
-// Get current selections
-$selections = $enrollment->selections ? json_decode($enrollment->selections, true) : [];
+// Get current selections.
+// findByUserAndTrajectory() already decodes selections to an array;
+// tolerate a raw JSON string for rows that skipped that path.
+$rawSelections = $enrollment->selections ?? null;
+if (is_array($rawSelections)) {
+    $selections = $rawSelections;
+} elseif (is_string($rawSelections) && $rawSelections !== '') {
+    $selections = (array) json_decode($rawSelections, true);
+} else {
+    $selections = [];
+}
 ?>
 
 <div class="space-y-6">
-    <h2 class="text-lg font-semibold text-text">
+    <h2 class="text-lg font-bold text-text">
         <?php esc_html_e('Keuzecursussen', 'stridence'); ?>
     </h2>
 
     <?php if (empty($electiveGroups)) : ?>
         <?php
-        get_template_part('partials/empty-state', null, [
+        stridence_template_part('partials/empty-state', null, [
             'icon' => 'check-square',
             'title' => __('Geen keuzevakken', 'stridence'),
             'message' => __('Dit traject heeft geen keuzecursussen.', 'stridence'),
@@ -71,39 +86,39 @@ $selections = $enrollment->selections ? json_decode($enrollment->selections, tru
         ?>
     <?php elseif ($windowBefore) : ?>
         <!-- Choice window not yet open -->
-        <div class="card p-6 text-center">
-            <div class="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4">
-                <?php echo stridence_icon('clock', 'w-8 h-8 text-accent'); ?>
+        <div class="bg-surface-card rounded-[14px] shadow-card p-6 text-center">
+            <div class="w-14 h-14 rounded-full bg-surface-alt flex items-center justify-center mx-auto mb-4">
+                <?php echo stridence_icon('clock', 'w-6 h-6 text-text-muted'); ?>
             </div>
-            <h3 class="font-semibold text-text mb-2">
+            <h3 class="font-heading font-bold text-[16px] text-text mb-2">
                 <?php esc_html_e('Keuzemoment nog niet beschikbaar', 'stridence'); ?>
             </h3>
-            <p class="text-text-muted mb-4">
+            <p class="text-[13px] text-text-muted mb-4">
                 <?php
                 printf(
                     esc_html__('Je kunt je keuzes maken vanaf %s.', 'stridence'),
-                    esc_html(date_i18n('j F Y', strtotime($choiceAvailable)))
+                    esc_html(date_i18n('j F Y', strtotime($choiceAvailable))),
                 );
-                ?>
+        ?>
             </p>
 
             <!-- Preview electives -->
             <div class="text-left mt-6">
-                <h4 class="text-sm font-medium text-text-muted uppercase tracking-wide mb-3">
+                <h4 class="text-[12px] font-bold text-text-faint uppercase tracking-wide mb-3">
                     <?php esc_html_e('Beschikbare keuzes', 'stridence'); ?>
                 </h4>
                 <?php foreach ($electiveGroups as $group) : ?>
                     <div class="mb-4">
-                        <p class="text-sm font-medium text-text mb-2">
+                        <p class="text-[13px] font-bold text-text mb-2">
                             <?php echo esc_html($group['name'] ?? __('Keuzegroep', 'stridence')); ?>
                             <span class="text-text-muted font-normal">
                                 (<?php printf(esc_html__('kies %d', 'stridence'), (int) ($group['required'] ?? 1)); ?>)
                             </span>
                         </p>
-                        <ul class="text-sm text-text-muted space-y-1">
+                        <ul class="text-[13px] text-text-muted space-y-1.5">
                             <?php foreach ($group['courses'] ?? [] as $course) : ?>
                                 <li class="flex items-center gap-2">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-border"></span>
+                                    <span class="w-1.5 h-1.5 rounded-full bg-border-soft"></span>
                                     <?php echo esc_html($course->post_title); ?>
                                 </li>
                             <?php endforeach; ?>
@@ -115,92 +130,104 @@ $selections = $enrollment->selections ? json_decode($enrollment->selections, tru
 
     <?php elseif ($windowOpen) : ?>
         <!-- Choice window is open -->
-        <div class="card p-4 bg-success/5 border-success/20 mb-6">
-            <div class="flex items-center gap-3">
-                <?php echo stridence_icon('check-square', 'w-5 h-5 text-success'); ?>
-                <div>
-                    <p class="font-medium text-success">
-                        <?php esc_html_e('Keuzemoment is open', 'stridence'); ?>
-                    </p>
-                    <p class="text-sm text-text-muted">
-                        <?php
-                        printf(
-                            esc_html__('Maak je keuze voor %s.', 'stridence'),
-                            esc_html(date_i18n('j F Y', strtotime($choiceDeadline)))
-                        );
-                        ?>
-                    </p>
-                </div>
-            </div>
-        </div>
+        <p class="text-[15px] text-text-muted leading-relaxed max-w-[640px]">
+            <?php
+            printf(
+                esc_html__('Maak je keuze voor %s.', 'stridence'),
+                esc_html(date_i18n('j F Y', strtotime($choiceDeadline))),
+            );
+        ?>
+        </p>
 
-        <form id="elective-selection-form" class="space-y-6">
+        <form id="elective-selection-form" class="space-y-7">
             <?php foreach ($electiveGroups as $groupIndex => $group) :
                 $groupName = $group['name'] ?? __('Keuzegroep', 'stridence');
                 $required = (int) ($group['required'] ?? 1);
                 $courses = $group['courses'] ?? [];
-            ?>
-                <div class="card p-4">
-                    <h3 class="font-medium text-text mb-1">
+                $inputType = $required === 1 ? 'radio' : 'checkbox';
+                $inputClass = $required === 1 ? 'input-radio' : 'input-checkbox';
+                ?>
+                <div>
+                    <h3 class="text-[15px] font-bold text-text mb-0.5">
                         <?php echo esc_html($groupName); ?>
                     </h3>
-                    <p class="text-sm text-text-muted mb-4">
+                    <p class="text-[13px] text-text-muted mb-3.5">
                         <?php printf(esc_html__('Selecteer %d cursus(sen)', 'stridence'), $required); ?>
                     </p>
 
-                    <div class="space-y-2">
+                    <div class="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
                         <?php foreach ($courses as $course) :
                             $isSelected = in_array($course->ID, $selections[$groupIndex] ?? [], true);
-                            $inputType = $required === 1 ? 'radio' : 'checkbox';
-                        ?>
-                            <label class="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary cursor-pointer transition-colors <?php echo $isSelected ? 'border-primary bg-primary/5' : ''; ?>">
-                                <input type="<?php echo esc_attr($inputType); ?>"
-                                       name="selections[<?php echo esc_attr($groupIndex); ?>]<?php echo $required > 1 ? '[]' : ''; ?>"
-                                       value="<?php echo esc_attr($course->ID); ?>"
-                                       <?php checked($isSelected); ?>
-                                       class="text-primary">
-                                <span class="text-text"><?php echo esc_html($course->post_title); ?></span>
+                            ?>
+                            <label class="bg-surface-card rounded-[14px] border border-border-soft hover:border-border p-5 flex flex-col gap-2.5 cursor-pointer transition-all duration-fast has-[:checked]:border-primary has-[:checked]:shadow-[0_0_0_2px_rgb(var(--color-primary)/0.25)]">
+                                <span class="flex items-start justify-between gap-2.5">
+                                    <span class="text-[15px] font-bold leading-snug text-text">
+                                        <?php echo esc_html($course->post_title); ?>
+                                    </span>
+                                    <input type="<?php echo esc_attr($inputType); ?>"
+                                           name="selections[<?php echo esc_attr($groupIndex); ?>]<?php echo $required > 1 ? '[]' : ''; ?>"
+                                           value="<?php echo esc_attr($course->ID); ?>"
+                                           <?php checked($isSelected); ?>
+                                           class="<?php echo esc_attr($inputClass); ?> mt-px">
+                                </span>
+                                <?php if (!empty($course->post_excerpt)) : ?>
+                                    <span class="text-[13px] text-text-muted leading-relaxed">
+                                        <?php echo esc_html($course->post_excerpt); ?>
+                                    </span>
+                                <?php endif; ?>
                             </label>
                         <?php endforeach; ?>
                     </div>
                 </div>
             <?php endforeach; ?>
 
-            <div class="flex justify-end">
+            <div class="flex flex-wrap items-center gap-3">
                 <button type="submit" class="btn-primary">
-                    <?php esc_html_e('Keuzes opslaan', 'stridence'); ?>
+                    <?php esc_html_e('Bevestig je keuze', 'stridence'); ?>
                 </button>
+                <span class="text-[13px] text-text-faint">
+                    <?php
+                    printf(
+                        esc_html__('Je kunt je keuze tot %s aanpassen.', 'stridence'),
+                        esc_html(date_i18n('j F Y', strtotime($choiceDeadline))),
+                    );
+            ?>
+                </span>
             </div>
         </form>
 
     <?php else : ?>
         <!-- Choice window closed -->
-        <div class="card p-6">
+        <div class="bg-surface-card rounded-[14px] shadow-card p-6">
             <div class="flex items-center gap-3 mb-4">
                 <?php echo stridence_icon('check', 'w-5 h-5 text-success'); ?>
-                <h3 class="font-medium text-text">
+                <h3 class="text-[15px] font-bold text-text">
                     <?php esc_html_e('Keuzeperiode is gesloten', 'stridence'); ?>
                 </h3>
             </div>
 
             <?php if (!empty($selections)) : ?>
-                <p class="text-sm text-text-muted mb-4">
+                <p class="text-[13px] text-text-muted mb-4">
                     <?php esc_html_e('Jouw geselecteerde cursussen:', 'stridence'); ?>
                 </p>
 
                 <?php foreach ($electiveGroups as $groupIndex => $group) :
                     $groupSelections = $selections[$groupIndex] ?? [];
-                    if (empty($groupSelections)) continue;
-                ?>
+                    if (empty($groupSelections)) {
+                        continue;
+                    }
+                    ?>
                     <div class="mb-4">
-                        <p class="text-sm font-medium text-text mb-2">
+                        <p class="text-[13px] font-bold text-text mb-2">
                             <?php echo esc_html($group['name'] ?? __('Keuzegroep', 'stridence')); ?>
                         </p>
                         <ul class="space-y-2">
                             <?php foreach ($group['courses'] ?? [] as $course) :
-                                if (!in_array($course->ID, $groupSelections, true)) continue;
-                            ?>
-                                <li class="flex items-center gap-2 text-text">
+                                if (!in_array($course->ID, $groupSelections, true)) {
+                                    continue;
+                                }
+                                ?>
+                                <li class="flex items-center gap-2 text-[14px] text-text">
                                     <?php echo stridence_icon('check', 'w-4 h-4 text-success'); ?>
                                     <?php echo esc_html($course->post_title); ?>
                                 </li>
@@ -209,7 +236,7 @@ $selections = $enrollment->selections ? json_decode($enrollment->selections, tru
                     </div>
                 <?php endforeach; ?>
             <?php else : ?>
-                <p class="text-text-muted">
+                <p class="text-[13px] text-text-muted">
                     <?php esc_html_e('Er zijn geen keuzes gemaakt tijdens de keuzeperiode.', 'stridence'); ?>
                 </p>
             <?php endif; ?>

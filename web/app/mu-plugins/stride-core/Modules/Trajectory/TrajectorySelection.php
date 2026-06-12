@@ -19,6 +19,7 @@ final class TrajectorySelection
         private readonly TrajectoryService $trajectories,
         private readonly TrajectoryRepository $trajectoryRepo,
         private readonly RegistrationRepository $registrations,
+        private readonly TrajectoryCascadeService $cascade,
     ) {}
 
     // === Enrollment ===
@@ -26,7 +27,7 @@ final class TrajectorySelection
     /**
      * Enroll user in trajectory.
      */
-    public function enroll(int $userId, int $trajectoryId): int|WP_Error
+    public function enroll(int $userId, int $trajectoryId, array $options = []): int|WP_Error
     {
         // Check trajectory allows enrollment
         if (!$this->trajectories->isEnrollmentOpen($trajectoryId)) {
@@ -39,15 +40,36 @@ final class TrajectorySelection
         }
 
         // Create trajectory enrollment (edition_id = null)
-        $registrationId = $this->registrations->create([
+        $data = [
             'user_id' => $userId,
             'trajectory_id' => $trajectoryId,
             'enrollment_path' => RegistrationRepository::PATH_TRAJECTORY,
-        ]);
+        ];
+
+        if (!empty($options['company_id'])) {
+            $data['company_id'] = (int) $options['company_id'];
+        }
+
+        $registrationId = $this->registrations->create($data);
 
         if (is_wp_error($registrationId)) {
             return $registrationId;
         }
+
+        // Materialise child registrations for the trajectory's required courses
+        // (mandatory editions + pure-LD courses). Electives wait for setSelections().
+        $this->cascade->cascadeOnEnrollment($registrationId);
+
+        // Snapshot the mandatory editions chosen at enrollment time.
+        $mandatoryEditionIds = $this->getMandatoryEditionIds($trajectoryId);
+        $this->registrations->appendInitialSelectionPhase(
+            $registrationId,
+            [
+                'phase'       => 'enrollment',
+                'edition_ids' => $mandatoryEditionIds,
+            ],
+            'trajectory',
+        );
 
         do_action('stride/trajectory/enrolled', [
             'registration_id' => $registrationId,
@@ -79,33 +101,7 @@ final class TrajectorySelection
         return count($enrollments) < $trajectory['capacity'];
     }
 
-    /**
-     * Check if user is enrolled in trajectory.
-     */
-    public function isEnrolled(int $userId, int $trajectoryId): bool
-    {
-        return $this->registrations->existsForTrajectory($userId, $trajectoryId);
-    }
-
-    /**
-     * Get user's trajectory enrollment.
-     */
-    public function getEnrollment(int $userId, int $trajectoryId): ?object
-    {
-        return $this->registrations->findByUserAndTrajectory($userId, $trajectoryId);
-    }
-
     // === Elective Selection ===
-
-    /**
-     * Get user's elective choices (edition IDs).
-     *
-     * @return array<int>
-     */
-    public function getSelections(int $registrationId): array
-    {
-        return $this->registrations->getSelections($registrationId);
-    }
 
     /**
      * Set elective choices for enrollment.
@@ -143,6 +139,29 @@ final class TrajectorySelection
         if (!$result) {
             return new WP_Error('db_error', 'Failed to save choices');
         }
+
+        // Cascade: add/remove child registrations to match the new selection.
+        // The selections JSON is the user's record of what they picked; the
+        // child rows are the authoritative "where they're actually enrolled."
+        // A capacity failure (`edition_full`) returns early without firing
+        // the choices_updated event — the selection state is inconsistent
+        // with reality and the caller surfaces the error.
+        $cascadeResult = $this->cascade->cascadeOnSelection($registrationId, $editionIds);
+        if (is_wp_error($cascadeResult)) {
+            return $cascadeResult;
+        }
+
+        // Append-only: every call records a new phase entry. The phased-choices
+        // feature (future) will pass distinct phase labels; today all calls use
+        // 'enrollment'.
+        $this->registrations->appendInitialSelectionPhase(
+            $registrationId,
+            [
+                'phase'       => 'enrollment',
+                'edition_ids' => array_values(array_map('intval', $editionIds)),
+            ],
+            'trajectory',
+        );
 
         do_action('stride/trajectory/choices_updated', [
             'registration_id' => $registrationId,
@@ -194,26 +213,46 @@ final class TrajectorySelection
      */
     public function validateSelections(int $trajectoryId, array $editionIds): true|WP_Error
     {
+        $editionIds = array_map('intval', $editionIds);
         $electiveGroups = $this->trajectoryRepo->getElectiveGroups($trajectoryId);
 
-        foreach ($electiveGroups as $groupName => $courses) {
-            $courseIds = array_column($courses, 'course_id');
-            $pickCount = $courses[0]['pick_count'] ?? 1;
+        foreach ($electiveGroups as $group) {
+            $groupName = (string) ($group['name'] ?? 'Keuze');
+            // `required` carries the group's min_choices; unset/0 keeps the
+            // historic default of "pick exactly one".
+            $required = max(1, (int) ($group['required'] ?? 0));
 
-            // Count how many chosen from this group
-            $chosenInGroup = count(array_intersect($editionIds, $courseIds));
+            // Selections are edition ids — collect the group's edition-backed
+            // choices from each course post's attached trajectory_config.
+            $groupEditionIds = [];
+            foreach ($group['courses'] ?? [] as $coursePost) {
+                $config = $coursePost->trajectory_config ?? [];
+                $editionId = (int) ($config['edition_id'] ?? 0);
+                if ($editionId > 0) {
+                    $groupEditionIds[] = $editionId;
+                }
+            }
 
-            if ($chosenInGroup < $pickCount) {
+            // Pure-LD electives have no edition_id and are not selectable yet
+            // (deferred to phased choices) — a group with nothing selectable
+            // must not block the submission.
+            if ($groupEditionIds === []) {
+                continue;
+            }
+
+            $chosenInGroup = count(array_intersect($editionIds, $groupEditionIds));
+
+            if ($chosenInGroup < $required) {
                 return new WP_Error(
                     'incomplete_choices',
-                    sprintf('Group "%s" requires %d selection(s), got %d', $groupName, $pickCount, $chosenInGroup)
+                    sprintf('Group "%s" requires %d selection(s), got %d', $groupName, $required, $chosenInGroup),
                 );
             }
 
-            if ($chosenInGroup > $pickCount) {
+            if ($chosenInGroup > $required) {
                 return new WP_Error(
                     'too_many_choices',
-                    sprintf('Group "%s" allows %d selection(s), got %d', $groupName, $pickCount, $chosenInGroup)
+                    sprintf('Group "%s" allows %d selection(s), got %d', $groupName, $required, $chosenInGroup),
                 );
             }
         }
@@ -223,14 +262,37 @@ final class TrajectorySelection
 
     // === Queries ===
 
+    // === Helpers ===
+
     /**
-     * Get user's trajectory enrollments.
+     * Return the mandatory edition IDs configured on a trajectory.
      *
-     * @return array<object>
+     * Mandatory = `required: true` AND `type: edition` AND `edition_id > 0`.
+     * Used by the initial_selection snapshot in enroll(). If the trajectory has
+     * no mandatory editions (or cannot be loaded), returns an empty array — the
+     * snapshot still records `type=trajectory` + the `enrollment` phase.
+     *
+     * @return array<int>
      */
-    public function getUserEnrollments(int $userId): array
+    private function getMandatoryEditionIds(int $trajectoryId): array
     {
-        return $this->registrations->findTrajectoryEnrollmentsByUser($userId);
+        $trajectory = $this->trajectories->getTrajectory($trajectoryId);
+        if (!$trajectory) {
+            return [];
+        }
+
+        $ids = [];
+        foreach ($trajectory['courses'] ?? [] as $course) {
+            if (
+                ($course['required'] ?? false) === true
+                && ($course['type'] ?? '') === 'edition'
+                && !empty($course['edition_id'])
+            ) {
+                $ids[] = (int) $course['edition_id'];
+            }
+        }
+
+        return array_values($ids);
     }
 
     /**

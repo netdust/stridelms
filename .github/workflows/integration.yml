@@ -1,25 +1,109 @@
 name: Integration
 
-on: [push, pull_request, workflow_dispatch]
+# Push trigger limited to long-lived branches (PR-branch pushes otherwise
+# double-run every suite); ci-seam-* kept for throwaway seam-proof pushes.
+on:
+  push:
+    branches: [main, staging, 'ci-seam-*']
+  pull_request:
+  workflow_dispatch:
+
+# Runs the real integration suite (phpunit-integration.xml.dist) against a
+# fresh WordPress install + MariaDB — replaces the old devcontainer job that
+# only curl'd the homepage title (audit finding CR-1) and had been red on
+# every run since the composer.lock moved to PHP 8.3 (devcontainer image was
+# php:8.1-fpm).
+#
+# Mirrors local DDEV behavior; the same setup can be simulated locally via
+# scripts/ci/install-wp.sh (see its header).
 
 jobs:
-  test:
+  integration:
     runs-on: ubuntu-latest
+
+    services:
+      database:
+        image: mariadb:10.11
+        env:
+          MYSQL_DATABASE: wordpress
+          MYSQL_USER: wordpress
+          MYSQL_PASSWORD: password
+          MYSQL_ROOT_PASSWORD: password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=20s
+          --health-retries=10
+
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Copy .env file
-        working-directory: .devcontainer
-        run: cp .env.example ../.env
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.3'
+        extensions: mysqli, gd, zip, intl
+        coverage: none
+        tools: wp-cli
 
-      - name: Start dev container and test
-        uses: devcontainers/ci@v0.3
-        with:
-          configFile: .devcontainer/devcontainer.json
-          runCmd: |
-            composer install --no-interaction --no-progress --prefer-dist
-            wp core install --url=http://localhost:8080 --title=Bedrock --admin_user=admin --admin_password=admin --admin_email=admin@example.com --skip-email --allow-root
+    - name: Cache Composer dependencies
+      id: composer-cache
+      run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
 
-      - name: Verify installation
-        run: |
-          curl -s http://localhost:8080 | grep "<title>Bedrock"
+    - uses: actions/cache@v4
+      with:
+        path: ${{ steps.composer-cache.outputs.dir }}
+        key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+        restore-keys: ${{ runner.os }}-composer-
+
+    - name: Install Composer dependencies
+      run: composer install --no-progress --prefer-dist --optimize-autoloader
+
+    # Bedrock reads config from .env; tests/Integration/bootstrap.php loads
+    # web/wp/wp-load.php which goes through the same config. Fresh install
+    # uses the default wp_ table prefix — the suite derives names from
+    # $wpdb->prefix, so it is prefix-agnostic (local DDEV runs ckqp_).
+    - name: Write .env
+      run: |
+        cat > .env <<'ENV'
+        DB_NAME=wordpress
+        DB_USER=wordpress
+        DB_PASSWORD=password
+        DB_HOST=127.0.0.1
+        DB_PREFIX=wp_
+        WP_ENV=development
+        WP_HOME=http://localhost:8080
+        WP_SITEURL=${WP_HOME}/wp
+        AUTH_KEY=ci-not-secret
+        SECURE_AUTH_KEY=ci-not-secret
+        LOGGED_IN_KEY=ci-not-secret
+        NONCE_KEY=ci-not-secret
+        AUTH_SALT=ci-not-secret
+        SECURE_AUTH_SALT=ci-not-secret
+        LOGGED_IN_SALT=ci-not-secret
+        NONCE_SALT=ci-not-secret
+        ENV
+
+    - name: Install WordPress + Stride stack
+      run: bash scripts/ci/install-wp.sh
+
+    # The suite's real-HTTP seam tests (guest catalog wire path, attachment
+    # permalink denial) need a listener on WP_HOME. PHP's built-in server +
+    # the Bedrock router serves WordPress for real — those tests genuinely
+    # run here. The nginx-deny 403 test skips itself when the responding
+    # server is not nginx (verified in DDEV + post-deploy curl instead).
+    - name: Serve WordPress over HTTP (php -S)
+      run: |
+        PHP_CLI_SERVER_WORKERS=4 php -S 127.0.0.1:8080 -t web scripts/ci/router.php >/tmp/php-server.log 2>&1 &
+        for i in $(seq 1 30); do
+          if curl -fso /dev/null "http://localhost:8080/index.php?rest_route=/"; then
+            echo "server up after ${i}s"; exit 0
+          fi
+          sleep 1
+        done
+        echo "PHP built-in server failed to come up"; cat /tmp/php-server.log; exit 1
+
+    - name: Run integration tests
+      run: composer test:integration

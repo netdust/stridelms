@@ -1,0 +1,217 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Call to static method exists\(\) on an unknown class NTDST\\Audit\\AuditTable\.$#'
+			identifier: class.notFound
+			count: 3
+			path: web/app/mu-plugins/stride-core/Admin/AdminAPIController.php
+
+		-
+			message: '#^Call to static method getTableName\(\) on an unknown class NTDST\\Audit\\AuditTable\.$#'
+			identifier: class.notFound
+			count: 3
+			path: web/app/mu-plugins/stride-core/Admin/AdminAPIController.php
+
+		-
+			message: '#^Class NTDST\\Audit\\AuditService not found\.$#'
+			identifier: class.notFound
+			count: 3
+			path: web/app/mu-plugins/stride-core/Admin/AdminAPIController.php
+
+		-
+			message: '#^Constant COOKIEPATH not found\.$#'
+			identifier: constant.notFound
+			count: 2
+			path: web/app/mu-plugins/stride-core/Admin/AdminAPIController.php
+
+		-
+			message: '#^Action callback returns bool but should not return anything\.$#'
+			identifier: return.void
+			count: 5
+			path: web/app/mu-plugins/stride-core/Admin/AdminDashboardService.php
+
+		-
+			message: '#^Function ntdst_enqueue_api_client not found\.$#'
+			identifier: function.notFound
+			count: 1
+			path: web/app/mu-plugins/stride-core/Admin/StrideSettingsService.php
+
+		-
+			message: '#^Parameter \$auditService of method Stride\\Modules\\Audit\\ActivityShortcode\:\:__construct\(\) has invalid type NTDST\\Audit\\AuditService\.$#'
+			identifier: class.notFound
+			count: 1
+			path: web/app/mu-plugins/stride-core/Modules/Audit/ActivityShortcode.php
+
+		-
+			message: '#^Property Stride\\Modules\\Audit\\ActivityShortcode\:\:\$auditService has unknown class NTDST\\Audit\\AuditService as its type\.$#'
+			identifier: class.notFound
+			count: 1
+			path: web/app/mu-plugins/stride-core/Modules/Audit/ActivityShortcode.php
+
+		-
+			message: '#^Parameter \$auditService of method Stride\\Modules\\Audit\\AuditBridge\:\:__construct\(\) has invalid type NTDST\\Audit\\AuditService\.$#'
+			identifier: class.notFound
+			count: 1
+			path: web/app/mu-plugins/stride-core/Modules/Audit/AuditBridge.php
+
+		-
+			message: '#^Property Stride\\Modules\\Audit\\AuditBridge\:\:\$auditService has unknown class NTDST\\Audit\\AuditService as its type\.$#'
+			identifier: class.notFound
+			count: 1
+			path: web/app/mu-plugins/stride-core/Modules/Audit/AuditBridge.php
+
+		-
+			message: '#^Variable \$updateData in empty\(\) always exists and is not falsy\.$#'
+			identifier: empty.variable
+			count: 1
+			path: web/app/mu-plugins/stride-core/Modules/Invoicing/Admin/VoucherAdminController.php
+
+		-
+			message: '#^Action callback returns string\|WP_Error but should not return anything\.$#'
+			identifier: return.void
+			count: 1
+			path: web/app/mu-plugins/stride-core/Modules/Invoicing/QuotePDFGenerator.php
+
+		-
+			message: '#^Function ndmail_send not found\.$#'
+			identifier: function.notFound
+			count: 5
+			path: web/app/mu-plugins/stride-core/Modules/Mail/StrideMailBridge.php
+
+		-
+			message: '#^Parameter \$auditService of method Stride\\Modules\\Notification\\NotificationService\:\:__construct\(\) has invalid type NTDST\\Audit\\AuditService\.$#'
+			identifier: class.notFound
+			count: 1
+			path: web/app/mu-plugins/stride-core/Modules/Notification/NotificationService.php
+
+		-
+			message: '#^Property Stride\\Modules\\Notification\\NotificationService\:\:\$auditService has unknown class NTDST\\Audit\\AuditService as its type\.$#'
+			identifier: class.notFound
+			count: 1
+			path: web/app/mu-plugins/stride-core/Modules/Notification/NotificationService.php
+
+		-
+			message: '#^Array has 2 duplicate keys with value ''remove'' \(''remove'', ''remove''\)\.$#'
+			identifier: array.duplicateKey
+			count: 1
+			path: web/app/mu-plugins/stride-core/Modules/Trajectory/Admin/TrajectoryAdminController.php
+
+		-
+			message: '#^Variable \$updateData in empty\(\) always exists and is not falsy\.$#'
+			identifier: empty.variable
+			count: 1
+			path: web/app/mu-plugins/stride-core/Modules/Trajectory/Admin/TrajectoryAdminController.php
+
+		-
+			message: '#^Call to static method add_command\(\) on an unknown class WP_CLI\.$#'
+			identifier: class.notFound
+			count: 1
+			path: web/app/mu-plugins/stride-core/Modules/Trajectory/TrajectoryService.php
+
+		-
+			message: '#^Call to static method log\(\) on an unknown class WP_CLI\.$#'
+			identifier: class.notFound
+			count: 4
+			path: web/app/mu-plugins/stride-core/Modules/Trajectory/TrajectoryService.php
+
+		-
+			message: '#^Call to static method success\(\) on an unknown class WP_CLI\.$#'
+			identifier: class.notFound
+			count: 2
+			path: web/app/mu-plugins/stride-core/Modules/Trajectory/TrajectoryService.php
+
+		-
+			message: '#^Call to static method warning\(\) on an unknown class WP_CLI\.$#'
+			identifier: class.notFound
+			count: 1
+			path: web/app/mu-plugins/stride-core/Modules/Trajectory/TrajectoryService.php
+
+		-
+			message: '#^Call to static method add_command\(\) on an unknown class WP_CLI\.$#'
+			identifier: class.notFound
+			count: 1
+			path: web/app/mu-plugins/stride-core/Modules/User/UserLifecycleService.php
+
+		-
+			message: '#^Call to static method log\(\) on an unknown class WP_CLI\.$#'
+			identifier: class.notFound
+			count: 3
+			path: web/app/mu-plugins/stride-core/Modules/User/UserLifecycleService.php
+
+		-
+			message: '#^Call to static method success\(\) on an unknown class WP_CLI\.$#'
+			identifier: class.notFound
+			count: 2
+			path: web/app/mu-plugins/stride-core/Modules/User/UserLifecycleService.php
+
+		-
+			message: '#^Variable \$formatCurrency might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: web/app/mu-plugins/stride-core/templates/pdf/quote.php
+
+		-
+			message: '#^Variable \$enrollment_mode on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.variable
+			count: 1
+			path: web/app/themes/stridence/enrollment/form.php
+
+		-
+			message: '#^Variable \$enrollment_open on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.variable
+			count: 1
+			path: web/app/themes/stridence/enrollment/form.php
+
+		-
+			message: '#^Variable \$type on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.variable
+			count: 1
+			path: web/app/themes/stridence/enrollment/form.php
+
+		-
+			message: '#^Variable \$phase on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.variable
+			count: 1
+			path: web/app/themes/stridence/forms/completion.php
+
+		-
+			message: '#^Action callback returns NTDST_Bootstrap but should not return anything\.$#'
+			identifier: return.void
+			count: 2
+			path: web/app/themes/stridence/functions.php
+
+		-
+			message: '#^Constant STRIDENCE_DIR not found\.$#'
+			identifier: constant.notFound
+			count: 2
+			path: web/app/themes/stridence/services/frontend/hooks/AssetHooks.php
+
+		-
+			message: '#^Constant STRIDENCE_URI not found\.$#'
+			identifier: constant.notFound
+			count: 2
+			path: web/app/themes/stridence/services/frontend/hooks/AssetHooks.php
+
+		-
+			message: '#^Variable \$args might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: web/app/themes/stridence/templates/trajectory/tab-berichten.php
+
+		-
+			message: '#^Variable \$args might not be defined\.$#'
+			identifier: variable.undefined
+			count: 4
+			path: web/app/themes/stridence/templates/trajectory/tab-keuzes.php
+
+		-
+			message: '#^Variable \$args might not be defined\.$#'
+			identifier: variable.undefined
+			count: 3
+			path: web/app/themes/stridence/templates/trajectory/tab-materialen.php
+
+		-
+			message: '#^Variable \$args might not be defined\.$#'
+			identifier: variable.undefined
+			count: 4
+			path: web/app/themes/stridence/templates/trajectory/tab-voortgang.php

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Icon Helper Functions
  *
@@ -35,7 +36,7 @@ function stridence_icon(string $name, string $class = ''): string
                 '/<svg/',
                 '<svg class="' . esc_attr($class) . '"',
                 $svg,
-                1
+                1,
             );
         }
 

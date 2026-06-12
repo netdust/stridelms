@@ -1,9 +1,15 @@
 <?php
 /**
- * Dashboard Tab: Trajecten (Learning Paths)
+ * Dashboard Tab: Trajecten (Learning Paths) — Helder Tij redesign
  *
- * Shows user's trajectory enrollments with progress tracking.
- * Handles both cohort (fixed schedule) and self-paced (flexible) modes.
+ * Card per trajectory: white rounded-[16px] shadow-card p-6.
+ * Header row: 72px progress ring + Traject badge + 16px/700 title +
+ * "X van Y onderdelen · keuze status" 13px muted + "Open traject" primary sm.
+ * Parts checklist: bg-surface rounded-[12px] wells:
+ *   done     → ✓ icon green / text-badge-open-text
+ *   active   → bg-badge-online-bg tinted well
+ *   elective → outlined bg-surface + "Maak je keuze" mini-CTA
+ * Empty state via partials/empty-state.
  *
  * @param array $args {
  *     @type WP_User $user Current user object
@@ -15,10 +21,11 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
-use Stride\Contracts\LMSAdapterInterface;
 use Stride\Domain\RegistrationStatus;
 use Stride\Domain\TrajectoryMode;
+use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Enrollment\RegistrationRepository;
+use Stride\Modules\Trajectory\TrajectoryRepository;
 use Stride\Modules\Trajectory\TrajectoryService;
 use Stride\Modules\Edition\EditionService;
 
@@ -28,8 +35,8 @@ $user_id = $user->ID;
 // Get services
 $registrationRepo   = ntdst_get(RegistrationRepository::class);
 $trajectoryService  = ntdst_get(TrajectoryService::class);
+$trajectoryRepo     = ntdst_get(TrajectoryRepository::class);
 $editionService     = ntdst_get(EditionService::class);
-$lmsAdapter         = ntdst_get(LMSAdapterInterface::class);
 
 // Get user's trajectory enrollments
 $enrollments = $registrationRepo->findTrajectoryEnrollmentsByUser($user_id);
@@ -47,11 +54,10 @@ foreach ($enrollments as $enrollment) {
     }
 
     // Get trajectory courses
-    $required_courses = $trajectoryService->getRequiredCourses($trajectory_id);
-    $elective_groups  = $trajectoryService->getElectiveGroups($trajectory_id);
+    $required_courses = $trajectoryRepo->getRequiredCourses($trajectory_id);
+    $elective_groups  = $trajectoryRepo->getElectiveGroups($trajectory_id);
 
     // Calculate total courses count
-    $total_courses = count($required_courses);
     $required_elective_count = 0;
     foreach ($elective_groups as $group) {
         $required_elective_count += (int) ($group['required'] ?? 0);
@@ -61,8 +67,11 @@ foreach ($enrollments as $enrollment) {
     // Get user's edition registrations linked to this trajectory
     $edition_registrations = $registrationRepo->findEditionsByTrajectory($user_id, $trajectory_id);
 
-    // Get selections from enrollment (selected editions/courses for self-paced)
-    $selections = $enrollment->selections ? json_decode($enrollment->selections, true) : [];
+    // Get selections from enrollment
+    $selections = $enrollment->selections ?? [];
+    if (is_string($selections)) {
+        $selections = json_decode($selections, true) ?? [];
+    }
 
     // Calculate progress based on mode
     $mode = TrajectoryMode::tryFrom($trajectory['mode']) ?? TrajectoryMode::Cohort;
@@ -72,10 +81,9 @@ foreach ($enrollments as $enrollment) {
     // Check course completion for each required course
     foreach ($required_courses as $course) {
         $course_id = $course->ID;
-        if ($lmsAdapter->isComplete($user_id, $course_id)) {
+        if (LearnDashHelper::isComplete($course_id, $user_id)) {
             $completed_courses[] = $course_id;
         } else {
-            // Check if user has active registration for any edition of this course
             $has_active_registration = false;
             foreach ($edition_registrations as $edReg) {
                 $ed_course_id = $editionService->getCourseId((int) $edReg->edition_id);
@@ -94,7 +102,7 @@ foreach ($enrollments as $enrollment) {
     foreach ($elective_groups as $group) {
         foreach ($group['courses'] as $course) {
             $course_id = $course->ID;
-            if ($lmsAdapter->isComplete($user_id, $course_id)) {
+            if (LearnDashHelper::isComplete($course_id, $user_id)) {
                 $completed_courses[] = $course_id;
             } else {
                 foreach ($edition_registrations as $edReg) {
@@ -113,23 +121,24 @@ foreach ($enrollments as $enrollment) {
     $is_trajectory_complete = $completed_count >= $total_required && $total_required > 0;
 
     $trajectory_data = [
-        'enrollment_id'     => (int) $enrollment->id,
-        'trajectory_id'     => $trajectory_id,
-        'trajectory'        => $trajectory,
-        'mode'              => $mode,
-        'registered_at'     => $enrollment->registered_at,
-        'status'            => $enrollment->status,
-        'required_courses'  => $required_courses,
-        'elective_groups'   => $elective_groups,
-        'total_required'    => $total_required,
-        'completed_count'   => $completed_count,
-        'in_progress_count' => $in_progress_count,
-        'is_complete'       => $is_trajectory_complete,
+        'enrollment_id'      => (int) $enrollment->id,
+        'trajectory_id'      => $trajectory_id,
+        'trajectory'         => $trajectory,
+        'mode'               => $mode,
+        'registered_at'      => $enrollment->registered_at,
+        'status'             => $enrollment->status,
+        'required_courses'   => $required_courses,
+        'elective_groups'    => $elective_groups,
+        'total_required'     => $total_required,
+        'completed_count'    => $completed_count,
+        'in_progress_count'  => $in_progress_count,
+        'in_progress_courses' => array_unique($in_progress_courses),
+        'completed_courses'  => array_unique($completed_courses),
+        'is_complete'        => $is_trajectory_complete,
         'edition_registrations' => $edition_registrations,
-        'selections'        => $selections,
+        'selections'         => $selections,
     ];
 
-    // Check enrollment status
     $status = RegistrationStatus::tryFrom($enrollment->status) ?? RegistrationStatus::Confirmed;
 
     if ($status === RegistrationStatus::Completed || $is_trajectory_complete) {
@@ -140,287 +149,285 @@ foreach ($enrollments as $enrollment) {
 }
 ?>
 
-<div class="space-y-8">
-    <!-- Active Trajectories -->
-    <section>
-        <h2 class="font-heading text-xl font-bold text-text mb-4">
-            <?php esc_html_e('Actieve trajecten', 'stridence'); ?>
-        </h2>
+<div class="space-y-6">
 
+    <?php if (empty($active) && empty($completed)) : ?>
+        <?php
+        stridence_template_part('partials/empty-state', null, [
+            'icon'    => 'layers',
+            'title'   => __('Geen actieve trajecten', 'stridence'),
+            'message' => __('Je bent nog niet ingeschreven voor een leertraject. Ontdek onze trajecten en start je leerpad.', 'stridence'),
+            'action'  => __('Bekijk trajecten', 'stridence'),
+            'url'     => get_post_type_archive_link('vad_trajectory'),
+        ]);
+        ?>
+    <?php else : ?>
+
+        <!-- Active Trajectories -->
         <?php if (!empty($active)) : ?>
-            <div class="space-y-4">
-                <?php foreach ($active as $traj) : ?>
-                    <div class="card" x-data="expandable()">
-                        <button type="button"
-                                class="w-full p-4 flex items-center justify-between gap-4 text-left"
-                                @click="toggle()">
-                            <div class="flex-1 min-w-0">
-                                <div class="flex items-center gap-2 mb-1">
-                                    <h3 class="font-semibold text-text truncate">
-                                        <?php echo esc_html($traj['trajectory']['title']); ?>
-                                    </h3>
-                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium <?php echo $traj['mode'] === TrajectoryMode::Cohort ? 'bg-primary/10 text-primary' : 'bg-accent/10 text-accent'; ?>">
-                                        <?php echo $traj['mode'] === TrajectoryMode::Cohort
-                                            ? esc_html__('Cohort', 'stridence')
-                                            : esc_html__('Zelfgestuurd', 'stridence'); ?>
-                                    </span>
+            <div class="flex flex-col gap-6">
+                <?php foreach ($active as $traj) :
+                    $progressPct = $traj['total_required'] > 0
+                        ? (int) round(($traj['completed_count'] / $traj['total_required']) * 100)
+                        : 0;
+
+                    $trajectory_post = get_post($traj['trajectory_id']);
+                    $trajectory_slug = $trajectory_post ? $trajectory_post->post_name : '';
+                    $dashboard_url = $trajectory_slug
+                        ? home_url('/mijn-account/trajecten/' . $trajectory_slug . '/')
+                        : get_permalink($traj['trajectory_id']);
+
+                    // Elective choice status — selections are keyed by elective
+                    // group INDEX (same shape as trajectory/tab-keuzes.php and
+                    // tab-voortgang.php), so the chosen-state is per group, and
+                    // the header line only says "keuze gemaakt" when EVERY
+                    // group has a selection.
+                    $has_electives = !empty($traj['elective_groups']);
+                    $selections    = is_array($traj['selections']) ? $traj['selections'] : [];
+                    $all_groups_chosen = $has_electives;
+                    foreach (array_keys($traj['elective_groups']) as $groupIndex) {
+                        if (empty($selections[$groupIndex])) {
+                            $all_groups_chosen = false;
+                            break;
+                        }
+                    }
+                    $elective_status_txt = $has_electives
+                        ? ($all_groups_chosen
+                            ? __('keuze gemaakt', 'stridence')
+                            : __('keuzemodule nog te kiezen', 'stridence'))
+                        : '';
+
+                    // Build course→edition map for "bezig" detection
+                    $editionByCourse = [];
+                    foreach ($traj['edition_registrations'] as $edReg) {
+                        $edId = (int) $edReg->edition_id;
+                        $cId  = $editionService->getCourseId($edId);
+                        if ($cId !== null && !isset($editionByCourse[$cId])) {
+                            $editionByCourse[$cId] = $edId;
+                        }
+                    }
+                    ?>
+                    <div class="bg-surface-card rounded-[16px] shadow-card p-6">
+                        <!-- Header row: ring + title/meta + CTA -->
+                        <div class="flex gap-5 items-start flex-wrap mb-5">
+                            <!-- 72px progress ring -->
+                            <?php stridence_template_part('templates/dashboard/partials/progress-ring', null, [
+                                'progress' => $progressPct,
+                                'size'     => 72,
+                            ]); ?>
+
+                            <!-- Title + meta -->
+                            <div class="flex-1 min-w-[220px]">
+                                <!-- Traject badge -->
+                                <div class="flex flex-wrap gap-[6px] mb-2">
+                                    <?php stridence_template_part('partials/badge-status', null, ['status' => 'trajectory', 'size' => 'sm']); ?>
                                 </div>
-                                <div class="flex flex-wrap gap-4 text-sm text-text-muted">
-                                    <span class="flex items-center gap-1">
-                                        <?php echo stridence_icon('book-open', 'w-4 h-4'); ?>
-                                        <?php printf(
-                                            esc_html__('%d van %d cursussen', 'stridence'),
-                                            $traj['completed_count'],
-                                            $traj['total_required']
-                                        ); ?>
-                                    </span>
-                                    <?php if ($traj['in_progress_count'] > 0) : ?>
-                                        <span class="flex items-center gap-1 text-accent">
-                                            <?php echo stridence_icon('clock', 'w-4 h-4'); ?>
-                                            <?php printf(
-                                                esc_html__('%d in uitvoering', 'stridence'),
-                                                $traj['in_progress_count']
-                                            ); ?>
-                                        </span>
+                                <!-- 16px/700 title -->
+                                <div class="text-[16px] font-bold text-text leading-snug">
+                                    <?php echo esc_html($traj['trajectory']['title'] ?? ''); ?>
+                                </div>
+                                <!-- 13px muted: X van Y onderdelen · keuze status -->
+                                <div class="text-[13px] text-text-muted mt-1">
+                                    <?php echo esc_html(sprintf(
+                                        /* translators: %1$d completed, %2$d total */
+                                        __('%1$d van %2$d onderdelen afgerond', 'stridence'),
+                                        $traj['completed_count'],
+                                        $traj['total_required'],
+                                    )); ?>
+                                    <?php if ($elective_status_txt) : ?>
+                                        <span class="mx-1 opacity-40">&middot;</span>
+                                        <?php echo esc_html($elective_status_txt); ?>
                                     <?php endif; ?>
                                 </div>
                             </div>
-                            <span class="shrink-0 text-text-muted transition-transform duration-200"
-                                  :class="{ 'rotate-180': open }">
-                                <?php echo stridence_icon('chevron-down', 'w-5 h-5'); ?>
-                            </span>
-                        </button>
 
-                        <div x-show="open" x-collapse class="border-t border-border">
-                            <div class="p-4 space-y-6">
-                                <!-- Progress Bar -->
-                                <?php
-                                get_template_part('partials/progress-bar', null, [
-                                    'attended' => $traj['completed_count'],
-                                    'required' => $traj['total_required'],
-                                    'label'    => __('Voortgang', 'stridence'),
-                                ]);
-                                ?>
-
-                                <!-- Course List by Group -->
-                                <div class="space-y-4">
-                                    <!-- Required Courses -->
-                                    <?php if (!empty($traj['required_courses'])) : ?>
-                                        <div>
-                                            <h4 class="text-xs font-medium text-text-muted uppercase tracking-wide mb-2">
-                                                <?php esc_html_e('Verplichte cursussen', 'stridence'); ?>
-                                            </h4>
-                                            <div class="divide-y divide-border rounded-lg border border-border">
-                                                <?php foreach ($traj['required_courses'] as $course) :
-                                                    $is_course_complete = $lmsAdapter->isComplete($user_id, $course->ID);
-                                                    $is_in_progress = in_array($course->ID, array_unique($in_progress_courses ?? []));
-                                                ?>
-                                                    <div class="p-3 flex items-center justify-between gap-3">
-                                                        <div class="flex items-center gap-3 min-w-0">
-                                                            <?php if ($is_course_complete) : ?>
-                                                                <span class="shrink-0 w-6 h-6 rounded-full bg-success/10 flex items-center justify-center">
-                                                                    <?php echo stridence_icon('check', 'w-4 h-4 text-success'); ?>
-                                                                </span>
-                                                            <?php elseif ($is_in_progress) : ?>
-                                                                <span class="shrink-0 w-6 h-6 rounded-full bg-accent/10 flex items-center justify-center">
-                                                                    <?php echo stridence_icon('clock', 'w-4 h-4 text-accent'); ?>
-                                                                </span>
-                                                            <?php else : ?>
-                                                                <span class="shrink-0 w-6 h-6 rounded-full bg-border flex items-center justify-center">
-                                                                    <span class="w-2 h-2 rounded-full bg-text-muted"></span>
-                                                                </span>
-                                                            <?php endif; ?>
-                                                            <span class="truncate <?php echo $is_course_complete ? 'text-text-muted line-through' : 'text-text'; ?>">
-                                                                <?php echo esc_html($course->post_title); ?>
-                                                            </span>
-                                                        </div>
-                                                        <?php if ($is_course_complete) : ?>
-                                                            <span class="text-xs text-success font-medium">
-                                                                <?php esc_html_e('Afgerond', 'stridence'); ?>
-                                                            </span>
-                                                        <?php elseif ($is_in_progress) : ?>
-                                                            <span class="text-xs text-accent font-medium">
-                                                                <?php esc_html_e('Bezig', 'stridence'); ?>
-                                                            </span>
-                                                        <?php else : ?>
-                                                            <a href="<?php echo esc_url(get_permalink($course)); ?>"
-                                                               class="text-xs text-primary hover:underline">
-                                                                <?php esc_html_e('Bekijk', 'stridence'); ?>
-                                                            </a>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                <?php endforeach; ?>
-                                            </div>
-                                        </div>
-                                    <?php endif; ?>
-
-                                    <!-- Elective Groups -->
-                                    <?php foreach ($traj['elective_groups'] as $group) :
-                                        $group_name = $group['name'] ?? __('Keuzecursussen', 'stridence');
-                                        $group_required = (int) ($group['required'] ?? 0);
-                                        $courses = $group['courses'] ?? [];
-                                        if (empty($courses)) continue;
-
-                                        // Count completed in this group
-                                        $group_completed = 0;
-                                        foreach ($courses as $course) {
-                                            if ($lmsAdapter->isComplete($user_id, $course->ID)) {
-                                                $group_completed++;
-                                            }
-                                        }
-                                    ?>
-                                        <div>
-                                            <h4 class="text-xs font-medium text-text-muted uppercase tracking-wide mb-2 flex items-center justify-between">
-                                                <span><?php echo esc_html($group_name); ?></span>
-                                                <?php if ($group_required > 0) : ?>
-                                                    <span class="text-text font-semibold">
-                                                        <?php printf(
-                                                            esc_html__('%d/%d vereist', 'stridence'),
-                                                            $group_completed,
-                                                            $group_required
-                                                        ); ?>
-                                                    </span>
-                                                <?php endif; ?>
-                                            </h4>
-                                            <div class="divide-y divide-border rounded-lg border border-border">
-                                                <?php foreach ($courses as $course) :
-                                                    $is_course_complete = $lmsAdapter->isComplete($user_id, $course->ID);
-                                                    $is_in_progress = false;
-                                                    foreach ($traj['edition_registrations'] as $edReg) {
-                                                        if ($editionService->getCourseId((int) $edReg->edition_id) === $course->ID) {
-                                                            $is_in_progress = true;
-                                                            break;
-                                                        }
-                                                    }
-                                                ?>
-                                                    <div class="p-3 flex items-center justify-between gap-3">
-                                                        <div class="flex items-center gap-3 min-w-0">
-                                                            <?php if ($is_course_complete) : ?>
-                                                                <span class="shrink-0 w-6 h-6 rounded-full bg-success/10 flex items-center justify-center">
-                                                                    <?php echo stridence_icon('check', 'w-4 h-4 text-success'); ?>
-                                                                </span>
-                                                            <?php elseif ($is_in_progress) : ?>
-                                                                <span class="shrink-0 w-6 h-6 rounded-full bg-accent/10 flex items-center justify-center">
-                                                                    <?php echo stridence_icon('clock', 'w-4 h-4 text-accent'); ?>
-                                                                </span>
-                                                            <?php else : ?>
-                                                                <span class="shrink-0 w-6 h-6 rounded-full bg-border flex items-center justify-center">
-                                                                    <span class="w-2 h-2 rounded-full bg-text-muted"></span>
-                                                                </span>
-                                                            <?php endif; ?>
-                                                            <span class="truncate <?php echo $is_course_complete ? 'text-text-muted line-through' : 'text-text'; ?>">
-                                                                <?php echo esc_html($course->post_title); ?>
-                                                            </span>
-                                                        </div>
-                                                        <?php if ($is_course_complete) : ?>
-                                                            <span class="text-xs text-success font-medium">
-                                                                <?php esc_html_e('Afgerond', 'stridence'); ?>
-                                                            </span>
-                                                        <?php elseif ($is_in_progress) : ?>
-                                                            <span class="text-xs text-accent font-medium">
-                                                                <?php esc_html_e('Bezig', 'stridence'); ?>
-                                                            </span>
-                                                        <?php else : ?>
-                                                            <a href="<?php echo esc_url(get_permalink($course)); ?>"
-                                                               class="text-xs text-primary hover:underline">
-                                                                <?php esc_html_e('Bekijk', 'stridence'); ?>
-                                                            </a>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                <?php endforeach; ?>
-                                            </div>
-                                        </div>
-                                    <?php endforeach; ?>
-                                </div>
-
-                                <!-- Actions -->
-                                <div class="flex flex-wrap gap-3 pt-2">
-                                    <?php
-                                    $trajectory_post = get_post($traj['trajectory_id']);
-                                    $trajectory_slug = $trajectory_post ? $trajectory_post->post_name : '';
-                                    $dashboard_url = $trajectory_slug
-                                        ? home_url('/mijn-account/trajecten/' . $trajectory_slug . '/')
-                                        : get_permalink($traj['trajectory_id']);
-                                    ?>
-                                    <a href="<?php echo esc_url($dashboard_url); ?>"
-                                       class="btn-primary text-sm">
-                                        <?php echo stridence_icon('layout-dashboard', 'w-4 h-4 mr-1'); ?>
-                                        <?php esc_html_e('Mijn dashboard', 'stridence'); ?>
-                                    </a>
-                                    <a href="<?php echo esc_url(get_permalink($traj['trajectory_id'])); ?>"
-                                       class="btn-secondary text-sm">
-                                        <?php esc_html_e('Bekijk traject', 'stridence'); ?>
-                                        <?php echo stridence_icon('chevron-right', 'w-4 h-4 ml-1'); ?>
-                                    </a>
-                                </div>
-                            </div>
+                            <!-- "Open traject" primary sm -->
+                            <a href="<?php echo esc_url($dashboard_url); ?>"
+                               class="btn-primary btn-sm shrink-0">
+                                <?php esc_html_e('Open traject', 'stridence'); ?>
+                            </a>
                         </div>
+
+                        <!-- Parts checklist rows -->
+                        <?php
+                        $completedIds  = $traj['completed_courses'];
+                        $inProgressIds = $traj['in_progress_courses'];
+                        $allParts      = [];
+
+                        // Required courses
+                        foreach ($traj['required_courses'] as $course) {
+                            $cId = (int) $course->ID;
+                            $isDone       = in_array($cId, $completedIds, true);
+                            $isActive     = !$isDone && in_array($cId, $inProgressIds, true);
+                            $allParts[] = [
+                                'type'     => 'required',
+                                'course'   => $course,
+                                'is_done'  => $isDone,
+                                'is_active' => $isActive,
+                            ];
+                        }
+
+                        // Elective groups — chosen-state derived per group index
+                        foreach ($traj['elective_groups'] as $groupIndex => $group) {
+                            $groupName     = $group['name'] ?? __('Keuzemodule', 'stridence');
+                            $requiredCount = (int) ($group['required'] ?? 1);
+                            $groupChosen   = !empty($selections[$groupIndex]);
+
+                            $allParts[] = [
+                                'type'          => 'elective',
+                                'group_name'    => $groupName,
+                                'required'      => $requiredCount,
+                                'courses_count' => count($group['courses'] ?? []),
+                                'is_done'       => $groupChosen,
+                                'choice_url'    => add_query_arg('tab', 'keuzes', $dashboard_url),
+                            ];
+                        }
+                        ?>
+                        <?php if (!empty($allParts)) : ?>
+                            <div class="flex flex-col gap-2">
+                                <?php foreach ($allParts as $part) :
+                                    if ($part['type'] === 'required') :
+                                        $course = $part['course'];
+                                        $isDone   = $part['is_done'];
+                                        $isActive = $part['is_active'];
+                                        $cId      = (int) $course->ID;
+                                        $cTitle   = esc_html($course->post_title);
+
+                                        // Edition link for active course
+                                        $editionLink = null;
+                                        if ($isActive && isset($editionByCourse[$cId])) {
+                                            $editionLink = get_permalink($editionByCourse[$cId]) ?: null;
+                                        }
+                                        ?>
+                                        <?php if ($isDone) : ?>
+                                            <!-- Done row: bg-surface, green check -->
+                                            <div class="bg-surface rounded-[12px] px-4 py-[13px] flex gap-3 items-center">
+                                                <span class="w-[22px] h-[22px] rounded-full bg-badge-open-bg flex items-center justify-center shrink-0">
+                                                    <span class="text-[12px] font-extrabold text-badge-open-text leading-none">✓</span>
+                                                </span>
+                                                <span class="text-[14px] font-semibold text-text flex-1"><?php echo $cTitle; ?></span>
+                                            </div>
+                                        <?php elseif ($isActive) : ?>
+                                            <!-- Active row: tinted bg-badge-online-bg -->
+                                            <div class="bg-badge-online-bg rounded-[12px] px-4 py-[13px] flex gap-3 items-center">
+                                                <span class="w-[22px] h-[22px] rounded-full bg-primary flex items-center justify-center shrink-0">
+                                                    <span class="w-2 h-2 rounded-full bg-white inline-block"></span>
+                                                </span>
+                                                <span class="text-[14px] font-bold text-text flex-1"><?php echo $cTitle; ?></span>
+                                                <?php if ($editionLink) : ?>
+                                                    <a href="<?php echo esc_url($editionLink); ?>"
+                                                       class="text-[12px] font-bold text-badge-online-text shrink-0">
+                                                        <?php esc_html_e('Bekijk editie', 'stridence'); ?>
+                                                    </a>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php else : ?>
+                                            <!-- Upcoming row: plain bg-surface -->
+                                            <div class="bg-surface rounded-[12px] px-4 py-[13px] flex gap-3 items-center">
+                                                <span class="w-[22px] h-[22px] rounded-full bg-white shadow-[inset_0_0_0_1.5px_rgb(var(--color-border))] shrink-0"></span>
+                                                <span class="text-[14px] font-semibold text-text flex-1"><?php echo $cTitle; ?></span>
+                                            </div>
+                                        <?php endif; ?>
+
+                                    <?php elseif ($part['type'] === 'elective') :
+                                        $groupName     = esc_html($part['group_name']);
+                                        $requiredCount = $part['required'];
+                                        $coursesCount  = $part['courses_count'];
+                                        $isGroupDone   = $part['is_done'];
+                                        $choiceUrl     = $part['choice_url'];
+                                    ?>
+
+                                        <?php if ($isGroupDone) : ?>
+                                            <!-- Elective done row -->
+                                            <div class="bg-surface rounded-[12px] px-4 py-[13px] flex gap-3 items-center">
+                                                <span class="w-[22px] h-[22px] rounded-full bg-badge-open-bg flex items-center justify-center shrink-0">
+                                                    <span class="text-[12px] font-extrabold text-badge-open-text leading-none">✓</span>
+                                                </span>
+                                                <span class="text-[14px] font-semibold text-text flex-1">
+                                                    <?php echo esc_html(sprintf(
+                                                        /* translators: %s: group name */
+                                                        __('%s — keuze gemaakt', 'stridence'),
+                                                        $groupName,
+                                                    )); ?>
+                                                </span>
+                                            </div>
+                                        <?php else : ?>
+                                            <!-- Elective pending row: outlined + mini-CTA -->
+                                            <div class="bg-surface rounded-[12px] shadow-[inset_0_0_0_1.5px_rgb(var(--color-border))] px-4 py-[13px] flex flex-wrap gap-3 items-center">
+                                                <span class="w-[22px] h-[22px] rounded-full bg-white shadow-[inset_0_0_0_1.5px_rgb(var(--color-border))] shrink-0"></span>
+                                                <span class="text-[14px] font-semibold text-text flex-1 min-w-[180px]">
+                                                    <?php echo esc_html(sprintf(
+                                                        /* translators: %1$s: group name, %2$d: required choices, %3$d: total options */
+                                                        __('Keuze %1$s — kies %2$d van %3$d', 'stridence'),
+                                                        $groupName,
+                                                        $requiredCount,
+                                                        $coursesCount,
+                                                    )); ?>
+                                                </span>
+                                                <a href="<?php echo esc_url($choiceUrl); ?>"
+                                                   class="btn-primary btn-sm shrink-0">
+                                                    <?php esc_html_e('Maak je keuze', 'stridence'); ?>
+                                                </a>
+                                            </div>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
             </div>
-        <?php else : ?>
-            <?php
-            get_template_part('partials/empty-state', null, [
-                'icon'    => 'layers',
-                'title'   => __('Geen actieve trajecten', 'stridence'),
-                'message' => __('Je bent nog niet ingeschreven voor een leertraject. Ontdek onze trajecten en start je leerpad.', 'stridence'),
-                'action'  => __('Bekijk trajecten', 'stridence'),
-                'url'     => get_post_type_archive_link('vad_trajectory'),
-            ]);
-            ?>
         <?php endif; ?>
-    </section>
 
-    <!-- Completed Trajectories -->
-    <?php if (!empty($completed)) : ?>
-        <section x-data="{ open: false }">
-            <button type="button"
-                    class="w-full flex items-center justify-between gap-4 mb-4"
-                    @click="open = !open">
-                <h2 class="font-heading text-xl font-bold text-text">
-                    <?php
-                    printf(
-                        /* translators: %d: number of completed trajectories */
-                        esc_html__('Afgeronde trajecten (%d)', 'stridence'),
-                        count($completed)
-                    );
-                    ?>
-                </h2>
-                <span class="text-text-muted transition-transform duration-200"
-                      :class="{ 'rotate-180': open }">
-                    <?php echo stridence_icon('chevron-down', 'w-5 h-5'); ?>
-                </span>
-            </button>
+        <!-- Completed Trajectories — collapsible -->
+        <?php if (!empty($completed)) : ?>
+            <section x-data="{ open: false }">
+                <button type="button"
+                        class="w-full flex items-center justify-between gap-4 mb-3"
+                        @click="open = !open">
+                    <h3 class="text-base font-semibold text-text">
+                        <?php printf(
+                            /* translators: %d: number of completed trajectories */
+                            esc_html__('Afgeronde trajecten (%d)', 'stridence'),
+                            count($completed),
+                        ); ?>
+                    </h3>
+                    <span class="text-text-muted transition-transform duration-200"
+                          :class="{ 'rotate-180': open }">
+                        <?php echo stridence_icon('chevron-down', 'w-4 h-4'); ?>
+                    </span>
+                </button>
 
-            <div x-show="open" x-collapse>
-                <div class="card divide-y divide-border">
-                    <?php foreach ($completed as $traj) : ?>
-                        <div class="p-4 flex items-center justify-between gap-4">
-                            <div class="flex items-center gap-3 min-w-0">
-                                <span class="shrink-0 w-10 h-10 rounded-full bg-success/10 flex items-center justify-center">
-                                    <?php echo stridence_icon('award', 'w-5 h-5 text-success'); ?>
+                <div x-show="open" x-collapse>
+                    <div class="bg-surface-card rounded-[16px] border border-border shadow-sm">
+                        <?php foreach ($completed as $traj) : ?>
+                            <div class="flex items-center gap-4 px-4 py-3.5 border-b border-border/60 last:border-b-0 transition-colors">
+                                <span class="shrink-0 w-8 h-8 rounded-full bg-success/10 flex items-center justify-center">
+                                    <?php echo stridence_icon('award', 'w-4 h-4 text-success'); ?>
                                 </span>
-                                <div class="min-w-0">
-                                    <h3 class="font-medium text-text truncate">
-                                        <?php echo esc_html($traj['trajectory']['title']); ?>
-                                    </h3>
-                                    <p class="text-sm text-text-muted">
+                                <div class="flex-1 min-w-0">
+                                    <span class="font-medium text-text text-sm truncate block">
+                                        <?php echo esc_html($traj['trajectory']['title'] ?? ''); ?>
+                                    </span>
+                                    <span class="text-xs text-text-muted">
                                         <?php printf(
                                             esc_html__('%d cursussen afgerond', 'stridence'),
-                                            $traj['completed_count']
+                                            $traj['completed_count'],
                                         ); ?>
-                                    </p>
+                                    </span>
                                 </div>
+                                <a href="<?php echo esc_url(add_query_arg('tab', 'certificaten', get_permalink())); ?>"
+                                   class="btn-ghost btn-sm shrink-0">
+                                    <?php echo stridence_icon('award', 'w-4 h-4 mr-1'); ?>
+                                    <?php esc_html_e('Certificaat', 'stridence'); ?>
+                                </a>
                             </div>
-                            <a href="<?php echo esc_url(add_query_arg('tab', 'certificaten', get_permalink())); ?>"
-                               class="btn-ghost text-sm">
-                                <?php echo stridence_icon('award', 'w-4 h-4 mr-1'); ?>
-                                <?php esc_html_e('Certificaat', 'stridence'); ?>
-                            </a>
-                        </div>
-                    <?php endforeach; ?>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
-            </div>
-        </section>
+            </section>
+        <?php endif; ?>
+
     <?php endif; ?>
+
 </div>

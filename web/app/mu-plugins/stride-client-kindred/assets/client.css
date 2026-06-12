@@ -1,0 +1,507 @@
+/**
+ * Kindred HR — Design Token Overrides
+ *
+ * Editorial "warm coral + cream" design system.
+ * Warm coral on warm cream paper. Dark warm-ink anchors. Instrument Serif
+ * for editorial fragments only. Geist for everything else.
+ *
+ * Source: brand-board.css from stridelms brand.zip (2026-05),
+ * primary palette: #D97757 / #29261b / #f6f4ef.
+ *
+ * Design principles:
+ * - Restraint over decoration — every element earns its presence
+ * - Editorial typography is the visual system — type does the work
+ * - Tonal layering, no hard borders — surface shifts instead of 1px lines
+ */
+
+:root {
+  /* ── Brand Colors — Coral on Warm Cream ── */
+  --color-primary: 217 119 87;            /* #D97757 warm coral */
+  --color-primary-hover: 188 95 65;       /* #BC5F41 deeper coral */
+  --color-primary-subtle: 247 224 213;    /* #F7E0D5 soft coral tint */
+  --color-primary-light: 244 196 175;     /* #F4C4AF light coral */
+  --color-primary-dark: 159 76 49;        /* #9F4C31 burnt coral */
+  --color-accent: 217 119 87;             /* coral as single accent */
+  --color-accent-light: 247 224 213;
+
+  /* ── Neutrals — Warm Cream Paper + Ink ── */
+  --color-surface: 246 244 239;           /* #F6F4EF warm cream base */
+  --color-surface-alt: 237 234 226;       /* #EDEAE2 deeper cream */
+  --color-surface-card: 252 250 245;      /* #FCFAF5 lifted card */
+  --color-border: 226 220 209;            /* #E2DCD1 soft warm line */
+  --color-border-strong: 200 192 178;     /* #C8C0B2 stronger warm line */
+  --color-text: 41 38 27;                 /* #29261B dark ink (warm) */
+  --color-text-muted: 110 104 88;         /* #6E6858 muted warm */
+  --color-text-inverse: 252 250 245;
+
+  /* ── 5-tier surface ladder ── */
+  --color-surface-container: 237 234 226;        /* #EDEAE2 emphasised panels */
+  --color-surface-container-high: 226 220 209;   /* #E2DCD1 modals / dropdowns */
+  --color-surface-container-highest: 200 192 178;/* #C8C0B2 overlays */
+  --color-secondary-container: 247 224 213;     /* coral tint */
+  --color-tertiary: 41 38 27;                   /* ink as tertiary anchor */
+  --color-tertiary-light: 73 67 51;             /* warm ink-soft */
+
+  /* ── Status Colors — warm-aligned ── */
+  --color-success: 91 130 73;             /* #5B8249 olive green (works with coral) */
+  --color-warning: 191 134 38;            /* #BF8626 amber */
+  --color-error: 168 56 38;               /* #A83826 brick red */
+  --color-info: 217 119 87;               /* coral */
+
+  /* ── Badge Colors — warm cream surface ── */
+  --color-badge-open-bg: 232 240 217;          /* olive tint */
+  --color-badge-open-text: 65 99 50;
+  --color-badge-few-bg: 248 230 196;           /* amber tint */
+  --color-badge-few-text: 130 91 28;
+  --color-badge-full-bg: 247 224 213;          /* coral tint as "closed/sold-out" */
+  --color-badge-full-text: 159 76 49;
+  --color-badge-cancelled-bg: 237 234 226;
+  --color-badge-cancelled-text: 110 104 88;
+  --color-badge-online-bg: 226 224 215;        /* warm neutral */
+  --color-badge-online-text: 73 67 51;
+  --color-badge-free-bg: 232 240 217;
+  --color-badge-free-text: 65 99 50;
+
+  /* ── Typography ── */
+  --font-sans: 'Geist', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-heading: 'Geist', system-ui, sans-serif;
+  --font-serif: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+  --font-label: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-display-alt: 'Fraunces', 'Instrument Serif', Georgia, serif;
+
+  /* ── Spacing ── */
+  --space-section: 6rem;
+  --space-block: 3.5rem;
+  --space-element: 1.5rem;
+
+  /* ── Border Radius — restrained, no pills ── */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --radius-xl: 22px;
+
+  /* ── Shadows — minimal, ink-tinted ── */
+  --shadow-xs: 0 1px 2px rgba(17, 19, 18, 0.04);
+  --shadow-sm: 0 2px 6px rgba(17, 19, 18, 0.05);
+  --shadow-md: 0 8px 20px -6px rgba(17, 19, 18, 0.08);
+  --shadow-lg: 0 20px 40px -12px rgba(17, 19, 18, 0.10);
+  --shadow-overlay: 0 24px 50px -14px rgba(17, 19, 18, 0.14);
+  --shadow-card: var(--shadow-xs);
+  --shadow-elevated: var(--shadow-sm);
+
+  /* ── Motion — slow, premium, never bouncy ── */
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --duration-fast: 180ms;
+  --duration-normal: 320ms;
+
+  /* ── Brand utilities ── */
+  --kindred-page-max: 1320px;
+  --kindred-gutter: clamp(20px, 4vw, 56px);
+}
+
+/* ═══════════════════════════════════════════ Component overrides ═══════════════════════════════════════════ */
+
+/* ── Body baseline ── */
+body {
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.005em;
+}
+
+/* ── Selection ── */
+::selection {
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-text-inverse));
+}
+
+/* ── Links ──
+   Underline only inside long-form prose (.prose-stride / .entry-content).
+   Anywhere else: links inherit color, no underline.
+   `:not([class])` keeps buttons, cards, tabs (which all have classes)
+   un-underlined even when nested inside a prose block. */
+.prose-stride a:not([class]),
+.entry-content a:not([class]) {
+  color: rgb(var(--color-primary));
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+.prose-stride a:not([class]):hover,
+.entry-content a:not([class]):hover { color: rgb(var(--color-primary-hover)); }
+
+/* ── Buttons ── */
+.btn-primary,
+.btn-secondary,
+.btn-accent,
+.btn-outline-dark,
+.btn-outline-light,
+.btn-ghost,
+.btn-danger {
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  transition: background var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out);
+}
+
+.btn-primary {
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-text-inverse));
+  border: 1px solid rgb(var(--color-primary));
+}
+.btn-primary:hover {
+  background: rgb(var(--color-primary-hover));
+  border-color: rgb(var(--color-primary-hover));
+}
+
+.btn-secondary {
+  background: rgb(var(--color-surface-card));
+  color: rgb(var(--color-text));
+  border: 1px solid rgb(var(--color-border-strong));
+}
+.btn-secondary:hover {
+  background: rgb(var(--color-surface-alt));
+}
+
+.btn-outline-dark {
+  background: transparent;
+  color: rgb(var(--color-text));
+  border: 1px solid rgb(var(--color-text));
+}
+.btn-outline-dark:hover {
+  background: rgb(var(--color-text));
+  color: rgb(var(--color-text-inverse));
+}
+
+.btn-ghost {
+  background: transparent;
+  color: rgb(var(--color-text));
+  border: 1px solid transparent;
+}
+.btn-ghost:hover {
+  background: rgb(var(--color-surface-alt));
+}
+
+.btn-sm { font-size: 13px; padding: 0.5rem 0.875rem; }
+.btn-lg { font-size: 16px; padding: 0.9rem 1.5rem; }
+
+/* ── Cards ── */
+.card,
+.card-bordered,
+.card-interactive,
+.dash-card,
+.dash-card-hero,
+.dash-card-interactive,
+.dash-panel {
+  background: rgb(var(--color-surface-card));
+  border: 1px solid rgb(var(--color-border));
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+.card-interactive:hover,
+.dash-card-interactive:hover {
+  background: rgb(var(--color-surface-card));
+  border-color: rgb(var(--color-border-strong));
+  box-shadow: var(--shadow-elevated);
+}
+
+/* ── Glass nav (header) ── */
+.glass-nav {
+  background: rgb(var(--color-surface) / 0.85);
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid rgb(var(--color-border));
+}
+
+/* ── Dark section ── */
+.dark-section {
+  background: rgb(var(--color-text));
+  color: rgb(var(--color-text-inverse));
+}
+.dark-section a { color: rgb(var(--color-primary-subtle)); }
+
+/* ── Hero watermark ── */
+.hero-watermark {
+  color: rgb(var(--color-primary) / 0.06);
+  font-family: var(--font-heading);
+}
+
+/* ── Tags / pills ── */
+.tag-pill {
+  background: rgb(var(--color-primary-subtle));
+  color: rgb(var(--color-primary-dark));
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+  font-family: var(--font-label);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ── Status badges ── */
+.badge-open    { background: rgb(var(--color-badge-open-bg));    color: rgb(var(--color-badge-open-text)); }
+.badge-few     { background: rgb(var(--color-badge-few-bg));     color: rgb(var(--color-badge-few-text)); }
+.badge-full    { background: rgb(var(--color-badge-full-bg));    color: rgb(var(--color-badge-full-text)); }
+.badge-cancelled { background: rgb(var(--color-badge-cancelled-bg)); color: rgb(var(--color-badge-cancelled-text)); }
+.badge-online  { background: rgb(var(--color-badge-online-bg));  color: rgb(var(--color-badge-online-text)); }
+.badge-free    { background: rgb(var(--color-badge-free-bg));    color: rgb(var(--color-badge-free-text)); }
+
+/* ── Prose ── */
+.prose-stride {
+  color: rgb(var(--color-text));
+  font-family: var(--font-sans);
+  line-height: 1.65;
+}
+.prose-stride h1,
+.prose-stride h2,
+.prose-stride h3,
+.prose-stride h4 {
+  font-family: var(--font-heading);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.prose-stride em { font-family: var(--font-serif); font-style: italic; }
+.prose-stride code { font-family: var(--font-label); font-size: 0.9em; }
+
+/* ── Forms ── */
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+input[type="url"],
+input[type="password"],
+input[type="number"],
+input[type="search"],
+input[type="date"],
+select,
+textarea {
+  background: rgb(var(--color-surface-card));
+  border: 1px solid rgb(var(--color-border-strong));
+  border-radius: var(--radius-md);
+  color: rgb(var(--color-text));
+  font-family: var(--font-sans);
+  font-size: 15px;
+  padding: 0.65rem 0.85rem;
+  transition: border-color var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: rgb(var(--color-primary));
+  box-shadow: 0 0 0 3px rgb(var(--color-primary-subtle) / 0.5);
+}
+
+/* ── Footer ── */
+footer {
+  background: rgb(var(--color-surface));
+  border-top: 1px solid rgb(var(--color-border));
+  color: rgb(var(--color-text-muted));
+  font-family: var(--font-label);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+footer a { color: rgb(var(--color-text)); }
+
+/* ── Brand utilities (front-page) ── */
+.t-fraunces { font-family: var(--font-display-alt); }
+.t-serif    { font-family: var(--font-serif); font-style: italic; letter-spacing: -0.01em; }
+.t-mono     { font-family: var(--font-label); letter-spacing: 0; }
+.t-eyebrow  {
+  font-family: var(--font-label);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgb(var(--color-text-muted));
+  font-weight: 500;
+}
+
+/* ═══════════════════════════════════════════ LearnDash ═══════════════════════════════════════════
+   LD ships its own design tokens (--ld-color-primitives-* and --ld-color-semantic-*).
+   The blue primitives drive brand-primary, links, button bg, focus rings, and the
+   "system-dark" color used for hover states. Remapping the blue ramp inherits
+   through to all LD semantic + component tokens.
+
+   IMPORTANT: LD declares its tokens in :root, and the focus-mode sidebar
+   (.ld-focus, .ld-focus-sidebar) sits OUTSIDE .learndash-wrapper. We must
+   override at :root level so the cascade reaches every LD surface. The token
+   names are all --ld-* prefixed, so this can't leak to non-LD code. */
+:root {
+  /* Blue → coral ramp. LD consumes these as `var(--token)` (direct value), so
+     they must be hex / rgb() functions, NOT bare RGB triplets like our own
+     --color-* tokens. */
+  --ld-color-primitives-blue-100: #FAF1EC;      /* very light coral wash */
+  --ld-color-primitives-blue-150: #F7E0D5;      /* matches --color-primary-subtle */
+  --ld-color-primitives-blue-175: #F4C4AF;      /* matches --color-primary-light */
+  --ld-color-primitives-blue-200: #E8AE94;
+  --ld-color-primitives-blue-500: #D97757;      /* coral — brand-primary */
+  --ld-color-primitives-blue-800: #9F4C31;      /* deep coral — hover/system-dark */
+
+  /* Body surface + text → warm cream + warm ink */
+  --ld-color-system-white: #FCFAF5;             /* card surface */
+  --ld-color-system-body-text: #29261B;         /* warm ink */
+  --ld-color-system-dark: #9F4C31;              /* hover */
+  --ld-color-system-border: #E2DCD1;            /* warm border */
+
+  /* Buttons */
+  --ld-color-button-bg: #D97757;
+  --ld-color-button-bg-hover: #9F4C31;
+  --ld-color-button: #FCFAF5;
+  --ld-color-button-secondary-border: #D97757;
+
+  /* Links */
+  --ld-color-semantic-text-link: #D97757;
+  --ld-color-semantic-text-link-hover: #9F4C31;
+
+  /* Primary brand alias */
+  --ld-color-brand-primary: #D97757;
+
+  /* Typography — make LD inherit our Geist via its own token */
+  --ld-typography-font-family: 'Geist', system-ui, -apple-system, sans-serif;
+}
+
+/* Apply our font to all LD surfaces (focus mode + wrapper) */
+.learndash-wrapper,
+.ld-focus,
+.ld-focus-sidebar { font-family: var(--font-sans); }
+
+/* LD lesson body content uses prose-like spacing — pick up our serif italic + mono */
+.learndash-wrapper em { font-family: var(--font-serif); font-style: italic; }
+.learndash-wrapper code,
+.learndash-wrapper pre { font-family: var(--font-label); }
+
+/* Focus mode background layers.
+   LD sets background: #fff at TWO body-level layers (body.ld-in-focus-mode
+   and body.ld-in-focus-mode .learndash-wrapper) — these are the bottom
+   canvas under everything. Plus the inner focus-header, focus-main,
+   focus-content, and tab-content also hardcode white. Override ALL of
+   them to cream so the content column reads as one continuous surface.
+   Sidebar stays white (LD default, not touched here). */
+body.ld-in-focus-mode,
+body.ld-in-focus-mode .learndash-wrapper,
+.learndash-wrapper .ld-focus .ld-focus-main,
+.learndash-wrapper .ld-focus .ld-focus-main .ld-focus-content,
+.learndash-wrapper .ld-focus .ld-tabs-content,
+.learndash-wrapper .ld-focus .ld-tab-content {
+  background: rgb(var(--color-surface)) !important;
+}
+
+.learndash-wrapper .ld-focus .ld-focus-header {
+  background: rgb(var(--color-surface)) !important;
+  border-bottom-color: rgb(var(--color-border)) !important;
+}
+
+/* Lesson title heading — match Kindred display style */
+.learndash-wrapper h1,
+.learndash-wrapper h2 {
+  font-family: var(--font-heading);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: rgb(var(--color-text));
+}
+
+/* Lesson H1 specifically — clamp it down; LD default is 4rem (64px) which is
+   too display-y for a body heading. */
+.learndash-wrapper h1,
+.ld-focus h1 {
+  font-size: clamp(28px, 3vw, 40px);
+  line-height: 1.15;
+}
+
+/* Status icons (complete / incomplete) — recolor the green completed checks
+   so they don't clash with coral. Olive matches our --color-success. */
+.learndash-wrapper .ld-status-complete,
+.learndash-wrapper .ld-status-icon-complete {
+  color: rgb(var(--color-success));
+}
+
+/* ── Hardcoded #235af3 overrides ──
+   LD's learndash.css ships ~50 rules with `color: #235af3` and
+   `background-color: #235af3` hardcoded, bypassing the token system.
+   :root token overrides have no effect; these rules need direct selector
+   matching. Using !important here because LD's specificity stack varies
+   widely across the file and matching every variant is fragile. Scope
+   stays inside .learndash-wrapper so it can't leak outside LD's UI. */
+
+/* Focus-mode sidebar header (the big colored bar at top-left) */
+.learndash-wrapper .ld-focus .ld-focus-sidebar .ld-course-navigation-heading {
+  background-color: rgb(var(--color-primary)) !important;
+}
+
+/* Sidebar toggle button (the circle with arrow) */
+.learndash-wrapper .ld-focus .ld-focus-sidebar .ld-focus-sidebar-trigger .ld-icon {
+  background: rgb(var(--color-primary)) !important;
+}
+
+/* Current-lesson highlight in the sidebar list */
+.learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-item-preview-heading,
+.learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-title {
+  color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-item-preview-heading .ld-status-incomplete,
+.learndash-wrapper .ld-course-navigation .ld-lesson-item.ld-is-current-lesson .ld-lesson-title .ld-status-incomplete {
+  border-color: rgb(var(--color-primary)) !important;
+}
+
+/* "0% COMPLETE" percentage label — two contexts (page-level + focus-header) */
+.learndash-wrapper .ld-progress .ld-progress-percentage {
+  color: rgb(var(--color-primary)) !important;
+}
+
+/* .ld-primary-color utility */
+.learndash-wrapper .ld-primary-color,
+.learndash-wrapper .ld-primary-color-hover:hover {
+  color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-primary-background {
+  background-color: rgb(var(--color-primary)) !important;
+}
+
+/* Transparent buttons: "Next Lesson", focus-header "Mark Complete" link */
+.learndash-wrapper .ld-button.ld-button-transparent,
+.learndash-wrapper .ld-button.ld-button-transparent.ld-status-complete,
+.learndash-wrapper .learndash_mark_complete_button.ld-button-transparent,
+.learndash-wrapper #learndash_mark_complete_button.ld-button-transparent {
+  color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-button.ld-button-transparent:hover,
+.learndash-wrapper .ld-button.ld-button-transparent:focus {
+  color: rgb(var(--color-primary-hover)) !important;
+}
+
+/* Focus-header content action links (top-right top bar) */
+.learndash-wrapper .ld-focus .ld-focus-header .ld-content-action a,
+.learndash-wrapper .ld-focus .ld-focus-header .ld-content-action .ld-button {
+  color: rgb(var(--color-primary)) !important;
+}
+
+/* ── Focus-header sledgehammer ──
+   Modern theme's focus-header uses Tailwind utilities + various class
+   combos for the "Mark Complete" text link top-right. Rather than chasing
+   each one, force any link descendant of .ld-focus-header to coral. */
+.learndash-wrapper .ld-focus-header a,
+.learndash-wrapper .ld-focus-header a:visited,
+.learndash-wrapper .ld-focus-header button {
+  color: rgb(var(--color-primary)) !important;
+}
+.learndash-wrapper .ld-focus-header a:hover,
+.learndash-wrapper .ld-focus-header button:hover {
+  color: rgb(var(--color-primary-hover)) !important;
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

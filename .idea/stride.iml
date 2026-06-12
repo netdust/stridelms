@@ -10,14 +10,18 @@
       <sourceFolder url="file://$MODULE_DIR$/web/app/plugins/fluent-crm/vendor/wpfluent/framework/src/WPFluent" isTestSource="false" packagePrefix="FluentCrm\Framework\" />
       <sourceFolder url="file://$MODULE_DIR$/web/app/plugins/fluent-smtp/app" isTestSource="false" packagePrefix="FluentMail\App\" />
       <sourceFolder url="file://$MODULE_DIR$/web/app/plugins/fluent-smtp/includes" isTestSource="false" packagePrefix="FluentMail\Includes\" />
-      <sourceFolder url="file://$MODULE_DIR$/web/app/plugins/fluentform/app" isTestSource="false" packagePrefix="FluentForm\App\" />
-      <sourceFolder url="file://$MODULE_DIR$/web/app/plugins/fluentform/vendor/wpfluent/framework/src/WPFluent" isTestSource="false" packagePrefix="FluentForm\Framework\" />
       <sourceFolder url="file://$MODULE_DIR$/tests" isTestSource="true" packagePrefix="Stride\Tests\" />
       <sourceFolder url="file://$MODULE_DIR$/tests/Integration" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/tests/Unit" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/web/app/mu-plugins/stride-core" isTestSource="false" packagePrefix="Stride\" />
+      <sourceFolder url="file://$MODULE_DIR$/web/app/plugins/netdust-mail/src" isTestSource="false" packagePrefix="Netdust\Mail\" />
+      <sourceFolder url="file://$MODULE_DIR$/web/app/themes/stride" isTestSource="false" packagePrefix="stride\" />
+      <sourceFolder url="file://$MODULE_DIR$/web/app/plugins/netdust-lti/src" isTestSource="false" packagePrefix="NetdustLTI\" />
+      <sourceFolder url="file://$MODULE_DIR$/web/app/plugins/ntdst-audit/src/Bridges" isTestSource="true" packagePrefix="NTDST\Audit\Bridges\" />
       <sourceFolder url="file://$MODULE_DIR$/spec" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/bck/stride" isTestSource="false" packagePrefix="stride\" />
+      <sourceFolder url="file://$MODULE_DIR$/web/app/plugins/ntdst-assistant/src" isTestSource="false" packagePrefix="NtdstAssistant\" />
+      <sourceFolder url="file://$MODULE_DIR$/web/app/plugins/fluentform/app" isTestSource="false" packagePrefix="FluentForm\App\" />
+      <sourceFolder url="file://$MODULE_DIR$/web/app/plugins/fluentform/vendor/wpfluent/framework/src/WPFluent" isTestSource="false" packagePrefix="FluentForm\Framework\" />
       <excludeFolder url="file://$MODULE_DIR$/vendor/composer" />
       <excludeFolder url="file://$MODULE_DIR$/vendor/dompdf/dompdf" />
       <excludeFolder url="file://$MODULE_DIR$/vendor/dompdf/php-font-lib" />
@@ -131,6 +135,11 @@
       <excludeFolder url="file://$MODULE_DIR$/vendor/symfony/string" />
       <excludeFolder url="file://$MODULE_DIR$/vendor/symfony/var-dumper" />
       <excludeFolder url="file://$MODULE_DIR$/vendor/symfony/yaml" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/dg/bypass-finals" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/openspout/openspout" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/phpoffice/math" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/phpoffice/phpword" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/erusev/parsedown" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

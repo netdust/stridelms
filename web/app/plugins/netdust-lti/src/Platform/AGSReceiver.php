@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace NetdustLTI\Platform;
 
+use NetdustLTI\Platform\WPPlatform;
+use NetdustLTI\Shared\JsonResponseTrait;
 use WP_Error;
 
 use function absint;
@@ -25,6 +27,8 @@ use function is_wp_error;
  */
 final class AGSReceiver
 {
+    use JsonResponseTrait;
+
     /**
      * Handle an incoming grade submission request.
      *
@@ -40,24 +44,37 @@ final class AGSReceiver
      */
     public function handleGradeSubmission(): void
     {
+        try {
+            $this->processGradeSubmission();
+        } catch (\Throwable $e) {
+            ntdst_log('lti')->error('AGSReceiver fatal error', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            $this->sendJsonError('Internal error: ' . $e->getMessage(), 500);
+        }
+    }
+
+    private function processGradeSubmission(): void
+    {
         // Only accept POST requests
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            $this->sendJsonResponse(['error' => 'Method not allowed'], 405);
+            $this->sendJsonError('Method not allowed', 405);
         }
 
         // Validate bearer token
         $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
         if (!preg_match('/^Bearer\s+(.+)$/i', $authHeader, $matches)) {
-            $this->sendJsonResponse(['error' => 'Missing bearer token'], 401);
+            $this->sendJsonError('Missing bearer token', 401);
         }
 
         $token = $matches[1];
 
-        // Validate JWT and extract claims
-        $claims = $this->validateToken($token);
+        // Validate OAuth2 access token
+        $tokenData = $this->validateToken($token);
 
-        if (is_wp_error($claims)) {
-            $this->sendJsonResponse(['error' => $claims->get_error_message()], 401);
+        if (is_wp_error($tokenData)) {
+            $this->sendJsonError($tokenData->get_error_message(), 401);
         }
 
         // Parse score submission
@@ -65,18 +82,11 @@ final class AGSReceiver
         $data = json_decode($input, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
-            $this->sendJsonResponse(['error' => 'Invalid JSON body'], 400);
+            $this->sendJsonError('Invalid JSON body', 400);
         }
 
         if (!is_array($data)) {
-            $this->sendJsonResponse(['error' => 'Expected JSON object'], 400);
-        }
-
-        // Extract user from claims
-        $userId = $this->findUserByLtiSub($claims['sub'] ?? '');
-
-        if (!$userId) {
-            $this->sendJsonResponse(['error' => 'User not found'], 404);
+            $this->sendJsonError('Expected JSON object', 400);
         }
 
         // Extract score data
@@ -86,12 +96,24 @@ final class AGSReceiver
         $activityProgress = sanitize_text_field($data['activityProgress'] ?? 'Completed');
         $gradingProgress = sanitize_text_field($data['gradingProgress'] ?? 'FullyGraded');
 
+        // Extract user from score data (LTI AGS includes userId in score submission)
+        $ltiUserId = $data['userId'] ?? '';
+        if (empty($ltiUserId)) {
+            $this->sendJsonError('userId required in score data', 400);
+        }
+
+        $userId = $this->findUserByLtiSub($ltiUserId);
+        if (!$userId) {
+            $this->sendJsonError('User not found for userId: ' . $ltiUserId, 404);
+        }
+
         // Normalize score to 0-1 range
         $normalizedScore = $scoreMaximum > 0 ? $scoreGiven / $scoreMaximum : 0;
 
-        // Extract tool and resource from claims
-        $toolId = absint($claims['tool_id'] ?? 0);
-        $resourceLinkId = $claims['https://purl.imsglobal.org/spec/lti/claim/resource_link']['id'] ?? 'unknown';
+        // With library auth, we don't get tool_id from token
+        // Use 0 as generic tool ID (grades are keyed by resource_link_id)
+        $toolId = 0;
+        $resourceLinkId = $this->extractResourceLinkFromUrl();
 
         // Store grade
         $this->storeGrade($userId, $toolId, $resourceLinkId, $normalizedScore, $activityProgress, $comment);
@@ -99,7 +121,7 @@ final class AGSReceiver
         // Fire action hook for integrations
         do_action('lti_grade_received', $userId, $toolId, $normalizedScore, $activityProgress);
 
-        $this->sendJsonResponse(['success' => true], 200);
+        $this->sendJsonSuccess(['success' => true], 200);
     }
 
     /**
@@ -171,31 +193,53 @@ final class AGSReceiver
     }
 
     /**
-     * Validate JWT token using the platform's public key.
+     * Validate JWT access token using library.
      *
-     * @param string $token JWT token from Authorization header
-     * @return array|WP_Error Claims array on success, WP_Error on failure
+     * @param string $token JWT Bearer token from Authorization header
+     * @return array|WP_Error Token claims on success, WP_Error on failure
      */
     private function validateToken(string $token): array|WP_Error
     {
-        try {
-            $publicKey = get_option('netdust_lti_public_key');
+        // Create platform instance for verification
+        $platform = new WPPlatform();
 
-            if (!$publicKey) {
-                return new WP_Error('config_error', 'Public key not configured');
-            }
+        // Required scopes for grade submission
+        $requiredScopes = [
+            'https://purl.imsglobal.org/spec/lti-ags/scope/score',
+        ];
 
-            // Decode and validate JWT
-            $claims = \ceLTIc\LTI\Jwt\FirebaseClient::verify($token, $publicKey);
-
-            if (!$claims) {
-                return new WP_Error('invalid_token', 'Token verification failed');
-            }
-
-            return (array) $claims;
-        } catch (\Exception $e) {
-            return new WP_Error('token_error', $e->getMessage());
+        // Library verifies JWT signature and checks scopes
+        // Returns true if valid, modifies $requiredScopes to matched scopes
+        if (!$platform->verifyAuthorization($requiredScopes)) {
+            $reason = $platform->reason ?? 'Token verification failed';
+            ntdst_log('lti')->warning('AGSReceiver: Token validation failed', ['reason' => $reason]);
+            return new WP_Error('invalid_token', $reason);
         }
+
+        // Token is valid - return minimal data for grade storage
+        return [
+            'valid' => true,
+            'scopes' => $requiredScopes,
+        ];
+    }
+
+    /**
+     * Extract resource link ID from the grades URL.
+     *
+     * The URL is typically: /lti/platform/grades or /lti/platform/grades/{resource_id}
+     * For now we use a generic identifier since we're using a single grades endpoint.
+     */
+    private function extractResourceLinkFromUrl(): string
+    {
+        $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+
+        // Check if there's a resource ID in the URL
+        if (preg_match('#/lti/platform/grades/([^/]+)#', $requestUri, $matches)) {
+            return sanitize_text_field($matches[1]);
+        }
+
+        // Default resource link for the single grades endpoint
+        return 'default';
     }
 
     /**
@@ -230,17 +274,4 @@ final class AGSReceiver
         return null;
     }
 
-    /**
-     * Send JSON response and exit.
-     *
-     * @param array $data Response data
-     * @param int $status HTTP status code
-     */
-    private function sendJsonResponse(array $data, int $status): void
-    {
-        http_response_code($status);
-        header('Content-Type: application/json');
-        echo wp_json_encode($data);
-        exit;
-    }
 }

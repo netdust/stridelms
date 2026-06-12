@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace NetdustLTI\Tests\Unit;
 
-use NetdustLTI\Repositories\PlatformRepository;
+use NetdustLTI\ToolProvider\PlatformRepository;
 use Stride\Tests\TestCase;
 use WP_Error;
 use WP_Post;

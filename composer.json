@@ -32,7 +32,7 @@
     }
   ],
   "require": {
-    "php": ">=8.1",
+    "php": ">=8.3",
     "composer/installers": "^2.2",
     "vlucas/phpdotenv": "^5.5",
     "oscarotero/env": "^2.1",
@@ -45,7 +45,11 @@
     "wpackagist-plugin/fluentform": "^6.1",
     "wpackagist-plugin/fluent-smtp": "^2.2",
     "dompdf/dompdf": "^3.1",
-    "wpackagist-theme/kadence": "^1.4"
+    "wpackagist-theme/kadence": "^1.4",
+    "openspout/openspout": "^4",
+    "phpoffice/phpword": "^1",
+    "erusev/parsedown": "^1.7",
+    "wpackagist-plugin/redis-cache": "^2.8"
   },
   "require-dev": {
     "laravel/pint": "^1.18",
@@ -53,19 +57,22 @@
     "brain/monkey": "^2.6",
     "mockery/mockery": "^1.6",
     "lucatume/wp-browser": "^4.5",
-    "dg/bypass-finals": "^1.9"
+    "dg/bypass-finals": "^1.9",
+    "szepeviktor/phpstan-wordpress": "^2.0"
   },
   "autoload": {
     "psr-4": {
       "stride\\": "web/app/themes/stride/",
       "Stride\\": "web/app/mu-plugins/stride-core/",
       "Netdust\\Mail\\": "web/app/plugins/netdust-mail/src/",
-      "NetdustLTI\\": "web/app/plugins/netdust-lti/src/"
+      "NetdustLTI\\": "web/app/plugins/netdust-lti/src/",
+      "NtdstAssistant\\": "web/app/plugins/ntdst-assistant/src/"
     }
   },
   "autoload-dev": {
     "psr-4": {
-      "Stride\\Tests\\": "tests/"
+      "Stride\\Tests\\": "tests/",
+      "NTDST\\Audit\\Bridges\\": "web/app/plugins/ntdst-audit/src/Bridges/"
     }
   },
   "config": {
@@ -87,11 +94,14 @@
     "wordpress-install-dir": "web/wp"
   },
   "scripts": {
-    "lint": "pint --test",
-    "lint:fix": "pint",
+    "lint": "pint --test web/app/mu-plugins/stride-core web/app/mu-plugins/ntdst-core web/app/themes/stridence",
+    "lint:fix": "pint web/app/mu-plugins/stride-core web/app/mu-plugins/ntdst-core web/app/themes/stridence",
+    "lint:stan": "phpstan analyse --memory-limit=2G --no-progress",
     "test": "phpunit",
     "test:unit": "phpunit --testsuite Unit",
     "test:integration": "phpunit -c phpunit-integration.xml.dist",
-    "test:coverage": "phpunit --coverage-html coverage"
+    "test:coverage": "phpunit --coverage-html coverage",
+    "audit:drift": "bash scripts/audit-drift.sh",
+    "check:invariants": "bash scripts/check-invariants.sh"
   }
 }

@@ -10,8 +10,23 @@
 
 defined( 'ABSPATH' ) || exit;
 
-if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' ) ) && ( class_exists( 'LearnDash_ProPanel_Filtering' ) ) ) {
+if (
+	! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' )
+	&& class_exists( 'LearnDash_ProPanel_Filtering' )
+) {
+	/**
+	 * ProPanel reporting filter widget for courses.
+	 *
+	 * @since 4.17.0
+	 */
 	class LearnDash_ProPanel_Reporting_Filter_Courses extends LearnDash_ProPanel_Filtering {
+		/**
+		 * Registers filters and template paths.
+		 *
+		 * @since 4.17.0
+		 *
+		 * @return void
+		 */
 		public function __construct() {
 			$this->filter_key                = 'courses';
 			$this->filter_search_placeholder = __( 'Search Users', 'learndash' );
@@ -24,31 +39,94 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' ) ) && ( cl
 			add_filter( 'ld_propanel_reporting_activity_args', array( $this, 'filter_activity_args' ), 20, 3 );
 		}
 
+		/**
+		 * Normalizes course filter values from the request.
+		 *
+		 * @since 4.17.0
+		 *
+		 * @param array<string, mixed> $post_args Post arguments.
+		 * @param array<string, mixed> $_get      Request GET data.
+		 * @return array<string, mixed>
+		 */
 		public function filter_post_args( $post_args = array(), $_get = array() ) {
-			if ( ( isset( $_get['filters'][ $this->filter_key ] ) ) && ( ! empty( $_get['filters'][ $this->filter_key ] ) ) ) {
-				if ( is_string( $_get['filters'][ $this->filter_key ] ) ) {
-					$post_args['filters'][ $this->filter_key ] = explode( ',', $_get['filters'][ $this->filter_key ] );
+			if (
+				! isset( $post_args['filters'] )
+				|| ! is_array( $post_args['filters'] )
+			) {
+				$post_args['filters'] = array();
+			}
+
+			$req_filters = ( isset( $_get['filters'] ) && is_array( $_get['filters'] ) ) ? $_get['filters'] : array();
+			$key         = $this->filter_key;
+			if (
+				isset( $req_filters[ $key ] )
+				&& ! empty( $req_filters[ $key ] )
+			) {
+				$raw = $req_filters[ $key ];
+				if ( is_string( $raw ) ) {
+					$ids = explode( ',', $raw );
+				} elseif ( is_array( $raw ) ) {
+					$ids = $raw;
 				} else {
-					$post_args['filters'][ $this->filter_key ] = $_get['filters'][ $this->filter_key ];
+					$ids = array( $raw );
 				}
 
-				$post_args['filters'][ $this->filter_key ] = array_map( 'intval', $post_args['filters'][ $this->filter_key ] );
+				$int_ids = array();
+				foreach ( $ids as $id ) {
+					$int_ids[] = (int) $id;
+				}
+				$post_args['filters'][ $key ] = $int_ids;
 			}
 
 			return $post_args;
 		}
 
+		/**
+		 * Merges selected courses into activity query arguments.
+		 *
+		 * @since 4.17.0
+		 *
+		 * @param array<string, mixed> $activity_args Activity query arguments.
+		 * @param array<string, mixed> $post_data     Posted filter data.
+		 * @param array<string, mixed> $_get          Request GET data.
+		 * @return array<string, mixed>
+		 */
 		public function filter_activity_args( $activity_args = array(), $post_data = array(), $_get = array() ) {
+			$post_filters = ( isset( $post_data['filters'] ) && is_array( $post_data['filters'] ) ) ? $post_data['filters'] : array();
+			$course_key   = $this->filter_key;
+
 			if ( ! empty( $activity_args ) ) {
-				if ( ( isset( $post_data['filters'][ $this->filter_key ] ) ) && ( ! empty( $post_data['filters'][ $this->filter_key ] ) ) ) {
-					if ( ( ! isset( $activity_args['post_ids'] ) ) || ( empty( $activity_args['post_ids'] ) ) ) {
-						$activity_args['post_ids'] = $post_data['filters'][ $this->filter_key ];
+				if (
+					isset( $post_filters[ $course_key ] )
+					&& ! empty( $post_filters[ $course_key ] )
+				) {
+					if (
+						! isset( $activity_args['post_ids'] )
+						|| empty( $activity_args['post_ids'] )
+					) {
+						$activity_args['post_ids'] = $post_filters[ $course_key ];
 					}
-				} elseif ( ( ! isset( $activity_args['post_ids'] ) ) || ( empty( $activity_args['post_ids'] ) ) ) {
+				} elseif (
+					! isset( $activity_args['post_ids'] )
+					|| empty( $activity_args['post_ids'] )
+				) {
+					$filtered_user_ids = array();
+					if (
+						isset( $post_filters['users'] )
+						&& is_array( $post_filters['users'] )
+					) {
+						foreach ( $post_filters['users'] as $uid ) {
+							$filtered_user_ids[] = (int) $uid;
+						}
+					}
+
 					if ( learndash_is_admin_user( get_current_user_id() ) ) {
-						if ( ( empty( $activity_args['post_ids'] ) ) && ( ! empty( $post_data['filters']['users'] ) ) ) {
+						if (
+							empty( $activity_args['post_ids'] )
+							&& ! empty( $filtered_user_ids )
+						) {
 							$users_course_ids = array();
-							foreach ( $post_data['filters']['users'] as $user_id ) {
+							foreach ( $filtered_user_ids as $user_id ) {
 								$course_ids = learndash_user_get_enrolled_courses( $user_id, true );
 								if ( ! empty( $course_ids ) ) {
 									$users_course_ids = array_merge( $users_course_ids, $course_ids );
@@ -61,13 +139,14 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' ) ) && ( cl
 							}
 						}
 					} elseif ( learndash_is_group_leader_user( get_current_user_id() ) ) {
-						// Check if the this groups leader is a leader of this course
-						$group_ids = learndash_get_administrators_group_ids( get_current_user_id() );
+						// Ensure the group leader may access courses for the selected context.
+						$group_ids  = learndash_get_administrators_group_ids( get_current_user_id() );
+						$course_ids = array();
 						if ( ! empty( $group_ids ) ) {
-							// Now if we have a filtered user we filter the courses further to only include the courses
-							if ( ! empty( $post_data['filters']['users'] ) ) {
+							// When users are filtered, restrict courses to those users' groups.
+							if ( ! empty( $filtered_user_ids ) ) {
 								$user_group_ids = array();
-								foreach ( $post_data['filters']['users'] as $user_id ) {
+								foreach ( $filtered_user_ids as $user_id ) {
 									$user_group_ids = array_merge( $user_group_ids, learndash_get_users_group_ids( $user_id ) );
 								}
 
@@ -78,7 +157,6 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' ) ) && ( cl
 								}
 							}
 							if ( ! empty( $group_ids ) ) {
-								$course_ids = array();
 								foreach ( $group_ids as $group_id ) {
 									$group_course_ids = learndash_group_enrolled_courses( $group_id );
 									if ( ! empty( $group_course_ids ) ) {
@@ -107,14 +185,20 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' ) ) && ( cl
 			return $activity_args;
 		}
 
-
+		/**
+		 * Returns markup for the course filter select control.
+		 *
+		 * @since 4.17.0
+		 *
+		 * @return string
+		 */
 		public function filter_display() {
 			return '<select class="filter-courses select2" data-ajax--cache="true" data-allow-clear="true" data-placeholder="' . sprintf(
-				// translators: All Courses
+				// Translators: placeholder is the courses label.
 				esc_html_x( 'All %s', 'All Courses', 'learndash' ),
 				LearnDash_Custom_Label::get_label( 'courses' )
 			) . '"><option value="">' . sprintf(
-				// translators: All Courses
+				// Translators: placeholder is the courses label.
 				esc_html_x( 'All %s', 'All Courses', 'learndash' ),
 				LearnDash_Custom_Label::get_label( 'courses' )
 			) . '</option></select>';
@@ -128,31 +212,65 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' ) ) && ( cl
 		 *
 		 * @return array<string, mixed> The courses data.
 		 */
-		function filter_search() {
+		public function filter_search(): array {
 			$courses_data = array(
 				'total' => 0,
 				'items' => array(),
 			);
+
+			// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Verified by ProPanel filters_search handler.
+			$page = isset( $_GET['page'] ) ? absint( wp_unslash( $_GET['page'] ) ) : 1;
+			if ( $page < 1 ) {
+				$page = 1;
+			}
 
 			$course_query_args = array(
 				'post_type'      => 'sfwd-courses',
 				'post_status'    => 'publish',
 				'orderby'        => 'post_title',
 				'order'          => 'ASC',
-				// 's' => esc_attr( $_GET['search'] ),
 				'posts_per_page' => 10,
-				'offset'         => ( intval( $_GET['page'] ) - 1 ) * 10,
-				'paged'          => intval( $_GET['page'] ),
+				'offset'         => ( $page - 1 ) * 10,
+				'paged'          => $page,
 			);
 
-			if ( ( isset( $_GET['search'] ) ) && ( ! empty( $_GET['search'] ) ) ) {
-				$course_query_args['s'] = esc_attr( $_GET['search'] );
+			if (
+				isset( $_GET['search'] )
+				&& is_string( $_GET['search'] )
+				&& $_GET['search'] !== ''
+			) {
+				$course_query_args['s'] = sanitize_text_field( wp_unslash( $_GET['search'] ) );
+			}
+			// phpcs:enable WordPress.Security.NonceVerification.Recommended
+
+			$post_filters = ( isset( $this->post_data['filters'] ) && is_array( $this->post_data['filters'] ) )
+				? $this->post_data['filters']
+				: array();
+
+			$filter_groups = array();
+			if (
+				isset( $post_filters['groups'] )
+				&& is_array( $post_filters['groups'] )
+			) {
+				foreach ( $post_filters['groups'] as $gid ) {
+					$filter_groups[] = (int) $gid;
+				}
+			}
+
+			$filter_users_cf = array();
+			if (
+				isset( $post_filters['users'] )
+				&& is_array( $post_filters['users'] )
+			) {
+				foreach ( $post_filters['users'] as $uid ) {
+					$filter_users_cf[] = (int) $uid;
+				}
 			}
 
 			if ( learndash_is_admin_user( get_current_user_id() ) ) {
 				$groups_course_ids = array();
-				if ( ( isset( $this->post_data['filters']['groups'] ) ) && ( ! empty( $this->post_data['filters']['groups'] ) ) ) {
-					foreach ( $this->post_data['filters']['groups'] as $group_id ) {
+				if ( ! empty( $filter_groups ) ) {
+					foreach ( $filter_groups as $group_id ) {
 						$course_ids = learndash_group_enrolled_courses( $group_id );
 						if ( ! empty( $course_ids ) ) {
 							$groups_course_ids = array_merge( $groups_course_ids, $course_ids );
@@ -164,8 +282,8 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' ) ) && ( cl
 				}
 
 				$users_course_ids = array();
-				if ( ( isset( $this->post_data['filters']['users'] ) ) && ( ! empty( $this->post_data['filters']['users'] ) ) ) {
-					foreach ( $this->post_data['filters']['users'] as $user_id ) {
+				if ( ! empty( $filter_users_cf ) ) {
+					foreach ( $filter_users_cf as $user_id ) {
 						$course_ids = learndash_user_get_enrolled_courses( $user_id );
 						if ( ! empty( $course_ids ) ) {
 							$users_course_ids = array_merge( $users_course_ids, $course_ids );
@@ -176,7 +294,10 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' ) ) && ( cl
 					}
 				}
 
-				if ( ( ! empty( $groups_course_ids ) ) && ( ! empty( $users_course_ids ) ) ) {
+				if (
+					! empty( $groups_course_ids )
+					&& ! empty( $users_course_ids )
+				) {
 					$course_query_args['post__in'] = array_intersect( $groups_course_ids, $users_course_ids );
 				} elseif ( ! empty( $groups_course_ids ) ) {
 					$course_query_args['post__in'] = $groups_course_ids;
@@ -185,8 +306,8 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' ) ) && ( cl
 				}
 			} elseif ( learndash_is_group_leader_user( get_current_user_id() ) ) {
 				$groups_course_ids = array();
-				if ( ( isset( $this->post_data['filters']['groups'] ) ) && ( ! empty( $this->post_data['filters']['groups'] ) ) ) {
-					foreach ( $this->post_data['filters']['groups'] as $group_id ) {
+				if ( ! empty( $filter_groups ) ) {
+					foreach ( $filter_groups as $group_id ) {
 						$course_ids = learndash_group_enrolled_courses( $group_id );
 						if ( ! empty( $course_ids ) ) {
 							$groups_course_ids = array_merge( $groups_course_ids, $course_ids );
@@ -198,8 +319,8 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' ) ) && ( cl
 				}
 
 				$users_course_ids = array();
-				if ( ( isset( $this->post_data['filters']['users'] ) ) && ( ! empty( $this->post_data['filters']['users'] ) ) ) {
-					foreach ( $this->post_data['filters']['users'] as $user_id ) {
+				if ( ! empty( $filter_users_cf ) ) {
+					foreach ( $filter_users_cf as $user_id ) {
 						$course_ids = learndash_user_get_enrolled_courses( $user_id );
 						if ( ! empty( $course_ids ) ) {
 							$users_course_ids = array_merge( $users_course_ids, $course_ids );
@@ -210,14 +331,17 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' ) ) && ( cl
 					}
 				}
 
-				if ( ( ! empty( $groups_course_ids ) ) && ( ! empty( $users_course_ids ) ) ) {
+				if (
+					! empty( $groups_course_ids )
+					&& ! empty( $users_course_ids )
+				) {
 					$course_query_args['post__in'] = array_intersect( $groups_course_ids, $users_course_ids );
 				} elseif ( ! empty( $groups_course_ids ) ) {
 					$course_query_args['post__in'] = $groups_course_ids;
 				} elseif ( ! empty( $users_course_ids ) ) {
 					$course_query_args['post__in'] = $users_course_ids;
 				} else {
-					// If we don't have any filtered by group courses. Then grab all the courses the GL can manage.
+					// If no group or user filter, list every course this group leader may manage.
 					$group_ids = learndash_get_administrators_group_ids( get_current_user_id() );
 					if ( ! empty( $group_ids ) ) {
 						$course_ids = learndash_get_groups_courses_ids( get_current_user_id(), $group_ids );
@@ -253,35 +377,48 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' ) ) && ( cl
 					foreach ( $course_query->posts as $course ) {
 						$courses_data['items'][] = array(
 							'id'   => $course->ID,
-							'text' => strip_tags( $course->post_title ),
+							'text' => wp_strip_all_tags( $course->post_title ),
 						);
 					}
 				}
 			}
 
-			/**
-			 * Filter courses returned in search
-			 */
+			/** This filter is documented in includes/reports/templates/reporting-filters/groups/ld-propanel-reporting-filter-group.php. */
 			return apply_filters( 'ld_propanel_filter_search', $courses_data, $this->filter_key, $course_query_args );
 		}
 
-		function filter_build_table() {
+		/**
+		 * Renders the filter results table for courses.
+		 *
+		 * @since 4.17.0
+		 *
+		 * @return string
+		 */
+		public function filter_build_table() {
 			$this->filter_table_headers();
-			$container_type = $_GET['container_type'];
 
 			ob_start();
 			include ld_propanel_get_template( $this->filter_template_table );
-			return ob_get_clean();
+			$output = ob_get_clean();
+
+			return is_string( $output ) ? $output : '';
 		}
 
-		function filter_table_headers() {
-			if ( 'widget' == $this->post_data['container_type'] ) {
+		/**
+		 * Sets column headers based on container type.
+		 *
+		 * @since 4.17.0
+		 *
+		 * @return array<int|string, string>
+		 */
+		public function filter_table_headers() {
+			if ( 'widget' === $this->post_data['container_type'] ) {
 				$this->filter_headers = array(
 					'checkbox' => __( 'Checkbox', 'learndash' ),
 					'user'     => __( 'User', 'learndash' ),
 					'progress' => __( 'Progress', 'learndash' ),
 				);
-			} elseif ( 'full' == $this->post_data['container_type'] ) {
+			} elseif ( 'full' === $this->post_data['container_type'] ) {
 				$this->filter_headers = array(
 					'checkbox'    => __( 'Checkbox', 'learndash' ),
 					'user_id'     => __( 'User ID', 'learndash' ),
@@ -289,18 +426,26 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' ) ) && ( cl
 					'progress'    => __( 'Progress', 'learndash' ),
 					'last_update' => __( 'Completed On', 'learndash' ),
 				);
-			} elseif ( 'shortcode' == $this->post_data['container_type'] ) {
+			} elseif ( 'shortcode' === $this->post_data['container_type'] ) {
 				$this->filter_headers = array(
 					'user'     => __( 'User', 'learndash' ),
 					'progress' => __( 'Progress', 'learndash' ),
 				);
 			}
 
-			return apply_filters( 'ld-propanel-reporting-headers', $this->filter_headers, $this->filter_key );
+			return apply_filters( 'ld-propanel-reporting-headers', $this->filter_headers, $this->filter_key ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Legacy hook.
 		}
 
-		function filter_result_rows( $course_id ) {
-			// Set the initial response. In case all following queries fail.
+		/**
+		 * Builds HTML rows for a course activity result set.
+		 *
+		 * @since 4.17.0
+		 *
+		 * @param int $course_id Course post ID.
+		 * @return array<string, mixed>
+		 */
+		public function filter_result_rows( $course_id ) {
+			// Default response if queries return nothing.
 			$response = array(
 				'total_rows'  => 0,
 				'rows_html'   => '',
@@ -324,15 +469,16 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' ) ) && ( cl
 				$this->activity_query_args = ld_propanel_adjust_admin_users( $this->activity_query_args );
 				$this->activity_query_args = ld_propanel_convert_fewer_users( $this->activity_query_args );
 
-				/**
-				 * Get the goodies
-				 */
-				// error_log('course: activity_query_args<pre>'. print_r($this->activity_query_args, true) .'</pre>');
 				$activities = learndash_reports_get_activity( $this->activity_query_args );
-				// error_log('course: activities<pre>'. print_r($activities, true) .'</pre>');
 
-				if ( ( isset( $activities['results'] ) ) && ( ! empty( $activities['results'] ) ) ) {
-					if ( ( isset( $activities['pager'] ) ) && ( ! empty( $activities['pager'] ) ) ) {
+				if (
+					isset( $activities['results'] )
+					&& ! empty( $activities['results'] )
+				) {
+					if (
+						isset( $activities['pager'] )
+						&& ! empty( $activities['pager'] )
+					) {
 						$response['total_rows']  = $activities['pager']['total_items'];
 						$response['total_users'] = $activities['pager']['total_items'];
 
@@ -341,8 +487,6 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' ) ) && ( cl
 					}
 
 					foreach ( $activities['results'] as $activity ) {
-						// $response['user_ids'][$activity->user_id] = $activity->user_id;
-
 						$row      = array();
 						$row_html = '<tr>';
 
@@ -350,7 +494,7 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' ) ) && ( cl
 							ob_start();
 							include ld_propanel_get_template( $this->filter_template_row );
 							$row       = ob_get_clean();
-							$row_html .= '<td class="' . apply_filters( 'ld-propanel-column-class', 'ld-propanel-reporting-col-' . $header_key, $this->filter_key, $header_key, $this->post_data['container_type'] ) . '">' . $row . '</td>';
+							$row_html .= '<td class="' . apply_filters( 'ld-propanel-column-class', 'ld-propanel-reporting-col-' . $header_key, $this->filter_key, $header_key, $this->post_data['container_type'] ) . '">' . $row . '</td>'; // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Legacy hook.
 						}
 						$row_html              .= '</tr>';
 						$response['rows_html'] .= $row_html;
@@ -370,8 +514,6 @@ if ( ( ! class_exists( 'LearnDash_ProPanel_Reporting_Filter_Courses' ) ) && ( cl
 
 			return $response;
 		}
-
-		// End of functions
 	}
 }
 

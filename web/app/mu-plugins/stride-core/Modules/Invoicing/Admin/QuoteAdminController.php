@@ -7,6 +7,7 @@ namespace Stride\Modules\Invoicing\Admin;
 use Stride\Domain\Money;
 use Stride\Domain\QuoteStatus;
 use Stride\Modules\Edition\EditionRepository;
+use Stride\Modules\Invoicing\Helpers\QuoteCalculator;
 use Stride\Modules\Invoicing\QuoteCPT;
 use Stride\Modules\Invoicing\QuoteRepository;
 use Stride\Modules\Invoicing\QuoteService;
@@ -43,6 +44,8 @@ final class QuoteAdminController
 
         add_action('add_meta_boxes', [$this, 'registerMetaboxes']);
         add_action('save_post_' . QuoteCPT::POST_TYPE, [$this, 'handleSave'], 10, 2);
+        add_action('admin_notices', [$this, 'showAdminNotices']);
+        add_filter('post_updated_messages', [$this, 'customizeUpdateMessages']);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
         add_action('wp_ajax_stride_get_user_data', [$this, 'ajaxGetUserData']);
 
@@ -65,7 +68,7 @@ final class QuoteAdminController
             [$this, 'renderOverviewMetabox'],
             QuoteCPT::POST_TYPE,
             'normal',
-            'high'
+            'high',
         );
 
         // Notes metabox
@@ -75,7 +78,7 @@ final class QuoteAdminController
             [$this, 'renderNotesMetabox'],
             QuoteCPT::POST_TYPE,
             'normal',
-            'default'
+            'default',
         );
 
         // Status & actions sidebar
@@ -85,7 +88,7 @@ final class QuoteAdminController
             [$this, 'renderActionsMetabox'],
             QuoteCPT::POST_TYPE,
             'side',
-            'high'
+            'high',
         );
     }
 
@@ -102,14 +105,14 @@ final class QuoteAdminController
             'select2',
             'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css',
             [],
-            '4.1.0'
+            '4.1.0',
         );
         wp_enqueue_script(
             'select2',
             'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js',
             ['jquery'],
             '4.1.0',
-            true
+            true,
         );
 
         // Quote admin styles (from stride-core mu-plugin)
@@ -120,7 +123,7 @@ final class QuoteAdminController
                 'stride-quote-admin',
                 plugins_url('assets/css/admin/quote-admin.css', $basePath . '/stride-core.php'),
                 [],
-                filemtime($cssFile)
+                filemtime($cssFile),
             );
         }
 
@@ -132,7 +135,7 @@ final class QuoteAdminController
                 plugins_url('assets/js/admin/quote-admin.js', $basePath . '/stride-core.php'),
                 ['jquery', 'select2'],
                 filemtime($jsFile),
-                true
+                true,
             );
 
             $currentUser = wp_get_current_user();
@@ -197,7 +200,9 @@ final class QuoteAdminController
                 </div>
             <?php else: ?>
                 <?php foreach ($notes as $index => $note): ?>
-                    <?php if (!empty($note['_deleted'])) continue; ?>
+                    <?php if (!empty($note['_deleted'])) {
+                        continue;
+                    } ?>
                     <?php
                     $isCustomer = ($note['type'] ?? 'admin') === 'customer';
                     $typeClass = $isCustomer ? 'customer' : 'admin';
@@ -251,8 +256,8 @@ final class QuoteAdminController
     public function handleSave(int $postId, WP_Post $post): void
     {
         // Verify nonce
-        if (!isset($_POST['stride_quote_nonce']) ||
-            !wp_verify_nonce($_POST['stride_quote_nonce'], 'stride_save_quote')) {
+        if (!isset($_POST['stride_quote_nonce'])
+            || !wp_verify_nonce($_POST['stride_quote_nonce'], 'stride_save_quote')) {
             return;
         }
 
@@ -328,6 +333,27 @@ final class QuoteAdminController
             $updateData['valid_until'] = sanitize_text_field($_POST['ntdst_fields']['valid_until']);
         }
 
+        // Handle notes update
+        if (isset($_POST['ntdst_fields']['notes'])) {
+            $notesRaw = wp_unslash($_POST['ntdst_fields']['notes']);
+            $notes = is_string($notesRaw) ? json_decode($notesRaw, true) : $notesRaw;
+            if (is_array($notes)) {
+                $sanitized = [];
+                foreach ($notes as $note) {
+                    if (!is_array($note) || !empty($note['_deleted'])) {
+                        continue;
+                    }
+                    $sanitized[] = [
+                        'content' => sanitize_textarea_field($note['content'] ?? ''),
+                        'type'    => in_array($note['type'] ?? '', ['admin', 'customer'], true) ? $note['type'] : 'admin',
+                        'author'  => sanitize_text_field($note['author'] ?? ''),
+                        'date'    => sanitize_text_field($note['date'] ?? ''),
+                    ];
+                }
+                $updateData['notes'] = $sanitized;
+            }
+        }
+
         // Update if we have data
         if (!empty($updateData)) {
             $this->repository->updateMeta($postId, $updateData);
@@ -345,22 +371,103 @@ final class QuoteAdminController
             $sendCc = sanitize_email($_POST['stride_send_cc'] ?? '');
             if ($sendTo) {
                 do_action('stride/quote/send_email', $postId, $sendTo, $sendCc);
+                $this->setAdminNotice('success', sprintf(
+                    __('Offerte verzonden naar %s.', 'stride'),
+                    $sendTo,
+                ));
+                $this->suppressDefaultNotice();
             }
         }
 
         // Handle PDF regeneration
         if (!empty($_POST['stride_regenerate_pdf'])) {
             do_action('stride/quote/regenerate_pdf', $postId);
+            $pdfPath = ntdst_data()->get('vad_quote')->getMeta($postId, 'pdf_path');
+            if ($pdfPath) {
+                $this->setAdminNotice('success', __('PDF is opnieuw gegenereerd.', 'stride'));
+            } else {
+                $this->setAdminNotice('error', __('PDF genereren mislukt.', 'stride'));
+            }
+            $this->suppressDefaultNotice();
         }
 
         // Handle voucher/discount actions
         $this->handleVoucherActions($postId);
     }
 
+    /**
+     * Suppress WP's default "Post updated" notice by stripping the message query arg.
+     */
+    private function suppressDefaultNotice(): void
+    {
+        add_filter('redirect_post_location', function (string $location): string {
+            return remove_query_arg('message', $location);
+        });
+    }
+
+    /**
+     * Set an admin notice to show after redirect.
+     */
+    private function setAdminNotice(string $type, string $message): void
+    {
+        set_transient(
+            'stride_quote_notice_' . get_current_user_id(),
+            ['type' => $type, 'message' => $message],
+            30,
+        );
+    }
+
+    /**
+     * Replace default "Post updated" with quote-specific messages.
+     */
+    public function customizeUpdateMessages(array $messages): array
+    {
+        $messages[QuoteCPT::POST_TYPE] = [
+            0  => '',
+            1  => __('Offerte opgeslagen.', 'stride'),
+            2  => __('Offerte opgeslagen.', 'stride'),
+            3  => __('Offerte opgeslagen.', 'stride'),
+            4  => __('Offerte opgeslagen.', 'stride'),
+            5  => __('Offerte opgeslagen.', 'stride'),
+            6  => __('Offerte opgeslagen.', 'stride'),
+            7  => __('Offerte opgeslagen.', 'stride'),
+            8  => __('Offerte opgeslagen.', 'stride'),
+            9  => __('Offerte opgeslagen.', 'stride'),
+            10 => __('Offerte opgeslagen.', 'stride'),
+        ];
+
+        return $messages;
+    }
+
+    /**
+     * Show admin notices set during save.
+     */
+    public function showAdminNotices(): void
+    {
+        $screen = get_current_screen();
+        if (!$screen || $screen->post_type !== QuoteCPT::POST_TYPE) {
+            return;
+        }
+
+        $notice = get_transient('stride_quote_notice_' . get_current_user_id());
+        if (!$notice || !is_array($notice)) {
+            return;
+        }
+
+        delete_transient('stride_quote_notice_' . get_current_user_id());
+
+        $type = $notice['type'] === 'error' ? 'error' : 'success';
+        printf(
+            '<div class="notice notice-%s is-dismissible"><p>%s</p></div>',
+            esc_attr($type),
+            esc_html($notice['message']),
+        );
+    }
+
     private function processBillingData(array $input): array
     {
         $billing = [];
-        $fields = ['organisation', 'email', 'address', 'postal_code', 'city', 'vat_number', 'gln_number'];
+        $fields = ['company', 'email', 'address', 'postal_code', 'city', 'vat_number', 'gln_number'];
 
         foreach ($fields as $field) {
             if (isset($input[$field])) {
@@ -397,14 +504,13 @@ final class QuoteAdminController
             $subtotal += $total;
         }
 
-        $tax = (int) round($subtotal * 0.21);
-        $total = $subtotal + $tax;
+        $totals = QuoteCalculator::deriveTotalsFromCents($subtotal);
 
         return [
             'items' => $processedItems,
-            'subtotal' => $subtotal,
-            'tax' => $tax,
-            'total' => $total,
+            'subtotal' => $totals['subtotal'],
+            'tax' => $totals['tax'],
+            'total' => $totals['total'],
         ];
     }
 
@@ -434,22 +540,23 @@ final class QuoteAdminController
     {
         $quote = $this->quoteService->getQuote($postId, true);
         if (is_wp_error($quote)) {
+            ntdst_log('invoicing')->warning('Manual discount skipped: quote lookup failed', [
+                'quote_id' => $postId,
+                'error'    => $quote->get_error_code() . ': ' . $quote->get_error_message(),
+            ]);
+
             return;
         }
 
         $subtotal = (int) ($quote['subtotal'] ?? 0);
-        $discountCents = (int) round($amount * 100);
-        $discountCents = min($discountCents, $subtotal); // Can't discount more than subtotal
-
-        $taxableAmount = $subtotal - $discountCents;
-        $tax = (int) round($taxableAmount * 0.21);
-        $total = $taxableAmount + $tax;
+        // Discount is clamped to the subtotal by the derivation
+        $totals = QuoteCalculator::deriveTotalsFromCents($subtotal, (int) round($amount * 100));
 
         $this->repository->updateMeta($postId, [
             'voucher_code' => '',
-            'discount' => $discountCents,
-            'tax' => $tax,
-            'total' => $total,
+            'discount' => $totals['discount'],
+            'tax' => $totals['tax'],
+            'total' => $totals['total'],
         ]);
     }
 
@@ -457,18 +564,22 @@ final class QuoteAdminController
     {
         $quote = $this->quoteService->getQuote($postId, true);
         if (is_wp_error($quote)) {
+            ntdst_log('invoicing')->warning('Discount removal skipped: quote lookup failed', [
+                'quote_id' => $postId,
+                'error'    => $quote->get_error_code() . ': ' . $quote->get_error_message(),
+            ]);
+
             return;
         }
 
         $subtotal = (int) ($quote['subtotal'] ?? 0);
-        $tax = (int) round($subtotal * 0.21);
-        $total = $subtotal + $tax;
+        $totals = QuoteCalculator::deriveTotalsFromCents($subtotal);
 
         $this->repository->updateMeta($postId, [
             'voucher_code' => '',
             'discount' => 0,
-            'tax' => $tax,
-            'total' => $total,
+            'tax' => $totals['tax'],
+            'total' => $totals['total'],
         ]);
     }
 
@@ -506,9 +617,7 @@ final class QuoteAdminController
         ]];
 
         // Calculate totals
-        $subtotal = $unitPriceCents;
-        $tax = (int) round($subtotal * 0.21);
-        $total = $subtotal + $tax;
+        $totals = QuoteCalculator::deriveTotalsFromCents($unitPriceCents);
 
         // Generate quote number
         $quoteNumber = $this->repository->generateQuoteNumber();
@@ -535,10 +644,10 @@ final class QuoteAdminController
             'quote_number' => $quoteNumber,
             'status' => 'draft',
             'items' => $items,
-            'subtotal' => $subtotal,
+            'subtotal' => $totals['subtotal'],
             'discount' => 0,
-            'tax' => $tax,
-            'total' => $total,
+            'tax' => $totals['tax'],
+            'total' => $totals['total'],
             'billing' => $billing,
             'voucher_code' => '',
             'valid_until' => $validUntil,
@@ -575,10 +684,11 @@ final class QuoteAdminController
         wp_send_json_success([
             'email' => $user->user_email,
             'organisation' => get_user_meta($userId, 'organisation', true) ?: '',
-            'address' => get_user_meta($userId, 'billing_address', true) ?: '',
-            'postal_code' => get_user_meta($userId, 'billing_postal_code', true) ?: '',
+            'company' => get_user_meta($userId, 'billing_company', true) ?: '',
+            'address' => get_user_meta($userId, 'billing_address_1', true) ?: '',
+            'postal_code' => get_user_meta($userId, 'billing_postcode', true) ?: '',
             'city' => get_user_meta($userId, 'billing_city', true) ?: '',
-            'vat_number' => get_user_meta($userId, 'vat_number', true) ?: '',
+            'vat_number' => get_user_meta($userId, 'billing_vat', true) ?: '',
             'gln_number' => get_user_meta($userId, 'gln_number', true) ?: '',
         ]);
     }

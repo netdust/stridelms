@@ -14,6 +14,32 @@ require_once __DIR__ . '/QueryCache.php';
 
 class NTDST_Data_Model
 {
+    /**
+     * Friendly Data-API keys → wp_posts column they write to.
+     *
+     * The first four map to a `post_` prefix; everything else passes through.
+     * Keys outside this list AND outside the schema are treated as unregistered
+     * (logged via ntdst_log('data')->warning() and dropped).
+     */
+    public const WP_COLUMNS = [
+        'title'                 => 'post_title',
+        'content'               => 'post_content',
+        'excerpt'               => 'post_excerpt',
+        'post_status'           => 'post_status',
+        'post_author'           => 'post_author',
+        'post_parent'           => 'post_parent',
+        'post_date'             => 'post_date',
+        'post_date_gmt'         => 'post_date_gmt',
+        'post_name'             => 'post_name',
+        'menu_order'            => 'menu_order',
+        'comment_status'        => 'comment_status',
+        'ping_status'           => 'ping_status',
+        'post_password'         => 'post_password',
+        'post_content_filtered' => 'post_content_filtered',
+        'to_ping'               => 'to_ping',
+        'pinged'                => 'pinged',
+    ];
+
     protected string $post_type;
     protected array $schema;
     protected array $query_args = [];
@@ -31,7 +57,9 @@ class NTDST_Data_Model
         $this->meta_prefix = $meta_prefix;
 
         // Delegate cache time resolution to QueryCache
-        $this->cache_time = NTDST_Query_Cache::instance()->resolveCacheTime($cache_time);
+        $query_cache = NTDST_Query_Cache::instance();
+        $this->cache_time = $query_cache->resolveCacheTime($cache_time);
+        $query_cache->registerMetaPrefix($this->meta_prefix);
 
         $this->setupSanitizers();
         $this->setupValidators();
@@ -96,19 +124,79 @@ class NTDST_Data_Model
         return match ($type) {
             'int', 'integer' => 'absint',
             'float', 'double' => 'floatval',
-            'bool', 'boolean' => fn($v) => (bool) $v,
+            'bool', 'boolean' => fn($v) => $this->sanitizeBoolean($v),
             'email' => 'sanitize_email',
             'url' => 'esc_url_raw',
             'text' => 'sanitize_text_field',
             'textarea' => 'sanitize_textarea_field',
             'html', 'content' => fn($v) => wp_kses_post($v),
-            'array' => fn($v) => is_array($v) ? array_map('sanitize_text_field', $v) : [],
-            'json' => fn($v) => is_array($v) ? $v : json_decode($v, true),
+            'array' => fn($v) => is_array($v) ? $this->sanitizeNestedArray($v) : [],
+            'json' => fn($v) => $this->sanitizeJson($v),
             'relation' => fn($v) => is_array($v) ? array_map('absint', array_filter($v)) : (!empty($v) ? [absint($v)] : []),
             'gallery' => fn($v) => is_array($v) ? array_map('absint', array_filter($v)) : [],
             'repeater' => fn($v) => is_array($v) ? $this->sanitizeRepeater($v) : [],
             default => 'sanitize_text_field',
         };
+    }
+
+    /**
+     * Sanitize boolean values without treating non-empty strings like "false" as true.
+     */
+    protected function sanitizeBoolean($value): bool
+    {
+        if (function_exists('wp_validate_boolean')) {
+            return wp_validate_boolean($value);
+        }
+
+        if (is_string($value)) {
+            $normalized = strtolower(trim($value));
+            if (in_array($normalized, ['false', '0', 'no', 'off', ''], true)) {
+                return false;
+            }
+            if (in_array($normalized, ['true', '1', 'yes', 'on'], true)) {
+                return true;
+            }
+        }
+
+        return (bool) $value;
+    }
+
+    /**
+     * Sanitize JSON-like values to an array and reject invalid JSON strings.
+     */
+    protected function sanitizeJson($value): array
+    {
+        if (is_array($value)) {
+            return $this->sanitizeNestedArray($value);
+        }
+
+        if (!is_string($value) || trim($value) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+        return is_array($decoded) ? $this->sanitizeNestedArray($decoded) : [];
+    }
+
+    /**
+     * Recursively sanitize scalar values in a nested array while preserving structure.
+     */
+    protected function sanitizeNestedArray(array $value): array
+    {
+        $sanitized = [];
+
+        foreach ($value as $key => $item) {
+            $sanitized_key = is_string($key) ? sanitize_key($key) : $key;
+            if (is_array($item)) {
+                $sanitized[$sanitized_key] = $this->sanitizeNestedArray($item);
+            } elseif (is_bool($item) || is_int($item) || is_float($item) || $item === null) {
+                $sanitized[$sanitized_key] = $item;
+            } else {
+                $sanitized[$sanitized_key] = sanitize_text_field($item);
+            }
+        }
+
+        return $sanitized;
     }
 
     /**
@@ -212,16 +300,8 @@ class NTDST_Data_Model
         $sanitized = [];
 
         foreach ($data as $key => $value) {
-            // Handle core WordPress fields
-            // Note: Use 'post_status' not 'status' to avoid conflict with custom meta fields named 'status'
-            if (in_array($key, ['title', 'content', 'excerpt', 'post_status'])) {
-                $sanitized[$key] = match ($key) {
-                    'title' => sanitize_text_field($value),
-                    'content' => wp_kses_post($value),
-                    'excerpt' => sanitize_textarea_field($value),
-                    'post_status' => in_array($value, ['publish', 'draft', 'pending', 'private', 'trash', 'auto-draft', 'future']) ? $value : 'draft',
-                    default => sanitize_text_field($value),
-                };
+            if (isset(self::WP_COLUMNS[$key])) {
+                $sanitized[$key] = $this->sanitizeWpColumn($key, $value);
             } else {
                 // Custom field - use schema sanitizer
                 $sanitized[$key] = $this->sanitizeField($key, $value);
@@ -229,6 +309,59 @@ class NTDST_Data_Model
         }
 
         return $sanitized;
+    }
+
+    /**
+     * Sanitize a wp_posts column value. wp_insert_post calls sanitize_post()
+     * itself, so this only needs to cover keys that benefit from typed coercion
+     * or stricter cleaning than WP's catch-all sanitizer.
+     */
+    protected function sanitizeWpColumn(string $key, $value)
+    {
+        return match ($key) {
+            'title'                 => sanitize_text_field($value),
+            'content'               => wp_kses_post($value),
+            'excerpt'               => sanitize_textarea_field($value),
+            'post_content_filtered' => wp_kses_post($value),
+            'post_status'           => in_array($value, ['publish', 'draft', 'pending', 'private', 'trash', 'auto-draft', 'future'], true)
+                ? $value
+                : 'draft',
+            'post_author', 'post_parent', 'menu_order' => (int) $value,
+            'post_name'             => sanitize_title($value),
+            'comment_status', 'ping_status' => in_array($value, ['open', 'closed', ''], true) ? $value : '',
+            default                 => $value,
+        };
+    }
+
+    /**
+     * Log a warning when a caller passes keys that are neither WordPress
+     * columns nor registered schema fields. Drops the keys silently from
+     * the returned array — the warning is the contract signal.
+     *
+     * Called from create()/update() before sanitization, so typos surface
+     * as a clear "unregistered key" warning rather than a confusing
+     * "required field missing" validation error.
+     */
+    protected function warnUnregisteredKeys(array $data, string $operation): array
+    {
+        $allowed = array_flip(array_keys($this->schema)) + self::WP_COLUMNS;
+        $unknown = array_diff_key($data, $allowed);
+
+        if (empty($unknown)) {
+            return $data;
+        }
+
+        if (function_exists('ntdst_log')) {
+            ntdst_log('data')->warning(
+                sprintf('Unregistered key(s) passed to %s on %s', $operation, $this->post_type),
+                [
+                    'post_type' => $this->post_type,
+                    'keys'      => array_keys($unknown),
+                ],
+            );
+        }
+
+        return array_diff_key($data, $unknown);
     }
 
     /**
@@ -243,16 +376,23 @@ class NTDST_Data_Model
         $errors = [];
 
         foreach ($this->validators as $field => $rules) {
-            $value = $data[$field] ?? null;
+            $has_value = array_key_exists($field, $data);
+            $value = $has_value ? $data[$field] : null;
+            $is_empty = $value === null || $value === '' || (is_array($value) && $value === []);
 
-            // Check required - only for create operations, or if the field is being explicitly set
-            // For updates, missing fields are not an error (they keep their existing values)
-            if ($rules['required'] && !$isUpdate && (empty($value) && $value !== '0' && $value !== 0)) {
+            // Check required - only for create operations. For updates, missing fields keep existing values.
+            if ($rules['required'] && !$isUpdate && (!$has_value || $is_empty)) {
                 $errors[$field][] = sprintf('%s is required', $field);
+                continue;
             }
 
-            // Skip other validations if value is empty and not required
-            if (empty($value) && !$rules['required']) {
+            // Skip validations for fields that are not part of a partial update.
+            if (!$has_value) {
+                continue;
+            }
+
+            // Optional empty values are allowed, but explicit false/0/'0' still validate below.
+            if ($is_empty && !$rules['required']) {
                 continue;
             }
 
@@ -306,6 +446,8 @@ class NTDST_Data_Model
      */
     public function create(array $data)
     {
+        $data = $this->warnUnregisteredKeys($data, 'create');
+
         // Validate input
         $validation = $this->validateData($data);
         if (is_wp_error($validation)) {
@@ -327,17 +469,22 @@ class NTDST_Data_Model
             return $post_id;
         }
 
-        // Save meta data
-
+        // Save meta data. Roll back the post if any meta write genuinely fails.
         foreach ($this->extractMetaData($data) as $key => $value) {
-            update_post_meta($post_id, $key, $value);
+            if (!$this->updateMetaValue($post_id, $key, $value)) {
+                wp_delete_post($post_id, true);
+                $this->clearCache($post_id);
+                return new WP_Error('meta_update_failed', sprintf('Failed to update meta field %s', $key), ['status' => 500]);
+            }
         }
+
+        $this->clearCache($post_id);
 
         // Fire after hook
         do_action('ntdst_model_create_after', $this->post_type, $post_id, $data);
 
         // Return the newly created post with meta/fields
-        return $this->find($post_id);
+        return $this->find($post_id, true);
     }
 
     /**
@@ -355,6 +502,8 @@ class NTDST_Data_Model
             return new WP_Error('not_found', 'Post not found', ['status' => 404]);
         }
 
+        $data = $this->warnUnregisteredKeys($data, 'update');
+
         // Validate input - isUpdate=true skips required field validation for missing fields
         $validation = $this->validateData($data, true);
         if (is_wp_error($validation)) {
@@ -367,23 +516,37 @@ class NTDST_Data_Model
         // Fire before hook
         do_action('ntdst_model_update_before', $this->post_type, $id, $data);
 
+        $post_data = $this->extractPostData($data);
+        $previous_post_data = [];
+        foreach (array_keys($post_data) as $post_field) {
+            $previous_post_data[$post_field] = $existing->{$post_field} ?? null;
+        }
+
         // Update post data
-        if ($post_data = $this->extractPostData($data)) {
+        if ($post_data) {
             $result = wp_update_post($post_data + ['ID' => $id], true);
             if (is_wp_error($result)) {
                 return $result;
             }
         }
 
-        // Update meta data
-        foreach ($this->extractMetaData($data) as $key => $value) {
-            update_post_meta($id, $key, $value);
+        $meta_data = $this->extractMetaData($data);
+        $previous_meta = [];
+        foreach ($meta_data as $key => $value) {
+            $previous_meta[$key] = [
+                'exists' => metadata_exists('post', $id, $key),
+                'value' => get_post_meta($id, $key, true),
+            ];
+
+            if (!$this->updateMetaValue($id, $key, $value)) {
+                $this->restorePostData($id, $previous_post_data);
+                $this->restoreMetaData($id, $previous_meta);
+                $this->clearCache($id);
+                return new WP_Error('meta_update_failed', sprintf('Failed to update meta field %s', $key), ['status' => 500]);
+            }
         }
 
         $this->clearCache($id);
-        // Also clear the manager's cached meta and terms for this post
-        NTDST_Data_Manager::clearCache($id);
-
 
         // Fire after hook
         do_action('ntdst_model_update_after', $this->post_type, $id, $data);
@@ -401,31 +564,14 @@ class NTDST_Data_Model
      */
     public function find(int $id, bool $skipCache = false)
     {
-        // Use our super-fast query system with meta included
-        // Skip cache after mutations to ensure fresh data is returned
-        $results = NTDST_Data_Manager::getPostsFast([
-            'post_type' => $this->post_type,
-            'post_status' => 'any',
-            'p' => $id,
-            'posts_per_page' => 1,
-            'include_meta' => true,
-            'cache_time' => $skipCache ? 0 : $this->cache_time,
-        ]);
-
-        if (empty($results)) {
-            return new WP_Error('not_found', 'Post not found', ['status' => 404]);
-        }
-
-        $item = $results[0];
-
-        // Convert array result to WP_Post object for compatibility
         $post = get_post($id);
-        if (!$post) {
+        if (!$post || $post->post_type !== $this->post_type) {
+            NTDST_Data_Manager::clearCache($id);
             return new WP_Error('not_found', 'Post not found', ['status' => 404]);
         }
 
-        // Add meta and fields properties (expected by templates)
-        $post->meta = $item['meta'] ?? [];
+        $cache_time = $skipCache ? 0 : $this->cache_time;
+        $post->meta = NTDST_Data_Manager::getPostMetaFromCache($id, $cache_time);
         $post->fields = $this->formatMeta($post->meta);
 
         return $post;
@@ -460,6 +606,69 @@ class NTDST_Data_Model
     }
 
     /**
+     * Update a prefixed meta key and verify the write. WordPress returns false for both
+     * failures and unchanged values, so confirm the stored value before treating false as an error.
+     */
+    protected function updateMetaValue(int $id, string $metaKey, $value): bool
+    {
+        $result = update_post_meta($id, $metaKey, $value);
+
+        if ($result !== false) {
+            return true;
+        }
+
+        return $this->valuesMatch(get_post_meta($id, $metaKey, true), $value);
+    }
+
+    /**
+     * Restore post-table fields after a partial update failure.
+     */
+    protected function restorePostData(int $id, array $previousPostData): void
+    {
+        if (empty($previousPostData)) {
+            return;
+        }
+
+        wp_update_post($previousPostData + ['ID' => $id], true);
+    }
+
+    /**
+     * Restore meta fields after a partial update failure.
+     */
+    protected function restoreMetaData(int $id, array $previousMeta): void
+    {
+        foreach ($previousMeta as $key => $snapshot) {
+            $exists = is_array($snapshot) ? ($snapshot['exists'] ?? true) : true;
+            $value = is_array($snapshot) && array_key_exists('value', $snapshot) ? $snapshot['value'] : $snapshot;
+
+            if ($exists) {
+                update_post_meta($id, $key, $value);
+            } else {
+                delete_post_meta($id, $key);
+            }
+        }
+    }
+
+    /**
+     * Compare stored and intended values after WordPress maybe_unserialize handling.
+     */
+    protected function valuesMatch($stored, $expected): bool
+    {
+        if ($stored === $expected) {
+            return true;
+        }
+
+        // WP stores all meta as strings; the schema may sanitize to int/bool/etc.
+        // Treat scalar values as matching when their string representations are equal,
+        // so update_post_meta's "no-op" return-false doesn't trigger a batch rollback.
+        if (is_scalar($stored) && is_scalar($expected) && (string) $stored === (string) $expected) {
+            return true;
+        }
+
+        return maybe_serialize($stored) === maybe_serialize($expected);
+    }
+
+    /**
      * Update meta value for a post - convenience method with automatic error handling
      *
      * @param int $id Post ID
@@ -475,26 +684,25 @@ class NTDST_Data_Model
             return new WP_Error('not_found', 'Post not found', ['status' => 404]);
         }
 
-        // Get field schema for sanitization
-        $schema = $this->schema['fields'][$key] ?? null;
-        if ($schema) {
-            $field_type = $schema['type'] ?? 'text';
-            $sanitizer = $this->getDefaultSanitizer()[$field_type] ?? 'sanitize_text_field';
-
-            // Sanitize value
+        // Sanitize value based on this model's field schema.
+        $fieldSchema = $this->schema[$key] ?? null;
+        if ($fieldSchema && is_array($fieldSchema)) {
+            $fieldType = $fieldSchema['type'] ?? 'text';
+            $sanitizer = $this->getDefaultSanitizer($fieldType);
             if (is_callable($sanitizer)) {
                 $value = $sanitizer($value);
             }
         }
 
-        // Update meta with prefix
         $metaKey = $this->prefixMetaKey($key);
-        $result = update_post_meta($id, $metaKey, $value);
+        if (!$this->updateMetaValue($id, $metaKey, $value)) {
+            return new WP_Error('meta_update_failed', sprintf('Failed to update meta field %s', $metaKey), ['status' => 500]);
+        }
 
         // Clear cache for this post
         $this->clearCache($id);
 
-        return $result !== false;
+        return true;
     }
 
     /**
@@ -515,6 +723,8 @@ class NTDST_Data_Model
             return false;
         }
 
+        $previousMeta = [];
+
         foreach ($data as $key => $value) {
             // Get field schema for sanitization (schema IS the fields array)
             $fieldSchema = $this->schema[$key] ?? null;
@@ -526,18 +736,21 @@ class NTDST_Data_Model
                 }
             }
 
-            // update_post_meta returns meta_id, true, or false
-            // false can mean failure OR unchanged value (WordPress quirk)
-            // We don't fail on unchanged values, only on actual errors
             $metaKey = $this->prefixMetaKey($key);
-            update_post_meta($id, $metaKey, $value);
+            $previousMeta[$metaKey] = [
+                'exists' => metadata_exists('post', $id, $metaKey),
+                'value' => get_post_meta($id, $metaKey, true),
+            ];
+
+            if (!$this->updateMetaValue($id, $metaKey, $value)) {
+                $this->restoreMetaData($id, $previousMeta);
+                $this->clearCache($id);
+                return false;
+            }
         }
 
         // Clear cache once after all updates
         $this->clearCache($id);
-
-        // Also clear the static NTDST_Data_Manager cache
-        NTDST_Data_Manager::clearCache($id);
 
         return true;
     }
@@ -585,15 +798,13 @@ class NTDST_Data_Model
         // Fire before hook
         do_action('ntdst_model_delete_before', $this->post_type, $id);
 
-        $this->clearCache($id);
-        // Also clear the manager's cached meta and terms for this post
-        NTDST_Data_Manager::clearCache($id);
-
         $result = $force ? wp_delete_post($id, true) : wp_trash_post($id);
 
         if (!$result) {
             return new WP_Error('delete_failed', 'Failed to delete post', ['status' => 500]);
         }
+
+        $this->clearCache($id);
 
         // Fire after hook
         do_action('ntdst_model_delete_after', $this->post_type, $id);
@@ -615,7 +826,9 @@ class NTDST_Data_Model
 
         if (in_array($field, $core_fields)) {
             // Core WordPress field - add directly to query_args
-            $this->query_args[$field] = $value;
+            // Map post_name to 'name' for WP_Query compatibility.
+            $queryKey = ($field === 'post_name') ? 'name' : $field;
+            $this->query_args[$queryKey] = $value;
         } else {
             // Custom meta field - use meta_query with prefix
             if (!isset($this->query_args['meta_query'])) {
@@ -662,10 +875,11 @@ class NTDST_Data_Model
             } else {
                 // Other core fields - WP_Query doesn't support != for these
                 // Throw exception to fail loudly rather than silently returning wrong results
+                $this->query_args = [];
                 throw new \InvalidArgumentException(
-                    "whereNot() does not support negation for core field '{$field}'. " .
-                    "Supported fields: post_status, post_author, post_parent. " .
-                    "For other fields, use a custom meta field or filter results in PHP."
+                    "whereNot() does not support negation for core field '{$field}'. "
+                    . "Supported fields: post_status, post_author, post_parent. "
+                    . "For other fields, use a custom meta field or filter results in PHP.",
                 );
             }
         } else {
@@ -677,7 +891,7 @@ class NTDST_Data_Model
             $this->query_args['meta_query'][] = [
                 'key' => $this->prefixMetaKey($field),
                 'value' => $value,
-                'compare' => '!='
+                'compare' => '!=',
             ];
         }
 
@@ -707,7 +921,7 @@ class NTDST_Data_Model
             $this->query_args['meta_query'][] = [
                 'key' => $this->prefixMetaKey($field),
                 'value' => $values,
-                'compare' => 'IN'
+                'compare' => 'IN',
             ];
         }
 
@@ -841,6 +1055,9 @@ class NTDST_Data_Model
      * Query builder - OR where clause (starts a new OR relation)
      *
      * @return $this
+     *
+     * Note: this creates one flat root-level OR meta_query. It cannot express
+     * nested groups like A AND (B OR C); use a custom meta_query for those cases.
      *
      * Example:
      * $model->where('featured', true)
@@ -985,23 +1202,29 @@ class NTDST_Data_Model
      */
     public function get(): array
     {
-        // Use our super-fast query system
-        $posts = NTDST_Data_Manager::getPostsFast(array_merge([
-            'post_type' => $this->post_type,
-            'cache_time' => $this->cache_time,
-        ], $this->query_args));
-
-        $this->query_args = [];
-        return $posts;
+        try {
+            // Use our super-fast query system
+            return NTDST_Data_Manager::getPostsFast(array_merge([
+                'post_type' => $this->post_type,
+                'cache_time' => $this->cache_time,
+            ], $this->query_args));
+        } finally {
+            $this->query_args = [];
+        }
     }
 
     /**
-     * Get first result
+     * Get first result as a WP_Post with model meta/fields attached, matching find().
      */
     public function first()
     {
+        $cache_time = $this->query_args['cache_time'] ?? $this->cache_time;
         $results = $this->limit(1)->get();
-        return $results ? (object) $results[0] : null;
+        if (!$results) {
+            return null;
+        }
+
+        return $this->hydratePostFromResult($results[0], $cache_time);
     }
 
     /**
@@ -1017,13 +1240,11 @@ class NTDST_Data_Model
      */
     public function count(): int
     {
-        $query = new WP_Query(array_merge([
-            'post_type' => $this->post_type,
-            'fields' => 'ids',
-        ], $this->query_args));
-
-        $this->query_args = [];
-        return $query->found_posts;
+        try {
+            return $this->cachedCount($this->query_args);
+        } finally {
+            $this->query_args = [];
+        }
     }
 
     /**
@@ -1036,39 +1257,103 @@ class NTDST_Data_Model
     public function paginate(int $page = 1, int $per_page = 10): array
     {
         $page = max(1, $page);
+        $per_page = max(1, $per_page);
         $offset = ($page - 1) * $per_page;
 
-        // Get total count first
-        $total_query = new WP_Query(array_merge([
+        try {
+            // Get total count first
+            $total = $this->cachedCount($this->query_args);
+            $total_pages = (int) ceil($total / $per_page);
+
+            // Get paginated results
+            $this->query_args['posts_per_page'] = $per_page;
+            $this->query_args['offset'] = $offset;
+
+            $posts = NTDST_Data_Manager::getPostsFast(array_merge([
+                'post_type' => $this->post_type,
+                'cache_time' => $this->cache_time,
+            ], $this->query_args));
+
+            return [
+                'data' => $posts,
+                'pagination' => [
+                    'total' => $total,
+                    'per_page' => $per_page,
+                    'current_page' => $page,
+                    'total_pages' => $total_pages,
+                    'from' => $total > 0 ? $offset + 1 : 0,
+                    'to' => min($offset + $per_page, $total),
+                ],
+            ];
+        } finally {
+            $this->query_args = [];
+        }
+    }
+
+    /**
+     * Count matching posts with the same versioned QueryCache used for data queries.
+     */
+    protected function cachedCount(array $query_args): int
+    {
+        $queryCache = NTDST_Query_Cache::instance();
+        $cache_time = $queryCache->resolveCacheTime($query_args['cache_time'] ?? $this->cache_time);
+        unset($query_args['cache_time'], $query_args['include_meta'], $query_args['include_terms']);
+
+        $count_args = array_merge([
             'post_type' => $this->post_type,
+        ], $query_args, [
             'fields' => 'ids',
-        ], $this->query_args));
+            'posts_per_page' => 1,
+            'no_found_rows' => false,
+            'cache_count' => true,
+        ]);
 
-        $total = $total_query->found_posts;
-        $total_pages = ceil($total / $per_page);
+        $cache_key = $queryCache->generateKey($count_args, $this->post_type);
+        $cache_group = $queryCache->getGroup($this->post_type);
 
-        // Get paginated results
-        $this->query_args['posts_per_page'] = $per_page;
-        $this->query_args['offset'] = $offset;
+        if ($cache_time > 0) {
+            $cached = $queryCache->get($cache_key, $cache_group);
+            if ($cached !== false) {
+                return (int) $cached;
+            }
+        }
 
-        $posts = NTDST_Data_Manager::getPostsFast(array_merge([
-            'post_type' => $this->post_type,
-            'cache_time' => $this->cache_time,
-        ], $this->query_args));
+        $wp_query_args = $count_args;
+        unset($wp_query_args['cache_count']);
 
-        $this->query_args = [];
+        $query = new WP_Query($wp_query_args);
+        $total = (int) $query->found_posts;
 
-        return [
-            'data' => $posts,
-            'pagination' => [
-                'total' => $total,
-                'per_page' => $per_page,
-                'current_page' => $page,
-                'total_pages' => $total_pages,
-                'from' => $offset + 1,
-                'to' => min($offset + $per_page, $total),
-            ],
-        ];
+        if ($cache_time > 0) {
+            $queryCache->set($cache_key, $cache_group, $total, $cache_time);
+        }
+
+        return $total;
+    }
+
+    /**
+     * Hydrate a fast-query result into the same WP_Post shape returned by find().
+     */
+    protected function hydratePostFromResult(array $item, ?int $cache_time = null)
+    {
+        $id = (int) ($item['id'] ?? $item['ID'] ?? 0);
+        if ($id <= 0) {
+            return null;
+        }
+
+        $post = get_post($id);
+        if (!$post || $post->post_type !== $this->post_type) {
+            NTDST_Data_Manager::clearCache($id);
+            return null;
+        }
+
+        $post->meta = $item['meta'] ?? NTDST_Data_Manager::getPostMetaFromCache($id, $cache_time ?? $this->cache_time);
+        $post->fields = $this->formatMeta($post->meta);
+        if (isset($item['terms'])) {
+            $post->terms = $item['terms'];
+        }
+
+        return $post;
     }
 
     /**
@@ -1093,33 +1378,29 @@ class NTDST_Data_Model
     }
 
     /**
-     * Extract WordPress post data from input
+     * Extract WordPress post-table data from input, keyed for wp_insert_post /
+     * wp_update_post (i.e. mapped to their `post_*` column names where needed).
      */
     protected function extractPostData(array $data): array
     {
         $post = [];
-        // Note: Use 'post_status' not 'status' - 'status' is commonly used as meta field name
-        foreach (['title', 'content', 'excerpt', 'post_status'] as $field) {
-            if (isset($data[$field])) {
-                // post_status already has prefix, others need it
-                $key = ($field === 'post_status') ? $field : 'post_' . $field;
-                $post[$key] = $data[$field];
+        foreach (self::WP_COLUMNS as $inputKey => $columnName) {
+            if (array_key_exists($inputKey, $data)) {
+                $post[$columnName] = $data[$inputKey];
             }
         }
         return $post;
     }
 
     /**
-     * Extract custom meta data from input
+     * Extract custom meta data from input.
      *
-     * Filters out WordPress post fields, keeping only meta fields.
+     * Filters out WordPress post-table fields, keeping only meta fields.
      * Applies meta_prefix if configured.
-     * Note: Uses 'post_status' not 'status' since 'status' is commonly
-     * used as a meta field name (e.g., order fulfillment status).
      */
     protected function extractMetaData(array $data): array
     {
-        $meta = array_diff_key($data, array_flip(['title', 'content', 'excerpt', 'post_status']));
+        $meta = array_diff_key($data, self::WP_COLUMNS);
 
         // Apply prefix if configured
         if ($this->meta_prefix !== '') {
@@ -1150,6 +1431,23 @@ class NTDST_Data_Model
             return substr($key, strlen($this->meta_prefix));
         }
         return $key;
+    }
+
+    /**
+     * Decode array-like stored values without returning null on invalid JSON.
+     */
+    protected function decodeArrayField($value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        if (!is_string($value) || $value === '') {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+        return is_array($decoded) ? $decoded : [];
     }
 
     /**
@@ -1185,18 +1483,18 @@ class NTDST_Data_Model
             $formatted[$field] = match ($type) {
                 'int', 'integer' => (int) $value,
                 'float', 'double' => (float) $value,
-                'bool', 'boolean' => (bool) $value,
+                'bool', 'boolean' => $this->sanitizeBoolean($value),
                 'array' => is_array($value) ? $value : [],
-                'json' => is_array($value) ? $value : (is_string($value) && $value !== '' ? json_decode($value, true) : []),
-                'relation' => is_array($value) ? array_map('intval', $value) : (is_string($value) && $value !== '' ? json_decode($value, true) : []),
-                'gallery' => is_array($value) ? array_map('intval', $value) : (is_string($value) && $value !== '' ? json_decode($value, true) : []),
+                'json' => $this->decodeArrayField($value),
+                'relation' => array_map('intval', $this->decodeArrayField($value)),
+                'gallery' => array_map('intval', $this->decodeArrayField($value)),
                 'repeater' => $this->formatRepeaterField($value),
                 default => is_array($value) ? json_encode($value) : (string) ($value ?? ''),
             };
 
             // Additional sanitization for simple arrays only (not JSON/nested structures)
             if ($type === 'array' && is_array($formatted[$field])) {
-                $formatted[$field] = array_map('sanitize_text_field', $formatted[$field]);
+                $formatted[$field] = $this->sanitizeNestedArray($formatted[$field]);
             }
             // JSON fields are already sanitized when saved, don't re-sanitize on output
         }
@@ -1246,7 +1544,7 @@ class NTDST_Data_Manager
         self::$models[$name] = $model;
 
         // Auto-register metabox if this model has fields and is registered as a post type
-        if (!empty($config['fields']) && isset($config['label'])) {
+        if (!empty($config['fields']) && isset($config['label']) && ($config['auto_metabox'] ?? true)) {
             // Assumes ntdst_metabox() returns a valid metabox manager object
             if (function_exists('ntdst_metabox')) {
                 ntdst_metabox()->register($name, $config);
@@ -1268,6 +1566,18 @@ class NTDST_Data_Manager
     public function get(string $name): NTDST_Data_Model
     {
         return self::$models[$name] ?? $this->register($name);
+    }
+
+    /**
+     * Check whether a model has been explicitly registered.
+     *
+     * Unlike get(), this does NOT auto-create a phantom empty model as a
+     * side effect. Use this when iterating over post types to find ones
+     * that actually have schemas.
+     */
+    public function isRegistered(string $name): bool
+    {
+        return isset(self::$models[$name]);
     }
 
     /**
@@ -1347,7 +1657,11 @@ class NTDST_Data_Manager
             $wp_cached = wp_cache_get($post_id, "{$taxonomy}_relationships");
             if ($wp_cached !== false && is_array($wp_cached)) {
                 foreach ($wp_cached as $term) {
-                    if (is_object($term)) {
+                    if (!is_object($term)) {
+                        $term = get_term((int) $term, $taxonomy);
+                    }
+
+                    if (is_object($term) && !is_wp_error($term)) {
                         $terms[$taxonomy][] = [
                             'id'   => (int) $term->term_id,
                             'name' => $term->name,
@@ -1390,7 +1704,7 @@ class NTDST_Data_Manager
         global $wpdb;
         $results = $wpdb->get_results($wpdb->prepare(
             "SELECT meta_key, meta_value FROM {$wpdb->postmeta} WHERE post_id = %d",
-            $post_id
+            $post_id,
         ));
 
         $meta = [];
@@ -1429,7 +1743,7 @@ class NTDST_Data_Manager
              INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id
              INNER JOIN {$wpdb->terms} t ON tt.term_id = t.term_id
              WHERE tr.object_id = %d",
-            $post_id
+            $post_id,
         ));
 
         $terms = [];

@@ -164,14 +164,16 @@ test.describe('Network Requests', () => {
 test.describe('Scroll Behavior', () => {
   test('page is scrollable', async ({ page }) => {
     await page.goto('/');
+    // Allow late JS (Lenis/Alpine) to wire scroll handlers before sampling.
+    await page.waitForLoadState('networkidle');
 
-    // Get page height
     const pageHeight = await page.evaluate(() => document.body.scrollHeight);
     const viewportHeight = await page.evaluate(() => window.innerHeight);
 
     if (pageHeight > viewportHeight) {
-      // Page is scrollable
       await page.evaluate(() => window.scrollTo(0, 100));
+      // Wait one frame so the browser commits the scroll position.
+      await page.waitForTimeout(100);
       const scrollY = await page.evaluate(() => window.scrollY);
       expect(scrollY).toBeGreaterThan(0);
     }

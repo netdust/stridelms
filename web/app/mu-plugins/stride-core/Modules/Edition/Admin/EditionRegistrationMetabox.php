@@ -64,6 +64,9 @@ final class EditionRegistrationMetabox
         // Batch fetch user meta (organisation, phone, billing, vat)
         $userMeta = $this->batchGetUserMeta($userIds);
 
+        // Batch fetch quotes for this edition (indexed by registration_id)
+        $quotes = $this->batchGetQuotes($post->ID);
+
         ?>
         <?php $exportNonce = wp_create_nonce('stride_edition_admin'); ?>
         <div class="stride-edition-admin stride-registration-metabox">
@@ -99,24 +102,49 @@ final class EditionRegistrationMetabox
                                     <span class="dashicons dashicons-clipboard"></span>
                                     <?php esc_html_e('Presentielijst (Word)', 'stride'); ?>
                                 </a>
+                                <div class="stride-export-divider" role="separator" aria-hidden="true"></div>
+                                <a href="<?php echo esc_url(admin_url('admin-ajax.php?action=stride_export_registrations&type=files&edition_id=' . $this->currentEditionId . '&nonce=' . $exportNonce)); ?>">
+                                    <span class="dashicons dashicons-portfolio"></span>
+                                    <?php esc_html_e('Uploads (ZIP)', 'stride'); ?>
+                                </a>
+                                <a href="<?php echo esc_url(admin_url('admin-ajax.php?action=stride_export_registrations&type=bundle&edition_id=' . $this->currentEditionId . '&nonce=' . $exportNonce)); ?>">
+                                    <span class="dashicons dashicons-archive"></span>
+                                    <?php esc_html_e('Volledig pakket (ZIP)', 'stride'); ?>
+                                </a>
                             </div>
                         </div>
                     <?php endif; ?>
                 </div>
 
                 <div class="stride-tab-content active" data-tab="deelnemers">
-                    <?php $this->renderRegistrationsTab($registrations, $users, $userMeta); ?>
+                    <?php $this->renderRegistrationsTab($registrations, $users, $userMeta, $quotes); ?>
                 </div>
 
                 <div class="stride-tab-content" data-tab="aanwezigheid">
                     <?php $this->renderAttendanceTab($post, $registrations, $users, $userMeta); ?>
                 </div>
             </div>
+
+            <div id="stride-registration-modal" class="stride-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="stride-registration-modal-title">
+                <div class="stride-modal-backdrop" data-stride-modal-close></div>
+                <div class="stride-modal-dialog">
+                    <header class="stride-modal-header">
+                        <h2 id="stride-registration-modal-title" class="stride-modal-title"></h2>
+                        <button type="button" class="stride-modal-close" data-stride-modal-close aria-label="<?php esc_attr_e('Sluiten', 'stride'); ?>">
+                            <span class="dashicons dashicons-no-alt"></span>
+                        </button>
+                    </header>
+                    <div class="stride-modal-content"></div>
+                    <div class="stride-modal-skeleton" hidden>
+                        <p><?php esc_html_e('Laden…', 'stride'); ?></p>
+                    </div>
+                </div>
+            </div>
         </div>
         <?php
     }
 
-    private function renderRegistrationsTab(array $registrations, array $users, array $userMeta): void
+    private function renderRegistrationsTab(array $registrations, array $users, array $userMeta, array $quotes = []): void
     {
         if (empty($registrations)) {
             ?>
@@ -145,16 +173,94 @@ final class EditionRegistrationMetabox
                     <?php
                     $userId = (int) $registration['user_id'];
                     $user = $users[$userId] ?? null;
-                    if (!$user) {
+                    $regId = (int) $registration['id'];
+                    $registeredAt = $registration['registered_at'] ?? '';
+
+                    // Anonymised or hard-deleted user: faded row, no actions
+                    $anonymisedAt = $user ? (int) get_user_meta($userId, '_stride_anonymised_at', true) : 0;
+                    if (!$user || $anonymisedAt > 0) {
+                        $displayName = $user
+                            ? $user->display_name
+                            : sprintf(__('Gebruiker #%d (verwijderd)', 'stride'), $userId);
+                        $subtitle = $anonymisedAt > 0
+                            ? sprintf(__('Geanonimiseerd op %s', 'stride'), date_i18n('j M Y', $anonymisedAt))
+                            : __('Account verwijderd', 'stride');
+                        ?>
+                        <tr class="registration-row stride-row-anonymised" style="color:#646970;">
+                            <td class="column-name">
+                                <span style="font-style:italic;"><?php echo esc_html($displayName); ?></span>
+                                <div style="font-size:11px;color:#8c8f94;"><?php echo esc_html($subtitle); ?></div>
+                            </td>
+                            <td class="column-email">&mdash;</td>
+                            <td class="column-org">&mdash;</td>
+                            <td class="column-status">
+                                <span class="stride-status-badge"><?php esc_html_e('Inactief', 'stride'); ?></span>
+                            </td>
+                            <td class="column-date">
+                                <?php echo $registeredAt ? esc_html(date_i18n('j M Y', strtotime($registeredAt))) : '&mdash;'; ?>
+                            </td>
+                            <td class="column-actions">&mdash;</td>
+                        </tr>
+                        <?php
                         continue;
                     }
 
-                    $regId = (int) $registration['id'];
                     $status = RegistrationStatus::tryFrom($registration['status'] ?? '') ?? RegistrationStatus::Pending;
-                    $registeredAt = $registration['registered_at'] ?? '';
                     $completionTasks = $this->getCompletionTasks($registration);
                     $meta = $userMeta[$userId] ?? [];
-                    $organisation = $meta['organisation'] ?? $meta['company'] ?? '';
+                    $organisation = $meta['organisation'] ?? '';
+
+                    // Determine admin-facing badge and actions
+                    $badgeLabel = $status->label();
+                    $badgeClass = $status->value;
+                    $showApproveReject = false;
+                    $showPostApprove = false;
+
+                    if ($status === RegistrationStatus::Pending && !empty($completionTasks)) {
+                        $hasIncompleteUserTasks = false;
+                        foreach ($completionTasks as $type => $task) {
+                            if ($type === 'approval' || $type === 'post_approval') {
+                                continue;
+                            }
+                            if (($task['status'] ?? 'pending') !== 'completed') {
+                                $hasIncompleteUserTasks = true;
+                                break;
+                            }
+                        }
+
+                        if ($hasIncompleteUserTasks) {
+                            $badgeLabel = __('Taken openstaand', 'stride');
+                        } elseif (isset($completionTasks['approval'])) {
+                            // User tasks done, waiting on admin approval
+                            $showApproveReject = true;
+                        } else {
+                            // All tasks done, no approval required — shouldn't stay pending long
+                            $badgeLabel = __('Wordt verwerkt', 'stride');
+                        }
+                    } elseif ($status === RegistrationStatus::Pending) {
+                        // No completion tasks — edition uses manual approval
+                        $showApproveReject = true;
+                    }
+
+                    // Post-course approval: confirmed registration with pending post_approval
+                    if ($status === RegistrationStatus::Confirmed && !empty($completionTasks['post_approval'])) {
+                        $postApprovalStatus = $completionTasks['post_approval']['status'] ?? 'pending';
+                        if ($postApprovalStatus !== 'completed') {
+                            // Check if post user tasks are done
+                            $postUserDone = true;
+                            foreach (['post_evaluation', 'post_documents'] as $pt) {
+                                if (isset($completionTasks[$pt]) && ($completionTasks[$pt]['status'] ?? 'pending') !== 'completed') {
+                                    $postUserDone = false;
+                                    break;
+                                }
+                            }
+                            if ($postUserDone) {
+                                $showPostApprove = true;
+                                $badgeLabel = __('Aftekenen vereist', 'stride');
+                                $badgeClass = 'confirmed';
+                            }
+                        }
+                    }
                     ?>
                     <tr class="registration-row stride-toggle-detail" data-reg-id="<?php echo esc_attr((string) $regId); ?>">
                         <td class="column-name">
@@ -164,15 +270,15 @@ final class EditionRegistrationMetabox
                         <td class="column-email"><?php echo esc_html($user->user_email); ?></td>
                         <td class="column-org"><?php echo esc_html($organisation); ?></td>
                         <td class="column-status">
-                            <span class="stride-status-badge <?php echo esc_attr($status->value); ?>">
-                                <?php echo esc_html($status->label()); ?>
+                            <span class="stride-status-badge <?php echo esc_attr($badgeClass); ?>">
+                                <?php echo esc_html($badgeLabel); ?>
                             </span>
                         </td>
                         <td class="column-date">
                             <?php echo $registeredAt ? esc_html(date_i18n('j M Y', strtotime($registeredAt))) : '&mdash;'; ?>
                         </td>
                         <td class="column-actions">
-                            <?php if ($status === RegistrationStatus::Pending): ?>
+                            <?php if ($showApproveReject): ?>
                                 <button type="button" class="button-link stride-confirm-reg" title="<?php esc_attr_e('Goedkeuren', 'stride'); ?>">
                                     <span class="dashicons dashicons-yes-alt"></span>
                                 </button>
@@ -180,11 +286,45 @@ final class EditionRegistrationMetabox
                                     <span class="dashicons dashicons-dismiss"></span>
                                 </button>
                             <?php endif; ?>
+                            <?php if ($showPostApprove): ?>
+                                <button type="button" class="button-link stride-approve-post-course" title="<?php esc_attr_e('Aftekenen', 'stride'); ?>">
+                                    <span class="dashicons dashicons-yes-alt" style="color: #2271b1;"></span>
+                                </button>
+                            <?php endif; ?>
+
+                            <span class="stride-action-divider" aria-hidden="true"></span>
+
+                            <button type="button"
+                                    class="button-link stride-view-enrollment"
+                                    data-reg-id="<?php echo esc_attr((string) $regId); ?>"
+                                    title="<?php esc_attr_e('Inschrijvingsgegevens bekijken', 'stride'); ?>">
+                                <span class="dashicons dashicons-clipboard"></span>
+                            </button>
+                            <button type="button"
+                                    class="button-link stride-view-completion"
+                                    data-reg-id="<?php echo esc_attr((string) $regId); ?>"
+                                    title="<?php esc_attr_e('Voltooiingsdata bekijken', 'stride'); ?>">
+                                <span class="dashicons dashicons-yes"></span>
+                            </button>
+                            <?php if (!empty($quotes[$regId]['id'])): ?>
+                                <a href="<?php echo esc_url((string) get_edit_post_link((int) $quotes[$regId]['id'])); ?>"
+                                   class="button-link stride-view-quote"
+                                   title="<?php esc_attr_e('Offerte bekijken', 'stride'); ?>"
+                                   target="_blank" rel="noopener">
+                                    <span class="dashicons dashicons-media-text"></span>
+                                </a>
+                            <?php else: ?>
+                                <span class="button-link stride-view-quote disabled"
+                                      title="<?php esc_attr_e('Geen offerte', 'stride'); ?>"
+                                      aria-disabled="true">
+                                    <span class="dashicons dashicons-media-text"></span>
+                                </span>
+                            <?php endif; ?>
                         </td>
                     </tr>
                     <tr class="registration-detail" data-reg-id="<?php echo esc_attr((string) $regId); ?>" style="display:none">
                         <td colspan="6">
-                            <?php $this->renderDetailRow($user, $meta, $registration, $completionTasks); ?>
+                            <?php $this->renderDetailRow($user, $meta, $registration, $completionTasks, $quotes[$regId] ?? null); ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -193,12 +333,17 @@ final class EditionRegistrationMetabox
         <?php
     }
 
-    private function renderDetailRow(\WP_User $user, array $meta, array $registration, array $completionTasks): void
+    private function renderDetailRow(\WP_User $user, array $meta, array $registration, array $completionTasks, ?array $quote = null): void
     {
         $phone = $meta['phone'] ?? '';
-        $company = $meta['company'] ?? $meta['organisation'] ?? '';
-        $vatNumber = $meta['vat_number'] ?? '';
+        $organisation = $meta['organisation'] ?? '';
+        $department = $meta['department'] ?? '';
+        $company = $meta['billing_company'] ?? '';
+        $vatNumber = $meta['billing_vat'] ?? '';
         $notes = $registration['notes'] ?? '';
+
+        $hasContent = ($phone || $organisation || $department || $vatNumber || $notes
+            || ($company && $company !== $organisation));
         ?>
         <div class="stride-detail-panels">
             <dl class="stride-detail-dl">
@@ -206,8 +351,16 @@ final class EditionRegistrationMetabox
                     <dt><?php esc_html_e('Telefoon', 'stride'); ?></dt>
                     <dd><?php echo esc_html($phone); ?></dd>
                 <?php endif; ?>
-                <?php if ($company): ?>
+                <?php if ($organisation): ?>
                     <dt><?php esc_html_e('Organisatie', 'stride'); ?></dt>
+                    <dd><?php echo esc_html($organisation); ?></dd>
+                <?php endif; ?>
+                <?php if ($department): ?>
+                    <dt><?php esc_html_e('Afdeling', 'stride'); ?></dt>
+                    <dd><?php echo esc_html($department); ?></dd>
+                <?php endif; ?>
+                <?php if ($company && $company !== $organisation): ?>
+                    <dt><?php esc_html_e('Facturatie bedrijf', 'stride'); ?></dt>
                     <dd><?php echo esc_html($company); ?></dd>
                 <?php endif; ?>
                 <?php if ($vatNumber): ?>
@@ -218,44 +371,10 @@ final class EditionRegistrationMetabox
                     <dt><?php esc_html_e('Opmerking', 'stride'); ?></dt>
                     <dd><?php echo esc_html($notes); ?></dd>
                 <?php endif; ?>
-                <?php if (!$phone && !$company && !$vatNumber && !$notes && empty($completionTasks)): ?>
+                <?php if (!$hasContent): ?>
                     <dd class="stride-detail-empty"><?php esc_html_e('Geen aanvullende gegevens.', 'stride'); ?></dd>
                 <?php endif; ?>
             </dl>
-
-            <?php if (!empty($completionTasks)): ?>
-                <ul class="stride-task-list">
-                    <?php foreach ($completionTasks as $task): ?>
-                        <?php
-                        $taskStatus = $task['status'] ?? 'pending';
-                        $taskLabel = $task['label'] ?? $task['type'] ?? '';
-                        $taskData = $task['data'] ?? [];
-                        ?>
-                        <li class="stride-task-item <?php echo esc_attr($taskStatus); ?>">
-                            <span class="dashicons <?php echo $taskStatus === 'completed' ? 'dashicons-yes-alt' : 'dashicons-clock'; ?>"></span>
-                            <span class="task-label"><?php echo esc_html($taskLabel); ?></span>
-
-                            <?php if (!empty($taskData['files']) && is_array($taskData['files'])): ?>
-                                <div class="task-files">
-                                    <?php foreach ($taskData['files'] as $fileId): ?>
-                                        <?php
-                                        $url = wp_get_attachment_url((int) $fileId);
-                                        $filename = basename(get_attached_file((int) $fileId) ?: '');
-                                        if (!$url) {
-                                            continue;
-                                        }
-                                        ?>
-                                        <a href="<?php echo esc_url($url); ?>" target="_blank" class="task-file-link">
-                                            <span class="dashicons dashicons-media-default"></span>
-                                            <?php echo esc_html($filename ?: __('Bestand', 'stride')); ?>
-                                        </a>
-                                    <?php endforeach; ?>
-                                </div>
-                            <?php endif; ?>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            <?php endif; ?>
         </div>
         <?php
     }
@@ -331,7 +450,7 @@ final class EditionRegistrationMetabox
                             if (!$user) {
                                 continue;
                             }
-                            $organisation = $userMeta[$userId]['organisation'] ?? $userMeta[$userId]['company'] ?? '';
+                            $organisation = $userMeta[$userId]['organisation'] ?? '';
                             ?>
                             <tr data-user-id="<?php echo esc_attr((string) $userId); ?>">
                                 <td class="column-name"><?php echo esc_html($user->display_name); ?></td>
@@ -426,7 +545,7 @@ final class EditionRegistrationMetabox
             <p class="description" style="margin: 0 0 8px; font-size: 11px; color: #646970;">
                 <?php echo esc_html(sprintf(
                     __('%d deelnemer(s) direct ingeschreven via LearnDash.', 'stride'),
-                    count($users)
+                    count($users),
                 )); ?>
             </p>
             <table class="wp-list-table widefat fixed striped stride-registration-table">
@@ -472,7 +591,7 @@ final class EditionRegistrationMetabox
 
         return $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$table} WHERE edition_id = %d ORDER BY registered_at DESC",
-            $editionId
+            $editionId,
         ), ARRAY_A) ?: [];
     }
 
@@ -490,7 +609,7 @@ final class EditionRegistrationMetabox
 
         global $wpdb;
         $userIds = array_map('intval', array_unique($userIds));
-        $metaKeys = ['organisation', 'company', 'phone', 'billing_address', 'vat_number'];
+        $metaKeys = ['phone', 'organisation', 'billing_company', 'billing_vat', 'billing_address_1', 'department'];
 
         $userPlaceholders = implode(',', array_fill(0, count($userIds), '%d'));
         $keyPlaceholders = implode(',', array_fill(0, count($metaKeys), '%s'));
@@ -498,7 +617,7 @@ final class EditionRegistrationMetabox
         $results = $wpdb->get_results($wpdb->prepare(
             "SELECT user_id, meta_key, meta_value FROM {$wpdb->usermeta}
              WHERE user_id IN ({$userPlaceholders}) AND meta_key IN ({$keyPlaceholders})",
-            ...array_merge($userIds, $metaKeys)
+            ...array_merge($userIds, $metaKeys),
         ));
 
         $meta = [];
@@ -506,6 +625,16 @@ final class EditionRegistrationMetabox
             $meta[(int) $row->user_id][$row->meta_key] = $row->meta_value;
         }
         return $meta;
+    }
+
+    private function getEnrollmentData(array $registration): array
+    {
+        $data = $registration['enrollment_data'] ?? '';
+        if (is_string($data) && $data !== '') {
+            $decoded = json_decode($data, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+        return is_array($data) ? $data : [];
     }
 
     private function getCompletionTasks(array $registration): array
@@ -537,6 +666,35 @@ final class EditionRegistrationMetabox
         }
 
         return ['present' => $present, 'total' => $total];
+    }
+
+    /**
+     * Batch fetch quotes for an edition, indexed by registration_id.
+     *
+     * @return array<int, array{id: int, quote_number: string, status: string, total: int}>
+     */
+    private function batchGetQuotes(int $editionId): array
+    {
+        $results = ntdst_data()->get('vad_quote')
+            ->where('edition_id', $editionId)
+            ->where('post_status', 'publish')
+            ->withMeta()
+            ->get();
+
+        $indexed = [];
+        foreach ($results as $quote) {
+            $regId = (int) ($quote['meta']['registration_id'] ?? 0);
+            if ($regId > 0) {
+                $indexed[$regId] = [
+                    'id' => (int) $quote['id'],
+                    'quote_number' => $quote['meta']['quote_number'] ?? '',
+                    'status' => $quote['meta']['status'] ?? '',
+                    'total' => (int) ($quote['meta']['total'] ?? 0),
+                ];
+            }
+        }
+
+        return $indexed;
     }
 
     private function getStatusLabel(string $status): string

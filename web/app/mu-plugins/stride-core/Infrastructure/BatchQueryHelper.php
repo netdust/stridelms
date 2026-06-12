@@ -35,7 +35,7 @@ final class BatchQueryHelper
              FROM {$wpdb->postmeta}
              WHERE post_id IN ({$postPlaceholders})
              AND meta_key IN ({$keyPlaceholders})",
-            ...array_merge($postIds, $metaKeys)
+            ...array_merge($postIds, $metaKeys),
         ));
 
         $meta = [];
@@ -81,7 +81,7 @@ final class BatchQueryHelper
              FROM {$table}
              WHERE edition_id IN ({$placeholders}) AND status = 'confirmed'
              GROUP BY edition_id",
-            ...$editionIds
+            ...$editionIds,
         ));
 
         $counts = array_fill_keys($editionIds, 0);
@@ -181,7 +181,7 @@ final class BatchQueryHelper
              INNER JOIN {$wpdb->terms} t ON tt.term_id = t.term_id
              WHERE tr.object_id IN ({$placeholders})
              AND tt.taxonomy = 'ld_course_tag'",
-            ...$courseIds
+            ...$courseIds,
         ));
 
         $tags = array_fill_keys($courseIds, []);
@@ -214,7 +214,7 @@ final class BatchQueryHelper
 
         $results = $wpdb->get_results($wpdb->prepare(
             "SELECT user_id, session_id, status FROM {$table} WHERE edition_id = %d",
-            $editionId
+            $editionId,
         ));
 
         $attendance = [];

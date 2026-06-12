@@ -7,7 +7,6 @@ namespace Stride\Modules\Trajectory\Admin;
 use Stride\Domain\TrajectoryMode;
 use Stride\Domain\OfferingStatus;
 use Stride\Modules\Edition\EditionRepository;
-use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Trajectory\TrajectoryCPT;
 use Stride\Modules\Trajectory\TrajectoryRepository;
@@ -35,7 +34,6 @@ final class TrajectoryAdminController
         private readonly TrajectoryService $trajectoryService,
         private readonly TrajectoryRepository $repository,
         private readonly RegistrationRepository $registrations,
-        private readonly EditionService $editionService,
         private readonly EditionRepository $editionRepository,
     ) {
         $this->init();
@@ -75,7 +73,7 @@ final class TrajectoryAdminController
             [$this, 'renderDetailsMetabox'],
             TrajectoryCPT::POST_TYPE,
             'normal',
-            'high'
+            'high',
         );
 
         // Courses metabox
@@ -85,7 +83,7 @@ final class TrajectoryAdminController
             [$this, 'renderCoursesMetabox'],
             TrajectoryCPT::POST_TYPE,
             'normal',
-            'default'
+            'default',
         );
 
         // Enrollments metabox
@@ -95,7 +93,7 @@ final class TrajectoryAdminController
             [$this, 'renderEnrollmentsMetabox'],
             TrajectoryCPT::POST_TYPE,
             'normal',
-            'default'
+            'default',
         );
 
         // Messages metabox
@@ -105,7 +103,7 @@ final class TrajectoryAdminController
             [$this, 'renderMessagesMetabox'],
             TrajectoryCPT::POST_TYPE,
             'normal',
-            'default'
+            'default',
         );
 
         // Sidebar
@@ -115,7 +113,7 @@ final class TrajectoryAdminController
             [$this, 'renderSidebarMetabox'],
             TrajectoryCPT::POST_TYPE,
             'side',
-            'high'
+            'high',
         );
     }
 
@@ -132,14 +130,14 @@ final class TrajectoryAdminController
             'select2',
             'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css',
             [],
-            '4.1.0'
+            '4.1.0',
         );
         wp_enqueue_script(
             'select2',
             'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js',
             ['jquery'],
             '4.1.0',
-            true
+            true,
         );
 
         // Trajectory admin styles (from stride-core mu-plugin)
@@ -150,7 +148,7 @@ final class TrajectoryAdminController
                 'stride-trajectory-admin',
                 plugins_url('assets/css/admin/trajectory-admin.css', $basePath . '/stride-core.php'),
                 ['select2'],
-                filemtime($cssFile)
+                filemtime($cssFile),
             );
         }
 
@@ -162,7 +160,7 @@ final class TrajectoryAdminController
                 plugins_url('assets/js/admin/trajectory-admin.js', $basePath . '/stride-core.php'),
                 ['jquery', 'select2'],
                 filemtime($jsFile),
-                true
+                true,
             );
 
             $currentUser = wp_get_current_user();
@@ -317,9 +315,9 @@ final class TrajectoryAdminController
                             'toolbar1' => 'formatselect,bold,italic,underline,bullist,numlist,link,unlink,wp_more,fullscreen',
                             'toolbar2' => '',
                         ],
-                    ]
+                    ],
                 );
-                ?>
+        ?>
             </div>
 
             <!-- Tab: Deadlines -->
@@ -418,8 +416,10 @@ final class TrajectoryAdminController
                 <?php if (empty($electiveGroups)): ?>
                     <p class="stride-no-courses"><?php esc_html_e('Nog geen keuzegroepen. Klik op "+ Nieuwe groep" om te beginnen.', 'stride'); ?></p>
                 <?php else: ?>
-                    <?php $groupIndex = 0; foreach ($electiveGroups as $groupName => $group): ?>
-                        <?php $this->renderElectiveGroup($groupIndex, $group); $groupIndex++; ?>
+                    <?php $groupIndex = 0;
+                    foreach ($electiveGroups as $groupName => $group): ?>
+                        <?php $this->renderElectiveGroup($groupIndex, $group);
+                        $groupIndex++; ?>
                     <?php endforeach; ?>
                 <?php endif; ?>
             </div>
@@ -434,22 +434,41 @@ final class TrajectoryAdminController
     private function renderElectiveGroup(int|string $index, array $group): void
     {
         $namePrefix = "ntdst_fields[elective_groups][{$index}]";
+        $isNew = empty($group['name']) && empty($group['courses']);
+        $courseCount = is_array($group['courses'] ?? null) ? count($group['courses']) : 0;
         ?>
-        <div class="stride-elective-group" data-group-index="<?php echo esc_attr($index); ?>">
-            <div class="group-header">
-                <div class="stride-field" style="flex: 2;">
-                    <label><?php esc_html_e('Groepnaam', 'stride'); ?></label>
-                    <input type="text" name="<?php echo esc_attr($namePrefix); ?>[name]"
-                           value="<?php echo esc_attr($group['name']); ?>"
-                           placeholder="<?php esc_attr_e('bijv. Specialisatie', 'stride'); ?>">
+        <div class="stride-elective-group<?php echo $isNew ? ' is-editing' : ''; ?>"
+             data-group-index="<?php echo esc_attr($index); ?>">
+
+            <!-- Summary header (always visible) -->
+            <div class="stride-group-summary">
+                <div class="stride-group-summary-main">
+                    <span class="stride-group-summary-label"><?php echo esc_html($group['name'] ?: __('(Nieuwe groep)', 'stride')); ?></span>
+                    <span class="stride-group-summary-meta">
+                        <?php printf(
+                            /* translators: %d: pick count */
+                            esc_html__('Kies %d', 'stride'),
+                            (int) ($group['pick_count'] ?? 1),
+                        ); ?>
+                        ·
+                        <?php printf(
+                            /* translators: %d: number of courses */
+                            esc_html(_n('%d cursus', '%d cursussen', $courseCount, 'stride')),
+                            $courseCount,
+                        ); ?>
+                    </span>
                 </div>
-                <div class="stride-field" style="flex: 0 0 100px;">
-                    <label><?php esc_html_e('Kies', 'stride'); ?></label>
-                    <input type="number" name="<?php echo esc_attr($namePrefix); ?>[pick_count]"
-                           value="<?php echo esc_attr($group['pick_count']); ?>" min="1" max="10">
+                <div class="stride-group-summary-actions">
+                    <button type="button" class="button-link stride-edit-group" title="<?php esc_attr_e('Bewerken', 'stride'); ?>">
+                        <span class="dashicons dashicons-edit"></span>
+                    </button>
+                    <button type="button" class="button-link stride-delete-group" title="<?php esc_attr_e('Groep verwijderen', 'stride'); ?>">
+                        <span class="dashicons dashicons-trash"></span>
+                    </button>
                 </div>
             </div>
 
+            <!-- Course list (always visible) -->
             <ul class="stride-course-list stride-elective-course-list">
                 <?php if (empty($group['courses'])): ?>
                     <li class="stride-no-courses"><?php esc_html_e('Nog geen cursussen in deze groep.', 'stride'); ?></li>
@@ -460,17 +479,32 @@ final class TrajectoryAdminController
                 <?php endif; ?>
             </ul>
 
-            <div class="stride-add-course">
-                <select class="stride-course-select stride-hybrid-select stride-elective-course-select" style="width: 100%;">
-                    <option value=""><?php esc_html_e('Zoek cursus of editie...', 'stride'); ?></option>
-                </select>
-                <button type="button" class="button stride-add-elective-btn"><?php esc_html_e('Toevoegen', 'stride'); ?></button>
-            </div>
+            <!-- Edit panel (hidden unless .is-editing) -->
+            <div class="stride-group-edit">
+                <div class="group-header">
+                    <div class="stride-field" style="flex: 2;">
+                        <label><?php esc_html_e('Groepnaam', 'stride'); ?></label>
+                        <input type="text" name="<?php echo esc_attr($namePrefix); ?>[name]"
+                               value="<?php echo esc_attr($group['name']); ?>"
+                               placeholder="<?php esc_attr_e('bijv. Specialisatie', 'stride'); ?>">
+                    </div>
+                    <div class="stride-field" style="flex: 0 0 100px;">
+                        <label><?php esc_html_e('Kies', 'stride'); ?></label>
+                        <input type="number" name="<?php echo esc_attr($namePrefix); ?>[pick_count]"
+                               value="<?php echo esc_attr($group['pick_count']); ?>" min="1" max="10">
+                    </div>
+                </div>
 
-            <div class="group-footer">
-                <button type="button" class="button-link stride-delete-group" style="color: #b32d2e;">
-                    <span class="dashicons dashicons-trash"></span> <?php esc_html_e('Groep verwijderen', 'stride'); ?>
-                </button>
+                <div class="stride-add-course">
+                    <select class="stride-course-select stride-hybrid-select stride-elective-course-select" style="width: 100%;">
+                        <option value=""><?php esc_html_e('Zoek cursus of editie...', 'stride'); ?></option>
+                    </select>
+                    <button type="button" class="button stride-add-elective-btn"><?php esc_html_e('Toevoegen', 'stride'); ?></button>
+                </div>
+
+                <div class="group-footer">
+                    <button type="button" class="button button-small stride-group-done"><?php esc_html_e('Klaar', 'stride'); ?></button>
+                </div>
             </div>
         </div>
         <?php
@@ -495,7 +529,7 @@ final class TrajectoryAdminController
 
         // For editions, add date and venue info
         if ($type === 'edition' && $editionId) {
-            $editionPost = $this->editionService->getEdition($editionId);
+            $editionPost = $this->editionRepository->find($editionId);
             if (!is_wp_error($editionPost)) {
                 $startDate = $this->editionRepository->getField($editionId, 'start_date', '');
                 $venue = $this->editionRepository->getField($editionId, 'venue', '');
@@ -613,7 +647,7 @@ final class TrajectoryAdminController
                             <td>
                                 <?php
                                 $userEditUrl = $user ? get_edit_user_link($user->ID) : null;
-                                if ($userEditUrl): ?>
+                        if ($userEditUrl): ?>
                                     <a href="<?php echo esc_url($userEditUrl); ?>"><?php echo esc_html($userName); ?></a>
                                 <?php else: ?>
                                     <?php echo esc_html($userName); ?>
@@ -661,7 +695,7 @@ final class TrajectoryAdminController
         <style>
             .stride-trajectory-sidebar .stride-sidebar-section { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #f0f0f1; }
             .stride-trajectory-sidebar .stride-sidebar-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-            .stride-trajectory-sidebar label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #646970; margin-bottom: 6px; }
+            .stride-trajectory-sidebar > div.stride-sidebar-section label.status-label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #646970; margin-bottom: 6px; }
             .stride-trajectory-sidebar select { width: 100%; }
             .stride-sidebar-meta { list-style: none; margin: 0; padding: 0; }
             .stride-sidebar-meta li { display: flex; justify-content: space-between; padding: 6px 0; font-size: 12px; }
@@ -671,7 +705,7 @@ final class TrajectoryAdminController
 
         <div class="stride-trajectory-sidebar">
             <div class="stride-sidebar-section">
-                <label for="trajectory_status"><?php esc_html_e('Status', 'stride'); ?></label>
+                <label class="status-label" for="trajectory_status"><?php esc_html_e('Status', 'stride'); ?></label>
                 <select id="trajectory_status" name="ntdst_fields[status]">
                     <?php foreach (OfferingStatus::cases() as $statusOption): ?>
                     <option value="<?php echo esc_attr($statusOption->value); ?>" <?php selected($status->value, $statusOption->value); ?>>
@@ -732,40 +766,7 @@ final class TrajectoryAdminController
                 </div>
             <?php endif; ?>
 
-            <div class="stride-sidebar-section">
-                <h4 style="margin: 0 0 8px; font-size: 12px; font-weight: 600;"><?php esc_html_e('Inschrijfvereisten', 'stride'); ?></h4>
-                <p class="description" style="margin-bottom: 8px; font-size: 11px;">
-                    <?php esc_html_e('Deelnemers moeten deze stappen voltooien na inschrijving.', 'stride'); ?>
-                </p>
-                <?php
-                $requirementKeys = [
-                    'requires_session_selection' => __('Sessiekeuze vereist', 'stride'),
-                    'requires_questionnaire'     => __('Vragenlijst invullen', 'stride'),
-                    'requires_documents'         => __('Documenten uploaden', 'stride'),
-                ];
-                foreach ($requirementKeys as $key => $reqLabel): ?>
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px; font-size: 12px; font-weight: normal; text-transform: none; color: #1d2327;">
-                        <input type="hidden" name="ntdst_fields[<?= esc_attr($key) ?>]" value="0">
-                        <input type="checkbox" name="ntdst_fields[<?= esc_attr($key) ?>]" value="1"
-                               <?php checked(!empty($trajectory[$key])); ?>>
-                        <span><?= esc_html($reqLabel) ?></span>
-                    </label>
-                <?php endforeach; ?>
-            </div>
-
-            <div class="stride-sidebar-section">
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                    <input type="hidden" name="ntdst_fields[requires_approval]" value="0">
-                    <input type="checkbox" name="ntdst_fields[requires_approval]" value="1"
-                           <?php checked(!empty($trajectory['requires_approval'])); ?>>
-                    <span style="font-weight: 600; font-size: 12px;">
-                        <?php esc_html_e('Goedkeuring vereist', 'stride'); ?>
-                    </span>
-                </label>
-                <p class="description" style="margin-top: 6px; font-size: 11px;">
-                    <?php esc_html_e('Inschrijvingen wachten op goedkeuring door een beheerder.', 'stride'); ?>
-                </p>
-            </div>
+            <?php \Stride\Modules\Edition\Admin\OfferingSidebarPartial::render($post, TrajectoryCPT::POST_TYPE); ?>
         </div>
         <?php
     }
@@ -842,7 +843,9 @@ final class TrajectoryAdminController
                 </div>
             <?php else: ?>
                 <?php foreach ($messages as $index => $message): ?>
-                    <?php if (!empty($message['_deleted'])) continue; ?>
+                    <?php if (!empty($message['_deleted'])) {
+                        continue;
+                    } ?>
                     <?php
                     $type = $message['type'] ?? 'announcement';
                     $typeConfig = $messageTypes[$type] ?? $messageTypes['announcement'];
@@ -1007,8 +1010,8 @@ final class TrajectoryAdminController
 
     public function handleSave(int $postId, WP_Post $post): void
     {
-        if (!isset($_POST[self::NONCE_FIELD]) ||
-            !wp_verify_nonce($_POST[self::NONCE_FIELD], self::NONCE_SAVE)) {
+        if (!isset($_POST[self::NONCE_FIELD])
+            || !wp_verify_nonce($_POST[self::NONCE_FIELD], self::NONCE_SAVE)) {
             return;
         }
 
@@ -1051,6 +1054,23 @@ final class TrajectoryAdminController
 
         if (isset($fields['requires_approval'])) {
             $updateData['requires_approval'] = (bool) $fields['requires_approval'];
+        }
+
+        // Lifecycle requirements (mirrors EditionAdminController save handler)
+        if (isset($fields['enrollment_form'])) {
+            $updateData['enrollment_form'] = sanitize_text_field($fields['enrollment_form']);
+        }
+        $offeringBooleans = [
+            'requires_questionnaire',
+            'requires_documents',
+            'post_requires_evaluation',
+            'post_requires_documents',
+            'post_requires_approval',
+        ];
+        foreach ($offeringBooleans as $boolField) {
+            if (isset($fields[$boolField])) {
+                $updateData[$boolField] = (bool) $fields[$boolField];
+            }
         }
 
         if (isset($fields['price'])) {
@@ -1121,12 +1141,10 @@ final class TrajectoryAdminController
             $messages = json_decode($jsonString, true);
 
             if (json_last_error() !== JSON_ERROR_NONE) {
-                // Log JSON decode error for debugging
-                error_log(sprintf(
-                    'Stride Trajectory: JSON decode error for messages on post %d: %s',
-                    $postId,
-                    json_last_error_msg()
-                ));
+                ntdst_log('trajectory')->warning('JSON decode error for messages', [
+                    'post_id' => $postId,
+                    'error'   => json_last_error_msg(),
+                ]);
             } elseif (is_array($messages)) {
                 // Filter out deleted messages and sanitize
                 $sanitizedMessages = [];
@@ -1260,7 +1278,7 @@ final class TrajectoryAdminController
         $results = [];
 
         // Group 1: Editions
-        $editions = $this->editionService->getUpcomingEditions(50);
+        $editions = $this->editionRepository->findUpcoming(50);
 
         $editionResults = [];
         foreach ($editions as $edition) {
@@ -1357,9 +1375,11 @@ final class TrajectoryAdminController
         }
 
         if (!empty($search)) {
-            $enrollments = array_filter($enrollments, function($e) use ($search) {
+            $enrollments = array_filter($enrollments, function ($e) use ($search) {
                 $user = get_userdata($e->user_id);
-                if (!$user) return false;
+                if (!$user) {
+                    return false;
+                }
                 $name = strtolower($user->display_name . ' ' . $user->user_email);
                 return str_contains($name, strtolower($search));
             });

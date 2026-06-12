@@ -132,7 +132,7 @@ namespace NTDST\Audit {
                 string $action,
                 ?int $actorId = null,
                 array $context = []
-            ): void {
+            ): int|\WP_Error {
                 $this->recordedCalls[] = [
                     'entity_type' => $entityType,
                     'entity_id' => $entityId,
@@ -140,6 +140,18 @@ namespace NTDST\Audit {
                     'actor_id' => $actorId,
                     'context' => $context,
                 ];
+
+                // Mirror the real AuditService (mode-2 stub sync, audit
+                // 2026-06-10): record() returns int|WP_Error — callers
+                // branch on is_wp_error() (AdminAPIController PII reveal,
+                // CR-B2) — and fires ntdst/audit/recorded, which consumers
+                // (NotificationService badge cache, CR-F2) listen to. A
+                // void/silent stub forks test-world from real-world.
+                if (function_exists('do_action')) {
+                    do_action('ntdst/audit/recorded', $action, $entityType, $entityId, $context, $actorId);
+                }
+
+                return count($this->recordedCalls);
             }
 
             /**
@@ -165,20 +177,93 @@ namespace NTDST\Audit {
             {
                 return end($this->recordedCalls) ?: null;
             }
+
+            /**
+             * Get audit entries where user is the subject (not actor).
+             *
+             * @param string[] $excludeActions
+             * @return array<object>
+             */
+            public function getForSubjectUser(int $userId, int $limit = 50, int $daysBack = 30, array $excludeActions = []): array
+            {
+                return [];
+            }
+
+            /**
+             * Get session note update entries for given edition IDs.
+             *
+             * @param int[] $editionIds
+             * @return array<object>
+             */
+            public function getSessionNoteUpdates(array $editionIds, int $daysBack = 30): array
+            {
+                return [];
+            }
+        }
+    }
+
+    if (!class_exists(AuditTable::class)) {
+        /**
+         * AuditTable stub for testing
+         *
+         * Returns a predictable table name without touching the real database.
+         */
+        class AuditTable
+        {
+            public const TABLE_NAME = 'audit_log';
+
+            public static function getTableName(): string
+            {
+                global $wpdb;
+                return $wpdb->prefix . self::TABLE_NAME;
+            }
         }
     }
 }
 
 // Global namespace for ntdst_log function
 namespace {
+    // Captured log calls so unit tests can assert logging behavior.
+    // Shape: ['channel' => string, 'level' => string, 'message' => string, 'context' => array]
+    global $_test_log_entries;
+    $_test_log_entries = [];
+
     if (!function_exists('ntdst_log')) {
         function ntdst_log(string $channel = 'default'): object
         {
-            return new class {
-                public function info(string $message, array $context = []): void {}
-                public function debug(string $message, array $context = []): void {}
-                public function warning(string $message, array $context = []): void {}
-                public function error(string $message, array $context = []): void {}
+            return new class ($channel) {
+                public function __construct(private string $channel) {}
+
+                public function info(string $message, array $context = []): void
+                {
+                    $this->record('info', $message, $context);
+                }
+
+                public function debug(string $message, array $context = []): void
+                {
+                    $this->record('debug', $message, $context);
+                }
+
+                public function warning(string $message, array $context = []): void
+                {
+                    $this->record('warning', $message, $context);
+                }
+
+                public function error(string $message, array $context = []): void
+                {
+                    $this->record('error', $message, $context);
+                }
+
+                private function record(string $level, string $message, array $context): void
+                {
+                    global $_test_log_entries;
+                    $_test_log_entries[] = [
+                        'channel' => $this->channel,
+                        'level' => $level,
+                        'message' => $message,
+                        'context' => $context,
+                    ];
+                }
             };
         }
     }

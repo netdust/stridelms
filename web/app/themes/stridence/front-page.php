@@ -1,197 +1,229 @@
 <?php
 /**
- * Homepage Template
+ * Homepage Template — Helder Tij
+ *
+ * Sections per mockup `docs/stride-base-design/Homepage.dc.html`:
+ * hero, mode selector, "Binnenkort van start" band, "Waarom Stride"
+ * + closing CTA. Counts and featured cards come from the existing
+ * INV-7 catalog pre-pass (helpers/catalog.php) — no new query shapes.
  *
  * @package stridence
  */
 
+declare(strict_types=1);
+
+defined('ABSPATH') || exit;
+
+// Mode-selector counts via the existing catalog helpers only (Task 9.1):
+// the same eligible-items lists the catalog pages render, so the numbers
+// match what the user finds after clicking through.
+$klassikaal_items = stridence_catalog_items('klassikaal');
+$online_items     = stridence_catalog_items('online');
+$klassikaal_total = count($klassikaal_items);
+$online_total     = count($online_items);
+
+// Trajectory count through the repository (INV-3: the CPT's repository is
+// the single data-access point — no direct wp_count_posts on vad_trajectory).
+$trajectory_total = ntdst_get(\Stride\Modules\Trajectory\TrajectoryRepository::class)
+    ->count(['post_status' => 'publish']);
+
+// "Binnenkort van start": the 3 soonest klassikaal items (the list is
+// already start_date ASC), rendered through the same prefetch + card
+// path as page-klassikaal.php. E1: zero items hides the band entirely.
+$featured_items = array_slice($klassikaal_items, 0, 3);
+$featured_html  = !empty($featured_items)
+    ? stridence_catalog_render_cards($featured_items, get_current_user_id() ?: null)
+    : '';
+
 get_header();
 ?>
 
-<!-- Hero Section -->
-<section class="bg-primary text-text-inverse py-16 lg:py-24">
-    <div class="container">
-        <div class="max-w-3xl">
-            <h1 class="text-4xl lg:text-5xl font-heading font-bold mb-6">
-                <?php esc_html_e('Professionele opleidingen voor de zorgsector', 'stridence'); ?>
-            </h1>
-            <p class="text-xl text-text-inverse/80 mb-8">
-                <?php esc_html_e('Versterk je kennis en vaardigheden met onze erkende trainingen. Van ouderenzorg tot GGZ, van webinar tot meerdaagse opleiding.', 'stridence'); ?>
-            </p>
-            <div class="flex flex-wrap gap-4">
-                <a href="<?php echo esc_url(home_url('/cursussen/')); ?>" class="btn-primary bg-white text-primary hover:bg-white/90">
-                    <?php esc_html_e('Bekijk opleidingen', 'stridence'); ?>
-                </a>
-                <a href="<?php echo esc_url(home_url('/trajecten/')); ?>" class="btn-ghost text-white hover:bg-white/10">
-                    <?php esc_html_e('Ontdek trajecten', 'stridence'); ?>
-                </a>
-            </div>
-        </div>
-    </div>
-</section>
+<!-- Hero -->
+<section class="relative overflow-hidden px-[clamp(20px,4vw,48px)] pt-[clamp(64px,10vw,120px)] pb-[clamp(56px,8vw,96px)]">
+    <!-- Decorative blobs -->
+    <div class="absolute -top-[120px] -right-20 w-[420px] h-[420px] rounded-full bg-badge-online-bg blur-[2px] z-0" aria-hidden="true"></div>
+    <div class="absolute -bottom-[180px] -left-[120px] w-[380px] h-[380px] rounded-full bg-accent-subtle z-0" aria-hidden="true"></div>
 
-<!-- Quick Category Links -->
-<section class="section">
-    <div class="container">
-        <h2 class="font-heading text-2xl font-bold text-center mb-8">
-            <?php esc_html_e('Opleidingen per domein', 'stridence'); ?>
-        </h2>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <?php
-            $domains = get_terms([
-                'taxonomy' => 'stride_domain',
-                'hide_empty' => true,
-            ]);
-
-            if (!is_wp_error($domains) && !empty($domains)) :
-                foreach ($domains as $domain) :
-            ?>
-                <a href="<?php echo esc_url(get_term_link($domain)); ?>"
-                   class="card-interactive p-6 text-center">
-                    <span class="text-lg font-semibold text-text">
-                        <?php echo esc_html($domain->name); ?>
-                    </span>
-                    <span class="block text-sm text-text-muted mt-1">
-                        <?php
-                        printf(
-                            esc_html(_n('%d opleiding', '%d opleidingen', $domain->count, 'stridence')),
-                            $domain->count
-                        );
-                        ?>
-                    </span>
-                </a>
-            <?php
-                endforeach;
-            else :
-            ?>
-                <!-- Fallback categories -->
-                <a href="<?php echo esc_url(home_url('/cursussen/?domein=ouderenzorg')); ?>" class="card-interactive p-6 text-center">
-                    <span class="text-lg font-semibold text-text"><?php esc_html_e('Ouderenzorg', 'stridence'); ?></span>
-                </a>
-                <a href="<?php echo esc_url(home_url('/cursussen/?domein=ggz')); ?>" class="card-interactive p-6 text-center">
-                    <span class="text-lg font-semibold text-text"><?php esc_html_e('Geestelijke gezondheidszorg', 'stridence'); ?></span>
-                </a>
-                <a href="<?php echo esc_url(home_url('/cursussen/?domein=eerste-lijn')); ?>" class="card-interactive p-6 text-center">
-                    <span class="text-lg font-semibold text-text"><?php esc_html_e('Eerste lijn', 'stridence'); ?></span>
-                </a>
-                <a href="<?php echo esc_url(home_url('/cursussen/?domein=ziekenhuiszorg')); ?>" class="card-interactive p-6 text-center">
-                    <span class="text-lg font-semibold text-text"><?php esc_html_e('Ziekenhuiszorg', 'stridence'); ?></span>
-                </a>
-            <?php endif; ?>
-        </div>
-    </div>
-</section>
-
-<!-- Featured Editions (placeholder) -->
-<section class="section-alt">
-    <div class="container">
-        <div class="flex items-center justify-between mb-8">
-            <h2 class="font-heading text-2xl font-bold">
-                <?php esc_html_e('Binnenkort gepland', 'stridence'); ?>
-            </h2>
-            <a href="<?php echo esc_url(home_url('/cursussen/')); ?>" class="btn-ghost">
-                <?php esc_html_e('Alle opleidingen', 'stridence'); ?> &rarr;
+    <div class="relative z-[1] max-w-[1080px] mx-auto flex flex-col items-start gap-[22px]">
+        <p class="text-[13px] font-bold uppercase tracking-[0.14em] text-accent">
+            <?php esc_html_e('Professionele Ontwikkeling in de Zorg', 'stridence'); ?>
+        </p>
+        <h1 class="font-serif font-light text-[clamp(44px,7vw,84px)] leading-[1.05] tracking-tight max-w-[860px] [text-wrap:balance]">
+            <?php echo wp_kses(
+                __('Versterk je zorgteam met <em>deskundige</em> opleidingen.', 'stridence'),
+                ['em' => []],
+            ); ?>
+        </h1>
+        <p class="text-[clamp(16px,2vw,19px)] text-text-muted leading-[1.65] max-w-[560px]">
+            <?php esc_html_e('Wij geloven dat leren net zo zorgvuldig moet zijn als het vak dat het ondersteunt. Ontdek een platform ontworpen voor verdieping, focus en menselijke verbinding.', 'stridence'); ?>
+        </p>
+        <div class="mt-2 flex flex-wrap gap-3">
+            <a href="<?php echo esc_url(home_url('/klassikaal/')); ?>" class="btn-primary btn-lg">
+                <?php esc_html_e('Bekijk het aanbod', 'stridence'); ?>
+            </a>
+            <a href="<?php echo esc_url(home_url('/contact/')); ?>" class="btn-ghost btn-lg">
+                <?php esc_html_e('Opleiding op maat', 'stridence'); ?>
             </a>
         </div>
+    </div>
+</section>
 
-        <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            <?php
-            // Get upcoming editions
-            // This will be replaced with actual EditionRepository call
-            $courses = get_posts([
-                'post_type' => 'sfwd-courses',
-                'posts_per_page' => 6,
-                'orderby' => 'date',
-                'order' => 'DESC',
-            ]);
+<!-- Mode selector -->
+<section class="px-[clamp(20px,4vw,48px)] pb-[clamp(56px,8vw,88px)]">
+    <div class="max-w-[1080px] mx-auto flex flex-col gap-6">
+        <h2 class="font-serif font-normal text-[clamp(26px,3.5vw,36px)] text-text">
+            <?php esc_html_e('Hoe wil je leren?', 'stridence'); ?>
+        </h2>
 
-            if (!empty($courses)) :
-                foreach ($courses as $course) :
-            ?>
-                <article class="card overflow-hidden flex flex-col">
-                    <?php if (has_post_thumbnail($course)) : ?>
-                        <a href="<?php echo esc_url(get_permalink($course)); ?>" class="block aspect-video overflow-hidden">
-                            <?php echo get_the_post_thumbnail($course, 'stride_course_card', ['class' => 'w-full h-full object-cover']); ?>
-                        </a>
-                    <?php endif; ?>
+        <div class="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-[18px]">
 
-                    <div class="p-5 flex-1 flex flex-col">
-                        <h3 class="font-heading font-semibold text-lg mb-2 line-clamp-2">
-                            <a href="<?php echo esc_url(get_permalink($course)); ?>" class="text-text hover:text-primary">
-                                <?php echo esc_html($course->post_title); ?>
-                            </a>
-                        </h3>
-
-                        <p class="text-sm text-text-muted line-clamp-2 mb-4 flex-1">
-                            <?php echo esc_html(wp_trim_words($course->post_excerpt ?: $course->post_content, 20)); ?>
-                        </p>
-
-                        <a href="<?php echo esc_url(get_permalink($course)); ?>" class="btn-primary w-full text-center">
-                            <?php esc_html_e('Meer info', 'stridence'); ?>
-                        </a>
-                    </div>
-                </article>
-            <?php
-                endforeach;
-            else :
-            ?>
-                <div class="col-span-full text-center py-12">
-                    <p class="text-text-muted">
-                        <?php esc_html_e('Er zijn momenteel geen geplande opleidingen.', 'stridence'); ?>
-                    </p>
-                    <p class="text-sm text-text-muted mt-2">
-                        <?php esc_html_e('Schrijf je in voor de nieuwsbrief om op de hoogte te blijven.', 'stridence'); ?>
-                    </p>
+            <a href="<?php echo esc_url(home_url('/trajecten/')); ?>"
+                class="flex flex-col gap-3 bg-surface-card rounded-[16px] shadow-card p-7 transition-[box-shadow,transform] duration-normal ease-out hover:shadow-elevated hover:-translate-y-[3px]">
+                <!-- Trajectory dots strip (korenbloem) -->
+                <div class="flex items-center w-16" aria-hidden="true">
+                    <span class="w-2.5 h-2.5 rounded-full bg-accent"></span>
+                    <span class="h-0.5 flex-1 bg-accent-light"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-accent-light"></span>
+                    <span class="h-0.5 flex-1 bg-accent-light"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-accent-subtle shadow-[inset_0_0_0_1.5px_rgb(var(--color-accent-light))]"></span>
                 </div>
-            <?php endif; ?>
+                <h3 class="text-[19px] font-bold text-text">
+                    <?php esc_html_e('Trajecten', 'stridence'); ?>
+                </h3>
+                <p class="text-sm text-text-muted leading-[1.6]">
+                    <?php esc_html_e('Volg een leertraject met meerdere cursussen en begeleiding', 'stridence'); ?>
+                </p>
+                <div class="mt-auto flex items-center justify-between pt-1.5">
+                    <span class="text-[13px] font-bold text-text-faint">
+                        <?php printf(esc_html(_n('%d traject', '%d trajecten', $trajectory_total, 'stridence')), $trajectory_total); ?>
+                    </span>
+                    <span class="text-sm font-bold text-primary"><?php esc_html_e('Ontdek', 'stridence'); ?> &rarr;</span>
+                </div>
+            </a>
+
+            <a href="<?php echo esc_url(home_url('/klassikaal/')); ?>"
+                class="flex flex-col gap-3 bg-surface-card rounded-[16px] shadow-card p-7 transition-[box-shadow,transform] duration-normal ease-out hover:shadow-elevated hover:-translate-y-[3px]">
+                <!-- Klassikaal squares (teal) -->
+                <div class="flex items-end gap-1 h-2.5" aria-hidden="true">
+                    <span class="w-2.5 h-2.5 rounded-[3px] bg-primary"></span>
+                    <span class="w-2.5 h-2.5 rounded-[3px] bg-primary-light"></span>
+                    <span class="w-2.5 h-2.5 rounded-[3px] bg-primary-subtle"></span>
+                </div>
+                <h3 class="text-[19px] font-bold text-text">
+                    <?php esc_html_e('Klassikaal', 'stridence'); ?>
+                </h3>
+                <p class="text-sm text-text-muted leading-[1.6]">
+                    <?php esc_html_e('Leer samen met anderen onder begeleiding van ervaren docenten', 'stridence'); ?>
+                </p>
+                <div class="mt-auto flex items-center justify-between pt-1.5">
+                    <span class="text-[13px] font-bold text-text-faint">
+                        <?php printf(esc_html(_n('%d opleiding', '%d opleidingen', $klassikaal_total, 'stridence')), $klassikaal_total); ?>
+                    </span>
+                    <span class="text-sm font-bold text-primary"><?php esc_html_e('Ontdek', 'stridence'); ?> &rarr;</span>
+                </div>
+            </a>
+
+            <a href="<?php echo esc_url(home_url('/online/')); ?>"
+                class="flex flex-col gap-3 bg-surface-card rounded-[16px] shadow-card p-7 transition-[box-shadow,transform] duration-normal ease-out hover:shadow-elevated hover:-translate-y-[3px]">
+                <!-- Online bars (teal) -->
+                <div class="flex items-center gap-1 h-2.5" aria-hidden="true">
+                    <span class="w-[26px] h-1.5 rounded-full bg-primary"></span>
+                    <span class="w-3.5 h-1.5 rounded-full bg-primary-light"></span>
+                    <span class="w-2 h-1.5 rounded-full bg-primary-subtle"></span>
+                </div>
+                <h3 class="text-[19px] font-bold text-text">
+                    <?php esc_html_e('Online', 'stridence'); ?>
+                </h3>
+                <p class="text-sm text-text-muted leading-[1.6]">
+                    <?php esc_html_e('Leer op je eigen tempo met e-learning en webinars', 'stridence'); ?>
+                </p>
+                <div class="mt-auto flex items-center justify-between pt-1.5">
+                    <span class="text-[13px] font-bold text-text-faint">
+                        <?php printf(esc_html(_n('%d cursus', '%d cursussen', $online_total, 'stridence')), $online_total); ?>
+                    </span>
+                    <span class="text-sm font-bold text-primary"><?php esc_html_e('Ontdek', 'stridence'); ?> &rarr;</span>
+                </div>
+            </a>
+
         </div>
     </div>
 </section>
 
-<!-- Value Proposition -->
-<section class="section">
-    <div class="container">
-        <h2 class="font-heading text-2xl font-bold text-center mb-12">
-            <?php esc_html_e('Waarom kiezen voor Stride?', 'stridence'); ?>
-        </h2>
+<!-- Binnenkort van start (hidden entirely when no upcoming items — E1) -->
+<?php if (!empty($featured_items)) : ?>
+<section class="bg-surface-alt px-[clamp(20px,4vw,48px)] py-[clamp(48px,7vw,80px)]">
+    <div class="max-w-[1080px] mx-auto flex flex-col gap-6">
+        <div class="flex flex-wrap items-baseline justify-between gap-4">
+            <h2 class="font-serif font-normal text-[clamp(26px,3.5vw,36px)] text-text">
+                <?php esc_html_e('Binnenkort van start', 'stridence'); ?>
+            </h2>
+            <a href="<?php echo esc_url(home_url('/klassikaal/')); ?>" class="text-sm font-bold text-primary hover:text-primary-hover">
+                <?php esc_html_e('Volledig aanbod', 'stridence'); ?> &rarr;
+            </a>
+        </div>
+        <div class="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-[18px]">
+            <?php echo $featured_html; // Card HTML — escaped within the partials.?>
+        </div>
+    </div>
+</section>
+<?php endif; ?>
 
-        <div class="grid gap-8 md:grid-cols-3">
-            <div class="text-center">
-                <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-accent/10 flex items-center justify-center">
-                    <?php echo stridence_icon('award', 'w-8 h-8 text-accent'); ?>
-                </div>
-                <h3 class="font-heading font-semibold text-lg mb-2">
-                    <?php esc_html_e('Geaccrediteerd', 'stridence'); ?>
-                </h3>
-                <p class="text-text-muted">
-                    <?php esc_html_e('Onze opleidingen zijn erkend door RIZIV, VDAB en andere instanties.', 'stridence'); ?>
-                </p>
+<!-- Waarom Stride -->
+<section class="px-[clamp(20px,4vw,48px)] py-[clamp(56px,8vw,96px)]">
+    <div class="max-w-[1080px] mx-auto flex flex-wrap items-center gap-[clamp(28px,5vw,64px)]">
+        <div class="flex-[1_1_420px] min-w-[280px] flex flex-col gap-[18px]">
+            <p class="text-[13px] font-bold uppercase tracking-[0.14em] text-accent">
+                <?php esc_html_e('Waarom Stride', 'stridence'); ?>
+            </p>
+            <h2 class="font-serif font-normal text-[clamp(26px,3.5vw,38px)] leading-[1.2] text-text [text-wrap:balance]">
+                <?php esc_html_e('Kwaliteitsvolle nascholing voor de volgende generatie zorgverleners.', 'stridence'); ?>
+            </h2>
+            <div class="flex flex-col gap-4 text-base text-text-muted leading-[1.7] max-w-[480px]">
+                <p><?php esc_html_e('Wij geloven dat professionele groei in de zorgsector niet beperkt mag blijven tot verplichte bijscholing. Onze opleidingen combineren wetenschappelijke onderbouwing met praktijkervaring.', 'stridence'); ?></p>
+                <p><?php esc_html_e('Als onafhankelijk opleidingscentrum garanderen wij dat elke zorgprofessional toegang heeft tot de tools, begeleiding en erkenning die nodig zijn om het verschil te maken.', 'stridence'); ?></p>
             </div>
-
-            <div class="text-center">
-                <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-                    <?php echo stridence_icon('users', 'w-8 h-8 text-primary'); ?>
-                </div>
-                <h3 class="font-heading font-semibold text-lg mb-2">
-                    <?php esc_html_e('Praktijkgericht', 'stridence'); ?>
-                </h3>
-                <p class="text-text-muted">
-                    <?php esc_html_e('Direct toepasbaar in je dagelijkse werk door ervaren docenten.', 'stridence'); ?>
-                </p>
-            </div>
-
-            <div class="text-center">
-                <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-success/10 flex items-center justify-center">
-                    <?php echo stridence_icon('check-circle', 'w-8 h-8 text-success'); ?>
-                </div>
-                <h3 class="font-heading font-semibold text-lg mb-2">
-                    <?php esc_html_e('Flexibel leren', 'stridence'); ?>
-                </h3>
-                <p class="text-text-muted">
-                    <?php esc_html_e('Kies uit meerdaagse opleidingen, studiedagen of e-learning.', 'stridence'); ?>
-                </p>
+            <?php
+            // PLACEHOLDER (field-inventory: stats_trio) — no data source for
+            // these figures exists yet; values are i18n'd sample copy.
+            $stats_trio = [
+                ['value' => __('15', 'stridence'), 'label' => __('jaar ervaring', 'stridence')],
+                ['value' => __('3.200+', 'stridence'), 'label' => __('deelnemers per jaar', 'stridence')],
+                ['value' => __('9,1', 'stridence'), 'label' => __('gemiddelde score', 'stridence')],
+            ];
+            ?>
+            <div class="mt-2 flex flex-wrap gap-[clamp(20px,4vw,44px)]">
+                <?php foreach ($stats_trio as $stat) : ?>
+                    <div>
+                        <div class="text-[30px] font-extrabold tabular-nums text-text"><?php echo esc_html($stat['value']); ?></div>
+                        <div class="text-[13px] text-text-muted"><?php echo esc_html($stat['label']); ?></div>
+                    </div>
+                <?php endforeach; ?>
             </div>
         </div>
+        <!-- Photo slot — PLACEHOLDER (field-inventory: waarom_foto) -->
+        <div class="flex-[1_1_360px] min-w-[280px] aspect-[4/3] rounded-[20px] grid place-items-center"
+            style="background: repeating-linear-gradient(45deg, rgb(var(--color-surface-alt)) 0px, rgb(var(--color-surface-alt)) 14px, rgb(var(--color-surface-container-high)) 14px, rgb(var(--color-surface-container-high)) 28px);">
+            <span class="font-mono text-xs text-text-faint bg-white/80 rounded-sm px-3 py-1.5">
+                <?php esc_html_e('foto: lesgever met groep, warm licht', 'stridence'); ?>
+            </span>
+        </div>
+    </div>
+</section>
+
+<!-- Closing CTA -->
+<section class="px-[clamp(20px,4vw,48px)] pb-[clamp(56px,8vw,88px)]">
+    <div class="relative overflow-hidden max-w-[1080px] mx-auto bg-primary rounded-[24px] px-[clamp(24px,5vw,64px)] py-[clamp(40px,6vw,72px)] flex flex-col items-start gap-[18px]">
+        <div class="absolute -top-[100px] -right-[60px] w-[280px] h-[280px] rounded-full bg-white/[0.07]" aria-hidden="true"></div>
+        <?php // PLACEHOLDER copy (field-inventory: cta_team_copy) — in-company offer copy has no data source yet.?>
+        <h2 class="relative font-serif font-light text-[clamp(28px,4.5vw,48px)] leading-[1.15] text-white max-w-[640px] [text-wrap:balance]">
+            <?php esc_html_e('Een opleiding voor je hele team?', 'stridence'); ?>
+        </h2>
+        <p class="relative text-base text-white/85 leading-[1.65] max-w-[480px]">
+            <?php esc_html_e('We komen naar jouw organisatie, stemmen de inhoud af op jullie praktijk en regelen alles — van offerte tot attesten.', 'stridence'); ?>
+        </p>
+        <a href="<?php echo esc_url(home_url('/contact/')); ?>" class="relative mt-1.5 bg-white text-primary rounded-[12px] px-7 py-[15px] text-base font-bold leading-tight transition-transform duration-fast ease-out hover:-translate-y-0.5">
+            <?php esc_html_e('Vraag een offerte', 'stridence'); ?>
+        </a>
     </div>
 </section>
 

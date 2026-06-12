@@ -495,4 +495,172 @@ class AdminIntegrationTest extends IntegrationTestCase
 
         $this->assertArrayHasKey('/stride/v1/admin/editions/(?P<id>\\d+)/registrations', $routes);
     }
+
+    // =========================================================================
+    // PENDING APPROVALS / STALE-PENDING (D-Cap1)
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function pendingApprovalsReturnsStaleUserBucket(): void
+    {
+        global $wpdb;
+        $controller = ntdst_get(\Stride\Admin\AdminAPIController::class);
+        $editionId = $this->createTestEdition();
+        $userId = self::$adminUserId;
+
+        // Insert a pending registration with incomplete user task, dated 10 days ago.
+        $tenDaysAgo = gmdate('Y-m-d H:i:s', time() - 10 * DAY_IN_SECONDS);
+        $regTable = $wpdb->prefix . 'vad_registrations';
+        $wpdb->insert($regTable, [
+            'user_id' => $userId,
+            'edition_id' => $editionId,
+            'status' => 'pending',
+            'enrollment_path' => 'individual',
+            'registered_at' => $tenDaysAgo,
+            'completion_tasks' => wp_json_encode([
+                'session_selection' => ['status' => 'pending'],
+                'approval' => ['status' => 'pending'],
+            ]),
+        ]);
+        $regId = (int) $wpdb->insert_id;
+
+        $req = new WP_REST_Request('GET', '/stride/v1/admin/pending-approvals');
+        $req->set_param('stale_days', 7);
+        $response = $controller->getPendingApprovals($req);
+        $data = $response->get_data();
+
+        $stale = array_values(array_filter($data['items'], fn($i) => $i['id'] === $regId));
+        $this->assertCount(1, $stale, 'The stale pending registration should be returned');
+        $this->assertEquals('stale_user', $stale[0]['type']);
+        $this->assertEquals('session_selection', $stale[0]['open_task']);
+        $this->assertGreaterThanOrEqual(10, $stale[0]['days_idle']);
+        $this->assertGreaterThanOrEqual(1, $data['counts']['stale_user']);
+        $this->assertEquals(7, $data['stale_threshold_days']);
+
+        $wpdb->delete($regTable, ['id' => $regId]);
+    }
+
+    /**
+     * @test
+     */
+    public function pendingApprovalsRespectsStaleDaysThreshold(): void
+    {
+        global $wpdb;
+        $controller = ntdst_get(\Stride\Admin\AdminAPIController::class);
+        $editionId = $this->createTestEdition();
+
+        // Recent pending — only 3 days old, should NOT appear with threshold=7
+        $threeDaysAgo = gmdate('Y-m-d H:i:s', time() - 3 * DAY_IN_SECONDS);
+        $regTable = $wpdb->prefix . 'vad_registrations';
+        $wpdb->insert($regTable, [
+            'user_id' => self::$adminUserId,
+            'edition_id' => $editionId,
+            'status' => 'pending',
+            'enrollment_path' => 'individual',
+            'registered_at' => $threeDaysAgo,
+            'completion_tasks' => wp_json_encode([
+                'documents' => ['status' => 'pending'],
+                'approval' => ['status' => 'pending'],
+            ]),
+        ]);
+        $regId = (int) $wpdb->insert_id;
+
+        $req = new WP_REST_Request('GET', '/stride/v1/admin/pending-approvals');
+        $req->set_param('stale_days', 7);
+        $response = $controller->getPendingApprovals($req);
+        $stale = array_values(array_filter($response->get_data()['items'], fn($i) => $i['id'] === $regId));
+        $this->assertCount(0, $stale, '3-day pending must not appear with 7-day threshold');
+
+        // Lower threshold — same registration should now appear
+        $req->set_param('stale_days', 1);
+        $response = $controller->getPendingApprovals($req);
+        $stale = array_values(array_filter($response->get_data()['items'], fn($i) => $i['id'] === $regId));
+        $this->assertCount(1, $stale, '3-day pending must appear with 1-day threshold');
+
+        $wpdb->delete($regTable, ['id' => $regId]);
+    }
+
+    /**
+     * @test
+     */
+    public function pendingApprovalsBucketsDoNotDoubleCount(): void
+    {
+        global $wpdb;
+        $controller = ntdst_get(\Stride\Admin\AdminAPIController::class);
+        $editionId = $this->createTestEdition();
+
+        // Registration where user tasks are DONE — should be 'approval' bucket only,
+        // never stale_user even if old.
+        $tenDaysAgo = gmdate('Y-m-d H:i:s', time() - 10 * DAY_IN_SECONDS);
+        $regTable = $wpdb->prefix . 'vad_registrations';
+        $wpdb->insert($regTable, [
+            'user_id' => self::$adminUserId,
+            'edition_id' => $editionId,
+            'status' => 'pending',
+            'enrollment_path' => 'individual',
+            'registered_at' => $tenDaysAgo,
+            'completion_tasks' => wp_json_encode([
+                'documents' => ['status' => 'completed'],
+                'approval' => ['status' => 'pending'],
+            ]),
+        ]);
+        $regId = (int) $wpdb->insert_id;
+
+        $req = new WP_REST_Request('GET', '/stride/v1/admin/pending-approvals');
+        $req->set_param('stale_days', 7);
+        $items = $controller->getPendingApprovals($req)->get_data()['items'];
+
+        $matching = array_values(array_filter($items, fn($i) => $i['id'] === $regId));
+        $this->assertCount(1, $matching, 'Should only appear in one bucket, not both');
+        $this->assertEquals('approval', $matching[0]['type']);
+
+        $wpdb->delete($regTable, ['id' => $regId]);
+    }
+
+    // =========================================================================
+    // IMPERSONATION AUDIT — schema regression (H3)
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function impersonationAuditRowLandsWithCorrectColumns(): void
+    {
+        global $wpdb;
+
+        $controller = ntdst_get(\Stride\Admin\AdminAPIController::class);
+
+        $targetId = wp_create_user(
+            'imp_target_' . wp_generate_password(6, false),
+            'pw',
+            'imp_target_' . wp_generate_password(6, false) . '@test.local'
+        );
+        $this->assertIsInt($targetId);
+        self::$testPosts[] = $targetId;
+        get_userdata($targetId)->set_role('subscriber');
+
+        $auditTable = $wpdb->prefix . 'audit_log';
+        $wpdb->query("DELETE FROM {$auditTable} WHERE action = 'impersonation.started' AND entity_id = " . (int) $targetId);
+
+        $req = new WP_REST_Request('POST', '/stride/v1/admin/users/' . $targetId . '/impersonate');
+        $req->set_param('id', $targetId);
+        $controller->impersonateUser($req);
+
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT entity_type, entity_id, actor_id, action FROM {$auditTable}
+             WHERE action = %s AND entity_id = %d
+             ORDER BY id DESC LIMIT 1",
+            'impersonation.started',
+            $targetId
+        ));
+
+        $this->assertNotNull($row, 'Audit row must land — subject_id schema mismatch dropped it under MySQL strict mode');
+        $this->assertEquals('user', $row->entity_type);
+        $this->assertEquals($targetId, (int) $row->entity_id);
+        $this->assertEquals(self::$adminUserId, (int) $row->actor_id);
+
+        $wpdb->query("DELETE FROM {$auditTable} WHERE action = 'impersonation.started' AND entity_id = " . (int) $targetId);
+    }
 }

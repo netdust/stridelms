@@ -65,6 +65,10 @@ final class EditionAdminController
         // Registration approval AJAX endpoints
         add_action('wp_ajax_stride_confirm_registration', [$this, 'ajaxConfirmRegistration']);
         add_action('wp_ajax_stride_reject_registration', [$this, 'ajaxRejectRegistration']);
+        add_action('wp_ajax_stride_approve_post_course', [$this, 'ajaxApprovePostCourse']);
+
+        // Bulk lock/unlock quotes for this edition
+        add_action('wp_ajax_stride_bulk_lock_quotes', [$this, 'ajaxBulkLockQuotes']);
 
         // Registration export
         add_action('wp_ajax_stride_export_registrations', [$this, 'ajaxExportRegistrations']);
@@ -75,9 +79,12 @@ final class EditionAdminController
         add_filter('manage_edit-' . EditionCPT::POST_TYPE . '_sortable_columns', [$this, 'defineSortableColumns']);
         add_action('pre_get_posts', [$this, 'handleColumnSorting']);
 
-        // Format filter
-        add_action('restrict_manage_posts', [$this, 'renderFormatFilter']);
-        add_action('pre_get_posts', [$this, 'applyFormatFilter']);
+        // List table filters
+        add_action('restrict_manage_posts', [$this, 'renderListFilters']);
+        add_action('pre_get_posts', [$this, 'applyListFilters']);
+
+        // Remove bulk actions
+        add_filter('bulk_actions-edit-' . EditionCPT::POST_TYPE, [$this, 'removeBulkActions']);
     }
 
     public function registerMetaboxes(): void
@@ -92,17 +99,17 @@ final class EditionAdminController
             [$this, 'renderDetailsMetabox'],
             EditionCPT::POST_TYPE,
             'normal',
-            'high'
+            'high',
         );
 
-        // Sessions metabox (only for existing editions)
+        // Sessions metabox
         add_meta_box(
             'stride_edition_sessions',
             __('Sessies', 'stride'),
             [$this, 'renderSessionsMetabox'],
             EditionCPT::POST_TYPE,
             'normal',
-            'default'
+            'default',
         );
 
         // Registrations & Attendance metabox
@@ -112,7 +119,7 @@ final class EditionAdminController
             [$this, 'renderRegistrationMetabox'],
             EditionCPT::POST_TYPE,
             'normal',
-            'default'
+            'default',
         );
 
         // Notes metabox
@@ -122,7 +129,7 @@ final class EditionAdminController
             [$this, 'renderNotesMetabox'],
             EditionCPT::POST_TYPE,
             'normal',
-            'default'
+            'default',
         );
 
         // Status & actions sidebar
@@ -132,7 +139,7 @@ final class EditionAdminController
             [$this, 'renderActionsMetabox'],
             EditionCPT::POST_TYPE,
             'side',
-            'high'
+            'high',
         );
     }
 
@@ -144,19 +151,22 @@ final class EditionAdminController
             return;
         }
 
+        // WP Media Library (for document uploads)
+        wp_enqueue_media();
+
         // Select2 from CDN
         wp_enqueue_style(
             'select2',
             'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css',
             [],
-            '4.1.0'
+            '4.1.0',
         );
         wp_enqueue_script(
             'select2',
             'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js',
             ['jquery'],
             '4.1.0',
-            true
+            true,
         );
 
         // Edition admin styles (from stride-core mu-plugin)
@@ -167,7 +177,7 @@ final class EditionAdminController
                 'stride-edition-admin',
                 plugins_url('assets/css/admin/edition-admin.css', $basePath . '/stride-core.php'),
                 [],
-                filemtime($cssFile)
+                filemtime($cssFile),
             );
         }
 
@@ -179,7 +189,7 @@ final class EditionAdminController
                 plugins_url('assets/js/admin/edition-admin.js', $basePath . '/stride-core.php'),
                 ['jquery', 'select2'],
                 filemtime($jsFile),
-                true
+                true,
             );
 
             $currentUser = wp_get_current_user();
@@ -188,6 +198,7 @@ final class EditionAdminController
                 'nonce' => wp_create_nonce(self::NONCE_AJAX),
                 'editionId' => $post ? $post->ID : 0,
                 'currentUser' => $currentUser->display_name ?: $currentUser->user_login,
+                'onlineCourseIds' => $this->getOnlineCourseIds(),
                 'i18n' => [
                     'searchCourse' => __('Zoek cursus...', 'stride'),
                     'noResults' => __('Geen resultaten gevonden', 'stride'),
@@ -211,6 +222,26 @@ final class EditionAdminController
                 ],
             ]);
         }
+    }
+
+    /**
+     * Get IDs of courses categorized as online.
+     * @return int[]
+     */
+    private function getOnlineCourseIds(): array
+    {
+        $courses = get_posts([
+            'post_type' => 'sfwd-courses',
+            'posts_per_page' => 500,
+            'fields' => 'ids',
+            'tax_query' => [[
+                'taxonomy' => 'stride_format',
+                'field' => 'slug',
+                'terms' => ['online', 'webinar', 'e-learning'],
+            ]],
+        ]);
+
+        return array_map('intval', $courses);
     }
 
     public function renderDetailsMetabox(WP_Post $post): void
@@ -277,7 +308,9 @@ final class EditionAdminController
                 </div>
             <?php else: ?>
                 <?php foreach ($notes as $index => $note): ?>
-                    <?php if (!empty($note['_deleted'])) continue; ?>
+                    <?php if (!empty($note['_deleted'])) {
+                        continue;
+                    } ?>
                     <?php
                     $type = $note['type'] ?? 'userinfo';
                     $typeConfig = $noteTypes[$type] ?? $noteTypes['userinfo'];
@@ -326,8 +359,8 @@ final class EditionAdminController
     public function handleSave(int $postId, WP_Post $post): void
     {
         // Verify nonce
-        if (!isset($_POST['stride_edition_nonce']) ||
-            !wp_verify_nonce($_POST['stride_edition_nonce'], self::NONCE_SAVE)) {
+        if (!isset($_POST['stride_edition_nonce'])
+            || !wp_verify_nonce($_POST['stride_edition_nonce'], self::NONCE_SAVE)) {
             return;
         }
 
@@ -351,8 +384,14 @@ final class EditionAdminController
             'end_date' => 'date',
             'capacity' => 'int',
             'venue' => 'text',
-            'speakers' => 'text',
             'enrollment_form' => 'text',
+            'required_experience' => 'text',
+            'price_includes' => 'text',
+            'target_audience' => 'textarea',
+            'included' => 'textarea',
+            'cancellation_policy' => 'textarea',
+            'cta_benefits' => 'textarea',
+            'enrollment_info' => 'textarea',
         ];
 
         foreach ($basicFields as $field => $type) {
@@ -360,23 +399,62 @@ final class EditionAdminController
                 $updateData[$field] = match ($type) {
                     'int' => absint($fields[$field]),
                     'date' => sanitize_text_field($fields[$field]),
-                    'text' => sanitize_text_field($fields[$field]),
+                    'textarea' => sanitize_textarea_field($fields[$field]),
                     default => sanitize_text_field($fields[$field]),
                 };
             }
         }
 
-        // Process pricing fields (convert to cents)
-        if (isset($fields['price'])) {
-            $updateData['price'] = (int) round((float) $fields['price'] * 100);
-        }
+        // Process pricing fields (convert to cents).
+        // v1 has no member tier — the admin form posts a single value as
+        // `price_non_member` (canonical for v1). Sync `price` to the same
+        // value so any reader still routing through member/non-member meta
+        // sees one source of truth.
         if (isset($fields['price_non_member'])) {
-            $updateData['price_non_member'] = (int) round((float) $fields['price_non_member'] * 100);
+            $cents = (int) round((float) $fields['price_non_member'] * 100);
+            $updateData['price_non_member'] = $cents;
+            $updateData['price'] = $cents;
+        } elseif (isset($fields['price'])) {
+            // Back-compat path if a caller still posts the legacy `price` key.
+            $cents = (int) round((float) $fields['price'] * 100);
+            $updateData['price'] = $cents;
+            $updateData['price_non_member'] = $cents;
         }
 
-        // Process requires_approval
-        if (isset($fields['requires_approval'])) {
-            $updateData['requires_approval'] = (bool) $fields['requires_approval'];
+        // Process boolean checkbox fields (sidebar + sessions metabox)
+        // Note: requires_session_selection is NOT in this list — it's derived
+        // from session_slots[].required below (single source of truth).
+        $booleanFields = [
+            'requires_approval',
+            'requires_questionnaire',
+            'requires_documents',
+            'selection_open',
+            'post_requires_evaluation',
+            'post_requires_documents',
+            'post_requires_approval',
+        ];
+        foreach ($booleanFields as $boolField) {
+            if (isset($fields[$boolField])) {
+                $updateData[$boolField] = (bool) $fields[$boolField];
+            }
+        }
+
+        // Process speakers repeater ([{name, role}], stored as json field).
+        // The metabox posts a speakers_present marker so removing every row
+        // still clears the meta (an empty repeater posts no speakers[] keys).
+        if (!empty($fields['speakers_present'])) {
+            $speakers = [];
+            foreach ((array) ($fields['speakers'] ?? []) as $speaker) {
+                $name = sanitize_text_field($speaker['name'] ?? '');
+                if ($name === '') {
+                    continue;
+                }
+                $speakers[] = [
+                    'name' => $name,
+                    'role' => sanitize_text_field($speaker['role'] ?? ''),
+                ];
+            }
+            $updateData['speakers'] = $speakers;
         }
 
         // Process status
@@ -384,20 +462,27 @@ final class EditionAdminController
             $updateData['status'] = sanitize_text_field($_POST['stride_change_status']);
         }
 
-        // Process session slots configuration
+        // Process session slots configuration.
+        // requires_session_selection is derived: true iff any slot is marked required.
         if (isset($fields['session_slots']) && is_array($fields['session_slots'])) {
             $slots = [];
+            $hasRequiredSlot = false;
             foreach ($fields['session_slots'] as $slot) {
                 if (!empty($slot['slot'])) {
+                    $required = !empty($slot['required']);
+                    if ($required) {
+                        $hasRequiredSlot = true;
+                    }
                     $slots[] = [
                         'slot' => sanitize_text_field($slot['slot']),
                         'label' => sanitize_text_field($slot['label'] ?? ''),
                         'max_selections' => absint($slot['max_selections'] ?? 1),
-                        'required' => !empty($slot['required']),
+                        'required' => $required,
                     ];
                 }
             }
             $updateData['session_slots'] = $slots;
+            $updateData['requires_session_selection'] = $hasRequiredSlot;
         }
 
         // Process selection deadline
@@ -411,12 +496,10 @@ final class EditionAdminController
             $notes = json_decode($jsonString, true);
 
             if (json_last_error() !== JSON_ERROR_NONE) {
-                // Log JSON decode error for debugging
-                error_log(sprintf(
-                    'Stride Edition: JSON decode error for notes on post %d: %s',
-                    $postId,
-                    json_last_error_msg()
-                ));
+                ntdst_log('edition')->warning('JSON decode error for notes', [
+                    'post_id' => $postId,
+                    'error'   => json_last_error_msg(),
+                ]);
             } elseif (is_array($notes)) {
                 // Filter out deleted notes and sanitize
                 $sanitizedNotes = [];
@@ -431,6 +514,15 @@ final class EditionAdminController
                     }
                 }
                 $updateData['notes'] = $sanitizedNotes;
+            }
+        }
+
+        // Process documents (stored as JSON array of attachment IDs)
+        if (isset($fields['documents'])) {
+            $jsonString = wp_unslash($fields['documents']);
+            $docs = is_string($jsonString) ? json_decode($jsonString, true) : $jsonString;
+            if (is_array($docs)) {
+                $updateData['documents'] = array_values(array_map('absint', array_filter($docs)));
             }
         }
 
@@ -453,6 +545,10 @@ final class EditionAdminController
             wp_send_json_error(['message' => __('Ongeldige editie.', 'stride')], 400);
         }
 
+        if (!current_user_can('edit_post', $editionId)) {
+            wp_send_json_error(['message' => __('Geen toegang.', 'stride')], 403);
+        }
+
         $data = $this->sanitizeSessionData($_POST);
         $data['edition_id'] = $editionId;
 
@@ -462,8 +558,11 @@ final class EditionAdminController
             wp_send_json_error(['message' => $result->get_error_message()], 400);
         }
 
+        // Clear cache so renderSessionsTableBody gets fresh meta
+        ntdst_invalidate_post_type('vad_session');
+
         wp_send_json_success([
-            'session_id' => $result,
+            'session_id' => $result->ID,
             'html' => $this->renderSessionsTableBody($editionId),
         ]);
     }
@@ -484,6 +583,11 @@ final class EditionAdminController
             wp_send_json_error(['message' => __('Sessie niet gevonden.', 'stride')], 404);
         }
 
+        $editionId = (int) ($session['edition_id'] ?? 0);
+        if (!current_user_can('edit_post', $editionId)) {
+            wp_send_json_error(['message' => __('Geen toegang.', 'stride')], 403);
+        }
+
         $data = $this->sanitizeSessionData($_POST);
 
         $result = $this->sessionService->updateSession($sessionId, $data);
@@ -491,6 +595,8 @@ final class EditionAdminController
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()], 400);
         }
+
+        ntdst_invalidate_post_type('vad_session');
 
         wp_send_json_success([
             'html' => $this->renderSessionsTableBody($session['edition_id']),
@@ -587,16 +693,15 @@ final class EditionAdminController
                 $this->attendanceRepository->delete((int) $existing->id);
             }
         } else {
-            // Record attendance using repository
+            // Record attendance via service (fires events for audit + auto-complete)
+            $attendanceService = ntdst_get(\Stride\Modules\Attendance\AttendanceService::class);
             $status = AttendanceStatus::tryFrom($statusValue);
             if ($status) {
-                $this->attendanceRepository->record(
-                    $sessionId,
-                    $userId,
-                    $status,
-                    $editionId,
-                    get_current_user_id()
-                );
+                match ($status) {
+                    AttendanceStatus::Present => $attendanceService->markPresent($sessionId, $userId),
+                    AttendanceStatus::Absent => $attendanceService->markAbsent($sessionId, $userId),
+                    AttendanceStatus::Excused => $attendanceService->markExcused($sessionId, $userId),
+                };
             }
         }
 
@@ -627,21 +732,50 @@ final class EditionAdminController
         // Get all registrations for this edition
         $registrations = $this->getEditionRegistrations($editionId);
 
-        // Mark all as present using repository
-        $currentUserId = get_current_user_id();
+        // Mark all as present via service (fires events for audit + auto-complete)
+        $attendanceService = ntdst_get(\Stride\Modules\Attendance\AttendanceService::class);
         foreach ($registrations as $registration) {
-            $this->attendanceRepository->record(
-                $sessionId,
-                (int) $registration['user_id'],
-                AttendanceStatus::Present,
-                $editionId,
-                $currentUserId
-            );
+            $attendanceService->markPresent($sessionId, (int) $registration['user_id']);
         }
 
         $totals = $this->getAttendanceTotals($sessionId);
 
         wp_send_json_success($totals);
+    }
+
+    // === Quote bulk lock/unlock ===
+
+    /**
+     * Bulk lock or unlock all quotes linked to an edition.
+     *
+     * POST params:
+     *   edition_id  int    — the edition whose quotes to update
+     *   locked      bool   — '1' or '0'
+     *
+     * Returns a summary {total, changed, unchanged} so the UI can show
+     * "12 offertes vergrendeld" or "Alle offertes waren al ontgrendeld".
+     */
+    public function ajaxBulkLockQuotes(): void
+    {
+        if (!$this->verifyAjaxNonce()) {
+            return;
+        }
+
+        $editionId = absint($_POST['edition_id'] ?? 0);
+        if (!$editionId) {
+            wp_send_json_error(['message' => __('Ongeldige editie.', 'stride')], 400);
+        }
+
+        if (!current_user_can('edit_post', $editionId)) {
+            wp_send_json_error(['message' => __('Onvoldoende rechten.', 'stride')], 403);
+        }
+
+        $locked = filter_var($_POST['locked'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+        $quoteService = ntdst_get(\Stride\Modules\Invoicing\QuoteService::class);
+        $summary = $quoteService->bulkSetLockedByEdition($editionId, $locked);
+
+        wp_send_json_success($summary);
     }
 
     // === Registration Approval AJAX Endpoints ===
@@ -688,6 +822,27 @@ final class EditionAdminController
         wp_send_json_success(['message' => __('Inschrijving afgewezen.', 'stride')]);
     }
 
+    public function ajaxApprovePostCourse(): void
+    {
+        if (!$this->verifyAjaxNonce()) {
+            return;
+        }
+
+        $registrationId = absint($_POST['registration_id'] ?? 0);
+        if (!$registrationId) {
+            wp_send_json_error(['message' => __('Ongeldige registratie.', 'stride')], 400);
+        }
+
+        $completion = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
+        $result = $completion->completeTask($registrationId, 'post_approval');
+
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()], 400);
+        }
+
+        wp_send_json_success(['message' => __('Dossier afgetekend.', 'stride')]);
+    }
+
     // === Export ===
 
     public function ajaxExportRegistrations(): void
@@ -725,6 +880,40 @@ final class EditionAdminController
                 $exporter->export($editionId);
                 break;
 
+            case 'files':
+                $filesExporter = new EditionFilesZipExporter(
+                    $this->editionRepository,
+                    ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class),
+                );
+                $filesExporter->export($editionId);
+                break;
+
+            case 'bundle':
+                $filesExporter = new EditionFilesZipExporter(
+                    $this->editionRepository,
+                    ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class),
+                );
+                $bundleExporter = new EditionBundleZipExporter(
+                    new EditionRegistrationExporter(
+                        $this->editionService,
+                        $this->editionRepository,
+                        $this->sessionService,
+                        $this->attendanceRepository,
+                    ),
+                    new EditionNamecardExporter(
+                        $this->editionService,
+                        $this->editionRepository,
+                    ),
+                    new EditionAttendanceExporter(
+                        $this->editionService,
+                        $this->editionRepository,
+                        $this->sessionService,
+                    ),
+                    $filesExporter,
+                );
+                $bundleExporter->export($editionId);
+                break;
+
             default: // 'excel'
                 $exporter = new EditionRegistrationExporter(
                     $this->editionService,
@@ -737,25 +926,84 @@ final class EditionAdminController
         }
     }
 
-    // === Format Filter ===
+    // === List Table Filters & Bulk Actions ===
 
-    public function renderFormatFilter(string $postType): void
+    /**
+     * Remove bulk actions from edition list table.
+     */
+    public function removeBulkActions(array $actions): array
+    {
+        return [];
+    }
+
+    /**
+     * Render filter dropdowns: Course, Status, Format.
+     */
+    public function renderListFilters(string $postType): void
     {
         if ($postType !== EditionCPT::POST_TYPE) {
             return;
         }
 
-        $current = sanitize_text_field($_GET['stride_format'] ?? '');
+        // Course filter
+        $currentCourse = (int) ($_GET['stride_course'] ?? 0);
+        $courses = get_posts([
+            'post_type'      => 'sfwd-courses',
+            'posts_per_page' => 500,
+            'post_status'    => 'publish',
+            'orderby'        => 'title',
+            'order'          => 'ASC',
+        ]);
         ?>
-        <select name="stride_format">
+        <select name="stride_course">
+            <option value=""><?php esc_html_e('Alle cursussen', 'stride'); ?></option>
+            <?php foreach ($courses as $course) : ?>
+                <option value="<?php echo esc_attr($course->ID); ?>" <?php selected($currentCourse, $course->ID); ?>>
+                    <?php echo esc_html($course->post_title); ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+        <?php
+
+        // Status filter
+        $currentStatus = sanitize_text_field($_GET['stride_status'] ?? '');
+        $statuses = [
+            'draft'        => __('Concept', 'stride'),
+            'announcement' => __('Vooraankondiging', 'stride'),
+            'open'         => __('Open', 'stride'),
+            'full'         => __('Volzet', 'stride'),
+            'in_progress'  => __('Lopend', 'stride'),
+            'postponed'    => __('Uitgesteld', 'stride'),
+            'cancelled'    => __('Geannuleerd', 'stride'),
+            'completed'    => __('Afgerond', 'stride'),
+            'archived'     => __('Gearchiveerd', 'stride'),
+        ];
+        ?>
+        <select name="stride_status">
+            <option value=""><?php esc_html_e('Alle statussen', 'stride'); ?></option>
+            <?php foreach ($statuses as $value => $label) : ?>
+                <option value="<?php echo esc_attr($value); ?>" <?php selected($currentStatus, $value); ?>>
+                    <?php echo esc_html($label); ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+        <?php
+
+        // Format filter (name must NOT match taxonomy slug to avoid WP auto tax_query)
+        $currentFormat = sanitize_text_field($_GET['edition_format'] ?? '');
+        ?>
+        <select name="edition_format">
             <option value=""><?php esc_html_e('Alle formaten', 'stride'); ?></option>
-            <option value="online" <?php selected($current, 'online'); ?>><?php esc_html_e('Online', 'stride'); ?></option>
-            <option value="classroom" <?php selected($current, 'classroom'); ?>><?php esc_html_e('Klassikaal', 'stride'); ?></option>
+            <option value="online" <?php selected($currentFormat, 'online'); ?>><?php esc_html_e('Online', 'stride'); ?></option>
+            <option value="classroom" <?php selected($currentFormat, 'classroom'); ?>><?php esc_html_e('Klassikaal', 'stride'); ?></option>
         </select>
         <?php
     }
 
-    public function applyFormatFilter(\WP_Query $query): void
+    /**
+     * Apply list filters to the query.
+     */
+    public function applyListFilters(\WP_Query $query): void
     {
         if (!is_admin() || !$query->is_main_query()) {
             return;
@@ -764,42 +1012,65 @@ final class EditionAdminController
             return;
         }
 
-        $format = sanitize_text_field($_GET['stride_format'] ?? '');
-        if (!$format) {
-            return;
+        $metaQuery = $query->get('meta_query') ?: [];
+
+        // Course filter
+        $courseId = (int) ($_GET['stride_course'] ?? 0);
+        if ($courseId > 0) {
+            $metaQuery[] = [
+                'key'     => '_ntdst_course_id',
+                'value'   => $courseId,
+                'compare' => '=',
+                'type'    => 'NUMERIC',
+            ];
         }
 
-        // Get all course IDs that match the format
-        $onlineSlugs = ['online', 'webinar', 'e-learning'];
-        $courseArgs = [
-            'post_type' => 'sfwd-courses',
-            'posts_per_page' => -1,
-            'fields' => 'ids',
-            'tax_query' => [
-                [
-                    'taxonomy' => 'ld_course_category',
-                    'field' => 'slug',
-                    'terms' => $onlineSlugs,
-                    'operator' => $format === 'online' ? 'IN' : 'NOT IN',
+        // Status filter
+        $status = sanitize_text_field($_GET['stride_status'] ?? '');
+        if ($status) {
+            $metaQuery[] = [
+                'key'     => '_ntdst_status',
+                'value'   => $status,
+                'compare' => '=',
+            ];
+        }
+
+        // Format filter
+        $format = sanitize_text_field($_GET['edition_format'] ?? '');
+        if ($format) {
+            $onlineSlugs = ['online', 'webinar', 'e-learning'];
+
+            $courseIds = get_posts([
+                'post_type'      => 'sfwd-courses',
+                'posts_per_page' => 500,
+                'fields'         => 'ids',
+                'tax_query'      => [
+                    [
+                        'taxonomy' => 'stride_format',
+                        'field'    => 'slug',
+                        'terms'    => $onlineSlugs,
+                        'operator' => $format === 'online' ? 'IN' : 'NOT IN',
+                    ],
                 ],
-            ],
-        ];
-        $courseIds = get_posts($courseArgs);
+            ]);
 
-        if (empty($courseIds)) {
-            // No matching courses — force empty result
-            $query->set('post__in', [0]);
-            return;
+            if (empty($courseIds)) {
+                $query->set('post__in', [0]);
+                return;
+            }
+
+            $metaQuery[] = [
+                'key'     => '_ntdst_course_id',
+                'value'   => $courseIds,
+                'compare' => 'IN',
+                'type'    => 'NUMERIC',
+            ];
         }
 
-        $existing = $query->get('meta_query') ?: [];
-        $existing[] = [
-            'key' => '_ntdst_course_id',
-            'value' => $courseIds,
-            'compare' => 'IN',
-            'type' => 'NUMERIC',
-        ];
-        $query->set('meta_query', $existing);
+        if (!empty($metaQuery)) {
+            $query->set('meta_query', $metaQuery);
+        }
+
     }
 
     // === Helper Methods ===
@@ -829,20 +1100,29 @@ final class EditionAdminController
             'type' => sanitize_text_field($input['session_type'] ?? 'in_person'),
         ];
 
+        // Convert euro input to cents for storage
+        $priceModifierInput = $input['price_modifier'] ?? '';
+        if ($priceModifierInput !== '' && $priceModifierInput !== null) {
+            $data['price_modifier'] = (int) round(floatval(str_replace(',', '.', (string) $priceModifierInput)) * 100);
+        } else {
+            $data['price_modifier'] = 0;
+        }
+
         // Type-specific fields
         $type = SessionType::tryFrom($data['type']) ?? SessionType::InPerson;
 
         switch ($type) {
             case SessionType::InPerson:
-                $data['post_title'] = sanitize_text_field($input['title'] ?? '');
+                $data['title'] = sanitize_text_field($input['title'] ?? '');
                 $data['location'] = sanitize_text_field($input['location'] ?? '');
                 $data['description'] = sanitize_textarea_field($input['description'] ?? '');
                 break;
 
             case SessionType::Webinar:
-                $data['post_title'] = sanitize_text_field($input['title'] ?? '');
+                $data['title'] = sanitize_text_field($input['title'] ?? '');
                 $data['webinar_link'] = esc_url_raw($input['webinar_link'] ?? '');
                 $data['description'] = sanitize_textarea_field($input['description'] ?? '');
+                $data['location'] = 'Online';
                 break;
 
             case SessionType::Online:
@@ -850,9 +1130,10 @@ final class EditionAdminController
                 $lessonId = absint($input['lesson_id'] ?? 0);
                 if ($lessonId) {
                     $lesson = get_post($lessonId);
-                    $data['post_title'] = $lesson ? $lesson->post_title : '';
+                    $data['title'] = $lesson ? $lesson->post_title : '';
                     $data['lesson_ids'] = [$lessonId];
                 }
+                $data['location'] = 'Online';
                 break;
         }
 
@@ -904,7 +1185,8 @@ final class EditionAdminController
             data-title="<?php echo esc_attr($session['title'] ?? ''); ?>"
             data-description="<?php echo esc_attr($session['description'] ?? ''); ?>"
             data-webinar-link="<?php echo esc_attr($session['webinar_link'] ?? ''); ?>"
-            data-lesson-ids="<?php echo esc_attr($lessonIds); ?>">
+            data-lesson-ids="<?php echo esc_attr($lessonIds); ?>"
+            data-price-modifier="<?php echo esc_attr((string) ($session['price_modifier'] ?? 0)); ?>">
             <td class="column-date"><?php echo esc_html($dateFormatted); ?></td>
             <td class="column-time"><?php echo esc_html($timeFormatted ?: '-'); ?></td>
             <td class="column-type">
@@ -912,7 +1194,19 @@ final class EditionAdminController
                     <?php echo esc_html($type->label()); ?>
                 </span>
             </td>
+            <td class="column-slot"><?php echo esc_html($session['slot'] ? ($session['slot']) : '-'); ?></td>
             <td class="column-location"><?php echo esc_html($session['location'] ?: '-'); ?></td>
+            <td class="column-price-mod" style="white-space: nowrap;">
+                <?php
+                $modifier = (int) ($session['price_modifier'] ?? 0);
+        if ($modifier !== 0):
+            $sign = $modifier > 0 ? '+' : '';
+            echo esc_html($sign . number_format($modifier / 100, 2, ',', '.'));
+        else:
+            echo '-';
+        endif;
+        ?>
+            </td>
             <td class="column-actions">
                 <button type="button" class="button-link stride-edit-session" title="<?php esc_attr_e('Bewerken', 'stride'); ?>">
                     <span class="dashicons dashicons-edit"></span>
@@ -962,7 +1256,7 @@ final class EditionAdminController
 
         return $wpdb->get_results($wpdb->prepare(
             "SELECT user_id FROM {$table} WHERE edition_id = %d AND status = 'confirmed'",
-            $editionId
+            $editionId,
         ), ARRAY_A) ?: [];
     }
 
@@ -999,7 +1293,6 @@ final class EditionAdminController
     public function defineListColumns(array $columns): array
     {
         $newColumns = [];
-        $newColumns['cb'] = $columns['cb'] ?? '<input type="checkbox" />';
         $newColumns['title'] = __('Editie', 'stride');
         $newColumns['course'] = __('Cursus', 'stride');
         $newColumns['format'] = __('Formaat', 'stride');
@@ -1036,7 +1329,7 @@ final class EditionAdminController
                 $courseId = (int) $this->editionRepository->getField($postId, 'course_id', 0);
                 $isOnline = false;
                 if ($courseId) {
-                    $cats = get_the_terms($courseId, 'ld_course_category');
+                    $cats = get_the_terms($courseId, 'stride_format');
                     if ($cats && !is_wp_error($cats)) {
                         foreach ($cats as $cat) {
                             if (in_array($cat->slug, ['online', 'webinar', 'e-learning'], true)) {
@@ -1085,12 +1378,16 @@ final class EditionAdminController
             case 'status':
                 $status = $this->editionRepository->getField($postId, 'status', 'draft');
                 $statusLabels = [
-                    'draft' => ['label' => __('Concept', 'stride'), 'color' => '#787c82'],
-                    'open' => ['label' => __('Open', 'stride'), 'color' => '#00a32a'],
-                    'full' => ['label' => __('Vol', 'stride'), 'color' => '#dba617'],
-                    'closed' => ['label' => __('Gesloten', 'stride'), 'color' => '#d63638'],
-                    'cancelled' => ['label' => __('Geannuleerd', 'stride'), 'color' => '#d63638'],
-                    'completed' => ['label' => __('Afgerond', 'stride'), 'color' => '#2271b1'],
+                    'draft'        => ['label' => __('Concept', 'stride'),         'color' => '#787c82'],
+                    'announcement' => ['label' => __('Vooraankondiging', 'stride'), 'color' => '#dba617'],
+                    'open'         => ['label' => __('Open', 'stride'),            'color' => '#00a32a'],
+                    'few_spots'    => ['label' => __('Bijna volzet', 'stride'),    'color' => '#dba617'],
+                    'full'         => ['label' => __('Volzet', 'stride'),          'color' => '#dba617'],
+                    'in_progress'  => ['label' => __('Lopend', 'stride'),          'color' => '#2271b1'],
+                    'postponed'    => ['label' => __('Uitgesteld', 'stride'),      'color' => '#dba617'],
+                    'cancelled'    => ['label' => __('Geannuleerd', 'stride'),     'color' => '#d63638'],
+                    'completed'    => ['label' => __('Afgerond', 'stride'),        'color' => '#646970'],
+                    'archived'     => ['label' => __('Gearchiveerd', 'stride'),    'color' => '#787c82'],
                 ];
                 $config = $statusLabels[$status] ?? ['label' => ucfirst($status), 'color' => '#787c82'];
                 echo '<span style="display:inline-block;padding:2px 8px;border-radius:3px;background:' . $config['color'] . '20;color:' . $config['color'] . ';font-size:12px;">';

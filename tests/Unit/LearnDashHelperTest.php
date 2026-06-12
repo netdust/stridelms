@@ -585,4 +585,28 @@ class LearnDashHelperTest extends TestCase
             }');
         }
     }
+
+    // ──────────────────────────────────────────────────────────
+    // Regression for B3-004: course-exists guard on hasAccess
+    // ──────────────────────────────────────────────────────────
+
+    /**
+     * @test
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function hasAccessReturnsFalseForNonExistentCourse(): void
+    {
+        if (!function_exists('learndash_get_setting')) {
+            eval('function learndash_get_setting($id, $key = null) { return ""; }');
+        }
+        if (!function_exists('sfwd_lms_has_access')) {
+            // Mimics LD core: returns true for any int, including non-existent.
+            eval('function sfwd_lms_has_access(int $courseId, int $userId): bool { return true; }');
+        }
+        // _test_posts empty → get_post_type returns false → not 'sfwd-courses'
+        $GLOBALS['_test_posts'] = [];
+
+        self::assertFalse(LearnDashHelper::hasAccess(99999, 1));
+    }
 }

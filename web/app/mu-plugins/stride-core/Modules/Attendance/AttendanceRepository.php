@@ -22,16 +22,12 @@ final class AttendanceRepository
      *
      * @return int|WP_Error Attendance record ID or error
      */
-    public function record(int $sessionId, int $userId, AttendanceStatus $status, ?int $editionId = null, ?int $markedBy = null): int|WP_Error
+    public function record(int $sessionId, int $userId, AttendanceStatus $status, int $editionId, ?int $markedBy = null): int|WP_Error
     {
         global $wpdb;
 
-        // If edition_id not provided, look it up from session via Data Manager
-        if ($editionId === null) {
-            $editionId = (int) ntdst_data()->get('vad_session')->getMeta($sessionId, 'edition_id');
-            if ($editionId === 0) {
-                return new WP_Error('missing_edition', 'Could not determine edition for session');
-            }
+        if ($editionId === 0) {
+            return new WP_Error('missing_edition', 'Could not determine edition for session');
         }
 
         // Check for existing record
@@ -46,7 +42,7 @@ final class AttendanceRepository
                     'marked_by' => $markedBy,
                     'marked_at' => current_time('mysql'),
                 ],
-                ['id' => $existing->id]
+                ['id' => $existing->id],
             );
 
             if ($result === false) {
@@ -81,7 +77,7 @@ final class AttendanceRepository
 
         return $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$this->table()} WHERE id = %d",
-            $id
+            $id,
         ));
     }
 
@@ -95,7 +91,7 @@ final class AttendanceRepository
         return $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$this->table()} WHERE session_id = %d AND user_id = %d",
             $sessionId,
-            $userId
+            $userId,
         ));
     }
 
@@ -133,8 +129,37 @@ final class AttendanceRepository
         return $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$this->table()} WHERE user_id = %d AND edition_id = %d ORDER BY session_id ASC",
             $userId,
-            $editionId
+            $editionId,
         ));
+    }
+
+    /**
+     * Get attendance records for multiple users.
+     *
+     * @param array<int> $userIds
+     * @return array<object>
+     */
+    public function getByUsers(array $userIds, ?int $editionId = null): array
+    {
+        if (empty($userIds)) {
+            return [];
+        }
+
+        global $wpdb;
+
+        $placeholders = implode(',', array_fill(0, count($userIds), '%d'));
+        $params = $userIds;
+
+        $sql = "SELECT * FROM {$this->table()} WHERE user_id IN ({$placeholders})";
+
+        if ($editionId !== null) {
+            $sql .= " AND edition_id = %d";
+            $params[] = $editionId;
+        }
+
+        $sql .= " ORDER BY marked_at DESC";
+
+        return $wpdb->get_results($wpdb->prepare($sql, ...$params));
     }
 
     /**
@@ -166,10 +191,12 @@ final class AttendanceRepository
     {
         global $wpdb;
 
+        $statuses = AttendanceStatus::attendedValues();
+
         return (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$this->table()} WHERE user_id = %d AND edition_id = %d AND status = 'present'",
+            "SELECT COUNT(*) FROM {$this->table()} WHERE user_id = %d AND edition_id = %d AND status IN ($statuses)",
             $userId,
-            $editionId
+            $editionId,
         ));
     }
 
@@ -183,7 +210,7 @@ final class AttendanceRepository
         return (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM {$this->table()} WHERE user_id = %d AND edition_id = %d",
             $userId,
-            $editionId
+            $editionId,
         ));
     }
 
@@ -219,9 +246,11 @@ final class AttendanceRepository
     {
         global $wpdb;
 
+        $statuses = AttendanceStatus::attendedValues();
+
         $results = $wpdb->get_col($wpdb->prepare(
-            "SELECT user_id FROM {$this->table()} WHERE session_id = %d AND status = 'present'",
-            $sessionId
+            "SELECT user_id FROM {$this->table()} WHERE session_id = %d AND status IN ($statuses)",
+            $sessionId,
         ));
 
         return array_map('intval', $results);
@@ -245,5 +274,26 @@ final class AttendanceRepository
         global $wpdb;
 
         return $wpdb->delete($this->table(), ['session_id' => $sessionId]) !== false;
+    }
+
+    /**
+     * Delete attendance records for many sessions in one query.
+     *
+     * @param array<int> $sessionIds
+     */
+    public function deleteBySessions(array $sessionIds): bool
+    {
+        if (empty($sessionIds)) {
+            return true;
+        }
+
+        global $wpdb;
+
+        $ids = array_map('intval', $sessionIds);
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+
+        $sql = "DELETE FROM {$this->table()} WHERE session_id IN ({$placeholders})";
+
+        return $wpdb->query($wpdb->prepare($sql, ...$ids)) !== false;
     }
 }

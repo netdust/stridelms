@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /**
  * NTDST Mailer - Template-based Mail System
  *
@@ -53,15 +55,18 @@ class NTDST_Mailer
 
     public function __construct()
     {
-        // Set defaults from WordPress settings
-        $this->from_email = get_option('admin_email');
-        $this->from_name = get_option('blogname');
+        // Set defaults from WordPress settings.
+        // Cast defensively: on a not-yet-installed site (e.g. `wp core install`
+        // bootstrapping an empty DB in CI) these options do not exist yet and
+        // get_option() returns false, which would fatal on the typed properties.
+        $this->from_email = (string) get_option('admin_email');
+        $this->from_name = (string) get_option('blogname');
     }
 
     /**
      * Set recipient(s)
      */
-    public function to($email): self
+    public function to(string|array $email): self
     {
         $this->to = is_array($email) ? $email : [$email];
         return $this;
@@ -70,7 +75,7 @@ class NTDST_Mailer
     /**
      * Set CC recipients
      */
-    public function cc($email): self
+    public function cc(string|array $email): self
     {
         $this->cc = is_array($email) ? $email : [$email];
         return $this;
@@ -79,28 +84,35 @@ class NTDST_Mailer
     /**
      * Set BCC recipients
      */
-    public function bcc($email): self
+    public function bcc(string|array $email): self
     {
         $this->bcc = is_array($email) ? $email : [$email];
         return $this;
     }
 
     /**
-     * Set subject
+     * Set subject.
+     *
+     * CRLF stripped defensively — wp_mail's protection varies by WP version,
+     * and a CRLF in the subject can be used to inject arbitrary headers.
      */
     public function subject(string $subject): self
     {
-        $this->subject = $subject;
+        $this->subject = preg_replace('/[\r\n]/', ' ', $subject) ?? '';
         return $this;
     }
 
     /**
-     * Set from address
+     * Set from address.
+     *
+     * Email is validated through sanitize_email (returns '' if invalid).
+     * Name has CRLF stripped to prevent injection into the From header.
      */
     public function from(string $email, string $name = ''): self
     {
-        $this->from_email = $email;
-        $this->from_name = $name ?: $email;
+        $this->from_email = sanitize_email($email);
+        $cleanName = preg_replace('/[\r\n]/', '', $name) ?? '';
+        $this->from_name = $cleanName !== '' ? $cleanName : $this->from_email;
         return $this;
     }
 
@@ -125,22 +137,60 @@ class NTDST_Mailer
     }
 
     /**
-     * Add attachment
+     * Add attachment.
+     *
+     * Only files inside the WordPress uploads directory (or other
+     * allow-listed bases via `ntdst_mail_attachment_bases`) are accepted.
+     * Without this check, a caller passing user input could attach
+     * arbitrary local files (wp-config.php, /etc/passwd, etc.).
      */
     public function attach(string $path): self
     {
-        if (file_exists($path)) {
-            $this->attachments[] = $path;
+        if (!file_exists($path)) {
+            return $this;
+        }
+
+        $real = realpath($path);
+        if ($real === false) {
+            return $this;
+        }
+
+        $defaults = [];
+        if (function_exists('wp_upload_dir')) {
+            $upload = wp_upload_dir();
+            if (!empty($upload['basedir'])) {
+                $defaults[] = $upload['basedir'];
+            }
+        }
+        $allowed = apply_filters('ntdst_mail_attachment_bases', $defaults);
+
+        foreach ($allowed as $base) {
+            $realBase = realpath($base);
+            if ($realBase && str_starts_with($real, $realBase . DIRECTORY_SEPARATOR)) {
+                $this->attachments[] = $path;
+                return $this;
+            }
+        }
+
+        if (function_exists('ntdst_log')) {
+            ntdst_log('mail')->warning('Refused attachment outside allowed bases: ' . $path);
         }
         return $this;
     }
 
     /**
-     * Add custom header
+     * Add custom header.
+     *
+     * CRLF and ':' (in name) are stripped to prevent header injection.
      */
     public function header(string $name, string $value): self
     {
-        $this->headers[] = "{$name}: {$value}";
+        $cleanName = preg_replace('/[\r\n:]/', '', $name) ?? '';
+        $cleanValue = preg_replace('/[\r\n]/', '', $value) ?? '';
+        if ($cleanName === '') {
+            return $this;
+        }
+        $this->headers[] = "{$cleanName}: {$cleanValue}";
         return $this;
     }
 
@@ -155,7 +205,7 @@ class NTDST_Mailer
                 $this->message = $this->renderTemplate($this->template, $this->template_data);
             } elseif ($this->is_html && $this->message) {
                 // Wrap HTML messages in layout if not already wrapped
-                if (strpos($this->message, '<html') === false) {
+                if (!str_contains($this->message, '<html')) {
                     $this->message = $this->wrapInLayout($this->message, []);
                 }
             }
@@ -193,7 +243,7 @@ class NTDST_Mailer
 
             return $result;
 
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             ntdst_log('mail')->error('Email exception', [
                 'error' => $e->getMessage(),
                 'to' => implode(', ', $this->to),
@@ -276,8 +326,11 @@ class NTDST_Mailer
     }
 
     /**
-     * Render email template
-     * Uses Response.php for template loading (DRY principle)
+     * Render email template using Response.php for loading.
+     *
+     * Pre-checks that the template file exists before delegating to
+     * Response::html(), so we don't depend on Response's error-HTML
+     * format to detect missing templates (fragile coupling).
      */
     protected function renderTemplate(string $template, array $data): string
     {
@@ -288,30 +341,35 @@ class NTDST_Mailer
             NTDST_PATH . '/templates/emails',
         ]);
 
+        $templateFile = $template . (str_ends_with($template, '.php') ? '' : '.php');
+        $found = false;
+        foreach ($template_paths as $path) {
+            if (file_exists(rtrim($path, '/') . '/' . $templateFile)) {
+                $found = true;
+                break;
+            }
+        }
+        if (!$found) {
+            return $this->getDefaultTemplate($data);
+        }
+
         // Create Response instance for template rendering
         $response = ntdst_response();
-
-        // Add email-specific template paths
         foreach ($template_paths as $path) {
             $response->addPath($path);
         }
 
-        // Try to render template using Response's html() method
         try {
             $content = $response->withData($data)->html($template);
-        } catch (Exception $e) {
-            // Template not found - use default
-            return $this->getDefaultTemplate($data);
-        }
-
-        // Check if template rendering resulted in error HTML
-        // (Response returns error HTML string when template not found)
-        if (strpos($content, '<div style="padding:20px;background:#fee;') === 0) {
+        } catch (\Throwable $e) {
+            if (function_exists('ntdst_log')) {
+                ntdst_log('mail')->error('Email template render failed: ' . $e->getMessage());
+            }
             return $this->getDefaultTemplate($data);
         }
 
         // Wrap in email layout if not already wrapped
-        if (strpos($content, '<html') === false) {
+        if (!str_contains($content, '<html')) {
             $content = $this->wrapInLayout($content, $data);
         }
 
@@ -327,7 +385,10 @@ class NTDST_Mailer
     }
 
     /**
-     * Get default template
+     * Get default template.
+     *
+     * `{{key}}` substitutions are esc_html'd so that user-controlled values
+     * (names, emails) can't inject HTML into the email body.
      */
     protected function getDefaultTemplate(array $data): string
     {
@@ -336,7 +397,7 @@ class NTDST_Mailer
         // Replace variables
         foreach ($data as $key => $value) {
             if (is_scalar($value)) {
-                $content = str_replace('{{' . $key . '}}', $value, $content);
+                $content = str_replace('{{' . $key . '}}', esc_html((string) $value), $content);
             }
         }
 
@@ -396,30 +457,36 @@ add_action('ntdst_send_queued_mail', function ($args) {
 /**
  * Global helper - get mailer instance
  */
-function ntdst_mail(): NTDST_Mailer
-{
-    return new NTDST_Mailer();
+if (!function_exists('ntdst_mail')) {
+    function ntdst_mail(): NTDST_Mailer
+    {
+        return new NTDST_Mailer();
+    }
 }
 
 /**
  * Quick send helper
  */
-function ntdst_send_mail(string $to, string $subject, string $message, bool $is_html = true): bool
-{
-    return ntdst_mail()
-        ->to($to)
-        ->subject($subject)
-        ->message($message, $is_html)
-        ->send();
+if (!function_exists('ntdst_send_mail')) {
+    function ntdst_send_mail(string $to, string $subject, string $message, bool $is_html = true): bool
+    {
+        return ntdst_mail()
+            ->to($to)
+            ->subject($subject)
+            ->message($message, $is_html)
+            ->send();
+    }
 }
 
 /**
  * Send notification based on event
  */
-function ntdst_notify(string $event, array $data = []): void
-{
-    do_action('ntdst_notification', $event, $data);
-    do_action('ntdst_notification_' . $event, $data);
+if (!function_exists('ntdst_notify')) {
+    function ntdst_notify(string $event, array $data = []): void
+    {
+        do_action('ntdst_notification', $event, $data);
+        do_action('ntdst_notification_' . $event, $data);
+    }
 }
 
 /**
@@ -429,42 +496,46 @@ function ntdst_notify(string $event, array $data = []): void
  * @param string $subject Email subject (for title tag)
  * @return string Wrapped HTML email
  */
-function ntdst_wrap_email_in_layout(string $content, string $subject = ''): string
-{
-    $site_name = get_option('blogname');
-    $site_url = home_url();
+if (!function_exists('ntdst_wrap_email_in_layout')) {
+    function ntdst_wrap_email_in_layout(string $content, string $subject = ''): string
+    {
+        // Escape values that come from settings or callers; $content is HTML
+        // by contract (templates handle their own escaping).
+        $site_name = esc_html(get_option('blogname'));
+        $site_url = esc_url(home_url());
+        $safe_subject = esc_html($subject);
 
-    // Look for layout template
-    $layout_paths = apply_filters('ntdst_email_layout_paths', [
-        get_stylesheet_directory() . '/views/emails/layout.php',
-        get_template_directory() . '/views/emails/layout.php',
-        NTDST_PATH . '/templates/emails/layout.php',
-    ]);
+        // Look for layout template
+        $layout_paths = apply_filters('ntdst_email_layout_paths', [
+            get_stylesheet_directory() . '/views/emails/layout.php',
+            get_template_directory() . '/views/emails/layout.php',
+            NTDST_PATH . '/templates/emails/layout.php',
+        ]);
 
-    $layout_file = null;
-    foreach ($layout_paths as $path) {
-        if (file_exists($path)) {
-            $layout_file = $path;
-            break;
+        $layout_file = null;
+        foreach ($layout_paths as $path) {
+            if (file_exists($path)) {
+                $layout_file = $path;
+                break;
+            }
         }
-    }
 
-    // If layout file exists, use it
-    if ($layout_file) {
-        ob_start();
-        include $layout_file;
-        return ob_get_clean();
-    }
+        // If layout file exists, use it
+        if ($layout_file) {
+            ob_start();
+            include $layout_file;
+            return ob_get_clean();
+        }
 
-    // Fallback to inline layout
-    $year = date('Y');
-    return <<<HTML
+        // Fallback to inline layout
+        $year = date('Y');
+        return <<<HTML
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{$subject}</title>
+    <title>{$safe_subject}</title>
 </head>
 <body style="margin:0; padding:0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f4f4f4;">
@@ -494,6 +565,7 @@ function ntdst_wrap_email_in_layout(string $content, string $subject = ''): stri
 </body>
 </html>
 HTML;
+    }
 }
 
 /**
@@ -522,10 +594,9 @@ add_filter('wp_mail', function ($args) {
     }
 
     // Wrap if HTML and not already wrapped
-    if ($is_html && isset($args['message']) && strpos($args['message'], '<html') === false) {
+    if ($is_html && isset($args['message']) && !str_contains($args['message'], '<html')) {
         $args['message'] = ntdst_wrap_email_in_layout($args['message'], $args['subject'] ?? '');
     }
 
     return $args;
 }, 999);
-

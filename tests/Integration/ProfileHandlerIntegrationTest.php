@@ -128,32 +128,26 @@ class ProfileHandlerIntegrationTest extends IntegrationTestCase
     {
         $result = $this->handler->handleUpdateProfile([], [
             'form_type' => 'billing',
-            'billing_company' => 'Test Company BV',
-            'billing_vat' => 'NL123456789B01',
-            'billing_address' => 'Teststraat 123',
-            'billing_postal_code' => '1234 AB',
-            'billing_city' => 'Amsterdam',
-            'billing_email' => 'billing@test.local',
-            'billing_gln' => '1234567890123',
+            'company' => 'Test Company BV',
+            'vat_number' => 'NL123456789B01',
+            'address' => 'Teststraat 123',
+            'postal_code' => '1234 AB',
+            'city' => 'Amsterdam',
+            'invoice_email' => 'billing@test.local',
+            'gln_number' => '1234567890123',
         ]);
 
         $this->assertIsArray($result);
         $this->assertTrue($result['success']);
 
-        // Verify primary fields
-        $this->assertUserMeta(self::$testUserId, 'invoice_organization_name', 'Test Company BV');
-        $this->assertUserMeta(self::$testUserId, 'vat_number', 'NL123456789B01');
-        $this->assertUserMeta(self::$testUserId, 'invoice_address', 'Teststraat 123');
-        $this->assertUserMeta(self::$testUserId, 'invoice_postal_code', '1234 AB');
-        $this->assertUserMeta(self::$testUserId, 'invoice_city', 'Amsterdam');
+        // Verify billing meta fields
+        $this->assertUserMeta(self::$testUserId, 'billing_company', 'Test Company BV');
+        $this->assertUserMeta(self::$testUserId, 'billing_vat', 'NL123456789B01');
+        $this->assertUserMeta(self::$testUserId, 'billing_address_1', 'Teststraat 123');
+        $this->assertUserMeta(self::$testUserId, 'billing_postcode', '1234 AB');
+        $this->assertUserMeta(self::$testUserId, 'billing_city', 'Amsterdam');
         $this->assertUserMeta(self::$testUserId, 'invoice_email', 'billing@test.local');
         $this->assertUserMeta(self::$testUserId, 'gln_number', '1234567890123');
-
-        // Verify legacy field mapping
-        $this->assertUserMeta(self::$testUserId, 'company', 'Test Company BV');
-        $this->assertUserMeta(self::$testUserId, 'address_line_1', 'Teststraat 123');
-        $this->assertUserMeta(self::$testUserId, 'postal_code', '1234 AB');
-        $this->assertUserMeta(self::$testUserId, 'city', 'Amsterdam');
     }
 
     /**
@@ -162,19 +156,19 @@ class ProfileHandlerIntegrationTest extends IntegrationTestCase
     public function handlesEmptyBillingFields(): void
     {
         // First set some values
-        update_user_meta(self::$testUserId, 'invoice_organization_name', 'Old Company');
+        update_user_meta(self::$testUserId, 'billing_company', 'Old Company');
 
         // Then clear them
         $result = $this->handler->handleUpdateProfile([], [
             'form_type' => 'billing',
-            'billing_company' => '',
+            'company' => '',
         ]);
 
         $this->assertIsArray($result);
         $this->assertTrue($result['success']);
 
         // Empty string should be saved (clearing the field)
-        $this->assertUserMeta(self::$testUserId, 'invoice_organization_name', '');
+        $this->assertUserMeta(self::$testUserId, 'billing_company', '');
     }
 
     // =========================================================================
@@ -317,5 +311,109 @@ class ProfileHandlerIntegrationTest extends IntegrationTestCase
         $this->assertIsArray($result);
         $this->assertTrue($result['success']);
         $this->assertStringContainsString('Persoonlijke', $result['message']);
+    }
+
+    // =========================================================================
+    // PARTIAL UPDATE REGRESSION (B3-001 / B3-002)
+    //
+    // Pre-fix bug: the handler wrote every field unconditionally, defaulting
+    // missing input to ''. A caller that posted only one field (e.g. an
+    // inline-edit AJAX call) wiped all other personal/billing fields and
+    // also wiped wp_users.first_name + last_name + display_name via
+    // wp_update_user.
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function partialPersonalUpdateLeavesOtherMetaUntouched(): void
+    {
+        // Seed the user with existing personal data
+        wp_update_user([
+            'ID' => self::$testUserId,
+            'first_name' => 'Pieter',
+            'last_name' => 'Janssen',
+            'display_name' => 'Pieter Janssen',
+        ]);
+        update_user_meta(self::$testUserId, 'phone', '+32470111222');
+        update_user_meta(self::$testUserId, 'organisation', 'BWEEG vzw');
+        update_user_meta(self::$testUserId, 'department', 'Opleidingen');
+
+        // Submit ONLY the phone field — mimics a single-field inline edit
+        $result = $this->handler->handleUpdateProfile([], [
+            'form_type' => 'personal',
+            'phone' => '+32470999000',
+        ]);
+
+        $this->assertTrue($result['success']);
+
+        $this->assertUserMeta(self::$testUserId, 'phone', '+32470999000');
+        $this->assertUserMeta(self::$testUserId, 'organisation', 'BWEEG vzw');
+        $this->assertUserMeta(self::$testUserId, 'department', 'Opleidingen');
+
+        $user = get_userdata(self::$testUserId);
+        $this->assertSame('Pieter', $user->first_name);
+        $this->assertSame('Janssen', $user->last_name);
+        $this->assertSame('Pieter Janssen', $user->display_name);
+    }
+
+    /**
+     * @test
+     */
+    public function partialBillingUpdateLeavesOtherMetaUntouched(): void
+    {
+        update_user_meta(self::$testUserId, 'billing_company', 'BWEEG vzw');
+        update_user_meta(self::$testUserId, 'billing_vat', 'BE0123456789');
+        update_user_meta(self::$testUserId, 'billing_address_1', 'Sportstraat 42');
+        update_user_meta(self::$testUserId, 'billing_postcode', '9000');
+        update_user_meta(self::$testUserId, 'billing_city', 'Gent');
+        update_user_meta(self::$testUserId, 'invoice_email', 'facturatie@bweeg.be');
+        update_user_meta(self::$testUserId, 'gln_number', '5400112345678');
+
+        $result = $this->handler->handleUpdateProfile([], [
+            'form_type' => 'billing',
+            'company' => 'BWEEG NV',
+        ]);
+
+        $this->assertTrue($result['success']);
+
+        $this->assertUserMeta(self::$testUserId, 'billing_company', 'BWEEG NV');
+        $this->assertUserMeta(self::$testUserId, 'billing_vat', 'BE0123456789');
+        $this->assertUserMeta(self::$testUserId, 'billing_address_1', 'Sportstraat 42');
+        $this->assertUserMeta(self::$testUserId, 'billing_postcode', '9000');
+        $this->assertUserMeta(self::$testUserId, 'billing_city', 'Gent');
+        $this->assertUserMeta(self::$testUserId, 'invoice_email', 'facturatie@bweeg.be');
+        $this->assertUserMeta(self::$testUserId, 'gln_number', '5400112345678');
+
+        // Cleanup billing meta the base tearDown doesn't know about
+        delete_user_meta(self::$testUserId, 'billing_company');
+        delete_user_meta(self::$testUserId, 'billing_vat');
+        delete_user_meta(self::$testUserId, 'billing_address_1');
+        delete_user_meta(self::$testUserId, 'billing_postcode');
+        delete_user_meta(self::$testUserId, 'billing_city');
+    }
+
+    /**
+     * @test
+     */
+    public function explicitlyEmptyStringStillClearsField(): void
+    {
+        // User opens the section, blanks out organisation, saves. The field
+        // IS present in the payload, value is ''. That's an explicit clear
+        // and must still wipe the meta.
+        update_user_meta(self::$testUserId, 'organisation', 'Old Org');
+
+        $result = $this->handler->handleUpdateProfile([], [
+            'form_type' => 'personal',
+            'first_name' => 'X',
+            'last_name' => 'Y',
+            'phone' => '+32470000000',
+            'organisation' => '',
+            'department' => '',
+        ]);
+
+        $this->assertTrue($result['success']);
+        $this->assertUserMeta(self::$testUserId, 'organisation', '');
+        $this->assertUserMeta(self::$testUserId, 'department', '');
     }
 }
