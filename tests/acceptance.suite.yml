@@ -28,7 +28,7 @@ modules:
       user: 'db'
       password: 'db'
       url: '%WP_URL%'
-      tablePrefix: 'ckqp_'
+      tablePrefix: 'stride_'
       dump: 'tests/_data/dump.sql'
       populate: false
       cleanup: false
