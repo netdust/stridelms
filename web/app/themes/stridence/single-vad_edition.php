@@ -311,36 +311,26 @@ get_header();
     <!-- Two Column Layout -->
     <div class="container py-8 lg:py-12">
         <div class="flex flex-col lg:flex-row gap-8 lg:gap-12">
-            <!-- Main Content: content tabs -->
-            <div class="flex-1 min-w-0"
-                 x-data="contentTabs(<?php echo esc_attr(wp_json_encode(array_keys($content_tabs))); ?>)">
+            <!-- Main Content: all sections visible, sticky nav scrolls to them -->
+            <div class="flex-1 min-w-0" x-data="editionDetailTabs()">
 
-                <!-- Underline tabs -->
-                <nav class="border-b border-border-soft flex gap-6 overflow-x-auto scrollbar-hide" role="tablist"
+                <!-- Sticky section nav (scroll-spy via IntersectionObserver) -->
+                <nav class="sticky top-16 lg:top-20 bg-surface z-30 border-b border-border-soft flex gap-6 overflow-x-auto scrollbar-hide"
                      aria-label="<?php esc_attr_e('Editie informatie', 'stridence'); ?>">
                     <?php foreach ($content_tabs as $tab_id => $tab_label) : ?>
-                        <button type="button" role="tab"
-                                id="tab-<?php echo esc_attr($tab_id); ?>"
-                                aria-controls="<?php echo esc_attr($tab_id); ?>"
-                                class="text-[15px] font-bold pb-3 px-0.5 whitespace-nowrap transition-colors"
-                                :class="isActive('<?php echo esc_attr($tab_id); ?>')
-                                    ? 'text-primary shadow-[inset_0_-2px_0_0] shadow-primary'
-                                    : 'text-text-faint hover:text-text'"
-                                :aria-selected="isActive('<?php echo esc_attr($tab_id); ?>')"
-                                @click="setTab('<?php echo esc_attr($tab_id); ?>')">
+                        <a href="#<?php echo esc_attr($tab_id); ?>"
+                           class="text-[15px] font-bold py-3 px-0.5 whitespace-nowrap transition-colors"
+                           :class="activeTab === '<?php echo esc_attr($tab_id); ?>'
+                               ? 'text-primary shadow-[inset_0_-2px_0_0] shadow-primary'
+                               : 'text-text-faint hover:text-text'"
+                           @click.prevent="scrollTo('<?php echo esc_attr($tab_id); ?>')">
                             <?php echo esc_html($tab_label); ?>
-                        </button>
+                        </a>
                     <?php endforeach; ?>
                 </nav>
 
-                <?php /* Server-render-first: all four panels are in the DOM; x-show toggles.
-                         Deliberately NO x-cloak on panels — base.css hides [x-cloak], which
-                         would blank the page for non-JS visitors. Without JS, the panels
-                         render stacked. */ ?>
-
-                <!-- Panel: Omschrijving -->
-                <section id="omschrijving" role="tabpanel" aria-labelledby="tab-omschrijving"
-                         x-show="isActive('omschrijving')" class="pt-7 flex flex-col gap-7">
+                <!-- Section: Omschrijving -->
+                <section id="omschrijving" class="scroll-mt-32 pt-7 flex flex-col gap-7">
                     <?php if ($course) : ?>
                         <div class="prose-stride max-w-none">
                             <?php echo apply_filters('the_content', $course->post_content); ?>
@@ -379,9 +369,9 @@ get_header();
                     </div>
                 </section>
 
-                <!-- Panel: Programma -->
-                <section id="programma" role="tabpanel" aria-labelledby="tab-programma"
-                         x-show="isActive('programma')" class="pt-7">
+                <!-- Section: Programma -->
+                <section id="programma" class="scroll-mt-32 pt-10">
+                    <h2 class="text-[18px] font-bold text-text mb-4"><?php esc_html_e('Programma', 'stridence'); ?></h2>
                     <?php if (!$has_sessions) : ?>
                         <?php
                         stridence_template_part('partials/empty-state', null, [
@@ -525,9 +515,9 @@ get_header();
                     <?php endif; ?>
                 </section>
 
-                <!-- Panel: Praktisch -->
-                <section id="praktisch" role="tabpanel" aria-labelledby="tab-praktisch"
-                         x-show="isActive('praktisch')" class="pt-7">
+                <!-- Section: Praktisch -->
+                <section id="praktisch" class="scroll-mt-32 pt-10">
+                    <h2 class="text-[18px] font-bold text-text mb-4"><?php esc_html_e('Praktisch', 'stridence'); ?></h2>
                     <div class="grid gap-[14px] sm:grid-cols-2 lg:grid-cols-3">
                         <div class="bg-surface-card rounded-[14px] shadow-card p-5">
                             <h3 class="text-[11px] font-bold text-primary uppercase tracking-[0.08em]"><?php esc_html_e('Locatie', 'stridence'); ?></h3>
@@ -552,9 +542,9 @@ get_header();
                     </div>
                 </section>
 
-                <!-- Panel: Lesgever -->
-                <section id="lesgever" role="tabpanel" aria-labelledby="tab-lesgever"
-                         x-show="isActive('lesgever')" class="pt-7">
+                <!-- Section: Lesgever -->
+                <section id="lesgever" class="scroll-mt-32 pt-10">
+                    <h2 class="text-[18px] font-bold text-text mb-4"><?php esc_html_e('Lesgever', 'stridence'); ?></h2>
                     <div class="bg-surface-card rounded-[14px] shadow-card p-6 flex gap-5 items-start flex-wrap">
                         <span class="w-14 h-14 rounded-full bg-accent-subtle text-accent-hover font-bold text-[18px] grid place-items-center shrink-0" aria-hidden="true"><?php echo $has_speaker ? esc_html($lesgever_initials) : stridence_icon('user', 'w-6 h-6'); ?></span>
                         <div class="flex-1 min-w-[240px]">
