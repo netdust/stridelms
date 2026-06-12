@@ -180,10 +180,22 @@ foreach (['description','text','textarea','select','radio','checkbox','scale'] a
     $check("qg_enrollment_seed covers field type: {$type}", in_array($type, $fieldTypes, true));
 }
 
-// 3e. qg_eval_seed resolves to >=1 course assignment (cluster-2 review addition)
+// 3e. qg_eval_seed resolves to >=1 assignment (cluster-2 review addition)
 $evalGroup = $groups['qg_eval_seed'] ?? null;
 $check('questionnaire group qg_eval_seed exists', $evalGroup !== null);
-$check('qg_eval_seed has >=1 course assignment', !empty($evalGroup['assignments']));
+$check('qg_eval_seed has >=1 assignment', !empty($evalGroup['assignments']));
+
+// 3e-bis. Shakeout F1: assignments must be EDITION ids, not course ids —
+// QuestionnaireRepository::matchesAssignment strict-matches the rendered
+// vad_edition post ID on /inschrijven/, so a course-id assignment never renders.
+$enrollHasEditionAssignment = false;
+foreach ((array) ($enrollGroup['assignments'] ?? []) as $aid) {
+    if (is_int($aid) && get_post_type($aid) === 'vad_edition') {
+        $enrollHasEditionAssignment = true;
+        break;
+    }
+}
+$check('qg_enrollment_seed has >=1 vad_edition assignment id', $enrollHasEditionAssignment);
 
 // 3f. Partner data: >=1 registration with enrollment_path='partner' AND company_id=1
 $partnerCount = (int) $wpdb->get_var(
@@ -233,6 +245,39 @@ if (!empty($regIds)) {
 } else {
     $check('manifest contains registration ids (needed for timestamp checks)', false);
 }
+
+// 3i. Shakeout F3: >=1 pending seed registration is APPROVAL-READY — all user
+// tasks completed, approval task present and still open (feeds the admin
+// "Wacht op mij" bucket in /admin/pending-approvals).
+$approvalReady = 0;
+if (!empty($regIds)) {
+    $in = implode(',', $regIds);
+    // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- int-cast IDs
+    $pendingRows = $wpdb->get_results(
+        "SELECT id, completion_tasks FROM {$regTable}
+         WHERE id IN ({$in}) AND status = 'pending' AND completion_tasks IS NOT NULL"
+    );
+    foreach ($pendingRows as $row) {
+        $tasks = json_decode((string) $row->completion_tasks, true) ?: [];
+        if (!isset($tasks['approval']) || ($tasks['approval']['status'] ?? 'pending') === 'completed') {
+            continue;
+        }
+        $userDone = true;
+        foreach ($tasks as $type => $task) {
+            if ($type === 'approval' || $type === 'post_approval') {
+                continue;
+            }
+            if (($task['status'] ?? 'pending') !== 'completed') {
+                $userDone = false;
+                break;
+            }
+        }
+        if ($userDone) {
+            $approvalReady++;
+        }
+    }
+}
+$check('>=1 pending seed registration approval-ready (user tasks complete, approval open)', $approvalReady >= 1);
 
 // ---------------------------------------------------------------------------
 echo "\n" . (empty($failures) ? "ALL DIMENSIONS COVERED\n" : count($failures) . " FAILURES\n");

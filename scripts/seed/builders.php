@@ -528,6 +528,18 @@ final class StrideSeedBuilders
             $completion = ntdst_get(EnrollmentCompletion::class);
             $tasks = $completion->buildInitialTasks($editionId, 'vad_edition');
             if (!empty($tasks)) {
+                if (!empty($reg['complete_user_tasks'])) {
+                    // Approval-ready pending reg: mark all USER tasks complete via the
+                    // product's canonical shape (EnrollmentCompletion::markTaskComplete),
+                    // leaving only admin-side approval open — feeds the dashboard
+                    // "Wacht op mij" bucket (AdminAPIController::getPendingApprovals).
+                    foreach (array_keys($tasks) as $taskType) {
+                        if ($taskType === 'approval' || $taskType === 'post_approval') {
+                            continue;
+                        }
+                        $tasks = $completion->markTaskComplete($tasks, $taskType);
+                    }
+                }
                 $wpdb->update(
                     $wpdb->prefix . 'vad_registrations',
                     ['completion_tasks' => wp_json_encode($tasks)],
@@ -712,10 +724,13 @@ final class StrideSeedBuilders
      * builder admin sanitizes (QuestionnaireSettingsPage:329) and what the
      * renderers explode (dynamic-field.php / field-radio.php).
      *
-     * Assignment resolution (flat int course IDs, per repository contract):
-     * - 'assign_to_course' => '<course title>'  → resolved to the course ID
-     * - 'assign_to_course' => '*post_course*'   → every course whose edition
-     *   has _ntdst_post_requires_evaluation (port of the old eval-group logic)
+     * Assignment resolution (flat int EDITION post IDs — the repository's
+     * matchesAssignment() strict-matches the rendered post's own ID, which on
+     * /inschrijven/ is the vad_edition, never the course):
+     * - 'assign_to_course' => '<course title>'  → resolved to ALL seed edition
+     *   IDs of that course (vad_edition with _ntdst_course_id, any status)
+     * - 'assign_to_course' => '*post_course*'   → every EDITION that has
+     *   _ntdst_post_requires_evaluation (port of the old eval-group logic)
      *
      * @return string[] group ids written
      */
@@ -771,33 +786,50 @@ final class StrideSeedBuilders
         return $writtenIds;
     }
 
-    /** @return array<int> flat course IDs (repository assignment contract) */
+    /** @return array<int> flat EDITION post IDs (matchesAssignment strict-matches the edition ID) */
     private function resolveGroupAssignments(?string $target): array
     {
+        global $wpdb;
+
         if ($target === null || $target === '') {
             return [];
         }
 
         if ($target === '*post_course*') {
-            // Every course whose edition has post_requires_evaluation
-            global $wpdb;
-            $courseIds = $wpdb->get_col(
-                "SELECT DISTINCT cm.meta_value
+            // Every EDITION that has post_requires_evaluation
+            $editionIds = $wpdb->get_col(
+                "SELECT DISTINCT p.ID
                  FROM {$wpdb->postmeta} pm
                  JOIN {$wpdb->posts} p ON p.ID = pm.post_id AND p.post_type = 'vad_edition'
-                 JOIN {$wpdb->postmeta} cm ON cm.post_id = p.ID AND cm.meta_key = '_ntdst_course_id'
                  WHERE pm.meta_key = '_ntdst_post_requires_evaluation' AND pm.meta_value = '1'"
             );
-            return array_map('intval', $courseIds);
+            return array_map('intval', $editionIds);
         }
 
-        // Course title → ID
+        // Course title → all seed edition IDs of that course (any post_status)
         $courseId = $this->findIdByTitle('sfwd-courses', $target);
         if (!$courseId) {
             echo "  ! Questionnaire assignment target not found: {$target}\n";
             return [];
         }
-        return [$courseId];
+
+        $editionIds = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT p.ID
+             FROM {$wpdb->posts} p
+             JOIN {$wpdb->postmeta} cm ON cm.post_id = p.ID
+                 AND cm.meta_key = '_ntdst_course_id' AND cm.meta_value = %s
+             JOIN {$wpdb->postmeta} sm ON sm.post_id = p.ID
+                 AND sm.meta_key = %s
+             WHERE p.post_type = 'vad_edition'",
+            (string) $courseId,
+            StrideSeedRunner::SEED_META_KEY,
+        ));
+
+        if (empty($editionIds)) {
+            echo "  ! Questionnaire assignment: no seed editions found for course '{$target}' ({$courseId})\n";
+            return [];
+        }
+        return array_map('intval', $editionIds);
     }
 
     /**

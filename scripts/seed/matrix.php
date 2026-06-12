@@ -37,6 +37,7 @@
  *       'status' => RegistrationStatus value, 'path' => 'individual'|'colleague'|'trajectory'|'partner',
  *       'attendance' => 'present'|null,  'quote' => 'draft'|'sent'|'exported'|'cancelled'|null,
  *       'init_tasks' => bool, 'init_post_tasks' => bool,
+ *       'complete_user_tasks' => bool,   // with init_tasks: mark all non-approval tasks completed (approval-ready)
  *     ], ...],
  *     'covers' => string[],
  *     'sessions' => [['date_offset','start','end','type','title','optional'?,'slot'?,'location'?,'link_lesson'?]],
@@ -484,6 +485,10 @@ return [
                     'registrations' => [
                         ['user' => 'seed_student3', 'status' => 'pending', 'path' => 'individual',
                          'init_tasks' => true, 'quote' => 'draft'],
+                        [   // Approval-ready: user tasks done, only admin approval open
+                            // → fills the dashboard "Wacht op mij" bucket (shakeout F3)
+                            'user' => 'seed_student5', 'status' => 'pending', 'path' => 'individual',
+                            'init_tasks' => true, 'complete_user_tasks' => true],
                     ],
                     'sessions' => [
                         ['date_offset' => 0,  'start' => '09:00', 'end' => '17:00', 'type' => 'in_person', 'title' => 'Dag 1: Intake en motorische screening'],
@@ -863,7 +868,7 @@ return [
             'id' => 'qg_enrollment_seed',
             'label' => 'Extra inschrijvingsvragen',
             'stage' => 'enrollment_personal',                  // valid per QuestionnaireRepository::STAGES
-            'assign_to_course' => 'Erkenningstraject Jeugdsportcoach',   // resolved to course ID by builder
+            'assign_to_course' => 'Erkenningstraject Jeugdsportcoach',   // resolved to that course's seed EDITION ids by builder
             'fields' => [
                 ['label' => 'Toelichting', 'name' => 'intro_desc', 'type' => 'description',
                  'description' => 'Deze gegevens gebruiken we om de opleiding af te stemmen op de groep.'],
@@ -885,7 +890,7 @@ return [
             'id' => 'qg_eval_seed',
             'label' => 'Evaluatie opleiding',
             'stage' => 'evaluation',
-            'assign_to_course' => '*post_course*',   // builder: every course whose edition has post_requires_evaluation
+            'assign_to_course' => '*post_course*',   // builder: every EDITION with post_requires_evaluation
             'fields' => [
                 ['label' => 'Beoordeling docent', 'name' => 'beoordeling_docent', 'type' => 'scale', 'required' => true, 'min' => 1, 'max' => 5],
                 ['label' => 'Beoordeling lesmateriaal', 'name' => 'beoordeling_materiaal', 'type' => 'scale', 'required' => true, 'min' => 1, 'max' => 5],
