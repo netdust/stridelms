@@ -474,4 +474,92 @@ class TrajectoryE2ECest
             'a non-enrolled user must not reach the elective form'
         );
     }
+
+    // =========================================================================
+    // Descriptive fields on the PUBLIC trajectory page (plan F1/F2/F3)
+    // =========================================================================
+
+    private function setDescriptiveField(AcceptanceTester $I, string $field, string $value): void
+    {
+        // Mirrors the admin save: registered schema field, _ntdst_-prefixed meta.
+        $I->havePostmetaInDatabase($this->trajectoryId, '_ntdst_' . $field, $value);
+    }
+
+    /**
+     * F2: a trajectory with every descriptive field empty shows NO hardcoded
+     * placeholders and NO empty wells — only the always-on Praktisch cards.
+     *
+     * @test
+     */
+    public function emptyDescriptiveFieldsShowNoPlaceholders(AcceptanceTester $I): void
+    {
+        $I->wantTo('see no hardcoded placeholders when descriptive fields are empty');
+
+        $I->amOnPage('/trajecten/' . $this->trajectorySlug . '/');
+        $I->waitForElement('#praktisch', 10);
+
+        // The removed hardcoded values must be gone.
+        $I->dontSee('Zorgprofessionals');
+        $I->dontSee('VAD Certificaat');
+        // No empty wells.
+        $I->dontSee('Voor wie?');
+        $I->dontSee('Voorkennis');
+        $I->dontSee('Inbegrepen');
+        // The always-on cards remain.
+        $I->see('Praktische informatie');
+        $I->see('Doorlooptijd');
+        $I->dontSee('Fatal error');
+    }
+
+    /**
+     * F1: setting descriptive fields renders their wells on the public page.
+     *
+     * @test
+     */
+    public function setDescriptiveFieldsRenderTheirWells(AcceptanceTester $I): void
+    {
+        $I->wantTo('see the Praktisch wells + Voor wie render from real fields');
+
+        $this->setDescriptiveField($I, 'target_audience', 'Zorgcoördinatoren en preventiewerkers');
+        $this->setDescriptiveField($I, 'required_experience', 'Geen voorkennis vereist');
+        $this->setDescriptiveField($I, 'included', 'Cursusmateriaal en begeleiding');
+        $this->setDescriptiveField($I, 'cancellation_policy', 'Kosteloos tot 14 dagen voor start');
+        $this->setDescriptiveField($I, 'duration', '6 maanden');
+
+        $I->amOnPage('/trajecten/' . $this->trajectorySlug . '/');
+        $I->waitForElement('#praktisch', 10);
+
+        $I->see('Voor wie?');
+        $I->see('Zorgcoördinatoren en preventiewerkers');
+        $I->see('Voorkennis');
+        $I->see('Geen voorkennis vereist');
+        $I->see('Inbegrepen');
+        $I->see('Cursusmateriaal en begeleiding');
+        $I->see('Annuleren');
+        $I->see('Kosteloos tot 14 dagen voor start');
+        // duration overrides the mode-derived Doorlooptijd label.
+        $I->see('6 maanden');
+    }
+
+    /**
+     * F3: the sidebar renders price_includes / enrollment_info / cta_benefits.
+     *
+     * @test
+     */
+    public function sidebarRendersDescriptiveFields(AcceptanceTester $I): void
+    {
+        $I->wantTo('see price_includes, enrollment_info and cta_benefits in the sidebar');
+
+        $this->setDescriptiveField($I, 'price_includes', 'incl. cursusmateriaal');
+        $this->setDescriptiveField($I, 'enrollment_info', 'Je ontvangt een bevestiging per e-mail.');
+        $this->setDescriptiveField($I, 'cta_benefits', "Erkend certificaat\nBegeleiding door experts\n");
+
+        $I->amOnPage('/trajecten/' . $this->trajectorySlug . '/');
+        $I->waitForElement('main', 10);
+
+        $I->see('incl. cursusmateriaal');
+        $I->see('Je ontvangt een bevestiging per e-mail.');
+        $I->see('Erkend certificaat');
+        $I->see('Begeleiding door experts');
+    }
 }
