@@ -61,8 +61,8 @@ foreach ($progress['edition_registrations'] as $edReg) {
 
 // Picks as COURSE ids through the single decision point — the raw
 // selections column stores flat EDITION ids, never grouped course ids.
-$selectedCourseIds = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::class)
-    ->getSelectedCourseIds((int) ($enrollment->id ?? 0));
+$trajectorySelection = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::class);
+$selectedCourseIds = $trajectorySelection->getSelectedCourseIds((int) ($enrollment->id ?? 0));
 
 // Build timeline rows: required courses in order, then one keuze row per group.
 $timeline = [];
@@ -95,7 +95,7 @@ foreach ($progress['elective_groups'] as $groupIndex => $group) {
     $required = (int) ($group['required'] ?? 0);
     $groupCourseIds = array_map(static fn($c): int => (int) $c->ID, $courses);
     $chosenIds = array_values(array_intersect($groupCourseIds, $selectedCourseIds));
-    $confirmed = count($chosenIds) >= $required;
+    $confirmed = $trajectorySelection->isGroupChosen($group, $selectedCourseIds);
 
     $chosenTitles = [];
     foreach ($courses as $course) {

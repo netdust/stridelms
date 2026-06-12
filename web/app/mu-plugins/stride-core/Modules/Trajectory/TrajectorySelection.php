@@ -289,6 +289,38 @@ final class TrajectorySelection
     }
 
     /**
+     * How many of a group's courses are among the selected course ids.
+     *
+     * The one derivation templates use for per-group chosen state — pair it
+     * with getSelectedCourseIds() so the threshold rule (`required` =
+     * min_choices) can never drift per template.
+     *
+     * @param array<string, mixed> $group One getElectiveGroups() struct
+     * @param array<int>           $selectedCourseIds
+     */
+    public function countChosenInGroup(array $group, array $selectedCourseIds): int
+    {
+        $groupCourseIds = array_map(
+            static fn($coursePost): int => (int) $coursePost->ID,
+            $group['courses'] ?? [],
+        );
+
+        return count(array_intersect($groupCourseIds, $selectedCourseIds));
+    }
+
+    /**
+     * Whether a group's requirement is met by the selected course ids.
+     *
+     * @param array<string, mixed> $group
+     * @param array<int>           $selectedCourseIds
+     */
+    public function isGroupChosen(array $group, array $selectedCourseIds): bool
+    {
+        return $this->countChosenInGroup($group, $selectedCourseIds)
+            >= max(1, (int) ($group['required'] ?? 0));
+    }
+
+    /**
      * The shared write path behind both selection entry points: canonical
      * selections write → cascade reconcile → append-only phase entry →
      * choices_updated event. Never duplicated (single guard/cascade sequence).

@@ -374,6 +374,22 @@ class TrajectorySelectionFromCoursesTest extends TestCase
     }
 
     /** @test */
+    public function groupChosenHelpersCountIntersectionAgainstRequirement(): void
+    {
+        $group = $this->group('Verdieping', 1, [[101, 201], [102, 0]]);
+
+        $this->assertSame(1, $this->selection->countChosenInGroup($group, [101]));
+        $this->assertSame(0, $this->selection->countChosenInGroup($group, [999]));
+        $this->assertTrue($this->selection->isGroupChosen($group, [102]));
+        $this->assertFalse($this->selection->isGroupChosen($group, []));
+
+        // required=0 keeps the historic "pick exactly one" floor.
+        $zeroGroup = $this->group('Optioneel', 0, [[103, 203]]);
+        $this->assertFalse($this->selection->isGroupChosen($zeroGroup, []));
+        $this->assertTrue($this->selection->isGroupChosen($zeroGroup, [103]));
+    }
+
+    /** @test */
     public function selectedCourseIdsEmptyForUnknownRegistration(): void
     {
         $this->registrations->shouldReceive('find')->with(self::REG_ID)->andReturn(null);

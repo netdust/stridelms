@@ -34,6 +34,7 @@ $user_id = $user->ID;
 
 // Get services
 $registrationRepo   = ntdst_get(RegistrationRepository::class);
+$trajectorySelection = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::class);
 $trajectoryService  = ntdst_get(TrajectoryService::class);
 $trajectoryRepo     = ntdst_get(TrajectoryRepository::class);
 $editionService     = ntdst_get(EditionService::class);
@@ -69,8 +70,7 @@ foreach ($enrollments as $enrollment) {
 
     // Picks as COURSE ids through the single decision point — the raw
     // selections column stores flat EDITION ids, never grouped course ids.
-    $selected_course_ids = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::class)
-        ->getSelectedCourseIds((int) $enrollment->id);
+    $selected_course_ids = $trajectorySelection->getSelectedCourseIds((int) $enrollment->id);
 
     // Calculate progress based on mode
     $mode = TrajectoryMode::tryFrom($trajectory['mode']) ?? TrajectoryMode::Cohort;
@@ -182,14 +182,10 @@ foreach ($enrollments as $enrollment) {
                     // the header line only says "keuze gemaakt" when EVERY
                     // group has a selection.
                     $has_electives = !empty($traj['elective_groups']);
-                    $selectedCourseIds = is_array($traj['selected_course_ids'] ?? null) ? $traj['selected_course_ids'] : [];
-                    $groupChosenCount = static function (array $group) use ($selectedCourseIds): int {
-                        $ids = array_map(static fn($c): int => (int) $c->ID, $group['courses'] ?? []);
-                        return count(array_intersect($ids, $selectedCourseIds));
-                    };
+                    $selectedCourseIds = $traj['selected_course_ids'];
                     $all_groups_chosen = $has_electives;
                     foreach ($traj['elective_groups'] as $group) {
-                        if ($groupChosenCount($group) < max(1, (int) ($group['required'] ?? 1))) {
+                        if (!$trajectorySelection->isGroupChosen($group, $selectedCourseIds)) {
                             $all_groups_chosen = false;
                             break;
                         }
@@ -274,7 +270,7 @@ foreach ($enrollments as $enrollment) {
                         foreach ($traj['elective_groups'] as $groupIndex => $group) {
                             $groupName     = $group['name'] ?? __('Keuzemodule', 'stridence');
                             $requiredCount = (int) ($group['required'] ?? 1);
-                            $groupChosen   = $groupChosenCount($group) >= max(1, (int) ($group['required'] ?? 1));
+                            $groupChosen   = $trajectorySelection->isGroupChosen($group, $selectedCourseIds);
 
                             $allParts[] = [
                                 'type'          => 'elective',

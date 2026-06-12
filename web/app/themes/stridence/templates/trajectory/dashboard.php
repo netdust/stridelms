@@ -84,13 +84,12 @@ if (!empty($choice_available) && !empty($choice_deadline)) {
     if ($now >= strtotime($choice_available) && $now <= strtotime($choice_deadline)) {
         // Picks as COURSE ids through the single decision point — the raw
         // selections column stores flat EDITION ids, never grouped course ids.
-        $selected_course_ids = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::class)
-            ->getSelectedCourseIds((int) ($enrollment->id ?? 0));
+        $trajectory_selection = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::class);
+        $selected_course_ids = $trajectory_selection->getSelectedCourseIds((int) ($enrollment->id ?? 0));
 
         foreach ($progress['elective_groups'] as $group) {
             $required = (int) ($group['required'] ?? 0);
-            $group_course_ids = array_map(static fn($c): int => (int) $c->ID, $group['courses'] ?? []);
-            $chosen = count(array_intersect($group_course_ids, $selected_course_ids));
+            $chosen = $trajectory_selection->countChosenInGroup($group, $selected_course_ids);
 
             if ($required > 0 && $chosen < $required) {
                 $open_choices++;

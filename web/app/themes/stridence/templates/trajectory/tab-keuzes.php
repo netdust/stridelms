@@ -134,16 +134,6 @@ $selectedCourseIds = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::c
         </p>
 
         <div x-data="strideTrajectoryChoices({ registrationId: <?php echo (int) ($enrollment->id ?? 0); ?> })">
-            <!-- Success state -->
-            <template x-if="saved">
-                <div class="bg-surface-card rounded-[14px] shadow-card p-6 flex items-center gap-3">
-                    <?php echo stridence_icon('check', 'w-5 h-5 text-success'); ?>
-                    <p class="text-[14px] font-bold text-text m-0">
-                        <?php esc_html_e('Je keuze is opgeslagen.', 'stridence'); ?>
-                    </p>
-                </div>
-            </template>
-
         <form id="elective-selection-form" class="space-y-7" x-show="!saved" @submit.prevent="submit($el)">
             <?php foreach ($electiveGroups as $groupIndex => $group) :
                 $groupName = $group['name'] ?? __('Keuzegroep', 'stridence');
@@ -170,7 +160,7 @@ $selectedCourseIds = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::c
                                         <?php echo esc_html($course->post_title); ?>
                                     </span>
                                     <input type="<?php echo esc_attr($inputType); ?>"
-                                           name="selections[<?php echo esc_attr($groupIndex); ?>]<?php echo $required > 1 ? '[]' : ''; ?>"
+                                           name="elective_group_<?php echo esc_attr($groupIndex); ?>"
                                            value="<?php echo esc_attr($course->ID); ?>"
                                            <?php checked($isSelected); ?>
                                            class="<?php echo esc_attr($inputClass); ?> mt-px">
@@ -222,8 +212,10 @@ $selectedCourseIds = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::c
                             registration_id: config.registrationId,
                             selections: selections,
                         });
+                        // Server is the source of truth for the rendered
+                        // summary — hide the form and re-render immediately.
                         this.saved = true;
-                        window.setTimeout(() => window.location.reload(), 800);
+                        window.location.reload();
                     } catch (e) {
                         this.error = e.message || '<?php echo esc_js(__('Er is een fout opgetreden.', 'stridence')); ?>';
                     } finally {
