@@ -1,7 +1,8 @@
 <?php
 /**
- * Orchestrates the matrix: taxonomy terms → users → questionnaire groups →
+ * Orchestrates the matrix: taxonomy terms → users →
  * courses (lessons → editions → sessions → registrations → quotes) →
+ * questionnaire groups (after courses: assignments resolve course titles) →
  * trajectories → vouchers → manifest. Idempotent: users/courses/lessons/
  * editions check existence by natural key (login / title / derived edition
  * title) and a re-run reconstructs the full manifest + covers; sessions ride
@@ -33,12 +34,16 @@ final class StrideSeedRunner
             $id = $this->builders->buildUser($u);
             if ($id) { $this->userMap[$u['login']] = $id; $this->created['users'][] = $id; }
         }
-        $this->created['questionnaire_groups'] = $this->builders->buildQuestionnaireGroups(
-            $this->matrix['questionnaire_groups']
-        );
         foreach ($this->matrix['courses'] as $course) {
             $result = $this->builders->buildCourse($course, $this->userMap);
             $this->merge($result);   // merges courses/lessons/editions/sessions/registrations/quotes + covers
+        }
+        // After courses: group assignments reference courses by title.
+        $this->created['questionnaire_groups'] = $this->builders->buildQuestionnaireGroups(
+            $this->matrix['questionnaire_groups']
+        );
+        foreach ($this->matrix['questionnaire_groups'] as $g) {
+            $this->covers["qgroup:{$g['id']}"] = $g['covers'] ?? [];
         }
         foreach ($this->matrix['trajectories'] as $t) {
             $id = $this->builders->buildTrajectory($t, $this->created['courses']);

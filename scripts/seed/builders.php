@@ -12,6 +12,9 @@ use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Enrollment\EnrollmentCompletion;
 use Stride\Modules\Invoicing\QuoteRepository;
+use Stride\Modules\Invoicing\VoucherService;
+use Stride\Modules\Invoicing\VoucherRepository;
+use Stride\Modules\Questionnaire\QuestionnaireRepository;
 
 final class StrideSeedBuilders
 {
@@ -642,11 +645,99 @@ final class StrideSeedBuilders
         return $quoteId;
     }
 
-    /** @return string[] group ids written */
-    public function buildQuestionnaireGroups(array $groups): array
+    /**
+     * Merge matrix questionnaire groups into the stride_questionnaire_field_groups
+     * option BY GROUP ID (idempotent — a matrix group replaces the stored group
+     * with the same id; existing assignments are merged in, never dropped).
+     *
+     * Field 'options' values are comma-separated STRINGS — that is what the
+     * builder admin sanitizes (QuestionnaireSettingsPage:329) and what the
+     * renderers explode (dynamic-field.php / field-radio.php).
+     *
+     * Assignment resolution (flat int course IDs, per repository contract):
+     * - 'assign_to_course' => '<course title>'  → resolved to the course ID
+     * - 'assign_to_course' => '*post_course*'   → every course whose edition
+     *   has _ntdst_post_requires_evaluation (port of the old eval-group logic)
+     *
+     * @return string[] group ids written
+     */
+    public function buildQuestionnaireGroups(array $matrixGroups): array
     {
-        // Task 7 implement
-        return [];
+        if (empty($matrixGroups)) {
+            return [];
+        }
+
+        $repo = ntdst_get(QuestionnaireRepository::class);
+        $stored = $repo->getAllGroups();
+        $writtenIds = [];
+
+        foreach ($matrixGroups as $mg) {
+            $assignments = $this->resolveGroupAssignments($mg['assign_to_course'] ?? null);
+
+            $group = [
+                'id' => $mg['id'],
+                'label' => $mg['label'],
+                'stage' => $mg['stage'],
+                'assignments' => $assignments,
+                'fields' => $mg['fields'],
+            ];
+
+            $merged = false;
+            foreach ($stored as $i => $existing) {
+                if (($existing['id'] ?? '') === $mg['id']) {
+                    // Preserve assignments made outside the seed (merge, dedupe)
+                    $group['assignments'] = array_values(array_unique(array_merge(
+                        $existing['assignments'] ?? [],
+                        $assignments,
+                    ), SORT_REGULAR));
+                    $stored[$i] = $group;
+                    $merged = true;
+                    echo "  - Questionnaire group '{$mg['id']}' exists - updated\n";
+                    break;
+                }
+            }
+            if (!$merged) {
+                $stored[] = $group;
+                echo "  + Questionnaire group: {$mg['label']} ({$mg['id']}, stage: {$mg['stage']})\n";
+            }
+            $writtenIds[] = $mg['id'];
+        }
+
+        $repo->saveGroups($stored);
+
+        return $writtenIds;
+    }
+
+    /** @return array<int> flat course IDs (repository assignment contract) */
+    private function resolveGroupAssignments(?string $target): array
+    {
+        if ($target === null || $target === '') {
+            return [];
+        }
+
+        if ($target === '*post_course*') {
+            // Every course whose edition has post_requires_evaluation
+            global $wpdb;
+            $courseIds = $wpdb->get_col(
+                "SELECT DISTINCT cm.meta_value
+                 FROM {$wpdb->postmeta} pm
+                 JOIN {$wpdb->posts} p ON p.ID = pm.post_id AND p.post_type = 'vad_edition'
+                 JOIN {$wpdb->postmeta} cm ON cm.post_id = p.ID AND cm.meta_key = '_ntdst_course_id'
+                 WHERE pm.meta_key = '_ntdst_post_requires_evaluation' AND pm.meta_value = '1'"
+            );
+            return array_map('intval', $courseIds);
+        }
+
+        // Course title → ID
+        $found = new WP_Query([
+            'post_type' => 'sfwd-courses', 'title' => $target, 'post_status' => 'any',
+            'posts_per_page' => 1, 'fields' => 'ids', 'no_found_rows' => true,
+        ]);
+        if (empty($found->posts)) {
+            echo "  ! Questionnaire assignment target not found: {$target}\n";
+            return [];
+        }
+        return [(int) $found->posts[0]];
     }
 
     public function buildTrajectory(array $t, array $courseIds): ?int
@@ -655,9 +746,47 @@ final class StrideSeedBuilders
         return null;
     }
 
+    /**
+     * VoucherService::createVoucher() (code-dedup + stride/voucher/created hook)
+     * then scope fields via repository update — createVoucher does not accept
+     * scope_mode / excluded_edition_ids (plan ground-truth fact 7).
+     * Idempotent by code (getVoucherByCode).
+     *
+     * @param int[] $editionIds editions created this run (scope targets)
+     */
     public function buildVoucher(array $v, array $editionIds): ?int
     {
-        // Task 7/8 implement
-        return null;
+        $service = ntdst_get(VoucherService::class);
+
+        $existing = $service->getVoucherByCode($v['code']);
+        if ($existing) {
+            echo "  - Voucher {$v['code']} exists (ID: {$existing['id']})\n";
+            return (int) $existing['id'];
+        }
+
+        $id = $service->createVoucher([
+            'code' => $v['code'],
+            'discount_type' => $v['discount_type'],
+            'discount_value' => $v['discount_value'],
+            'usage_limit' => $v['usage_limit'],
+        ]);
+        if (is_wp_error($id)) {
+            echo "  ! Voucher {$v['code']} failed: {$id->get_error_message()}\n";
+            return null;
+        }
+        update_post_meta($id, StrideSeedRunner::SEED_META_KEY, true);
+
+        // Scope: createVoucher() does not accept these — set via repository update.
+        $scope = $v['scope'] ?? 'all';   // 'all' | 'only' | 'except'
+        if ($scope !== 'all') {
+            $repo = ntdst_get(VoucherRepository::class);
+            $update = ['scope_mode' => $scope];
+            if ($scope === 'only')   { $update['edition_id'] = $editionIds[0] ?? 0; }
+            if ($scope === 'except') { $update['excluded_edition_ids'] = array_slice($editionIds, 0, 2); }  // json field
+            $repo->update($id, $update);
+        }
+
+        echo "  + Voucher: {$v['code']} [{$v['discount_type']}/{$scope}] (ID: {$id})\n";
+        return (int) $id;
     }
 }

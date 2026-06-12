@@ -126,8 +126,61 @@ return [
         // Remaining entries added in Task 8 per the coverage table there.
     ],
     'trajectories' => [],            // Task 8
-    'vouchers' => [],                // Task 8
-    'questionnaire_groups' => [],    // Task 7
+    'vouchers' => [
+        // SEEDVOUCHER10 code preserved (legacy fixture). discount_value: cents
+        // for fixed, 0-100 for percentage. scope: all | only | except.
+        ['code' => 'WELKOM2026', 'discount_type' => 'percentage', 'discount_value' => 10, 'usage_limit' => 50, 'scope' => 'all',
+         'covers' => ['voucher:percentage', 'voucher:scope_all']],
+        ['code' => 'KORTING50', 'discount_type' => 'fixed', 'discount_value' => 5000, 'usage_limit' => 20, 'scope' => 'all',
+         'covers' => ['voucher:fixed']],
+        ['code' => 'GRATIS-INTRO', 'discount_type' => 'full', 'discount_value' => 0, 'usage_limit' => 5, 'scope' => 'all',
+         'covers' => ['voucher:full']],
+        ['code' => 'SEEDVOUCHER10', 'discount_type' => 'percentage', 'discount_value' => 10, 'usage_limit' => 100, 'scope' => 'all',
+         'covers' => []],   // legacy fixture, preserved
+        ['code' => 'EDITIE-ONLY', 'discount_type' => 'percentage', 'discount_value' => 20, 'usage_limit' => 10, 'scope' => 'only',
+         'covers' => ['voucher:scope_only']],
+        ['code' => 'NIET-HIER', 'discount_type' => 'fixed', 'discount_value' => 2500, 'usage_limit' => 10, 'scope' => 'except',
+         'covers' => ['voucher:scope_except']],
+    ],
+    'questionnaire_groups' => [
+        // NOTE: field 'options' are comma-separated STRINGS — verified against
+        // QuestionnaireSettingsPage::sanitize (:329) and the renderers
+        // (dynamic-field.php / field-radio.php both explode(',', $options)).
+        [   // Custom enrollment form exercising ALL 7 field types + reserved auto-persist fields
+            'id' => 'qg_enrollment_seed',
+            'label' => 'Extra inschrijvingsvragen',
+            'stage' => 'enrollment_personal',                  // valid per QuestionnaireRepository::STAGES
+            'assign_to_course' => 'Erkenningstraject Jeugdsportcoach',   // resolved to course ID by builder
+            'fields' => [
+                ['label' => 'Toelichting', 'name' => 'intro_desc', 'type' => 'description',
+                 'description' => 'Deze gegevens gebruiken we om de opleiding af te stemmen op de groep.'],
+                ['label' => 'Telefoonnummer', 'name' => 'phone', 'type' => 'text', 'required' => true],          // reserved → wp_usermeta
+                ['label' => 'Organisatie', 'name' => 'organisation', 'type' => 'text', 'required' => true],      // reserved → wp_usermeta
+                ['label' => 'Motivatie', 'name' => 'motivatie', 'type' => 'textarea', 'required' => true],
+                ['label' => 'Functie', 'name' => 'functie', 'type' => 'select', 'required' => true,
+                 'options' => 'Leerkracht, CLB-medewerker, Jeugdwerker, Sportcoach, Andere'],
+                ['label' => 'Ervaring met jeugdsport', 'name' => 'ervaring', 'type' => 'radio', 'required' => true,
+                 'options' => 'Geen, 1-3 jaar, Meer dan 3 jaar'],
+                ['label' => 'Ik wil de nieuwsbrief ontvangen', 'name' => 'nieuwsbrief', 'type' => 'checkbox', 'required' => false,
+                 'description' => 'Maximaal één mail per maand.'],
+                ['label' => 'Hoe schat je je voorkennis in?', 'name' => 'voorkennis_schaal', 'type' => 'scale',
+                 'required' => true, 'min' => 1, 'max' => 5],
+            ],
+            'covers' => ['form:custom_all_types', 'form:reserved_fields'],
+        ],
+        [   // Evaluation group (preserves current qg_eval_seed behavior)
+            'id' => 'qg_eval_seed',
+            'label' => 'Evaluatie opleiding',
+            'stage' => 'evaluation',
+            'assign_to_course' => '*post_course*',   // builder: every course whose edition has post_requires_evaluation
+            'fields' => [
+                ['label' => 'Beoordeling docent', 'name' => 'beoordeling_docent', 'type' => 'scale', 'required' => true, 'min' => 1, 'max' => 5],
+                ['label' => 'Beoordeling lesmateriaal', 'name' => 'beoordeling_materiaal', 'type' => 'scale', 'required' => true, 'min' => 1, 'max' => 5],
+                ['label' => 'Opmerkingen', 'name' => 'opmerkingen', 'type' => 'textarea', 'required' => false],
+            ],
+            'covers' => ['req:post_evaluation'],
+        ],
+    ],
     'company_details' => [
         'name' => 'BWEEG vzw', 'address' => 'Sportstraat 42', 'postal_code' => '9000',
         'city' => 'Gent', 'country' => 'België', 'vat' => 'BE0420.798.935',
