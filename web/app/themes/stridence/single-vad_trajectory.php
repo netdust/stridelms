@@ -43,6 +43,14 @@ $price              = $trajectory['price'] ?? 0;
 $price_non_member   = $trajectory['price_non_member'] ?? 0;
 $capacity           = $trajectory['capacity'] ?? 0;
 
+// Descriptive sidebar fields (shared with editions), render-when-present.
+$price_includes     = trim((string) ($trajectory['price_includes'] ?? ''));
+$enrollment_info    = trim((string) ($trajectory['enrollment_info'] ?? ''));
+$cta_benefits       = array_values(array_filter(array_map(
+    'trim',
+    preg_split('/\R/', (string) ($trajectory['cta_benefits'] ?? '')) ?: [],
+)));
+
 // Get courses via repository (returns WP_Post objects)
 $required_courses   = $trajectoryRepo->getRequiredCourses($trajectory_id);
 $elective_groups    = $trajectoryRepo->getElectiveGroups($trajectory_id);
@@ -179,6 +187,9 @@ get_header();
 ?>
                             </span>
                         </div>
+                        <?php if ($price_includes !== '') : ?>
+                            <p class="text-[13px] text-text-muted -mt-1"><?php echo esc_html($price_includes); ?></p>
+                        <?php endif; ?>
                         <?php if ($price_non_member > 0 && $price_non_member !== $price) : ?>
                             <div class="flex justify-between">
                                 <span class="text-text-muted"><?php esc_html_e('Prijs (niet-leden)', 'stridence'); ?></span>
@@ -223,6 +234,23 @@ get_header();
                         <button type="button" class="btn-secondary w-full text-center opacity-50 cursor-not-allowed" disabled>
                             <?php esc_html_e('Niet beschikbaar', 'stridence'); ?>
                         </button>
+                    <?php endif; ?>
+
+                    <?php if ($enrollment_info !== '') : ?>
+                        <p class="text-[13px] text-text-muted leading-relaxed mt-4"><?php echo esc_html($enrollment_info); ?></p>
+                    <?php endif; ?>
+
+                    <?php if (!empty($cta_benefits)) : ?>
+                        <div class="border-t border-border-soft mt-5 pt-4">
+                            <ul class="flex flex-col gap-2 text-[13px] text-text-muted">
+                                <?php foreach ($cta_benefits as $benefit) : ?>
+                                    <li class="flex items-center gap-2">
+                                        <span class="text-badge-open-text font-extrabold" aria-hidden="true">&check;</span>
+                                        <?php echo esc_html($benefit); ?>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
                     <?php endif; ?>
                 </div>
             </div>
