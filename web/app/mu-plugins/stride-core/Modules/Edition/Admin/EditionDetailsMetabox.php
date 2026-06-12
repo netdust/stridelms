@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Stride\Modules\Edition\Admin;
 
 use Stride\Integrations\LearnDash\LearnDashHelper;
+use Stride\Modules\Edition\EditionCPT;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionService;
@@ -34,7 +35,6 @@ final class EditionDetailsMetabox
         $endDate = $this->repository->getField($post->ID, 'end_date', '');
         $capacity = (int) $this->repository->getField($post->ID, 'capacity', 0);
         $venue = $this->repository->getField($post->ID, 'venue', '');
-        $speakers = $this->repository->getField($post->ID, 'speakers', '');
         $price = (int) $this->repository->getField($post->ID, 'price', 0);
         $priceNonMember = (int) $this->repository->getField($post->ID, 'price_non_member', 0);
         // Get all courses for dropdown
@@ -67,7 +67,7 @@ final class EditionDetailsMetabox
 
                 <!-- Tab: Informatie -->
                 <div class="stride-tab-content" data-tab="informatie">
-                    <?php $this->renderInformatieTab($speakers); ?>
+                    <?php $this->renderInformatieTab($post->ID); ?>
                 </div>
 
                 <!-- Tab: Prijzen -->
@@ -167,19 +167,120 @@ final class EditionDetailsMetabox
         <?php
     }
 
-    private function renderInformatieTab(string $speakers): void
+    private function renderInformatieTab(int $editionId): void
     {
+        $speakers = $this->repository->getSpeakers($editionId);
+        // Content fields, prefilled with defaults when empty (persist on first
+        // save). Schema-registered fields always exist on the formatted read
+        // (as ''), so getField()'s default never kicks in — fall back on the
+        // empty string explicitly.
+        $defaults = EditionCPT::getContentDefaults();
+        $content = [];
+        foreach ($defaults as $key => $default) {
+            $value = trim((string) $this->repository->getField($editionId, $key, ''));
+            $content[$key] = $value !== '' ? $value : $default;
+        }
         ?>
         <div class="stride-edition-columns">
             <div class="stride-edition-main">
                 <h4><?php esc_html_e('Sprekers / Docenten', 'stride'); ?></h4>
+                <?php /* Presence marker: lets the save handler clear speakers
+                         when every repeater row is removed (an empty array
+                         posts nothing). */ ?>
+                <input type="hidden" name="ntdst_fields[speakers_present]" value="1">
+                <div id="stride-speakers-list" class="stride-speakers-list">
+                    <?php foreach ($speakers as $i => $speaker) : ?>
+                        <?php $this->renderSpeakerRow($i, $speaker['name'], $speaker['role']); ?>
+                    <?php endforeach; ?>
+                </div>
+                <button type="button" class="button" id="stride-add-speaker">
+                    <span class="dashicons dashicons-plus-alt2" style="vertical-align: middle; margin-right: 4px;"></span>
+                    <?php esc_html_e('Spreker toevoegen', 'stride'); ?>
+                </button>
+                <script type="text/template" id="stride-speaker-row-template">
+                    <?php $this->renderSpeakerRow('__INDEX__', '', ''); ?>
+                </script>
+
+                <h4 style="margin-top: 20px;"><?php esc_html_e('Doelpubliek', 'stride'); ?></h4>
                 <div class="stride-field-row">
                     <div class="stride-field">
-                        <textarea name="ntdst_fields[speakers]" id="edition_speakers" rows="4"
-                                  placeholder="<?php esc_attr_e('Voer namen van sprekers in, gescheiden door komma\'s of op aparte regels', 'stride'); ?>"><?php echo esc_textarea($speakers); ?></textarea>
+                        <textarea name="ntdst_fields[target_audience]" id="edition_target_audience" rows="2"
+                                  placeholder="<?php esc_attr_e('bijv. Intergemeentelijke- en lokale preventiewerkers', 'stride'); ?>"><?php echo esc_textarea($content['target_audience']); ?></textarea>
+                        <p class="description"><?php esc_html_e('Getoond als "Voor wie?" op de editiepagina. Leeg = niet getoond.', 'stride'); ?></p>
+                    </div>
+                </div>
+
+                <h4><?php esc_html_e('Voorkennis', 'stride'); ?></h4>
+                <div class="stride-field-row">
+                    <div class="stride-field">
+                        <input type="text" name="ntdst_fields[required_experience]" id="edition_required_experience"
+                               value="<?php echo esc_attr($content['required_experience']); ?>">
+                    </div>
+                </div>
+
+                <h4><?php esc_html_e('Inbegrepen', 'stride'); ?></h4>
+                <div class="stride-field-row">
+                    <div class="stride-field">
+                        <textarea name="ntdst_fields[included]" id="edition_included" rows="2"><?php echo esc_textarea($content['included']); ?></textarea>
+                    </div>
+                </div>
+
+                <h4><?php esc_html_e('Annuleringsvoorwaarden', 'stride'); ?></h4>
+                <div class="stride-field-row">
+                    <div class="stride-field">
+                        <textarea name="ntdst_fields[cancellation_policy]" id="edition_cancellation_policy" rows="2"><?php echo esc_textarea($content['cancellation_policy']); ?></textarea>
+                    </div>
+                </div>
+
+                <h4><?php esc_html_e('Inschrijvingsinfo', 'stride'); ?></h4>
+                <div class="stride-field-row">
+                    <div class="stride-field">
+                        <textarea name="ntdst_fields[enrollment_info]" id="edition_enrollment_info" rows="2"
+                                  placeholder="<?php esc_attr_e('bijv. Uiterste inschrijvingsdatum: 24 augustus 2026. Na inschrijving ontvang je een mail met de bevestiging van je deelname.', 'stride'); ?>"><?php echo esc_textarea($content['enrollment_info']); ?></textarea>
+                        <p class="description"><?php esc_html_e('Getoond onder de inschrijfknop.', 'stride'); ?></p>
                     </div>
                 </div>
             </div>
+
+            <div class="stride-edition-side">
+                <h4><?php esc_html_e('Prijs inclusief', 'stride'); ?></h4>
+                <div class="stride-field-row">
+                    <div class="stride-field">
+                        <input type="text" name="ntdst_fields[price_includes]" id="edition_price_includes"
+                               value="<?php echo esc_attr($content['price_includes']); ?>">
+                        <p class="description"><?php esc_html_e('Korte regel onder de prijs in de zijbalk.', 'stride'); ?></p>
+                    </div>
+                </div>
+
+                <h4><?php esc_html_e('Voordelen', 'stride'); ?></h4>
+                <div class="stride-field-row">
+                    <div class="stride-field">
+                        <textarea name="ntdst_fields[cta_benefits]" id="edition_cta_benefits" rows="3"><?php echo esc_textarea($content['cta_benefits']); ?></textarea>
+                        <p class="description"><?php esc_html_e('Eén voordeel per regel; getoond als checklist in de zijbalk.', 'stride'); ?></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php
+    }
+
+    /**
+     * One speakers-repeater row. $index is an int for stored rows or the
+     * literal '__INDEX__' placeholder inside the JS row template.
+     */
+    private function renderSpeakerRow(int|string $index, string $name, string $role): void
+    {
+        ?>
+        <div class="stride-speaker-row" style="display: flex; gap: 8px; margin-bottom: 6px;">
+            <input type="text" name="ntdst_fields[speakers][<?php echo esc_attr((string) $index); ?>][name]"
+                   value="<?php echo esc_attr($name); ?>"
+                   placeholder="<?php esc_attr_e('Naam', 'stride'); ?>" style="flex: 1;">
+            <input type="text" name="ntdst_fields[speakers][<?php echo esc_attr((string) $index); ?>][role]"
+                   value="<?php echo esc_attr($role); ?>"
+                   placeholder="<?php esc_attr_e('Rol (bijv. sportpedagoge)', 'stride'); ?>" style="flex: 1;">
+            <button type="button" class="stride-speaker-remove button-link" title="<?php esc_attr_e('Verwijderen', 'stride'); ?>" style="color: #d63638;">
+                <span class="dashicons dashicons-no-alt"></span>
+            </button>
         </div>
         <?php
     }

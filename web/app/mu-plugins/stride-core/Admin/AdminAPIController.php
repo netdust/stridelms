@@ -1232,7 +1232,7 @@ final class AdminAPIController
         $courseId = (int) $this->editionRepository->getField($editionId, 'course_id', 0);
         $price = (int) $this->editionRepository->getField($editionId, 'price', 0);
         $priceNonMember = (int) $this->editionRepository->getField($editionId, 'price_non_member', 0);
-        $speakers = $this->editionRepository->getField($editionId, 'speakers', '');
+        $speakers = $this->editionRepository->getSpeakersLabel($editionId);
 
         // Get course title
         $courseTitle = '';

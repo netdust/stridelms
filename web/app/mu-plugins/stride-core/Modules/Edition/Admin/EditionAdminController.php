@@ -384,8 +384,14 @@ final class EditionAdminController
             'end_date' => 'date',
             'capacity' => 'int',
             'venue' => 'text',
-            'speakers' => 'text',
             'enrollment_form' => 'text',
+            'required_experience' => 'text',
+            'price_includes' => 'text',
+            'target_audience' => 'textarea',
+            'included' => 'textarea',
+            'cancellation_policy' => 'textarea',
+            'cta_benefits' => 'textarea',
+            'enrollment_info' => 'textarea',
         ];
 
         foreach ($basicFields as $field => $type) {
@@ -393,7 +399,7 @@ final class EditionAdminController
                 $updateData[$field] = match ($type) {
                     'int' => absint($fields[$field]),
                     'date' => sanitize_text_field($fields[$field]),
-                    'text' => sanitize_text_field($fields[$field]),
+                    'textarea' => sanitize_textarea_field($fields[$field]),
                     default => sanitize_text_field($fields[$field]),
                 };
             }
@@ -431,6 +437,24 @@ final class EditionAdminController
             if (isset($fields[$boolField])) {
                 $updateData[$boolField] = (bool) $fields[$boolField];
             }
+        }
+
+        // Process speakers repeater ([{name, role}], stored as json field).
+        // The metabox posts a speakers_present marker so removing every row
+        // still clears the meta (an empty repeater posts no speakers[] keys).
+        if (!empty($fields['speakers_present'])) {
+            $speakers = [];
+            foreach ((array) ($fields['speakers'] ?? []) as $speaker) {
+                $name = sanitize_text_field($speaker['name'] ?? '');
+                if ($name === '') {
+                    continue;
+                }
+                $speakers[] = [
+                    'name' => $name,
+                    'role' => sanitize_text_field($speaker['role'] ?? ''),
+                ];
+            }
+            $updateData['speakers'] = $speakers;
         }
 
         // Process status

@@ -33,6 +33,7 @@
             this.initSessionTypeHandling();
             this.initNotesManagement();
             this.initDocumentsManagement();
+            this.initSpeakersManagement();
             this.initRegistrationManagement();
             this.initQuoteLockToggle();
         },
@@ -976,6 +977,36 @@
          */
         updateDocumentsData: function(docs) {
             $('#stride_documents_data').val(JSON.stringify(docs));
+        },
+
+        // ========================================
+        // SPEAKERS MANAGEMENT
+        // ========================================
+
+        /**
+         * Initialize speakers repeater (name + role rows).
+         * Rows post as ntdst_fields[speakers][N][name|role]; indexes only
+         * need to be unique (PHP iterates values), so removal needs no
+         * reindexing — a monotonic counter avoids collisions.
+         */
+        initSpeakersManagement: function() {
+            var counter = $('#stride-speakers-list .stride-speaker-row').length;
+
+            $('#stride-add-speaker').on('click', function(e) {
+                e.preventDefault();
+                var $template = $('#stride-speaker-row-template');
+                if (!$template.length) return;
+
+                var html = $template.html().replace(/__INDEX__/g, counter++);
+                var $row = $(html);
+                $('#stride-speakers-list').append($row);
+                $row.find('input').first().focus();
+            });
+
+            $(document).on('click', '.stride-speaker-remove', function(e) {
+                e.preventDefault();
+                $(this).closest('.stride-speaker-row').remove();
+            });
         },
 
         // ========================================
