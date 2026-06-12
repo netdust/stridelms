@@ -22,6 +22,9 @@ class NTDST_Response
      */
     protected static ?array $cached_paths = null;
 
+    /** @var array<string, true> Paths added via the instance addPath() — excluded from the shared template cache. */
+    protected array $instance_paths = [];
+
     /**
      * Drop the per-request path snapshot (and the resolved-template cache,
      * whose entries depend on it). Called by NTDST_Template_Loader::addPath
@@ -134,10 +137,17 @@ class NTDST_Response
 
     /**
      * Add template path (prepend - highest priority)
+     *
+     * Instance-private: resolutions through a path added here are NOT
+     * written to the shared static template cache (a PDF generator's
+     * private 'quote' template must never hijack another Response's
+     * 'quote' lookup in the same request).
      */
     public function addPath(string $path): self
     {
-        array_unshift($this->template_paths, rtrim($path, '/'));
+        $path = rtrim($path, '/');
+        array_unshift($this->template_paths, $path);
+        $this->instance_paths[$path] = true;
         return $this;
     }
 
@@ -380,7 +390,12 @@ class NTDST_Response
         foreach ($this->template_paths as $path) {
             $file = $path . '/' . $template;
             if (file_exists($file) && $this->isInside($file, $path)) {
-                self::$template_cache[$template] = $file;
+                // Only globally-registered paths populate the shared cache —
+                // instance-added paths (see addPath) resolve for this
+                // Response only.
+                if (!isset($this->instance_paths[$path])) {
+                    self::$template_cache[$template] = $file;
+                }
                 return $file;
             }
         }
