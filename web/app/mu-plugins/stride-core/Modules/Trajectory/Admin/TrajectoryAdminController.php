@@ -318,6 +318,56 @@ final class TrajectoryAdminController
                     ],
                 );
         ?>
+
+                <!-- Descriptive fields (shared with editions) — rendered
+                     render-when-present on the public trajectory page. -->
+                <div class="stride-field-row two-col" style="margin-top:18px">
+                    <div class="stride-field">
+                        <label for="trajectory_target_audience"><?php esc_html_e('Doelpubliek', 'stride'); ?></label>
+                        <textarea id="trajectory_target_audience" name="ntdst_fields[target_audience]"><?php echo esc_textarea($trajectory['target_audience'] ?? ''); ?></textarea>
+                    </div>
+                    <div class="stride-field">
+                        <label for="trajectory_required_experience"><?php esc_html_e('Voorkennis', 'stride'); ?></label>
+                        <input type="text" id="trajectory_required_experience" name="ntdst_fields[required_experience]"
+                               value="<?php echo esc_attr($trajectory['required_experience'] ?? ''); ?>">
+                    </div>
+                </div>
+                <div class="stride-field-row two-col">
+                    <div class="stride-field">
+                        <label for="trajectory_included"><?php esc_html_e('Inbegrepen', 'stride'); ?></label>
+                        <textarea id="trajectory_included" name="ntdst_fields[included]"><?php echo esc_textarea($trajectory['included'] ?? ''); ?></textarea>
+                    </div>
+                    <div class="stride-field">
+                        <label for="trajectory_cancellation_policy"><?php esc_html_e('Annuleringsvoorwaarden', 'stride'); ?></label>
+                        <textarea id="trajectory_cancellation_policy" name="ntdst_fields[cancellation_policy]"><?php echo esc_textarea($trajectory['cancellation_policy'] ?? ''); ?></textarea>
+                    </div>
+                </div>
+                <div class="stride-field-row two-col">
+                    <div class="stride-field">
+                        <label for="trajectory_duration"><?php esc_html_e('Doorlooptijd', 'stride'); ?></label>
+                        <input type="text" id="trajectory_duration" name="ntdst_fields[duration]"
+                               value="<?php echo esc_attr($trajectory['duration'] ?? ''); ?>"
+                               placeholder="<?php esc_attr_e('bijv. 6 maanden', 'stride'); ?>">
+                    </div>
+                    <div class="stride-field">
+                        <label for="trajectory_price_includes"><?php esc_html_e('Prijs inclusief', 'stride'); ?></label>
+                        <input type="text" id="trajectory_price_includes" name="ntdst_fields[price_includes]"
+                               value="<?php echo esc_attr($trajectory['price_includes'] ?? ''); ?>">
+                        <p class="description"><?php esc_html_e('Korte regel onder de prijs in de sidebar.', 'stride'); ?></p>
+                    </div>
+                </div>
+                <div class="stride-field-row two-col">
+                    <div class="stride-field">
+                        <label for="trajectory_cta_benefits"><?php esc_html_e('Voordelen', 'stride'); ?></label>
+                        <textarea id="trajectory_cta_benefits" name="ntdst_fields[cta_benefits]"><?php echo esc_textarea($trajectory['cta_benefits'] ?? ''); ?></textarea>
+                        <p class="description"><?php esc_html_e('Eén voordeel per regel — getoond als lijst in de sidebar.', 'stride'); ?></p>
+                    </div>
+                    <div class="stride-field">
+                        <label for="trajectory_enrollment_info"><?php esc_html_e('Inschrijvingsinfo', 'stride'); ?></label>
+                        <textarea id="trajectory_enrollment_info" name="ntdst_fields[enrollment_info]"><?php echo esc_textarea($trajectory['enrollment_info'] ?? ''); ?></textarea>
+                        <p class="description"><?php esc_html_e('Getoond onder de inschrijf-knop.', 'stride'); ?></p>
+                    </div>
+                </div>
             </div>
 
             <!-- Tab: Deadlines -->
@@ -1046,6 +1096,19 @@ final class TrajectoryAdminController
 
         if (isset($fields['description'])) {
             $updateData['description'] = sanitize_textarea_field($fields['description']);
+        }
+
+        // Descriptive fields shared with editions. Textareas keep newlines
+        // (sanitize_textarea_field); single-line fields use sanitize_text_field.
+        foreach (['target_audience', 'included', 'cancellation_policy', 'cta_benefits', 'enrollment_info'] as $textareaField) {
+            if (isset($fields[$textareaField])) {
+                $updateData[$textareaField] = sanitize_textarea_field($fields[$textareaField]);
+            }
+        }
+        foreach (['required_experience', 'price_includes', 'duration'] as $textField) {
+            if (isset($fields[$textField])) {
+                $updateData[$textField] = sanitize_text_field($fields[$textField]);
+            }
         }
 
         if (isset($fields['capacity'])) {
