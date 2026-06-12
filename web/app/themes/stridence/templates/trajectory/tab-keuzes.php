@@ -36,27 +36,17 @@ $trajectoryData = $trajectoryService->getTrajectory($trajectory->ID);
 // Get elective groups
 $electiveGroups = ntdst_get(TrajectoryRepository::class)->getElectiveGroups($trajectory->ID);
 
-// Check choice window status
+// Choice window state — the SERVICE is the single decision point
+// (TrajectoryService::isChoiceWindowOpen; the server-side submit guard uses
+// the same call). Shake-out BUG-4: this template re-derived the rule and
+// required BOTH dates, so a trajectory without configured dates rendered
+// "closed" while the server accepted submissions. No dates configured = open.
 $choiceAvailable = $trajectoryData['choice_available_date'] ?? '';
 $choiceDeadline = $trajectoryData['choice_deadline'] ?? '';
 
-$now = time();
-$windowOpen = false;
-$windowBefore = false;
-$windowAfter = false;
-
-if (!empty($choiceAvailable) && !empty($choiceDeadline)) {
-    $availableTime = strtotime($choiceAvailable);
-    $deadlineTime = strtotime($choiceDeadline);
-
-    if ($now < $availableTime) {
-        $windowBefore = true;
-    } elseif ($now >= $availableTime && $now <= $deadlineTime) {
-        $windowOpen = true;
-    } else {
-        $windowAfter = true;
-    }
-}
+$windowOpen = $trajectoryService->isChoiceWindowOpen($trajectory->ID);
+$windowBefore = !$windowOpen && !empty($choiceAvailable) && time() < strtotime($choiceAvailable);
+$windowAfter = !$windowOpen && !$windowBefore;
 
 // Current picks as COURSE ids — through the single decision point
 // (TrajectorySelection::getSelectedCourseIds). The raw selections column
@@ -124,14 +114,16 @@ $selectedCourseIds = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::c
 
     <?php elseif ($windowOpen) : ?>
         <!-- Choice window is open -->
-        <p class="text-[15px] text-text-muted leading-relaxed max-w-[640px]">
-            <?php
-            printf(
-                esc_html__('Maak je keuze voor %s.', 'stridence'),
-                esc_html(date_i18n('j F Y', strtotime($choiceDeadline))),
-            );
-        ?>
-        </p>
+        <?php if (!empty($choiceDeadline)) : ?>
+            <p class="text-[15px] text-text-muted leading-relaxed max-w-[640px]">
+                <?php
+                printf(
+                    esc_html__('Maak je keuze voor %s.', 'stridence'),
+                    esc_html(date_i18n('j F Y', strtotime($choiceDeadline))),
+                );
+            ?>
+            </p>
+        <?php endif; ?>
 
         <div x-data="strideTrajectoryChoices({ registrationId: <?php echo (int) ($enrollment->id ?? 0); ?> })">
         <form id="elective-selection-form" class="space-y-7" x-show="!saved" @submit.prevent="submit($el)">
@@ -183,14 +175,16 @@ $selectedCourseIds = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::c
                     <span x-show="!loading"><?php esc_html_e('Bevestig je keuze', 'stridence'); ?></span>
                     <span x-show="loading" x-cloak><?php esc_html_e('Bezig...', 'stridence'); ?></span>
                 </button>
-                <span class="text-[13px] text-text-faint">
-                    <?php
-                    printf(
-                        esc_html__('Je kunt je keuze tot %s aanpassen.', 'stridence'),
-                        esc_html(date_i18n('j F Y', strtotime($choiceDeadline))),
-                    );
-            ?>
-                </span>
+                <?php if (!empty($choiceDeadline)) : ?>
+                    <span class="text-[13px] text-text-faint">
+                        <?php
+                        printf(
+                            esc_html__('Je kunt je keuze tot %s aanpassen.', 'stridence'),
+                            esc_html(date_i18n('j F Y', strtotime($choiceDeadline))),
+                        );
+                ?>
+                    </span>
+                <?php endif; ?>
             </div>
         </form>
         </div>

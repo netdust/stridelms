@@ -866,6 +866,19 @@ final class StrideSeedBuilders
             foreach (['order', 'group', 'min_choices'] as $key) {
                 if (isset($c[$key])) { $entry[$key] = $c[$key]; }
             }
+            // Author the admin-UI shape (TrajectoryAdminController::parseCourseItemValue):
+            // a course with a seeded edition is an edition-typed entry carrying its
+            // edition_id; without one it is a pure-LD 'online' entry. Shake-out
+            // BUG-2 (2026-06-12): entries missing these keys are treated as
+            // pure-LD by the selection/cascade paths — picks then bypass the
+            // edition registration, capacity and quote machinery entirely.
+            $editionId = $this->findEditionIdForCourse($courseId);
+            if ($editionId) {
+                $entry['type'] = 'edition';
+                $entry['edition_id'] = $editionId;
+            } else {
+                $entry['type'] = 'online';
+            }
             $courses[] = $entry;
         }
 
@@ -897,6 +910,36 @@ final class StrideSeedBuilders
         update_post_meta($id, StrideSeedRunner::SEED_META_KEY, true);
         echo "  + Trajectory: {$t['title']} [{$t['mode']}] (ID: {$id}, " . count($courses) . " courses)\n";
         return (int) $id;
+    }
+
+    /**
+     * Resolve the edition a trajectory course entry should bind to: the
+     * course's OPEN seeded edition, falling back to any seeded edition.
+     * Returns 0 when the course has no edition (pure-LD).
+     */
+    private function findEditionIdForCourse(int $courseId): int
+    {
+        $candidates = get_posts([
+            'post_type' => 'vad_edition',
+            'post_status' => 'publish',
+            'numberposts' => -1,
+            'meta_key' => '_ntdst_course_id',
+            'meta_value' => (string) $courseId,
+            'fields' => 'ids',
+        ]);
+
+        $fallback = 0;
+        foreach ($candidates as $editionId) {
+            $status = (string) get_post_meta((int) $editionId, '_ntdst_status', true);
+            if ($status === 'open') {
+                return (int) $editionId;
+            }
+            if (!$fallback) {
+                $fallback = (int) $editionId;
+            }
+        }
+
+        return $fallback;
     }
 
     /**

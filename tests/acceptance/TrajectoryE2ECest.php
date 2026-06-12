@@ -268,6 +268,15 @@ class TrajectoryE2ECest
             'parent_registration_id' => $parentId,
         ]);
 
+        // Shake-out BUG-5 regression: the MANDATORY child must survive the
+        // elective choices submission (the reconcile once cancelled it).
+        $mandatoryStatus = (string) $I->grabFromDatabase($I->grabPrefixedTableNameFor('vad_registrations'), 'status', [
+            'user_id' => $this->userId,
+            'edition_id' => $this->mandatoryEditionId,
+            'parent_registration_id' => $parentId,
+        ]);
+        \PHPUnit\Framework\Assert::assertSame('confirmed', $mandatoryStatus, 'mandatory child must survive elective picks');
+
         // Re-rendered: the option is checked after reload.
         $I->amOnPage($this->dashboardUrl('keuzes'));
         $I->waitForElement('#elective-selection-form', 10);
@@ -401,6 +410,16 @@ class TrajectoryE2ECest
         $I->waitForElement('main', 10);
         $I->see('Keuzeperiode is gesloten');
         $I->see('Er zijn geen keuzes gemaakt tijdens de keuzeperiode.');
+
+        // NO DATES configured (shake-out BUG-4): server treats the window as
+        // open, so the UI must too — the form renders, UI and wire agree.
+        $I->updateInDatabase($table, ['meta_value' => ''],
+            ['post_id' => $this->trajectoryId, 'meta_key' => '_ntdst_choice_available_date']);
+        $I->updateInDatabase($table, ['meta_value' => ''],
+            ['post_id' => $this->trajectoryId, 'meta_key' => '_ntdst_choice_deadline']);
+        $I->amOnPage($this->dashboardUrl('keuzes'));
+        $I->waitForElement('#elective-selection-form', 10);
+        $I->see('Bevestig je keuze');
     }
 
     // =========================================================================

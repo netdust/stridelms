@@ -134,6 +134,10 @@ class TrajectorySelectionFromCoursesTest extends TestCase
     {
         $this->trajectories->shouldReceive('isChoiceWindowOpen')->with(self::TRAJ_ID)->andReturn($windowOpen);
         $this->registrations->shouldReceive('areSelectionsLocked')->with(self::REG_ID)->andReturn($locked);
+        // Concurrency guard (shake-out BUG-3): the course-level write path
+        // serializes per registration via the repository's advisory lock.
+        $this->registrations->shouldReceive('acquireSelectionLock')->with(self::REG_ID)->andReturn(true)->byDefault();
+        $this->registrations->shouldReceive('releaseSelectionLock')->with(self::REG_ID)->byDefault();
     }
 
     /** Expectations for the shared write path (repo + cascade + phase + action). */
@@ -264,6 +268,80 @@ class TrajectorySelectionFromCoursesTest extends TestCase
 
         $this->assertInstanceOf(WP_Error::class, $result);
         $this->assertSame('incomplete_choices', $result->get_error_code());
+    }
+
+    /** @test */
+    public function contendedLockRefusesTheSubmission(): void
+    {
+        // Shake-out BUG-3: two interleaved submissions diffed against the
+        // same pre-state and left LD access diverged from the recorded picks.
+        // The write path serializes per registration; a contended lock refuses.
+        $this->stubFind($this->registration());
+        $this->trajectories->shouldReceive('isChoiceWindowOpen')->andReturn(true);
+        $this->registrations->shouldReceive('areSelectionsLocked')->andReturn(false);
+        $this->registrations->shouldReceive('acquireSelectionLock')->once()->with(self::REG_ID)->andReturn(false);
+        $this->registrations->shouldNotReceive('setSelections');
+        $this->lms->shouldNotReceive('grantAccess');
+
+        $result = $this->selection->setSelectionsFromCourses(self::REG_ID, [101]);
+
+        $this->assertInstanceOf(WP_Error::class, $result);
+        $this->assertSame('busy', $result->get_error_code());
+    }
+
+    /** @test */
+    public function lockIsReleasedEvenWhenValidationRefuses(): void
+    {
+        $this->stubFind($this->registration());
+        $this->trajectories->shouldReceive('isChoiceWindowOpen')->andReturn(true);
+        $this->registrations->shouldReceive('areSelectionsLocked')->andReturn(false);
+        $this->registrations->shouldReceive('acquireSelectionLock')->once()->with(self::REG_ID)->andReturn(true);
+        $this->registrations->shouldReceive('releaseSelectionLock')->once()->with(self::REG_ID);
+        $this->stubMixedGroup();
+
+        $result = $this->selection->setSelectionsFromCourses(self::REG_ID, [999]);
+
+        $this->assertInstanceOf(WP_Error::class, $result);
+        $this->assertSame('invalid_choice', $result->get_error_code());
+    }
+
+    /** @test */
+    public function cancelledRegistrationCannotSubmitChoices(): void
+    {
+        // Shake-out BUG-1: a cancelled enrollee could still change choices and
+        // gain LD access. Only active registrations may pick.
+        $this->stubFind($this->registration(['status' => 'cancelled']));
+        $this->registrations->shouldNotReceive('setSelections');
+        $this->lms->shouldNotReceive('grantAccess');
+
+        $result = $this->selection->setSelectionsFromCourses(self::REG_ID, [101]);
+
+        $this->assertInstanceOf(WP_Error::class, $result);
+        $this->assertSame('registration_inactive', $result->get_error_code());
+    }
+
+    /** @test */
+    public function completedRegistrationCannotSubmitChoices(): void
+    {
+        $this->stubFind($this->registration(['status' => 'completed']));
+
+        $result = $this->selection->setSelectionsFromCourses(self::REG_ID, [101]);
+
+        $this->assertInstanceOf(WP_Error::class, $result);
+        $this->assertSame('registration_inactive', $result->get_error_code());
+    }
+
+    /** @test */
+    public function pendingRegistrationMaySubmitChoices(): void
+    {
+        // Pending (awaiting approval) enrollees still need to pick before the
+        // window closes — only terminal/withdrawn states are refused.
+        $this->stubFind($this->registration(['status' => 'pending']));
+        $this->stubGuards();
+        $this->stubMixedGroup();
+        $this->expectWritePath([201], [101]);
+
+        $this->assertTrue($this->selection->setSelectionsFromCourses(self::REG_ID, [101]));
     }
 
     /** @test */

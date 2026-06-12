@@ -132,13 +132,21 @@ final class TrajectoryCascadeService
 
         $existingChildren = $this->registrations->findByParent($parentRegistrationId);
 
-        // 1. Cancel children whose edition is no longer in the new selection.
+        // The elective slate only governs ELECTIVE children. Children on
+        // mandatory editions (required entries in the trajectory's courses
+        // config) are created at enrollment and must survive every choices
+        // submission (shake-out BUG-5, 2026-06-12: they were cancelled here
+        // because the reconcile compared ALL children against the slate).
+        $mandatoryEditionIds = $this->mandatoryEditionIds((int) $parent->trajectory_id);
+
+        // 1. Cancel ELECTIVE children whose edition is no longer selected.
         foreach ($existingChildren as $child) {
             $childEditionId = (int) ($child->edition_id ?? 0);
             $childStatus = RegistrationStatus::tryFrom((string) $child->status);
             if (
                 $childEditionId > 0
                 && !in_array($childEditionId, $editionIds, true)
+                && !in_array($childEditionId, $mandatoryEditionIds, true)
                 && $childStatus !== RegistrationStatus::Cancelled
             ) {
                 $this->cancelChildSilently((int) $child->id, $childEditionId, $userId, (int) ($child->quote_id ?? 0));
@@ -425,6 +433,29 @@ final class TrajectoryCascadeService
     {
         $raw = get_user_meta($userId, self::TRAJECTORY_COURSES_META_KEY, true);
         return is_array($raw) ? array_values($raw) : [];
+    }
+
+    /**
+     * Edition ids of the trajectory's REQUIRED course entries — the children
+     * a choices submission must never reconcile away.
+     *
+     * @return array<int>
+     */
+    private function mandatoryEditionIds(int $trajectoryId): array
+    {
+        $courses = $this->trajectories->getField($trajectoryId, 'courses', []);
+        if (is_string($courses)) {
+            $courses = json_decode($courses, true) ?: [];
+        }
+
+        $ids = [];
+        foreach ((array) $courses as $entry) {
+            if (($entry['required'] ?? false) && !empty($entry['edition_id'])) {
+                $ids[] = (int) $entry['edition_id'];
+            }
+        }
+
+        return array_values(array_unique($ids));
     }
 
     /**

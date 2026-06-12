@@ -349,6 +349,43 @@ final class RegistrationRepository
         do_action('stride/registration/' . $event, $id, $changed, $context);
     }
 
+    /**
+     * Per-registration advisory lock for selection writes (MySQL GET_LOCK).
+     *
+     * Serializes read-modify-write sequences on a registration's selections /
+     * enrollment_data so interleaved submissions can't diff against the same
+     * pre-state (trajectory choices grant/revoke race, shake-out 2026-06-12).
+     */
+    public function acquireSelectionLock(int $registrationId, int $timeoutSeconds = 5): bool
+    {
+        global $wpdb;
+
+        return (int) $wpdb->get_var($wpdb->prepare(
+            'SELECT GET_LOCK(%s, %d)',
+            $this->selectionLockName($registrationId),
+            $timeoutSeconds,
+        )) === 1;
+    }
+
+    public function releaseSelectionLock(int $registrationId): void
+    {
+        global $wpdb;
+
+        $wpdb->query($wpdb->prepare(
+            'SELECT RELEASE_LOCK(%s)',
+            $this->selectionLockName($registrationId),
+        ));
+    }
+
+    private function selectionLockName(int $registrationId): string
+    {
+        global $wpdb;
+
+        // Prefix with the table prefix so parallel test/staging DBs on one
+        // MySQL server don't contend on the same lock namespace.
+        return $wpdb->prefix . 'vad_reg_selections_' . $registrationId;
+    }
+
     // === Find by ID ===
 
     /**

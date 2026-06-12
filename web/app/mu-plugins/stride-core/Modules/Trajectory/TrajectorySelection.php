@@ -118,6 +118,11 @@ final class TrajectorySelection
 
         $trajectoryId = (int) $registration->trajectory_id;
 
+        // Only ACTIVE registrations may change choices (see setSelectionsFromCourses).
+        if (!in_array((string) $registration->status, ['confirmed', 'pending'], true)) {
+            return new WP_Error('registration_inactive', 'Registration is not active');
+        }
+
         // Check choice window is open
         if (!$this->trajectories->isChoiceWindowOpen($trajectoryId)) {
             return new WP_Error('choice_window_closed', 'Choice window is not open');
@@ -179,12 +184,48 @@ final class TrajectorySelection
 
         $trajectoryId = (int) $registration->trajectory_id;
 
+        // Only ACTIVE registrations may change choices (shake-out BUG-1:
+        // a cancelled enrollee could still submit and gain LD access).
+        // Pending stays allowed — approval can land after the choice window.
+        if (!in_array((string) $registration->status, ['confirmed', 'pending'], true)) {
+            return new WP_Error('registration_inactive', 'Registration is not active');
+        }
+
         // Same single decision points as setSelections — window, then lock.
         if (!$this->trajectories->isChoiceWindowOpen($trajectoryId)) {
             return new WP_Error('choice_window_closed', 'Choice window is not open');
         }
         if ($this->registrations->areSelectionsLocked($registrationId)) {
             return new WP_Error('choices_locked', 'Choices are locked');
+        }
+
+        // Serialize per registration (shake-out BUG-3): two interleaved
+        // submissions both diffed grants against the same pre-state, leaving
+        // LD access diverged from the recorded picks.
+        if (!$this->registrations->acquireSelectionLock($registrationId)) {
+            return new WP_Error('busy', 'Er wordt al een keuze verwerkt — probeer het opnieuw.');
+        }
+
+        try {
+            return $this->applyCourseSelections($registrationId, $trajectoryId, $courseIds);
+        } finally {
+            $this->registrations->releaseSelectionLock($registrationId);
+        }
+    }
+
+    /**
+     * The locked section of setSelectionsFromCourses: re-reads the
+     * registration (the grant/revoke diff base must reflect any submission
+     * that held the lock before us), validates and applies.
+     *
+     * @param array<int> $courseIds
+     */
+    private function applyCourseSelections(int $registrationId, int $trajectoryId, array $courseIds): true|WP_Error
+    {
+        // Fresh read inside the lock.
+        $registration = $this->registrations->find($registrationId);
+        if (!$registration) {
+            return new WP_Error('enrollment_not_found', 'Enrollment not found');
         }
 
         $courseIds = array_values(array_unique(array_map('intval', $courseIds)));
