@@ -291,11 +291,14 @@
     margin-right: 8px;
 }
 
+/* Centered, not text-top — text-top drops a 16px icon ~3px under the
+   baseline of 13px button text (same fix as edition-admin.css). */
 .stride-quote-actions .dashicons {
     font-size: 16px;
     width: 16px;
     height: 16px;
-    vertical-align: text-top;
+    vertical-align: middle;
+    margin-top: -2px;
     margin-right: 4px;
 }
 

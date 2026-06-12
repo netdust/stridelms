@@ -8,6 +8,23 @@
  */
 
 /* ==========================================================================
+   Icon Buttons
+   ========================================================================== */
+
+/* Dashicons inside WP .button elements sit too low (dashicon line-height 1
+   inside the 2.15 button line-height; text-top drops a 16px icon ~3px under
+   the baseline). Center them instead. This stylesheet only loads on edition
+   screens, so the generic selector is page-scoped. */
+.button .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+    margin-top: -2px;
+    margin-right: 2px;
+}
+
+/* ==========================================================================
    Edition Admin Container
    ========================================================================== */
 
@@ -200,14 +217,6 @@
     display: flex;
     justify-content: flex-end;
     margin-bottom: 12px;
-}
-
-.stride-sessions-header .button .dashicons {
-    font-size: 16px;
-    width: 16px;
-    height: 16px;
-    vertical-align: text-top;
-    margin-right: 2px;
 }
 
 /* ==========================================================================
@@ -1147,14 +1156,6 @@
 
 #stride-add-slot-btn {
     margin-top: 8px;
-}
-
-#stride-add-slot-btn .dashicons {
-    font-size: 16px;
-    width: 16px;
-    height: 16px;
-    vertical-align: text-top;
-    margin-right: 2px;
 }
 
 /* Sessions Table with Slot Column */
