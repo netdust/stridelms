@@ -45,6 +45,7 @@ class TrajectorySelectionValidationTest extends TestCase
             $this->trajectoryRepo,
             $this->registrations,
             $this->cascade,
+            Mockery::mock(\Stride\Contracts\LMSAdapterInterface::class),
         );
     }
 

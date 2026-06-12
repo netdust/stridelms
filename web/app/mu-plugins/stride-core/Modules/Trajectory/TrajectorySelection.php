@@ -20,6 +20,7 @@ final class TrajectorySelection
         private readonly TrajectoryRepository $trajectoryRepo,
         private readonly RegistrationRepository $registrations,
         private readonly TrajectoryCascadeService $cascade,
+        private readonly \Stride\Contracts\LMSAdapterInterface $lms,
     ) {}
 
     // === Enrollment ===
@@ -133,6 +134,138 @@ final class TrajectorySelection
             return $validation;
         }
 
+        return $this->applySelections($registrationId, $trajectoryId, $editionIds, null);
+    }
+
+    /**
+     * Set elective choices from COURSE ids — the keuzes form's native shape.
+     *
+     * Maps edition-backed electives (trajectory_config.edition_id) onto the
+     * existing edition-id write path (repo + cascade + phase entry + event),
+     * and pure-LD electives (no edition_id) onto direct LD access through
+     * the LMS adapter (INV-6), diffed against the previous picks so a
+     * deselected course is revoked and an unchanged one is not re-granted.
+     *
+     * Validation is catalog-bound and course-level: unknown ids refuse the
+     * whole submission, and each group's min_choices is counted over course
+     * ids so pure-LD picks count toward the requirement.
+     *
+     * @param array<int> $courseIds
+     */
+    public function setSelectionsFromCourses(int $registrationId, array $courseIds): true|WP_Error
+    {
+        $registration = $this->registrations->find($registrationId);
+        if (!$registration) {
+            return new WP_Error('enrollment_not_found', 'Enrollment not found');
+        }
+
+        $trajectoryId = (int) $registration->trajectory_id;
+
+        // Same single decision points as setSelections — window, then lock.
+        if (!$this->trajectories->isChoiceWindowOpen($trajectoryId)) {
+            return new WP_Error('choice_window_closed', 'Choice window is not open');
+        }
+        if ($this->registrations->areSelectionsLocked($registrationId)) {
+            return new WP_Error('choices_locked', 'Choices are locked');
+        }
+
+        $courseIds = array_values(array_unique(array_map('intval', $courseIds)));
+
+        $catalog = $this->buildElectiveCatalog($trajectoryId);
+
+        // Catalog-bound: every submitted id must be an elective of THIS
+        // trajectory (threat-model mitigation 3 — no partial application).
+        foreach ($courseIds as $courseId) {
+            if (!array_key_exists($courseId, $catalog['courses'])) {
+                return new WP_Error('invalid_choice', sprintf('Course %d is not a choice in this trajectory', $courseId));
+            }
+        }
+
+        // Per-group exact min_choices count over COURSE ids (mitigation 5).
+        $validation = $this->validateCourseSelections($catalog['groups'], $courseIds);
+        if (is_wp_error($validation)) {
+            return $validation;
+        }
+
+        // Partition into edition-backed picks and pure-LD picks.
+        $editionIds = [];
+        $pureLdCourseIds = [];
+        foreach ($courseIds as $courseId) {
+            $editionId = $catalog['courses'][$courseId];
+            if ($editionId > 0) {
+                $editionIds[] = $editionId;
+            } else {
+                $pureLdCourseIds[] = $courseId;
+            }
+        }
+
+        // Previous pure-LD picks BEFORE the new phase entry overwrites the
+        // record — the grant/revoke diff is computed against these.
+        $previousPureLd = $this->getSelectedPureLdCourseIds($registration, $catalog);
+
+        $applied = $this->applySelections($registrationId, $trajectoryId, $editionIds, $courseIds);
+        if (is_wp_error($applied)) {
+            return $applied;
+        }
+
+        // Pure-LD grant/revoke diff via the adapter only (INV-6).
+        $userId = (int) $registration->user_id;
+        foreach (array_diff($pureLdCourseIds, $previousPureLd) as $courseId) {
+            $this->lms->grantAccess($userId, $courseId);
+        }
+        foreach (array_diff($previousPureLd, $pureLdCourseIds) as $courseId) {
+            $this->lms->revokeAccess($userId, $courseId);
+        }
+
+        return true;
+    }
+
+    /**
+     * Single decision point for "which elective COURSES did this registration
+     * pick" — every template renders selection state through this, never by
+     * re-deriving from the raw selections column (whose shape is edition ids).
+     *
+     * @return array<int>
+     */
+    public function getSelectedCourseIds(int $registrationId): array
+    {
+        $registration = $this->registrations->find($registrationId);
+        if (!$registration || empty($registration->trajectory_id)) {
+            return [];
+        }
+
+        $catalog = $this->buildElectiveCatalog((int) $registration->trajectory_id);
+
+        // Edition-backed picks: map the canonical edition ids back to courses.
+        $selections = is_array($registration->selections ?? null)
+            ? array_map('intval', $registration->selections)
+            : [];
+        $ids = [];
+        foreach ($catalog['courses'] as $courseId => $editionId) {
+            if ($editionId > 0 && in_array($editionId, $selections, true)) {
+                $ids[] = $courseId;
+            }
+        }
+
+        // Pure-LD picks: recorded in the latest initial_selection phase entry.
+        foreach ($this->getSelectedPureLdCourseIds($registration, $catalog) as $courseId) {
+            $ids[] = $courseId;
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    /**
+     * The shared write path behind both selection entry points: canonical
+     * selections write → cascade reconcile → append-only phase entry →
+     * choices_updated event. Never duplicated (single guard/cascade sequence).
+     *
+     * @param array<int>      $editionIds
+     * @param array<int>|null $courseIds The submitted course ids when the
+     *                                   course-level entry point was used.
+     */
+    private function applySelections(int $registrationId, int $trajectoryId, array $editionIds, ?array $courseIds): true|WP_Error
+    {
         // Save selections
         $result = $this->registrations->setSelections($registrationId, $editionIds);
 
@@ -154,14 +287,14 @@ final class TrajectorySelection
         // Append-only: every call records a new phase entry. The phased-choices
         // feature (future) will pass distinct phase labels; today all calls use
         // 'enrollment'.
-        $this->registrations->appendInitialSelectionPhase(
-            $registrationId,
-            [
-                'phase'       => 'enrollment',
-                'edition_ids' => array_values(array_map('intval', $editionIds)),
-            ],
-            'trajectory',
-        );
+        $phase = [
+            'phase'       => 'enrollment',
+            'edition_ids' => array_values(array_map('intval', $editionIds)),
+        ];
+        if ($courseIds !== null) {
+            $phase['course_ids'] = array_values(array_map('intval', $courseIds));
+        }
+        $this->registrations->appendInitialSelectionPhase($registrationId, $phase, 'trajectory');
 
         do_action('stride/trajectory/choices_updated', [
             'registration_id' => $registrationId,
@@ -170,6 +303,92 @@ final class TrajectorySelection
         ]);
 
         return true;
+    }
+
+    /**
+     * Elective catalog for a trajectory: courseId => editionId (0 = pure-LD),
+     * plus the group structs for count validation.
+     *
+     * @return array{courses: array<int, int>, groups: array<int, array<string, mixed>>}
+     */
+    private function buildElectiveCatalog(int $trajectoryId): array
+    {
+        $groups = $this->trajectoryRepo->getElectiveGroups($trajectoryId);
+
+        $courses = [];
+        foreach ($groups as $group) {
+            foreach ($group['courses'] ?? [] as $coursePost) {
+                $config = $coursePost->trajectory_config ?? [];
+                $courses[(int) $coursePost->ID] = (int) ($config['edition_id'] ?? 0);
+            }
+        }
+
+        return ['courses' => $courses, 'groups' => $groups];
+    }
+
+    /**
+     * Per-group exact-count validation over COURSE ids — the course-level
+     * mirror of validateSelections(), where pure-LD picks also count.
+     *
+     * @param array<int, array<string, mixed>> $groups
+     * @param array<int>                       $courseIds
+     */
+    private function validateCourseSelections(array $groups, array $courseIds): true|WP_Error
+    {
+        foreach ($groups as $group) {
+            $groupName = (string) ($group['name'] ?? 'Keuze');
+            $required = max(1, (int) ($group['required'] ?? 0));
+
+            $groupCourseIds = array_map(
+                static fn($coursePost): int => (int) $coursePost->ID,
+                $group['courses'] ?? [],
+            );
+            if ($groupCourseIds === []) {
+                continue;
+            }
+
+            $chosenInGroup = count(array_intersect($courseIds, $groupCourseIds));
+
+            if ($chosenInGroup < $required) {
+                return new WP_Error(
+                    'incomplete_choices',
+                    sprintf('Group "%s" requires %d selection(s), got %d', $groupName, $required, $chosenInGroup),
+                );
+            }
+            if ($chosenInGroup > $required) {
+                return new WP_Error(
+                    'too_many_choices',
+                    sprintf('Group "%s" allows %d selection(s), got %d', $groupName, $required, $chosenInGroup),
+                );
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * The registration's current pure-LD picks: the latest phase entry's
+     * course_ids, narrowed to courses the catalog marks as pure-LD.
+     *
+     * @param array{courses: array<int, int>} $catalog
+     * @return array<int>
+     */
+    private function getSelectedPureLdCourseIds(object $registration, array $catalog): array
+    {
+        $data = is_array($registration->enrollment_data ?? null) ? $registration->enrollment_data : [];
+        $phases = $data['initial_selection']['phases'] ?? [];
+
+        $latestCourseIds = [];
+        foreach ($phases as $phase) {
+            if (array_key_exists('course_ids', (array) $phase)) {
+                $latestCourseIds = array_map('intval', (array) $phase['course_ids']);
+            }
+        }
+
+        return array_values(array_filter(
+            $latestCourseIds,
+            fn(int $courseId): bool => ($catalog['courses'][$courseId] ?? -1) === 0,
+        ));
     }
 
     /**
