@@ -562,4 +562,60 @@ class TrajectoryE2ECest
         $I->see('Erkend certificaat');
         $I->see('Begeleiding door experts');
     }
+
+    // =========================================================================
+    // Shared trajectory card (catalog + dashboard)
+    // =========================================================================
+
+    /**
+     * Card-F1: the public /trajecten catalog card shows the richer design —
+     * course count + keuzemodule + price + deadline, and NO progress badge
+     * (anonymous visitor) and NO journey-dots strip.
+     *
+     * @test
+     */
+    public function catalogCardShowsRicherDesignWithoutProgress(AcceptanceTester $I): void
+    {
+        $I->wantTo('see the richer catalog trajectory card without a progress badge or dots strip');
+
+        $I->amOnPage('/trajecten/');
+        $I->waitForElement('main', 10);
+
+        // Scope to the fixture trajectory's card via its title.
+        $cardText = (string) $I->executeJS(
+            "const h = Array.from(document.querySelectorAll('h3')).find(el => el.textContent.includes('E2E Traject {$this->stamp}'));" .
+            "return h ? h.closest('a, div').innerText : '';"
+        );
+
+        // 2 mandatory-ish + 1 edition elective + 1 pure-LD elective = 3 courses, 1 group.
+        \PHPUnit\Framework\Assert::assertStringContainsString('opleidingen', $cardText, 'course count must render');
+        \PHPUnit\Framework\Assert::assertStringContainsString('keuzemodule', $cardText, 'elective-group count must render');
+        \PHPUnit\Framework\Assert::assertStringContainsString('Bekijk traject', $cardText, 'catalog CTA');
+        \PHPUnit\Framework\Assert::assertStringNotContainsString('voltooid', $cardText, 'no progress badge on the public catalog');
+    }
+
+    /**
+     * Card-F2: the dashboard "Mijn trajecten" card shows the SAME card WITH a
+     * "X% voltooid" badge and "Open traject" CTA, and NO per-course checklist.
+     *
+     * @test
+     */
+    public function dashboardCardShowsProgressBadgeAndNoChecklist(AcceptanceTester $I): void
+    {
+        $I->wantTo('see the dashboard trajectory card with a progress badge and no per-course checklist');
+
+        $this->enroll($I);
+
+        $I->amOnPage('/mijn-account/?tab=trajecten');
+        $I->waitForElement('main', 10);
+
+        $I->see('voltooid');           // the X% voltooid badge
+        $I->see('Open traject');       // dashboard CTA
+        $I->see('opleidingen');        // the shared meta line
+
+        // The removed per-course checklist must NOT render.
+        $I->dontSee('onderdelen afgerond');
+        $I->dontSee('Bekijk editie');
+        $I->dontSee('Fatal error');
+    }
 }
