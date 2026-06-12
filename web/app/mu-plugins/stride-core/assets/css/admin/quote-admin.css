@@ -291,15 +291,21 @@
     margin-right: 8px;
 }
 
-/* Centered, not text-top — text-top drops a 16px icon ~3px under the
-   baseline of 13px button text (same fix as edition-admin.css). */
-.stride-quote-actions .dashicons {
+/* Flex-center icon buttons — same fix/rationale as edition-admin.css
+   (core buttons.css centering assumes 20px dashicons; 16px overrides
+   break the line-height math, so inline-align tricks sit a few px off). */
+.button:has(> .dashicons) {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.wp-core-ui .button > .dashicons {
     font-size: 16px;
     width: 16px;
     height: 16px;
-    vertical-align: middle;
-    margin-top: -2px;
-    margin-right: 4px;
+    line-height: 1;
+    margin: 0;
 }
 
 .stride-readonly-notice {

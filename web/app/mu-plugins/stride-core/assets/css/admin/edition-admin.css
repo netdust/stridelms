@@ -11,17 +11,24 @@
    Icon Buttons
    ========================================================================== */
 
-/* Dashicons inside WP .button elements sit too low (dashicon line-height 1
-   inside the 2.15 button line-height; text-top drops a 16px icon ~3px under
-   the baseline). Center them instead. This stylesheet only loads on edition
+/* Core buttons.css centers dashicons assuming their default 20px size
+   (line-height 1.9 in the 38px button line box); our 16px override breaks
+   that math, so inline-align tricks always sit a few px off. Flex-center
+   the button content instead — exact at any button height. Verified 0px
+   offset in-browser 2026-06-12. This stylesheet only loads on edition
    screens, so the generic selector is page-scoped. */
-.button .dashicons {
+.button:has(> .dashicons) {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.wp-core-ui .button > .dashicons {
     font-size: 16px;
     width: 16px;
     height: 16px;
-    vertical-align: middle;
-    margin-top: -2px;
-    margin-right: 2px;
+    line-height: 1;
+    margin: 0;
 }
 
 /* ==========================================================================
