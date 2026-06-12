@@ -40,7 +40,6 @@ $status_enum        = $trajectory['status_enum'];
 $deadline           = $trajectory['enrollment_deadline'];
 $can_enroll         = $trajectoryService->isEnrollmentOpen($trajectory_id);
 $price              = $trajectory['price'] ?? 0;
-$price_non_member   = $trajectory['price_non_member'] ?? 0;
 $capacity           = $trajectory['capacity'] ?? 0;
 
 // Descriptive sidebar fields (shared with editions), render-when-present.
@@ -50,6 +49,19 @@ $cta_benefits       = array_values(array_filter(array_map(
     'trim',
     preg_split('/\R/', (string) ($trajectory['cta_benefits'] ?? '')) ?: [],
 )));
+
+// Capacity bar — mirrors the edition sidebar (single-vad_edition.php:105-230).
+// Only when a finite capacity is set; self-paced trajectories use capacity 0
+// (unlimited) → no bar. $spots is remaining seats; fill is the used fraction.
+$registrationRepo  = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+$spots             = $capacity > 0
+    ? max(0, $capacity - count($registrationRepo->findByTrajectory($trajectory_id, 'confirmed')))
+    : null;
+$show_capacity_bar = $spots !== null && $can_enroll;
+$capacity_fill     = $show_capacity_bar
+    ? max(0, min(100, (int) round((($capacity - $spots) / $capacity) * 100)))
+    : 0;
+$spots_few         = $spots !== null && $spots > 0 && $spots <= 5;
 
 // Get courses via repository (returns WP_Post objects)
 $required_courses   = $trajectoryRepo->getRequiredCourses($trajectory_id);
@@ -163,78 +175,66 @@ get_header();
 ?>
             </div>
 
-            <!-- Sidebar (1/3) - Enrollment Card -->
+            <!-- Sidebar (1/3) — sticky enrollment card, mirrors the edition
+                 sidebar design (single-vad_edition.php:585-684): price hero,
+                 capacity bar, slim info rows, CTA, descriptive fields. -->
             <div class="lg:col-span-1">
-                <div class="bg-surface-card rounded-[16px] shadow-card p-6 sticky top-24">
-                    <h3 class="font-heading font-semibold text-lg mb-4">
-                        <?php esc_html_e('Inschrijven', 'stridence'); ?>
-                    </h3>
-
-                    <div class="space-y-3 mb-6">
-                        <div class="flex justify-between">
-                            <span class="text-text-muted"><?php esc_html_e('Prijs (leden)', 'stridence'); ?></span>
-                            <span class="font-semibold">
-                                <?php
-                if ($price > 0) {
-                    echo esc_html(stride_format_money((int) ($price * 100)));
-                } else {
-                    // A genuinely free trajectory reads "Gratis" — matches the
-                    // catalog card + online-course sidebar convention
-                    // (card-edition.php, sidebar-online.php). "Op aanvraag" is
-                    // for unpriced offerings, not zero-priced ones.
-                    esc_html_e('Gratis', 'stridence');
-                }
-?>
-                            </span>
+                <aside class="bg-surface-card rounded-[16px] shadow-elevated p-7 sticky top-24">
+                    <!-- Price hero -->
+                    <?php if ($price > 0) : ?>
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-[32px] font-extrabold tracking-[-0.01em] text-text"><?php echo esc_html(stride_format_money((int) ($price * 100))); ?></span>
+                            <span class="text-[13px] text-text-faint"><?php esc_html_e('per deelnemer', 'stridence'); ?></span>
                         </div>
-                        <?php if ($price_includes !== '') : ?>
-                            <p class="text-[13px] text-text-muted -mt-1"><?php echo esc_html($price_includes); ?></p>
-                        <?php endif; ?>
-                        <?php if ($price_non_member > 0 && $price_non_member !== $price) : ?>
-                            <div class="flex justify-between">
-                                <span class="text-text-muted"><?php esc_html_e('Prijs (niet-leden)', 'stridence'); ?></span>
-                                <span class="font-semibold">
-                                    <?php echo esc_html(stride_format_money((int) ($price_non_member * 100))); ?>
-                                </span>
+                    <?php else : ?>
+                        <div class="text-[32px] font-extrabold tracking-[-0.01em] text-badge-free-text"><?php esc_html_e('Gratis', 'stridence'); ?></div>
+                    <?php endif; ?>
+                    <?php if ($price_includes !== '') : ?>
+                        <div class="text-[13px] text-text-muted mt-1"><?php echo esc_html($price_includes); ?></div>
+                    <?php endif; ?>
+
+                    <!-- Capacity bar -->
+                    <?php if ($show_capacity_bar) : ?>
+                        <div class="mt-5">
+                            <div class="h-2 rounded-full bg-surface-alt overflow-hidden">
+                                <div class="h-full rounded-full bg-primary" style="width: <?php echo esc_attr((string) $capacity_fill); ?>%"></div>
                             </div>
-                        <?php endif; ?>
-                        <?php if ($deadline) : ?>
-                            <div class="flex justify-between">
-                                <span class="text-text-muted"><?php esc_html_e('Inschrijven tot', 'stridence'); ?></span>
-                                <span><?php echo esc_html(stride_format_date($deadline)); ?></span>
+                            <div class="text-[13px] font-bold mt-2 <?php echo $spots_few ? 'text-badge-few-text' : 'text-text-muted'; ?>">
+                                <?php
+                                /* translators: 1: spots remaining, 2: total capacity */
+                                echo esc_html(sprintf(__('Nog %1$d van %2$d plaatsen vrij', 'stridence'), (int) $spots, (int) $capacity));
+                                ?>
                             </div>
-                        <?php endif; ?>
-                        <?php if ($capacity > 0) : ?>
-                            <div class="flex justify-between">
-                                <span class="text-text-muted"><?php esc_html_e('Maximaal', 'stridence'); ?></span>
-                                <span>
-                                    <?php
-    printf(
-        esc_html(_n('%d deelnemer', '%d deelnemers', $capacity, 'stridence')),
-        $capacity,
-    );
-                            ?>
-                                </span>
-                            </div>
+                        </div>
+                    <?php endif; ?>
+
+                    <!-- Deadline info row -->
+                    <?php if ($deadline) : ?>
+                        <div class="flex justify-between text-[13px] mt-5">
+                            <span class="text-text-muted"><?php esc_html_e('Inschrijven tot', 'stridence'); ?></span>
+                            <span class="font-semibold text-text"><?php echo esc_html(stride_format_date($deadline)); ?></span>
+                        </div>
+                    <?php endif; ?>
+
+                    <!-- CTA -->
+                    <div class="mt-[22px]">
+                        <?php if ($can_enroll) : ?>
+                            <a href="<?php echo esc_url(stride_enrollment_url($trajectory_id, 'trajectory')); ?>" class="btn-primary w-full text-center block">
+                                <?php esc_html_e('Nu inschrijven', 'stridence'); ?>
+                            </a>
+                        <?php elseif ($status_enum->allowsInterest()) : ?>
+                            <a href="<?php echo esc_url(stride_enrollment_url($trajectory_id, 'trajectory')); ?>" class="btn-primary w-full text-center block">
+                                <?php esc_html_e('Interesse melden', 'stridence'); ?>
+                            </a>
+                            <p class="text-xs text-text-muted mt-3 text-center">
+                                <?php esc_html_e('Dit traject is nog in voorbereiding. Meld je interesse en we houden je op de hoogte.', 'stridence'); ?>
+                            </p>
+                        <?php else : ?>
+                            <button type="button" class="btn-secondary w-full text-center opacity-50 cursor-not-allowed" disabled>
+                                <?php esc_html_e('Niet beschikbaar', 'stridence'); ?>
+                            </button>
                         <?php endif; ?>
                     </div>
-
-                    <?php if ($can_enroll) : ?>
-                        <a href="<?php echo esc_url(stride_enrollment_url($trajectory_id, 'trajectory')); ?>" class="btn-primary w-full text-center block">
-                            <?php esc_html_e('Nu inschrijven', 'stridence'); ?>
-                        </a>
-                    <?php elseif ($status_enum->allowsInterest()) : ?>
-                        <a href="<?php echo esc_url(stride_enrollment_url($trajectory_id, 'trajectory')); ?>" class="btn-primary w-full text-center block">
-                            <?php esc_html_e('Interesse melden', 'stridence'); ?>
-                        </a>
-                        <p class="text-xs text-text-muted mt-3 text-center">
-                            <?php esc_html_e('Dit traject is nog in voorbereiding. Meld je interesse en we houden je op de hoogte.', 'stridence'); ?>
-                        </p>
-                    <?php else : ?>
-                        <button type="button" class="btn-secondary w-full text-center opacity-50 cursor-not-allowed" disabled>
-                            <?php esc_html_e('Niet beschikbaar', 'stridence'); ?>
-                        </button>
-                    <?php endif; ?>
 
                     <?php if ($enrollment_info !== '') : ?>
                         <p class="text-[13px] text-text-muted leading-relaxed mt-4"><?php echo esc_html($enrollment_info); ?></p>
@@ -252,7 +252,7 @@ get_header();
                             </ul>
                         </div>
                     <?php endif; ?>
-                </div>
+                </aside>
             </div>
         </div>
     </div>
