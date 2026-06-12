@@ -22,14 +22,30 @@ $trajectory       = $args['trajectory'] ?? [];
 $has_courses = !empty($required_courses) || !empty($elective_groups);
 
 ?>
+<?php
+// Descriptive fields (shared with editions) — surfaced by getTrajectory().
+$target_audience     = trim((string) ($trajectory['target_audience'] ?? ''));
+$required_experience = trim((string) ($trajectory['required_experience'] ?? ''));
+$included            = trim((string) ($trajectory['included'] ?? ''));
+$cancellation_policy = trim((string) ($trajectory['cancellation_policy'] ?? ''));
+$duration            = trim((string) ($trajectory['duration'] ?? ''));
+?>
 <!-- Overzicht Section -->
-<section id="overzicht" class="scroll-mt-32">
+<section id="overzicht" class="scroll-mt-32 flex flex-col gap-6">
     <!-- Bare prose, no card — matches the edition/course description block
          (single-vad_edition.php #omschrijving). A panel around the body text
          reads as broken when the content is a single short paragraph. -->
     <div class="prose-stride max-w-none">
         <?php echo apply_filters('the_content', get_post_field('post_content', $trajectory_id)); ?>
     </div>
+
+    <?php if ($target_audience !== '') : ?>
+        <!-- "Voor wie?" well — mirrors single-vad_edition.php:353. -->
+        <div class="bg-surface-alt rounded-[14px] p-5 text-[14px] text-text-muted leading-relaxed">
+            <strong class="text-text"><?php esc_html_e('Voor wie?', 'stridence'); ?></strong>
+            <?php echo esc_html($target_audience); ?>
+        </div>
+    <?php endif; ?>
 </section>
 
 <!-- Cursussen Section -->
@@ -48,7 +64,22 @@ $has_courses = !empty($required_courses) || !empty($elective_groups);
 </section>
 <?php endif; ?>
 
-<!-- Praktisch Section -->
+<!-- Praktisch Section — always-on cards (course count, doorlooptijd) plus
+     render-when-present wells for the descriptive fields. No hardcoded
+     placeholder values: an unset field shows no card. -->
+<?php
+$total_courses = count($required_courses);
+foreach ($elective_groups as $group) {
+    $total_courses += count($group['courses'] ?? []);
+}
+// Doorlooptijd: the authored duration wins; otherwise derive from mode.
+$mode = $trajectory['mode'] ?? 'cohort';
+$duration_label = $duration !== ''
+    ? $duration
+    : ($mode === 'self_paced'
+        ? __('In eigen tempo', 'stridence')
+        : __('Vast programma met cohort', 'stridence'));
+?>
 <section id="praktisch" class="scroll-mt-32">
     <h2 class="font-heading text-xl font-semibold text-text mb-4">
         <?php esc_html_e('Praktische informatie', 'stridence'); ?>
@@ -56,37 +87,15 @@ $has_courses = !empty($required_courses) || !empty($elective_groups);
     <div class="grid sm:grid-cols-2 gap-4">
         <div class="bg-surface-card rounded-[14px] shadow-card p-5">
             <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
-                <?php echo stridence_icon('users', 'w-5 h-5 text-primary'); ?>
-                <?php esc_html_e('Doelgroep', 'stridence'); ?>
-            </h3>
-            <p class="text-text-muted text-sm">
-                <?php esc_html_e('Zorgprofessionals', 'stridence'); ?>
-            </p>
-        </div>
-        <div class="bg-surface-card rounded-[14px] shadow-card p-5">
-            <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
-                <?php echo stridence_icon('award', 'w-5 h-5 text-primary'); ?>
-                <?php esc_html_e('Certificaat', 'stridence'); ?>
-            </h3>
-            <p class="text-text-muted text-sm">
-                <?php esc_html_e('VAD Certificaat na afronding', 'stridence'); ?>
-            </p>
-        </div>
-        <div class="bg-surface-card rounded-[14px] shadow-card p-5">
-            <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
                 <?php echo stridence_icon('book-open', 'w-5 h-5 text-primary'); ?>
                 <?php esc_html_e('Cursussen', 'stridence'); ?>
             </h3>
             <p class="text-text-muted text-sm">
                 <?php
-                $total_courses = count($required_courses);
-foreach ($elective_groups as $group) {
-    $total_courses += count($group['courses'] ?? []);
-}
-printf(
-    esc_html(_n('%d cursus', '%d cursussen', $total_courses, 'stridence')),
-    $total_courses,
-);
+                printf(
+                    esc_html(_n('%d cursus', '%d cursussen', $total_courses, 'stridence')),
+                    $total_courses,
+                );
 ?>
             </p>
         </div>
@@ -95,17 +104,35 @@ printf(
                 <?php echo stridence_icon('clock', 'w-5 h-5 text-primary'); ?>
                 <?php esc_html_e('Doorlooptijd', 'stridence'); ?>
             </h3>
-            <p class="text-text-muted text-sm">
-                <?php
-$mode = $trajectory['mode'] ?? 'cohort';
-if ($mode === 'self_paced') {
-    esc_html_e('In eigen tempo', 'stridence');
-} else {
-    esc_html_e('Vast programma met cohort', 'stridence');
-}
-?>
-            </p>
+            <p class="text-text-muted text-sm"><?php echo esc_html($duration_label); ?></p>
         </div>
+        <?php if ($required_experience !== '') : ?>
+            <div class="bg-surface-card rounded-[14px] shadow-card p-5">
+                <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
+                    <?php echo stridence_icon('check-circle', 'w-5 h-5 text-primary'); ?>
+                    <?php esc_html_e('Voorkennis', 'stridence'); ?>
+                </h3>
+                <p class="text-text-muted text-sm"><?php echo esc_html($required_experience); ?></p>
+            </div>
+        <?php endif; ?>
+        <?php if ($included !== '') : ?>
+            <div class="bg-surface-card rounded-[14px] shadow-card p-5">
+                <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
+                    <?php echo stridence_icon('award', 'w-5 h-5 text-primary'); ?>
+                    <?php esc_html_e('Inbegrepen', 'stridence'); ?>
+                </h3>
+                <p class="text-text-muted text-sm"><?php echo esc_html($included); ?></p>
+            </div>
+        <?php endif; ?>
+        <?php if ($cancellation_policy !== '') : ?>
+            <div class="bg-surface-card rounded-[14px] shadow-card p-5">
+                <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
+                    <?php echo stridence_icon('alert-circle', 'w-5 h-5 text-primary'); ?>
+                    <?php esc_html_e('Annuleren', 'stridence'); ?>
+                </h3>
+                <p class="text-text-muted text-sm"><?php echo esc_html($cancellation_policy); ?></p>
+            </div>
+        <?php endif; ?>
     </div>
 </section>
 
