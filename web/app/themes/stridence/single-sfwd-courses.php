@@ -60,10 +60,22 @@ $online_sidebar_args = [
 ];
 
 if ($is_online && $has_active_edition) {
-    $editionService   = ntdst_get(EditionService::class);
+    $editionService = ntdst_get(EditionService::class);
+
+    // Prefer the first edition that is open for enrollment — a course can
+    // have a running cohort AND an open one (multi-cohort e-learning), and
+    // the enrollable cohort must drive the CTA. Without this preference the
+    // sidebar can say "Niet beschikbaar" while an open cohort exists.
+    $statuses         = $editionService->getEffectiveStatuses($active_edition_ids);
     $primaryEditionId = (int) $active_edition_ids[0];
-    $primaryStatus    = $editionService->getEffectiveStatus($primaryEditionId);
-    $viewerId         = get_current_user_id();
+    foreach ($active_edition_ids as $candidate_id) {
+        if (($statuses[(int) $candidate_id] ?? null)?->allowsEnrollment()) {
+            $primaryEditionId = (int) $candidate_id;
+            break;
+        }
+    }
+    $primaryStatus = $statuses[$primaryEditionId] ?? $editionService->getEffectiveStatus($primaryEditionId);
+    $viewerId      = get_current_user_id();
 
     $registration = $viewerId
         ? ntdst_get(RegistrationRepository::class)->findByUserAndEdition($viewerId, $primaryEditionId)
