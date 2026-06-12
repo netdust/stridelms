@@ -26,6 +26,7 @@ require_once STRIDENCE_DIR . '/helpers/icons.php';
 require_once STRIDENCE_DIR . '/helpers/formatting.php';
 require_once STRIDENCE_DIR . '/helpers/templates.php';
 require_once STRIDENCE_DIR . '/helpers/catalog.php';
+require_once STRIDENCE_DIR . '/helpers/trajectory-card.php';
 
 // ========================================
 // BOOTSTRAP (NTDST Core Integration)

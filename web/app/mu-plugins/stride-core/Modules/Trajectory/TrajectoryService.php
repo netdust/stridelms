@@ -344,6 +344,14 @@ final class TrajectoryService extends AbstractService
         return count($this->repository->getRequiredCourses($trajectoryId));
     }
 
+    /**
+     * Get the number of elective (choice) groups on a trajectory.
+     */
+    public function getElectiveGroupCount(int $trajectoryId): int
+    {
+        return count($this->repository->getElectiveGroups($trajectoryId));
+    }
+
     // === User Enrollment ===
 
     /**
