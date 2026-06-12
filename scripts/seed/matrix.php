@@ -788,6 +788,16 @@ return [
             'choice_deadline' => date('Y-m-d', strtotime('+3 weeks')),
             'capacity' => 15,
             'price' => 1695.00, 'price_non_member' => 1995.00,
+            'descriptive' => [
+                'target_audience' => 'Zorgcoördinatoren, CLB-medewerkers en preventiewerkers die zich willen specialiseren in jeugdgezondheid.',
+                'required_experience' => 'Een basisopleiding in zorg, onderwijs of welzijn',
+                'included' => 'Alle cursusdagen, digitaal en gedrukt cursusmateriaal, lunch op de praktijkdagen en het eindcertificaat.',
+                'price_includes' => 'incl. cursusmateriaal en certificaat',
+                'cancellation_policy' => 'Kosteloos annuleren tot 30 dagen voor de start. Daarna kan een collega je plaats overnemen.',
+                'cta_benefits' => "Erkend specialisatiecertificaat\nBegeleiding door ervaren docenten\nKleine cohortgroep (max. 15)\nKeuzecursussen op maat",
+                'enrollment_info' => 'Na inschrijving ontvang je een bevestigingsmail met het volledige programma en de data.',
+                'duration' => 'Ongeveer 4 maanden',
+            ],
             'courses' => [
                 ['course_title' => 'Jeugdgezondheid: Fundament', 'required' => true, 'order' => 1],
                 ['course_title' => 'Assessment en Motorische Screening', 'required' => true, 'order' => 2],
@@ -807,6 +817,15 @@ return [
             'enrollment_deadline' => '',
             'capacity' => 0,
             'price' => 595.00, 'price_non_member' => 745.00,
+            'descriptive' => [
+                'target_audience' => 'Jeugdgezondheidswerkers die zich flexibel willen bijscholen naast hun werk.',
+                'included' => 'Toegang tot alle online cursussen en de bijhorende werkdocumenten gedurende 12 maanden.',
+                'price_includes' => 'incl. 12 maanden toegang',
+                'cancellation_policy' => 'Omdat dit een digitaal traject is, is annuleren niet mogelijk na de eerste login.',
+                'cta_benefits' => "Volledig in je eigen tempo\n12 maanden toegang\nDirect starten na inschrijving",
+                'enrollment_info' => 'Je krijgt meteen na inschrijving toegang tot je persoonlijk dashboard.',
+                // No duration field → the "In eigen tempo" mode fallback shows.
+            ],
             'courses' => [
                 ['course_title' => 'E-learning: Basiskennis Jeugdgezondheid', 'required' => true, 'order' => 1],
                 ['course_title' => 'E-learning: Voeding en Prestatie bij Jonge Sporters', 'required' => true, 'order' => 2],
@@ -824,6 +843,13 @@ return [
             'enrollment_deadline' => '',
             'capacity' => 0,
             'price' => 0.00, 'price_non_member' => 0.00,
+            // Intentionally a SUBSET — exercises render-when-present (the
+            // Voorkennis/Inbegrepen/Annuleren wells stay hidden here).
+            'descriptive' => [
+                'target_audience' => 'Iedereen die wil kennismaken met de opleidingen van BWEEG Academy.',
+                'cta_benefits' => "Gratis kennismaking\nMix van gratis en betaalde onderdelen",
+                'enrollment_info' => 'Je begint met de gratis onderdelen en kiest zelf of je verdiept.',
+            ],
             'courses' => [
                 ['course_title' => 'Gratis Introductie: Werken bij BWEEG', 'required' => true, 'order' => 1],
                 ['course_title' => 'Gratis Webinar: Energy Drinks - De Nieuwe Trend', 'required' => true, 'order' => 2],

@@ -898,6 +898,14 @@ final class StrideSeedBuilders
         if (isset($t['choice_available_date'])) { $payload['choice_available_date'] = $t['choice_available_date']; }
         if (isset($t['choice_deadline']))       { $payload['choice_deadline'] = $t['choice_deadline']; }
         if (isset($t['courses']))               { $payload['courses'] = wp_json_encode($courses); }
+        // Descriptive fields (shared with editions) — schema-registered, so
+        // they go through the repository payload, not update_post_meta. The
+        // matrix key is 'descriptive' (the trajectory's 'content' is the post
+        // body, unlike editions where 'content' IS the descriptive block).
+        foreach (($t['descriptive'] ?? []) as $key => $value) {
+            $payload[$key] = $value;   // target_audience, required_experience, included, price_includes,
+                                       // cancellation_policy, cta_benefits, enrollment_info, duration
+        }
 
         $id = ntdst_get(TrajectoryService::class)->createTrajectory($payload);
         if (is_wp_error($id)) {
