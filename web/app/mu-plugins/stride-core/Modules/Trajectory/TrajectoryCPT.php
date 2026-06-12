@@ -117,6 +117,11 @@ final class TrajectoryCPT
                 'label' => 'Gekoppelde edities',
                 'description' => 'JSON array of course-edition mappings',
             ],
+            'trajectory_messages' => [
+                'type' => 'json',
+                'label' => 'Berichten',
+                'description' => 'Admin-authored messages/announcements shown on the trajectory dashboard',
+            ],
             'requires_approval' => [
                 'type' => 'boolean',
                 'label' => 'Goedkeuring vereist',
