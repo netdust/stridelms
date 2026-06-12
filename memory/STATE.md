@@ -657,3 +657,4 @@ Inventory only — left in place per user instruction:
 
 **Decisions**
 - Helder Tij is the stock theme look; VAD/client plugins keep their own skins via the verified override chain.
+[2026-06-12] — session ended (no significant changes captured)
