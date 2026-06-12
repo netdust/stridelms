@@ -10,6 +10,7 @@ use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\SessionRepository;
 use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
+use Stride\Modules\Enrollment\EnrollmentCompletion;
 
 final class StrideSeedBuilders
 {
@@ -255,8 +256,10 @@ final class StrideSeedBuilders
         $postTitle = $courseTitle . ' - ' . date('j M Y', strtotime($data['start_date']));
 
         // Natural key: derived post title. On re-run, reconstruct the full
-        // created/covers picture (edition id + its existing seed sessions)
-        // instead of recreating — sessions ride the edition gate.
+        // created/covers picture (edition id + its existing seed sessions),
+        // then STILL fall through to the registrations/quotes loop below —
+        // those builders are idempotent by natural key themselves, and the
+        // manifest must be rebuilt in full on every run.
         $existing = new WP_Query([
             'post_type' => 'vad_edition', 'title' => $postTitle, 'post_status' => 'any',
             'posts_per_page' => 1, 'fields' => 'ids', 'no_found_rows' => true,
@@ -265,11 +268,12 @@ final class StrideSeedBuilders
             $editionId = (int) $existing->posts[0];
             $sessionIds = ntdst_get(SessionRepository::class)->findIdsByEdition($editionId);
             echo "    - Edition '{$postTitle}' exists (ID: {$editionId}, " . count($sessionIds) . " sessions)\n";
-            return [
+            $out = [
                 'id' => $editionId,
                 'created' => ['editions' => [$editionId], 'sessions' => $sessionIds],
                 'covers' => ["edition:{$editionId}" => $data['covers'] ?? []],
             ];
+            return $this->buildEditionRegistrations($editionId, $data, $userMap, $out);
         }
 
         // end_date derivation from max session offset
@@ -362,9 +366,151 @@ final class StrideSeedBuilders
             $sessionId = $this->buildSession($editionId, $data, $sessionData, $sessionLessonIds);
             if ($sessionId) { $out['created']['sessions'][] = $sessionId; }
         }
-        // Registrations/quotes wired in Task 5/6.
+
+        return $this->buildEditionRegistrations($editionId, $data, $userMap, $out);
+    }
+
+    /**
+     * Shared tail of buildEdition: walks the matrix registrations (and their
+     * quotes — Task 6) for one edition. Runs on BOTH the create and the
+     * exists path so a re-run reconstructs the manifest. Registration/quote
+     * covers tags ride the edition's covers key (matrix puts reg:/path:/quote:
+     * tags in the edition 'covers' list).
+     */
+    private function buildEditionRegistrations(int $editionId, array $data, array $userMap, array $out): array
+    {
+        foreach (($data['registrations'] ?? []) as $reg) {
+            $regId = $this->buildRegistration($editionId, $reg, $userMap);
+            if (!$regId) {
+                continue;
+            }
+            $out['created']['registrations'][] = $regId;
+
+            if (!empty($reg['quote'])) {
+                $userId = (int) ($userMap[$reg['user']] ?? 0);
+                if ($userId) {
+                    $quoteId = $this->buildQuote($editionId, $userId, $regId, $reg['quote']);
+                    if ($quoteId) { $out['created']['quotes'][] = $quoteId; }
+                }
+            }
+        }
 
         return $out;
+    }
+
+    /**
+     * Create (or reuse) one registration from a matrix entry.
+     *
+     * Idempotency: RegistrationRepository::create() reactivates existing
+     * cancelled/interest/waitlist rows for the same user+edition; an active
+     * duplicate returns a WP_Error('duplicate') which we resolve to the
+     * existing row's id. Anonymous interest/waitlist rows (no user) get an
+     * explicit natural-key pre-check since the repository skips its duplicate
+     * check for them.
+     *
+     * @return int|null registration id
+     */
+    public function buildRegistration(int $editionId, array $reg, array $userMap): ?int
+    {
+        global $wpdb;
+        $repo = ntdst_get(RegistrationRepository::class);
+        $userId = $userMap[$reg['user'] ?? ''] ?? null;   // 'admin' => 1; null user only valid for interest/waitlist
+        $status = $reg['status'];                          // one of the 6 RegistrationStatus values
+        $path = match ($reg['path'] ?? 'individual') {
+            'individual' => RegistrationRepository::PATH_INDIVIDUAL,
+            'colleague'  => RegistrationRepository::PATH_COLLEAGUE,
+            'trajectory' => RegistrationRepository::PATH_TRAJECTORY,
+            'partner'    => RegistrationRepository::PATH_PARTNER,
+        };
+
+        // Anonymous rows: repository skips its duplicate check — guard here.
+        if (!$userId) {
+            $existingId = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$wpdb->prefix}vad_registrations
+                 WHERE edition_id = %d AND (user_id IS NULL OR user_id = 0) AND status = %s LIMIT 1",
+                $editionId,
+                $status,
+            ));
+            if ($existingId) {
+                echo "      - Registration (anonymous, {$status}) exists (ID: {$existingId})\n";
+                return (int) $existingId;
+            }
+        }
+
+        $payload = ['edition_id' => $editionId, 'status' => $status, 'enrollment_path' => $path, 'notes' => 'Seed: feature matrix'];
+        if ($userId) { $payload['user_id'] = $userId; }
+        if ($path === RegistrationRepository::PATH_PARTNER) { $payload['company_id'] = 1; }  // Partner API scoping
+
+        $regId = $repo->create($payload);
+        if (is_wp_error($regId)) {
+            if ($regId->get_error_code() === 'duplicate' && $userId) {
+                $existing = $repo->findByUserAndEdition((int) $userId, $editionId);
+                if ($existing) {
+                    echo "      - Registration {$reg['user']} ({$status}) exists (ID: {$existing->id})\n";
+                    return (int) $existing->id;
+                }
+            }
+            echo "      ! Registration failed ({$reg['user']}): {$regId->get_error_message()}\n";
+            return null;
+        }
+        $regId = (int) $regId;
+        echo "      + Registration: {$reg['user']} [{$status}/{$path}] (ID: {$regId})\n";
+
+        // LD access for confirmed/completed
+        if (in_array($status, ['confirmed', 'completed'], true) && $userId && function_exists('ld_update_course_access')) {
+            $courseId = (int) ntdst_get(EditionService::class)->getCourseId($editionId);
+            if ($courseId) {
+                ld_update_course_access($userId, $courseId, false);
+            }
+        }
+
+        // Pre-enrollment completion tasks
+        if (!empty($reg['init_tasks'])) {
+            $completion = ntdst_get(EnrollmentCompletion::class);
+            $tasks = $completion->buildInitialTasks($editionId, 'vad_edition');
+            if (!empty($tasks)) {
+                $wpdb->update(
+                    $wpdb->prefix . 'vad_registrations',
+                    ['completion_tasks' => wp_json_encode($tasks)],
+                    ['id' => $regId]
+                );
+                echo "        + Completion tasks: " . implode(', ', array_keys($tasks)) . "\n";
+            }
+        }
+
+        // Attendance for every session of the edition
+        if (($reg['attendance'] ?? null) === 'present' && $userId) {
+            $attendanceTable = $wpdb->prefix . 'vad_attendance';
+            $sessionIds = ntdst_get(SessionRepository::class)->findIdsByEdition($editionId);
+            foreach ($sessionIds as $sessionId) {
+                $exists = $wpdb->get_var($wpdb->prepare(
+                    "SELECT id FROM {$attendanceTable} WHERE session_id = %d AND user_id = %d",
+                    $sessionId,
+                    $userId,
+                ));
+                if (!$exists) {
+                    $wpdb->insert($attendanceTable, [
+                        'edition_id' => $editionId,
+                        'session_id' => $sessionId,
+                        'user_id' => $userId,
+                        'status' => 'present',
+                        'marked_by' => (int) ($userMap['seed_admin'] ?? 1),
+                        'marked_at' => current_time('mysql'),
+                    ]);
+                    echo "        + Attendance: session {$sessionId} (present)\n";
+                }
+            }
+        }
+
+        // Post-course completion tasks
+        if (!empty($reg['init_post_tasks'])) {
+            $completion = ntdst_get(EnrollmentCompletion::class);
+            $completion->initializePostCourseTasks($regId, $editionId);
+            $reqs = $completion->getPostCourseRequirements($editionId, 'vad_edition');
+            echo "        + Post-course tasks: " . implode(', ', array_keys(array_filter($reqs))) . "\n";
+        }
+
+        return $regId;
     }
 
     /**
@@ -428,6 +574,12 @@ final class StrideSeedBuilders
         echo "      {$typeEmoji} {$sessionDate} {$sessionData['start']}-{$sessionData['end']}: {$title}{$slotInfo}\n";
 
         return (int) $sessionId;
+    }
+
+    public function buildQuote(int $editionId, int $userId, int $registrationId, string $status): ?int
+    {
+        // Task 6 implement
+        return null;
     }
 
     /** @return string[] group ids written */
