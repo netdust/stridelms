@@ -24,10 +24,11 @@ $has_courses = !empty($required_courses) || !empty($elective_groups);
 ?>
 <!-- Overzicht Section -->
 <section id="overzicht" class="scroll-mt-32">
-    <div class="bg-surface-card rounded-[16px] shadow-card p-6 lg:p-8">
-        <div class="prose-stride max-w-none">
-            <?php echo apply_filters('the_content', get_post_field('post_content', $trajectory_id)); ?>
-        </div>
+    <!-- Bare prose, no card — matches the edition/course description block
+         (single-vad_edition.php #omschrijving). A panel around the body text
+         reads as broken when the content is a single short paragraph. -->
+    <div class="prose-stride max-w-none">
+        <?php echo apply_filters('the_content', get_post_field('post_content', $trajectory_id)); ?>
     </div>
 </section>
 
