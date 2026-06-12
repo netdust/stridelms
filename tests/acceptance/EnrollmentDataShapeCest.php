@@ -181,13 +181,14 @@ class EnrollmentDataShapeCest
         // ── DB shape assertions ──────────────────────────────────────────────
 
         // Confirm a registration row was created
-        $I->seeInDatabase('ckqp_vad_registrations', [
+        $registrationsTable = $I->grabPrefixedTableNameFor('vad_registrations');
+        $I->seeInDatabase($registrationsTable, [
             'user_id'    => $this->testUserId,
             'edition_id' => $this->testEditionId,
         ]);
 
         // Pull the enrollment_data JSON from the persisted row
-        $rawJson = $I->grabFromDatabase('ckqp_vad_registrations', 'enrollment_data', [
+        $rawJson = $I->grabFromDatabase($registrationsTable, 'enrollment_data', [
             'user_id'    => $this->testUserId,
             'edition_id' => $this->testEditionId,
         ]);

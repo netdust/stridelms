@@ -14,11 +14,14 @@ use Tests\Support\AcceptanceTester;
  * - Already enrolled state
  * - Admin metabox behavior for online editions
  *
- * Prerequisites: seed data must be loaded (scripts/seed.php)
- * with the extended scenarios (minimal, direct, webinar).
+ * Prerequisites: seed data must be loaded (scripts/seed.php). Scenario →
+ * seed mapping (scripts/seed/matrix.php):
+ *   default  → "E-learning: Beweegbeleid Ontwikkelen" (online, open cohort)
+ *   minimal  → "Webinarreeks: Actuele Thema's" (form:minimal)
+ *   direct   → "Gratis Introductie: Werken bij BWEEG" (form:direct, open edition)
+ *   webinar  → "Webinarreeks: Actuele Thema's"
  *
  * Alpine.js forms: use executeJS with Alpine.$data(el) for navigation.
- * DB prefix: stride_ (not wp_).
  */
 class OnlineEnrollmentCest
 {
@@ -45,20 +48,17 @@ class OnlineEnrollmentCest
                 'user_id'    => $this->studentUserId,
                 'edition_id' => $scenario['edition_id'],
             ]);
-        }
 
-        // Mindfulness (minimal scenario) is the only course this Cest may grant
-        // LearnDash access for. Other seed scenarios already have legitimate
-        // seed-data LD usermeta we must not touch.
-        $minimalCourseId = $this->courseData['minimal']['course_id'] ?? 0;
-        if ($minimalCourseId) {
+            // None of this Cest's scenario courses carry seeded LD usermeta
+            // for seed_student1 (verified against the feature-matrix seeder),
+            // so LD access granted by an enrollment under test is safe to drop.
             $I->dontHaveInDatabase($I->grabPrefixedTableNameFor('usermeta'), [
                 'user_id'  => $this->studentUserId,
-                'meta_key' => 'course_' . $minimalCourseId . '_access_from',
+                'meta_key' => 'course_' . $scenario['course_id'] . '_access_from',
             ]);
             $I->dontHaveInDatabase($I->grabPrefixedTableNameFor('usermeta'), [
                 'user_id'  => $this->studentUserId,
-                'meta_key' => 'learndash_course_' . $minimalCourseId . '_enrolled_at',
+                'meta_key' => 'learndash_course_' . $scenario['course_id'] . '_enrolled_at',
             ]);
         }
     }
@@ -66,31 +66,49 @@ class OnlineEnrollmentCest
     private function resolveSeedData(AcceptanceTester $I): array
     {
         $data = [];
-        $data['default'] = $this->findEditionByCourseTitlePrefix($I, 'E-learning: Eetproblemen');
-        $data['minimal'] = $this->findEditionByCourseTitlePrefix($I, 'E-learning: Mindfulness');
-        $data['direct']  = $this->findEditionByCourseTitlePrefix($I, 'E-learning: Snelle Update');
+        $data['default'] = $this->findEditionByCourseTitlePrefix($I, 'E-learning: Beweegbeleid');
+        $data['minimal'] = $this->findEditionByCourseTitlePrefix($I, 'Webinarreeks: Actuele');
+        $data['direct']  = $this->findEditionByCourseTitlePrefix($I, 'Gratis Introductie');
         $data['webinar'] = $this->findEditionByCourseTitlePrefix($I, 'Webinarreeks: Actuele');
         return $data;
     }
 
+    /**
+     * Resolve a course by title prefix and its OPEN edition (multi-edition
+     * courses in the feature matrix also seed in_progress/announcement ones).
+     */
     private function findEditionByCourseTitlePrefix(AcceptanceTester $I, string $prefix): array
     {
-        $courseId = $I->grabFromDatabase($I->grabPrefixedTableNameFor('posts'), 'ID', [
+        $courseId = (int) $I->grabFromDatabase($I->grabPrefixedTableNameFor('posts'), 'ID', [
             'post_type' => 'sfwd-courses',
             'post_status' => 'publish',
             'post_title LIKE' => $prefix . '%',
         ]);
+        \PHPUnit\Framework\Assert::assertGreaterThan(0, $courseId, 'Seed course not found: ' . $prefix);
 
-        $editionId = $I->grabFromDatabase($I->grabPrefixedTableNameFor('postmeta'), 'post_id', [
+        $editionIds = $I->grabColumnFromDatabase($I->grabPrefixedTableNameFor('postmeta'), 'post_id', [
             'meta_key' => '_ntdst_course_id',
-            'meta_value' => $courseId,
+            'meta_value' => (string) $courseId,
         ]);
+
+        $editionId = 0;
+        foreach (array_map('intval', $editionIds) as $candidate) {
+            $status = (string) $I->grabFromDatabase($I->grabPrefixedTableNameFor('postmeta'), 'meta_value', [
+                'post_id'  => $candidate,
+                'meta_key' => '_ntdst_status',
+            ]);
+            if ($status === 'open') {
+                $editionId = $candidate;
+                break;
+            }
+        }
+        \PHPUnit\Framework\Assert::assertGreaterThan(0, $editionId, 'No open edition found for seed course: ' . $prefix);
 
         $slug = $I->grabFromDatabase($I->grabPrefixedTableNameFor('posts'), 'post_name', ['ID' => $editionId]);
 
         return [
-            'course_id' => (int) $courseId,
-            'edition_id' => (int) $editionId,
+            'course_id' => $courseId,
+            'edition_id' => $editionId,
             'slug' => $slug,
             'enrollment_url' => '/edities/' . $editionId . '/inschrijving/',
         ];
@@ -249,7 +267,7 @@ class OnlineEnrollmentCest
             'ID' => $this->courseData['default']['course_id'],
         ]);
 
-        $this->loginAsStudent($I, '/cursussen/' . $courseSlug . '/');
+        $this->loginAsStudent($I, '/opleidingen/' . $courseSlug . '/');
         $I->waitForElement('body', 10);
 
         $I->see('Inschrijven');
@@ -267,7 +285,7 @@ class OnlineEnrollmentCest
             'ID' => $this->courseData['webinar']['course_id'],
         ]);
 
-        $this->loginAsStudent($I, '/cursussen/' . $courseSlug . '/');
+        $this->loginAsStudent($I, '/opleidingen/' . $courseSlug . '/');
         $I->waitForElement('body', 10);
 
         $I->see('Webinar');
@@ -330,7 +348,7 @@ class OnlineEnrollmentCest
         $this->loginAsStudent($I, '/mijn-account/?tab=inschrijvingen');
         $I->waitForElement('body', 10);
 
-        $I->see('Mindfulness');
+        $I->see('Webinarreeks');
         $I->dontSee('Fatal error');
     }
 }
