@@ -655,10 +655,11 @@ get_header();
                                 </button>
                             <?php endif; ?>
 
-                            <?php // PLACEHOLDER: quote-request URL (cta_quote_url) — no quote-request page exists yet. ?>
-                            <a href="<?php echo esc_url(home_url('/contact/')); ?>" class="btn-ghost w-full text-center">
-                                <?php esc_html_e('Offerte voor je team', 'stridence'); ?>
-                            </a>
+                            <?php /* "Offerte voor je team" CTA intentionally hidden
+                                     (Stefan, 2026-06-12): no quote-request flow exists
+                                     yet and a /contact/ link would push enrollments
+                                     into manual handling. Restore when cta_quote_url
+                                     has a real target (see field-inventory doc). */ ?>
                         </div>
 
                         <?php if ($enrollment_info !== '') : ?>

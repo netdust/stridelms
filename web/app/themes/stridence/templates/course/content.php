@@ -251,26 +251,12 @@ endif;
     <h2 class="font-heading text-2xl font-bold text-text mb-6">
         <?php esc_html_e('Praktische informatie', 'stridence'); ?>
     </h2>
+    <?php /* Doelgroep + Accreditatie cards removed (Stefan, 2026-06-12):
+             courses carry no such fields — we use only what LearnDash
+             offers at course level. Audience info lives on editions
+             (target_audience). The remaining cards are generic copy. */ ?>
+    <?php if ($is_online) : ?>
     <div class="grid sm:grid-cols-2 gap-4">
-        <div class="card-bordered p-5">
-            <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
-                <?php echo stridence_icon('users', 'w-5 h-5 text-primary'); ?>
-                <?php esc_html_e('Doelgroep', 'stridence'); ?>
-            </h3>
-            <p class="text-text-muted text-sm">
-                <?php esc_html_e('Zorgprofessionals', 'stridence'); ?>
-            </p>
-        </div>
-        <div class="card-bordered p-5">
-            <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
-                <?php echo stridence_icon('award', 'w-5 h-5 text-primary'); ?>
-                <?php esc_html_e('Accreditatie', 'stridence'); ?>
-            </h3>
-            <p class="text-text-muted text-sm">
-                <?php esc_html_e('In aanvraag', 'stridence'); ?>
-            </p>
-        </div>
-        <?php if ($is_online) : ?>
         <div class="card-bordered p-5">
             <h3 class="font-semibold text-text mb-2 flex items-center gap-2">
                 <?php echo stridence_icon('clock', 'w-5 h-5 text-primary'); ?>
@@ -289,8 +275,8 @@ endif;
                 <?php esc_html_e('Online, 24/7 beschikbaar', 'stridence'); ?>
             </p>
         </div>
-        <?php endif; ?>
     </div>
+    <?php endif; ?>
 
     <?php
     $materials = LearnDashHelper::getCourseMaterials($course_id);
