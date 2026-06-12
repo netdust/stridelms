@@ -122,17 +122,28 @@ final class StrideMailBridge extends AbstractService
     /**
      * Shared helper for the two user-confirmation mails above.
      *
-     * @param array{user_id: int, edition_id?: int|null} $data
+     * Handles both dispatch shapes of the interest/waitlist events:
+     * logged-in (EnrollmentService: user_id set) and anonymous
+     * (QuestionnaireHandler: user_id null, name/email in the payload).
+     *
+     * @param array{user_id?: int|null, edition_id?: int|null, name?: string, email?: string} $data
      */
     private function sendUserStageMail(string $template, array $data): void
     {
         $userId = (int) ($data['user_id'] ?? 0);
-        if (!$userId) {
-            return;
-        }
-        $user = get_userdata($userId);
-        if (!$user || !$user->user_email) {
-            return;
+        if ($userId) {
+            $user = get_userdata($userId);
+            if (!$user || !$user->user_email) {
+                return;
+            }
+            $name  = trim($user->first_name . ' ' . $user->last_name) ?: $user->display_name;
+            $email = $user->user_email;
+        } else {
+            $name  = (string) ($data['name'] ?? '');
+            $email = sanitize_email((string) ($data['email'] ?? ''));
+            if (!$email) {
+                return;
+            }
         }
 
         $editionId = (int) ($data['edition_id'] ?? 0);
@@ -140,12 +151,12 @@ final class StrideMailBridge extends AbstractService
 
         ndmail_send($template, [
             'registration' => [
-                'name' => trim($user->first_name . ' ' . $user->last_name) ?: $user->display_name,
-                'email' => $user->user_email,
+                'name' => $name,
+                'email' => $email,
             ],
             'edition_id' => $editionId,
             'edition' => ['title' => $edition ? $edition->post_title : ''],
-        ], ['to' => $user->user_email]);
+        ], ['to' => $email]);
     }
 
     /**

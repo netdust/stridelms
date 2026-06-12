@@ -283,6 +283,8 @@ final class RegistrationRepository
 
                 $this->clearCache();
 
+                $this->emitRowEvent('row_updated', (int) $existing->id, $reactivate, 'reactivate');
+
                 return (int) $existing->id;
             }
 
@@ -320,7 +322,31 @@ final class RegistrationRepository
 
         $registrationId = (int) $wpdb->insert_id;
 
+        $this->emitRowEvent('row_created', $registrationId, $insert, 'create');
+
         return $registrationId;
+    }
+
+    /**
+     * Emit the row-level write event.
+     *
+     * Every write to the registrations table announces itself here, so
+     * cross-cutting consumers (audit, mail, notifications) can hook ANY
+     * write path — not only the EnrollmentService lifecycle, which keeps
+     * its richer semantic events (`stride/registration/created`,
+     * `interest_registered`, …) at the service layer.
+     *
+     * @param string $event   'row_created' or 'row_updated'
+     * @param int    $id      Registration id
+     * @param array  $changed Column => value as written
+     * @param string $context Write site: 'create', 'reactivate', 'update',
+     *                        'upgrade_from_interest', 'cancel_children',
+     *                        'set_selections', 'lock_selections',
+     *                        'update_completion_tasks'
+     */
+    private function emitRowEvent(string $event, int $id, array $changed, string $context): void
+    {
+        do_action('stride/registration/' . $event, $id, $changed, $context);
     }
 
     // === Find by ID ===
@@ -423,7 +449,7 @@ final class RegistrationRepository
         global $wpdb;
         $table = $this->table();
 
-        return $wpdb->get_row($wpdb->prepare(
+        $row = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$table}
              WHERE edition_id = %d
              AND user_id IS NULL
@@ -439,6 +465,15 @@ final class RegistrationRepository
             $email,
             $email,
         ));
+
+        // Decode JSON columns like every other finder — callers merge new
+        // stage envelopes into enrollment_data and a raw string here made
+        // that merge silently start from [] (dropping the earlier stage).
+        if ($row && isset($row->enrollment_data) && $row->enrollment_data) {
+            $row->enrollment_data = json_decode($row->enrollment_data, true);
+        }
+
+        return $row;
     }
 
     /**
@@ -492,6 +527,10 @@ final class RegistrationRepository
 
         if ($result !== false) {
             $this->clearCache();
+            $this->emitRowEvent('row_updated', $registrationId, [
+                'user_id' => $userId,
+                'status'  => $status,
+            ], 'upgrade_from_interest');
         }
 
         return $result !== false;
@@ -907,6 +946,16 @@ final class RegistrationRepository
     {
         global $wpdb;
 
+        // Snapshot the rows the UPDATE below will touch, so the per-row
+        // write event can fire for each transitioned child.
+        $childIds = array_map('intval', $wpdb->get_col($wpdb->prepare(
+            "SELECT id FROM {$this->table()}
+             WHERE parent_registration_id = %d
+               AND status != %s",
+            $parentRegistrationId,
+            RegistrationStatus::Cancelled->value,
+        )));
+
         $affected = $wpdb->query($wpdb->prepare(
             "UPDATE {$this->table()}
              SET status = %s, cancelled_at = %s, completion_tasks = NULL
@@ -924,6 +973,11 @@ final class RegistrationRepository
 
         if ($affected > 0) {
             $this->clearCache();
+            foreach ($childIds as $childId) {
+                $this->emitRowEvent('row_updated', $childId, [
+                    'status' => RegistrationStatus::Cancelled->value,
+                ], 'cancel_children');
+            }
         }
 
         return (int) $affected;
@@ -1112,6 +1166,7 @@ final class RegistrationRepository
 
         if ($result) {
             $this->clearCache();
+            $this->emitRowEvent('row_updated', $registrationId, ['selections' => $selections], 'set_selections');
         }
 
         return $result;
@@ -1150,6 +1205,7 @@ final class RegistrationRepository
             // Write path was missing its invalidation (selections_locked_at
             // is part of the rows findByUser caches) — found during Task E1.
             $this->clearCache();
+            $this->emitRowEvent('row_updated', $registrationId, ['selections_locked_at' => true], 'lock_selections');
         }
 
         return $result;
@@ -1183,6 +1239,10 @@ final class RegistrationRepository
         );
 
         $this->clearCache();
+
+        if ($result !== false) {
+            $this->emitRowEvent('row_updated', $registrationId, ['completion_tasks' => $tasks], 'update_completion_tasks');
+        }
 
         return $result !== false;
     }
@@ -1355,6 +1415,8 @@ final class RegistrationRepository
                     ]);
                 }
             }
+
+            $this->emitRowEvent('row_updated', $id, $update, 'update');
         }
 
         return $result;

@@ -90,15 +90,16 @@ final class QuestionnaireHandler
             }
         }
 
-        // Send confirmation to the user
-        if (function_exists('ndmail_send')) {
-            $edition = get_post($editionId);
-            ndmail_send('stride-interest-registered-user', [
-                'registration' => ['name' => $name, 'email' => $email],
-                'edition_id'   => $editionId,
-                'edition'      => ['title' => $edition ? $edition->post_title : "Editie #{$editionId}"],
-            ], ['to' => $email]);
-        }
+        // Same semantic event the logged-in EnrollmentService path dispatches —
+        // mail (StrideMailBridge), audit (AuditBridge) and any future consumer
+        // hang off this one emission point instead of inline ndmail_send calls.
+        do_action('stride/registration/interest_registered', [
+            'registration_id' => $existing ? (int) $existing->id : (int) $registrationId,
+            'user_id'         => null,
+            'edition_id'      => $editionId,
+            'name'            => $name,
+            'email'           => $email,
+        ]);
 
         return [
             'success' => true,
@@ -157,15 +158,15 @@ final class QuestionnaireHandler
             }
         }
 
-        // Send confirmation to the user
-        if (function_exists('ndmail_send')) {
-            $edition = get_post($editionId);
-            ndmail_send('stride-waitlist-registered-user', [
-                'registration' => ['name' => $name, 'email' => $email],
-                'edition_id'   => $editionId,
-                'edition'      => ['title' => $edition ? $edition->post_title : "Editie #{$editionId}"],
-            ], ['to' => $email]);
-        }
+        // Same semantic event the logged-in EnrollmentService path dispatches —
+        // see handleSubmitInterest for the rationale.
+        do_action('stride/registration/waitlisted', [
+            'registration_id' => $existing ? (int) $existing->id : (int) $registrationId,
+            'user_id'         => null,
+            'edition_id'      => $editionId,
+            'name'            => $name,
+            'email'           => $email,
+        ]);
 
         return [
             'success' => true,
