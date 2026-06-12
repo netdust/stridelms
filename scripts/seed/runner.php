@@ -7,8 +7,8 @@
  * editions check existence by natural key (login / title / derived edition
  * title) and a re-run reconstructs the full manifest + covers; sessions ride
  * the edition gate (existing edition → its seed sessions are looked up, not
- * recreated). Builders still pending (Tasks 5-8: registrations, quotes,
- * questionnaire groups, trajectories, vouchers) must follow the same pattern.
+ * recreated). Registrations dedupe on (user, edition); ANONYMOUS rows dedupe
+ * on (edition, status) — one anonymous row per edition+status by design.
  */
 final class StrideSeedRunner
 {

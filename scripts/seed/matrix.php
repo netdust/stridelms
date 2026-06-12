@@ -16,6 +16,13 @@
  *   'lessons' => [['title','content'], ...],
  *   'editions' => [[
  *     'start_date','end_date'?, 'price','price_non_member','capacity','venue',
+ *     // PRICING (v1 single-price rule): `price` is the MEMBER price, reserved
+ *     // for v2 membership (EditionService::getPrice reads it for members).
+ *     // v1 has no member feature, so the builder COLLAPSES both fields to
+ *     // price_non_member (canonical — same sync EditionAdminController:410
+ *     // applies on admin save). The distinct `price` values declared below
+ *     // (e.g. 295/345) document the intended v2 member price but are
+ *     // currently IGNORED: both fields are stored as price_non_member.
  *     'status' => OfferingStatus value string,
  *     'speakers' => [['name','role'], ...],                 // JSON repeater — NEVER a plain string
  *     'content' => ['target_audience','required_experience','included','price_includes',
@@ -42,6 +49,16 @@
 
 use Stride\Domain\OfferingStatus;
 use Stride\Domain\TrajectoryMode;
+
+// Byte-identical session arrays shared by sibling editions (hoisted).
+$blessureSessions = [
+    ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => 'in_person', 'title' => 'Dag 1: Functionele screening'],
+    ['date_offset' => 7, 'start' => '09:00', 'end' => '17:00', 'type' => 'in_person', 'title' => 'Dag 2: Blessurepreventie-oefeningen'],
+    ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => 'in_person', 'title' => 'Dag 3: Return-to-play protocollen'],
+];
+$masterclassSessions = [
+    ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => 'in_person', 'title' => 'Masterclass Mentale Veerkracht'],
+];
 
 return [
     'users' => [
@@ -239,11 +256,7 @@ return [
                     ],
                     'enrollment_form' => 'default',
                     'covers' => ['status:few_spots', 'capacity:full_fake_display', 'sessions:type_in_person'],
-                    'sessions' => [
-                        ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => 'in_person', 'title' => 'Dag 1: Functionele screening'],
-                        ['date_offset' => 7, 'start' => '09:00', 'end' => '17:00', 'type' => 'in_person', 'title' => 'Dag 2: Blessurepreventie-oefeningen'],
-                        ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => 'in_person', 'title' => 'Dag 3: Return-to-play protocollen'],
-                    ],
+                    'sessions' => $blessureSessions,
                 ],
                 [   // Past, completed — ALL THREE post-course requirements
                     'start_date' => date('Y-m-d', strtotime('-6 weeks')),
@@ -258,11 +271,7 @@ return [
                         ['user' => 'seed_student1', 'status' => 'confirmed', 'path' => 'individual',
                          'attendance' => 'present', 'init_post_tasks' => true],
                     ],
-                    'sessions' => [
-                        ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => 'in_person', 'title' => 'Dag 1: Functionele screening'],
-                        ['date_offset' => 7, 'start' => '09:00', 'end' => '17:00', 'type' => 'in_person', 'title' => 'Dag 2: Blessurepreventie-oefeningen'],
-                        ['date_offset' => 14, 'start' => '09:00', 'end' => '17:00', 'type' => 'in_person', 'title' => 'Dag 3: Return-to-play protocollen'],
-                    ],
+                    'sessions' => $blessureSessions,
                 ],
             ],
             'lessons' => [
@@ -305,9 +314,7 @@ return [
                         ['user' => 'seed_student5', 'status' => 'confirmed', 'path' => 'individual'],
                         ['user' => 'seed_student1', 'status' => 'waitlist', 'path' => 'individual'],
                     ],
-                    'sessions' => [
-                        ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => 'in_person', 'title' => 'Masterclass Mentale Veerkracht'],
-                    ],
+                    'sessions' => $masterclassSessions,
                 ],
                 [   // Future edition, open
                     'start_date' => date('Y-m-d', strtotime('+3 months')),
@@ -316,9 +323,7 @@ return [
                     'status' => OfferingStatus::Open->value,
                     'speakers' => [['name' => 'Dr. Paul Verhaeghe', 'role' => 'Sportpsycholoog']],
                     'covers' => ['status:open'],
-                    'sessions' => [
-                        ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => 'in_person', 'title' => 'Masterclass Mentale Veerkracht'],
-                    ],
+                    'sessions' => $masterclassSessions,
                 ],
             ],
             'lessons' => [

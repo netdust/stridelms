@@ -23,6 +23,20 @@ final class StrideSeedBuilders
     // matches current seed's null-guard pattern).
 
     /**
+     * Idempotency lookup by exact post title (get_page_by_title is deprecated).
+     * Replaces the duplicated WP_Query title-lookup blocks.
+     */
+    private function findIdByTitle(string $postType, string $title): ?int
+    {
+        $found = new WP_Query([
+            'post_type' => $postType, 'title' => $title, 'post_status' => 'any',
+            'posts_per_page' => 1, 'fields' => 'ids', 'no_found_rows' => true,
+        ]);
+
+        return !empty($found->posts) ? (int) $found->posts[0] : null;
+    }
+
+    /**
      * Ensure stride_format and stride_theme taxonomy terms exist.
      */
     public function ensureTaxonomyTerms(): void
@@ -121,16 +135,12 @@ final class StrideSeedBuilders
             return $out;
         }
 
-        // Existence check by title (idempotent re-run; get_page_by_title is deprecated)
-        $existingQuery = new WP_Query([
-            'post_type' => 'sfwd-courses', 'title' => $courseData['title'],
-            'post_status' => 'any', 'posts_per_page' => 1, 'fields' => 'ids', 'no_found_rows' => true,
-        ]);
-        if (!empty($existingQuery->posts)) {
+        // Existence check by title (idempotent re-run)
+        $courseId = $this->findIdByTitle('sfwd-courses', $courseData['title']);
+        if ($courseId) {
             // Existing course: do NOT return early — still walk lessons/editions
             // below (each idempotent by natural key) so the runner's manifest +
             // covers options are reconstructed in full on every re-run.
-            $courseId = (int) $existingQuery->posts[0];
             echo "  - Course '{$courseData['title']}' exists (ID: {$courseId})\n";
         } else {
             $courseId = wp_insert_post([
@@ -265,12 +275,8 @@ final class StrideSeedBuilders
         // then STILL fall through to the registrations/quotes loop below —
         // those builders are idempotent by natural key themselves, and the
         // manifest must be rebuilt in full on every run.
-        $existing = new WP_Query([
-            'post_type' => 'vad_edition', 'title' => $postTitle, 'post_status' => 'any',
-            'posts_per_page' => 1, 'fields' => 'ids', 'no_found_rows' => true,
-        ]);
-        if (!empty($existing->posts)) {
-            $editionId = (int) $existing->posts[0];
+        $editionId = $this->findIdByTitle('vad_edition', $postTitle);
+        if ($editionId) {
             $sessionIds = ntdst_get(SessionRepository::class)->findIdsByEdition($editionId);
             echo "    - Edition '{$postTitle}' exists (ID: {$editionId}, " . count($sessionIds) . " sessions)\n";
             $out = [
@@ -406,12 +412,20 @@ final class StrideSeedBuilders
     /**
      * Create (or reuse) one registration from a matrix entry.
      *
-     * Idempotency: RegistrationRepository::create() reactivates existing
-     * cancelled/interest/waitlist rows for the same user+edition; an active
-     * duplicate returns a WP_Error('duplicate') which we resolve to the
-     * existing row's id. Anonymous interest/waitlist rows (no user) get an
-     * explicit natural-key pre-check since the repository skips its duplicate
-     * check for them.
+     * Idempotency: BOTH the user+edition and the anonymous (edition,status)
+     * natural keys are pre-checked here, BEFORE calling create(). The
+     * pre-check is load-bearing: RegistrationRepository::create() REACTIVATES
+     * existing cancelled/interest/waitlist rows (resetting cancelled_at,
+     * notes, registered_at), so a re-run that went through create() would
+     * churn the timestamps this builder deliberately sets below.
+     * Anonymous rows are deduped on (edition, status) — one anonymous row
+     * per edition+status by design.
+     *
+     * Timestamps: create() never sets completed_at/cancelled_at (only
+     * updateStatus() does, on transition) — so for completed/cancelled
+     * matrix entries we set them post-create via repo->update() (both keys
+     * are in update()'s allow-list). registered_at is NOT allow-listed, so
+     * past editions get it backdated via direct $wpdb->update.
      *
      * @return int|null registration id
      */
@@ -419,14 +433,40 @@ final class StrideSeedBuilders
     {
         global $wpdb;
         $repo = ntdst_get(RegistrationRepository::class);
-        $userId = $userMap[$reg['user'] ?? ''] ?? null;   // 'admin' => 1; null user only valid for interest/waitlist
         $status = $reg['status'];                          // one of the 6 RegistrationStatus values
+
+        // A named user that is missing from the user map is a matrix mistake —
+        // warn and skip rather than silently creating an anonymous row.
+        $userId = null;
+        if (!empty($reg['user'])) {
+            $userId = $userMap[$reg['user']] ?? null;      // 'admin' => 1
+            if (!$userId) {
+                echo "      ! Unknown user login '{$reg['user']}' — registration skipped\n";
+                return null;
+            }
+        }
+
         $path = match ($reg['path'] ?? 'individual') {
             'individual' => RegistrationRepository::PATH_INDIVIDUAL,
             'colleague'  => RegistrationRepository::PATH_COLLEAGUE,
             'trajectory' => RegistrationRepository::PATH_TRAJECTORY,
             'partner'    => RegistrationRepository::PATH_PARTNER,
+            default      => null,
         };
+        if ($path === null) {
+            echo "      ! Unknown path '{$reg['path']}' — registration skipped\n";
+            return null;
+        }
+
+        // Named users: pre-check by user+edition so a re-run returns the
+        // existing row WITHOUT create()'s reactivation path (see docblock).
+        if ($userId) {
+            $existing = $repo->findByUserAndEdition((int) $userId, $editionId);
+            if ($existing) {
+                echo "      - Registration {$reg['user']} ({$existing->status}) exists (ID: {$existing->id})\n";
+                return (int) $existing->id;
+            }
+        }
 
         // Anonymous rows: repository skips its duplicate check — guard here.
         if (!$userId) {
@@ -448,18 +488,32 @@ final class StrideSeedBuilders
 
         $regId = $repo->create($payload);
         if (is_wp_error($regId)) {
-            if ($regId->get_error_code() === 'duplicate' && $userId) {
-                $existing = $repo->findByUserAndEdition((int) $userId, $editionId);
-                if ($existing) {
-                    echo "      - Registration {$reg['user']} ({$status}) exists (ID: {$existing->id})\n";
-                    return (int) $existing->id;
-                }
-            }
+            // 'duplicate' is unreachable: the user+edition pre-check above runs first.
             echo "      ! Registration failed ({$reg['user']}): {$regId->get_error_message()}\n";
             return null;
         }
         $regId = (int) $regId;
         echo "      + Registration: {$reg['user']} [{$status}/{$path}] (ID: {$regId})\n";
+
+        // Plausible timestamps (see docblock). Edition start anchors them.
+        $startDate = (string) ntdst_get(EditionRepository::class)->getField($editionId, 'start_date', '');
+        $startTs = $startDate ? strtotime($startDate) : false;
+        if ($status === 'completed') {
+            $base = $startTs ?: strtotime('-1 week');
+            $repo->update($regId, ['completed_at' => date('Y-m-d', strtotime('+1 day', $base)) . ' 17:00:00']);
+        }
+        if ($status === 'cancelled') {
+            $repo->update($regId, ['cancelled_at' => date('Y-m-d H:i:s', strtotime('-2 days'))]);
+        }
+        if ($startTs && $startTs < time()) {
+            // Past edition: registration must predate the start (registered_at
+            // is not in update()'s allow-list — direct table update).
+            $wpdb->update(
+                $wpdb->prefix . 'vad_registrations',
+                ['registered_at' => date('Y-m-d', strtotime('-21 days', $startTs)) . ' 10:00:00'],
+                ['id' => $regId]
+            );
+        }
 
         // LD access for confirmed/completed
         if (in_array($status, ['confirmed', 'completed'], true) && $userId && function_exists('ld_update_course_access')) {
@@ -595,9 +649,10 @@ final class StrideSeedBuilders
 
         $existing = $repo->findByRegistration($registrationId);
         if ($existing) {
-            $quoteId = (int) ($existing['ID'] ?? $existing['id'] ?? 0);
+            // getPostsFast row shape: lowercase 'id'
+            $quoteId = (int) $existing['id'];
             echo "        - Quote for registration {$registrationId} exists (ID: {$quoteId})\n";
-            return $quoteId ?: null;
+            return $quoteId;
         }
 
         $user = get_user_by('ID', $userId);
@@ -605,7 +660,9 @@ final class StrideSeedBuilders
             return null;
         }
 
-        $priceCents = (int) round(((float) (ntdst_get(EditionRepository::class)->getField($editionId, 'price') ?: 299.00)) * 100);
+        // No fallback price: a €0 quote on a paid edition should surface a
+        // matrix mistake, not be masked. price_non_member is canonical (v1).
+        $priceCents = (int) round(((float) ntdst_get(EditionRepository::class)->getField($editionId, 'price_non_member', 0)) * 100);
         $taxCents = (int) round($priceCents * 0.21);
         $quoteNumber = $repo->generateQuoteNumber();   // real numbering, not rand()
 
@@ -669,42 +726,47 @@ final class StrideSeedBuilders
         }
 
         $repo = ntdst_get(QuestionnaireRepository::class);
-        $stored = $repo->getAllGroups();
+        $byId = array_column($repo->getAllGroups(), null, 'id');
         $writtenIds = [];
 
         foreach ($matrixGroups as $mg) {
             $assignments = $this->resolveGroupAssignments($mg['assign_to_course'] ?? null);
+
+            // QuestionnaireSettingsPage::sanitize() preserves only
+            // label/name/type/required/help/options/min/max — a seeded
+            // 'description' would be dropped on the first admin save. Mirror
+            // the text into 'help' (kept by sanitize) while keeping
+            // 'description' for the renderer.
+            $fields = array_map(static function (array $f): array {
+                if (!empty($f['description']) && empty($f['help'])) {
+                    $f['help'] = $f['description'];
+                }
+                return $f;
+            }, $mg['fields']);
 
             $group = [
                 'id' => $mg['id'],
                 'label' => $mg['label'],
                 'stage' => $mg['stage'],
                 'assignments' => $assignments,
-                'fields' => $mg['fields'],
+                'fields' => $fields,
             ];
 
-            $merged = false;
-            foreach ($stored as $i => $existing) {
-                if (($existing['id'] ?? '') === $mg['id']) {
-                    // Preserve assignments made outside the seed (merge, dedupe)
-                    $group['assignments'] = array_values(array_unique(array_merge(
-                        $existing['assignments'] ?? [],
-                        $assignments,
-                    ), SORT_REGULAR));
-                    $stored[$i] = $group;
-                    $merged = true;
-                    echo "  - Questionnaire group '{$mg['id']}' exists - updated\n";
-                    break;
-                }
-            }
-            if (!$merged) {
-                $stored[] = $group;
+            if (isset($byId[$mg['id']])) {
+                // Preserve assignments made outside the seed (merge, dedupe)
+                $group['assignments'] = array_values(array_unique(array_merge(
+                    $byId[$mg['id']]['assignments'] ?? [],
+                    $assignments,
+                ), SORT_REGULAR));
+                echo "  - Questionnaire group '{$mg['id']}' exists - updated\n";
+            } else {
                 echo "  + Questionnaire group: {$mg['label']} ({$mg['id']}, stage: {$mg['stage']})\n";
             }
+            $byId[$mg['id']] = $group;
             $writtenIds[] = $mg['id'];
         }
 
-        $repo->saveGroups($stored);
+        $repo->saveGroups(array_values($byId));
 
         return $writtenIds;
     }
@@ -730,106 +792,75 @@ final class StrideSeedBuilders
         }
 
         // Course title → ID
-        $found = new WP_Query([
-            'post_type' => 'sfwd-courses', 'title' => $target, 'post_status' => 'any',
-            'posts_per_page' => 1, 'fields' => 'ids', 'no_found_rows' => true,
-        ]);
-        if (empty($found->posts)) {
+        $courseId = $this->findIdByTitle('sfwd-courses', $target);
+        if (!$courseId) {
             echo "  ! Questionnaire assignment target not found: {$target}\n";
             return [];
         }
-        return [(int) $found->posts[0]];
+        return [$courseId];
     }
 
     /**
      * Create one trajectory from a matrix entry. Course references are by
      * TITLE, resolved here (replaces the old brittle index-position scheme).
-     * Idempotent by title — or by slug for the slug-pinned E2E fixture
-     * (`test-trajectory`), which keeps the old wp_insert_post path because
-     * the Data API create has no slug vocabulary.
+     * Single create path via TrajectoryService::createTrajectory; the
+     * slug-pinned E2E fixture (`test-trajectory`) gets its slug pinned with
+     * wp_update_post afterwards (Data API create has no slug vocabulary).
+     * Idempotent by slug (when pinned) or title.
      */
     public function buildTrajectory(array $t): ?int
     {
-        // --- Slug-pinned E2E fixture path ---
-        if (!empty($t['slug'])) {
-            $existing = get_page_by_path($t['slug'], OBJECT, 'vad_trajectory');
-            if ($existing) {
-                echo "  - Trajectory '{$t['slug']}' exists (ID: {$existing->ID})\n";
-                return (int) $existing->ID;
-            }
-            $id = wp_insert_post([
-                'post_type' => 'vad_trajectory',
-                'post_title' => $t['title'],
-                'post_name' => $t['slug'],
-                'post_status' => 'publish',
-                'post_content' => $t['content'] ?? '',
-            ]);
-            if (is_wp_error($id)) {
-                echo "  ! Trajectory '{$t['slug']}' failed: {$id->get_error_message()}\n";
-                return null;
-            }
-            $model = function_exists('ntdst_data') ? ntdst_data()->get('vad_trajectory') : null;
-            if ($model) {
-                $model->updateMetaBatch($id, [
-                    'mode' => $t['mode'],
-                    'status' => $t['status'],
-                    'price' => $t['price'],
-                    'price_non_member' => $t['price_non_member'],
-                    'enrollment_deadline' => $t['enrollment_deadline'] ?? '',
-                    'capacity' => $t['capacity'] ?? 0,
-                ]);
-            }
-            update_post_meta($id, StrideSeedRunner::SEED_META_KEY, true);
-            echo "  + Trajectory: {$t['title']} [{$t['slug']}] (ID: {$id})\n";
-            return (int) $id;
+        $slug = $t['slug'] ?? null;
+        if ($slug) {
+            $existing = get_page_by_path($slug, OBJECT, 'vad_trajectory');
+            $existingId = $existing ? (int) $existing->ID : null;
+        } else {
+            $existingId = $this->findIdByTitle('vad_trajectory', $t['title']);
         }
-
-        // --- Regular path: idempotent by title ---
-        $existing = new WP_Query([
-            'post_type' => 'vad_trajectory', 'title' => $t['title'], 'post_status' => 'any',
-            'posts_per_page' => 1, 'fields' => 'ids', 'no_found_rows' => true,
-        ]);
-        if (!empty($existing->posts)) {
-            echo "  - Trajectory '{$t['title']}' exists (ID: {$existing->posts[0]})\n";
-            return (int) $existing->posts[0];
+        if ($existingId) {
+            echo "  - Trajectory '" . ($slug ?? $t['title']) . "' exists (ID: {$existingId})\n";
+            return $existingId;
         }
 
         // Resolve course titles → IDs (JSON shape per TrajectoryService contract)
         $courses = [];
-        foreach ($t['courses'] as $c) {
-            $found = new WP_Query([
-                'post_type' => 'sfwd-courses', 'title' => $c['course_title'], 'post_status' => 'any',
-                'posts_per_page' => 1, 'fields' => 'ids', 'no_found_rows' => true,
-            ]);
-            if (empty($found->posts)) {
+        foreach (($t['courses'] ?? []) as $c) {
+            $courseId = $this->findIdByTitle('sfwd-courses', $c['course_title']);
+            if (!$courseId) {
                 echo "  ! Trajectory course not found: {$c['course_title']}\n";
                 continue;
             }
-            $entry = ['course_id' => (int) $found->posts[0], 'required' => (bool) $c['required']];
+            $entry = ['course_id' => $courseId, 'required' => (bool) $c['required']];
             foreach (['order', 'group', 'min_choices'] as $key) {
                 if (isset($c[$key])) { $entry[$key] = $c[$key]; }
             }
             $courses[] = $entry;
         }
 
-        $service = ntdst_get(TrajectoryService::class);
-        $id = $service->createTrajectory([
+        $payload = [
             'title' => $t['title'],
             'content' => $t['content'] ?? '',   // Data API vocabulary: 'content', not 'post_content'
             'post_status' => 'publish',
             'mode' => $t['mode'],
             'status' => $t['status'],
             'enrollment_deadline' => $t['enrollment_deadline'] ?? '',
-            'choice_available_date' => $t['choice_available_date'] ?? '',
-            'choice_deadline' => $t['choice_deadline'] ?? '',
             'capacity' => $t['capacity'] ?? 0,
             'price' => $t['price'],
             'price_non_member' => $t['price_non_member'],
-            'courses' => wp_json_encode($courses),
-        ]);
+        ];
+        // Only write keys the entry actually declares — keeps the slug-pinned
+        // fixture's stored meta identical to the old wp_insert_post path.
+        if (isset($t['choice_available_date'])) { $payload['choice_available_date'] = $t['choice_available_date']; }
+        if (isset($t['choice_deadline']))       { $payload['choice_deadline'] = $t['choice_deadline']; }
+        if (isset($t['courses']))               { $payload['courses'] = wp_json_encode($courses); }
+
+        $id = ntdst_get(TrajectoryService::class)->createTrajectory($payload);
         if (is_wp_error($id)) {
             echo "  ! Trajectory '{$t['title']}' failed: {$id->get_error_message()}\n";
             return null;
+        }
+        if ($slug) {
+            wp_update_post(['ID' => $id, 'post_name' => $slug]);
         }
         update_post_meta($id, StrideSeedRunner::SEED_META_KEY, true);
         echo "  + Trajectory: {$t['title']} [{$t['mode']}] (ID: {$id}, " . count($courses) . " courses)\n";
