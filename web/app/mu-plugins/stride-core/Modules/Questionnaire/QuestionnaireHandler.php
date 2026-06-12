@@ -61,6 +61,8 @@ final class QuestionnaireHandler
         $stageData = array_merge(['name' => $name, 'email' => $email], $extraFields);
         $wrapped = RegistrationRepository::wrapStage($stageData, get_current_user_id() ?: null);
 
+        $registrationId = $existing ? (int) $existing->id : 0;
+
         if ($existing) {
             $existingData = is_array($existing->enrollment_data ?? null) ? $existing->enrollment_data : [];
             $existingData['interest'] = $wrapped;
@@ -77,7 +79,7 @@ final class QuestionnaireHandler
             }
         } else {
             // Create new interest registration
-            $registrationId = $registrations->create([
+            $created = $registrations->create([
                 'user_id' => null,
                 'edition_id' => $editionId,
                 'status' => RegistrationStatus::Interest->value,
@@ -85,16 +87,17 @@ final class QuestionnaireHandler
                 'enrollment_data' => ['interest' => $wrapped],
             ]);
 
-            if (is_wp_error($registrationId)) {
-                return $registrationId;
+            if (is_wp_error($created)) {
+                return $created;
             }
+            $registrationId = (int) $created;
         }
 
         // Same semantic event the logged-in EnrollmentService path dispatches —
         // mail (StrideMailBridge), audit (AuditBridge) and any future consumer
         // hang off this one emission point instead of inline ndmail_send calls.
         do_action('stride/registration/interest_registered', [
-            'registration_id' => $existing ? (int) $existing->id : (int) $registrationId,
+            'registration_id' => $registrationId,
             'user_id'         => null,
             'edition_id'      => $editionId,
             'name'            => $name,
@@ -130,6 +133,8 @@ final class QuestionnaireHandler
         $stageData = array_merge(['name' => $name, 'email' => $email], $extraFields);
         $wrapped = RegistrationRepository::wrapStage($stageData, get_current_user_id() ?: null);
 
+        $registrationId = $existing ? (int) $existing->id : 0;
+
         if ($existing) {
             $existingData = is_array($existing->enrollment_data ?? null) ? $existing->enrollment_data : [];
             $existingData['waitlist'] = $wrapped;
@@ -145,7 +150,7 @@ final class QuestionnaireHandler
                 return new WP_Error('update_failed', __('Je aanvraag kon niet worden opgeslagen. Probeer het later opnieuw.', 'stride'));
             }
         } else {
-            $registrationId = $registrations->create([
+            $created = $registrations->create([
                 'user_id' => null,
                 'edition_id' => $editionId,
                 'status' => RegistrationStatus::Waitlist->value,
@@ -153,15 +158,16 @@ final class QuestionnaireHandler
                 'enrollment_data' => ['waitlist' => $wrapped],
             ]);
 
-            if (is_wp_error($registrationId)) {
-                return $registrationId;
+            if (is_wp_error($created)) {
+                return $created;
             }
+            $registrationId = (int) $created;
         }
 
         // Same semantic event the logged-in EnrollmentService path dispatches —
         // see handleSubmitInterest for the rationale.
         do_action('stride/registration/waitlisted', [
-            'registration_id' => $existing ? (int) $existing->id : (int) $registrationId,
+            'registration_id' => $registrationId,
             'user_id'         => null,
             'edition_id'      => $editionId,
             'name'            => $name,
