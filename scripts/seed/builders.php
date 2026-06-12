@@ -237,8 +237,101 @@ final class StrideSeedBuilders
     /** @return array{id:int|null, created:array, covers:array} */
     public function buildEdition(int $courseId, string $courseTitle, array $data, array $lessonIds, array $userMap): array
     {
-        // Task 3 implement
-        return ['id' => null, 'created' => [], 'covers' => []];
+        $repo = ntdst_get(EditionRepository::class);
+        $postTitle = $courseTitle . ' - ' . date('j M Y', strtotime($data['start_date']));
+
+        // end_date derivation from max session offset
+        $endDate = $data['end_date'] ?? null;
+        if (!$endDate && !empty($data['sessions'])) {
+            $maxOffset = max(array_column($data['sessions'], 'date_offset'));
+            $endDate = date('Y-m-d', strtotime($data['start_date'] . " +{$maxOffset} days"));
+        }
+        $endDate = $endDate ?? $data['start_date'];
+
+        // v1 has no member feature — both price keys must hold the same value;
+        // price_non_member is canonical.
+        $effectivePrice = $data['price_non_member'] ?? $data['price'] ?? 0;
+
+        $createData = [
+            'title' => $postTitle,
+            'post_status' => 'publish',
+            'course_id' => $courseId,
+            'start_date' => $data['start_date'],
+            'end_date' => $endDate,
+            'price' => $effectivePrice,
+            'price_non_member' => $effectivePrice,
+            'capacity' => $data['capacity'],
+            'venue' => $data['venue'],
+            'status' => $data['status'],           // MUST be a valid OfferingStatus value — matrix uses ->value
+            'speakers' => $data['speakers'] ?? [], // json array of {name, role}, never a string
+        ];
+        // Content fields go through the repository (schema-registered), not update_post_meta
+        foreach (($data['content'] ?? []) as $key => $value) {
+            $createData[$key] = $value;   // target_audience, required_experience, included, price_includes,
+                                          // cancellation_policy, cta_benefits, enrollment_info
+        }
+        if (!empty($data['enrollment_form']))    { $createData['enrollment_form'] = $data['enrollment_form']; }
+        foreach (($data['requires'] ?? []) as $r)      { $createData['requires_' . $r] = true; }       // boolean schema fields
+        foreach (($data['post_requires'] ?? []) as $r) { $createData['post_requires_' . $r] = true; }
+        if (!empty($data['selection_open']))     { $createData['selection_open'] = true; }
+        if (!empty($data['selection_deadline'])) { $createData['selection_deadline'] = $data['selection_deadline']; }
+        if (!empty($data['session_slots']))      { $createData['session_slots'] = $data['session_slots']; }  // json field
+
+        $result = $repo->create($createData);
+        if (is_wp_error($result)) {
+            echo "    ! Edition failed: {$result->get_error_message()}\n";
+            return ['id' => null, 'created' => [], 'covers' => []];
+        }
+        $editionId = $result->ID;
+        update_post_meta($editionId, StrideSeedRunner::SEED_META_KEY, true);
+
+        // Display-only fake-user capacity fill (900000+ IDs avoid the unique_user_edition constraint)
+        if (!empty($data['fake_registered'])) {
+            global $wpdb;
+            for ($i = 0; $i < $data['fake_registered']; $i++) {
+                $fakeUserId = 900000 + ($editionId * 100) + $i + 1;
+                $insert = $wpdb->insert(
+                    $wpdb->prefix . 'vad_registrations',
+                    [
+                        'user_id' => $fakeUserId,
+                        'edition_id' => $editionId,
+                        'status' => 'confirmed',
+                        'enrollment_path' => 'individual',
+                        'notes' => 'Seed placeholder',
+                        'registered_at' => current_time('mysql'),
+                    ]
+                );
+                if ($insert === false) {
+                    echo "    ! Fake registration insert failed: {$wpdb->last_error}\n";
+                }
+            }
+        }
+
+        $out = ['id' => $editionId, 'created' => ['editions' => [$editionId]], 'covers' => ["edition:{$editionId}" => $data['covers'] ?? []]];
+
+        echo "    + Edition: {$data['start_date']} at {$data['venue']} (ID: {$editionId})";
+        if (!empty($data['enrollment_form'])) {
+            echo " [form: {$data['enrollment_form']}]";
+        }
+        if (!empty($data['selection_deadline'])) {
+            echo " [deadline: {$data['selection_deadline']}]";
+        }
+        echo "\n";
+
+        // Sessions (Task 4)
+        foreach (($data['sessions'] ?? []) as $sessionData) {
+            $sessionId = $this->buildSession($editionId, $data, $sessionData, $lessonIds);
+            if ($sessionId) { $out['created']['sessions'][] = $sessionId; }
+        }
+        // Registrations/quotes wired in Task 5/6.
+
+        return $out;
+    }
+
+    /** @return int|null session id — Task 4 implement */
+    public function buildSession(int $editionId, array $editionData, array $sessionData, array $lessonIds): ?int
+    {
+        return null;
     }
 
     /** @return string[] group ids written */
