@@ -37,6 +37,7 @@ final class EnrollmentFormHandler
         add_filter('ntdst/api_data/stride_submit_enrollment', [$this, 'handleSubmitEnrollment'], 10, 2);
         add_filter('ntdst/api_data/stride_validate_voucher', [$this, 'handleValidateVoucher'], 10, 2);
         add_filter('ntdst/api_data/stride_save_session_selection', [$this, 'handleSaveSessionSelection'], 10, 2);
+        add_filter('ntdst/api_data/stride_save_trajectory_choices', [$this, 'handleSaveTrajectoryChoices'], 10, 2);
     }
 
     /**
@@ -562,6 +563,63 @@ final class EnrollmentFormHandler
         return [
             'success' => true,
             'message' => __('Je sessiekeuze is opgeslagen.', 'stride'),
+            'reload' => true,
+        ];
+    }
+
+    /**
+     * Handle trajectory elective-choices save (the keuzes form).
+     *
+     * Input is the form's native shape: a flat array of COURSE ids. All
+     * mapping/validation/cascade/LD-grant logic lives in
+     * TrajectorySelection::setSelectionsFromCourses — this handler only
+     * authenticates, authorizes ownership and sanitizes.
+     *
+     * Threat model (plan 2026-06-12-trajectory-wiring): mitigation 1
+     * (ownership at entry, same error for not-found and not-yours — no
+     * existence oracle), mitigation 2 (NOT registered as a public action),
+     * INV-2 (nonce verified by the API layer), INV-4 (WP_Error propagation).
+     *
+     * @param mixed $data Existing data (unused)
+     * @param array<string, mixed> $params Request parameters
+     * @return array<string, mixed>|WP_Error
+     */
+    public function handleSaveTrajectoryChoices(mixed $data, array $params): array|WP_Error
+    {
+        $userId = get_current_user_id();
+        if (!$userId) {
+            return new WP_Error('not_logged_in', __('Je moet ingelogd zijn.', 'stride'));
+        }
+
+        $registrationId = absint($params['registration_id'] ?? 0);
+        $courseIds = array_values(array_filter(array_map('absint', (array) ($params['selections'] ?? []))));
+
+        $repo = ntdst_get(RegistrationRepository::class);
+        $registration = $registrationId ? $repo->find($registrationId) : null;
+        if (!$registration || (int) $registration->user_id !== $userId) {
+            // Identical error for "not found" and "not yours" — no oracle.
+            return new WP_Error('forbidden', __('Geen toegang.', 'stride'));
+        }
+
+        $selection = ntdst_get(TrajectorySelection::class);
+        $result = $selection->setSelectionsFromCourses($registrationId, $courseIds);
+        if (is_wp_error($result)) {
+            ntdst_log('enrollment')->warning('Trajectory choices refused', [
+                'registration_id' => $registrationId,
+                'course_ids' => $courseIds,
+                'error' => $result->get_error_message(),
+            ]);
+            return $result;
+        }
+
+        ntdst_log('enrollment')->info('Trajectory choices saved', [
+            'registration_id' => $registrationId,
+            'course_ids' => $courseIds,
+        ]);
+
+        return [
+            'success' => true,
+            'message' => __('Je keuze is opgeslagen.', 'stride'),
             'reload' => true,
         ];
     }
