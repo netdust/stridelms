@@ -188,7 +188,7 @@ final class EditionRegistrationExporter
         $startDate = $this->editionRepository->getField($editionId, 'start_date', '');
         $endDate = $this->editionRepository->getField($editionId, 'end_date', '');
         $venue = $this->editionRepository->getField($editionId, 'venue', '');
-        $speakers = $this->editionRepository->getField($editionId, 'speakers', '');
+        $speakers = $this->editionRepository->getSpeakersLabel($editionId);
         $capacity = (int) $this->editionRepository->getField($editionId, 'capacity', 0);
         $price = (int) $this->editionRepository->getField($editionId, 'price', 0);
 

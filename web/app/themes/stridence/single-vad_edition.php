@@ -88,7 +88,17 @@ if ($has_pending_tasks) {
 $editionModel = ntdst_data()->get('vad_edition');
 $start_date   = $editionModel->getMeta($edition_id, 'start_date', '');
 $venue        = $editionModel->getMeta($edition_id, 'venue', '');
-$speakers     = trim((string) $editionModel->getMeta($edition_id, 'speakers', ''));
+
+// Editable content fields (admin prefills defaults — see EditionCPT::getContentDefaults();
+// the theme renders saved values only and hides empty blocks)
+$speakers_list       = ntdst_get(\Stride\Modules\Edition\EditionRepository::class)->getSpeakers($edition_id);
+$target_audience     = trim((string) $editionModel->getMeta($edition_id, 'target_audience', ''));
+$required_experience = trim((string) $editionModel->getMeta($edition_id, 'required_experience', ''));
+$included            = trim((string) $editionModel->getMeta($edition_id, 'included', ''));
+$price_includes      = trim((string) $editionModel->getMeta($edition_id, 'price_includes', ''));
+$cancellation_policy = trim((string) $editionModel->getMeta($edition_id, 'cancellation_policy', ''));
+$enrollment_info     = trim((string) $editionModel->getMeta($edition_id, 'enrollment_info', ''));
+$cta_benefits_raw    = trim((string) $editionModel->getMeta($edition_id, 'cta_benefits', ''));
 
 // Spots remaining: derived from capacity minus current registrations.
 // `capacity = 0` means unlimited — there's nothing meaningful to count down.
@@ -175,21 +185,21 @@ $content_tabs = [
     'lesgever'     => __('Lesgever', 'stridence'),
 ];
 
-// Lesgever card: speakers meta when present, i18n'd placeholder otherwise.
-// Initials are only derived from a REAL speaker name — the placeholder text
-// would yield a fake monogram ("LN"); it gets a generic user icon instead.
-$has_speaker   = $speakers !== '';
-$lesgever_name = $has_speaker ? $speakers : __('Lesgever nog te bevestigen', 'stridence');
-$lesgever_initials = '';
-if ($has_speaker) {
-    foreach (preg_split('/[\s,]+/u', $lesgever_name, -1, PREG_SPLIT_NO_EMPTY) as $name_part) {
-        $lesgever_initials .= mb_substr($name_part, 0, 1);
-        if (mb_strlen($lesgever_initials) >= 2) {
+// Lesgever cards: one per speaker (name + role), i18n'd placeholder card
+// when none are set. Initials are only derived from a REAL speaker name —
+// the placeholder text would yield a fake monogram ("LN"); it gets a
+// generic user icon instead.
+$has_speaker = !empty($speakers_list);
+$speaker_initials = static function (string $name): string {
+    $initials = '';
+    foreach (preg_split('/[\s,]+/u', $name, -1, PREG_SPLIT_NO_EMPTY) as $name_part) {
+        $initials .= mb_substr($name_part, 0, 1);
+        if (mb_strlen($initials) >= 2) {
             break;
         }
     }
-    $lesgever_initials = mb_strtoupper($lesgever_initials);
-}
+    return mb_strtoupper($initials);
+};
 
 // ── Sidebar / CTA state (Helder Tij) ──
 
@@ -235,11 +245,8 @@ if ($enrolled_cta) {
     $mobile_cta = ['label' => __('Op wachtlijst plaatsen', 'stridence'), 'url' => home_url('/wachtlijst/?editie=' . $edition_id)];
 }
 
-// Benefits checklist — PLACEHOLDER copy (cta_benefits, see field inventory).
-$cta_benefits = [
-    __('Attest van deelname', 'stridence'),
-    __('Kosteloos annuleren tot 14 dagen vooraf', 'stridence'),
-];
+// Benefits checklist — cta_benefits edition meta, one item per line.
+$cta_benefits = array_values(array_filter(array_map('trim', preg_split('/\R/', $cta_benefits_raw) ?: [])));
 
 get_header();
 ?>
@@ -341,32 +348,14 @@ get_header();
                         </p>
                     <?php endif; ?>
 
-                    <?php
-                    // PLACEHOLDER (see docs/plans/2026-06-11-helder-tij-field-inventory.md):
-                    // "Wat je leert" sample items — no learning-outcomes field exists yet.
-                    $learning_items = [
-                        __('Spanning en escalatie vroegtijdig herkennen', 'stridence'),
-                        __('De-escalerend communiceren in moeilijke gesprekken', 'stridence'),
-                        __('Grenzen stellen met behoud van de zorgrelatie', 'stridence'),
-                    ];
-                    ?>
-                    <div class="flex flex-col gap-3.5">
-                        <h2 class="text-[18px] font-bold text-text"><?php esc_html_e('Wat je leert', 'stridence'); ?></h2>
-                        <ul class="grid gap-2.5">
-                            <?php foreach ($learning_items as $learning_item) : ?>
-                                <li class="flex items-center gap-3">
-                                    <span class="w-[22px] h-[22px] rounded-full bg-badge-open-bg text-badge-open-text text-[13px] font-extrabold grid place-items-center shrink-0" aria-hidden="true">&check;</span>
-                                    <span class="text-[15px] text-text-muted"><?php echo esc_html($learning_item); ?></span>
-                                </li>
-                            <?php endforeach; ?>
-                        </ul>
-                    </div>
-
-                    <?php // PLACEHOLDER: "Voor wie?" well — no audience field exists yet. ?>
-                    <div class="bg-surface-alt rounded-[14px] p-5 text-[14px] text-text-muted leading-relaxed">
-                        <strong class="text-text"><?php esc_html_e('Voor wie?', 'stridence'); ?></strong>
-                        <?php esc_html_e('Begeleiders, verpleegkundigen en onthaalmedewerkers in zorg en welzijn. Geen voorkennis nodig.', 'stridence'); ?>
-                    </div>
+                    <?php /* "Wat je leert" is authored in the course's Gutenberg
+                             content (rendered above) — no separate field. */ ?>
+                    <?php if ($target_audience !== '') : ?>
+                        <div class="bg-surface-alt rounded-[14px] p-5 text-[14px] text-text-muted leading-relaxed">
+                            <strong class="text-text"><?php esc_html_e('Voor wie?', 'stridence'); ?></strong>
+                            <?php echo esc_html($target_audience); ?>
+                        </div>
+                    <?php endif; ?>
                 </section>
 
                 <!-- Section: Programma -->
@@ -525,38 +514,68 @@ get_header();
                                 <?php echo $venue ? esc_html($venue) : esc_html__('Wordt nog bekendgemaakt', 'stridence'); ?>
                             </p>
                         </div>
-                        <?php // PLACEHOLDER: "Inbegrepen" card — no inclusions field exists yet. ?>
-                        <div class="bg-surface-card rounded-[14px] shadow-card p-5">
-                            <h3 class="text-[11px] font-bold text-primary uppercase tracking-[0.08em]"><?php esc_html_e('Inbegrepen', 'stridence'); ?></h3>
-                            <p class="text-[14px] text-text-muted leading-relaxed mt-2">
-                                <?php esc_html_e('Lunch, koffie en cursusmateriaal. Je ontvangt achteraf een attest van deelname.', 'stridence'); ?>
-                            </p>
-                        </div>
-                        <?php // PLACEHOLDER: "Annuleren" card — no cancellation-policy field exists yet. ?>
-                        <div class="bg-surface-card rounded-[14px] shadow-card p-5">
-                            <h3 class="text-[11px] font-bold text-primary uppercase tracking-[0.08em]"><?php esc_html_e('Annuleren', 'stridence'); ?></h3>
-                            <p class="text-[14px] text-text-muted leading-relaxed mt-2">
-                                <?php esc_html_e('Kosteloos tot 14 dagen vóór de eerste sessie. Daarna kan een collega je plaats overnemen.', 'stridence'); ?>
-                            </p>
-                        </div>
+                        <?php /* Doelpubliek renders as the "Voor wie?" well in the
+                                 Omschrijving section — not repeated here. */ ?>
+                        <?php if ($required_experience !== '') : ?>
+                            <div class="bg-surface-card rounded-[14px] shadow-card p-5">
+                                <h3 class="text-[11px] font-bold text-primary uppercase tracking-[0.08em]"><?php esc_html_e('Voorkennis', 'stridence'); ?></h3>
+                                <p class="text-[14px] text-text-muted leading-relaxed mt-2">
+                                    <?php echo esc_html($required_experience); ?>
+                                </p>
+                            </div>
+                        <?php endif; ?>
+                        <?php if ($included !== '') : ?>
+                            <div class="bg-surface-card rounded-[14px] shadow-card p-5">
+                                <h3 class="text-[11px] font-bold text-primary uppercase tracking-[0.08em]"><?php esc_html_e('Inbegrepen', 'stridence'); ?></h3>
+                                <p class="text-[14px] text-text-muted leading-relaxed mt-2">
+                                    <?php echo esc_html($included); ?>
+                                </p>
+                            </div>
+                        <?php endif; ?>
+                        <?php if ($cancellation_policy !== '') : ?>
+                            <div class="bg-surface-card rounded-[14px] shadow-card p-5">
+                                <h3 class="text-[11px] font-bold text-primary uppercase tracking-[0.08em]"><?php esc_html_e('Annuleren', 'stridence'); ?></h3>
+                                <p class="text-[14px] text-text-muted leading-relaxed mt-2">
+                                    <?php echo esc_html($cancellation_policy); ?>
+                                </p>
+                            </div>
+                        <?php endif; ?>
                     </div>
+
+                    <?php if ($enrollment_info !== '') : ?>
+                        <?php /* Desktop sees this under the sidebar CTA; the sidebar
+                                 is hidden on mobile, so repeat it here. */ ?>
+                        <p class="lg:hidden text-[13px] text-text-muted leading-relaxed mt-4">
+                            <?php echo esc_html($enrollment_info); ?>
+                        </p>
+                    <?php endif; ?>
                 </section>
 
                 <!-- Section: Lesgever -->
                 <section id="lesgever" class="scroll-mt-32 pt-10">
                     <h2 class="text-[18px] font-bold text-text mb-4"><?php esc_html_e('Lesgever', 'stridence'); ?></h2>
-                    <div class="bg-surface-card rounded-[14px] shadow-card p-6 flex gap-5 items-start flex-wrap">
-                        <span class="w-14 h-14 rounded-full bg-accent-subtle text-accent-hover font-bold text-[18px] grid place-items-center shrink-0" aria-hidden="true"><?php echo $has_speaker ? esc_html($lesgever_initials) : stridence_icon('user', 'w-6 h-6'); ?></span>
-                        <div class="flex-1 min-w-[240px]">
-                            <div class="text-[17px] font-bold text-text"><?php echo esc_html($lesgever_name); ?></div>
-                            <?php // PLACEHOLDER: role line — no speaker-role field exists yet. ?>
-                            <div class="text-[13px] text-accent font-semibold mt-0.5"><?php esc_html_e('Lesgever', 'stridence'); ?></div>
-                            <?php // PLACEHOLDER: bio — no speaker-bio field exists yet. ?>
-                            <p class="text-[14px] text-text-muted leading-relaxed mt-3">
-                                <?php esc_html_e('Meer informatie over de lesgever volgt binnenkort.', 'stridence'); ?>
-                            </p>
+                    <?php if ($has_speaker) : ?>
+                        <div class="flex flex-col gap-3.5">
+                            <?php foreach ($speakers_list as $speaker) : ?>
+                                <div class="bg-surface-card rounded-[14px] shadow-card p-6 flex gap-5 items-center flex-wrap">
+                                    <span class="w-14 h-14 rounded-full bg-accent-subtle text-accent-hover font-bold text-[18px] grid place-items-center shrink-0" aria-hidden="true"><?php echo esc_html($speaker_initials($speaker['name'])); ?></span>
+                                    <div class="flex-1 min-w-[240px]">
+                                        <div class="text-[17px] font-bold text-text"><?php echo esc_html($speaker['name']); ?></div>
+                                        <div class="text-[13px] text-accent font-semibold mt-0.5">
+                                            <?php echo $speaker['role'] !== '' ? esc_html($speaker['role']) : esc_html__('Lesgever', 'stridence'); ?>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
                         </div>
-                    </div>
+                    <?php else : ?>
+                        <div class="bg-surface-card rounded-[14px] shadow-card p-6 flex gap-5 items-center flex-wrap">
+                            <span class="w-14 h-14 rounded-full bg-accent-subtle text-accent-hover font-bold text-[18px] grid place-items-center shrink-0" aria-hidden="true"><?php echo stridence_icon('user', 'w-6 h-6'); ?></span>
+                            <div class="flex-1 min-w-[240px]">
+                                <div class="text-[17px] font-bold text-text"><?php esc_html_e('Lesgever nog te bevestigen', 'stridence'); ?></div>
+                            </div>
+                        </div>
+                    <?php endif; ?>
                 </section>
             </div>
 
@@ -576,8 +595,9 @@ get_header();
                                 <span class="text-[32px] font-extrabold tracking-[-0.01em] text-text"><?php echo esc_html(stride_format_money($price->inCents())); ?></span>
                                 <span class="text-[13px] text-text-faint"><?php esc_html_e('per deelnemer', 'stridence'); ?></span>
                             </div>
-                            <?php // PLACEHOLDER: price-includes line (cta_price_includes) — see field inventory. ?>
-                            <div class="text-[13px] text-text-muted mt-1"><?php esc_html_e('incl. lunch en cursusmateriaal', 'stridence'); ?></div>
+                            <?php if ($price_includes !== '') : ?>
+                                <div class="text-[13px] text-text-muted mt-1"><?php echo esc_html($price_includes); ?></div>
+                            <?php endif; ?>
                         <?php else : ?>
                             <div class="text-[32px] font-extrabold tracking-[-0.01em] text-text"><?php esc_html_e('Op aanvraag', 'stridence'); ?></div>
                         <?php endif; ?>
@@ -635,23 +655,32 @@ get_header();
                                 </button>
                             <?php endif; ?>
 
-                            <?php // PLACEHOLDER: quote-request URL (cta_quote_url) — no quote-request page exists yet. ?>
-                            <a href="<?php echo esc_url(home_url('/contact/')); ?>" class="btn-ghost w-full text-center">
-                                <?php esc_html_e('Offerte voor je team', 'stridence'); ?>
-                            </a>
+                            <?php /* "Offerte voor je team" CTA intentionally hidden
+                                     (Stefan, 2026-06-12): no quote-request flow exists
+                                     yet and a /contact/ link would push enrollments
+                                     into manual handling. Restore when cta_quote_url
+                                     has a real target (see field-inventory doc). */ ?>
                         </div>
 
-                        <!-- Benefits checklist -->
-                        <div class="border-t border-border-soft mt-5 pt-4">
-                            <ul class="flex flex-col gap-2 text-[13px] text-text-muted">
-                                <?php foreach ($cta_benefits as $benefit) : ?>
-                                    <li class="flex items-center gap-2">
-                                        <span class="text-badge-open-text font-extrabold" aria-hidden="true">&check;</span>
-                                        <?php echo esc_html($benefit); ?>
-                                    </li>
-                                <?php endforeach; ?>
-                            </ul>
-                        </div>
+                        <?php if ($enrollment_info !== '') : ?>
+                            <p class="text-[13px] text-text-muted leading-relaxed mt-4">
+                                <?php echo esc_html($enrollment_info); ?>
+                            </p>
+                        <?php endif; ?>
+
+                        <?php if (!empty($cta_benefits)) : ?>
+                            <!-- Benefits checklist -->
+                            <div class="border-t border-border-soft mt-5 pt-4">
+                                <ul class="flex flex-col gap-2 text-[13px] text-text-muted">
+                                    <?php foreach ($cta_benefits as $benefit) : ?>
+                                        <li class="flex items-center gap-2">
+                                            <span class="text-badge-open-text font-extrabold" aria-hidden="true">&check;</span>
+                                            <?php echo esc_html($benefit); ?>
+                                        </li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            </div>
+                        <?php endif; ?>
                     </aside>
 
                     <?php if ($course) : ?>

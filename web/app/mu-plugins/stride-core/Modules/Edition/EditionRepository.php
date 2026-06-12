@@ -245,4 +245,75 @@ final class EditionRepository extends AbstractRepository
     {
         return $this->model()->updateMetaBatch($editionId, $data);
     }
+
+    /**
+     * Speakers as a normalized list of ['name' => string, 'role' => string].
+     *
+     * The meta is a JSON array of {name, role} since 2026-06; legacy values
+     * are plain strings ("Lien De Smedt, sportpedagoge") and are returned as
+     * a single entry with the whole string as name and an empty role.
+     *
+     * @return array<int, array{name: string, role: string}>
+     */
+    public function getSpeakers(int $editionId): array
+    {
+        // Raw meta, NOT getField(): the json-typed schema decodes legacy
+        // plain-string values to [] on the formatted read path, which would
+        // silently drop them before this normalization can see them.
+        $raw = $this->rawSpeakersMeta($editionId);
+
+        if (is_string($raw)) {
+            $raw = trim($raw);
+            if ($raw === '') {
+                return [];
+            }
+            $decoded = json_decode($raw, true);
+            if (!is_array($decoded)) {
+                // Legacy plain-string value
+                return [['name' => $raw, 'role' => '']];
+            }
+            $raw = $decoded;
+        }
+
+        if (!is_array($raw)) {
+            return [];
+        }
+
+        $speakers = [];
+        foreach ($raw as $entry) {
+            if (is_string($entry)) {
+                $entry = ['name' => $entry];
+            }
+            if (!is_array($entry)) {
+                continue;
+            }
+            $name = trim((string) ($entry['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $speakers[] = [
+                'name' => $name,
+                'role' => trim((string) ($entry['role'] ?? '')),
+            ];
+        }
+
+        return $speakers;
+    }
+
+    /**
+     * Speakers as a flat display string (joined names) — for API payloads
+     * and exports that consumed the legacy string field.
+     */
+    public function getSpeakersLabel(int $editionId): string
+    {
+        return implode(', ', array_column($this->getSpeakers($editionId), 'name'));
+    }
+
+    /**
+     * Unformatted speakers meta (overridable seam for unit tests).
+     */
+    protected function rawSpeakersMeta(int $editionId): mixed
+    {
+        return get_post_meta($editionId, $this->model()->getMetaPrefix() . 'speakers', true);
+    }
 }
