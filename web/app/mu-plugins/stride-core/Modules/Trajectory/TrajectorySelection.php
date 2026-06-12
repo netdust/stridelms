@@ -134,7 +134,25 @@ final class TrajectorySelection
             return $validation;
         }
 
-        return $this->applySelections($registrationId, $trajectoryId, $editionIds, null);
+        // EVERY phase entry records course_ids (CR 2026-06-12): the pure-LD
+        // grant/revoke diff reads the latest entry's course_ids, so a legacy
+        // edition-id write that skipped them would leave the diff anchored to
+        // a stale older entry. Derive the course-level equivalent: the picked
+        // editions mapped back to their courses, plus the current pure-LD
+        // picks this entry point cannot express (carried forward unchanged).
+        $catalog = $this->buildElectiveCatalog($trajectoryId);
+        $derivedCourseIds = [];
+        $editionIdsInt = array_map('intval', $editionIds);
+        foreach ($catalog['courses'] as $courseId => $mappedEditionId) {
+            if ($mappedEditionId > 0 && in_array($mappedEditionId, $editionIdsInt, true)) {
+                $derivedCourseIds[] = $courseId;
+            }
+        }
+        foreach ($this->getSelectedPureLdCourseIds($registration, $catalog) as $courseId) {
+            $derivedCourseIds[] = $courseId;
+        }
+
+        return $this->applySelections($registrationId, $trajectoryId, $editionIds, array_values(array_unique($derivedCourseIds)));
     }
 
     /**
@@ -208,13 +226,28 @@ final class TrajectorySelection
             return $applied;
         }
 
-        // Pure-LD grant/revoke diff via the adapter only (INV-6).
+        // Pure-LD grant/revoke diff via the adapter only (INV-6). A false
+        // return must be observable (INV-4): the phase entry already records
+        // the pick, so a silent failure means the UI shows a course the user
+        // cannot open (grant) or keeps access they deselected (revoke).
         $userId = (int) $registration->user_id;
         foreach (array_diff($pureLdCourseIds, $previousPureLd) as $courseId) {
-            $this->lms->grantAccess($userId, $courseId);
+            if (!$this->lms->grantAccess($userId, $courseId)) {
+                ntdst_log('enrollment')->error('Pure-LD elective grant failed', [
+                    'registration_id' => $registrationId,
+                    'user_id' => $userId,
+                    'course_id' => $courseId,
+                ]);
+            }
         }
         foreach (array_diff($previousPureLd, $pureLdCourseIds) as $courseId) {
-            $this->lms->revokeAccess($userId, $courseId);
+            if (!$this->lms->revokeAccess($userId, $courseId)) {
+                ntdst_log('enrollment')->error('Pure-LD elective revoke failed', [
+                    'registration_id' => $registrationId,
+                    'user_id' => $userId,
+                    'course_id' => $courseId,
+                ]);
+            }
         }
 
         return true;
@@ -260,11 +293,15 @@ final class TrajectorySelection
      * selections write → cascade reconcile → append-only phase entry →
      * choices_updated event. Never duplicated (single guard/cascade sequence).
      *
-     * @param array<int>      $editionIds
-     * @param array<int>|null $courseIds The submitted course ids when the
-     *                                   course-level entry point was used.
+     * @param array<int> $editionIds
+     * @param array<int> $courseIds The course-level picks this write
+     *                              expresses — submitted directly (course
+     *                              entry point) or derived (edition entry
+     *                              point). ALWAYS recorded on the phase
+     *                              entry; the pure-LD grant/revoke diff
+     *                              depends on every entry carrying them.
      */
-    private function applySelections(int $registrationId, int $trajectoryId, array $editionIds, ?array $courseIds): true|WP_Error
+    private function applySelections(int $registrationId, int $trajectoryId, array $editionIds, array $courseIds): true|WP_Error
     {
         // Save selections
         $result = $this->registrations->setSelections($registrationId, $editionIds);
@@ -287,14 +324,11 @@ final class TrajectorySelection
         // Append-only: every call records a new phase entry. The phased-choices
         // feature (future) will pass distinct phase labels; today all calls use
         // 'enrollment'.
-        $phase = [
+        $this->registrations->appendInitialSelectionPhase($registrationId, [
             'phase'       => 'enrollment',
             'edition_ids' => array_values(array_map('intval', $editionIds)),
-        ];
-        if ($courseIds !== null) {
-            $phase['course_ids'] = array_values(array_map('intval', $courseIds));
-        }
-        $this->registrations->appendInitialSelectionPhase($registrationId, $phase, 'trajectory');
+            'course_ids'  => array_values(array_map('intval', $courseIds)),
+        ], 'trajectory');
 
         do_action('stride/trajectory/choices_updated', [
             'registration_id' => $registrationId,
@@ -318,8 +352,19 @@ final class TrajectorySelection
         $courses = [];
         foreach ($groups as $group) {
             foreach ($group['courses'] ?? [] as $coursePost) {
+                $courseId = (int) $coursePost->ID;
+                if (array_key_exists($courseId, $courses)) {
+                    // Misconfiguration: a course in two elective groups would
+                    // double-count toward both groups' requirements. Surface
+                    // it; keep the first mapping deterministic.
+                    ntdst_log('enrollment')->warning('Course appears in multiple elective groups', [
+                        'trajectory_id' => $trajectoryId,
+                        'course_id' => $courseId,
+                    ]);
+                    continue;
+                }
                 $config = $coursePost->trajectory_config ?? [];
-                $courses[(int) $coursePost->ID] = (int) ($config['edition_id'] ?? 0);
+                $courses[$courseId] = (int) ($config['edition_id'] ?? 0);
             }
         }
 

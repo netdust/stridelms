@@ -313,6 +313,67 @@ class TrajectorySelectionFromCoursesTest extends TestCase
     }
 
     /** @test */
+    public function legacyEditionPathRecordsDerivedCourseIdsInPhaseEntry(): void
+    {
+        // CR finding: setSelections (legacy, edition ids) appended phase
+        // entries WITHOUT course_ids, leaving the pure-LD grant/revoke diff
+        // anchored to a stale older entry. Rule: EVERY phase entry records
+        // course_ids — the legacy path derives them from the catalog and
+        // carries forward the current pure-LD picks it cannot express.
+        $this->stubFind($this->registration([
+            'enrollment_data' => ['initial_selection' => ['type' => 'trajectory', 'phases' => [
+                ['phase' => 'enrollment', 'edition_ids' => [], 'course_ids' => [102]], // pure-LD pick stands
+            ]]],
+        ]));
+        $this->stubGuards();
+        $this->stubMixedGroup();
+
+        $this->registrations->shouldReceive('setSelections')
+            ->once()->with(self::REG_ID, [201])->andReturn(true);
+        $this->cascade->shouldReceive('cascadeOnSelection')
+            ->once()->with(self::REG_ID, [201])->andReturn(true);
+        $this->registrations->shouldReceive('appendInitialSelectionPhase')
+            ->once()->withArgs(function (int $regId, array $phase) {
+                $courseIds = $phase['course_ids'] ?? null;
+                if (!is_array($courseIds)) {
+                    return false;
+                }
+                sort($courseIds);
+                // edition 201 → course 101, plus the carried-forward pure-LD 102
+                return $courseIds === [101, 102];
+            })->andReturn(true);
+
+        $result = $this->selection->setSelections(self::REG_ID, [201]);
+
+        $this->assertTrue($result);
+    }
+
+    /** @test */
+    public function failedLdGrantIsLoggedNotSwallowed(): void
+    {
+        // CR finding: a false return from the adapter left the phase entry
+        // recording a pick the user has no LD access to, invisibly. The
+        // failure must at least be observable (INV-4: logged once).
+        $this->stubFind($this->registration());
+        $this->stubGuards();
+        $this->stubMixedGroup();
+        $this->expectWritePath([], [102]);
+        $this->lms->shouldReceive('grantAccess')->once()->with(self::USER_ID, 102)->andReturn(false);
+
+        global $_test_log_entries;
+        $_test_log_entries = [];
+
+        $result = $this->selection->setSelectionsFromCourses(self::REG_ID, [102]);
+
+        $this->assertTrue($result, 'selection itself still succeeds');
+        $errors = array_filter(
+            $_test_log_entries,
+            fn(array $entry): bool => ($entry['level'] ?? '') === 'error',
+        );
+        $this->assertNotEmpty($errors, 'a failed LD grant must be logged at error level');
+    }
+
+    /** @test */
     public function selectedCourseIdsEmptyForUnknownRegistration(): void
     {
         $this->registrations->shouldReceive('find')->with(self::REG_ID)->andReturn(null);
