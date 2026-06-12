@@ -31,6 +31,11 @@
     margin: 0;
 }
 
+/* Speakers repeater rows */
+.wp-core-ui .stride-speaker-remove {
+    text-decoration: none;
+}
+
 /* ==========================================================================
    Edition Admin Container
    ========================================================================== */
