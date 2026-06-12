@@ -464,7 +464,37 @@ final class TrajectoryService extends AbstractService
             'price_non_member' => (float) $this->repository->getField($post->ID, 'price_non_member', 0),
             'requires_approval' => (bool) $this->repository->getField($post->ID, 'requires_approval', false),
             'courses' => $this->repository->getCourses($post->ID),
-        ];
+        ] + $this->descriptiveFields(fn(string $key): string =>
+            (string) $this->repository->getField($post->ID, $key, ''));
+    }
+
+    /**
+     * The descriptive field set shared with editions (target_audience,
+     * required_experience, included, price_includes, cancellation_policy,
+     * cta_benefits, enrollment_info, duration) — rendered render-when-present
+     * on the public trajectory page. Resolved through $get so both formatter
+     * paths (WP_Post + data-array) populate identically.
+     *
+     * @param callable(string): string $get
+     * @return array<string, string>
+     */
+    private function descriptiveFields(callable $get): array
+    {
+        $out = [];
+        foreach ([
+            'target_audience',
+            'required_experience',
+            'included',
+            'price_includes',
+            'cancellation_policy',
+            'cta_benefits',
+            'enrollment_info',
+            'duration',
+        ] as $key) {
+            $out[$key] = $get($key);
+        }
+
+        return $out;
     }
 
     /**
@@ -498,6 +528,7 @@ final class TrajectoryService extends AbstractService
             'price' => (float) ($data['meta']['price'] ?? $data['price'] ?? 0),
             'price_non_member' => (float) ($data['meta']['price_non_member'] ?? $data['price_non_member'] ?? 0),
             'courses' => $courses,
-        ];
+        ] + $this->descriptiveFields(static fn(string $key): string =>
+            (string) ($data['meta'][$key] ?? $data[$key] ?? ''));
     }
 }

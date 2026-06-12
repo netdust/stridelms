@@ -107,6 +107,36 @@ final class TrajectoryCPT
                 'label' => 'Duur',
                 'description' => 'Bijv. "6 maanden" of "1 jaar"',
             ],
+            // Descriptive fields reused verbatim from the edition set
+            // (EditionCPT::getFields) so the trajectory page can render the
+            // same "Praktisch" wells + sidebar info. Rendered render-when-present.
+            'required_experience' => [
+                'type' => 'text',
+                'label' => 'Voorkennis',
+            ],
+            'included' => [
+                'type' => 'textarea',
+                'label' => 'Inbegrepen',
+            ],
+            'price_includes' => [
+                'type' => 'text',
+                'label' => 'Prijs inclusief',
+                'description' => 'Korte regel onder de prijs in de sidebar',
+            ],
+            'cancellation_policy' => [
+                'type' => 'textarea',
+                'label' => 'Annuleringsvoorwaarden',
+            ],
+            'cta_benefits' => [
+                'type' => 'textarea',
+                'label' => 'Voordelen',
+                'description' => 'Voordelenlijst in de sidebar, één item per regel',
+            ],
+            'enrollment_info' => [
+                'type' => 'textarea',
+                'label' => 'Inschrijvingsinfo',
+                'description' => 'Getoond onder de inschrijf-knop (bv. deadline + bevestigingsinfo)',
+            ],
             'deadline_months' => [
                 'type' => 'int',
                 'label' => 'Deadline maanden',
