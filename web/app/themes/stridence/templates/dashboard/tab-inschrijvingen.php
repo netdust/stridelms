@@ -70,7 +70,8 @@ $cancelled_editions = $data['cancelled_editions'];
                     $venue     = $reg['venue'] ?? null;
                     $progress  = $reg['progress'] ?? null;
                     ?>
-                    <div class="bg-surface-card rounded-[16px] shadow-card p-[22px] px-6 flex flex-wrap justify-between gap-4">
+                    <div class="bg-surface-card rounded-[16px] shadow-card p-[22px] px-6 flex flex-wrap justify-between gap-4"
+                         <?php if ($editionId) : ?>data-edition-id="<?php echo (int) $editionId; ?>"<?php endif; ?>>
                         <!-- LEFT: badge + title + meta -->
                         <div class="flex-1 min-w-[240px]">
                             <!-- Badge row: type pill (inline) + enrolled pill -->

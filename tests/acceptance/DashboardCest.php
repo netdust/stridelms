@@ -5,82 +5,68 @@ declare(strict_types=1);
 use Tests\Support\AcceptanceTester;
 
 /**
- * Acceptance tests for the unified course-card on the dashboard.
+ * Acceptance tests for the course-card interaction on the dashboard.
+ *
+ * Helder Tij ruling (Stefan, 2026-06-12): cards render COLLAPSED by default
+ * — the pre-redesign auto-expand-first behavior is gone on purpose. The
+ * home tab uses flat panels (no expandable cards); expandable course-cards
+ * live in the Afgerond section of the inschrijvingen tab.
  */
 class DashboardCest
 {
     /**
-     * SCENARIO: Dashboard home Opleidingen — first card auto-expands.
+     * SCENARIO: expandable cards start collapsed and expand on click.
      *
-     *   GIVEN: seed_student1 has at least 2 active enrollments
-     *   WHEN:  visiting /mijn-account/ (tab=home)
-     *   THEN:  the first course card body is visible without clicking;
-     *          the second card body is hidden until clicked.
-     */
-    public function courseCardOnHomeAutoExpandsFirst(AcceptanceTester $I): void
-    {
-        $I->wantTo('verify the first course card auto-expands on the dashboard home');
-
-        // Login as seed_student1 (existing seed user, multiple enrollments)
-        $userId = (int) $I->grabFromDatabase($I->grabPrefixedTableNameFor('users'), 'ID', ['user_login' => 'seed_student1']);
-        $I->loginAsUserId($userId, '/mijn-account/');
-
-        $I->waitForElement('section', 5);
-
-        // Find all course cards inside the Opleidingen section.
-        // Each card uses x-data="expandable(...)".
-        $cardCount = $I->executeJS("return document.querySelectorAll('[x-data^=\"expandable\"]').length;");
-        \PHPUnit\Framework\Assert::assertGreaterThanOrEqual(2, $cardCount, 'expected at least 2 course cards for this test');
-
-        // First card body must be visible (open:true)
-        $firstOpen = $I->executeJS("
-            const card = document.querySelectorAll('[x-data^=\"expandable\"]')[0];
-            return Alpine.\$data(card).open;
-        ");
-        \PHPUnit\Framework\Assert::assertTrue((bool) $firstOpen, 'first card should be open by default');
-
-        // Second card body must be hidden (open:false)
-        $secondOpen = $I->executeJS("
-            const card = document.querySelectorAll('[x-data^=\"expandable\"]')[1];
-            return Alpine.\$data(card).open;
-        ");
-        \PHPUnit\Framework\Assert::assertFalse((bool) $secondOpen, 'second card should be closed by default');
-
-        // Click the second card's header — body becomes visible
-        $I->executeJS("
-            const card = document.querySelectorAll('[x-data^=\"expandable\"]')[1];
-            card.querySelector('button').click();
-        ");
-        $I->wait(1);
-
-        $secondOpenAfterClick = $I->executeJS("
-            const card = document.querySelectorAll('[x-data^=\"expandable\"]')[1];
-            return Alpine.\$data(card).open;
-        ");
-        \PHPUnit\Framework\Assert::assertTrue((bool) $secondOpenAfterClick, 'second card should be open after clicking its header');
-    }
-
-    /**
-     * SCENARIO: Mijn opleidingen tab — first active card auto-expands.
-     *
-     *   GIVEN: seed_student1 has at least 1 active classroom edition
+     *   GIVEN: seed_student1 has completed enrollments (Afgerond cards)
      *   WHEN:  visiting /mijn-account/?tab=inschrijvingen
-     *   THEN:  the first card in Klassikale opleidingen is expanded.
+     *   THEN:  every expandable card is closed by default, and clicking a
+     *          card's header opens it.
      */
-    public function courseCardOnInschrijvingenTabAutoExpandsFirst(AcceptanceTester $I): void
+    public function courseCardsStartCollapsedAndExpandOnClick(AcceptanceTester $I): void
     {
-        $I->wantTo('verify the first card on inschrijvingen tab auto-expands');
+        $I->wantTo('verify course cards render collapsed and expand on click');
 
         $userId = (int) $I->grabFromDatabase($I->grabPrefixedTableNameFor('users'), 'ID', ['user_login' => 'seed_student1']);
         $I->loginAsUserId($userId, '/mijn-account/?tab=inschrijvingen');
 
         $I->waitForElement('section', 5);
+        $I->wait(1); // Alpine boot
 
-        $firstOpen = $I->executeJS("
-            const cards = document.querySelectorAll('[x-data^=\"expandable\"]');
-            if (cards.length === 0) return null;
-            return Alpine.\$data(cards[0]).open;
+        $cardCount = (int) $I->executeJS("return document.querySelectorAll('[x-data^=\"expandable\"]').length;");
+        \PHPUnit\Framework\Assert::assertGreaterThanOrEqual(1, $cardCount, 'expected at least 1 expandable course card');
+
+        $anyOpen = (bool) $I->executeJS("
+            return Array.from(document.querySelectorAll('[x-data^=\"expandable\"]'))
+                .some((card) => Alpine.\$data(card).open);
         ");
-        \PHPUnit\Framework\Assert::assertTrue($firstOpen, 'first card on inschrijvingen tab should be open by default');
+        \PHPUnit\Framework\Assert::assertFalse($anyOpen, 'all cards must render collapsed (Helder Tij default)');
+
+        $I->executeJS("
+            const card = document.querySelectorAll('[x-data^=\"expandable\"]')[0];
+            card.querySelector('button').click();
+        ");
+        $I->wait(1);
+
+        $firstOpenAfterClick = (bool) $I->executeJS("
+            const card = document.querySelectorAll('[x-data^=\"expandable\"]')[0];
+            return Alpine.\$data(card).open;
+        ");
+        \PHPUnit\Framework\Assert::assertTrue($firstOpenAfterClick, 'card must open after clicking its header');
+    }
+
+    /**
+     * SCENARIO: the dashboard home renders the active-enrollment panels
+     * (flat, non-expandable in Helder Tij) without errors.
+     */
+    public function homeRendersEnrollmentPanels(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify the dashboard home renders active enrollment panels');
+
+        $userId = (int) $I->grabFromDatabase($I->grabPrefixedTableNameFor('users'), 'ID', ['user_login' => 'seed_student1']);
+        $I->loginAsUserId($userId, '/mijn-account/');
+
+        $I->waitForElement('main', 5);
+        $I->see('Binnenkort');
+        $I->dontSee('Fatal error');
     }
 }
