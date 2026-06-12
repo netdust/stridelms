@@ -11,6 +11,7 @@ use Stride\Modules\Edition\SessionRepository;
 use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Enrollment\EnrollmentCompletion;
+use Stride\Modules\Invoicing\QuoteRepository;
 
 final class StrideSeedBuilders
 {
@@ -576,10 +577,69 @@ final class StrideSeedBuilders
         return (int) $sessionId;
     }
 
+    /**
+     * Deterministic-status quote for one registration. Creating pre-`cancelled`
+     * is safe: QuoteRepository::create only fires stride/quote/data_changed
+     * (cache invalidation), no transition cascade (plan ground-truth fact 6).
+     * Idempotent by natural key: one quote per registration_id.
+     *
+     * @param string $status 'draft'|'sent'|'exported'|'cancelled' — QuoteStatus values
+     */
     public function buildQuote(int $editionId, int $userId, int $registrationId, string $status): ?int
     {
-        // Task 6 implement
-        return null;
+        $repo = ntdst_get(QuoteRepository::class);
+
+        $existing = $repo->findByRegistration($registrationId);
+        if ($existing) {
+            $quoteId = (int) ($existing['ID'] ?? $existing['id'] ?? 0);
+            echo "        - Quote for registration {$registrationId} exists (ID: {$quoteId})\n";
+            return $quoteId ?: null;
+        }
+
+        $user = get_user_by('ID', $userId);
+        if (!$user) {
+            return null;
+        }
+
+        $priceCents = (int) round(((float) (ntdst_get(EditionRepository::class)->getField($editionId, 'price') ?: 299.00)) * 100);
+        $taxCents = (int) round($priceCents * 0.21);
+        $quoteNumber = $repo->generateQuoteNumber();   // real numbering, not rand()
+
+        $result = $repo->create([
+            'title' => get_the_title($editionId),
+            'user_id' => $userId,
+            'registration_id' => $registrationId,
+            'edition_id' => $editionId,
+            'quote_number' => $quoteNumber,
+            'status' => $status,
+            'items' => [[
+                'type' => 'edition', 'id' => $editionId, 'title' => get_the_title($editionId),
+                'unit_price' => $priceCents, 'quantity' => 1, 'total' => $priceCents,
+            ]],
+            'subtotal' => $priceCents, 'discount' => 0, 'tax' => $taxCents, 'total' => $priceCents + $taxCents,
+            'billing' => ['name' => $user->display_name, 'email' => $user->user_email],
+            'valid_until' => date('Y-m-d', strtotime('+30 days')),
+        ]);
+        if (is_wp_error($result)) {
+            echo "        ! Quote failed: {$result->get_error_message()}\n";
+            return null;
+        }
+        $quoteId = (int) $result->ID;
+        update_post_meta($quoteId, StrideSeedRunner::SEED_META_KEY, true);
+
+        $extra = [];
+        if (in_array($status, ['sent', 'exported'], true)) {
+            $extra['sent_at'] = current_time('mysql');
+        }
+        if ($status === 'exported') {
+            $extra['locked'] = true;
+        }
+        if ($extra) {
+            $repo->update($quoteId, $extra);
+        }
+
+        echo "        + Quote: {$quoteNumber} [{$status}] (ID: {$quoteId})\n";
+        return $quoteId;
     }
 
     /** @return string[] group ids written */
