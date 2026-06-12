@@ -27,8 +27,24 @@ $config = require __DIR__ . '/plugin-config.php';
 // Register stride-core's own template path so mu-plugin code can render
 // shared presentation partials (templates/forms/fields, templates/admin,
 // templates/pdf) without depending on the active theme.
+//
+// Load-order trap: bedrock-autoloader.php loads this file BEFORE
+// ntdst-coreloader.php ('b' < 'n'), so NTDST_Template_Loader does not
+// exist yet at this point — an eager class_exists guard here silently
+// skipped the registration and broke every stride-core template render
+// that wasn't lucky enough to have its path primed by another caller.
+// Register now when possible, otherwise as soon as all mu-plugins loaded.
+$strideRegisterTemplates = static function (): void {
+    if (class_exists('NTDST_Template_Loader')
+        && !in_array(__DIR__ . '/templates', NTDST_Template_Loader::getCustomPaths(), true)
+    ) {
+        NTDST_Template_Loader::addPath(__DIR__ . '/templates');
+    }
+};
 if (class_exists('NTDST_Template_Loader')) {
-    NTDST_Template_Loader::addPath(__DIR__ . '/templates');
+    $strideRegisterTemplates();
+} else {
+    add_action('muplugins_loaded', $strideRegisterTemplates, 0);
 }
 
 // CPTs registered via their services (EditionService, SessionService, etc.)
