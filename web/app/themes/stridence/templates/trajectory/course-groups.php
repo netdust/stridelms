@@ -19,7 +19,7 @@ $electiveGroups  = $args['elective_groups'] ?? [];
 <?php if (!empty($requiredCourses)) : ?>
 <div class="mb-6">
     <div class="flex items-center gap-2 mb-3">
-        <?php echo stridence_icon('check-circle', 'w-4.5 h-4.5 text-primary'); ?>
+        <?php echo stridence_icon('check-circle', 'w-5 h-5 text-primary'); ?>
         <span class="text-[13px] font-semibold text-text-muted uppercase tracking-wider">
             <?php esc_html_e('Verplichte cursussen', 'stridence'); ?>
         </span>
@@ -56,7 +56,7 @@ $electiveGroups  = $args['elective_groups'] ?? [];
         ?>
     <div class="mb-6 last:mb-0">
         <div class="flex items-center gap-2 mb-3">
-            <?php echo stridence_icon('list', 'w-4.5 h-4.5 text-accent'); ?>
+            <?php echo stridence_icon('list', 'w-5 h-5 text-accent'); ?>
             <span class="text-[13px] font-semibold text-text-muted uppercase tracking-wider">
                 <?php echo esc_html($groupName); ?>
             </span>

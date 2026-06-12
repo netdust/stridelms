@@ -170,7 +170,11 @@ get_header();
                 if ($price > 0) {
                     echo esc_html(stride_format_money((int) ($price * 100)));
                 } else {
-                    esc_html_e('Op aanvraag', 'stridence');
+                    // A genuinely free trajectory reads "Gratis" — matches the
+                    // catalog card + online-course sidebar convention
+                    // (card-edition.php, sidebar-online.php). "Op aanvraag" is
+                    // for unpriced offerings, not zero-priced ones.
+                    esc_html_e('Gratis', 'stridence');
                 }
 ?>
                             </span>
