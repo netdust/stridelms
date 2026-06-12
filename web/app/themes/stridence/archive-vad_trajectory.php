@@ -50,7 +50,7 @@ get_header();
                 stridence_template_part(
                     'partials/card-trajectory',
                     null,
-                    stridence_build_trajectory_card_args($trajectory_id) + ['mode' => 'catalog'],
+                    stridence_build_trajectory_card_args($trajectory_id),
                 );
             endforeach; ?>
         </div>

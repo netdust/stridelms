@@ -37,6 +37,7 @@ final class TrajectoryRepository extends AbstractRepository
         return $this->model()
             ->whereIn('status', [OfferingStatus::Announcement->value, OfferingStatus::Open->value, OfferingStatus::InProgress->value])
             ->orderBy('post_title', 'ASC')
+            ->limit(-1) // catalog shows ALL active trajectories — not the default page cap
             ->withMeta()
             ->get();
     }

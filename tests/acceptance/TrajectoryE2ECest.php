@@ -595,6 +595,35 @@ class TrajectoryE2ECest
     }
 
     /**
+     * Card status-label regression (CR-C1): the card must render the
+     * OfferingStatus through the badge partial (Dutch labels), not an
+     * intermediate re-map that produced English "Completed" / wrong "In
+     * behandeling". An in_progress trajectory reads "Lopend".
+     *
+     * @test
+     */
+    public function catalogCardRendersLocalizedStatusLabel(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify the trajectory card renders the localized OfferingStatus label');
+
+        $I->updateInDatabase($I->grabPrefixedTableNameFor('postmeta'),
+            ['meta_value' => 'in_progress'],
+            ['post_id' => $this->trajectoryId, 'meta_key' => '_ntdst_status']);
+
+        $I->amOnPage('/trajecten/');
+        $I->waitForElement('main', 10);
+
+        $cardText = (string) $I->executeJS(
+            "const h = Array.from(document.querySelectorAll('h3')).find(el => el.textContent.includes('E2E Traject {$this->stamp}'));" .
+            "return h ? h.closest('a, div').innerText : '';"
+        );
+
+        \PHPUnit\Framework\Assert::assertStringContainsString('Lopend', $cardText, 'in_progress must render the Dutch "Lopend" label');
+        \PHPUnit\Framework\Assert::assertStringNotContainsString('Completed', $cardText, 'no English status label');
+        \PHPUnit\Framework\Assert::assertStringNotContainsString('In behandeling', $cardText, 'no registration-status label on a trajectory');
+    }
+
+    /**
      * Card-F2: the dashboard "Mijn trajecten" card shows the SAME card WITH a
      * "X% voltooid" badge and "Open traject" CTA, and NO per-course checklist.
      *

@@ -1,15 +1,11 @@
 <?php
 /**
- * Dashboard Tab: Trajecten (Learning Paths) — Helder Tij redesign
+ * Dashboard Tab: Trajecten (Learning Paths).
  *
- * Card per trajectory: white rounded-[16px] shadow-card p-6.
- * Header row: 72px progress ring + Traject badge + 16px/700 title +
- * "X van Y onderdelen · keuze status" 13px muted + "Open traject" primary sm.
- * Parts checklist: bg-surface rounded-[12px] wells:
- *   done     → ✓ icon green / text-badge-open-text
- *   active   → bg-badge-online-bg tinted well
- *   elective → outlined bg-surface + "Maak je keuze" mini-CTA
- * Empty state via partials/empty-state.
+ * Renders the shared `partials/card-trajectory` (dashboard mode) per active
+ * enrollment — progress badge + "Open traject" — and a collapsible list of
+ * completed trajectories. The per-course detail lives on the trajectory
+ * dashboard page, not this card. Empty state via partials/empty-state.
  *
  * @param array $args {
  *     @type WP_User $user Current user object
@@ -22,22 +18,18 @@ declare(strict_types=1);
 defined('ABSPATH') || exit;
 
 use Stride\Domain\RegistrationStatus;
-use Stride\Domain\TrajectoryMode;
 use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Trajectory\TrajectoryRepository;
 use Stride\Modules\Trajectory\TrajectoryService;
-use Stride\Modules\Edition\EditionService;
 
 $user    = $args['user'] ?? wp_get_current_user();
 $user_id = $user->ID;
 
 // Get services
-$registrationRepo   = ntdst_get(RegistrationRepository::class);
-$trajectorySelection = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::class);
-$trajectoryService  = ntdst_get(TrajectoryService::class);
-$trajectoryRepo     = ntdst_get(TrajectoryRepository::class);
-$editionService     = ntdst_get(EditionService::class);
+$registrationRepo  = ntdst_get(RegistrationRepository::class);
+$trajectoryService = ntdst_get(TrajectoryService::class);
+$trajectoryRepo    = ntdst_get(TrajectoryRepository::class);
 
 // Get user's trajectory enrollments
 $enrollments = $registrationRepo->findTrajectoryEnrollmentsByUser($user_id);
@@ -54,88 +46,44 @@ foreach ($enrollments as $enrollment) {
         continue;
     }
 
-    // Get trajectory courses
+    // Progress = completed courses / total parts. The shared card consumes
+    // only the count + total (for the "X% voltooid" badge and the
+    // active/completed split); the per-course detail lives on the trajectory
+    // dashboard page, not this card.
     $required_courses = $trajectoryRepo->getRequiredCourses($trajectory_id);
     $elective_groups  = $trajectoryRepo->getElectiveGroups($trajectory_id);
 
-    // Calculate total courses count
     $required_elective_count = 0;
     foreach ($elective_groups as $group) {
         $required_elective_count += (int) ($group['required'] ?? 0);
     }
     $total_required = count($required_courses) + $required_elective_count;
 
-    // Get user's edition registrations linked to this trajectory
-    $edition_registrations = $registrationRepo->findEditionsByTrajectory($user_id, $trajectory_id);
-
-    // Picks as COURSE ids through the single decision point — the raw
-    // selections column stores flat EDITION ids, never grouped course ids.
-    $selected_course_ids = $trajectorySelection->getSelectedCourseIds((int) $enrollment->id);
-
-    // Calculate progress based on mode
-    $mode = TrajectoryMode::tryFrom($trajectory['mode']) ?? TrajectoryMode::Cohort;
     $completed_courses = [];
-    $in_progress_courses = [];
-
-    // Check course completion for each required course
     foreach ($required_courses as $course) {
-        $course_id = $course->ID;
-        if (LearnDashHelper::isComplete($course_id, $user_id)) {
-            $completed_courses[] = $course_id;
-        } else {
-            $has_active_registration = false;
-            foreach ($edition_registrations as $edReg) {
-                $ed_course_id = $editionService->getCourseId((int) $edReg->edition_id);
-                if ($ed_course_id === $course_id) {
-                    $has_active_registration = true;
-                    break;
-                }
-            }
-            if ($has_active_registration) {
-                $in_progress_courses[] = $course_id;
-            }
+        if (LearnDashHelper::isComplete((int) $course->ID, $user_id)) {
+            $completed_courses[] = (int) $course->ID;
         }
     }
-
-    // Check elective group completion
     foreach ($elective_groups as $group) {
         foreach ($group['courses'] as $course) {
-            $course_id = $course->ID;
-            if (LearnDashHelper::isComplete($course_id, $user_id)) {
-                $completed_courses[] = $course_id;
-            } else {
-                foreach ($edition_registrations as $edReg) {
-                    $ed_course_id = $editionService->getCourseId((int) $edReg->edition_id);
-                    if ($ed_course_id === $course_id) {
-                        $in_progress_courses[] = $course_id;
-                        break;
-                    }
-                }
+            if (LearnDashHelper::isComplete((int) $course->ID, $user_id)) {
+                $completed_courses[] = (int) $course->ID;
             }
         }
     }
 
     $completed_count = count(array_unique($completed_courses));
-    $in_progress_count = count(array_unique($in_progress_courses));
     $is_trajectory_complete = $completed_count >= $total_required && $total_required > 0;
 
     $trajectory_data = [
-        'enrollment_id'      => (int) $enrollment->id,
-        'trajectory_id'      => $trajectory_id,
-        'trajectory'         => $trajectory,
-        'mode'               => $mode,
-        'registered_at'      => $enrollment->registered_at,
-        'status'             => $enrollment->status,
-        'required_courses'   => $required_courses,
-        'elective_groups'    => $elective_groups,
-        'total_required'     => $total_required,
-        'completed_count'    => $completed_count,
-        'in_progress_count'  => $in_progress_count,
-        'in_progress_courses' => array_unique($in_progress_courses),
-        'completed_courses'  => array_unique($completed_courses),
-        'is_complete'        => $is_trajectory_complete,
-        'edition_registrations' => $edition_registrations,
-        'selected_course_ids' => $selected_course_ids,
+        'trajectory_id'  => $trajectory_id,
+        'trajectory'     => $trajectory,
+        'registered_at'  => $enrollment->registered_at,
+        'status'         => $enrollment->status,
+        'total_required' => $total_required,
+        'completed_count' => $completed_count,
+        'is_complete'    => $is_trajectory_complete,
     ];
 
     $status = RegistrationStatus::tryFrom($enrollment->status) ?? RegistrationStatus::Confirmed;
@@ -187,7 +135,7 @@ foreach ($enrollments as $enrollment) {
                             'progress'      => $progressPct,
                             'started_at'    => (string) ($traj['registered_at'] ?? ''),
                             'dashboard_url' => $dashboard_url,
-                        ]) + ['mode' => 'dashboard'],
+                        ]),
                     );
                 endforeach; ?>
             </div>
