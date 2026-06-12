@@ -98,7 +98,7 @@ final class TrajectoryCPT
                 'description' => 'Korte pakkende zin over het traject',
             ],
             'target_audience' => [
-                'type' => 'text',
+                'type' => 'textarea',
                 'label' => 'Doelgroep',
                 'description' => 'Voor wie is dit traject bedoeld?',
             ],

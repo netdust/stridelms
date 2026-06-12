@@ -21,8 +21,6 @@ $trajectory       = $args['trajectory'] ?? [];
 
 $has_courses = !empty($required_courses) || !empty($elective_groups);
 
-?>
-<?php
 // Descriptive fields (shared with editions) — surfaced by getTrajectory().
 $target_audience     = trim((string) ($trajectory['target_audience'] ?? ''));
 $required_experience = trim((string) ($trajectory['required_experience'] ?? ''));
