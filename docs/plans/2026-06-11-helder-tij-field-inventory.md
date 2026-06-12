@@ -17,6 +17,18 @@ verified against `feature/helder-tij-redesign` HEAD on 2026-06-11.
 
 ## Edition detail (`single-vad_edition.php`)
 
+> **WIRED 2026-06-12** (branch `feature/edition-content-fields`) — Stefan's calls:
+> "Wat je leert" is authored in the course's **Gutenberg content** (block deleted
+> from the template, no field). "Voor wie?" = edition field `target_audience`.
+> New edition fields (defaults prefilled in the admin Informatie tab, theme
+> renders saved values only and hides empty blocks): `target_audience`,
+> `required_experience`, `included`, `price_includes`, `cancellation_policy`,
+> `cta_benefits` (one per line), `enrollment_info`. `speakers` changed text →
+> json repeater `[{name, role}]` with legacy-string fallback via
+> `EditionRepository::getSpeakers()` / `getSpeakersLabel()`. Speaker bio and
+> `cta_quote_url` remain open (quote-request page still doesn't exist).
+> Historical table below kept for the mockup-source references.
+
 | Field | Surface (template:line) | Mockup source | Suggested source | Placeholder used |
 |---|---|---|---|---|
 | Learning outcomes ("Wat je leert" checklist, 3 items) | `single-vad_edition.php:355` (`$learning_items`, rendered :366) | `Detail - Editie.dc.html` :76-84 | New course/edition meta `learning_outcomes` (repeater) on the course CPT | "Spanning en escalatie vroegtijdig herkennen" / "De-escalerend communiceren in moeilijke gesprekken" / "Grenzen stellen met behoud van de zorgrelatie" |
