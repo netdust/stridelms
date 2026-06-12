@@ -59,16 +59,10 @@ foreach ($progress['edition_registrations'] as $edReg) {
     }
 }
 
-// Selections — findByUserAndTrajectory() already decodes to an array;
-// tolerate a raw JSON string for rows that skipped that path (as the shell does).
-$rawSelections = $enrollment->selections ?? null;
-if (is_array($rawSelections)) {
-    $selections = $rawSelections;
-} elseif (is_string($rawSelections) && $rawSelections !== '') {
-    $selections = (array) json_decode($rawSelections, true);
-} else {
-    $selections = [];
-}
+// Picks as COURSE ids through the single decision point — the raw
+// selections column stores flat EDITION ids, never grouped course ids.
+$selectedCourseIds = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::class)
+    ->getSelectedCourseIds((int) ($enrollment->id ?? 0));
 
 // Build timeline rows: required courses in order, then one keuze row per group.
 $timeline = [];
@@ -99,7 +93,8 @@ foreach ($progress['elective_groups'] as $groupIndex => $group) {
     // Same confirmation rule as the shell's Keuzes tab badge:
     // a group is open while required > 0 and fewer choices are made.
     $required = (int) ($group['required'] ?? 0);
-    $chosenIds = array_map('intval', (array) ($selections[$groupIndex] ?? []));
+    $groupCourseIds = array_map(static fn($c): int => (int) $c->ID, $courses);
+    $chosenIds = array_values(array_intersect($groupCourseIds, $selectedCourseIds));
     $confirmed = count($chosenIds) >= $required;
 
     $chosenTitles = [];

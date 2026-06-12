@@ -67,11 +67,10 @@ foreach ($enrollments as $enrollment) {
     // Get user's edition registrations linked to this trajectory
     $edition_registrations = $registrationRepo->findEditionsByTrajectory($user_id, $trajectory_id);
 
-    // Get selections from enrollment
-    $selections = $enrollment->selections ?? [];
-    if (is_string($selections)) {
-        $selections = json_decode($selections, true) ?? [];
-    }
+    // Picks as COURSE ids through the single decision point — the raw
+    // selections column stores flat EDITION ids, never grouped course ids.
+    $selected_course_ids = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::class)
+        ->getSelectedCourseIds((int) $enrollment->id);
 
     // Calculate progress based on mode
     $mode = TrajectoryMode::tryFrom($trajectory['mode']) ?? TrajectoryMode::Cohort;
@@ -136,7 +135,7 @@ foreach ($enrollments as $enrollment) {
         'completed_courses'  => array_unique($completed_courses),
         'is_complete'        => $is_trajectory_complete,
         'edition_registrations' => $edition_registrations,
-        'selections'         => $selections,
+        'selected_course_ids' => $selected_course_ids,
     ];
 
     $status = RegistrationStatus::tryFrom($enrollment->status) ?? RegistrationStatus::Confirmed;
@@ -183,10 +182,14 @@ foreach ($enrollments as $enrollment) {
                     // the header line only says "keuze gemaakt" when EVERY
                     // group has a selection.
                     $has_electives = !empty($traj['elective_groups']);
-                    $selections    = is_array($traj['selections']) ? $traj['selections'] : [];
+                    $selectedCourseIds = is_array($traj['selected_course_ids'] ?? null) ? $traj['selected_course_ids'] : [];
+                    $groupChosenCount = static function (array $group) use ($selectedCourseIds): int {
+                        $ids = array_map(static fn($c): int => (int) $c->ID, $group['courses'] ?? []);
+                        return count(array_intersect($ids, $selectedCourseIds));
+                    };
                     $all_groups_chosen = $has_electives;
-                    foreach (array_keys($traj['elective_groups']) as $groupIndex) {
-                        if (empty($selections[$groupIndex])) {
+                    foreach ($traj['elective_groups'] as $group) {
+                        if ($groupChosenCount($group) < max(1, (int) ($group['required'] ?? 1))) {
                             $all_groups_chosen = false;
                             break;
                         }
@@ -271,7 +274,7 @@ foreach ($enrollments as $enrollment) {
                         foreach ($traj['elective_groups'] as $groupIndex => $group) {
                             $groupName     = $group['name'] ?? __('Keuzemodule', 'stridence');
                             $requiredCount = (int) ($group['required'] ?? 1);
-                            $groupChosen   = !empty($selections[$groupIndex]);
+                            $groupChosen   = $groupChosenCount($group) >= max(1, (int) ($group['required'] ?? 1));
 
                             $allParts[] = [
                                 'type'          => 'elective',

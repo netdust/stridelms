@@ -58,17 +58,11 @@ if (!empty($choiceAvailable) && !empty($choiceDeadline)) {
     }
 }
 
-// Get current selections.
-// findByUserAndTrajectory() already decodes selections to an array;
-// tolerate a raw JSON string for rows that skipped that path.
-$rawSelections = $enrollment->selections ?? null;
-if (is_array($rawSelections)) {
-    $selections = $rawSelections;
-} elseif (is_string($rawSelections) && $rawSelections !== '') {
-    $selections = (array) json_decode($rawSelections, true);
-} else {
-    $selections = [];
-}
+// Current picks as COURSE ids — through the single decision point
+// (TrajectorySelection::getSelectedCourseIds). The raw selections column
+// stores flat EDITION ids; templates never re-derive from it.
+$selectedCourseIds = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::class)
+    ->getSelectedCourseIds((int) ($enrollment->id ?? 0));
 ?>
 
 <div class="space-y-6">
@@ -139,7 +133,18 @@ if (is_array($rawSelections)) {
         ?>
         </p>
 
-        <form id="elective-selection-form" class="space-y-7">
+        <div x-data="strideTrajectoryChoices({ registrationId: <?php echo (int) ($enrollment->id ?? 0); ?> })">
+            <!-- Success state -->
+            <template x-if="saved">
+                <div class="bg-surface-card rounded-[14px] shadow-card p-6 flex items-center gap-3">
+                    <?php echo stridence_icon('check', 'w-5 h-5 text-success'); ?>
+                    <p class="text-[14px] font-bold text-text m-0">
+                        <?php esc_html_e('Je keuze is opgeslagen.', 'stridence'); ?>
+                    </p>
+                </div>
+            </template>
+
+        <form id="elective-selection-form" class="space-y-7" x-show="!saved" @submit.prevent="submit($el)">
             <?php foreach ($electiveGroups as $groupIndex => $group) :
                 $groupName = $group['name'] ?? __('Keuzegroep', 'stridence');
                 $required = (int) ($group['required'] ?? 1);
@@ -157,7 +162,7 @@ if (is_array($rawSelections)) {
 
                     <div class="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
                         <?php foreach ($courses as $course) :
-                            $isSelected = in_array($course->ID, $selections[$groupIndex] ?? [], true);
+                            $isSelected = in_array((int) $course->ID, $selectedCourseIds, true);
                             ?>
                             <label class="bg-surface-card rounded-[14px] border border-border-soft hover:border-border p-5 flex flex-col gap-2.5 cursor-pointer transition-all duration-fast has-[:checked]:border-primary has-[:checked]:shadow-[0_0_0_2px_rgb(var(--color-primary)/0.25)]">
                                 <span class="flex items-start justify-between gap-2.5">
@@ -181,9 +186,12 @@ if (is_array($rawSelections)) {
                 </div>
             <?php endforeach; ?>
 
+            <p x-show="error" x-text="error" x-cloak class="text-error text-sm"></p>
+
             <div class="flex flex-wrap items-center gap-3">
-                <button type="submit" class="btn-primary">
-                    <?php esc_html_e('Bevestig je keuze', 'stridence'); ?>
+                <button type="submit" class="btn-primary" :disabled="loading">
+                    <span x-show="!loading"><?php esc_html_e('Bevestig je keuze', 'stridence'); ?></span>
+                    <span x-show="loading" x-cloak><?php esc_html_e('Bezig...', 'stridence'); ?></span>
                 </button>
                 <span class="text-[13px] text-text-faint">
                     <?php
@@ -195,6 +203,36 @@ if (is_array($rawSelections)) {
                 </span>
             </div>
         </form>
+        </div>
+
+        <script>
+        function strideTrajectoryChoices(config) {
+            return {
+                loading: false,
+                saved: false,
+                error: '',
+                async submit(form) {
+                    this.loading = true;
+                    this.error = '';
+                    const selections = Array.from(
+                        form.querySelectorAll('input[type="radio"]:checked, input[type="checkbox"]:checked'),
+                    ).map((input) => parseInt(input.value, 10));
+                    try {
+                        await ntdstAPI.call('stride_save_trajectory_choices', {
+                            registration_id: config.registrationId,
+                            selections: selections,
+                        });
+                        this.saved = true;
+                        window.setTimeout(() => window.location.reload(), 800);
+                    } catch (e) {
+                        this.error = e.message || '<?php echo esc_js(__('Er is een fout opgetreden.', 'stridence')); ?>';
+                    } finally {
+                        this.loading = false;
+                    }
+                }
+            };
+        }
+        </script>
 
     <?php else : ?>
         <!-- Choice window closed -->
@@ -206,14 +244,17 @@ if (is_array($rawSelections)) {
                 </h3>
             </div>
 
-            <?php if (!empty($selections)) : ?>
+            <?php if (!empty($selectedCourseIds)) : ?>
                 <p class="text-[13px] text-text-muted mb-4">
                     <?php esc_html_e('Jouw geselecteerde cursussen:', 'stridence'); ?>
                 </p>
 
-                <?php foreach ($electiveGroups as $groupIndex => $group) :
-                    $groupSelections = $selections[$groupIndex] ?? [];
-                    if (empty($groupSelections)) {
+                <?php foreach ($electiveGroups as $group) :
+                    $groupChosen = array_filter(
+                        $group['courses'] ?? [],
+                        fn($course): bool => in_array((int) $course->ID, $selectedCourseIds, true),
+                    );
+                    if (empty($groupChosen)) {
                         continue;
                     }
                     ?>
@@ -222,11 +263,7 @@ if (is_array($rawSelections)) {
                             <?php echo esc_html($group['name'] ?? __('Keuzegroep', 'stridence')); ?>
                         </p>
                         <ul class="space-y-2">
-                            <?php foreach ($group['courses'] ?? [] as $course) :
-                                if (!in_array($course->ID, $groupSelections, true)) {
-                                    continue;
-                                }
-                                ?>
+                            <?php foreach ($groupChosen as $course) : ?>
                                 <li class="flex items-center gap-2 text-[14px] text-text">
                                     <?php echo stridence_icon('check', 'w-4 h-4 text-success'); ?>
                                     <?php echo esc_html($course->post_title); ?>

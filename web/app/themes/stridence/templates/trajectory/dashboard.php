@@ -82,20 +82,15 @@ $open_choices = 0;
 if (!empty($choice_available) && !empty($choice_deadline)) {
     $now = time();
     if ($now >= strtotime($choice_available) && $now <= strtotime($choice_deadline)) {
-        // findByUserAndTrajectory() already decodes selections to an array;
-        // tolerate a raw JSON string for rows that skipped that path.
-        $raw_selections = $enrollment->selections ?? null;
-        if (is_array($raw_selections)) {
-            $selections = $raw_selections;
-        } elseif (is_string($raw_selections) && $raw_selections !== '') {
-            $selections = (array) json_decode($raw_selections, true);
-        } else {
-            $selections = [];
-        }
+        // Picks as COURSE ids through the single decision point — the raw
+        // selections column stores flat EDITION ids, never grouped course ids.
+        $selected_course_ids = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::class)
+            ->getSelectedCourseIds((int) ($enrollment->id ?? 0));
 
-        foreach ($progress['elective_groups'] as $group_index => $group) {
+        foreach ($progress['elective_groups'] as $group) {
             $required = (int) ($group['required'] ?? 0);
-            $chosen = count((array) ($selections[$group_index] ?? []));
+            $group_course_ids = array_map(static fn($c): int => (int) $c->ID, $group['courses'] ?? []);
+            $chosen = count(array_intersect($group_course_ids, $selected_course_ids));
 
             if ($required > 0 && $chosen < $required) {
                 $open_choices++;
