@@ -318,9 +318,17 @@ final class StrideSeedBuilders
         }
         echo "\n";
 
-        // Sessions (Task 4)
+        // Sessions: lesson linking is DECLARATIVE — only sessions with
+        // 'link_lesson' => true consume the next lesson (replaces the old
+        // implicit "every online session eats the next lesson" counter).
+        $lessonIndex = 0;
         foreach (($data['sessions'] ?? []) as $sessionData) {
-            $sessionId = $this->buildSession($editionId, $data, $sessionData, $lessonIds);
+            $sessionLessonIds = [];
+            if (!empty($sessionData['link_lesson']) && isset($lessonIds[$lessonIndex])) {
+                $sessionLessonIds = [$lessonIds[$lessonIndex]];
+                $lessonIndex++;
+            }
+            $sessionId = $this->buildSession($editionId, $data, $sessionData, $sessionLessonIds);
             if ($sessionId) { $out['created']['sessions'][] = $sessionId; }
         }
         // Registrations/quotes wired in Task 5/6.
@@ -328,10 +336,67 @@ final class StrideSeedBuilders
         return $out;
     }
 
-    /** @return int|null session id — Task 4 implement */
+    /**
+     * Port of createSession. All four SessionType values are accepted:
+     * in_person | online | webinar | assignment.
+     *
+     * @return int|null session id
+     */
     public function buildSession(int $editionId, array $editionData, array $sessionData, array $lessonIds): ?int
     {
-        return null;
+        $sessionService = ntdst_get(SessionService::class);
+        if (!$sessionService) {
+            return null;
+        }
+
+        $sessionDate = date('Y-m-d', strtotime($editionData['start_date'] . " +{$sessionData['date_offset']} days"));
+
+        $createData = [
+            'edition_id' => $editionId,
+            'date' => $sessionDate,
+            'start_time' => $sessionData['start'],
+            'end_time' => $sessionData['end'],
+            'type' => $sessionData['type'],
+            'location' => $sessionData['location'] ?? $editionData['venue'],
+            'optional' => $sessionData['optional'] ?? false,
+        ];
+
+        if (!empty($sessionData['title'])) {
+            $createData['title'] = $sessionData['title'];
+        }
+        if (!empty($sessionData['slot'])) {
+            $createData['slot'] = $sessionData['slot'];
+        }
+
+        $session = $sessionService->createSession($createData);
+
+        if (is_wp_error($session)) {
+            echo "      ! Session failed: {$session->get_error_message()}\n";
+            return null;
+        }
+        // createSession returns WP_Post|WP_Error (ground-truth fact 10)
+        $sessionId = $session instanceof WP_Post ? $session->ID : (int) $session;
+
+        update_post_meta($sessionId, StrideSeedRunner::SEED_META_KEY, true);
+
+        // Link session to LearnDash lessons (explicit link_lesson key)
+        if (!empty($lessonIds)) {
+            update_post_meta($sessionId, '_ntdst_lesson_ids', $lessonIds);
+            $lessonTitles = array_map(fn($id) => get_the_title($id), $lessonIds);
+            echo "        🔗 Linked lessons: " . implode(', ', $lessonTitles) . "\n";
+        }
+
+        $typeEmoji = match ($sessionData['type']) {
+            'online'     => '💻',
+            'webinar'    => '📹',
+            'assignment' => '📝',
+            default      => '🏢',
+        };
+        $title = $sessionData['title'] ?? $sessionData['type'];
+        $slotInfo = !empty($sessionData['slot']) ? " [slot: {$sessionData['slot']}]" : '';
+        echo "      {$typeEmoji} {$sessionDate} {$sessionData['start']}-{$sessionData['end']}: {$title}{$slotInfo}\n";
+
+        return (int) $sessionId;
     }
 
     /** @return string[] group ids written */
