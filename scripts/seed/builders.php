@@ -5,8 +5,9 @@
  * imperative scripts/seed.php (see plan 2026-06-12-seed-feature-matrix.md).
  */
 
-use Stride\Modules\Edition\EditionService;
+use Stride\Modules\Edition\EditionService; // Task 5: buildRegistration needs getCourseId()
 use Stride\Modules\Edition\EditionRepository;
+use Stride\Modules\Edition\SessionRepository;
 use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 
@@ -120,56 +121,57 @@ final class StrideSeedBuilders
             'post_status' => 'any', 'posts_per_page' => 1, 'fields' => 'ids', 'no_found_rows' => true,
         ]);
         if (!empty($existingQuery->posts)) {
-            $existingId = (int) $existingQuery->posts[0];
-            echo "  - Course '{$courseData['title']}' exists\n";
-            $out['created']['courses'][] = $existingId;
-            $out['covers']["course:{$existingId}"] = $courseData['covers'] ?? [];
-            return $out;
-        }
+            // Existing course: do NOT return early — still walk lessons/editions
+            // below (each idempotent by natural key) so the runner's manifest +
+            // covers options are reconstructed in full on every re-run.
+            $courseId = (int) $existingQuery->posts[0];
+            echo "  - Course '{$courseData['title']}' exists (ID: {$courseId})\n";
+        } else {
+            $courseId = wp_insert_post([
+                'post_title' => $courseData['title'],
+                'post_type' => 'sfwd-courses',
+                'post_status' => 'publish',
+                'post_content' => $courseData['description'],
+            ]);
 
-        $courseId = wp_insert_post([
-            'post_title' => $courseData['title'],
-            'post_type' => 'sfwd-courses',
-            'post_status' => 'publish',
-            'post_content' => $courseData['description'],
-        ]);
+            if (is_wp_error($courseId)) {
+                echo "  ! Failed: {$courseId->get_error_message()}\n";
+                return $out;
+            }
 
-        if (is_wp_error($courseId)) {
-            echo "  ! Failed: {$courseId->get_error_message()}\n";
-            return $out;
-        }
+            update_post_meta($courseId, StrideSeedRunner::SEED_META_KEY, true);
+            update_post_meta($courseId, '_course_type', $courseData['type']);
 
-        update_post_meta($courseId, StrideSeedRunner::SEED_META_KEY, true);
-        update_post_meta($courseId, '_course_type', $courseData['type']);
+            // --- LearnDash course settings ---
+            $ldSettings = ['course_price_type' => $courseData['ld_price_type'] ?? 'open'];
+            if (!empty($courseData['ld_expire_access'])) {
+                $ldSettings['expire_access'] = $courseData['ld_expire_access'];
+                $ldSettings['expire_access_days'] = $courseData['ld_expire_access_days'] ?? 0;
+                $ldSettings['expire_access_delete_progress'] = '';
+            }
+            update_post_meta($courseId, '_sfwd-courses', $ldSettings);
 
-        // --- LearnDash course settings ---
-        $ldSettings = ['course_price_type' => $courseData['ld_price_type'] ?? 'open'];
-        if (!empty($courseData['ld_expire_access'])) {
-            $ldSettings['expire_access'] = $courseData['ld_expire_access'];
-            $ldSettings['expire_access_days'] = $courseData['ld_expire_access_days'] ?? 0;
-            $ldSettings['expire_access_delete_progress'] = '';
-        }
-        update_post_meta($courseId, '_sfwd-courses', $ldSettings);
+            // --- Taxonomies ---
+            $formats = $courseData['format'] ?? [];
+            if (!empty($formats)) {
+                wp_set_object_terms($courseId, $formats, 'stride_format');
+            }
+            $themes = $courseData['themes'] ?? [];
+            if (!empty($themes)) {
+                wp_set_object_terms($courseId, $themes, 'stride_theme');
+            }
+            $ldCategory = match ($courseData['type']) {
+                'online' => 'online',
+                'webinar' => 'webinar',
+                default => 'in-person',
+            };
+            wp_set_object_terms($courseId, $ldCategory, 'ld_course_category');
 
-        // --- Taxonomies ---
-        $formats = $courseData['format'] ?? [];
-        if (!empty($formats)) {
-            wp_set_object_terms($courseId, $formats, 'stride_format');
+            echo "  + Course: {$courseData['title']} (ID: {$courseId}) [format: " . implode(',', $formats) . "] [themes: " . implode(',', $themes) . "]\n";
         }
-        $themes = $courseData['themes'] ?? [];
-        if (!empty($themes)) {
-            wp_set_object_terms($courseId, $themes, 'stride_theme');
-        }
-        $ldCategory = match ($courseData['type']) {
-            'online' => 'online',
-            'webinar' => 'webinar',
-            default => 'in-person',
-        };
-        wp_set_object_terms($courseId, $ldCategory, 'ld_course_category');
 
         $out['created']['courses'][] = (int) $courseId;
         $out['covers']["course:{$courseId}"] = $courseData['covers'] ?? [];
-        echo "  + Course: {$courseData['title']} (ID: {$courseId}) [format: " . implode(',', $formats) . "] [themes: " . implode(',', $themes) . "]\n";
 
         // Lessons
         $lessonIds = $this->buildLessons($courseId, $courseData['lessons'] ?? []);
@@ -202,6 +204,18 @@ final class StrideSeedBuilders
         }
 
         foreach ($lessonData as $index => $lesson) {
+            // Natural key: lesson title + course_id (titles like 'Introductie' repeat across courses)
+            $existing = new WP_Query([
+                'post_type' => 'sfwd-lessons', 'title' => $lesson['title'], 'post_status' => 'any',
+                'meta_key' => 'course_id', 'meta_value' => $courseId,
+                'posts_per_page' => 1, 'fields' => 'ids', 'no_found_rows' => true,
+            ]);
+            if (!empty($existing->posts)) {
+                $lessonIds[] = (int) $existing->posts[0];
+                echo "      - Lesson '{$lesson['title']}' exists\n";
+                continue;
+            }
+
             $lessonId = wp_insert_post([
                 'post_title' => $lesson['title'],
                 'post_type' => 'sfwd-lessons',
@@ -240,13 +254,30 @@ final class StrideSeedBuilders
         $repo = ntdst_get(EditionRepository::class);
         $postTitle = $courseTitle . ' - ' . date('j M Y', strtotime($data['start_date']));
 
+        // Natural key: derived post title. On re-run, reconstruct the full
+        // created/covers picture (edition id + its existing seed sessions)
+        // instead of recreating — sessions ride the edition gate.
+        $existing = new WP_Query([
+            'post_type' => 'vad_edition', 'title' => $postTitle, 'post_status' => 'any',
+            'posts_per_page' => 1, 'fields' => 'ids', 'no_found_rows' => true,
+        ]);
+        if (!empty($existing->posts)) {
+            $editionId = (int) $existing->posts[0];
+            $sessionIds = ntdst_get(SessionRepository::class)->findIdsByEdition($editionId);
+            echo "    - Edition '{$postTitle}' exists (ID: {$editionId}, " . count($sessionIds) . " sessions)\n";
+            return [
+                'id' => $editionId,
+                'created' => ['editions' => [$editionId], 'sessions' => $sessionIds],
+                'covers' => ["edition:{$editionId}" => $data['covers'] ?? []],
+            ];
+        }
+
         // end_date derivation from max session offset
         $endDate = $data['end_date'] ?? null;
-        if (!$endDate && !empty($data['sessions'])) {
+        if ($endDate === null && !empty($data['sessions'])) {
             $maxOffset = max(array_column($data['sessions'], 'date_offset'));
             $endDate = date('Y-m-d', strtotime($data['start_date'] . " +{$maxOffset} days"));
         }
-        $endDate = $endDate ?? $data['start_date'];
 
         // v1 has no member feature — both price keys must hold the same value;
         // price_non_member is canonical.
@@ -257,7 +288,7 @@ final class StrideSeedBuilders
             'post_status' => 'publish',
             'course_id' => $courseId,
             'start_date' => $data['start_date'],
-            'end_date' => $endDate,
+            'end_date' => $endDate ?? $data['start_date'],
             'price' => $effectivePrice,
             'price_non_member' => $effectivePrice,
             'capacity' => $data['capacity'],
@@ -374,8 +405,8 @@ final class StrideSeedBuilders
             echo "      ! Session failed: {$session->get_error_message()}\n";
             return null;
         }
-        // createSession returns WP_Post|WP_Error (ground-truth fact 10)
-        $sessionId = $session instanceof WP_Post ? $session->ID : (int) $session;
+        // createSession returns WP_Post|WP_Error; WP_Error already handled above
+        $sessionId = $session->ID;
 
         update_post_meta($sessionId, StrideSeedRunner::SEED_META_KEY, true);
 

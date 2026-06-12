@@ -2,8 +2,12 @@
 /**
  * Orchestrates the matrix: taxonomy terms → users → questionnaire groups →
  * courses (lessons → editions → sessions → registrations → quotes) →
- * trajectories → vouchers → manifest. Idempotent: every builder checks
- * existence by natural key (login / title / code / group id) before creating.
+ * trajectories → vouchers → manifest. Idempotent: users/courses/lessons/
+ * editions check existence by natural key (login / title / derived edition
+ * title) and a re-run reconstructs the full manifest + covers; sessions ride
+ * the edition gate (existing edition → its seed sessions are looked up, not
+ * recreated). Builders still pending (Tasks 5-8: registrations, quotes,
+ * questionnaire groups, trajectories, vouchers) must follow the same pattern.
  */
 final class StrideSeedRunner
 {
@@ -54,7 +58,7 @@ final class StrideSeedRunner
     private function merge(array $result): void
     {
         foreach ($result['created'] as $kind => $ids) {
-            $this->created[$kind] = array_merge($this->created[$kind], $ids);
+            $this->created[$kind] = array_merge($this->created[$kind] ?? [], $ids);
         }
         $this->covers = array_merge($this->covers, $result['covers']);
     }
@@ -65,7 +69,7 @@ final class StrideSeedRunner
         foreach ($this->created as $kind => $ids) {
             echo sprintf("  - %s: %d\n", $kind, count($ids));
         }
-        $allTags = array_unique(array_merge(...array_values($this->covers ?: [[]])));
+        $allTags = array_unique(array_merge([], ...array_values($this->covers)));
         echo "  Dimensions covered: " . count($allTags) . "\n";
         echo "\nVerify:  ddev exec wp eval-file scripts/seed-verify.php\n";
         echo "Cleanup: ddev exec bash -c 'FORCE_UNSEED=1 wp eval-file scripts/unseed.php'\n";

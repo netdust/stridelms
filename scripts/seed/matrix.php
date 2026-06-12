@@ -10,6 +10,8 @@
  *   'format' => string[] (stride_format slugs),
  *   'themes' => string[] (stride_theme slugs),
  *   'ld_price_type' => 'open'|'closed' (default 'open'),
+ *   'ld_expire_access' => 'on'|null,      // LearnDash access expiry (Task 8 expiring-access course)
+ *   'ld_expire_access_days' => int,       // days until access expires (with ld_expire_access)
  *   'covers' => string[],            // dimension tags — seed-verify.php asserts these
  *   'lessons' => [['title','content'], ...],
  *   'editions' => [[
@@ -83,7 +85,7 @@ return [
             'title' => 'Motiverende Gespreksvoering rond Voeding bij Jongeren',
             'description' => 'Leer hoe je jongeren op een niet-veroordelende manier motiveert om gezondere eetgewoontes te ontwikkelen.',
             'type' => 'in-person', 'format' => ['klassikaal'], 'themes' => ['voeding', 'welzijn'],
-            'covers' => ['model:closed_single', 'edition_type:in_person', 'content:edition_fields', 'content:speakers_repeater'],
+            'covers' => ['model:closed_single', 'edition_type:in_person'],
             'editions' => [
                 [
                     'start_date' => date('Y-m-d', strtotime('+6 weeks')),
@@ -104,7 +106,9 @@ return [
                         'enrollment_info' => 'Na inschrijving ontvang je een mail met de bevestiging van je deelname.',
                     ],
                     'enrollment_form' => 'default',
-                    'covers' => ['status:open', 'sessions:type_in_person', 'form:default'],
+                    // Task-9 verifier finds the featured edition by scanning edition:{id}
+                    // covers — content tags live HERE, not on the course.
+                    'covers' => ['status:open', 'sessions:type_in_person', 'form:default', 'content:edition_fields', 'content:speakers_repeater'],
                     'registrations' => [
                         ['user' => 'seed_student2', 'status' => 'confirmed', 'path' => 'individual', 'quote' => 'sent'],
                         ['user' => 'seed_student4', 'status' => 'confirmed', 'path' => 'colleague', 'quote' => 'draft'],
