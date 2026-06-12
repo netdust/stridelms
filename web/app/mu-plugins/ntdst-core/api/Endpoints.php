@@ -154,6 +154,16 @@ final class NTDST_Endpoints
             return false;
         }
 
+        // Auth gate, symmetric with check_nonce_permission: anonymous
+        // requests may only dispatch PUBLIC actions. Previously this relied
+        // indirectly on "anon can't mint a nonce for a non-public action" +
+        // per-handler login checks — a handler that forgot its own check,
+        // combined with any nonce leak, became an exposed surface.
+        $public_actions = apply_filters('ntdst/api/public_actions', $this->public_actions);
+        if (!in_array($action, $public_actions, true) && !is_user_logged_in()) {
+            return false;
+        }
+
         return true;
     }
 

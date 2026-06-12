@@ -23,6 +23,17 @@ class NTDST_Response
     protected static ?array $cached_paths = null;
 
     /**
+     * Drop the per-request path snapshot (and the resolved-template cache,
+     * whose entries depend on it). Called by NTDST_Template_Loader::addPath
+     * so late path registrations are picked up by subsequent Responses.
+     */
+    public static function resetCachedPaths(): void
+    {
+        self::$cached_paths = null;
+        self::$template_cache = [];
+    }
+
+    /**
      * Template location cache (shared across all instances)
      */
     protected static array $template_cache = [];
@@ -375,11 +386,18 @@ class NTDST_Response
         }
 
         $located = locate_template([$template]);
-        $result = $located ?: null;
 
-        self::$template_cache[$template] = $result;
+        // Cache HITS only. A cached negative poisons the whole request: one
+        // early "not found" (e.g. before a path registration) makes the
+        // template unresolvable for every later caller — page-dependent
+        // breakage that is miserable to diagnose (2026-06-12, questionnaire
+        // field rendering).
+        if ($located) {
+            self::$template_cache[$template] = $located;
+            return $located;
+        }
 
-        return $result;
+        return null;
     }
 
     /**
@@ -490,6 +508,11 @@ final class NTDST_Template_Loader
     public static function addPath(string $path): void
     {
         self::$custom_paths[] = rtrim($path, '/');
+
+        // Invalidate the per-request snapshot Response instances copy at
+        // construction — without this, a path registered after the first
+        // Response was built is invisible for the rest of the request.
+        NTDST_Response::resetCachedPaths();
     }
 
     public static function getCustomPaths(): array
