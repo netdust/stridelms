@@ -4,7 +4,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Turn the entity-organised Stride admin dashboard into a *workbench* — a worklist home, a multi-select registrations grid with bulk actions and group-by, and a per-person case view — by **extending the existing Alpine `strideApp`**, not rewriting it.
+**Goal:** Turn the entity-organised Stride admin dashboard into a *workbench* — a worklist home, a multi-select registrations grid with bulk actions and group-by, and a per-person case view — by **extending the existing Alpine `strideApp`**, not rewriting it. **This REPLACES the current admin dashboard page in place** (same WordPress menu page, same endpoints, same app) — it is not a new/parallel page. The mockups under `docs/mockups/admin-workspace/` are the design target for what that page becomes; see §12 for the mockup→production mapping and cutover.
 
 **Architecture:** A new batched-join REST read-model (`GET /stride/v1/admin/registrations`) feeds a new Alpine grid component with multi-select state and a bulk-action bar. Bulk actions are a state-machine over the real `RegistrationStatus` enum, executed through ~8–10 smart-action handlers registered on the existing generic `ntdst/v1/action` registry (each minting its own nonce), one generic bulk-set-field for safe columns, and field-scoped export as the long-tail fallback. **No projection table, no postmeta-per-row join, no JSON in any WHERE/GROUP BY.**
 
@@ -319,6 +319,33 @@ Trajectory becomes the grid's second filter axis (cheap, indexed, child-row sema
 
 ---
 
+## 12. Implementation target & cutover — this REPLACES the current admin dashboard
+
+**This is not a new page. It is the evolution of the existing Stride admin dashboard page.** The mockups under `docs/mockups/admin-workspace/` are the *visual + interaction target* for what that existing page becomes — they are static Alpine precisely so they map 1:1 onto the real Alpine app. Stating this explicitly so no one builds the workspace as a *parallel* page.
+
+### 12.1 What it replaces, and where it lives
+- The workspace lives at the **same WordPress admin menu page** the current dashboard occupies — the "Stride" top-level menu registered by `Admin/AdminDashboardService.php` (`renderDashboard()`), backed by `templates/admin/dashboard.php` + `assets/js/admin-dashboard.js` + the `stride/v1/admin/*` REST controller. Same slug, same capability gate (`stride_view`/`stride_manage`), same menu position.
+- The **current dashboard's interaction model is what's replaced**: today the page is entity-tabs (edities / offertes / trajecten / gebruikers) where the loop is *list → open one record in a slide-over → act on one*. The workspace supersedes that with the **workbench model** — Vandaag (worklist home) + Inschrijvingen (multi-select grid) + Trajecten + Dossier (case view).
+- **Reuse, not rip-out:** the existing `stride/v1/admin/*` endpoints, the `strideApp` Alpine factory, the `X-WP-Nonce` API helper, and the menu registration are all kept and extended (§5). The Trajecten tab reuses the existing `/admin/trajectories` endpoints; the editions date/status scoping is mirrored (§10). Per-entity views are retired **as the workbench covers their use cases**, not deleted up front.
+
+### 12.2 Mockup → production file mapping
+The static prototype maps onto the real plugin files as follows (the builder ports the mockup's structure/CSS/Alpine into these, it does not ship the `docs/mockups/` files):
+
+| Mockup (static) | Becomes (production) |
+|---|---|
+| `vandaag.html` + `inschrijvingen.html` + `trajecten.html` + `dossier.html` (the tab shells) | views/partials inside `templates/admin/dashboard.php` (or split into `templates/admin/dashboard/*.php` partials per surface) |
+| `assets/js/grid.js` + `data.js` (Alpine components + hardcoded data) | the grid/worklist/case-view/trajectory **Alpine components added to `assets/js/admin-dashboard.js`** (the existing `strideApp`), fed by the **real endpoints** (§4), not hardcoded arrays |
+| `assets/css/workspace.css` + `grid.css` | merged into the admin CSS the dashboard already injects (`AdminDashboardService::injectStyles` / the existing admin stylesheet), reconciled with the existing `--sd-` tokens |
+| the hardcoded sample data in `data.js` | replaced by `fetch` to `GET /admin/registrations`, `/admin/stats`, `/admin/trajectories`, `/users/{id}/detail`, `/users/{id}/trajectories` via the existing `this.api()` helper |
+
+### 12.3 Cutover discipline
+- **Incremental, behind the same page.** Build the new surfaces as added views in `strideApp`; switch the dashboard's default landing view to Vandaag once Inschrijvingen + Dossier are functional. Keep the old entity tabs reachable during the transition; remove each only after its replacement is verified (the worklist export entry point is the first removal, §6 / Task 4.2).
+- **No second admin page, no second JS app, no React.** Anything that introduces a parallel surface contradicts §5 and this section — that is a review finding.
+- **Design parity check at shake-out.** The feature-acceptance pass (F1–F8) drives the *real* page; the mockups are the reference for *what it should look like and do*, not an artifact that ships.
+- **The mockups stay in `docs/` as the design record** — they are not enqueued, not referenced by the plugin, and not part of the build.
+
+---
+
 ## Golden path: form / AJAX / write-flow (deviations must be named and justified)
 
 - [ ] Built to `netdust-wp:ntdst-patterns → golden-paths/form-data-flow.md` — read before task breakdown. The bulk handlers ARE write-flows over the `ntdst/api_data` filter path, which is the slice's spine.
@@ -481,6 +508,12 @@ Cited per `netdust-agent:architecture-invariants` against the project's `ARCHITE
 - [ ] Write failing test; run (FAIL); register route with `permission_callback => [$this,'canViewAdmin']`, implement `getRegistrations()` calling `queryForGrid` + the batch resolvers (§3.1); run (PASS); commit.
 - **Acceptance:** drift pre-check clean — `/drift-reviewer` on the touched paths returns no findings; the per-flow security line (M1/M4/M5) satisfied in the diff.
 
+**Integration gate (cluster A1):** `ddev exec vendor/bin/phpunit -c phpunit-integration.xml.dist --filter 'RegistrationGrid|AdminRegistrationsEndpoint'` green; manual `curl -u coordinator … /admin/registrations?status=confirmed&group_by=edition_id` returns aggregates; `curl` as anon → 401/403. **HALT — `/code-review` + `/security-review` (FULL) on the A1 diff before starting A2.**
+
+### ── REVIEW GATE A2 ── (tier: FULL — the two lightweight picker endpoints + the trajectory parent→child join; the join is a confidentiality surface, threat-model A1/M3)
+
+> Cluster-A split (1f): the read-model cluster is 5 tasks, over the ~4 cap, so it splits into **A1** (1.1–1.3, the core read-model + endpoint) and **A2** (1.4a, 1.4b, the picker endpoints + the trajectory join). Both stay **TIER FULL** — A1 for M4/M5 + INV-3, A2 for the trajectory-join leak-check + param whitelists.
+
 #### Task 1.4a: `GET /admin/editions/options` — lightweight searchable edition picker (scale, §10)
 **Files:** Modify `web/app/mu-plugins/stride-core/Admin/AdminAPIController.php` (register route + `getEditionOptions()`); Test `tests/Integration/AdminEditionOptionsEndpointTest.php`
 - Tier A. **Test contract:** asserts the route returns a lightweight `{id, title, effective_status}` list (NOT the heavy `getEditions` payload) for a `canViewAdmin` user; **asserts `scope=active` (default) excludes terminal/past editions and `scope=all` includes them** (§10.4); asserts `q` does a server-side title search bound via `$wpdb->prepare`; asserts the result is capped/paged (no 200-row dump). Denies unauthenticated (M1).
@@ -493,11 +526,7 @@ Cited per `netdust-agent:architecture-invariants` against the project's `ARCHITE
 - Tier A. **Test contract:** asserts `queryForGrid(['trajectory_id'=>T])` returns the trajectory's **child edition-rows** (the course participations), NOT the parent row, and NOT rows of other trajectories — i.e. the parent→child join is correct and does not leak (§11.2); asserts `/trajectories/options` returns a lightweight `{id,title,status}` list for `canViewAdmin`, denies anon (M1). **The "does not leak other trajectories' rows" assertion is load-bearing** — a botched join is both a correctness and a confidentiality bug (threat-model A1).
 - [ ] Write failing test; run (FAIL); implement the trajectory filter routing through the verified join + the options endpoint; run (PASS); commit.
 
-> **Cluster A is now 5 tasks (1.1–1.4b) — over the ~4 cap (1f).** Split into **A1** (1.1, 1.2, 1.3 — the core read-model + endpoint) and **A2** (1.4a, 1.4b — the two lightweight picker endpoints + the trajectory join). Both remain **TIER FULL** (A1: M4/M5 + INV-3; A2: the trajectory-join confidentiality assertion + param whitelists). Run the integration gate + review at each sub-cluster.
-
-**Integration gate (cluster A1):** `ddev exec vendor/bin/phpunit -c phpunit-integration.xml.dist --filter 'RegistrationGrid|AdminRegistrationsEndpoint'` green; manual `curl -u coordinator … /admin/registrations?status=confirmed&group_by=edition_id` returns aggregates; `curl` as anon → 401/403.
-
-**Integration gate (cluster A2):** `--filter 'EditionOptions|TrajectoryOptions|RegistrationGridQuery'` green; manual `curl … /admin/registrations?trajectory_id=<T>` returns that trajectory's child edition-rows only; `/editions/options?scope=active` and `/trajectories/options` return lightweight lists.
+**Integration gate (cluster A2):** `--filter 'EditionOptions|TrajectoryOptions|RegistrationGridQuery'` green; manual `curl … /admin/registrations?trajectory_id=<T>` returns that trajectory's child edition-rows only (never another trajectory's — the leak-check); `/editions/options?scope=active` and `/trajectories/options` return lightweight lists. **HALT — `/code-review` + `/security-review` (FULL) on the A2 diff (focus: the join leak-check) before starting cluster B.**
 
 ### ── REVIEW GATE B ── (tier: FULL — cluster builds the bulk-mutation handlers under multi-select; the M2/M3/M6/M7 confused-deputy + per-row-authz security boundary)
 
@@ -602,7 +631,8 @@ Cross-cutting concerns to sweep when the relevant code is touched:
 - **Spec coverage:** IA — 3 surfaces + Trajecten tab + cohort lens (§1) ✓; action model + state→transitions table (§2) ✓; read-model/data-flow (§3) ✓; endpoints add-vs-reuse (§4) ✓; rewrite-vs-extend (§5) ✓; two exports (§6) ✓; scale/archived editions (§10) ✓; **trajectory layer — grid filter + Trajecten tab + case-view section (§11)** ✓; bulk execution semantics — partial-failure + per-action nonce + cache invalidation (§2.3) ✓; the four brief corrections + the 5th refinement (§0) ✓.
 - **Gates fired + embedded inline:** Threat model (M1–M10) ✓; Architecture invariants (INV-1/2/3/4/6b/7) ✓; Acceptance flows (F1–**F8**, six edges each — F7/F8 = trajectory) ✓; WP plan-requirements (golden path + four pillars + drift categories) ✓.
 - **First-slice boundary:** Phase 1 = person lens + trajectory **read/filter** layer; cohort roster + trajectory-*roster bulk actions* (Phase 2) + field-scoped export (Phase 3) explicitly deferred ✓.
-- **Review clusters sized + tiered (each ≤4 tasks, 1f):** Gate **A1** (read-model + endpoint, FULL) · **A2** (picker endpoints + trajectory join, FULL) · Gate B (bulk mutations, FULL) · Gate **C1** (edition UI, STANDARD) · **C2** (trajectory surfaces, STANDARD) · Gate D (boundary + cleanup, STANDARD) ✓.
+- **Review clusters sized + tiered (each ≤4 tasks, 1f):** Gate **A1** (1.1–1.3 read-model + endpoint, FULL, with `── REVIEW GATE A2 ──` marker + HALT) · **A2** (1.4a/1.4b picker endpoints + trajectory join, FULL) · Gate B (bulk mutations, FULL) · Gate **C1** (edition UI, STANDARD) · **C2** (trajectory surfaces, STANDARD) · Gate D (boundary + cleanup, STANDARD) ✓.
+- **Implementation target explicit (§12):** the workspace REPLACES the current admin dashboard page in place (same menu page / endpoints / `strideApp`); mockup→production file mapping + cutover discipline spelled out so no parallel page is built ✓.
 - **Per-task tiers:** every task tagged Tier A (with test contract) or Tier B (with reason) ✓; per-cluster Integration gate lines ✓.
 - **Trajectory layer (added 2026-06-13 after the overlooked-layer review):** machinery verified to exist; the only true backend gap is `/users/{id}/trajectories` (wiring existing compute); the parent/child join + read-vs-validate concerns are pinned as sibling-site audits ✓.
 
