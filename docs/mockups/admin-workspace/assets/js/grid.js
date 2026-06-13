@@ -87,6 +87,25 @@ function grid() {
       return rows;
     },
 
+    /* per-status counts for the pipeline chips — respect every OTHER active
+       filter but ignore the status filter itself, so the funnel always shows
+       how many rows each stage holds within the current context. */
+    statusCount(status) {
+      const f = this.filters;
+      return this.all.filter(r => {
+        if (r.status !== status) return false;
+        if (f.edition && r.edition !== f.edition) return false;
+        if (f.company && r.company !== f.company) return false;
+        if (f.offerteOpen && !(r.status === 'confirmed' && r.offerte !== 'exported')) return false;
+        if (f.noCert && !(r.status === 'completed' && r.cert === false)) return false;
+        if (f.q) {
+          const hay = (r.name + ' ' + r.email + ' ' + (this.companies[r.company] || '')).toLowerCase();
+          if (!hay.includes(f.q.toLowerCase())) return false;
+        }
+        return true;
+      }).length;
+    },
+
     get total() { return this.filtered.length; },
     get totalAllCorpus() { return 247; },        // the "van 247" fixed corpus feel
     get pageCount() { return Math.max(1, Math.ceil(this.total / this.perPage)); },
@@ -128,6 +147,28 @@ function grid() {
           attAvg, dist,
         };
       }).sort((a, b) => b.count - a.count);
+    },
+
+    /* human label for what we're grouping by (shown on each group header) */
+    get groupKindLabel() {
+      return { edition: 'Editie', status: 'Status', company: 'Organisatie' }[this.groupBy] || '';
+    },
+    /* toggle one group section open/closed */
+    toggleGroup(key) { this.collapsed[key] = !this.collapsed[key]; },
+    /* when the group field changes: clear collapse state (all expanded), reset page,
+       and clear selection so the bulk bar doesn't carry across a restructure */
+    onGroupChange() {
+      this.collapsed = {};
+      this.page = 1;
+    },
+    /* compact textual offerte distribution for the group header */
+    distSummary(dist) {
+      const parts = [];
+      if (dist.exported) parts.push(dist.exported + ' verwerkt');
+      if (dist.sent)     parts.push(dist.sent + ' verzonden');
+      if (dist.draft)    parts.push(dist.draft + ' in behandeling');
+      if (dist.none)     parts.push(dist.none + ' geen');
+      return parts.length ? parts.join(' · ') : 'geen offertes';
     },
 
     /* ===== selection ===== */

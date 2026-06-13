@@ -105,7 +105,17 @@
 
                 <!-- detail grid -->
                 <div class="ws-detail-grid">
-                  <div class="ws-field"><div class="ws-field__label">Status</div><div class="ws-field__val"><span class="ws-badge" :class="'ws-badge--'+WS.REG_STATUS[r.status].cls" x-text="WS.REG_STATUS[r.status].label"></span></div></div>
+                  <div class="ws-field ws-field--wide">
+                    <div class="ws-field__label">Inschrijvingsstatus</div>
+                    <div class="ws-field__val ws-field__val--status">
+                      <span class="ws-badge" :class="'ws-badge--'+WS.REG_STATUS[r.status].cls" x-text="WS.REG_STATUS[r.status].label"></span>
+                      <!-- pending clarity: what are we waiting for? (Fix 4) -->
+                      <span class="ws-status-hint" x-show="r.status === 'pending'">
+                        <span x-html="WS.icon('info')"></span>
+                        <span>Wacht op gebruiker (intake, sessiekeuze, documenten) <b>of</b> op goedkeuring zodra die taken klaar zijn.</span>
+                      </span>
+                    </div>
+                  </div>
                   <div class="ws-field"><div class="ws-field__label">Inschrijvingspad</div><div class="ws-field__val" x-text="r.path"></div></div>
                   <div class="ws-field"><div class="ws-field__label">Ingeschreven op</div><div class="ws-field__val" x-text="r.registered"></div></div>
                   <div class="ws-field"><div class="ws-field__label">Startdatum</div><div class="ws-field__val" x-text="r.startDate"></div></div>
@@ -124,50 +134,46 @@
                   </span>
                 </div>
 
-                <!-- enrollment_data STAGES (3-key shape) -->
-                <div class="ws-section-title"><span x-html="WS.icon('fileText')"></span> Inschrijvingsgegevens (stages) <span class="ws-section-title__line"></span></div>
-                <div class="ws-stages">
-                  <template x-for="(stage, key) in r.stages" :key="key">
-                    <div class="ws-stage" :class="openStages[r.id+'-'+key] && 'is-open'">
-                      <div class="ws-stage__head" @click="toggleStage(r.id, key)">
-                        <div class="ws-stage__icon" x-html="WS.icon(WS.STAGE_META[key]?.icon || 'fileText')"></div>
-                        <span class="ws-stage__name" x-text="WS.STAGE_META[key]?.name || key"></span>
-                        <template x-if="stage">
+                <!-- enrollment_data STAGES (3-key shape). Only stages WITH submitted
+                     data render (empty stages are hidden entirely, Fix 5). Each is a
+                     CLOSED collapsible panel; it opens only when clicked. The intake
+                     stage IS the questionnaire — there is no separate Vragenlijst. -->
+                <div class="ws-section-title"><span x-html="WS.icon('fileText')"></span> Ingediende gegevens <span class="ws-section-title__line"></span></div>
+                <template x-if="submittedStages(r).length">
+                  <div class="ws-stages">
+                    <template x-for="s in submittedStages(r)" :key="s.key">
+                      <div class="ws-stage" :class="openStages[r.id+'-'+s.key] && 'is-open'">
+                        <div class="ws-stage__head" @click="toggleStage(r.id, s.key)" role="button" :aria-expanded="!!openStages[r.id+'-'+s.key]">
+                          <div class="ws-stage__icon" x-html="WS.icon(s.meta.icon)"></div>
+                          <div class="ws-stage__heading">
+                            <span class="ws-stage__name" x-text="s.meta.name"></span>
+                            <span class="ws-stage__desc" x-text="s.meta.desc"></span>
+                          </div>
                           <span class="ws-stage__submitted">
-                            <b x-text="stage.submitted_at"></b><br>door <span x-text="stage.submitted_by"></span>
+                            <b x-text="s.stage.submitted_at"></b>
+                            <span class="ws-stage__by" x-show="s.stage.submitted_by">door <span x-text="s.stage.submitted_by"></span></span>
                           </span>
-                        </template>
-                        <template x-if="!stage">
-                          <span class="ws-stage__submitted" style="color:var(--ws-text-3);font-style:italic">nog niet ingediend</span>
-                        </template>
-                        <span class="ws-stage__chev" x-show="stage" x-html="WS.icon('chevDown')" style="margin-left:8px"></span>
-                      </div>
-                      <!-- stage data -->
-                      <template x-if="stage && openStages[r.id+'-'+key]">
-                        <div class="ws-stage__body">
+                          <span class="ws-stage__chev" x-html="WS.icon('chevDown')"></span>
+                        </div>
+                        <!-- stage data — clean label→value pairs, never raw JSON.
+                             Each pair is ONE real element so x-for renders it
+                             (a nested <template> wrapper would stay inert). -->
+                        <div class="ws-stage__body" x-show="openStages[r.id+'-'+s.key]" x-collapse>
                           <dl class="ws-kv">
-                            <template x-for="(val, label) in stage.data" :key="label">
-                              <template><dt x-text="label"></dt><dd x-text="val"></dd></template>
+                            <template x-for="(val, label) in s.stage.data" :key="label">
+                              <div class="ws-kv__row">
+                                <dt x-text="humanizeKey(label)"></dt>
+                                <dd x-text="val"></dd>
+                              </div>
                             </template>
                           </dl>
                         </div>
-                      </template>
-                      <!-- empty stage state (F5 empty edge) -->
-                      <template x-if="!stage">
-                        <div class="ws-stage__empty">Nog geen gegevens ingediend voor deze stap.</div>
-                      </template>
-                    </div>
-                  </template>
-                </div>
-
-                <!-- questionnaire -->
-                <div class="ws-section-title"><span x-html="WS.icon('book')"></span> Vragenlijst <span class="ws-section-title__line"></span></div>
-                <template x-if="r.questionnaire.length">
-                  <dl class="ws-kv">
-                    <template x-for="qa in r.questionnaire" :key="qa.q">
-                      <template><dt x-text="qa.q" style="color:var(--ws-text-2)"></dt><dd x-text="qa.a"></dd></template>
+                      </div>
                     </template>
-                  </dl>
+                  </div>
+                </template>
+                <template x-if="!submittedStages(r).length">
+                  <p class="ws-muted" style="font-size:var(--ws-fs-sm);font-style:italic;margin:0">Nog geen gegevens ingediend.</p>
                 </template>
 
                 <!-- attendance per session -->
@@ -215,20 +221,25 @@
                   <p class="ws-muted" style="font-size:var(--ws-fs-sm);font-style:italic;margin:0">Geen notities.</p>
                 </template>
 
-                <!-- STATE-APPROPRIATE ACTIONS (derived from §2.1 map) -->
+                <!-- STATE-APPROPRIATE ACTIONS (derived from §2.1 map) — real buttons -->
                 <div class="ws-reg-actions">
-                  <div class="ws-reg-actions__label">Acties voor deze inschrijving</div>
-                  <template x-for="a in actionsFor(r.status)" :key="a.id">
-                    <button class="ws-btn" :class="a.danger ? 'ws-btn--danger-ghost' : (a.id==='stride_bulk_approve' || a.id==='stride_bulk_promote_waitlist' ? '' : 'ws-btn--ghost')">
-                      <span x-html="WS.icon(a.icon)"></span> <span x-text="a.label"></span>
-                    </button>
-                  </template>
-                  <template x-if="actionsFor(r.status).length === 0">
-                    <span class="ws-muted" style="font-size:var(--ws-fs-sm);font-style:italic;display:flex;align-items:center;gap:6px">
-                      <span x-html="WS.icon('info')" style="width:15px;height:15px"></span>
-                      Terminale status — geen overgangen mogelijk. Een nieuwe inschrijving start een nieuw dossier.
-                    </span>
-                  </template>
+                  <div class="ws-reg-actions__label"><span x-html="WS.icon('sparkle')"></span> Acties voor deze inschrijving</div>
+                  <div class="ws-reg-actions__row">
+                    <template x-for="(a, i) in actionsFor(r.status)" :key="a.id">
+                      <button class="ws-action-btn"
+                              :class="a.danger ? 'ws-action-btn--danger' : (i===0 ? 'ws-action-btn--primary' : 'ws-action-btn--secondary')"
+                              :title="a.label">
+                        <span class="ws-action-btn__ico" x-html="WS.icon(a.icon)"></span>
+                        <span x-text="a.label"></span>
+                      </button>
+                    </template>
+                    <template x-if="actionsFor(r.status).length === 0">
+                      <span class="ws-reg-actions__none">
+                        <span x-html="WS.icon('info')"></span>
+                        Geen acties — geannuleerd. Een nieuwe inschrijving start een nieuw dossier.
+                      </span>
+                    </template>
+                  </div>
                 </div>
 
               </div>
@@ -251,9 +262,10 @@
               <div class="ws-timeline">
                 <template x-for="(ev, i) in activeTimeline" :key="i">
                   <div class="ws-tl-item">
-                    <span class="ws-tl-item__dot" :class="'ws-tl-item__dot--'+ev.dot"></span>
+                    <span class="ws-tl-item__node" :class="'ws-tl-item__node--'+ev.dot" x-html="WS.icon(ev.icon || 'clock')"></span>
                     <div class="ws-tl-item__title" x-text="ev.title"></div>
                     <div class="ws-tl-item__meta">
+                      <span class="ws-tl-item__actor" x-html="WS.icon(actorIsAdmin(ev.actor) ? 'briefcase' : 'user')"></span>
                       <span class="ws-tl-item__actor" x-text="ev.actor"></span> · <span x-text="ev.when"></span>
                     </div>
                   </div>
@@ -280,30 +292,54 @@
 <script src="assets/js/data.js"></script>
 <script>
 function dossier() {
+  // canonical stage order (matches the enrollment lifecycle, not object order)
+  const STAGE_ORDER = ['interest', 'waitlist', 'enrollment_personal', 'enrollment_billing', 'initial_selection', 'intake', 'evaluation'];
+
   return {
     person: WS.DOSSIER.person,
     regs: WS.DOSSIER.registrations,
-    openStages: {},
+    openStages: {},               // "<regId>-<stageKey>" -> true ; ALL CLOSED by default (Fix 5)
     timelineReg: WS.DOSSIER.registrations[0].id,
 
     init() {
-      // open all stages of the first (expanded) registration by default
-      const first = this.regs.find(r => r.open) || this.regs[0];
-      Object.keys(first.stages).forEach(k => { if (first.stages[k]) this.openStages[first.id + '-' + k] = true; });
-      // if arriving via #reg-<id>, expand that registration
+      // Stages render CLOSED by default — they open only on click (Fix 5).
+      // If arriving via #reg-<id>, just expand that REGISTRATION (not its stages).
       const hash = location.hash.match(/reg-(\d+)/);
       if (hash) {
         const id = Number(hash[1]);
         const r = this.regs.find(x => x.id === id);
-        if (r) { this.regs.forEach(x => x.open = (x.id === id)); this.timelineReg = id;
-          Object.keys(r.stages).forEach(k => { if (r.stages[k]) this.openStages[r.id + '-' + k] = true; }); }
+        if (r) { this.regs.forEach(x => x.open = (x.id === id)); this.timelineReg = id; }
       }
+    },
+
+    /* only stages WITH submitted data, in canonical order. A stage is "empty"
+       (and hidden) when it's null/absent or its .data has no keys (3-key shape). */
+    submittedStages(r) {
+      return STAGE_ORDER
+        .filter(key => {
+          const s = r.stages[key];
+          return s && s.data && Object.keys(s.data).length > 0;
+        })
+        .map(key => ({ key, stage: r.stages[key], meta: WS.STAGE_META[key] || { name: key, icon: 'fileText', desc: '' } }));
     },
 
     toggleStage(regId, key) {
       const k = regId + '-' + key;
       this.openStages[k] = !this.openStages[k];
     },
+
+    /* turn a stored field key into a readable Dutch-ish label (snake_case → words) */
+    humanizeKey(key) {
+      if (!/[_a-z]/.test(key) || /\s/.test(key)) return key; // already human
+      const s = key.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+      return s.charAt(0).toUpperCase() + s.slice(1);
+    },
+
+    /* crude actor-type heuristic for the timeline icon (admin vs the user) */
+    actorIsAdmin(actor) {
+      return /co[öo]rdinator|beheer|systeem|admin/i.test(actor || '');
+    },
+
     actionsFor(state) { return WS.actionsForState(state); },
     attLabel(s) { return { present:'Aanwezig', absent:'Afwezig', excused:'Verontschuldigd', upcoming:'Nog te volgen' }[s]; },
     get activeTimeline() { return (this.regs.find(r => r.id === this.timelineReg) || this.regs[0]).timeline; },

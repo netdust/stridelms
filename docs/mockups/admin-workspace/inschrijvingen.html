@@ -63,14 +63,38 @@
 
       <!-- ===== TOOLBAR ===== -->
       <div class="ws-toolbar">
-        <div class="ws-toolbar__row">
-          <div class="ws-filterbar">
-            <span class="ws-filterbar__label">Status</span>
-            <template x-for="(meta,key) in regStatus" :key="key">
-              <button class="ws-chip" :class="filters.status===key && 'is-active'" @click="setStatus(key)">
-                <span x-text="meta.label"></span>
+        <div class="ws-toolbar__row ws-toolbar__row--pipe">
+          <div class="ws-pipeline" role="group" aria-label="Filter op fase in het inschrijvingsproces">
+            <span class="ws-pipeline__label">Fase in inschrijvingsproces</span>
+            <div class="ws-pipeline__track">
+              <!-- the funnel: lifecycle stages left → right -->
+              <template x-for="(key, i) in WS.STATUS_PIPELINE" :key="key">
+                <div class="ws-pipeline__step">
+                  <button class="ws-stage-chip"
+                          :class="'ws-stage-chip--'+regStatus[key].cls + (filters.status===key ? ' is-active' : '')"
+                          :title="regStatus[key].hint"
+                          :aria-pressed="filters.status===key"
+                          @click="setStatus(key)">
+                    <span class="ws-stage-chip__no" x-text="i+1"></span>
+                    <span class="ws-stage-chip__txt" x-text="regStatus[key].pipe"></span>
+                    <span class="ws-stage-chip__count" x-text="statusCount(key)"></span>
+                  </button>
+                  <span class="ws-pipeline__arrow" x-show="i < WS.STATUS_PIPELINE.length - 1" x-html="WS.icon('arrowRight')"></span>
+                </div>
+              </template>
+
+              <!-- the exit / dead-end, visually separated after a divider -->
+              <span class="ws-pipeline__sep" title="Buiten de funnel — eindstatus"></span>
+              <button class="ws-stage-chip ws-stage-chip--exit"
+                      :class="filters.status===WS.STATUS_EXIT && 'is-active'"
+                      :title="regStatus[WS.STATUS_EXIT].hint"
+                      :aria-pressed="filters.status===WS.STATUS_EXIT"
+                      @click="setStatus(WS.STATUS_EXIT)">
+                <span class="ws-stage-chip__icon" x-html="WS.icon('xCircle')"></span>
+                <span class="ws-stage-chip__txt" x-text="regStatus[WS.STATUS_EXIT].pipe"></span>
+                <span class="ws-stage-chip__count" x-text="statusCount(WS.STATUS_EXIT)"></span>
               </button>
-            </template>
+            </div>
           </div>
           <div class="ws-toolbar__spacer"></div>
           <button class="ws-btn ws-btn--subtle ws-btn--sm" x-show="hasFilters" @click="clearAllFilters()">
@@ -79,16 +103,20 @@
         </div>
 
         <div class="ws-toolbar__row">
-          <!-- group-by -->
-          <div class="ws-select-wrap">
+          <!-- group-by — restructures the grid into collapsible sections with
+               aggregates (a pivot), NOT a sort. -->
+          <div class="ws-select-wrap ws-select-wrap--group" :class="groupBy && 'is-grouping'">
             <span x-html="WS.icon('layers')" style="width:14px;height:14px"></span>
-            Groeperen
-            <select class="ws-select" x-model="groupBy">
-              <option value="">Geen</option>
+            Indelen per
+            <select class="ws-select" x-model="groupBy" @change="onGroupChange()">
+              <option value="">Niet indelen</option>
               <option value="edition">Editie</option>
               <option value="status">Status</option>
               <option value="company">Organisatie</option>
             </select>
+            <button class="ws-group-clear" x-show="groupBy" @click="groupBy=''; onGroupChange()" title="Indeling opheffen">
+              <span x-html="WS.icon('x')"></span>
+            </button>
           </div>
 
           <!-- edition filter -->
@@ -215,8 +243,8 @@
           </tbody>
         </table>
 
-        <!-- GROUPED -->
-        <table class="ws-table" x-show="groupBy">
+        <!-- GROUPED — one <tbody> section per distinct group value (collapsible) -->
+        <table class="ws-table ws-table--grouped" x-show="groupBy">
           <thead>
             <tr>
               <th class="ws-col-check"></th>
@@ -224,61 +252,63 @@
               <th class="ws-col-offerte">Offerte</th><th class="ws-col-att">Aanwezigheid</th><th>Organisatie</th>
             </tr>
           </thead>
-          <tbody>
-            <template x-for="g in groups" :key="g.key">
-              <template>
-                <tbody>
-                  <!-- group header -->
-                  <tr class="ws-grouprow">
-                    <td colspan="7">
-                      <div class="ws-grouphead" :class="collapsed[g.key] && 'is-collapsed'" @click="collapsed[g.key] = !collapsed[g.key]">
-                        <span class="ws-grouphead__chev" x-html="WS.icon('chevDown')"></span>
-                        <span class="ws-grouphead__title">
-                          <span x-text="g.label"></span>
-                          <span class="ws-grouphead__count" x-text="g.count + (g.count===1 ? ' inschrijving' : ' inschrijvingen')"></span>
+          <!-- one <tbody> per group: a valid single root for x-for inside a table -->
+          <template x-for="g in groups" :key="g.key">
+            <tbody class="ws-group" :class="!collapsed[g.key] && 'is-expanded'">
+              <!-- group header row (click to toggle) -->
+              <tr class="ws-grouprow">
+                <td colspan="7">
+                  <div class="ws-grouphead" :class="collapsed[g.key] && 'is-collapsed'"
+                       @click="toggleGroup(g.key)" role="button" :aria-expanded="!collapsed[g.key]">
+                    <span class="ws-grouphead__chev" x-html="WS.icon('chevDown')"></span>
+                    <span class="ws-grouphead__kind" x-text="groupKindLabel"></span>
+                    <span class="ws-grouphead__title">
+                      <span x-text="g.label"></span>
+                      <span class="ws-grouphead__count" x-text="g.count + (g.count===1 ? ' inschrijving' : ' inschrijvingen')"></span>
+                    </span>
+                    <div class="ws-grouphead__aggs">
+                      <div class="ws-agg"><span class="ws-agg__label">% afgerond</span><span class="ws-agg__val" x-text="g.pctDone + '%'"></span></div>
+                      <div class="ws-agg"><span class="ws-agg__label">gem. aanwezigheid</span><span class="ws-agg__val" x-text="g.attAvg != null ? g.attAvg + '%' : '—'"></span></div>
+                      <div class="ws-agg ws-agg--dist">
+                        <span class="ws-agg__label">offerte-verdeling</span>
+                        <span class="ws-agg__distline">
+                          <span class="ws-distbar" :title="`Geen ${g.dist.none} · In behandeling ${g.dist.draft} · Verzonden ${g.dist.sent} · Verwerkt ${g.dist.exported}`">
+                            <template x-for="k in ['exported','sent','draft','none']" :key="k">
+                              <span x-show="g.dist[k]>0" :style="`flex:${g.dist[k]};background:${distColor(k)}`"></span>
+                            </template>
+                          </span>
+                          <span class="ws-distlegend" x-text="distSummary(g.dist)"></span>
                         </span>
-                        <div class="ws-grouphead__aggs">
-                          <div class="ws-agg"><span class="ws-agg__label">% afgerond</span><span class="ws-agg__val" x-text="g.pctDone + '%'"></span></div>
-                          <div class="ws-agg"><span class="ws-agg__label">aanwezigheid</span><span class="ws-agg__val" x-text="g.attAvg != null ? g.attAvg + '%' : '—'"></span></div>
-                          <div class="ws-agg">
-                            <span class="ws-agg__label">offerte-verdeling</span>
-                            <span class="ws-distbar" :title="`Geen ${g.dist.none} · Concept ${g.dist.draft} · Verzonden ${g.dist.sent} · Verwerkt ${g.dist.exported}`">
-                              <template x-for="k in ['exported','sent','draft','none']" :key="k">
-                                <span x-show="g.dist[k]>0" :style="`flex:${g.dist[k]};background:${distColor(k)}`"></span>
-                              </template>
-                            </span>
-                          </div>
-                        </div>
                       </div>
-                    </td>
-                  </tr>
-                  <!-- group rows -->
-                  <template x-for="r in g.rows" :key="r.id">
-                    <tr x-show="!collapsed[g.key]" :class="isSelected(r.id) && 'is-selected'" @click="window.location.href='dossier.html#reg-'+r.id">
-                      <td class="ws-col-check" @click.stop><input type="checkbox" class="ws-check" :checked="isSelected(r.id)" @change="toggle(r.id)"></td>
-                      <td>
-                        <div class="ws-namecell">
-                          <div class="ws-namecell__avatar" :style="`background:${WS.avatarColor(r.name)}`" x-text="WS.initials(r.name)"></div>
-                          <div><div class="ws-namecell__name" x-text="r.name"></div><div class="ws-namecell__sub" x-text="r.email"></div></div>
-                        </div>
-                      </td>
-                      <td class="ws-edition-cell"><span x-text="editions[r.edition].title"></span><small x-text="editions[r.edition].cohort"></small></td>
-                      <td><span class="ws-badge" :class="'ws-badge--'+regStatus[r.status].cls" x-text="regStatus[r.status].label"></span></td>
-                      <td><span class="ws-offerte" :class="'ws-offerte--'+offerteStatus[r.offerte].cls"><span class="ws-offerte__dot"></span><span x-text="offerteStatus[r.offerte].label"></span></span></td>
-                      <td>
-                        <template x-if="r.attendance != null"><div class="ws-meter"><div class="ws-meter__track"><div class="ws-meter__fill" :class="attClass(r.attendance)" :style="`width:${r.attendance}%`"></div></div><span class="ws-meter__val" x-text="r.attendance + '%'"></span></div></template>
-                        <template x-if="r.attendance == null"><span class="ws-meter__val ws-meter__val--na">—</span></template>
-                      </td>
-                      <td>
-                        <template x-if="companies[r.company]"><span class="ws-org-cell"><span x-html="WS.icon('building')"></span><span x-text="companies[r.company]"></span></span></template>
-                        <template x-if="!companies[r.company]"><span class="ws-muted" style="font-size:var(--ws-fs-sm)">Particulier</span></template>
-                      </td>
-                    </tr>
-                  </template>
-                </tbody>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+              <!-- group rows (hidden when collapsed) -->
+              <template x-for="r in g.rows" :key="r.id">
+                <tr x-show="!collapsed[g.key]" :class="isSelected(r.id) && 'is-selected'" @click="window.location.href='dossier.html#reg-'+r.id">
+                  <td class="ws-col-check" @click.stop><input type="checkbox" class="ws-check" :checked="isSelected(r.id)" @change="toggle(r.id)"></td>
+                  <td>
+                    <div class="ws-namecell">
+                      <div class="ws-namecell__avatar" :style="`background:${WS.avatarColor(r.name)}`" x-text="WS.initials(r.name)"></div>
+                      <div><div class="ws-namecell__name" x-text="r.name"></div><div class="ws-namecell__sub" x-text="r.email"></div></div>
+                    </div>
+                  </td>
+                  <td class="ws-edition-cell"><span x-text="editions[r.edition].title"></span><small x-text="editions[r.edition].cohort"></small></td>
+                  <td><span class="ws-badge" :class="'ws-badge--'+regStatus[r.status].cls" x-text="regStatus[r.status].label"></span></td>
+                  <td><span class="ws-offerte" :class="'ws-offerte--'+offerteStatus[r.offerte].cls"><span class="ws-offerte__dot"></span><span x-text="offerteStatus[r.offerte].label"></span></span></td>
+                  <td>
+                    <template x-if="r.attendance != null"><div class="ws-meter"><div class="ws-meter__track"><div class="ws-meter__fill" :class="attClass(r.attendance)" :style="`width:${r.attendance}%`"></div></div><span class="ws-meter__val" x-text="r.attendance + '%'"></span></div></template>
+                    <template x-if="r.attendance == null"><span class="ws-meter__val ws-meter__val--na">—</span></template>
+                  </td>
+                  <td>
+                    <template x-if="companies[r.company]"><span class="ws-org-cell"><span x-html="WS.icon('building')"></span><span x-text="companies[r.company]"></span></span></template>
+                    <template x-if="!companies[r.company]"><span class="ws-muted" style="font-size:var(--ws-fs-sm)">Particulier</span></template>
+                  </td>
+                </tr>
               </template>
-            </template>
-          </tbody>
+            </tbody>
+          </template>
         </table>
 
         <!-- EMPTY STATE -->

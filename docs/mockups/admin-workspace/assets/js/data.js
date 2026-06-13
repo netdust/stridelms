@@ -56,6 +56,9 @@ const ICONS = {
   briefcase: '<path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16M4 7h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z"/>',
   book:      '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/>',
   hash:      '<path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/>',
+  userPlus:  '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>',
+  userCheck: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/>',
+  slash:     '<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>',
 };
 
 function icon(name, cls) {
@@ -63,15 +66,38 @@ function icon(name, cls) {
   return '<svg class="' + (cls || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + path + '</svg>';
 }
 
-/* ---- Status maps (verbatim from the enums) ---- */
+/* ---- Status maps (verbatim from the enums) ----
+   `label` = the short badge text (still the bare enum label used on rows/badges).
+   The enrollment-pipeline filter (inschrijvingen.html) uses the richer fields:
+   `pipe`  = self-explanatory pipeline microcopy ("where this person is")
+   `hint`  = tooltip nuance shown on hover
+   `step`  = 1..5 lifecycle order; cancelled has no step (it's the exit/dead-end)
+   `exit`  = true → rendered separated from the funnel (a dead-end, not a stage) */
 const REG_STATUS = {
-  confirmed: { label: 'Bevestigd',      cls: 'confirmed' },
-  completed: { label: 'Afgerond',       cls: 'completed' },
-  cancelled: { label: 'Geannuleerd',    cls: 'cancelled' },
-  waitlist:  { label: 'Wachtlijst',     cls: 'waitlist'  },
-  interest:  { label: 'Interesse',      cls: 'interest'  },
-  pending:   { label: 'In afwachting',  cls: 'pending'   },
+  confirmed: { label: 'Bevestigd',      cls: 'confirmed', step: 4,
+               pipe: 'Bevestigd / ingeschreven',
+               hint: 'Inschrijving goedgekeurd en bevestigd — de persoon neemt deel.' },
+  completed: { label: 'Afgerond',       cls: 'completed', step: 5,
+               pipe: 'Afgerond',
+               hint: 'De cursus is afgerond.' },
+  cancelled: { label: 'Geannuleerd',    cls: 'cancelled', exit: true,
+               pipe: 'Geannuleerd',
+               hint: 'Uitgestapt — een eindstatus buiten de funnel. Heropnemen is een nieuwe inschrijving.' },
+  waitlist:  { label: 'Wachtlijst',     cls: 'waitlist',  step: 2,
+               pipe: 'Op wachtlijst',
+               hint: 'Aangemeld maar nog geen plaats — wacht tot er een plek vrijkomt.' },
+  interest:  { label: 'Interesse',      cls: 'interest',  step: 1,
+               pipe: 'Interesse getoond',
+               hint: 'Heeft interesse getoond maar is nog niet ingeschreven.' },
+  pending:   { label: 'In afwachting',  cls: 'pending',   step: 3,
+               pipe: 'Wacht op goedkeuring',
+               hint: 'Wacht op gebruiker of op goedkeuring — ofwel moet de gebruiker nog taken afronden (intake, sessiekeuze, documenten), ofwel is alles klaar en wacht het op goedkeuring door de beheerder.' },
 };
+
+/* the enrollment pipeline, in lifecycle order, with the exit separated.
+   Drives the funnel/stepper filter at the top of the grid (spec §1, Fix 1). */
+const STATUS_PIPELINE = ['interest', 'waitlist', 'pending', 'confirmed', 'completed'];
+const STATUS_EXIT = 'cancelled';
 
 const OFFERTE_STATUS = {
   none:     { label: 'Geen offerte',   cls: 'none'     },
@@ -248,17 +274,21 @@ const DOSSIER = {
       startDate: '12 sep 2026',
       quote: { ref: 'OFF-2026-0418', amount: '€ 540,00', status: 'draft' },
       stages: {
-        interest:            { submitted_at: '2026-05-18 14:22', submitted_by: 'Imane El Amrani', data: { 'Motivatie': 'Wil vaardigheden aanscherpen voor jongerenwerking', 'Voorkennis': 'Beperkt' } },
-        enrollment_personal: { submitted_at: '2026-05-20 09:41', submitted_by: 'Imane El Amrani', data: { 'Voornaam': 'Imane', 'Achternaam': 'El Amrani', 'Organisatie': 'OCMW Gent', 'Afdeling': 'Team Verslavingszorg', 'Functie': 'Maatschappelijk werker', 'Telefoon': '+32 9 266 50 11' } },
-        enrollment_billing:  { submitted_at: '2026-05-20 09:43', submitted_by: 'Imane El Amrani', data: { 'Facturatiebedrijf': 'OCMW Gent', 'BTW-nummer': 'BE 0212.171.213', 'Adres': 'Onderbergen 86, 9000 Gent', 'Factuur-e-mail': 'facturen@ocmwgent.be', 'GLN-nummer': '5400000000016' } },
-        intake:              { submitted_at: '2026-05-22 16:08', submitted_by: 'Imane El Amrani', data: { 'Dieetwensen': 'Vegetarisch', 'Toegankelijkheid': 'Geen bijzonderheden', 'Verwachtingen': 'Concrete gespreksmethodieken' } },
-        evaluation:          null, // not yet submitted → empty-state demo
+        interest:            { submitted_at: '18 mei 2026 · 14:22', submitted_by: 'Imane El Amrani', data: { 'Motivatie': 'Wil vaardigheden aanscherpen voor jongerenwerking', 'Voorkennis': 'Beperkt' } },
+        enrollment_personal: { submitted_at: '20 mei 2026 · 09:41', submitted_by: 'Imane El Amrani', data: { 'Voornaam': 'Imane', 'Achternaam': 'El Amrani', 'Organisatie': 'OCMW Gent', 'Afdeling': 'Team Verslavingszorg', 'Functie': 'Maatschappelijk werker', 'Telefoon': '+32 9 266 50 11' } },
+        enrollment_billing:  { submitted_at: '20 mei 2026 · 09:43', submitted_by: 'Imane El Amrani', data: { 'Facturatiebedrijf': 'OCMW Gent', 'BTW-nummer': 'BE 0212.171.213', 'Adres': 'Onderbergen 86, 9000 Gent', 'Factuur-e-mail': 'facturen@ocmwgent.be', 'GLN-nummer': '5400000000016' } },
+        initial_selection:   { submitted_at: '20 mei 2026 · 09:44', submitted_by: 'Imane El Amrani', data: { 'Sessie 1 — Kader & wettelijke context': 'Gekozen (verplicht)', 'Sessie 2 — Vroegdetectie': 'Gekozen (verplicht)', 'Keuzemodule fase 1': 'Jongeren & cannabis' } },
+        // intake = the questionnaire answers submitted after confirmation.
+        // These ARE the "Intakevragen"; there is no separate Vragenlijst dataset.
+        intake:              { submitted_at: '22 mei 2026 · 16:08', submitted_by: 'Imane El Amrani', data: {
+          'Jaren ervaring in de hulpverlening': '6 jaar',
+          'Werkt rechtstreeks met cliënten rond cannabisgebruik': 'Ja, wekelijks',
+          'Welk thema zeker behandeld zien': 'Omgaan met ambivalentie bij jongeren',
+          'Dieetwensen': 'Vegetarisch',
+          'Toegankelijkheid': 'Geen bijzonderheden',
+        } },
+        evaluation:          null, // not yet submitted → "hidden when empty" demo (Fix 5)
       },
-      questionnaire: [
-        { q: 'Hoeveel jaar ervaring heb je in de hulpverlening?', a: '6 jaar' },
-        { q: 'Werk je rechtstreeks met cliënten rond cannabisgebruik?', a: 'Ja, wekelijks' },
-        { q: 'Welk thema wil je zeker behandeld zien?', a: 'Omgaan met ambivalentie bij jongeren' },
-      ],
       attendance: [
         { title: 'Sessie 1 — Kader & wettelijke context', date: '12 sep 2026', state: 'upcoming' },
         { title: 'Sessie 2 — Vroegdetectie',              date: '19 sep 2026', state: 'upcoming' },
@@ -274,13 +304,18 @@ const DOSSIER = {
       notes: [
         { text: 'Belde op 21/05 om te vragen of de keuzemodule jongeren ook online te volgen is — bevestigd dat dit kan.', meta: 'Notitie door Sofie (coördinator) · 21 mei 2026' },
       ],
+      // newest first — the home of every per-write event for this registration
       timeline: [
-        { dot: 'primary', title: 'Interesse geregistreerd',            actor: 'Imane El Amrani', when: '18 mei 2026 · 14:22' },
-        { dot: 'default', title: 'Persoonsgegevens ingediend',         actor: 'Imane El Amrani', when: '20 mei 2026 · 09:41' },
-        { dot: 'default', title: 'Facturatiegegevens ingediend',       actor: 'Imane El Amrani', when: '20 mei 2026 · 09:43' },
-        { dot: 'success', title: 'Inschrijving goedgekeurd → bevestigd', actor: 'Sofie (coördinator)', when: '20 mei 2026 · 11:05' },
-        { dot: 'default', title: 'Intake-formulier ingediend',         actor: 'Imane El Amrani', when: '22 mei 2026 · 16:08' },
-        { dot: 'warning', title: 'Offerte OFF-2026-0418 aangemaakt (in behandeling)', actor: 'Systeem', when: '23 mei 2026 · 08:30' },
+        { dot: 'primary', icon: 'mail',        title: 'Herinnering verstuurd: intake afronden',     actor: 'Sofie (coördinator)', when: '24 mei 2026 · 10:12' },
+        { dot: 'warning', icon: 'send',        title: 'Offerte OFF-2026-0418 verzonden naar klant', actor: 'Sofie (coördinator)', when: '23 mei 2026 · 09:15' },
+        { dot: 'warning', icon: 'receipt',     title: 'Offerte OFF-2026-0418 aangemaakt (in behandeling)', actor: 'Systeem', when: '23 mei 2026 · 08:30' },
+        { dot: 'default', icon: 'fileText',    title: 'Intakevragenlijst ingediend',                actor: 'Imane El Amrani', when: '22 mei 2026 · 16:08' },
+        { dot: 'success', icon: 'userCheck',   title: 'Inschrijving goedgekeurd → bevestigd',       actor: 'Sofie (coördinator)', when: '20 mei 2026 · 11:05' },
+        { dot: 'primary', icon: 'route',       title: 'Sessies gekozen: Sessie 1 (vm), Sessie 2 · keuzemodule "Jongeren & cannabis"', actor: 'Imane El Amrani', when: '20 mei 2026 · 09:44' },
+        { dot: 'default', icon: 'receipt',     title: 'Facturatiegegevens ingediend',               actor: 'Imane El Amrani', when: '20 mei 2026 · 09:43' },
+        { dot: 'default', icon: 'user',        title: 'Persoonsgegevens ingediend',                 actor: 'Imane El Amrani', when: '20 mei 2026 · 09:41' },
+        { dot: 'primary', icon: 'userPlus',    title: 'Inschrijving aangemaakt (via organisatie)',  actor: 'Imane El Amrani', when: '20 mei 2026 · 09:40' },
+        { dot: 'primary', icon: 'sparkle',     title: 'Interesse geregistreerd',                    actor: 'Imane El Amrani', when: '18 mei 2026 · 14:22' },
       ],
     },
     {
@@ -294,15 +329,13 @@ const DOSSIER = {
       startDate: '8 mrt 2024',
       quote: { ref: 'OFF-2024-0091', amount: '€ 495,00', status: 'exported' },
       stages: {
-        interest:            { submitted_at: '2024-01-10 10:00', submitted_by: 'Imane El Amrani', data: { 'Motivatie': 'Basis MI onder de knie krijgen' } },
-        enrollment_personal: { submitted_at: '2024-01-14 13:20', submitted_by: 'Imane El Amrani', data: { 'Voornaam': 'Imane', 'Organisatie': 'OCMW Gent' } },
-        enrollment_billing:  { submitted_at: '2024-01-14 13:22', submitted_by: 'Imane El Amrani', data: { 'Facturatiebedrijf': 'OCMW Gent', 'BTW-nummer': 'BE 0212.171.213' } },
-        intake:              { submitted_at: '2024-02-01 09:00', submitted_by: 'Imane El Amrani', data: { 'Dieetwensen': 'Vegetarisch' } },
-        evaluation:          { submitted_at: '2024-04-30 17:30', submitted_by: 'Imane El Amrani', data: { 'Tevredenheid': '5/5', 'Aanbeveling': 'Zeker aanbevolen', 'Opmerking': 'Sterke begeleiding, praktijkgericht' } },
+        interest:            { submitted_at: '10 jan 2024 · 10:00', submitted_by: 'Imane El Amrani', data: { 'Motivatie': 'Basis MI onder de knie krijgen' } },
+        enrollment_personal: { submitted_at: '14 jan 2024 · 13:20', submitted_by: 'Imane El Amrani', data: { 'Voornaam': 'Imane', 'Organisatie': 'OCMW Gent' } },
+        enrollment_billing:  { submitted_at: '14 jan 2024 · 13:22', submitted_by: 'Imane El Amrani', data: { 'Facturatiebedrijf': 'OCMW Gent', 'BTW-nummer': 'BE 0212.171.213' } },
+        initial_selection:   { submitted_at: '14 jan 2024 · 13:24', submitted_by: 'Imane El Amrani', data: { 'Reeks': 'Volledige reeks (4 sessies)' } },
+        intake:              { submitted_at: '1 feb 2024 · 09:00', submitted_by: 'Imane El Amrani', data: { 'Jaren ervaring in de hulpverlening': '4 jaar (in 2024)', 'Dieetwensen': 'Vegetarisch' } },
+        evaluation:          { submitted_at: '30 apr 2024 · 17:30', submitted_by: 'Imane El Amrani', data: { 'Tevredenheid': '5/5', 'Aanbeveling': 'Zeker aanbevolen', 'Opmerking': 'Sterke begeleiding, praktijkgericht' } },
       },
-      questionnaire: [
-        { q: 'Ervaring in de hulpverlening?', a: '4 jaar (in 2024)' },
-      ],
       attendance: [
         { title: 'Sessie 1 — Geest van MI',     date: '8 mrt 2024',  state: 'present' },
         { title: 'Sessie 2 — Reflectief luisteren', date: '15 mrt 2024', state: 'present' },
@@ -317,32 +350,82 @@ const DOSSIER = {
         { label: 'Certificaat uitgereikt',   done: true },
       ],
       notes: [],
+      // newest first — full lifecycle incl. per-session attendance + selection
       timeline: [
-        { dot: 'primary', title: 'Interesse geregistreerd',  actor: 'Imane El Amrani', when: '10 jan 2024' },
-        { dot: 'success', title: 'Inschrijving bevestigd',   actor: 'Tom (coördinator)', when: '14 jan 2024' },
-        { dot: 'success', title: 'Cursus afgerond',          actor: 'Systeem', when: '29 mrt 2024' },
-        { dot: 'success', title: 'Certificaat uitgereikt',   actor: 'Systeem', when: '2 mei 2024' },
-        { dot: 'default', title: 'Eindevaluatie ingediend',  actor: 'Imane El Amrani', when: '30 apr 2024' },
+        { dot: 'success', icon: 'award',     title: 'Certificaat uitgereikt',                       actor: 'Systeem', when: '2 mei 2024 · 09:00' },
+        { dot: 'success', icon: 'checkCircle',title: 'Cursus afgerond (alle voltooiingstaken behaald)', actor: 'Systeem', when: '29 mrt 2024 · 17:30' },
+        { dot: 'default', icon: 'fileText',  title: 'Evaluatie (na afloop) ingediend',              actor: 'Imane El Amrani', when: '30 apr 2024 · 17:30' },
+        { dot: 'success', icon: 'check',     title: 'Aanwezig gemarkeerd — Sessie 4 (Versterken van verandertaal)', actor: 'Tom (coördinator)', when: '29 mrt 2024 · 12:30' },
+        { dot: 'warning', icon: 'slash',     title: 'Verontschuldigd gemarkeerd — Sessie 3 (Omgaan met weerstand)', actor: 'Tom (coördinator)', when: '22 mrt 2024 · 12:30' },
+        { dot: 'success', icon: 'check',     title: 'Aanwezig gemarkeerd — Sessie 2 (Reflectief luisteren)', actor: 'Tom (coördinator)', when: '15 mrt 2024 · 12:30' },
+        { dot: 'success', icon: 'check',     title: 'Aanwezig gemarkeerd — Sessie 1 (Geest van MI)', actor: 'Tom (coördinator)', when: '8 mrt 2024 · 12:30' },
+        { dot: 'primary', icon: 'route',     title: 'Sessies gekozen: Volledige reeks (4 sessies)', actor: 'Imane El Amrani', when: '14 jan 2024 · 13:24' },
+        { dot: 'success', icon: 'userCheck', title: 'Inschrijving bevestigd',                       actor: 'Tom (coördinator)', when: '14 jan 2024 · 13:30' },
+        { dot: 'primary', icon: 'userPlus',  title: 'Inschrijving aangemaakt (via organisatie)',    actor: 'Imane El Amrani', when: '14 jan 2024 · 13:20' },
+        { dot: 'primary', icon: 'sparkle',   title: 'Interesse geregistreerd',                      actor: 'Imane El Amrani', when: '10 jan 2024 · 10:00' },
+      ],
+    },
+    {
+      // PENDING registration — demonstrates the "Inschrijvingsstatus" pending
+      // hint (Fix 4) and "hidden when empty" stages (Fix 5: intake + evaluation
+      // not yet submitted, so those panels never render).
+      id: 318, open: false,
+      edition: 'Omgaan met agressie in de hulpverlening',
+      cohort: 'Voorjaar 2026 · Antwerpen',
+      status: 'pending',
+      offerte: 'none',
+      path: 'Via organisatie (OCMW Gent)',
+      registered: '9 jun 2026',
+      startDate: '3 okt 2026',
+      quote: { ref: '—', amount: 'Nog geen offerte', status: 'none' },
+      stages: {
+        interest:            null, // direct ingeschreven, geen interesse-stap → hidden
+        enrollment_personal: { submitted_at: '9 jun 2026 · 11:02', submitted_by: 'Imane El Amrani', data: { 'Voornaam': 'Imane', 'Achternaam': 'El Amrani', 'Organisatie': 'OCMW Gent', 'Functie': 'Maatschappelijk werker' } },
+        enrollment_billing:  { submitted_at: '9 jun 2026 · 11:04', submitted_by: 'Imane El Amrani', data: { 'Facturatiebedrijf': 'OCMW Gent', 'BTW-nummer': 'BE 0212.171.213' } },
+        initial_selection:   null, // sessiekeuze nog niet gemaakt → hidden
+        intake:              null, // intake nog niet ingevuld → hidden (Fix 5 demo)
+        evaluation:          null, // n.v.t. → hidden
+      },
+      attendance: [
+        { title: 'Sessie 1 — Veiligheid & de-escalatie', date: '3 okt 2026',  state: 'upcoming' },
+        { title: 'Sessie 2 — Grenzen stellen',           date: '10 okt 2026', state: 'upcoming' },
+      ],
+      selections: [],
+      completion: [
+        { label: 'Persoonsgegevens', done: true },
+        { label: 'Sessiekeuze',      done: false },
+        { label: 'Intakevragen',     done: false },
+        { label: 'Goedkeuring inschrijving', done: false },
+      ],
+      notes: [],
+      timeline: [
+        { dot: 'primary', icon: 'receipt',  title: 'Facturatiegegevens ingediend',              actor: 'Imane El Amrani', when: '9 jun 2026 · 11:04' },
+        { dot: 'default', icon: 'user',     title: 'Persoonsgegevens ingediend',                actor: 'Imane El Amrani', when: '9 jun 2026 · 11:02' },
+        { dot: 'primary', icon: 'userPlus', title: 'Inschrijving aangemaakt (via organisatie)', actor: 'Imane El Amrani', when: '9 jun 2026 · 11:00' },
       ],
     },
   ],
 };
 
-/* human-readable stage names */
+/* human-readable stage names + a one-line "what this stage is".
+   `intake` and `evaluation` are the two real questionnaire stages — intake is
+   the questionnaire submitted AFTER confirmation (same thing the completion
+   task "Intakevragen" tracks), evaluation is the post-course questionnaire.
+   There is no separate "Vragenlijst" dataset — the answers ARE the intake stage. */
 const STAGE_META = {
-  interest:            { name: 'Interesse',            icon: 'sparkle' },
-  waitlist:            { name: 'Wachtlijst',           icon: 'seat' },
-  enrollment_personal: { name: 'Inschrijving — persoonsgegevens', icon: 'user' },
-  enrollment_billing:  { name: 'Inschrijving — facturatie',       icon: 'receipt' },
-  intake:              { name: 'Intake',               icon: 'fileText' },
-  evaluation:          { name: 'Eindevaluatie',        icon: 'award' },
-  initial_selection:   { name: 'Initiële keuze',       icon: 'route' },
+  interest:            { name: 'Interesse',                       icon: 'sparkle',  desc: 'Eerste interesse, vóór inschrijving.' },
+  waitlist:            { name: 'Wachtlijst',                      icon: 'seat',     desc: 'Aangemeld op de wachtlijst.' },
+  enrollment_personal: { name: 'Inschrijving — persoonsgegevens', icon: 'user',    desc: 'Persoonsgegevens ingevuld bij inschrijving.' },
+  enrollment_billing:  { name: 'Inschrijving — facturatie',       icon: 'receipt', desc: 'Facturatiegegevens ingevuld bij inschrijving.' },
+  initial_selection:   { name: 'Initiële sessiekeuze',            icon: 'route',    desc: 'Keuze van sessies/keuzemodules bij inschrijving.' },
+  intake:              { name: 'Intakevragenlijst',               icon: 'fileText', desc: 'Vragenlijst ingevuld na bevestiging (de "Intakevragen"-taak).' },
+  evaluation:          { name: 'Evaluatie (na afloop)',           icon: 'award',    desc: 'Eindevaluatie ingevuld na de cursus.' },
 };
 
 /* ---- expose ---- */
 window.WS = {
   icon, ICONS,
-  REG_STATUS, OFFERTE_STATUS, SMART_ACTIONS, actionsForState, actionsForStates,
+  REG_STATUS, OFFERTE_STATUS, STATUS_PIPELINE, STATUS_EXIT, SMART_ACTIONS, actionsForState, actionsForStates,
   avatarColor, initials,
   EDITIONS, COMPANIES, REGISTRATIONS, QUEUES, QUEUE_FILTER, ACTION_QUEUE, STATS,
   DOSSIER, STAGE_META,
