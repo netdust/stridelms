@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="nl-BE">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stride · Admin Workspace — mockups</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/workspace.css">
+  <link rel="stylesheet" href="assets/css/grid.css">
+</head>
+<body>
+  <div class="ws-launcher" x-data x-cloak>
+    <div class="ws-launcher__inner ws-stagger">
+      <div class="ws-launcher__brand">
+        <div class="ws-launcher__mark" x-html="WS.icon('layers')"></div>
+        <div class="ws-launcher__name">Stride
+          <small>Admin Workspace · prototype</small>
+        </div>
+      </div>
+
+      <h1>Van lijst-en-loslaten<br>naar <em>werkbank</em>.</h1>
+      <p class="ws-launcher__lede">
+        Statische klikbare mockups voor de eerste fase van de Admin Workspace-herinrichting —
+        persoonslens. Geen backend, geen echte data: alles is hardgecodeerd om het
+        interactiemodel te valideren. Drie oppervlakken, exact volgens de spec.
+      </p>
+
+      <div class="ws-launcher__cards">
+        <a class="ws-launch-card" href="vandaag.html">
+          <span class="ws-launch-card__num">Oppervlak 01</span>
+          <div class="ws-launch-card__icon" x-html="WS.icon('sun')"></div>
+          <div class="ws-launch-card__arrow" x-html="WS.icon('arrowRight')"></div>
+          <h3>Vandaag</h3>
+          <p>De werklijst-thuispagina. Vijf wachtrijen met live tellingen, elk met de
+             standaard bulkactie klaar. Het commandocentrum.</p>
+        </a>
+
+        <a class="ws-launch-card" href="inschrijvingen.html">
+          <span class="ws-launch-card__num">Oppervlak 02</span>
+          <div class="ws-launch-card__icon" x-html="WS.icon('grid')"></div>
+          <div class="ws-launch-card__arrow" x-html="WS.icon('arrowRight')"></div>
+          <h3>Inschrijvingen</h3>
+          <p>De grid — het hart van de herinrichting. Multi-select, statusbewuste
+             bulkbalk, groeperen, server-side paginering.</p>
+        </a>
+
+        <a class="ws-launch-card" href="dossier.html">
+          <span class="ws-launch-card__num">Oppervlak 03</span>
+          <div class="ws-launch-card__icon" x-html="WS.icon('folder')"></div>
+          <div class="ws-launch-card__arrow" x-html="WS.icon('arrowRight')"></div>
+          <h3>Dossier</h3>
+          <p>Eén persoon, alle inschrijvingen. Volledige join: alle stages, offerte,
+             aanwezigheid, keuzes, en een geschiedenis-tijdlijn.</p>
+        </a>
+      </div>
+
+      <div class="ws-launcher__note">
+        <span x-html="WS.icon('info')"></span>
+        Mockup-only · statische HTML + Alpine.js + CSS · geen build, geen API · opent als <code style="font-family:var(--ws-mono);color:#94a3b8">file://</code>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
+  <script src="assets/js/data.js"></script>
+</body>
+</html>

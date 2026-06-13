@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="nl-BE">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vandaag · Stride Admin Workspace</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/workspace.css">
+  <link rel="stylesheet" href="assets/css/grid.css">
+</head>
+<body>
+<div class="ws-shell" x-data="vandaag()" x-cloak>
+
+  <!-- ===== COMMAND RAIL ===== -->
+  <aside class="ws-rail">
+    <div class="ws-brand">
+      <div class="ws-brand__mark" x-html="WS.icon('layers')"></div>
+      <div>
+        <div class="ws-brand__name">Stride</div>
+        <div class="ws-brand__sub">Workspace</div>
+      </div>
+    </div>
+    <nav class="ws-nav">
+      <div class="ws-nav__group">
+        <div class="ws-nav__label">Werkbank</div>
+        <a class="ws-nav__item is-active" href="vandaag.html"><span x-html="WS.icon('sun')"></span> Vandaag <span class="ws-nav__count is-alert">24</span></a>
+        <a class="ws-nav__item" href="inschrijvingen.html"><span x-html="WS.icon('grid')"></span> Inschrijvingen <span class="ws-nav__count">247</span></a>
+      </div>
+      <div class="ws-nav__group">
+        <div class="ws-nav__label">Beheer</div>
+        <a class="ws-nav__item" href="#"><span x-html="WS.icon('layers')"></span> Edities <span class="ws-nav__count">7</span></a>
+        <a class="ws-nav__item" href="#"><span x-html="WS.icon('calendar')"></span> Sessies</a>
+        <a class="ws-nav__item" href="#"><span x-html="WS.icon('receipt')"></span> Offertes <span class="ws-nav__count">12</span></a>
+        <a class="ws-nav__item" href="#"><span x-html="WS.icon('route')"></span> Trajecten</a>
+        <a class="ws-nav__item" href="#"><span x-html="WS.icon('users')"></span> Gebruikers</a>
+      </div>
+    </nav>
+    <div class="ws-rail__foot">
+      <div class="ws-user">
+        <div class="ws-user__avatar">SC</div>
+        <div>
+          <div class="ws-user__name">Sofie Coördinator</div>
+          <div class="ws-user__role">stride_coordinator</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <main class="ws-main">
+    <header class="ws-topbar">
+      <div class="ws-topbar__crumbs"><b>Vandaag</b></div>
+      <div class="ws-topbar__spacer"></div>
+      <div class="ws-search">
+        <span x-html="WS.icon('search')"></span>
+        <input type="text" placeholder="Zoek persoon, editie, organisatie…">
+        <kbd>⌘K</kbd>
+      </div>
+      <button class="ws-btn ws-btn--ghost ws-btn--icon" title="Vernieuwen" @click="pulse()"><span x-html="WS.icon('refresh')"></span></button>
+    </header>
+
+    <div class="ws-content">
+      <div class="ws-stagger">
+
+        <!-- Page head -->
+        <div class="ws-page-head">
+          <div>
+            <span class="ws-eyebrow">Werklijst · <span x-text="today"></span></span>
+            <h1>Goeiemorgen, Sofie.</h1>
+            <p>Je hebt <b x-text="totalActions"></b> openstaande acties verdeeld over vijf wachtrijen.</p>
+          </div>
+          <a class="ws-btn ws-btn--ghost" href="inschrijvingen.html"><span x-html="WS.icon('grid')"></span> Open alle inschrijvingen</a>
+        </div>
+
+        <!-- Stat strip -->
+        <div class="ws-statstrip">
+          <template x-for="s in stats" :key="s.label">
+            <div class="ws-stat">
+              <div class="ws-stat__label"><span x-html="WS.icon(s.icon)"></span> <span x-text="s.label"></span></div>
+              <div class="ws-stat__num" x-text="s.num.toLocaleString('nl-BE')"></div>
+              <div class="ws-stat__delta" :class="s.kind==='up' ? 'ws-stat__delta--up' : 'ws-stat__delta--flat'">
+                <span x-show="s.kind==='up'" x-html="WS.icon('arrowUp')" style="width:13px;height:13px"></span>
+                <span x-text="s.delta"></span>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- Promoted "Acties nodig" panel (front door) -->
+        <section class="ws-actions-strip">
+          <div class="ws-actions-strip__tabs">
+            <button class="ws-mini-tab" :class="actTab==='mij' && 'is-active'" @click="actTab='mij'">
+              <span x-html="WS.icon('hourglass')" style="width:15px;height:15px"></span> Wacht op mij
+              <span class="ws-mini-tab__pill" x-text="aq.mij.length"></span>
+            </button>
+            <button class="ws-mini-tab" :class="actTab==='gebruiker' && 'is-active'" @click="actTab='gebruiker'">
+              <span x-html="WS.icon('clock')" style="width:15px;height:15px"></span> Wacht op gebruiker
+              <span class="ws-mini-tab__pill" :class="aq.gebruiker.length && 'is-alert'" x-text="aq.gebruiker.length"></span>
+            </button>
+            <button class="ws-mini-tab" :class="actTab==='meldingen' && 'is-active'" @click="actTab='meldingen'">
+              <span x-html="WS.icon('bell')" style="width:15px;height:15px"></span> Meldingen
+              <span class="ws-mini-tab__pill" x-text="aq.meldingen.length"></span>
+            </button>
+          </div>
+          <div>
+            <template x-for="item in aq[actTab]" :key="item.regId">
+              <a class="ws-actitem" :href="'dossier.html#reg-'+item.regId">
+                <div class="ws-actitem__avatar" :style="`background:linear-gradient(135deg, ${WS.avatarColor(item.name)}, ${WS.avatarColor(item.name)}cc)`" x-text="WS.initials(item.name)"></div>
+                <div class="ws-actitem__body">
+                  <div class="ws-actitem__title" x-text="item.name"></div>
+                  <div class="ws-actitem__meta" x-text="item.meta"></div>
+                </div>
+                <div class="ws-actitem__age" x-text="item.age"></div>
+                <span x-html="WS.icon('chevRight')" style="width:16px;height:16px;color:var(--ws-text-3)"></span>
+              </a>
+            </template>
+            <div x-show="aq[actTab].length===0" class="ws-empty" style="padding:32px">
+              <div class="ws-empty__icon" x-html="WS.icon('checkCircle')"></div>
+              <h3>Niets in deze wachtrij</h3>
+              <p>Alles afgehandeld. Goed bezig.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- The 5 queues -->
+        <div class="ws-page-head" style="margin-bottom:var(--ws-4)">
+          <div><h2 style="font-size:18px;letter-spacing:-0.01em">Wachtrijen</h2></div>
+          <span class="ws-muted" style="font-size:var(--ws-fs-sm)">Klik een wachtrij om de grid voorgefilterd te openen</span>
+        </div>
+
+        <div class="ws-queues">
+          <template x-for="q in queues" :key="q.key">
+            <a class="ws-queue" :class="q.count===0 && 'is-empty'"
+               :style="`--accent:${q.accent}`"
+               :href="`inschrijvingen.html?queue=${q.key}`">
+              <div class="ws-queue__top">
+                <div class="ws-queue__icon" x-html="WS.icon(q.icon)"></div>
+                <div class="ws-queue__count" :class="q.count===0 && 'is-zero'" x-text="q.count"></div>
+              </div>
+              <div class="ws-queue__title" x-text="q.label"></div>
+              <div class="ws-queue__def" x-text="q.def"></div>
+              <div class="ws-queue__foot">
+                <span class="ws-queue__action">
+                  <span x-show="q.count>0" x-html="WS.icon(q.actionIcon)"></span>
+                  <span x-show="q.count===0" x-html="WS.icon('checkCircle')"></span>
+                  <span x-text="q.count>0 ? q.action : 'Niets te doen'"></span>
+                </span>
+                <span class="ws-queue__go" x-show="q.count>0">Openen <span x-html="WS.icon('arrowRight')"></span></span>
+              </div>
+            </a>
+          </template>
+        </div>
+
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- toast for the refresh demo -->
+<div class="ws-toast-zone" x-data="{ show:false }" @ws-toast.window="show=true; setTimeout(()=>show=false, 2600)">
+  <template x-if="show">
+    <div class="ws-toast">
+      <div class="ws-toast__icon ws-toast__icon--ok" x-html="WS.icon('check')"></div>
+      <div class="ws-toast__msg">Tellingen vernieuwd — <b>geen wijzigingen</b></div>
+    </div>
+  </template>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
+<script src="assets/js/data.js"></script>
+<script>
+function vandaag() {
+  return {
+    actTab: 'mij',
+    queues: WS.QUEUES,
+    stats: WS.STATS,
+    aq: WS.ACTION_QUEUE,
+    today: new Date().toLocaleDateString('nl-BE', { weekday:'long', day:'numeric', month:'long' }),
+    get totalActions() { return WS.QUEUES.reduce((n,q)=>n+q.count, 0); },
+    pulse() { window.dispatchEvent(new CustomEvent('ws-toast')); },
+  };
+}
+</script>
+</body>
+</html>
