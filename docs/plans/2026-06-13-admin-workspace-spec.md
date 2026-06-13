@@ -191,21 +191,24 @@ The grid's composite read model is assembled via **batched joins**, NOT a materi
 
 ### 4.1 ADD
 
-| Endpoint / handler | Type | Purpose | Key params / notes |
-|---|---|---|---|
-| `GET /stride/v1/admin/registrations` | REST route on `AdminAPIController` | The grid read-model (§3) | Filters: `status`, `edition_id`, `company_id`, `trajectory_id`, `offerte_status`, `q` (name search); `sort` (whitelisted columns only); `group_by` (whitelisted: `edition_id`/`status`/`company_id`/`trajectory_id`); `page`, `per_page` (capped). `trajectory_id` filter returns the trajectory's **child edition-rows** via the parent→child join (§11), not the parent. `permission_callback` → `canViewAdmin`. New registration query *shapes* extracted into `RegistrationRepository` (INV-3). |
-| `stride_bulk_approve` | `ntdst/v1/action` handler | bulk pending/interest → confirmed | wraps single-item `approveRegistration` path; per-row report (§2.3) |
-| `stride_bulk_promote_waitlist` | `ntdst/v1/action` handler | waitlist → confirmed | capacity re-check per row |
-| `stride_bulk_cancel` | `ntdst/v1/action` handler | → cancelled | release seat + notify |
-| `stride_bulk_quote_sent` | `ntdst/v1/action` handler | quote → `Sent` | NOT paid |
-| `stride_bulk_quote_exported` | `ntdst/v1/action` handler | quote → `Exported` | NOT paid |
-| `stride_bulk_approve_post_course` | `ntdst/v1/action` handler | post-course approval | wraps single-item `approvePostCourse` |
-| `stride_bulk_message` | `ntdst/v1/action` handler | send templated notification | reuses NotificationService |
-| `stride_bulk_generate_doc` | `ntdst/v1/action` handler | generate deliverable | reuses exporters/PDF |
-| `stride_bulk_set_field` | `ntdst/v1/action` handler | generic safe-column set | **server-side allowlist** notes/tags/company only |
-| `GET /admin/users/{id}/trajectories` | REST route on `AdminAPIController` | the case-view trajectory section (Surface 3 / §11) | **the one real gap** — returns per-trajectory progress + chosen electives by wiring the EXISTING `TrajectoryDashboardService::getProgressData` + `TrajectorySelection` (no new compute). `permission_callback` → `canViewAdmin`. *(Alternatively fold into `getUserDetail`; a separate endpoint keeps that payload lean — recommended.)* |
-| `GET /admin/trajectories/options` | REST route on `AdminAPIController` | trajectory typeahead for the grid filter + Trajecten-tab search | lightweight `{id, title, status}` (same pattern as `/editions/options`, §10). |
-| field-scoped export | extends exporters | deliverable export (Phase 3) | §9 — deferred |
+This is the **complete list of net-new server work** — 14 items: **13 in the first slice** (3 REST reads + 10 `ntdst/v1/action` bulk handlers, Phases 1A–1E) + 1 deferred (field-scoped export, Phase 3). Everything not in this table is REUSE (§4.2). The "Phase" column ties each to the phase map.
+
+| Endpoint / handler | Type | Phase | Purpose | Key params / notes |
+|---|---|---|---|---|
+| `GET /stride/v1/admin/registrations` | REST route on `AdminAPIController` | 1A | The grid read-model (§3) | Filters: `status`, `edition_id`, `company_id`, `trajectory_id`, `offerte_status`, `q` (name search); **`edition_scope`** (`active` default \| `all`, §10.4 — active = `getEffectiveStatus` not terminal AND `end_date ≥ today`; bypassed by an explicit `edition_id`); `sort` (whitelisted columns only); `group_by` (whitelisted: `edition_id`/`status`/`company_id`/`trajectory_id`); `page`, `per_page` (capped). `trajectory_id` filter returns the trajectory's **child edition-rows** via the parent→child join (§11), not the parent. `permission_callback` → `canViewAdmin`. New registration query *shapes* extracted into `RegistrationRepository` (INV-3). |
+| `GET /admin/editions/options` | REST route on `AdminAPIController` | 1B | lightweight edition typeahead for the grid filter + group-by source + queue scoping (§10) | params `q`, `scope` (`active` default \| `all`). Returns lightweight `{id, title, effective_status}` — NOT the heavy `getEditions` payload. `permission_callback` → `canViewAdmin`. Also repoints the existing heavy `loadQuoteEditions` quotes-filter call (§10.4 bonus). |
+| `GET /admin/trajectories/options` | REST route on `AdminAPIController` | 1B | trajectory typeahead for the grid filter + Trajecten-tab search | params `q`, `scope`. Lightweight `{id, title, status}` (same pattern as `/editions/options`). `permission_callback` → `canViewAdmin`. |
+| `stride_bulk_approve` | `ntdst/v1/action` handler | 1C | bulk pending/interest → confirmed | wraps single-item `approveRegistration` path; per-row report (§2.3) |
+| `stride_bulk_promote_waitlist` | `ntdst/v1/action` handler | 1C | waitlist → confirmed | capacity re-check per row |
+| `stride_bulk_cancel` | `ntdst/v1/action` handler | 1C | → cancelled | release seat + notify |
+| `stride_bulk_quote_sent` | `ntdst/v1/action` handler | 1C | quote → `Sent` | NOT paid |
+| `stride_bulk_quote_exported` | `ntdst/v1/action` handler | 1C | quote → `Exported` | NOT paid |
+| `stride_bulk_approve_post_course` | `ntdst/v1/action` handler | 1C | post-course approval | wraps single-item `approvePostCourse` |
+| `stride_bulk_message` | `ntdst/v1/action` handler | 1C | send templated notification | reuses NotificationService |
+| `stride_bulk_generate_doc` | `ntdst/v1/action` handler | 1C | generate deliverable | reuses exporters/PDF |
+| `stride_bulk_set_field` | `ntdst/v1/action` handler | 1C | generic safe-column set | **server-side allowlist** notes/tags/company only |
+| `GET /admin/users/{id}/trajectories` | REST route on `AdminAPIController` | 1E | the case-view trajectory section (Surface 3 / §11) | **the one real backend gap** — returns per-trajectory progress + chosen electives by wiring the EXISTING `TrajectoryDashboardService::getProgressData` + `TrajectorySelection` (no new compute). `permission_callback` → `canViewAdmin`. **DECIDED: a SEPARATE endpoint, not folded into `getUserDetail`** — keeps the already-fat `getUserDetail` payload lean and lets the Dossier lazy-load the trajectory section. |
+| `field-scoped export` | extends exporters | 3 | deliverable export | §9 — deferred |
 
 All bulk handlers register via `add_filter('ntdst/api_data/<name>', $cb, 10, 2)` (INV-2 convergence point) and authorize **inside** the handler with `canManageAdmin` semantics on **each row** (INV-1, § Threat model M2).
 
