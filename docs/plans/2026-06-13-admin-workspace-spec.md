@@ -47,6 +47,8 @@ Promotes the buried "Acties nodig" queue to the home screen. Named queues with *
 
 Clicking a queue opens **Surface 2 pre-filtered** with the relevant bulk action ready. These five ARE the shipped saved views (the brief's "~5 pre-made worklists"). A blank view-builder is explicitly **NOT** the front door.
 
+**Queue counts are scoped to active editions** (§10). A coordinator chases *live* work — nobody promotes a waitlist on a 2021 edition. The count queries (`countByEditions`/`statusBreakdownByEditions`/`batchGetRegistrationCounts`, all verified to take an explicit edition-ID set) are fed the active-edition subset, not the whole corpus, so the counts stay both fast and meaningful at 200+ total editions.
+
 ### Surface 2 — "Inschrijvingen" (the registrations grid / workbench)
 Row = **one registration in its current state** (NOT one row per write/event — events live in the case-view history). Columns are a **composite from structured sources**:
 
@@ -59,19 +61,25 @@ Row = **one registration in its current state** (NOT one row per write/event —
 | Aanwezigheid % | `vad_attendance` aggregate (batch) |
 | Organisatie | `company_id` (batch-resolved) |
 
-- **Filter / sort / group-by on structured columns only.** Grouped rows show aggregates **from structured data only**: `count`, `% afgerond` (via `completed_at`), aanwezigheid % (via `vad_attendance`), offerte-verdeling (via quote status). **Never** a questionnaire/`enrollment_data` JSON aggregate. This in-grid grouping replaces Excel pivot tables.
-- **Multi-select → bulk-action bar.** Top 3 actions surface as buttons; the rest in an overflow menu.
-- **Server-side pagination + filtering** (see §5 perf note — never load ~4000 rows client-side; Alpine cannot virtualize that).
+- **The status filter is presented as the enrollment PIPELINE, not a row of bare chips** (mockup-validated 2026-06-13). The lifecycle reads left→right as a funnel labelled "Fase in inschrijvingsproces": *Interesse getoond → Op wachtlijst → Wacht op goedkeuring → Bevestigd / ingeschreven → Afgerond*, connected by arrows, each a clickable toggle carrying its live count. **`Geannuleerd` is split off after a divider as a dead-end exit**, never inline in the funnel. Microcopy is self-explanatory ("where this person is in the process"), not single words — bare words like "Interesse"/"Wachtlijst" tested as meaningless. The *Wacht op goedkeuring* step carries a tooltip noting the two real sub-states (waiting on the user to finish tasks, OR waiting on admin approval once tasks are done — see §2.4).
+- **Group-by is the control "Indelen per"** (Editie / Status / Organisatie) — labelled so it reads as restructuring the view, not sorting. It collapses the list into **collapsible sections** per distinct value; each section header shows aggregates **from structured data only**: `count`, `% afgerond` (via `completed_at`), gem. aanwezigheid % (via `vad_attendance`), offerte-verdeling (a small quote-status breakdown, e.g. "2 verwerkt · 3 verzonden · 1 geen"). **Never** a questionnaire/`enrollment_data` JSON aggregate. This in-grid grouping replaces Excel pivot tables. Multi-select + bulk bar work inside grouped view.
+- **Multi-select → bulk-action bar.** Top 3 actions surface as buttons; the rest in an overflow menu. The actions shown are **state-aware** — derived from the §2.1 transition map for the current selection (a mixed-state selection narrows to the safe intersection).
+- **Server-side pagination + filtering** (see §5 + §10 perf notes — never load all rows client-side; Alpine cannot virtualize that).
+- **Defaults to active editions only** (see §10) — archived/past editions are excluded from the live grid + queue counts but reachable via the searchable edition picker.
 - Click a row → Surface 3.
 
 ### Surface 3 — "Dossier" (case view, per person → per registration)
 The full join for one registrant. A **person can hold multiple registrations** → person-headed, registrations listed, expand one for detail. Powered by the **existing** `GET /admin/users/{id}/detail` (REUSE — §6). Renders:
-- Registration detail (status, path, dates).
-- **All `enrollment_data` stages human-readable** — for each stage (`interest`, `waitlist`, `enrollment_personal`, `enrollment_billing`, `intake`, `evaluation`, `initial_selection`): render `stage.data` + show `submitted_at` and `submitted_by` (the 3-key shape, §0 #2).
+- Registration detail. The lifecycle status field is labelled **"Inschrijvingsstatus"** (not bare "Status"). A `pending` registration shows an inline hint explaining the two sub-states (waiting on the user vs waiting on admin approval — §2.4).
+- **`enrollment_data` stages as collapsible panels** (mockup-validated 2026-06-13): for each stage (`interest`, `waitlist`, `enrollment_personal`, `enrollment_billing`, `intake`, `evaluation`, `initial_selection`):
+  - **Stages with no submitted data are HIDDEN entirely** — a stage is empty if it's null/absent or its `.data` is empty. Do not render an empty panel.
+  - **Stages with data render as CLOSED panels** that open on click. The closed header shows the stage's Dutch name + `submitted_at` + `submitted_by` (the 3-key shape, §0 #2). Opened, `stage.data` renders as **clean humanized label→value pairs**, never raw JSON.
+  - **Dutch stage names:** `intake` → **"Intakevragenlijst"**, `evaluation` → **"Evaluatie (na afloop)"**, etc.
+- **There is NO separate "Vragenlijst" block.** The intake questionnaire answers ARE the `intake` stage's data — render them there ONCE. ("Intakevragen" may still appear as a *completion-task* status in the tasks list, but the answers live only under the intake stage.) Source: the `questionnaire` completion-task and the `intake` enrollment-data stage are the same dataset (verified — `QuestionnaireHandler`, `EnrollmentCompletion`). The brief's separate questionnaire-answers section was a duplication and is removed.
 - Linked quote (amount + **offerte-status**, never "betaald/onbetaald").
-- Questionnaire answers, attendance per session, selected sessions (via `TrajectorySelection::getSelectedCourseIds` per **INV-6b**, never the raw `selections` column), `completion_tasks`, notes.
-- The **state-appropriate action buttons** (§2 — same map as the grid).
-- A **history timeline** — this is where per-write events live (events are history *inside* a record, never the main grid).
+- Attendance per session, selected sessions (read via the server-side detail payload per **INV-6b** — never the raw `selections` column), `completion_tasks`, notes.
+- The **state-appropriate action buttons** (§2 — same map as the grid), styled as real buttons under "Acties voor deze inschrijving"; a terminal (`cancelled`) registration shows a muted "geen acties" state.
+- A **history timeline** — this is where per-write events live (events are history *inside* a record, never the main grid). It surfaces the full audited event spectrum: registration created/confirmed/cancelled, interest/waitlist, **attendance marked** (present/absent/excused), quote created/sent, completion-task/approval, certificate issued/course completed, admin messages, **and session selection**. ⚠️ **Implementation gap (small, named):** session-selection events ARE recorded (`session.selections_updated` + the `initial_selection.phases[]` trail with `captured_at`/`captured_by`) but are NOT currently surfaced in the admin timeline — `session.selections_updated` is absent from `AdminActivityMapper::KNOWN_ACTIONS`. Closing this is a one-line addition to that list (plus a label), tracked as Task 3.4a. The mockup shows these events because the data backs them.
 
 ### The Editie/sessie cohort lens (described fully; FIRST SLICE excludes it — Phase 2)
 - Edition → its sessions → per-session roster ("who is in which session"), derived from `registrations.selections` **within the edition's loaded roster** (a small set — no global query, no index, no projection).
@@ -226,6 +234,36 @@ All bulk handlers register via `add_filter('ntdst/api_data/<name>', $cb, 10, 2)`
 
 ---
 
+## 10. Scale & the active/archived edition cutoff
+
+The workbench must stay performant at **200+ editions** and **thousands of registrations**. Grounding (2026-06-13) confirms the data already supports the cutoff — this is a *default + a query scope*, not new infrastructure.
+
+### 10.1 The registrations grid scales already
+The grid is **server-side paged** (default 50/page) over the indexed `wp_vad_registrations` table. Per-page cost is one indexed query + ≤6 batched reads (§3), **constant in total corpus size**. Thousands of registrations is well within budget — the grid does not change with scale. The only hard rule is the one already stated (§5): never load the full set client-side.
+
+### 10.2 Where edition count actually bites — two dropdown/count spots, not the grid
+At 200+ editions, two surfaces degrade if naïve:
+1. **The edition filter/picker** (grid filter + the "Indelen per → Editie" group-by source). A flat list of 200+ editions is both a fat query and an unusable picker.
+2. **The Vandaag queue counts** (esp. "Wachtlijst — plaatsen vrij"), if they scan capacity across *all* editions including long-dead ones — slow, and meaningless (nobody chases a closed 2021 edition).
+
+### 10.3 The cutoff is built from EXISTING status/date data (verified)
+- **`Domain/OfferingStatus.php`** already defines terminal states `completed` ("Afgelopen") and `archived` ("Gearchiveerd"), alongside `cancelled`. `isTerminal()` covers all three.
+- **`EditionService::getEffectiveStatus()` / `isPast()`** already derive "past" from `end_date` (fallback `start_date`) — an edition whose end date has passed reads as `Completed` in effective status even if its stored status lags (INV-7).
+- **`getEditions` already soft-defaults** to hiding editions whose start is >2 days ago (`AdminAPIController.php:~786`). So a "recent/active by default" posture is the existing behaviour, not a new idea — this spec only makes it explicit and consistent for the grid + queues.
+- **All count methods take an explicit edition-ID set** — `RegistrationRepository::countByEditions($ids,$statuses)`, `statusBreakdownByEditions($ids)`, `BatchQueryHelper::batchGetRegistrationCounts($ids)` (verified). They are `WHERE edition_id IN (…)`, never a full scan. So scoping to active editions is a free win: pre-filter the edition IDs to active, pass that subset in.
+
+### 10.4 The design rule
+- **"Active" = not terminal AND not past:** `OfferingStatus NOT IN (completed, cancelled, archived)` AND `end_date >= today` (via the existing effective-status logic). Read through `getEffectiveStatus()` (INV-7), never raw stored status.
+- **The grid + queue counts default to active editions.** A visible, dismissable filter pill ("Actieve edities") signals the default; clearing it widens to all.
+- **The edition picker is a server-side searchable typeahead**, NOT a flat 200-item `<select>`. It returns a lightweight `{id, title, effective_status}` list, paged/filtered server-side, defaulting to active editions with archived ones one search away. This needs a small **new lightweight endpoint** `GET /admin/editions/options?q=&scope=active|all` (id+title only — do NOT reuse the heavy `getEditions` payload to fill a picker).
+- **An archived edition is never lost** — it is always reachable: search it in the picker (`scope=all`), and once selected the grid shows its registrations normally. Archiving changes the *default scope*, not *access*.
+- **Registrations themselves are never archived/hidden** — only editions gate the default view. A registration on an archived edition is still found by selecting that edition.
+
+### 10.5 Net effect
+At 200+ editions: the picker is a typeahead over a tiny id+title list (scoped + paged), the queue counts run `WHERE edition_id IN (active subset)` instead of a corpus scan, and the grid is unchanged (already paged). No projection table, no new edition lifecycle — just the active-by-default scope over data that already distinguishes active from terminal/past. *(This adds Task 1.4a — the `/editions/options` typeahead endpoint — and the active-default scope to Task 1.2's query method + the queue-count callers.)*
+
+---
+
 ## Golden path: form / AJAX / write-flow (deviations must be named and justified)
 
 - [ ] Built to `netdust-wp:ntdst-patterns → golden-paths/form-data-flow.md` — read before task breakdown. The bulk handlers ARE write-flows over the `ntdst/api_data` filter path, which is the slice's spine.
@@ -376,14 +414,20 @@ Cited per `netdust-agent:architecture-invariants` against the project's `ARCHITE
 
 #### Task 1.2: RegistrationRepository read-model query (the batched-join core)
 **Files:** Modify `web/app/mu-plugins/stride-core/Modules/Enrollment/RegistrationRepository.php`; Test `tests/Integration/RegistrationGridQueryTest.php`
-- Tier A. **Test contract:** asserts the new `queryForGrid(array $filters): array` returns only rows matching a structured `status`+`company_id` filter, respects `per_page`/`page`, and that an **out-of-whitelist `sort`/`group_by` value is rejected** (M4) and **no param path reaches `enrollment_data`** (M5 — assert the method signature/whitelist, drive a JSON-ish param and confirm it's ignored/rejected). Uses the integration DB (real indexes).
-- [ ] Write failing test; run (FAIL); implement `queryForGrid` with server-side whitelists + `$wpdb->prepare`; run (PASS); commit.
+- Tier A. **Test contract:** asserts the new `queryForGrid(array $filters): array` returns only rows matching a structured `status`+`company_id` filter, respects `per_page`/`page`, and that an **out-of-whitelist `sort`/`group_by` value is rejected** (M4) and **no param path reaches `enrollment_data`** (M5 — assert the method signature/whitelist, drive a JSON-ish param and confirm it's ignored/rejected); **asserts the active-edition scope default** (§10.4) — with `edition_scope=active` (default), rows on a terminal/past edition are excluded; with `edition_scope=all` or an explicit `edition_id`, they are included. Uses the integration DB (real indexes).
+- [ ] Write failing test; run (FAIL); implement `queryForGrid` with server-side whitelists + `$wpdb->prepare` + the active-edition scope (active = `getEffectiveStatus` not terminal AND `end_date >= today`, default on; bypassed by explicit `edition_id` or `scope=all`); run (PASS); commit.
 
 #### Task 1.3: `GET /admin/registrations` REST route (read-model endpoint)
 **Files:** Modify `web/app/mu-plugins/stride-core/Admin/AdminAPIController.php` (register route + `getRegistrations()` callback); Test `tests/Integration/AdminRegistrationsEndpointTest.php`
 - Tier A. **Test contract:** asserts the route returns the composed page DTO (name/edition/status/offerte-status/attendance%/company) for a `canViewAdmin` user; **asserts an unauthenticated request is denied (M1)**; asserts the offerte-status column is the two-step resolved value (§0 #5), NOT a "paid" flag.
 - [ ] Write failing test; run (FAIL); register route with `permission_callback => [$this,'canViewAdmin']`, implement `getRegistrations()` calling `queryForGrid` + the batch resolvers (§3.1); run (PASS); commit.
 - **Acceptance:** drift pre-check clean — `/drift-reviewer` on the touched paths returns no findings; the per-flow security line (M1/M4/M5) satisfied in the diff.
+
+#### Task 1.4a: `GET /admin/editions/options` — lightweight searchable edition picker (scale, §10)
+**Files:** Modify `web/app/mu-plugins/stride-core/Admin/AdminAPIController.php` (register route + `getEditionOptions()`); Test `tests/Integration/AdminEditionOptionsEndpointTest.php`
+- Tier A. **Test contract:** asserts the route returns a lightweight `{id, title, effective_status}` list (NOT the heavy `getEditions` payload) for a `canViewAdmin` user; **asserts `scope=active` (default) excludes terminal/past editions and `scope=all` includes them** (§10.4); asserts `q` does a server-side title search bound via `$wpdb->prepare`; asserts the result is capped/paged (no 200-row dump). Denies unauthenticated (M1).
+- [ ] Write failing test; run (FAIL); implement `getEditionOptions()` reading effective status (INV-7), `scope` default `active`, `q` typeahead, capped page; run (PASS); commit.
+- Rationale: powers the grid's edition filter + group-by source + the Vandaag queue scoping as a typeahead, so a 200+-edition corpus never fills a flat `<select>` and an archived edition is one search away (§10.2–10.4).
 
 **Integration gate (cluster A):** `ddev exec vendor/bin/phpunit -c phpunit-integration.xml.dist --filter 'RegistrationGrid|AdminRegistrationsEndpoint'` green; manual `curl -u coordinator … /admin/registrations?status=confirmed&group_by=edition_id` returns aggregates; `curl` as anon → 401/403.
 
@@ -431,9 +475,15 @@ Cited per `netdust-agent:architecture-invariants` against the project's `ARCHITE
 #### Task 3.4: Dossier case view (person → registration, all stages)
 **Files:** Modify `admin-dashboard.js` + admin template (case-view slide-over consuming `users/{id}/detail`)
 - Tier B. `no unit test: Tier B, presentational join-renderer over a tested endpoint — F5 acceptance drives all-stages rendering`.
-- [ ] Render person-headed registrations; per stage render `stage.data` + `submitted_at` + `submitted_by` (3-key shape); offerte-status (not paid); selections via the detail payload (INV-6b on the server side); state-appropriate buttons from the §2.1 map; history timeline; commit.
+- [ ] Render person-headed registrations; status field labelled **"Inschrijvingsstatus"** with the pending two-substate hint (§2.4); enrollment_data stages as **collapsible panels — empty stages hidden, with-data stages closed-then-open-on-click, clean label→value rendering** (§ Surface 3); `intake`→"Intakevragenlijst" / `evaluation`→"Evaluatie (na afloop)"; **NO separate Vragenlijst block** (answers live under intake once); offerte-status (not paid); selections via the detail payload (INV-6b on the server side); state-appropriate buttons styled as real buttons from the §2.1 map (terminal → muted "geen acties"); history timeline; commit.
 
-**Integration gate (cluster C):** Playwright/Chrome acceptance pass F1–F6 against the running admin (per `feature-acceptance` situation B) — emit the pass/fail/not-reachable manifest. No UI flow is "pass" without the browser driving it.
+#### Task 3.4a: Surface session-selection events in the admin timeline (named gap, § Surface 3)
+**Files:** Modify `web/app/mu-plugins/stride-core/Admin/AdminActivityMapper.php` (add `session.selections_updated` to `KNOWN_ACTIONS` + a Dutch label/mapping); Test `tests/Unit/Admin/AdminActivityMapperTest.php`
+- Tier A. **Test contract:** asserts an audit entry with action `session.selections_updated` maps to a rendered timeline item with a Dutch label (e.g. "Sessies gekozen: …") and the correct actor/timestamp — currently it is dropped because the action is absent from `KNOWN_ACTIONS`.
+- [ ] Write failing test (asserts the event currently maps to nothing); run (FAIL); add the action + label mapping; run (PASS); commit.
+- Rationale: session selection IS recorded (`session.selections_updated` + the `initial_selection.phases[]` trail) but not shown; this one-line gap is what makes the timeline genuinely "show everything" as the dossier promises.
+
+**Integration gate (cluster C):** Playwright/Chrome acceptance pass F1–F6 against the running admin (per `feature-acceptance` situation B) — emit the pass/fail/not-reachable manifest. No UI flow is "pass" without the browser driving it. Confirm the dossier hides ≥1 empty stage, opens a stage on click, shows no duplicate Vragenlijst block, and the timeline renders a session-selection + an attendance event.
 
 ### ── REVIEW GATE D ── (tier: STANDARD — select-all boundary model + worklist-export removal; behavior change, no new 1a surface)
 
@@ -475,7 +525,11 @@ Cross-cutting concerns to sweep when the relevant code is touched:
 
 Plan complete and saved to `docs/plans/2026-06-13-admin-workspace-spec.md`. This IS the brief's `spec.md`.
 
-**Next:** a separate agent builds the **first-slice UI mockups** (Vandaag worklist home + Inschrijvingen grid with multi-select/bulk-bar/group-by + one Dossier case view — person lens) FROM this spec. The cohort roster is NOT mocked in the first slice.
+**Mockups built + reviewed** under `docs/mockups/admin-workspace/` (Vandaag / Inschrijvingen / Dossier, person lens). This spec is **synced to the reviewed mockups (2026-06-13)** — the enrollment-pipeline status filter, "Indelen per" group-by, "Inschrijvingsstatus" + pending hint, hide-empty/collapsed stages, the Vragenlijst de-duplication, real action buttons, the comprehensive timeline, and the §10 scale/active-edition cutoff are all reflected here. Two refinement-derived tasks were added: **1.4a** (`/editions/options` typeahead) and **3.4a** (surface session-selection in the timeline).
+
+For implementation, two execution options:
+1. **Subagent-Driven (recommended)** — fresh subagent per task, review between tasks at each `── REVIEW GATE ──`.
+2. **Inline Execution** — batch execution with checkpoints at each gate.
 
 For implementation, two execution options:
 1. **Subagent-Driven (recommended)** — fresh subagent per task, review between tasks at each `── REVIEW GATE ──`.
