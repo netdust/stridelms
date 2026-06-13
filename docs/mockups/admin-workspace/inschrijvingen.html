@@ -103,21 +103,39 @@
         </div>
 
         <div class="ws-toolbar__row">
-          <!-- group-by — restructures the grid into collapsible sections with
-               aggregates (a pivot), NOT a sort. -->
+          <!-- VIEW control — group-by restructures the grid into collapsible
+               sections with aggregates (a pivot). It is a VIEW, not a filter, so
+               it sits in its own zone, split off from the filters by a separator. -->
           <div class="ws-select-wrap ws-select-wrap--group" :class="groupBy && 'is-grouping'">
             <span x-html="WS.icon('layers')" style="width:14px;height:14px"></span>
             Indelen per
             <select class="ws-select" x-model="groupBy" @change="onGroupChange()">
               <option value="">Niet indelen</option>
+              <option value="trajectory">Traject</option>
               <option value="edition">Editie</option>
               <option value="status">Status</option>
               <option value="company">Organisatie</option>
-              <option value="trajectory">Traject</option>
             </select>
             <button class="ws-group-clear" x-show="groupBy" @click="groupBy=''; onGroupChange()" title="Indeling opheffen">
               <span x-html="WS.icon('x')"></span>
             </button>
+          </div>
+
+          <!-- separator: VIEW (left) | FILTERS (right) -->
+          <span class="ws-toolbar__sep"></span>
+          <span class="ws-toolbar__group-label">Filters</span>
+
+          <!-- trajectory filter FIRST — the broader scope axis (spec §11.2). In
+               production a server-side typeahead (GET /admin/trajectories/options);
+               for the mockup a dropdown is enough. Selecting one scopes the grid to
+               that trajectory's CHILD edition-rows. -->
+          <div class="ws-select-wrap">
+            <span x-html="WS.icon('route')" style="width:14px;height:14px"></span>
+            Traject
+            <select class="ws-select" x-model="filters.trajectory" @change="page=1">
+              <option value="">Alle trajecten</option>
+              <template x-for="(t,k) in trajectories" :key="k"><option :value="k" x-text="t.title"></option></template>
+            </select>
           </div>
 
           <!-- edition filter -->
@@ -139,19 +157,6 @@
               <template x-for="(c,k) in companies" :key="k">
                 <option :value="k" x-text="c || 'Geen organisatie'" x-show="c"></option>
               </template>
-            </select>
-          </div>
-
-          <!-- trajectory filter — the second scope axis (spec §11.2). In production
-               this is a server-side typeahead (GET /admin/trajectories/options);
-               for the mockup a dropdown of trajectories is enough. Selecting one
-               scopes the grid to that trajectory's CHILD edition-rows. -->
-          <div class="ws-select-wrap">
-            <span x-html="WS.icon('route')" style="width:14px;height:14px"></span>
-            Traject
-            <select class="ws-select" x-model="filters.trajectory" @change="page=1">
-              <option value="">Alle trajecten</option>
-              <template x-for="(t,k) in trajectories" :key="k"><option :value="k" x-text="t.title"></option></template>
             </select>
           </div>
 
