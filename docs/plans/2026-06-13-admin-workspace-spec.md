@@ -344,6 +344,9 @@ The static prototype maps onto the real plugin files as follows (the builder por
 - **Design parity check at shake-out.** The feature-acceptance pass (F1–F8) drives the *real* page; the mockups are the reference for *what it should look like and do*, not an artifact that ships.
 - **The mockups stay in `docs/` as the design record** — they are not enqueued, not referenced by the plugin, and not part of the build.
 
+### 12.4 The god-class strangle is part of the work (not a side quest)
+`AdminAPIController` is a **3,627-line, 128-`$wpdb`-call god class**. Every new endpoint this spec adds lands in it — so building the workspace on it *as-is* would deepen the very drift INV-3 forbids. Decision (user, 2026-06-13): **strangle as we go** — no big-bang refactor phase; **each build phase extracts ONLY the controller slice it touches** into a thin-controller + service layer, behavior-preserving, with the existing test suite as the green-before-and-after safety net. The fat methods (`getStats` 32, `getActionQueue` 18, `getUserDetail` 11, quotes 10) extract during the phases that already consume them; the bulk-action targets are already thin (0 `$wpdb`), so that phase moves no SQL. **The phase-by-phase extraction assignment lives in the companion `docs/plans/2026-06-13-admin-workspace-phase-map.md` (§1 seams, §4 strangle ledger).** By end of the first slice ~70 of 128 `$wpdb` calls have drained out, with no dedicated rewrite phase.
+
 ---
 
 ## Golden path: form / AJAX / write-flow (deviations must be named and justified)
@@ -646,8 +649,8 @@ Plan complete and saved to `docs/plans/2026-06-13-admin-workspace-spec.md`. This
 
 **Refinement-derived tasks added:** **1.4a** (`/editions/options` typeahead), **3.4a** (surface session-selection in the timeline), and the **trajectory layer** (§11): **1.4b** (trajectory grid filter + `/trajectories/options`), **3.5** (`/users/{id}/trajectories` + case-view trajectory section), **3.6** (Trajecten tab).
 
-> **Mockup gap (deliberate):** the reviewed mockups do NOT yet show the trajectory layer (filter pill, Trajecten tab, case-view trajectory section) — that layer was added to the spec after the mockup round. Before/with Phase-1 implementation, the mockups should be extended with: a "Traject" filter pill on Inschrijvingen, a Trajecten tab (list + detail + jump-to-grid), and the trajectory progress section in the Dossier. Small mockup follow-on, tracked here so it isn't lost.
+**Mockups now include the trajectory layer** (2026-06-13): `trajecten.html` (Surface 4), the "Traject" filter + column + group-by on Inschrijvingen, and the Dossier trajectory progress section — all verified in-browser. Spec and mockups are in sync.
 
-For implementation, two execution options:
-1. **Subagent-Driven (recommended)** — fresh subagent per task, review between tasks at each `── REVIEW GATE ──`.
-2. **Inline Execution** — batch execution with checkpoints at each gate.
+**Phasing (this spec is too large for one plan):** it decomposes into phases — **1A–1F** (first slice: read-model → pickers/traj-filter → bulk layer → UI/cutover → traj case-view+tab → cleanup) plus **2/3** (deferred cohort + export). **Each phase gets its own dated implementation plan** (brainstorm→plan→build→merge), and each phase **strangles the slice of `AdminAPIController` it touches** (§12.4). The full phase breakdown, build order, dependency graph, and per-phase god-class extraction assignment live in the companion **`docs/plans/2026-06-13-admin-workspace-phase-map.md`**. To start a phase, run the planner (harness Stage 0→1) against this spec's tasks for that phase's cluster + the strangle assignment from the phase map.
+
+Per-phase execution uses **subagent-driven development** (fresh subagent per task, review at each `── REVIEW GATE ──`) or inline execution with the same gate checkpoints.
