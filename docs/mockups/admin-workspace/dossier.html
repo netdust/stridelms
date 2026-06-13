@@ -30,7 +30,7 @@
         <a class="ws-nav__item" href="#"><span x-html="WS.icon('layers')"></span> Edities <span class="ws-nav__count">7</span></a>
         <a class="ws-nav__item" href="#"><span x-html="WS.icon('calendar')"></span> Sessies</a>
         <a class="ws-nav__item" href="#"><span x-html="WS.icon('receipt')"></span> Offertes <span class="ws-nav__count">12</span></a>
-        <a class="ws-nav__item" href="#"><span x-html="WS.icon('route')"></span> Trajecten</a>
+        <a class="ws-nav__item" href="trajecten.html"><span x-html="WS.icon('route')"></span> Trajecten <span class="ws-nav__count">3</span></a>
         <a class="ws-nav__item is-active" href="#"><span x-html="WS.icon('users')"></span> Gebruikers</a>
       </div>
     </nav>
@@ -75,8 +75,106 @@
       </div>
 
       <div class="ws-dossier">
-        <!-- ===== LEFT: registrations ===== -->
+        <!-- ===== LEFT: trajectories + registrations ===== -->
         <div>
+
+          <!-- ===== TRAJECTORY SECTION (§11.4 / F8) =====
+               Present only when this person is in a trajectory. One block per
+               trajectory (a user can be in several — F8 boundary edge). Renders
+               progress (afgerond/bezig/nog te doen), required courses with state,
+               and elective groups with what the user CHOSE vs the requirement.
+               A non-trajectory user has trajectories.length === 0 → the whole
+               section is absent (not an error — F8 empty edge). -->
+          <template x-if="trajectories.length">
+            <div style="margin-bottom:var(--ws-8)">
+              <div class="ws-section-title ws-mt-0">
+                <span x-html="WS.icon('route')"></span> Trajecten
+                <span class="ws-grouphead__count" x-text="trajectories.length"></span>
+                <span class="ws-section-title__line"></span>
+              </div>
+
+              <template x-for="t in trajectories" :key="t.trajectory.id">
+                <div class="ws-traj-block">
+                  <!-- header: title + status + mode -->
+                  <div class="ws-traj-block__head">
+                    <div class="ws-traj-block__icon" x-html="WS.icon('route')"></div>
+                    <div class="ws-traj-block__heading">
+                      <div class="ws-traj-block__title" x-text="t.trajectory.title"></div>
+                      <div class="ws-traj-block__meta">
+                        <span class="ws-badge" :class="'ws-badge--'+trajStatus(t.trajectory.status).cls" x-text="trajStatus(t.trajectory.status).label"></span>
+                        <span class="ws-traj-mode" x-text="trajMode(t.trajectory.mode)"></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- progress -->
+                  <div class="ws-traj-progress">
+                    <div class="ws-traj-progress__top">
+                      <span class="ws-traj-progress__headline"><b x-text="t.completed_count"></b> van <b x-text="t.total_required"></b> afgerond</span>
+                      <span class="ws-traj-progress__pct" x-text="trajProgressPct(t) + '%'"></span>
+                    </div>
+                    <div class="ws-traj-progress__bar">
+                      <div class="ws-traj-progress__fill" :style="`width:${trajProgressPct(t)}%`"></div>
+                    </div>
+                    <div class="ws-traj-progress__legend">
+                      <span><span class="ws-dot ws-dot--done"></span> <b x-text="t.completed_count"></b> afgerond</span>
+                      <span><span class="ws-dot ws-dot--active"></span> <b x-text="t.in_progress_count"></b> bezig</span>
+                      <span><span class="ws-dot ws-dot--upcoming"></span> <b x-text="trajTodo(t)"></b> nog te doen</span>
+                    </div>
+                  </div>
+
+                  <!-- required courses with state -->
+                  <div class="ws-traj-subhead">Verplichte cursussen</div>
+                  <div class="ws-traj-courselist">
+                    <template x-for="c in t.required_courses" :key="c.edition">
+                      <div class="ws-traj-courserow">
+                        <span class="ws-att-row__dot" :class="'ws-att-row__dot--'+courseStateClass(c.state)"></span>
+                        <div class="ws-traj-courserow__body">
+                          <span class="ws-traj-courserow__title" x-text="c.title"></span>
+                          <small x-text="c.cohort + (c.completedAt ? ' · afgerond ' + c.completedAt : '')"></small>
+                        </div>
+                        <span class="ws-att-row__state" :class="'ws-att-row__state--'+courseStateClass(c.state)" x-text="courseStateLabel(c.state)"></span>
+                      </div>
+                    </template>
+                  </div>
+
+                  <!-- elective groups: chosen vs required -->
+                  <div class="ws-traj-subhead">Keuzemodules</div>
+                  <div class="ws-traj-electives">
+                    <template x-for="(g, gi) in t.elective_groups" :key="gi">
+                      <div class="ws-traj-elect" :class="g.isChosen ? 'is-complete' : 'is-open'">
+                        <div class="ws-traj-elect__top">
+                          <span class="ws-traj-elect__name">
+                            <span x-text="g.name"></span>
+                            <span class="ws-traj-elect__rule" x-text="'kies ' + g.required + ' uit ' + g.total"></span>
+                          </span>
+                          <span class="ws-traj-elect__count" :class="g.isChosen ? 'is-complete' : 'is-open'">
+                            <span x-html="WS.icon(g.isChosen ? 'checkCircle' : 'clock')"></span>
+                            <span x-text="g.countChosen + ' van ' + g.required + ' gekozen'"></span>
+                          </span>
+                        </div>
+                        <!-- what the user actually chose -->
+                        <template x-if="g.chosen.length">
+                          <div class="ws-traj-elect__chosen">
+                            <template x-for="ch in g.chosen" :key="ch.edition">
+                              <span class="ws-pill ws-pill--done"><span x-html="WS.icon('check')"></span><span x-text="ch.title"></span></span>
+                            </template>
+                            <template x-if="!g.isChosen">
+                              <span class="ws-traj-elect__remaining" x-text="'Nog ' + (g.required - g.countChosen) + ' te kiezen'"></span>
+                            </template>
+                          </div>
+                        </template>
+                        <template x-if="!g.chosen.length">
+                          <div class="ws-traj-elect__none"><span x-html="WS.icon('info')"></span> Nog geen keuze gemaakt</div>
+                        </template>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </template>
+
           <div class="ws-section-title ws-mt-0">
             <span x-html="WS.icon('grid')"></span> Inschrijvingen
             <span class="ws-grouphead__count" x-text="regs.length"></span>
@@ -298,6 +396,7 @@ function dossier() {
   return {
     person: WS.DOSSIER.person,
     regs: WS.DOSSIER.registrations,
+    trajectories: WS.DOSSIER.trajectories || [],   // §11.4 — empty for a non-trajectory user
     openStages: {},               // "<regId>-<stageKey>" -> true ; ALL CLOSED by default (Fix 5)
     timelineReg: WS.DOSSIER.registrations[0].id,
 
@@ -343,6 +442,18 @@ function dossier() {
     actionsFor(state) { return WS.actionsForState(state); },
     attLabel(s) { return { present:'Aanwezig', absent:'Afwezig', excused:'Verontschuldigd', upcoming:'Nog te volgen' }[s]; },
     get activeTimeline() { return (this.regs.find(r => r.id === this.timelineReg) || this.regs[0]).timeline; },
+
+    /* ----- trajectory section helpers (§11.4) ----- */
+    // completed / total_required as a percentage for the progress bar
+    trajProgressPct(t) { return t.total_required ? Math.round((t.completed_count / t.total_required) * 100) : 0; },
+    // "nog te doen" = required − afgerond − bezig (never below 0)
+    trajTodo(t) { return Math.max(0, t.total_required - t.completed_count - t.in_progress_count); },
+    // per-course state → Dutch label + the pill/dot modifier class
+    courseStateLabel(state) { return { afgerond:'Afgerond', bezig:'Bezig', 'nog te volgen':'Nog te volgen' }[state] || state; },
+    courseStateClass(state) { return { afgerond:'done', bezig:'active', 'nog te volgen':'upcoming' }[state] || 'upcoming'; },
+    courseStateIcon(state) { return { afgerond:'check', bezig:'refresh', 'nog te volgen':'clock' }[state] || 'clock'; },
+    trajStatus(s) { return WS.TRAJ_STATUS[s] || { label: s, cls: 'completed' }; },
+    trajMode(m) { return WS.TRAJ_MODE[m] || m; },
   };
 }
 </script>

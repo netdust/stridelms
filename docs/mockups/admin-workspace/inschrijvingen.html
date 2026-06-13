@@ -30,7 +30,7 @@
         <a class="ws-nav__item" href="#"><span x-html="WS.icon('layers')"></span> Edities <span class="ws-nav__count">7</span></a>
         <a class="ws-nav__item" href="#"><span x-html="WS.icon('calendar')"></span> Sessies</a>
         <a class="ws-nav__item" href="#"><span x-html="WS.icon('receipt')"></span> Offertes <span class="ws-nav__count">12</span></a>
-        <a class="ws-nav__item" href="#"><span x-html="WS.icon('route')"></span> Trajecten</a>
+        <a class="ws-nav__item" href="trajecten.html"><span x-html="WS.icon('route')"></span> Trajecten <span class="ws-nav__count">3</span></a>
         <a class="ws-nav__item" href="#"><span x-html="WS.icon('users')"></span> Gebruikers</a>
       </div>
     </nav>
@@ -113,6 +113,7 @@
               <option value="edition">Editie</option>
               <option value="status">Status</option>
               <option value="company">Organisatie</option>
+              <option value="trajectory">Traject</option>
             </select>
             <button class="ws-group-clear" x-show="groupBy" @click="groupBy=''; onGroupChange()" title="Indeling opheffen">
               <span x-html="WS.icon('x')"></span>
@@ -138,6 +139,19 @@
               <template x-for="(c,k) in companies" :key="k">
                 <option :value="k" x-text="c || 'Geen organisatie'" x-show="c"></option>
               </template>
+            </select>
+          </div>
+
+          <!-- trajectory filter — the second scope axis (spec §11.2). In production
+               this is a server-side typeahead (GET /admin/trajectories/options);
+               for the mockup a dropdown of trajectories is enough. Selecting one
+               scopes the grid to that trajectory's CHILD edition-rows. -->
+          <div class="ws-select-wrap">
+            <span x-html="WS.icon('route')" style="width:14px;height:14px"></span>
+            Traject
+            <select class="ws-select" x-model="filters.trajectory" @change="page=1">
+              <option value="">Alle trajecten</option>
+              <template x-for="(t,k) in trajectories" :key="k"><option :value="k" x-text="t.title"></option></template>
             </select>
           </div>
 
@@ -189,6 +203,7 @@
               <th class="is-sortable" :class="sortKey==='company' && 'is-sorted'" @click="sort('company')">
                 Organisatie <span class="ws-sort-ind" x-html="WS.icon('chevDown')" :style="sortKey==='company'&&sortDir==='asc'?'transform:rotate(180deg)':''"></span>
               </th>
+              <th class="ws-col-traject">Traject</th>
             </tr>
           </thead>
           <tbody>
@@ -238,6 +253,12 @@
                     <span class="ws-muted" style="font-size:var(--ws-fs-sm)">Particulier</span>
                   </template>
                 </td>
+                <td>
+                  <template x-if="trajTitle(r)">
+                    <span class="ws-traject-cell"><span x-html="WS.icon('route')"></span><span x-text="trajTitle(r)"></span></span>
+                  </template>
+                  <template x-if="!trajTitle(r)"><span class="ws-muted">—</span></template>
+                </td>
               </tr>
             </template>
           </tbody>
@@ -250,6 +271,7 @@
               <th class="ws-col-check"></th>
               <th>Naam</th><th>Editie</th><th class="ws-col-status">Status</th>
               <th class="ws-col-offerte">Offerte</th><th class="ws-col-att">Aanwezigheid</th><th>Organisatie</th>
+              <th class="ws-col-traject">Traject</th>
             </tr>
           </thead>
           <!-- one <tbody> per group: a valid single root for x-for inside a table -->
@@ -257,7 +279,7 @@
             <tbody class="ws-group" :class="!collapsed[g.key] && 'is-expanded'">
               <!-- group header row (click to toggle) -->
               <tr class="ws-grouprow">
-                <td colspan="7">
+                <td colspan="8">
                   <div class="ws-grouphead" :class="collapsed[g.key] && 'is-collapsed'"
                        @click="toggleGroup(g.key)" role="button" :aria-expanded="!collapsed[g.key]">
                     <span class="ws-grouphead__chev" x-html="WS.icon('chevDown')"></span>
@@ -304,6 +326,10 @@
                   <td>
                     <template x-if="companies[r.company]"><span class="ws-org-cell"><span x-html="WS.icon('building')"></span><span x-text="companies[r.company]"></span></span></template>
                     <template x-if="!companies[r.company]"><span class="ws-muted" style="font-size:var(--ws-fs-sm)">Particulier</span></template>
+                  </td>
+                  <td>
+                    <template x-if="trajTitle(r)"><span class="ws-traject-cell"><span x-html="WS.icon('route')"></span><span x-text="trajTitle(r)"></span></span></template>
+                    <template x-if="!trajTitle(r)"><span class="ws-muted">—</span></template>
                   </td>
                 </tr>
               </template>

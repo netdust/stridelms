@@ -142,7 +142,11 @@ function initials(name) {
   return ((p[0]?.[0] || '') + (p[p.length - 1]?.[0] || '')).toUpperCase();
 }
 
-/* ---- Editions (VAD-style) ---- */
+/* ---- Editions (VAD-style) ----
+   e1–e7 are stand-alone offerings; e8–e13 are the course-editions that make up
+   the two trajectories below (a trajectory's child registration rows point at
+   these). Keeping them as ordinary editions is the whole point of the model:
+   a trajectory is just a bundle of edition participations + a parent row. */
 const EDITIONS = {
   e1:  { title: 'Motiverende gespreksvoering',                cohort: 'Najaar 2026 · Brussel',    capacity: 16, seatsOpen: 0 },
   e2:  { title: 'Vroeginterventie bij cannabisgebruik',       cohort: 'Reeks 4 · Gent',           capacity: 14, seatsOpen: 3 },
@@ -151,6 +155,14 @@ const EDITIONS = {
   e5:  { title: 'Kortdurende interventies bij alcohol',       cohort: 'Reeks 2 · online',         capacity: 30, seatsOpen: 6 },
   e6:  { title: 'Werken met gezinnen rond middelengebruik',   cohort: 'Najaar 2026 · Hasselt',    capacity: 16, seatsOpen: 0 },
   e7:  { title: 'Herstelondersteunende zorg',                 cohort: 'Reeks 1 · Brugge',         capacity: 18, seatsOpen: 2 },
+  /* — Basisopleiding Tabakoloog (T1) course-editions — */
+  e8:  { title: 'Tabakologie — basismodule',                 cohort: 'Module 1 · Leuven',        capacity: 24, seatsOpen: 4 },
+  e9:  { title: 'Rookstopbegeleiding in de praktijk',        cohort: 'Module 2 · Leuven',        capacity: 24, seatsOpen: 6 },
+  e10: { title: 'Tabak & specifieke doelgroepen',            cohort: 'Keuzemodule · online',     capacity: 30, seatsOpen: 12 },
+  e11: { title: 'Tabak & geestelijke gezondheid',            cohort: 'Keuzemodule · Gent',       capacity: 18, seatsOpen: 5 },
+  /* — Postgraduaat Verslavingszorg (T2) course-editions — */
+  e12: { title: 'Verslaving — neurobiologie & beleid',       cohort: 'Blok 1 · Antwerpen',       capacity: 20, seatsOpen: 2 },
+  e13: { title: 'Casusbespreking & supervisie',             cohort: 'Blok 3 · Antwerpen',       capacity: 16, seatsOpen: 3 },
 };
 
 const COMPANIES = {
@@ -164,12 +176,28 @@ const COMPANIES = {
   c8: null, // particulier / geen organisatie
 };
 
-/* ---- Registrations (20 realistic rows; row = one registration) ----
-   path: individual | company | trajectory ; att = attendance % (or null when n/a) */
+/* ---- Registrations (one row = one registration) ----
+   path: individual | company | trajectory ; att = attendance % (or null when n/a)
+
+   TRAJECTORY MODEL (spec §11.1) — a trajectory enrolment is NOT a flat set of
+   rows. It is:
+     • ONE parent row   — trajectory_id = T, edition_id = null,
+                          parent_registration_id = null, path = 'trajectory'.
+                          ("this person is in trajectory T")  → lives in TRAJ_PARENTS,
+                          NOT in the grid corpus (the grid is edition-grained).
+     • N child rows     — one per course-edition (mandatory + each chosen elective),
+                          edition_id = E, parent_registration_id = <parent.id>,
+                          trajectory = T. These carry attendance/quote/status and
+                          ARE the rows the grid shows when you filter by trajectory.
+   A child row therefore has a `trajectory` field (the trajectory id) AND a
+   `parentId` (the parent registration). A naïve "WHERE trajectory_id = T" would
+   catch only the parent and miss the course rows — the grid joins parent→child
+   via WS.childRegsByTrajectory() instead. */
 function reg(id, name, email, ed, status, offerte, att, comp, path, extra) {
   return Object.assign({
     id, name, email,
     edition: ed, status, offerte, attendance: att, company: comp, path,
+    trajectory: null, parentId: null,
   }, extra || {});
 }
 
@@ -194,7 +222,43 @@ const REGISTRATIONS = [
   reg(118, 'Bram Peeters',        'bram.peeters@caw-antwerpen.be',   'e6', 'confirmed','draft',     60, 'c3', 'company',    { registered: '2026-05-25' }),
   reg(119, 'Sofie Claes',         'sofie.claes@gmail.com',           'e5', 'interest', 'none',     null, 'c8', 'individual', { registered: '2026-01-15', age: '149d' }),
   reg(120, 'Karim Belkacem',      'karim.belkacem@freeclinic.be',    'e7', 'confirmed','exported',  83, 'c7', 'company',    { registered: '2026-05-10' }),
+
+  /* ---- TRAJECTORY CHILD ROWS (edition-grained course participations) ----
+     These are the rows the grid surfaces when you filter by a trajectory.
+     Each carries `trajectory` (the trajectory id) + `parentId` (the parent
+     registration in TRAJ_PARENTS). Note Camille (107) and Robbe (108) ALSO have
+     a stand-alone e4 row above — a child row is a separate registration. */
+
+  // T1 — Basisopleiding Tabakoloog · Camille Dubois (parent 301)
+  reg(401, 'Camille Dubois', 'camille.dubois@vad.be',          'e8',  'completed','exported', 100, 'c4', 'trajectory', { registered: '2026-02-10', parentId: 301, trajectory: 't1', completedAt: '2026-04-02', cert: true }),
+  reg(402, 'Camille Dubois', 'camille.dubois@vad.be',          'e9',  'confirmed','exported',  88, 'c4', 'trajectory', { registered: '2026-02-10', parentId: 301, trajectory: 't1' }),
+  reg(403, 'Camille Dubois', 'camille.dubois@vad.be',          'e10', 'confirmed','exported',  null, 'c4', 'trajectory', { registered: '2026-02-10', parentId: 301, trajectory: 't1' }),
+  // T1 · Robbe Maes (parent 302)
+  reg(404, 'Robbe Maes',     'robbe.maes@cgg-vlbrabant.be',    'e8',  'completed','exported',  92, 'c5', 'trajectory', { registered: '2026-02-12', parentId: 302, trajectory: 't1', completedAt: '2026-04-02', cert: true }),
+  reg(405, 'Robbe Maes',     'robbe.maes@cgg-vlbrabant.be',    'e9',  'confirmed','sent',       76, 'c5', 'trajectory', { registered: '2026-02-12', parentId: 302, trajectory: 't1' }),
+  reg(406, 'Robbe Maes',     'robbe.maes@cgg-vlbrabant.be',    'e11', 'pending',  'none',      null, 'c5', 'trajectory', { registered: '2026-02-12', parentId: 302, trajectory: 't1', age: '2d' }),
+
+  // T2 — Postgraduaat Verslavingszorg · Imane El Amrani (parent 303 — the dossier person)
+  reg(407, 'Imane El Amrani','imane.elamrani@ocmwgent.be',     'e12', 'completed','exported', 100, 'c2', 'trajectory', { registered: '2025-09-15', parentId: 303, trajectory: 't2', completedAt: '2026-01-20', cert: true }),
+  reg(408, 'Imane El Amrani','imane.elamrani@ocmwgent.be',     'e2',  'confirmed','draft',      85, 'c2', 'trajectory', { registered: '2025-09-15', parentId: 303, trajectory: 't2' }),
+  reg(409, 'Imane El Amrani','imane.elamrani@ocmwgent.be',     'e13', 'confirmed','sent',       null, 'c2', 'trajectory', { registered: '2025-09-15', parentId: 303, trajectory: 't2' }),
 ];
+
+/* ---- Trajectory PARENT rows (the "person is in trajectory T" rows) ----
+   edition_id = null, parent_registration_id = null, path = 'trajectory'.
+   Deliberately kept OUT of REGISTRATIONS so the grid stays edition-grained:
+   filtering by a trajectory shows its CHILD edition-rows, never these. */
+const TRAJ_PARENTS = [
+  { id: 301, user: 'Camille Dubois', email: 'camille.dubois@vad.be',       company: 'c4', trajectory: 't1', status: 'in_progress', registered: '2026-02-10' },
+  { id: 302, user: 'Robbe Maes',     email: 'robbe.maes@cgg-vlbrabant.be', company: 'c5', trajectory: 't1', status: 'in_progress', registered: '2026-02-12' },
+  { id: 303, user: 'Imane El Amrani',email: 'imane.elamrani@ocmwgent.be',  company: 'c2', trajectory: 't2', status: 'in_progress', registered: '2025-09-15' },
+];
+
+/* the parent→child join (spec §11.2): "give me the child edition-rows of
+   trajectory T". This is the correct semantics — NOT a bare column filter. */
+function childRegsByTrajectory(trajectoryId) {
+  return REGISTRATIONS.filter(r => r.trajectory === trajectoryId);
+}
 
 /* ---- Worklist queues (spec §1, exact labels) ---- */
 const QUEUES = [
@@ -306,6 +370,7 @@ const DOSSIER = {
       ],
       // newest first — the home of every per-write event for this registration
       timeline: [
+        { dot: 'primary', icon: 'route',       title: 'Keuze gemaakt: Specialisatie → Kortdurende interventies bij alcohol', actor: 'Imane El Amrani', when: '28 mei 2026 · 11:40' },
         { dot: 'primary', icon: 'mail',        title: 'Herinnering verstuurd: intake afronden',     actor: 'Sofie (coördinator)', when: '24 mei 2026 · 10:12' },
         { dot: 'warning', icon: 'send',        title: 'Offerte OFF-2026-0418 verzonden naar klant', actor: 'Sofie (coördinator)', when: '23 mei 2026 · 09:15' },
         { dot: 'warning', icon: 'receipt',     title: 'Offerte OFF-2026-0418 aangemaakt (in behandeling)', actor: 'Systeem', when: '23 mei 2026 · 08:30' },
@@ -315,6 +380,7 @@ const DOSSIER = {
         { dot: 'default', icon: 'receipt',     title: 'Facturatiegegevens ingediend',               actor: 'Imane El Amrani', when: '20 mei 2026 · 09:43' },
         { dot: 'default', icon: 'user',        title: 'Persoonsgegevens ingediend',                 actor: 'Imane El Amrani', when: '20 mei 2026 · 09:41' },
         { dot: 'primary', icon: 'userPlus',    title: 'Inschrijving aangemaakt (via organisatie)',  actor: 'Imane El Amrani', when: '20 mei 2026 · 09:40' },
+        { dot: 'success', icon: 'route',       title: 'Ingeschreven voor traject: Postgraduaat Verslavingszorg', actor: 'Imane El Amrani', when: '15 sep 2025 · 10:05' },
         { dot: 'primary', icon: 'sparkle',     title: 'Interesse geregistreerd',                    actor: 'Imane El Amrani', when: '18 mei 2026 · 14:22' },
       ],
     },
@@ -405,6 +471,45 @@ const DOSSIER = {
       ],
     },
   ],
+
+  /* ---- TRAJECTORY PROGRESS (spec §11.4 — the case-view section, F8) ----
+     One block per trajectory the user is in. Shape mirrors what
+     TrajectoryDashboardService::getProgressData() returns + the per-item state
+     the live template (tab-voortgang.php) derives:
+       trajectory          { id, title, status, mode }
+       total_required      int   (required courses + Σ each group's `required`)
+       completed_count     int
+       in_progress_count   int
+       required_courses[]  { title, cohort, edition, state }   // state derived:
+                           //   id ∈ completed_courses → 'afgerond'
+                           //   id ∈ in_progress_courses → 'bezig'
+                           //   else → 'nog te volgen'
+       elective_groups[]   { name, required, total, countChosen, isChosen, chosen[] }
+                           // chosen-vs-required via getSelectedCourseIds /
+                           //   isGroupChosen / countChosenInGroup (INV-6b)
+     A non-trajectory user simply has trajectories: [] → the section is absent. */
+  trajectories: [
+    {
+      trajectory: { id: 't2', title: 'Postgraduaat Verslavingszorg', status: 'open', mode: 'cohort' },
+      total_required: 6,
+      completed_count: 1,
+      in_progress_count: 2,
+      registered: '15 sep 2025',
+      required_courses: [
+        { title: 'Verslaving — neurobiologie & beleid', cohort: 'Blok 1 · Antwerpen', edition: 'e12', state: 'afgerond',     completedAt: '20 jan 2026' },
+        { title: 'Vroeginterventie bij cannabisgebruik', cohort: 'Reeks 4 · Gent',    edition: 'e2',  state: 'bezig' },
+        { title: 'Casusbespreking & supervisie',         cohort: 'Blok 3 · Antwerpen', edition: 'e13', state: 'bezig' },
+      ],
+      elective_groups: [
+        // fully chosen: kies 1 uit 2 → 1 gekozen, confirmed
+        { name: 'Specialisatie', required: 1, total: 2, countChosen: 1, isChosen: true,
+          chosen: [ { title: 'Kortdurende interventies bij alcohol', edition: 'e5' } ] },
+        // partially chosen: kies 2 uit 3 → 1 gekozen, NOT confirmed yet
+        { name: 'Vrije verdieping', required: 2, total: 3, countChosen: 1, isChosen: false,
+          chosen: [ { title: 'Werken met gezinnen rond middelengebruik', edition: 'e6' } ] },
+      ],
+    },
+  ],
 };
 
 /* human-readable stage names + a one-line "what this stage is".
@@ -422,6 +527,126 @@ const STAGE_META = {
   evaluation:          { name: 'Evaluatie (na afloop)',           icon: 'award',    desc: 'Eindevaluatie ingevuld na de cursus.' },
 };
 
+/* ==========================================================================
+   TRAJECTORIES (Surface 4) — the trajectory ENTITIES
+   --------------------------------------------------------------------------
+   Mirrors the vad_trajectory CPT: title + status + mode + capacity, and a
+   `courses` config that the repo partitions into required courses (config
+   `required:true`) and elective groups (`required:false`, grouped by `group`,
+   with `min_choices` → the resolved group's `required` int). Here each course
+   maps to an edition (so the Traject column/jump-to-grid line up); a real
+   trajectory could also carry pure-LD courses with no edition.
+   Status labels per §1 Surface 4: Concept / Open / Volzet / Afgesloten / Gearchiveerd.
+   ========================================================================== */
+const TRAJ_STATUS = {
+  draft:       { label: 'Concept',       cls: 'completed' },  // slate
+  open:        { label: 'Open',          cls: 'confirmed' },  // green
+  full:        { label: 'Volzet',        cls: 'waitlist'  },  // purple
+  closed:      { label: 'Afgesloten',    cls: 'pending'   },  // amber
+  archived:    { label: 'Gearchiveerd',  cls: 'cancelled' },  // red/grey
+  // per-USER trajectory status (the roster badge) reuses the reg-status hues:
+  in_progress: { label: 'Bezig',         cls: 'interest'  },
+  completed:   { label: 'Afgerond',      cls: 'completed' },
+};
+const TRAJ_MODE = { cohort: 'Cohorte', self_paced: 'Zelfstandig tempo' };
+
+/* a tiny course helper so trajectory course-lists can show a title + cohort
+   from the edition map (course === backing edition in this mockup). */
+function trajCourse(editionKey, extra) {
+  const e = EDITIONS[editionKey] || { title: editionKey, cohort: '' };
+  return Object.assign({ edition: editionKey, title: e.title, cohort: e.cohort }, extra || {});
+}
+
+const TRAJECTORIES = {
+  t1: {
+    id: 't1',
+    title: 'Basisopleiding Tabakoloog',
+    status: 'open',
+    mode: 'cohort',
+    capacity: 24,
+    description: 'Erkende basisopleiding tot tabakoloog — twee verplichte modules plus een verdiepende keuzemodule.',
+    // required courses (config required:true)
+    required: [
+      trajCourse('e8'),
+      trajCourse('e9'),
+    ],
+    // elective groups (resolved shape: { name, required:int, courses:[...] })
+    electiveGroups: [
+      { name: 'Verdiepingsmodule', required: 1, courses: [ trajCourse('e10'), trajCourse('e11') ] },
+    ],
+    // enrolled users (the roster — parent rows resolved to a per-user view)
+    users: [
+      { name: 'Camille Dubois', email: 'camille.dubois@vad.be',       company: 'c4', status: 'in_progress', completed: 2, total: 3, parentId: 301 },
+      { name: 'Robbe Maes',     email: 'robbe.maes@cgg-vlbrabant.be', company: 'c5', status: 'in_progress', completed: 1, total: 3, parentId: 302 },
+    ],
+  },
+  t2: {
+    id: 't2',
+    title: 'Postgraduaat Verslavingszorg',
+    status: 'open',
+    mode: 'cohort',
+    capacity: 20,
+    description: 'Postgraduaat voor hulpverleners — drie verplichte blokken en een specialisatiekeuze.',
+    required: [
+      trajCourse('e12'),
+      trajCourse('e2'),
+      trajCourse('e13'),
+    ],
+    electiveGroups: [
+      { name: 'Specialisatie', required: 1, courses: [ trajCourse('e5'), trajCourse('e7') ] },
+      { name: 'Vrije verdieping', required: 2, courses: [ trajCourse('e1'), trajCourse('e6'), trajCourse('e7') ] },
+    ],
+    users: [
+      { name: 'Imane El Amrani', email: 'imane.elamrani@ocmwgent.be', company: 'c2', status: 'in_progress', completed: 1, total: 6, parentId: 303 },
+    ],
+  },
+  t3: {
+    // EMPTY trajectory — 0 enrollments (F7 empty edge) + Concept + self-paced.
+    id: 't3',
+    title: 'Train-de-trainer Vroeginterventie',
+    status: 'draft',
+    mode: 'self_paced',
+    capacity: 0,                 // 0 = onbeperkt
+    description: 'Opleiding tot trainer vroeginterventie — nog in voorbereiding, nog geen inschrijvingen.',
+    required: [
+      trajCourse('e3'),
+    ],
+    electiveGroups: [
+      { name: 'Didactiek', required: 1, courses: [ trajCourse('e1'), trajCourse('e6') ] },
+    ],
+    users: [],
+  },
+  t4: {
+    // CLOSED trajectory — hidden by the default "Actieve trajecten" scope, so the
+    // scope pill earns its keep: clearing it (scope=all) reveals this one.
+    id: 't4',
+    title: 'Basisopleiding Tabakoloog — reeks 2024',
+    status: 'closed',
+    mode: 'cohort',
+    capacity: 24,
+    description: 'Afgesloten reeks 2024 — gearchiveerd voor naslag.',
+    required: [
+      trajCourse('e8'),
+      trajCourse('e9'),
+    ],
+    electiveGroups: [
+      { name: 'Verdiepingsmodule', required: 1, courses: [ trajCourse('e10'), trajCourse('e11') ] },
+    ],
+    users: [
+      { name: 'Lien Goossens', email: 'lien.goossens@cgg-vlbrabant.be', company: 'c5', status: 'completed', completed: 3, total: 3, parentId: 304 },
+    ],
+  },
+};
+
+/* the trajectory typeahead source (mirrors GET /admin/trajectories/options) —
+   {id, title, status} only, scoped to "active" by default like the editions picker. */
+const TRAJ_OPTIONS = Object.values(TRAJECTORIES).map(t => ({ id: t.id, title: t.title, status: t.status }));
+/* "active" = not terminal: not closed/archived (mirrors §10 active scope posture) */
+function trajIsActive(t) { return t.status !== 'closed' && t.status !== 'archived'; }
+function trajCourseCount(t) {
+  return t.required.length + t.electiveGroups.reduce((n, g) => n + g.required, 0);
+}
+
 /* ---- expose ---- */
 window.WS = {
   icon, ICONS,
@@ -429,5 +654,7 @@ window.WS = {
   avatarColor, initials,
   EDITIONS, COMPANIES, REGISTRATIONS, QUEUES, QUEUE_FILTER, ACTION_QUEUE, STATS,
   DOSSIER, STAGE_META,
+  TRAJECTORIES, TRAJ_STATUS, TRAJ_MODE, TRAJ_PARENTS, TRAJ_OPTIONS,
+  childRegsByTrajectory, trajIsActive, trajCourseCount,
 };
 })();

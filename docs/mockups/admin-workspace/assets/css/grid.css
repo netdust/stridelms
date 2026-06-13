@@ -262,6 +262,12 @@
 .ws-col-att { width: 130px; }
 .ws-col-status { width: 130px; }
 .ws-col-offerte { width: 150px; }
+.ws-col-traject { width: 200px; }
+
+/* Traject cell — route icon + title; most rows show a muted em-dash instead */
+.ws-traject-cell { display: inline-flex; align-items: center; gap: 6px; color: var(--ws-text-2); }
+.ws-traject-cell svg { width: 14px; height: 14px; color: #7c3aed; flex-shrink: 0; }
+.ws-traject-cell span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Name cell */
 .ws-namecell { display: flex; align-items: center; gap: var(--ws-3); }
@@ -612,6 +618,65 @@
 .ws-tl-item__meta svg { width: 12px; height: 12px; opacity: 0.7; }
 .ws-tl-item__actor { font-weight: 500; color: var(--ws-text-2); }
 
+/* --------------------------------------------------------------------------
+   DOSSIER — trajectory progress section (§11.4 / F8)
+   -------------------------------------------------------------------------- */
+.ws-traj-block { border: 1px solid var(--ws-border); border-radius: var(--ws-radius); background: #fff; box-shadow: var(--ws-shadow-sm); padding: var(--ws-5); margin-bottom: var(--ws-4); }
+.ws-traj-block:last-child { margin-bottom: 0; }
+.ws-traj-block__head { display: flex; align-items: flex-start; gap: var(--ws-3); margin-bottom: var(--ws-4); }
+.ws-traj-block__icon { width: 38px; height: 38px; flex-shrink: 0; border-radius: 10px; display: grid; place-items: center; background: color-mix(in srgb, #7c3aed 12%, white); color: #7c3aed; }
+.ws-traj-block__icon svg { width: 19px; height: 19px; }
+.ws-traj-block__heading { flex: 1; min-width: 0; }
+.ws-traj-block__title { font-family: var(--ws-font-disp); font-size: 17px; font-weight: 600; color: var(--ws-text); letter-spacing: -0.01em; line-height: 1.2; }
+.ws-traj-block__meta { display: flex; align-items: center; gap: var(--ws-3); margin-top: 6px; }
+
+/* progress bar */
+.ws-traj-progress { background: var(--ws-surface-alt); border: 1px solid var(--ws-border); border-radius: var(--ws-radius-sm); padding: var(--ws-3) var(--ws-4); margin-bottom: var(--ws-5); }
+.ws-traj-progress__top { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
+.ws-traj-progress__headline { font-size: var(--ws-fs); color: var(--ws-text-2); }
+.ws-traj-progress__headline b { color: var(--ws-text); font-weight: 700; }
+.ws-traj-progress__pct { font-family: var(--ws-font-disp); font-size: 18px; font-weight: 600; color: var(--ws-text); font-variant-numeric: tabular-nums; }
+.ws-traj-progress__bar { height: 8px; border-radius: 999px; background: var(--ws-surface-sunken); overflow: hidden; }
+.ws-traj-progress__fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #7c3aed, var(--ws-primary)); transition: width 0.4s var(--ws-ease); }
+.ws-traj-progress__legend { display: flex; flex-wrap: wrap; gap: var(--ws-4); margin-top: 10px; font-size: var(--ws-fs-sm); color: var(--ws-text-2); }
+.ws-traj-progress__legend span { display: inline-flex; align-items: center; gap: 6px; }
+.ws-traj-progress__legend b { color: var(--ws-text); font-weight: 700; }
+.ws-dot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+.ws-dot--done { background: var(--ws-success); }
+.ws-dot--active { background: var(--ws-primary); }
+.ws-dot--upcoming { background: var(--ws-border-strong); }
+
+.ws-traj-subhead { font-size: var(--ws-fs-xs); font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ws-text-3); margin: 0 0 var(--ws-2); }
+.ws-traj-courselist { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--ws-5); }
+.ws-traj-courserow { display: flex; align-items: center; gap: var(--ws-3); padding: 8px 10px; border-radius: var(--ws-radius-sm); background: #fff; border: 1px solid var(--ws-border); }
+.ws-traj-courserow__body { flex: 1; min-width: 0; }
+.ws-traj-courserow__title { color: var(--ws-text); font-weight: 500; }
+.ws-traj-courserow__body small { display: block; color: var(--ws-text-3); font-size: var(--ws-fs-sm); }
+
+/* the course-state dot + label reuse the attendance vocabulary, adding the two
+   trajectory-specific states (afgerond → done = green, bezig → active = blue) */
+.ws-att-row__dot--done { background: var(--ws-success); }
+.ws-att-row__dot--active { background: var(--ws-primary); }
+.ws-att-row__state--done { color: var(--ws-success-text); }
+.ws-att-row__state--active { color: var(--ws-primary-active); }
+
+/* elective groups — chosen vs required */
+.ws-traj-electives { display: flex; flex-direction: column; gap: var(--ws-2); }
+.ws-traj-elect { border: 1px solid var(--ws-border); border-radius: var(--ws-radius-sm); background: #fff; padding: var(--ws-3) var(--ws-4); }
+.ws-traj-elect.is-open { background: #fffdf5; border-color: #fde68a; }
+.ws-traj-elect.is-complete { background: var(--ws-surface-alt); }
+.ws-traj-elect__top { display: flex; align-items: center; justify-content: space-between; gap: var(--ws-3); flex-wrap: wrap; }
+.ws-traj-elect__name { font-weight: 600; color: var(--ws-text); display: inline-flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.ws-traj-elect__rule { font-size: var(--ws-fs-sm); font-weight: 500; color: #7c3aed; background: color-mix(in srgb, #7c3aed 10%, white); padding: 1px 8px; border-radius: 999px; }
+.ws-traj-elect__count { display: inline-flex; align-items: center; gap: 5px; font-size: var(--ws-fs-sm); font-weight: 600; white-space: nowrap; }
+.ws-traj-elect__count svg { width: 14px; height: 14px; }
+.ws-traj-elect__count.is-complete { color: var(--ws-success-text); }
+.ws-traj-elect__count.is-open { color: var(--ws-warning-text); }
+.ws-traj-elect__chosen { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ws-2); margin-top: var(--ws-3); }
+.ws-traj-elect__remaining { font-size: var(--ws-fs-sm); color: var(--ws-warning-text); font-weight: 500; font-style: italic; }
+.ws-traj-elect__none { display: inline-flex; align-items: center; gap: 6px; margin-top: var(--ws-2); font-size: var(--ws-fs-sm); color: var(--ws-warning-text); font-style: italic; }
+.ws-traj-elect__none svg { width: 14px; height: 14px; flex-shrink: 0; }
+
 /* Quote linked card */
 .ws-quote-card { display: flex; align-items: center; gap: var(--ws-4); padding: var(--ws-4); border: 1px solid var(--ws-border); border-radius: var(--ws-radius-sm); background: #fff; }
 .ws-quote-card__icon { width: 40px; height: 40px; border-radius: 9px; background: var(--ws-primary-subtle); color: var(--ws-primary); display: grid; place-items: center; flex-shrink: 0; }
@@ -634,7 +699,7 @@
 .ws-launcher h1 { color: #fff; font-size: 38px; letter-spacing: -0.03em; line-height: 1.05; margin-bottom: var(--ws-3); }
 .ws-launcher h1 em { font-style: normal; color: #60a5fa; }
 .ws-launcher__lede { color: #94a3b8; font-size: 16px; max-width: 560px; line-height: 1.6; margin-bottom: var(--ws-10); }
-.ws-launcher__cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--ws-4); }
+.ws-launcher__cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--ws-4); }
 @media (max-width: 760px) { .ws-launcher__cards { grid-template-columns: 1fr; } }
 .ws-launch-card {
     display: block; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
@@ -650,6 +715,77 @@
 .ws-launch-card:hover .ws-launch-card__arrow { color: #60a5fa; transform: translate(2px,-2px); }
 .ws-launcher__note { margin-top: var(--ws-8); color: #475569; font-size: var(--ws-fs-sm); display: flex; align-items: center; gap: 8px; }
 .ws-launcher__note svg { width: 15px; height: 15px; }
+
+/* --------------------------------------------------------------------------
+   TRAJECTEN — Surface 4 (list + slide-over detail)
+   -------------------------------------------------------------------------- */
+.ws-traj-toolbar { display: flex; align-items: center; gap: var(--ws-2); flex-wrap: wrap; margin-top: var(--ws-2); }
+.ws-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* list table — rounded inside the card, so kill the table's own surface bg */
+.ws-traj-table { background: transparent; }
+.ws-traj-table thead th.ws-num { text-align: right; }
+.ws-traj-table thead th { background: var(--ws-surface-alt); }
+.ws-traj-table tbody td { color: var(--ws-text-2); }
+.ws-traj-table tbody tr:last-child td { border-bottom: none; }
+.ws-col-traject-action { width: 70px; text-align: right; }
+
+.ws-traj-namecell { display: flex; align-items: flex-start; gap: var(--ws-3); }
+.ws-traj-namecell__icon {
+    width: 34px; height: 34px; flex-shrink: 0; border-radius: 9px;
+    display: grid; place-items: center;
+    background: color-mix(in srgb, #7c3aed 12%, white); color: #7c3aed;
+}
+.ws-traj-namecell__icon svg { width: 17px; height: 17px; }
+.ws-traj-namecell__title { color: var(--ws-text); font-weight: 600; line-height: 1.25; }
+.ws-traj-namecell__sub { font-size: var(--ws-fs-sm); color: var(--ws-text-3); max-width: 460px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-traj-mode { display: inline-flex; align-items: center; gap: 6px; font-size: var(--ws-fs-sm); color: var(--ws-text-2); white-space: nowrap; }
+.ws-traj-mode svg { width: 14px; height: 14px; color: var(--ws-text-3); flex-shrink: 0; }
+.ws-traj-open { display: inline-flex; align-items: center; gap: 4px; color: var(--ws-text-3); font-size: var(--ws-fs-sm); font-weight: 600; transition: color var(--ws-ease); white-space: nowrap; }
+.ws-traj-open svg { width: 15px; height: 15px; }
+.ws-traj-table tbody tr:hover .ws-traj-open { color: var(--ws-primary); }
+
+/* slide-over — right-anchored panel reusing .ws-overlay */
+.ws-slideover {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 41;
+    width: min(560px, calc(100vw - 40px));
+    background: var(--ws-surface);
+    box-shadow: var(--ws-shadow-lg);
+    display: flex; flex-direction: column;
+    animation: ws-slide-in-right 0.24s var(--ws-ease);
+}
+.ws-slideover__head { display: flex; align-items: flex-start; gap: var(--ws-3); padding: var(--ws-5) var(--ws-6); border-bottom: 1px solid var(--ws-border); }
+.ws-slideover__head-main { flex: 1; min-width: 0; }
+.ws-slideover__title { font-size: 21px; letter-spacing: -0.02em; line-height: 1.15; color: var(--ws-text); }
+.ws-slideover__meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ws-3); margin-top: var(--ws-3); }
+.ws-slideover__body { flex: 1; overflow-y: auto; padding: var(--ws-6); }
+
+/* course blocks inside the slide-over */
+.ws-traj-courseblock { margin-bottom: var(--ws-5); }
+.ws-traj-courseblock__label { font-size: var(--ws-fs-sm); font-weight: 600; color: var(--ws-text-2); margin-bottom: var(--ws-2); display: flex; align-items: center; gap: 6px; }
+.ws-traj-courseblock__label b { color: var(--ws-text); font-weight: 600; }
+.ws-traj-course { display: flex; align-items: center; gap: var(--ws-3); padding: 10px var(--ws-3); border: 1px solid var(--ws-border); border-radius: var(--ws-radius-sm); background: #fff; margin-bottom: 6px; }
+.ws-traj-course:last-child { margin-bottom: 0; }
+.ws-traj-course__dot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+.ws-traj-course__dot--req { background: var(--ws-primary); }
+.ws-traj-course__dot--elect { background: #7c3aed; }
+.ws-traj-course__body { flex: 1; min-width: 0; }
+.ws-traj-course__title { color: var(--ws-text); font-weight: 500; line-height: 1.25; }
+.ws-traj-course__sub { font-size: var(--ws-fs-sm); color: var(--ws-text-3); }
+
+/* roster inside the slide-over */
+.ws-traj-roster { display: flex; flex-direction: column; gap: 6px; }
+.ws-traj-rosteritem { display: flex; align-items: center; gap: var(--ws-3); padding: 10px var(--ws-3); border: 1px solid var(--ws-border); border-radius: var(--ws-radius-sm); background: #fff; transition: border-color var(--ws-ease), background var(--ws-ease); }
+.ws-traj-rosteritem:hover { border-color: var(--ws-border-strong); background: var(--ws-surface-alt); }
+.ws-traj-rosteritem__avatar { width: 32px; height: 32px; border-radius: 999px; flex-shrink: 0; display: grid; place-items: center; color: #fff; font-weight: 600; font-size: 11px; }
+.ws-traj-rosteritem__body { flex: 1; min-width: 0; }
+.ws-traj-rosteritem__name { color: var(--ws-text); font-weight: 500; line-height: 1.25; }
+.ws-traj-rosteritem__sub { font-size: var(--ws-fs-sm); color: var(--ws-text-3); }
+
+@media (max-width: 640px) {
+    .ws-traj-table thead th:nth-child(4), .ws-traj-table tbody td:nth-child(4) { display: none; }
+    .ws-traj-namecell__sub { display: none; }
+}
 
 /* generic utilities */
 .ws-row { display: flex; align-items: center; gap: var(--ws-2); }

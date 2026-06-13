@@ -13,6 +13,8 @@ function grid() {
     all: WS.REGISTRATIONS,
     editions: WS.EDITIONS,
     companies: WS.COMPANIES,
+    trajectories: WS.TRAJECTORIES,
+    trajStatus: WS.TRAJ_STATUS,
     regStatus: WS.REG_STATUS,
     offerteStatus: WS.OFFERTE_STATUS,
 
@@ -22,13 +24,16 @@ function grid() {
     perPage: 10,
     sortKey: 'name',
     sortDir: 'asc',
-    groupBy: '',                  // '' | 'edition' | 'status' | 'company'
+    groupBy: '',                  // '' | 'edition' | 'status' | 'company' | 'trajectory'
     collapsed: {},                // group key -> true
     queue: '',                    // active worklist context (from ?queue=)
     armedAction: null,            // pre-armed bulk action id from the queue
 
-    /* ---- filters ---- */
-    filters: { status: '', edition: '', company: '', offerteOpen: false, noCert: false, q: '' },
+    /* ---- filters ----
+       `trajectory` is the second scope axis (spec §11.2). When set, the corpus
+       narrows to that trajectory's CHILD edition-rows via the parent→child join
+       (WS.childRegsByTrajectory), NOT a bare column match — see `get corpus`. */
+    filters: { status: '', edition: '', company: '', trajectory: '', offerteOpen: false, noCert: false, q: '' },
 
     /* ---- result modal / overflow / toast ---- */
     showResult: false,
@@ -53,11 +58,32 @@ function grid() {
         this.$nextTick(() => this.toast('mixed',
           `Wachtrij geopend — <b>${WS.QUEUES.find(x=>x.key===q)?.label}</b>. Bulkactie "${this.armedLabel}" staat klaar.`));
       }
+      // jump-to-grid from the Trajecten tab: ?trajectory=<id> pre-sets the
+      // trajectory scope (same mechanism as ?queue=). The grid then shows that
+      // trajectory's child edition-rows (spec §11.2, flow F7).
+      const t = p.get('trajectory');
+      if (t && this.trajectories[t]) {
+        this.filters.trajectory = t;
+        this.$nextTick(() => this.toast('mixed',
+          `Traject geopend — <b>${this.trajectories[t].title}</b>. De grid toont de cursusdeelnames van dit traject.`));
+      }
+    },
+
+    /* the working corpus. Normally the full registration set, but when a
+       trajectory filter is active the corpus IS that trajectory's child
+       edition-rows (the parent→child join, spec §11.2). This is what makes the
+       grid show ONLY trajectory T's course rows and never another trajectory's
+       (the leak-check, F7) — and it keeps the grid edition-grained (the parent
+       row, edition_id=null, is never part of the corpus). */
+    get corpus() {
+      return this.filters.trajectory
+        ? WS.childRegsByTrajectory(this.filters.trajectory)
+        : this.all;
     },
 
     /* ===== derived: filtered + sorted full set ===== */
     get filtered() {
-      let rows = this.all.filter(r => {
+      let rows = this.corpus.filter(r => {
         const f = this.filters;
         if (f.status && r.status !== f.status) return false;
         if (f.edition && r.edition !== f.edition) return false;
@@ -92,7 +118,7 @@ function grid() {
        how many rows each stage holds within the current context. */
     statusCount(status) {
       const f = this.filters;
-      return this.all.filter(r => {
+      return this.corpus.filter(r => {
         if (r.status !== status) return false;
         if (f.edition && r.edition !== f.edition) return false;
         if (f.company && r.company !== f.company) return false;
@@ -107,7 +133,9 @@ function grid() {
     },
 
     get total() { return this.filtered.length; },
-    get totalAllCorpus() { return 247; },        // the "van 247" fixed corpus feel
+    // the "van N" denominator — the corpus size. Normally the fixed 247-row
+    // feel; when scoped to a trajectory it's that trajectory's child-row count.
+    get totalAllCorpus() { return this.filters.trajectory ? this.corpus.length : 247; },
     get pageCount() { return Math.max(1, Math.ceil(this.total / this.perPage)); },
     get pageRows() {
       const start = (this.page - 1) * this.perPage;
@@ -120,13 +148,15 @@ function grid() {
     get groups() {
       if (!this.groupBy) return [];
       const keyOf = (r) =>
-        this.groupBy === 'edition' ? r.edition :
-        this.groupBy === 'status'  ? r.status  :
-        this.groupBy === 'company' ? (r.company || 'none') : '';
+        this.groupBy === 'edition'    ? r.edition :
+        this.groupBy === 'status'     ? r.status  :
+        this.groupBy === 'company'    ? (r.company || 'none') :
+        this.groupBy === 'trajectory' ? (r.trajectory || 'none') : '';
       const labelOf = (k) =>
-        this.groupBy === 'edition' ? this.editions[k].title :
-        this.groupBy === 'status'  ? this.regStatus[k].label :
-        this.groupBy === 'company' ? (this.companies[k] || 'Geen organisatie') : k;
+        this.groupBy === 'edition'    ? this.editions[k].title :
+        this.groupBy === 'status'     ? this.regStatus[k].label :
+        this.groupBy === 'company'    ? (this.companies[k] || 'Geen organisatie') :
+        this.groupBy === 'trajectory' ? (this.trajectories[k] ? this.trajectories[k].title : 'Geen traject') : k;
 
       const map = {};
       this.filtered.forEach(r => {
@@ -151,7 +181,7 @@ function grid() {
 
     /* human label for what we're grouping by (shown on each group header) */
     get groupKindLabel() {
-      return { edition: 'Editie', status: 'Status', company: 'Organisatie' }[this.groupBy] || '';
+      return { edition: 'Editie', status: 'Status', company: 'Organisatie', trajectory: 'Traject' }[this.groupBy] || '';
     },
     /* toggle one group section open/closed */
     toggleGroup(key) { this.collapsed[key] = !this.collapsed[key]; },
@@ -291,14 +321,16 @@ function grid() {
     /* ===== filter chips ===== */
     setStatus(s) { this.filters.status = (this.filters.status === s) ? '' : s; this.page = 1; }
     ,setEdition(e) { this.filters.edition = (this.filters.edition === e) ? '' : e; this.page = 1; }
-    ,clearAllFilters() { this.filters = { status:'', edition:'', company:'', offerteOpen:false, noCert:false, q:'' }; this.queue=''; this.armedAction=null; this.page = 1; }
-    ,get hasFilters() { const f = this.filters; return f.status||f.edition||f.company||f.offerteOpen||f.noCert||f.q; }
+    ,clearAllFilters() { this.filters = { status:'', edition:'', company:'', trajectory:'', offerteOpen:false, noCert:false, q:'' }; this.queue=''; this.armedAction=null; this.page = 1; }
+    ,get hasFilters() { const f = this.filters; return f.status||f.edition||f.company||f.trajectory||f.offerteOpen||f.noCert||f.q; }
     ,get activeChips() {
       const out = [];
       const f = this.filters;
       if (f.status)  out.push({ k:'status',  label: 'Status: ' + this.regStatus[f.status].label });
       if (f.edition) out.push({ k:'edition', label: 'Editie: ' + this.editions[f.edition].title });
       if (f.company) out.push({ k:'company', label: 'Org: ' + this.companies[f.company] });
+      // the Traject scope pill (spec §11.2: "Traject: <naam>")
+      if (f.trajectory && this.trajectories[f.trajectory]) out.push({ k:'trajectory', label: 'Traject: ' + this.trajectories[f.trajectory].title });
       if (f.offerteOpen) out.push({ k:'offerteOpen', label: 'Offerte nog niet verwerkt' });
       if (f.noCert)  out.push({ k:'noCert', label: 'Geen certificaat' });
       if (f.q)       out.push({ k:'q', label: '"' + f.q + '"' });
@@ -308,7 +340,10 @@ function grid() {
       if (k === 'offerteOpen' || k === 'noCert') this.filters[k] = false;
       else this.filters[k] = '';
       this.page = 1;
-    },
+    }
+    /* the Traject column cell: the trajectory title when a row belongs to one,
+       else '' (most rows are not in a trajectory). */
+    ,trajTitle(r) { return (r.trajectory && this.trajectories[r.trajectory]) ? this.trajectories[r.trajectory].title : ''; },
 
     /* ===== sort ===== */
     sort(key) {
@@ -335,6 +370,7 @@ function grid() {
 
     // context-aware empty-state headline (covers the F1 "empty queue" case)
     emptyTitle() {
+      if (this.filters.trajectory && this.trajectories[this.filters.trajectory]) return 'Nog geen inschrijvingen voor dit traject';
       if (this.queue === 'pending')  return 'Geen inschrijvingen wachten op goedkeuring';
       if (this.queue === 'waitlist') return 'Geen wachtlijst met vrije plaatsen';
       if (this.queue === 'offerte')  return 'Geen openstaande offerte-opvolging';
