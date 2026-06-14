@@ -55,12 +55,17 @@ function stridence_catalog_items(string $catalog): array
  * builder for all three sites — /klassikaal, /online and the course
  * archive's online query — so the window rule cannot fork again.
  *
- * NOTE — dateless (self-paced) editions are currently EXCLUDED: every
- * caller pairs this with `orderby => meta_value` + `meta_key => start_date`,
- * which forces an EXISTS AND-clause on start_date, so a fully dateless
- * edition can never match (runtime-proven: a published open dateless
- * edition does not list). Pre-existing parity with the old pages — latent;
- * follow-up ruling tracked in tasks/todo.md ("dateless/self-paced catalog").
+ * NOTE — dateless editions are now INCLUDED for both klassikaal and online.
+ * The `orderby => meta_value` + `meta_key => start_date` pairing that
+ * previously forced an EXISTS join on start_date (excluding fully-dateless
+ * editions) has been removed from all item builders; the OR-fallback below
+ * now also matches editions with neither end_date nor start_date set.
+ * Klassikaal band-orders the result via stridence_catalog_order_into_bands()
+ * (a /klassikaal-only presentation layer); online returns a flat enrollable
+ * list. See plan docs/plans/2026-06-14-dateless-editions-catalog.md.
+ * Inclusion is gated by post_status=publish + the active-status IN-clause
+ * here + the published-course guard downstream (INF-1) — a draft edition or
+ * a draft-course edition still never lists.
  *
  * @param string $prefix Edition meta prefix (EditionRepository::getMetaPrefix())
  * @return array<int, array<string, mixed>> meta_query clauses (AND-joined by WP_Query)
@@ -77,14 +82,15 @@ function stridence_catalog_date_window_meta_query(string $prefix): array
         ],
         [
             'relation' => 'OR',
+            // (1) dated: end_date within the grace window
             [
                 'key'     => $prefix . 'end_date',
                 'value'   => $past_cutoff,
                 'compare' => '>=',
                 'type'    => 'DATE',
             ],
+            // (2) end_date missing but start_date within the grace window
             [
-                // Fallback when end_date is missing: use start_date
                 'relation' => 'AND',
                 [
                     'key'     => $prefix . 'end_date',
@@ -95,6 +101,24 @@ function stridence_catalog_date_window_meta_query(string $prefix): array
                     'value'   => $past_cutoff,
                     'compare' => '>=',
                     'type'    => 'DATE',
+                ],
+            ],
+            // (3) fully dateless: neither end_date nor start_date set. For a
+            //     KLASSIKAAL edition these are the "Binnenkort — toon
+            //     interesse" anchors; for an ONLINE edition these are
+            //     always-on enrollables. Inclusion is still gated by
+            //     post_status=publish + the active-status IN-clause above +
+            //     the published-course guard downstream (INF-1). Treatment
+            //     differs per kind; inclusion does not. See plan threat note.
+            [
+                'relation' => 'AND',
+                [
+                    'key'     => $prefix . 'end_date',
+                    'compare' => 'NOT EXISTS',
+                ],
+                [
+                    'key'     => $prefix . 'start_date',
+                    'compare' => 'NOT EXISTS',
                 ],
             ],
         ],
