@@ -155,7 +155,15 @@ get_header();
     <div class="container py-6 lg:py-8">
         <?php if ($total > 0) : ?>
             <div class="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-[18px]" x-ref="grid">
-                <?php echo $initial_html; // Card HTML — escaped within the partials.?>
+                <?php
+                // /online renders a flat enrollable grid by design — online
+                // courses are always-on, so there is NO "Binnenkort — toon
+                // interesse" band here. Dateless online editions are normal
+                // enroll cards (status stays Open). The only behavior change on
+                // /online is that more cards appear via the inclusion fix; the
+                // render path is unchanged. See the dateless-editions catalog plan.
+                echo $initial_html; // Card HTML — escaped within the partials.
+                ?>
             </div>
 
             <!-- Empty state for filtered results -->
