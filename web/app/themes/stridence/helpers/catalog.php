@@ -144,8 +144,10 @@ function stridence_catalog_warn_if_capped(array $results, string $context): void
 
 /**
  * Eligible items for /klassikaal: active-status editions inside the date
- * window (2-day grace past end_date, start_date fallback), excluding
- * editions of online-only-format courses. Ordered by start_date ASC.
+ * window (2-day grace past end_date, start_date fallback, OR fully dateless),
+ * excluding editions of online-only-format courses. The SQL start_date
+ * ordering was removed so dateless editions are enumerated; dated ordering
+ * is applied in PHP by the band-ordering pass (task 3 of the dateless plan).
  */
 function stridence_catalog_klassikaal_items(): array
 {
@@ -158,9 +160,10 @@ function stridence_catalog_klassikaal_items(): array
         'fields'         => 'ids',
         'no_found_rows'  => true,
         'meta_query'     => stridence_catalog_date_window_meta_query($prefix),
-        'orderby'        => 'meta_value',
-        'meta_key'       => $prefix . 'start_date',
-        'order'          => 'ASC',
+        // No start_date orderby: ordering by meta_value forces an EXISTS join
+        // on start_date, which would exclude fully-dateless editions. Dated
+        // ordering for /klassikaal is applied in PHP by the band-ordering pass
+        // (task 3); inclusion is what matters at the query layer.
     ]);
     stridence_catalog_warn_if_capped($query->posts, 'klassikaal editions');
 
@@ -188,9 +191,11 @@ function stridence_catalog_klassikaal_items(): array
 
 /**
  * Eligible items for /online: one card per enrollable — (a) active editions
- * of online-format courses inside the date window, plus (b) pure-LD online
- * courses that never had an edition. Dateless (self-paced) editions are
- * excluded — see stridence_catalog_date_window_meta_query().
+ * of online-format courses inside the date window (including fully-dateless
+ * always-on editions), plus (b) pure-LD online courses that never had an
+ * edition. Returns a FLAT enrollable list — no band-ordering: online courses
+ * are always-on, so dateless online editions are normal enroll cards (see
+ * stridence_catalog_date_window_meta_query() and the dateless-catalog plan).
  */
 function stridence_catalog_online_items(): array
 {
@@ -232,9 +237,11 @@ function stridence_catalog_online_items(): array
         'fields'         => 'ids',
         'no_found_rows'  => true,
         'meta_query'     => $online_meta_query,
-        'orderby'        => 'meta_value',
-        'meta_key'       => $prefix . 'start_date',
-        'order'          => 'ASC',
+        // No start_date orderby (see klassikaal note): it would force an
+        // EXISTS join on start_date and exclude dateless always-on online
+        // editions. /online renders a flat enrollable grid and does NOT
+        // band-order — online courses are always-on, so there is no
+        // "Binnenkort" interest band here (Stefan, 2026-06-14).
     ]);
     stridence_catalog_warn_if_capped($edition_query->posts, 'online editions');
 
