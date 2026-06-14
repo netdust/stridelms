@@ -237,3 +237,14 @@ Deferred MEDIUM/LOW from the audit: launch-surface subset (H4, M1, M3, M5, M6, L
 - 6 MEDIUM + 4 LOW security findings (see audit report)
 - 5 MEDIUM perf findings (see audit report)
 - All P2 polish items deferred during this sprint
+
+## Dateless-editions sibling-site audit (2026-06-14, plan 2026-06-14-dateless-editions-catalog.md Task 7)
+
+The `start_date` SQL-ordering pattern that excludes dateless editions lives in four query sites. This plan fixed three; the remaining are filed as teaser-only by design:
+
+- `helpers/catalog.php` `stridence_catalog_klassikaal_items()` — FIXED (Task 2/3: orderby dropped, band-ordered in PHP).
+- `helpers/catalog.php` `stridence_catalog_online_items()` — FIXED (Task 2: orderby dropped, flat list).
+- `Admin/AdminAPIController.php` `getEditions` list view — FIXED (Task 6: LEFT JOIN + NULL-permit + NULL-last order).
+- `archive-sfwd-courses.php` classroom teaser (`:66-76`) — LEFT-AS-TEASER: 6-item homepage strip; comment added. Canonical inclusion is /klassikaal. Follow-up only if product wants dateless in the teaser.
+- `archive-sfwd-courses.php` online teaser (`:105-115`) — LEFT-AS-TEASER: same; comment added.
+- `helpers/catalog.php` `stridence_prefetch_course_cards()` — N/A: no start_date orderby (default order), never excluded dateless; confirmed by read.

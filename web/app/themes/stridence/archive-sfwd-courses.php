@@ -70,6 +70,10 @@ $edition_query = new WP_Query([
     'fields'         => 'ids',
     'no_found_rows'  => true,
     'meta_query'     => $edition_meta_query,
+    // dateless excluded here — teaser only (6-item homepage strip). The
+    // start_date orderby forces an EXISTS join that drops dateless editions;
+    // canonical dateless inclusion is /klassikaal + /online (see
+    // docs/plans/2026-06-14-dateless-editions-catalog.md, sibling-site audit).
     'orderby'        => 'meta_value',
     'meta_key'       => $meta_prefix . 'start_date',
     'order'          => 'ASC',
@@ -109,6 +113,8 @@ if (!empty($online_course_ids)) {
         'fields'         => 'ids',
         'no_found_rows'  => true,
         'meta_query'     => $online_meta_query,
+        // dateless excluded here — teaser only; canonical inclusion is
+        // /klassikaal + /online (same audit note as the classroom teaser above).
         'orderby'        => 'meta_value',
         'meta_key'       => $meta_prefix . 'start_date',
         'order'          => 'ASC',

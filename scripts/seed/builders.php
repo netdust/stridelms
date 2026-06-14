@@ -268,7 +268,15 @@ final class StrideSeedBuilders
     public function buildEdition(int $courseId, string $courseTitle, array $data, array $lessonIds, array $userMap): array
     {
         $repo = ntdst_get(EditionRepository::class);
-        $postTitle = $courseTitle . ' - ' . date('j M Y', strtotime($data['start_date']));
+        // A dateless edition (no sessions → no start_date/end_date meta) is the
+        // catalog interest/always-on anchor. It has no calendar date to key its
+        // natural-key title off, so use a stable label instead. The catalog
+        // eligibility query keys clause (3) off start_date/end_date being
+        // NOT EXISTS, so a dateless edition MUST NOT write those meta keys.
+        $isDateless = !empty($data['dateless']) || empty($data['start_date']);
+        $postTitle = $isDateless
+            ? $courseTitle . ' - Doorlopend'
+            : $courseTitle . ' - ' . date('j M Y', strtotime($data['start_date']));
 
         // Natural key: derived post title. On re-run, reconstruct the full
         // created/covers picture (edition id + its existing seed sessions),
@@ -302,8 +310,6 @@ final class StrideSeedBuilders
             'title' => $postTitle,
             'post_status' => 'publish',
             'course_id' => $courseId,
-            'start_date' => $data['start_date'],
-            'end_date' => $endDate ?? $data['start_date'],
             'price' => $effectivePrice,
             'price_non_member' => $effectivePrice,
             'capacity' => $data['capacity'],
@@ -311,6 +317,19 @@ final class StrideSeedBuilders
             'status' => $data['status'],           // MUST be a valid OfferingStatus value — matrix uses ->value
             'speakers' => $data['speakers'] ?? [], // json array of {name, role}, never a string
         ];
+        // Dated editions write start/end_date. A dateless edition must end up
+        // with NEITHER meta key set, so the catalog eligibility query's
+        // NOT EXISTS clause (3) matches it. But start_date is a `required`
+        // schema field (EditionCPT::getFields) — EditionRepository::create()
+        // rejects a row without it. So we satisfy the required gate with a
+        // throwaway value here and DELETE the date meta after create (below),
+        // reproducing the production "no date meta" shape exactly.
+        if ($isDateless) {
+            $createData['start_date'] = date('Y-m-d'); // throwaway — deleted post-create
+        } else {
+            $createData['start_date'] = $data['start_date'];
+            $createData['end_date'] = $endDate ?? $data['start_date'];
+        }
         // Content fields go through the repository (schema-registered), not update_post_meta
         foreach (($data['content'] ?? []) as $key => $value) {
             $createData[$key] = $value;   // target_audience, required_experience, included, price_includes,
@@ -330,6 +349,16 @@ final class StrideSeedBuilders
         }
         $editionId = $result->ID;
         update_post_meta($editionId, StrideSeedRunner::SEED_META_KEY, true);
+
+        // Dateless: strip the throwaway date meta so the row has NO start_date /
+        // end_date meta at all — the exact state the catalog NOT EXISTS clause
+        // (3) targets. (start_date is a required schema field, so it had to be
+        // present at create time; production dateless editions reach this same
+        // shape via editions saved without a date / migrated rows.)
+        if ($isDateless) {
+            delete_post_meta($editionId, $repo->getMetaPrefix() . 'start_date');
+            delete_post_meta($editionId, $repo->getMetaPrefix() . 'end_date');
+        }
 
         // Display-only fake-user capacity fill (900000+ IDs avoid the unique_user_edition constraint)
         if (!empty($data['fake_registered'])) {
@@ -355,7 +384,8 @@ final class StrideSeedBuilders
 
         $out = ['id' => $editionId, 'created' => ['editions' => [$editionId]], 'covers' => ["edition:{$editionId}" => $data['covers'] ?? []]];
 
-        echo "    + Edition: {$data['start_date']} at {$data['venue']} (ID: {$editionId})";
+        $dateLabel = $isDateless ? 'doorlopend (geen datum)' : $data['start_date'];
+        echo "    + Edition: {$dateLabel} at {$data['venue']} (ID: {$editionId})";
         if (!empty($data['enrollment_form'])) {
             echo " [form: {$data['enrollment_form']}]";
         }

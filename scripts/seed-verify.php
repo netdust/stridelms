@@ -63,6 +63,11 @@ $required = [
     'status:few_spots',
     'trajectory:cohort','trajectory:self_paced','trajectory:elective_choose_n',
     'flow:attendance_marked','flow:post_course_ready',
+    // Dateless dimension (2026-06-14 dateless-editions-catalog): a klassikaal
+    // interest anchor (Announcement, no dates) and an always-on online
+    // enrollable (Open, no dates). Both must be seeded so the catalog feature
+    // can be exercised end-to-end on /klassikaal and /online.
+    'date:dateless_klassikaal','date:dateless_online',
 ];
 foreach ($required as $tag) { $check("tag claimed: {$tag}", in_array($tag, $allTags, true)); }
 
@@ -167,6 +172,25 @@ $discountTypes = $wpdb->get_col("SELECT DISTINCT pm.meta_value FROM {$wpdb->post
 foreach (['full','fixed','percentage'] as $dt) {
     $check("voucher discount_type present (seed-scoped): {$dt}", in_array($dt, $discountTypes, true));
 }
+
+// 3c-bis. Dateless editions: the catalog eligibility query keys clause (3) off
+// start_date/end_date being absent (NOT EXISTS), so a seeded dateless edition
+// MUST carry NEITHER meta key, and its status must resolve correctly
+// (Announcement for klassikaal → interest band; Open for online → enroll).
+$assertDateless = function (string $tag, string $expectedStatus) use ($findEditionByTag, $editionRepo, $check): void {
+    $id = $findEditionByTag($tag);
+    $check("{$tag} edition seeded", $id !== null);
+    if ($id === null) {
+        return;
+    }
+    $start = get_post_meta($id, '_ntdst_start_date', true);
+    $end   = get_post_meta($id, '_ntdst_end_date', true);
+    $check("{$tag} has no start_date meta (catalog NOT EXISTS clause)", $start === '' || $start === false);
+    $check("{$tag} has no end_date meta (catalog NOT EXISTS clause)", $end === '' || $end === false);
+    $check("{$tag} stored status is {$expectedStatus}", (string) $editionRepo->getField($id, 'status') === $expectedStatus);
+};
+$assertDateless('date:dateless_klassikaal', 'announcement');
+$assertDateless('date:dateless_online', 'open');
 
 // 3d. Questionnaire: qg_enrollment_seed group exists, has 8 fields, types include all 7
 $qRepo  = ntdst_get(\Stride\Modules\Questionnaire\QuestionnaireRepository::class);

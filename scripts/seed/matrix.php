@@ -225,6 +225,19 @@ return [
                         ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => 'online', 'title' => 'E-learning: Beweegbeleid (nieuw cohort)', 'link_lesson' => true],
                     ],
                 ],
+                [   // DATELESS ONLINE (always-on): no sessions → no
+                    // start_date/end_date meta, but status stays Open (rule 3
+                    // of the effective-status engine fires only for classroom
+                    // editions). Lists on /online as a NORMAL enroll card — no
+                    // "Binnenkort" band, no interest CTA. The always-on
+                    // self-paced enrollable (Stefan, 2026-06-14).
+                    'dateless' => true,
+                    'price' => 125.00, 'price_non_member' => 150.00, 'capacity' => 0,
+                    'venue' => 'Online',
+                    'status' => OfferingStatus::Open->value,
+                    'speakers' => [['name' => 'Karel Mertens', 'role' => 'Beleidscoach']],
+                    'covers' => ['status:open', 'edition_type:online', 'date:dateless_online'],
+                ],
             ],
             'lessons' => [
                 ['title' => 'Module 1: Waarom een beweegbeleid?', 'content' => '<p>Het belang van een structureel beweegbeleid voor jongeren en hoe je draagvlak creëert.</p>'],
@@ -455,6 +468,22 @@ return [
                     ],
                     'sessions' => [
                         ['date_offset' => 0, 'start' => '09:30', 'end' => '12:30', 'type' => 'in_person', 'title' => 'Introductie en rondleiding BWEEG (najaar)'],
+                    ],
+                ],
+                [   // DATELESS KLASSIKAAL: no sessions → no start_date/end_date
+                    // meta → effective status resolves to Announcement
+                    // (allowsInterest). Lists on /klassikaal under the
+                    // "Binnenkort — toon interesse" band with the interest
+                    // card variant. The catalog interest anchor that was
+                    // stranded before the dateless-editions fix.
+                    'dateless' => true,
+                    'price' => 0.00, 'price_non_member' => 0.00, 'capacity' => 0,
+                    'venue' => 'BWEEG Hoofdkantoor Gent',
+                    'status' => OfferingStatus::Announcement->value,
+                    'speakers' => [['name' => 'Diverse BWEEG medewerkers', 'role' => 'Gastsprekers']],
+                    'covers' => ['status:announcement', 'date:dateless_klassikaal', 'reg:interest'],
+                    'registrations' => [
+                        ['status' => 'interest', 'path' => 'individual'],   // anonymous interest
                     ],
                 ],
             ],
