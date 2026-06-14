@@ -108,4 +108,72 @@ class CatalogShakeoutCest
         $I->waitForElement('[x-ref="grid"]', 10);
         $I->see('Ingeschreven');
     }
+
+    /**
+     * AF-1 + AF-2 (dateless-editions-catalog plan, 2026-06-14): a dateless
+     * KLASSIKAAL edition (no sessions → effective status Announcement) lists on
+     * /klassikaal under the "Binnenkort — toon interesse" band, rendered as the
+     * interest-variant card ("Geen datum — toon interesse" meta + "Toon
+     * interesse" CTA).
+     *
+     * Fixture: scripts/seed.php seeds one dateless klassikaal edition on the
+     * "Gratis Introductie: Werken bij BWEEG" course (cover tag
+     * date:dateless_klassikaal). The band header is a page-1 server-render-only
+     * concern, so it must be present in the initial HTML of /klassikaal.
+     *
+     *   GIVEN: a seeded dateless klassikaal edition (Announcement)
+     *   WHEN:  loading /klassikaal
+     *   THEN:  the "Binnenkort — toon interesse" band header renders, and a
+     *          card under it shows "Geen datum — toon interesse" + "Toon interesse".
+     */
+    public function datelessKlassikaalListsUnderBinnenkortBand(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify a dateless klassikaal edition lists under the Binnenkort band with the interest variant (AF-1, AF-2)');
+
+        $I->amOnPage('/klassikaal');
+        $I->waitForElement('[x-ref="grid"]', 10);
+        $I->dontSee('Fatal error');
+
+        // AF-1: the band header is present (page-1 server render).
+        $I->see('Binnenkort — toon interesse');
+
+        // AF-2: the interest-variant card meta + CTA are present.
+        $I->see('Geen datum — toon interesse');
+        $I->see('Toon interesse');
+    }
+
+    /**
+     * AF-5 (dateless-editions-catalog plan, 2026-06-14): a dateless ONLINE
+     * edition (always-on, effective status stays Open) lists on /online as a
+     * NORMAL enroll card — NO "Binnenkort" band, NO interest CTA. Online
+     * courses are always-on, so the interest concept is klassikaal-only.
+     *
+     * Fixture: scripts/seed.php seeds one dateless online edition on the
+     * "E-learning: Beweegbeleid Ontwikkelen" course (cover tag
+     * date:dateless_online).
+     *
+     *   GIVEN: a seeded dateless online edition (Open)
+     *   WHEN:  loading /online
+     *   THEN:  no "Binnenkort" band header anywhere, and the dateless online
+     *          edition renders as a normal enroll card — its course title is
+     *          present while the interest CTA / "Geen datum" framing is absent.
+     */
+    public function datelessOnlineRendersNormalEnrollCardNoBand(AcceptanceTester $I): void
+    {
+        $I->wantTo('verify a dateless online edition renders a normal enroll card with no interest band/CTA (AF-5)');
+
+        $I->amOnPage('/online');
+        $I->waitForElement('[x-ref="grid"]', 10);
+        $I->dontSee('Fatal error');
+
+        // AF-5: the band is klassikaal-only — /online never renders it.
+        $I->dontSee('Binnenkort — toon interesse');
+        // The interest framing must NOT appear for the always-on online edition.
+        $I->dontSee('Geen datum — toon interesse');
+
+        // The dateless online edition's course IS present as a normal enrollable
+        // card (the inclusion fix surfaces it). Asserting the course title proves
+        // it listed without the interest treatment.
+        $I->see('Beweegbeleid Ontwikkelen');
+    }
 }

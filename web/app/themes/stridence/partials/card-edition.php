@@ -86,6 +86,15 @@ $progress    = isset($args['progress']) ? (int) $args['progress'] : null;
 $is_cancelled = ($status === 'cancelled');
 $is_free      = ($price !== null && (float) $price <= 0);
 
+// Interest variant — the "Binnenkort — toon interesse" anchor. Keyed off the
+// EFFECTIVE status (INV-7), NOT date-absence: a KLASSIKAAL dateless edition
+// resolves to 'announcement' (allowsInterest), while an ONLINE dateless edition
+// stays 'open' (allowsEnrollment) and therefore renders a normal enroll card.
+// This is the whole reason online always-on editions need no special-casing
+// here (Stefan, 2026-06-14). Pure data-in: $status is already passed by the
+// catalog pre-pass; no service call.
+$is_interest = ($status === 'announcement') && !$is_cancelled && !$is_enrolled;
+
 // Sheet pill recipe (card size 'sm') for the enrolled-progress badges the
 // badge-status partial has no variant for — exact recipe classes inline.
 $pill_sm = 'text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex items-center gap-1';
@@ -95,6 +104,8 @@ if ($is_cancelled) {
     $cta_label = __('Bekijk alternatieven', 'stridence');
 } elseif ($is_enrolled) {
     $cta_label = __('Bekijk je inschrijving', 'stridence');
+} elseif ($is_interest) {
+    $cta_label = __('Toon interesse', 'stridence');
 } else {
     $cta_label = __('Bekijk editie', 'stridence');
 }
@@ -152,6 +163,10 @@ if ($is_cancelled) {
                 );
                 ?>
             </div>
+        <?php elseif ($is_interest && !$start_date) : ?>
+            <?php // Dateless interest anchor (effective status Announcement): no
+                  // date to show — surface the interest framing instead. ?>
+            <div class="font-semibold text-text"><?php esc_html_e('Geen datum — toon interesse', 'stridence'); ?></div>
         <?php else : ?>
             <?php if ($start_date) : ?>
                 <div>

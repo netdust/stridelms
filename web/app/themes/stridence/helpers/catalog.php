@@ -55,12 +55,17 @@ function stridence_catalog_items(string $catalog): array
  * builder for all three sites — /klassikaal, /online and the course
  * archive's online query — so the window rule cannot fork again.
  *
- * NOTE — dateless (self-paced) editions are currently EXCLUDED: every
- * caller pairs this with `orderby => meta_value` + `meta_key => start_date`,
- * which forces an EXISTS AND-clause on start_date, so a fully dateless
- * edition can never match (runtime-proven: a published open dateless
- * edition does not list). Pre-existing parity with the old pages — latent;
- * follow-up ruling tracked in tasks/todo.md ("dateless/self-paced catalog").
+ * NOTE — dateless editions are now INCLUDED for both klassikaal and online.
+ * The `orderby => meta_value` + `meta_key => start_date` pairing that
+ * previously forced an EXISTS join on start_date (excluding fully-dateless
+ * editions) has been removed from all item builders; the OR-fallback below
+ * now also matches editions with neither end_date nor start_date set.
+ * Klassikaal band-orders the result via stridence_catalog_order_into_bands()
+ * (a /klassikaal-only presentation layer); online returns a flat enrollable
+ * list. See plan docs/plans/2026-06-14-dateless-editions-catalog.md.
+ * Inclusion is gated by post_status=publish + the active-status IN-clause
+ * here + the published-course guard downstream (INF-1) — a draft edition or
+ * a draft-course edition still never lists.
  *
  * @param string $prefix Edition meta prefix (EditionRepository::getMetaPrefix())
  * @return array<int, array<string, mixed>> meta_query clauses (AND-joined by WP_Query)
@@ -77,14 +82,15 @@ function stridence_catalog_date_window_meta_query(string $prefix): array
         ],
         [
             'relation' => 'OR',
+            // (1) dated: end_date within the grace window
             [
                 'key'     => $prefix . 'end_date',
                 'value'   => $past_cutoff,
                 'compare' => '>=',
                 'type'    => 'DATE',
             ],
+            // (2) end_date missing but start_date within the grace window
             [
-                // Fallback when end_date is missing: use start_date
                 'relation' => 'AND',
                 [
                     'key'     => $prefix . 'end_date',
@@ -95,6 +101,24 @@ function stridence_catalog_date_window_meta_query(string $prefix): array
                     'value'   => $past_cutoff,
                     'compare' => '>=',
                     'type'    => 'DATE',
+                ],
+            ],
+            // (3) fully dateless: neither end_date nor start_date set. For a
+            //     KLASSIKAAL edition these are the "Binnenkort — toon
+            //     interesse" anchors; for an ONLINE edition these are
+            //     always-on enrollables. Inclusion is still gated by
+            //     post_status=publish + the active-status IN-clause above +
+            //     the published-course guard downstream (INF-1). Treatment
+            //     differs per kind; inclusion does not. See plan threat note.
+            [
+                'relation' => 'AND',
+                [
+                    'key'     => $prefix . 'end_date',
+                    'compare' => 'NOT EXISTS',
+                ],
+                [
+                    'key'     => $prefix . 'start_date',
+                    'compare' => 'NOT EXISTS',
                 ],
             ],
         ],
@@ -120,8 +144,10 @@ function stridence_catalog_warn_if_capped(array $results, string $context): void
 
 /**
  * Eligible items for /klassikaal: active-status editions inside the date
- * window (2-day grace past end_date, start_date fallback), excluding
- * editions of online-only-format courses. Ordered by start_date ASC.
+ * window (2-day grace past end_date, start_date fallback, OR fully dateless),
+ * excluding editions of online-only-format courses. The SQL start_date
+ * ordering was removed so dateless editions are enumerated; dated ordering
+ * is applied in PHP by the band-ordering pass (task 3 of the dateless plan).
  */
 function stridence_catalog_klassikaal_items(): array
 {
@@ -134,9 +160,10 @@ function stridence_catalog_klassikaal_items(): array
         'fields'         => 'ids',
         'no_found_rows'  => true,
         'meta_query'     => stridence_catalog_date_window_meta_query($prefix),
-        'orderby'        => 'meta_value',
-        'meta_key'       => $prefix . 'start_date',
-        'order'          => 'ASC',
+        // No start_date orderby: ordering by meta_value forces an EXISTS join
+        // on start_date, which would exclude fully-dateless editions. Dated
+        // ordering for /klassikaal is applied in PHP by the band-ordering pass
+        // (task 3); inclusion is what matters at the query layer.
     ]);
     stridence_catalog_warn_if_capped($query->posts, 'klassikaal editions');
 
@@ -144,7 +171,7 @@ function stridence_catalog_klassikaal_items(): array
 
     // Exclude editions of online-only-format courses (same rule as before:
     // online format present AND no classroom format).
-    return array_values(array_filter($items, static function (array $item): bool {
+    $items = array_values(array_filter($items, static function (array $item): bool {
         $course_id = (int) ($item['edition']['course_id'] ?? 0);
         if (!$course_id) {
             return true;
@@ -160,13 +187,23 @@ function stridence_catalog_klassikaal_items(): array
 
         return !($is_online && !$is_classroom);
     }));
+
+    // KLASSIKAAL-only presentation layer: band-order (dated-soon / dateless /
+    // grace) with a page-1 guard so the dateless "Binnenkort — toon interesse"
+    // anchors always land on page 1. Replaces the SQL start_date ordering that
+    // was dropped (it forced an EXISTS join excluding dateless editions). The
+    // /online builder intentionally does NOT call this — it returns a flat
+    // enrollable list (see dateless-editions-catalog plan).
+    return stridence_catalog_order_into_bands($items);
 }
 
 /**
  * Eligible items for /online: one card per enrollable — (a) active editions
- * of online-format courses inside the date window, plus (b) pure-LD online
- * courses that never had an edition. Dateless (self-paced) editions are
- * excluded — see stridence_catalog_date_window_meta_query().
+ * of online-format courses inside the date window (including fully-dateless
+ * always-on editions), plus (b) pure-LD online courses that never had an
+ * edition. Returns a FLAT enrollable list — no band-ordering: online courses
+ * are always-on, so dateless online editions are normal enroll cards (see
+ * stridence_catalog_date_window_meta_query() and the dateless-catalog plan).
  */
 function stridence_catalog_online_items(): array
 {
@@ -208,9 +245,11 @@ function stridence_catalog_online_items(): array
         'fields'         => 'ids',
         'no_found_rows'  => true,
         'meta_query'     => $online_meta_query,
-        'orderby'        => 'meta_value',
-        'meta_key'       => $prefix . 'start_date',
-        'order'          => 'ASC',
+        // No start_date orderby (see klassikaal note): it would force an
+        // EXISTS join on start_date and exclude dateless always-on online
+        // editions. /online renders a flat enrollable grid and does NOT
+        // band-order — online courses are always-on, so there is no
+        // "Binnenkort" interest band here (Stefan, 2026-06-14).
     ]);
     stridence_catalog_warn_if_capped($edition_query->posts, 'online editions');
 
@@ -304,6 +343,82 @@ function stridence_catalog_edition_items_from_ids(array $edition_ids): array
     }
 
     return $items;
+}
+
+/**
+ * Re-order KLASSIKAAL catalog items into three placement bands, guaranteeing
+ * the dateless ("Binnenkort — toon interesse") band falls inside page 1.
+ *
+ * KLASSIKAAL ONLY. The /online builder does NOT call this — online courses
+ * are always-on, so dateless online editions are normal enrollables in a
+ * flat grid with no interest band (Stefan, 2026-06-14).
+ *
+ * Band A: dated editions with start_date >= today, ASC (soonest first) —
+ *         plus any course items (evergreen enrollables) at the tail.
+ * Band B: dateless editions (no start_date), stable enumeration order.
+ * Band C: dated editions already started but inside the -2-day grace, ASC.
+ *
+ * Page-1 guard: when Band A alone fills STRIDENCE_CATALOG_PER_PAGE, the last
+ * count(B) slots of page 1 are reserved for Band B so dateless editions are
+ * never paged off page 1. PHP ordering is cheap — the list is capped at
+ * STRIDENCE_CATALOG_MAX_ITEMS and fully enumerated before slicing.
+ *
+ * Pure: data-in, no service calls. Status/CTA still come from the INV-7
+ * pre-pass at render time; this only decides ORDER.
+ *
+ * @param list<array<string, mixed>> $items
+ * @return list<array<string, mixed>>
+ */
+function stridence_catalog_order_into_bands(array $items): array
+{
+    $today = date('Y-m-d');
+    $a = [];   // dated-soon editions + course items
+    $b = [];   // dateless editions
+    $c = [];   // dated-grace editions
+
+    foreach ($items as $item) {
+        if (($item['kind'] ?? 'edition') === 'course') {
+            $a[] = $item;
+            continue;
+        }
+        $start = $item['edition']['start_date'] ?? null;
+        if ($start === null || $start === '') {
+            $b[] = $item;
+        } elseif ($start >= $today) {
+            $a[] = $item;
+        } else {
+            $c[] = $item;
+        }
+    }
+
+    // Sort dated editions ASC by start_date; keep course items at the A tail
+    // in enumeration order.
+    $a_editions = array_values(array_filter($a, static fn($i) => ($i['kind'] ?? 'edition') === 'edition'));
+    $a_courses  = array_values(array_filter($a, static fn($i) => ($i['kind'] ?? 'edition') === 'course'));
+    $cmp = static fn(array $x, array $y): int
+        => strcmp((string) ($x['edition']['start_date'] ?? ''), (string) ($y['edition']['start_date'] ?? ''));
+    usort($a_editions, $cmp);
+    usort($c, $cmp);
+    $a = [...$a_editions, ...$a_courses];
+
+    $p = defined('STRIDENCE_CATALOG_PER_PAGE') ? STRIDENCE_CATALOG_PER_PAGE : 24;
+    $countB = count($b);
+
+    if ($countB === 0) {
+        return [...$a, ...$c];
+    }
+    if ($countB >= $p) {
+        // Page 1 is all dateless; rest follows.
+        return [...$b, ...$a, ...$c];
+    }
+    if (count($a) + $countB <= $p) {
+        // B already lands on page 1 with A.
+        return [...$a, ...$b, ...$c];
+    }
+    // Reserve the last count(B) slots of page 1 for B.
+    $headA = array_slice($a, 0, $p - $countB);
+    $tailA = array_slice($a, $p - $countB);
+    return [...$headA, ...$b, ...$tailA, ...$c];
 }
 
 /**

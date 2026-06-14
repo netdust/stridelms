@@ -783,9 +783,13 @@ final class AdminAPIController
         $where = ["p.post_type = %s", "p.post_status = 'publish'"];
         $params = [EditionCPT::POST_TYPE];
 
-        // By default, only show editions that haven't passed more than 2 days ago
+        // By default, only show editions that haven't passed more than 2 days ago.
+        // Permit NULL start_date so dateless editions (no sessions -> no
+        // start_date meta, the interest-list anchors) show in the default scope.
+        // Same fix the Admin Workspace spec §10.7 / Task 1.2 inherits — see
+        // docs/plans/2026-06-13-admin-workspace-spec.md.
         if (empty($dateFrom)) {
-            $where[] = "pm_start.meta_value >= %s";
+            $where[] = "(pm_start.meta_value >= %s OR pm_start.meta_value IS NULL)";
             $params[] = $twoDaysAgo;
         }
 
@@ -822,7 +826,7 @@ final class AdminAPIController
         $countParams = $params;
         $total = (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(DISTINCT p.ID) FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
+             LEFT JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
              {$tagJoin}
              WHERE {$whereClause}",
             ...$countParams,
@@ -835,10 +839,10 @@ final class AdminAPIController
         $editions = $wpdb->get_results($wpdb->prepare(
             "SELECT DISTINCT p.ID, p.post_title, pm_start.meta_value as start_date
              FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
+             LEFT JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
              {$tagJoin}
              WHERE {$whereClause}
-             ORDER BY pm_start.meta_value ASC
+             ORDER BY pm_start.meta_value IS NULL, pm_start.meta_value ASC
              LIMIT %d OFFSET %d",
             ...$params,
         ));

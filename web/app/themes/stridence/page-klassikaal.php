@@ -33,7 +33,21 @@ $per_page = STRIDENCE_CATALOG_PER_PAGE;
 
 // Server-render the first slice only — the rest is paged via the endpoint.
 $initial_slice = array_slice($catalog_items, 0, $per_page);
-$initial_html = stridence_catalog_render_cards($initial_slice, get_current_user_id() ?: null);
+$uid = get_current_user_id() ?: null;
+
+// Split the page-1 slice at the dateless run for the "Binnenkort — toon
+// interesse" header. Same emptiness predicate as
+// stridence_catalog_order_into_bands() — reused, not forked. Bands are
+// contiguous in the ordered list (A.. B.. C..), so the dateless items form a
+// single run. KLASSIKAAL ONLY — page-online.php never does this (online is a
+// flat enrollable grid by design; online courses are always-on).
+$today = date('Y-m-d');
+$is_dateless = static fn(array $i): bool =>
+    ($i['kind'] ?? 'edition') === 'edition'
+    && empty($i['edition']['start_date'] ?? null);
+
+$b_indexes = array_keys(array_filter($initial_slice, $is_dateless));
+$has_band  = !empty($b_indexes);
 
 get_header();
 ?>
@@ -151,7 +165,34 @@ get_header();
     <div class="container py-6 lg:py-8">
         <?php if ($total > 0) : ?>
             <div class="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-[18px]" x-ref="grid">
-                <?php echo $initial_html; // Card HTML — escaped within the partials.?>
+                <?php
+                if ($has_band) {
+                    $first  = (int) min($b_indexes);
+                    $last   = (int) max($b_indexes);
+                    $before = array_slice($initial_slice, 0, $first);
+                    $band   = array_slice($initial_slice, $first, $last - $first + 1);
+                    $after  = array_slice($initial_slice, $last + 1);
+
+                    echo stridence_catalog_render_cards($before, $uid); // escaped within partials
+                    // Full-row band header — server-render only, KLASSIKAAL only.
+                    // The "Toon meer" / theme-filter endpoint returns flat cards;
+                    // Band B is fully consumed on page 1 (the page-1 guard in
+                    // stridence_catalog_order_into_bands() guarantees it), so
+                    // pages >=2 and filtered replaces never need this separator.
+                    // /online has no band at all. See the dateless-editions
+                    // catalog plan for why this stays page-1-only + klassikaal-only.
+                    ?>
+                    <div class="col-span-full mt-2 mb-1 flex items-center gap-3">
+                        <h2 class="text-[15px] font-bold text-text"><?php esc_html_e('Binnenkort — toon interesse', 'stridence'); ?></h2>
+                        <span class="flex-1 h-px bg-border-soft" aria-hidden="true"></span>
+                    </div>
+                    <?php
+                    echo stridence_catalog_render_cards($band, $uid);  // escaped within partials
+                    echo stridence_catalog_render_cards($after, $uid); // escaped within partials
+                } else {
+                    echo stridence_catalog_render_cards($initial_slice, $uid); // escaped within partials
+                }
+                ?>
             </div>
 
             <!-- Empty state for filtered results -->
