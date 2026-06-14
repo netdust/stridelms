@@ -2337,3 +2337,29 @@ if (!function_exists('wp_get_abilities')) {
         return $_test_abilities;
     }
 }
+
+if (!function_exists('get_post_status')) {
+    function get_post_status($post = null)
+    {
+        $found = get_post($post);
+        return $found instanceof \WP_Post ? $found->post_status : false;
+    }
+}
+
+if (!function_exists('stridence_template_part')) {
+    // No-op for the unit suite: pure-renderer partial tests assert the HOST
+    // partial's own output, not the markup of sub-partials it delegates to
+    // (e.g. badge-status, which goes through ntdst_response()). helpers/
+    // templates.php is function_exists-guarded, so loading it in another unit
+    // test (CourseCardBuilderTest) co-exists with this stub.
+    function stridence_template_part(string $slug, ?string $name = null, array $args = []): void
+    {
+    }
+}
+
+if (!function_exists('stride_format_money')) {
+    function stride_format_money(int $cents): string
+    {
+        return '€ ' . number_format($cents / 100, 2, ',', '.');
+    }
+}

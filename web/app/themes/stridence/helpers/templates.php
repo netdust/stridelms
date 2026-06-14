@@ -37,10 +37,12 @@ declare(strict_types=1);
  * @param string|null $name Optional name variant — appended as '-{name}'
  * @param array       $args Variables exposed to the template as $args + extracted
  */
-function stridence_template_part(string $slug, ?string $name = null, array $args = []): void
-{
-    echo stridence_template_html($slug, $name, $args);
-}
+if (!function_exists('stridence_template_part')) :
+    function stridence_template_part(string $slug, ?string $name = null, array $args = []): void
+    {
+        echo stridence_template_html($slug, $name, $args);
+    }
+endif;
 
 /**
  * Render a template part and return its output as a string.
@@ -53,15 +55,17 @@ function stridence_template_part(string $slug, ?string $name = null, array $args
  * @param string|null $name Optional name variant — appended as '-{name}'
  * @param array       $args Variables exposed to the template as $args + extracted
  */
-function stridence_template_html(string $slug, ?string $name = null, array $args = []): string
-{
-    $template = $name ? "{$slug}-{$name}" : $slug;
+if (!function_exists('stridence_template_html')) :
+    function stridence_template_html(string $slug, ?string $name = null, array $args = []): string
+    {
+        $template = $name ? "{$slug}-{$name}" : $slug;
 
-    return ntdst_response()
-        ->addPath(get_stylesheet_directory())
-        ->withData(['args' => $args] + $args)
-        ->html($template);
-}
+        return ntdst_response()
+            ->addPath(get_stylesheet_directory())
+            ->withData(['args' => $args] + $args)
+            ->html($template);
+    }
+endif;
 
 /**
  * Render a centered error card with icon, title, message and action link.
