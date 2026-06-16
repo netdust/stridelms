@@ -161,11 +161,11 @@ if ($is_cancelled) {
                         ? __('Deze editie werd geannuleerd. Je werd per e-mail verwittigd.', 'stridence')
                         : __('Deze editie werd geannuleerd.', 'stridence'),
                 );
-                ?>
+            ?>
             </div>
         <?php elseif ($is_interest && !$start_date) : ?>
             <?php // Dateless interest anchor (effective status Announcement): no
-                  // date to show — surface the interest framing instead. ?>
+              // date to show — surface the interest framing instead.?>
             <div class="font-semibold text-text"><?php esc_html_e('Geen datum — toon interesse', 'stridence'); ?></div>
         <?php else : ?>
             <?php if ($start_date) : ?>

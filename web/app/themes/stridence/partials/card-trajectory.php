@@ -61,19 +61,19 @@ if (!$enrolled) {
     $card_close = '</div>';
 }
 ?>
-<?php echo $card_open; // phpcs:ignore — pre-escaped above ?>
+<?php echo $card_open; // phpcs:ignore — pre-escaped above?>
 
     <!-- Badge row -->
     <div class="flex gap-1.5 flex-wrap items-center">
         <?php stridence_template_part('partials/badge-status', null, ['status' => 'trajectory', 'size' => 'sm']); ?>
-        <?php // badge-status owns the OfferingStatus → Dutch-label mapping; pass the raw status. ?>
+        <?php // badge-status owns the OfferingStatus → Dutch-label mapping; pass the raw status.?>
         <?php stridence_template_part('partials/badge-status', null, ['status' => $status, 'size' => 'sm']); ?>
         <?php if ($enrolled) : ?>
             <span class="text-[12px] font-bold px-[11px] py-1 rounded-full inline-flex items-center gap-1 bg-badge-online-bg text-badge-online-text">
                 <?php
                 /* translators: %d: completion percentage */
                 echo esc_html(sprintf(__('%d%% voltooid', 'stridence'), (int) $progress));
-                ?>
+            ?>
             </span>
         <?php endif; ?>
     </div>
@@ -106,14 +106,14 @@ if (!$enrolled) {
                 <?php
                 /* translators: %s: start month + year */
                 echo esc_html(sprintf(__('Gestart %s', 'stridence'), date_i18n('F Y', strtotime($started_at))));
-                ?>
+            ?>
             </div>
         <?php elseif (!$enrolled && $deadline !== '') : ?>
             <div>
                 <?php
-                /* translators: %s: enrollment deadline date */
-                echo esc_html(sprintf(__('Inschrijven tot %s', 'stridence'), stride_format_date($deadline)));
-                ?>
+            /* translators: %s: enrollment deadline date */
+            echo esc_html(sprintf(__('Inschrijven tot %s', 'stridence'), stride_format_date($deadline)));
+            ?>
             </div>
         <?php endif; ?>
     </div>
@@ -133,4 +133,4 @@ if (!$enrolled) {
             <span class="text-sm font-bold text-primary"><?php esc_html_e('Bekijk traject', 'stridence'); ?> &rarr;</span>
         <?php endif; ?>
     </div>
-<?php echo $card_close; // phpcs:ignore — static literal ?>
+<?php echo $card_close; // phpcs:ignore — static literal?>
