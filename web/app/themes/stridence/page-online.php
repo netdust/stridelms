@@ -201,9 +201,9 @@ get_header();
         <?php else : ?>
             <?php
             stridence_template_part('partials/empty-state', null, [
-            'icon'    => 'monitor',
-            'title'   => __('Geen opleidingen gevonden', 'stridence'),
-            'message' => __('Er zijn momenteel geen online opleidingen beschikbaar.', 'stridence'),
+                'icon'    => 'monitor',
+                'title'   => __('Geen opleidingen gevonden', 'stridence'),
+                'message' => __('Er zijn momenteel geen online opleidingen beschikbaar.', 'stridence'),
             ]);
             ?>
         <?php endif; ?>

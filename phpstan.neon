@@ -20,9 +20,12 @@ parameters:
         - web/app/mu-plugins/stride-core
         - web/app/themes/stridence
     excludePaths:
-        - web/app/themes/stridence/node_modules
-        - web/app/themes/stridence/dist
-        - web/app/themes/stridence/test-results
+        # (?) marks these optional: CI does not npm-install / build the theme,
+        # so these dirs are absent there. Without (?) PHPStan hard-errors on a
+        # missing excludePath ("neither a directory ... append (?)").
+        - web/app/themes/stridence/node_modules (?)
+        - web/app/themes/stridence/dist (?)
+        - web/app/themes/stridence/test-results (?)
     scanDirectories:
         # Symbol discovery only (not analyzed): NTDST framework + LearnDash,
         # so calls into them from stride-core/stridence resolve instead of

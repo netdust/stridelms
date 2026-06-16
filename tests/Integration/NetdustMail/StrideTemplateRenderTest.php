@@ -55,19 +55,26 @@ class StrideTemplateRenderTest extends \IntegrationTestCase
         // Seed the production templates (idempotent: existing slugs skipped).
         $this->bridge->seedTemplates();
 
-        // Guarantee the precondition this suite depends on: every seeded
-        // template is ACTIVE. seedTemplates() sets status=active on CREATE, but
-        // the `status` field carries a 'draft' default — on a fresh DB (CI) the
-        // created rows can read back as 'draft', which makes MailService::send()
-        // reject them (ndmail_template_inactive) and turns every render red.
-        // The test owns its preconditions: force-activate rather than trust the
-        // create-path + default interaction across environments.
+        // Guarantee the preconditions this suite depends on. seedTemplates()
+        // passes status/subject/category/trigger to create(), but on a fresh DB
+        // (CI) those meta fields don't reliably persist through the create path —
+        // status reads back as its 'draft' default (→ ndmail_template_inactive)
+        // and subject reads back empty (→ "rendered subject is empty"). Both turn
+        // every render red. The test owns its preconditions: reconcile each
+        // template's fields from the definitions via update() (which DOES persist
+        // reliably) rather than trusting create() across environments.
         $templateRepo = ntdst_get(MailTemplateRepository::class);
-        foreach (array_keys($this->templateDefinitions()) as $slug) {
+        foreach ($this->templateDefinitions() as $slug => $def) {
             $tpl = $templateRepo->findBySlug($slug);
-            if ($tpl && ($tpl->fields['status'] ?? '') !== 'active') {
-                $templateRepo->update($tpl->ID, ['status' => 'active']);
+            if (!$tpl) {
+                continue;
             }
+            $templateRepo->update($tpl->ID, [
+                'status'   => 'active',
+                'subject'  => $def['subject'] ?? '',
+                'category' => $def['category'] ?? 'notification',
+                'trigger'  => $def['trigger'] ?? '',
+            ]);
         }
 
         if (!self::$editionId) {

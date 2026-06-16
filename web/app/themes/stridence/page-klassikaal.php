@@ -230,9 +230,9 @@ stridence_template_part('partials/empty-state', null, [
         <?php else : ?>
             <?php
             stridence_template_part('partials/empty-state', null, [
-'icon'    => 'calendar',
-'title'   => __('Geen opleidingen gevonden', 'stridence'),
-'message' => __('Er zijn momenteel geen klassikale opleidingen gepland.', 'stridence'),
+                'icon'    => 'calendar',
+                'title'   => __('Geen opleidingen gevonden', 'stridence'),
+                'message' => __('Er zijn momenteel geen klassikale opleidingen gepland.', 'stridence'),
             ]);
             ?>
         <?php endif; ?>

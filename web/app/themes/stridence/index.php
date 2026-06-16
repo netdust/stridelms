@@ -55,17 +55,17 @@ get_header();
         </div>
 
         <?php the_posts_pagination([
-'prev_text' => '&larr; ' . __('Vorige', 'stridence'),
-'next_text' => __('Volgende', 'stridence') . ' &rarr;',
-'class' => 'mt-12',
+            'prev_text' => '&larr; ' . __('Vorige', 'stridence'),
+            'next_text' => __('Volgende', 'stridence') . ' &rarr;',
+            'class' => 'mt-12',
         ]); ?>
 
     <?php else : ?>
         <?php
         stridence_template_part('partials/empty-state', null, [
-'icon'    => 'file-text',
-'title'   => __('Geen berichten gevonden', 'stridence'),
-'message' => __('Er zijn momenteel geen berichten beschikbaar.', 'stridence'),
+            'icon'    => 'file-text',
+            'title'   => __('Geen berichten gevonden', 'stridence'),
+            'message' => __('Er zijn momenteel geen berichten beschikbaar.', 'stridence'),
         ]);
         ?>
     <?php endif; ?>
