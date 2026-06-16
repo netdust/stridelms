@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Integration\NetdustMail;
 
 use Netdust\Mail\MailService;
-use Netdust\Mail\MailTemplateRepository;
 use Netdust\Mail\SmartCodeRegistry;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Invoicing\QuoteService;
@@ -53,29 +52,11 @@ class StrideTemplateRenderTest extends \IntegrationTestCase
         ntdst_get(SmartCodeRegistry::class)->refresh();
 
         // Seed the production templates (idempotent: existing slugs skipped).
+        // create() persists prefixed meta (status=active, subject, ...) reliably
+        // regardless of bootstrap/seed timing — MailTemplateRepository::model()
+        // guards against the phantom-model / empty-meta_prefix case that
+        // previously left templates draft + blank-subject on a fresh DB.
         $this->bridge->seedTemplates();
-
-        // Guarantee the preconditions this suite depends on. seedTemplates()
-        // passes status/subject/category/trigger to create(), but on a fresh DB
-        // (CI) those meta fields don't reliably persist through the create path —
-        // status reads back as its 'draft' default (→ ndmail_template_inactive)
-        // and subject reads back empty (→ "rendered subject is empty"). Both turn
-        // every render red. The test owns its preconditions: reconcile each
-        // template's fields from the definitions via update() (which DOES persist
-        // reliably) rather than trusting create() across environments.
-        $templateRepo = ntdst_get(MailTemplateRepository::class);
-        foreach ($this->templateDefinitions() as $slug => $def) {
-            $tpl = $templateRepo->findBySlug($slug);
-            if (!$tpl) {
-                continue;
-            }
-            $templateRepo->update($tpl->ID, [
-                'status'   => 'active',
-                'subject'  => $def['subject'] ?? '',
-                'category' => $def['category'] ?? 'notification',
-                'trigger'  => $def['trigger'] ?? '',
-            ]);
-        }
 
         if (!self::$editionId) {
             $this->createFixtures();
@@ -240,7 +221,7 @@ class StrideTemplateRenderTest extends \IntegrationTestCase
         $this->assertSame(
             [],
             $failures,
-            "Templates that fail to render/send:\n - " . implode("\n - ", $failures)
+            "Templates that fail to render/send:\n - " . implode("\n - ", $failures),
         );
     }
 }

@@ -24,6 +24,43 @@ class MailTemplateRepository
     }
 
     /**
+     * Resolve the Data Manager model, guaranteeing it is the real
+     * schema-bearing one (correct meta_prefix), not a phantom.
+     *
+     * ntdst_data()->get() returns `self::$models[$name] ?? register($name)`:
+     * if create()/update() runs before MailTemplateCPT::register() has set up
+     * the model (e.g. before the `init` hook, or in a test that seeds in
+     * setUp), get() auto-registers a PHANTOM model with an EMPTY meta_prefix.
+     * extractMetaData() then writes `status`/`subject` UNPREFIXED, so later
+     * reads of `_ndmail_status` / `_ndmail_subject` come back empty — templates
+     * read as draft + blank subject. Forcing registration here makes the model
+     * deterministic regardless of bootstrap/seed timing.
+     *
+     * @return \NTDST_Data_Model The schema-bearing model (untyped return so the
+     *                           unit-test stub double satisfies it).
+     */
+    private function model()
+    {
+        $needsFix = !ntdst_data()->isRegistered(self::POST_TYPE)
+            || ntdst_data()->get(self::POST_TYPE)->getMetaPrefix() !== self::META_PREFIX;
+
+        if ($needsFix) {
+            // Re-register the Data Manager model directly with the correct
+            // meta_prefix + schema. We can't rely on MailTemplateCPT::register()
+            // here: its `post_type_exists()` early-return skips re-registration
+            // once the WP post type exists, which leaves a phantom model (empty
+            // prefix) in place. ntdst_data()->register() unconditionally
+            // overwrites self::$models[name] with a correctly-configured model.
+            ntdst_data()->register(self::POST_TYPE, [
+                'meta_prefix' => self::META_PREFIX,
+                'fields' => MailTemplateCPT::getFields(),
+            ]);
+        }
+
+        return ntdst_data()->get(self::POST_TYPE);
+    }
+
+    /**
      * Find a template by its slug (post_name).
      *
      * @param string $slug The template post_name.
@@ -31,7 +68,7 @@ class MailTemplateRepository
      */
     public function findBySlug(string $slug): ?\WP_Post
     {
-        $model = ntdst_data()->get(self::POST_TYPE);
+        $model = $this->model();
         $results = $model->where('post_name', $slug)
             ->where('post_status', 'publish')
             ->withMeta()
@@ -51,7 +88,7 @@ class MailTemplateRepository
      */
     public function findById(int $id): ?\WP_Post
     {
-        $model = ntdst_data()->get(self::POST_TYPE);
+        $model = $this->model();
         $result = $model->find($id);
 
         if (is_wp_error($result)) {
@@ -68,7 +105,7 @@ class MailTemplateRepository
      */
     public function findWithTriggers(): array
     {
-        $model = ntdst_data()->get(self::POST_TYPE);
+        $model = $this->model();
         $results = $model->where('post_status', 'publish')
             ->whereNot('trigger', '')
             ->withMeta()
@@ -85,7 +122,7 @@ class MailTemplateRepository
      */
     public function findByCategory(string $category): array
     {
-        $model = ntdst_data()->get(self::POST_TYPE);
+        $model = $this->model();
         $results = $model->where('post_status', 'publish')
             ->where('category', $category)
             ->withMeta()
@@ -101,7 +138,7 @@ class MailTemplateRepository
      */
     public function findAll(): array
     {
-        $model = ntdst_data()->get(self::POST_TYPE);
+        $model = $this->model();
         $results = $model->where('post_status', 'publish')
             ->withMeta()
             ->get();
@@ -162,7 +199,7 @@ class MailTemplateRepository
      */
     public function create(array $data): \WP_Post|\WP_Error
     {
-        $model = ntdst_data()->get(self::POST_TYPE);
+        $model = $this->model();
 
         // Ensure post_status defaults to draft if not provided
         if (!isset($data['post_status'])) {
@@ -181,7 +218,7 @@ class MailTemplateRepository
      */
     public function update(int $id, array $data): \WP_Post|\WP_Error
     {
-        $model = ntdst_data()->get(self::POST_TYPE);
+        $model = $this->model();
         return $model->update($id, $data);
     }
 
@@ -194,7 +231,7 @@ class MailTemplateRepository
      */
     public function delete(int $id, bool $force = false): bool|\WP_Error
     {
-        $model = ntdst_data()->get(self::POST_TYPE);
+        $model = $this->model();
         return $model->delete($id, $force);
     }
 }
