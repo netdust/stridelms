@@ -257,10 +257,10 @@ Branch: `feat/trajectory-edition-parity` (DDEV-served; off HEAD da528fd1). Dirty
 
 Goal: trajectory enrolled-state works like editions on BOTH catalog card + detail page (context CTA + enrolled panels for child-editions/electives).
 
-- [ ] 1. `EnrollmentService::getEnrolledTrajectoryIds()` — bulk, mirrors getEnrolledEditionIds. **Tier A** unit test.
-- [ ] 2. Catalog: archive-vad_trajectory.php prefetches enrolled set → passes progress/dashboard_url opts to card builder.
-- [ ] 3. Detail CTA parity: port edition $enrolled_cta states to single-vad_trajectory.php.
-- [ ] 4. Detail enrolled panels: child-editions + elective choices inline (analogue of session panels), from getProgressData.
-- [ ] 5. Verify live (catalog+detail, enrolled+guest) + unit + trajectory integration green.
+- [x] 1. `EnrollmentService::getEnrolledTrajectoryIds()` — bulk, mirrors getEnrolledEditionIds. **Tier A** unit test.
+- [x] 2. Catalog: archive-vad_trajectory.php prefetches enrolled set → passes progress/dashboard_url opts to card builder.
+- [x] 3. Detail CTA parity: port edition $enrolled_cta states to single-vad_trajectory.php.
+- [x] 4. Detail enrolled panels: child-editions + elective choices inline (analogue of session panels), from getProgressData.
+- [x] 5. Verify live (catalog+detail, enrolled+guest) + unit + trajectory integration green.
 
 Committed already: basic enrolled CTA on detail + trajectory price in enrollment form (from fix/trajectory-detail-form).
