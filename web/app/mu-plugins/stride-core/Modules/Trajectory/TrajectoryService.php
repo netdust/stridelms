@@ -472,8 +472,8 @@ final class TrajectoryService extends AbstractService
             'price_non_member' => (float) $this->repository->getField($post->ID, 'price_non_member', 0),
             'requires_approval' => (bool) $this->repository->getField($post->ID, 'requires_approval', false),
             'courses' => $this->repository->getCourses($post->ID),
-        ] + $this->descriptiveFields(fn(string $key): string =>
-            (string) $this->repository->getField($post->ID, $key, ''));
+        ] + $this->descriptiveFields(fn(string $key): string
+            => (string) $this->repository->getField($post->ID, $key, ''));
     }
 
     /**
@@ -536,7 +536,7 @@ final class TrajectoryService extends AbstractService
             'price' => (float) ($data['meta']['price'] ?? $data['price'] ?? 0),
             'price_non_member' => (float) ($data['meta']['price_non_member'] ?? $data['price_non_member'] ?? 0),
             'courses' => $courses,
-        ] + $this->descriptiveFields(static fn(string $key): string =>
-            (string) ($data['meta'][$key] ?? $data[$key] ?? ''));
+        ] + $this->descriptiveFields(static fn(string $key): string
+            => (string) ($data['meta'][$key] ?? $data[$key] ?? ''));
     }
 }

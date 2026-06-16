@@ -42,8 +42,8 @@ $uid = get_current_user_id() ?: null;
 // single run. KLASSIKAAL ONLY — page-online.php never does this (online is a
 // flat enrollable grid by design; online courses are always-on).
 $today = date('Y-m-d');
-$is_dateless = static fn(array $i): bool =>
-    ($i['kind'] ?? 'edition') === 'edition'
+$is_dateless = static fn(array $i): bool
+    => ($i['kind'] ?? 'edition') === 'edition'
     && empty($i['edition']['start_date'] ?? null);
 
 $b_indexes = array_keys(array_filter($initial_slice, $is_dateless));
@@ -192,19 +192,19 @@ get_header();
                 } else {
                     echo stridence_catalog_render_cards($initial_slice, $uid); // escaped within partials
                 }
-                ?>
+?>
             </div>
 
             <!-- Empty state for filtered results -->
             <div x-show="filteredTotal === 0 && !loading" x-cloak>
                 <?php
-                stridence_template_part('partials/empty-state', null, [
-                    'icon'    => 'search',
-                    'title'   => __('Geen opleidingen gevonden', 'stridence'),
-                    'message' => __('Er zijn geen klassikale opleidingen in dit thema.', 'stridence'),
-                    'band'    => true,
-                ]);
-                ?>
+stridence_template_part('partials/empty-state', null, [
+    'icon'    => 'search',
+    'title'   => __('Geen opleidingen gevonden', 'stridence'),
+    'message' => __('Er zijn geen klassikale opleidingen in dit thema.', 'stridence'),
+    'band'    => true,
+]);
+?>
                 <div class="mt-4 flex justify-center">
                     <button @click="setFilter('')" type="button" class="btn-ghost">
                         <?php esc_html_e('Toon alles', 'stridence'); ?>
@@ -230,9 +230,9 @@ get_header();
         <?php else : ?>
             <?php
             stridence_template_part('partials/empty-state', null, [
-                'icon'    => 'calendar',
-                'title'   => __('Geen opleidingen gevonden', 'stridence'),
-                'message' => __('Er zijn momenteel geen klassikale opleidingen gepland.', 'stridence'),
+'icon'    => 'calendar',
+'title'   => __('Geen opleidingen gevonden', 'stridence'),
+'message' => __('Er zijn momenteel geen klassikale opleidingen gepland.', 'stridence'),
             ]);
             ?>
         <?php endif; ?>

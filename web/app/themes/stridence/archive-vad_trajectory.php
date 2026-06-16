@@ -49,7 +49,7 @@ get_header();
 
     <?php if (!empty($trajectories)) : ?>
 
-        <?php // 320px min-width — wider trajectory cards vs 300px catalog grids ?>
+        <?php // 320px min-width — wider trajectory cards vs 300px catalog grids?>
         <div class="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-[18px]">
             <?php foreach ($trajectories as $trajectory) :
                 $trajectory_id = (int) ($trajectory['id'] ?? $trajectory['ID'] ?? 0);

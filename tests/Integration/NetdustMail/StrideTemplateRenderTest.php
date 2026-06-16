@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Integration\NetdustMail;
 
 use Netdust\Mail\MailService;
+use Netdust\Mail\MailTemplateRepository;
 use Netdust\Mail\SmartCodeRegistry;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Invoicing\QuoteService;
@@ -53,6 +54,21 @@ class StrideTemplateRenderTest extends \IntegrationTestCase
 
         // Seed the production templates (idempotent: existing slugs skipped).
         $this->bridge->seedTemplates();
+
+        // Guarantee the precondition this suite depends on: every seeded
+        // template is ACTIVE. seedTemplates() sets status=active on CREATE, but
+        // the `status` field carries a 'draft' default — on a fresh DB (CI) the
+        // created rows can read back as 'draft', which makes MailService::send()
+        // reject them (ndmail_template_inactive) and turns every render red.
+        // The test owns its preconditions: force-activate rather than trust the
+        // create-path + default interaction across environments.
+        $templateRepo = ntdst_get(MailTemplateRepository::class);
+        foreach (array_keys($this->templateDefinitions()) as $slug) {
+            $tpl = $templateRepo->findBySlug($slug);
+            if ($tpl && ($tpl->fields['status'] ?? '') !== 'active') {
+                $templateRepo->update($tpl->ID, ['status' => 'active']);
+            }
+        }
 
         if (!self::$editionId) {
             $this->createFixtures();

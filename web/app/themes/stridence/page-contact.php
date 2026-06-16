@@ -34,7 +34,7 @@ get_header();
          * Source: site option or page excerpt.
          * Field inventory: docs/plans/2026-06-11-helder-tij-field-inventory.md
          */
-        ?>
+?>
         <p class="text-[16px] text-text-muted max-w-[560px]">
             <?php esc_html_e('Een vraag over een opleiding, een offerte voor je team, of gewoon eens aftoetsen wat kan? We antwoorden binnen één werkdag — met een mens, niet met een ticketnummer.', 'stridence'); ?>
         </p>
@@ -54,13 +54,13 @@ get_header();
 
             <!-- Persons cluster -->
             <?php
-            /*
-             * PLACEHOLDER — contact_persons
-             * Source: site option or ACF repeater on the contact page.
-             * Field inventory: docs/plans/2026-06-11-helder-tij-field-inventory.md
-             * Initials, bg/text colours per mockup rows 50-53.
-             */
-            ?>
+    /*
+     * PLACEHOLDER — contact_persons
+     * Source: site option or ACF repeater on the contact page.
+     * Field inventory: docs/plans/2026-06-11-helder-tij-field-inventory.md
+     * Initials, bg/text colours per mockup rows 50-53.
+     */
+?>
             <div class="flex gap-[14px] items-start">
                 <div class="flex">
                     <span class="w-11 h-11 rounded-full bg-[#E2F0EE] text-[#0B5F5C] grid place-items-center text-[14px] font-extrabold ring-2 ring-surface">LD</span>
@@ -77,12 +77,12 @@ get_header();
                 <!-- Bezoek ons -->
                 <div class="py-4 first:pt-0">
                     <?php
-                    /*
-                     * PLACEHOLDER — contact_address
-                     * Source: stride site settings or ACF option.
-                     * Field inventory: docs/plans/2026-06-11-helder-tij-field-inventory.md
-                     */
-                    ?>
+        /*
+         * PLACEHOLDER — contact_address
+         * Source: stride site settings or ACF option.
+         * Field inventory: docs/plans/2026-06-11-helder-tij-field-inventory.md
+         */
+?>
                     <div class="px-6">
                         <p class="text-[11px] font-bold tracking-[0.1em] uppercase text-text-faint mb-[6px]">
                             <?php esc_html_e('Bezoek ons', 'stridence'); ?>
@@ -97,21 +97,21 @@ get_header();
                 <!-- Bel of mail -->
                 <div class="py-4">
                     <?php
-                    /*
-                     * PLACEHOLDER — contact_phone, contact_hours, contact_email
-                     * Source: stride site settings or ACF option.
-                     * Field inventory: docs/plans/2026-06-11-helder-tij-field-inventory.md
-                     */
-                    ?>
+/*
+ * PLACEHOLDER — contact_phone, contact_hours, contact_email
+ * Source: stride site settings or ACF option.
+ * Field inventory: docs/plans/2026-06-11-helder-tij-field-inventory.md
+ */
+?>
                     <div class="px-6">
                         <p class="text-[11px] font-bold tracking-[0.1em] uppercase text-text-faint mb-[6px]">
                             <?php esc_html_e('Bel of mail', 'stridence'); ?>
                         </p>
                         <p class="text-[14px] text-[#43454C] leading-[1.6]">
-                            <?php // TODO at wiring time: esc_url('tel:' . get_option('stride_contact_phone')) ?>
+                            <?php // TODO at wiring time: esc_url('tel:' . get_option('stride_contact_phone'))?>
                             <a href="tel:+3221234567" class="text-primary font-bold no-underline">+32 2 123 45 67</a>
                             — <?php esc_html_e('werkdagen 9:00 – 17:00', 'stridence'); ?><br>
-                            <?php // TODO at wiring time: esc_url('mailto:' . get_option('stride_contact_email')) ?>
+                            <?php // TODO at wiring time: esc_url('mailto:' . get_option('stride_contact_email'))?>
                             <a href="mailto:info@stride.be" class="text-primary font-bold no-underline">info@stride.be</a>
                         </p>
                     </div>
@@ -120,12 +120,12 @@ get_header();
                 <!-- Facturatie -->
                 <div class="py-4 last:pb-0">
                     <?php
-                    /*
-                     * PLACEHOLDER — contact_vat, contact_kmo
-                     * Source: stride site settings or ACF option.
-                     * Field inventory: docs/plans/2026-06-11-helder-tij-field-inventory.md
-                     */
-                    ?>
+/*
+ * PLACEHOLDER — contact_vat, contact_kmo
+ * Source: stride site settings or ACF option.
+ * Field inventory: docs/plans/2026-06-11-helder-tij-field-inventory.md
+ */
+?>
                     <div class="px-6">
                         <p class="text-[11px] font-bold tracking-[0.1em] uppercase text-text-faint mb-[6px]">
                             <?php esc_html_e('Facturatie', 'stridence'); ?>
@@ -145,7 +145,7 @@ get_header();
              * Source: site option or ACF field (Google Maps embed URL or iframe).
              * Field inventory: docs/plans/2026-06-11-helder-tij-field-inventory.md
              */
-            ?>
+?>
             <div class="aspect-video rounded-[16px] bg-[repeating-linear-gradient(45deg,#EEF1F5_0px,#EEF1F5_14px,#E4E8EE_14px,#E4E8EE_28px)] grid place-items-center">
                 <span class="font-mono text-[12px] text-text-faint bg-white/80 rounded-lg px-3 py-1">
                     <?php esc_html_e('kaart: locatie Schaarbeek', 'stridence'); ?>
@@ -165,15 +165,15 @@ get_header();
             </h2>
 
             <?php
-            // Form seam — preserves existing page content (FluentForms shortcode,
-            // block content, or client-pattern override) byte-identical.
-            if (have_posts()) :
-                while (have_posts()) :
-                    the_post();
-                    the_content();
-                endwhile;
-            endif;
-            ?>
+// Form seam — preserves existing page content (FluentForms shortcode,
+// block content, or client-pattern override) byte-identical.
+if (have_posts()) :
+    while (have_posts()) :
+        the_post();
+        the_content();
+    endwhile;
+endif;
+?>
         </div><!-- /right -->
 
     </div><!-- /flex -->

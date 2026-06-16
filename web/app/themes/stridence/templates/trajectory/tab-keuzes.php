@@ -182,7 +182,7 @@ $selectedCourseIds = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::c
                             esc_html__('Je kunt je keuze tot %s aanpassen.', 'stridence'),
                             esc_html(date_i18n('j F Y', strtotime($choiceDeadline))),
                         );
-                ?>
+                    ?>
                     </span>
                 <?php endif; ?>
             </div>

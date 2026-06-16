@@ -171,7 +171,7 @@ $all_quotes = array_merge($quoteData['active'], $quoteData['cancelled']);
                                         esc_html__('behaald op %s', 'stridence'),
                                         esc_html(stride_format_date($cert['completed_at'])),
                                     );
-                                    ?>
+                                ?>
                                 </div>
                             <?php endif; ?>
                         </div>
@@ -219,7 +219,7 @@ $all_quotes = array_merge($quoteData['active'], $quoteData['cancelled']);
                                     esc_html__('Offerte #%s', 'stridence'),
                                     esc_html($quote['quote_number']),
                                 );
-                                ?>
+                    ?>
                             </div>
                             <div class="text-[12px] text-text-faint mt-[2px]">
                                 <?php echo esc_html($quote['title']); ?>
@@ -264,6 +264,6 @@ $all_quotes = array_merge($quoteData['active'], $quoteData['cancelled']);
             'title'   => __('Nog geen facturen', 'stridence'),
             'message' => __('Facturen worden hier weergegeven zodra ze beschikbaar zijn.', 'stridence'),
         ]);
-        ?>
+?>
     </section>
 </div>

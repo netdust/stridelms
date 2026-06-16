@@ -288,9 +288,14 @@ function stridence_build_course_card_args_from_trajectory_course(\WP_Post $cours
         ? get_the_excerpt($courseId)
         : wp_trim_words(get_post_field('post_content', $courseId), 25);
 
-    // Upcoming editions via repository; canEnroll() stays on the service
+    // Upcoming editions via repository; canEnroll() stays on the service.
+    // This is a READ-ONLY overview surface — the learner enrols in the
+    // trajectory, not in individual editions. The editions list below is an
+    // informational preview only (no enrol CTA). Edition/session choice is a
+    // gated completion task AFTER the trajectory enrolment form.
     $editionService    = ntdst_get(\Stride\Modules\Edition\EditionService::class);
     $editionRepository = ntdst_get(\Stride\Modules\Edition\EditionRepository::class);
+    $sessionService    = ntdst_get(\Stride\Modules\Edition\SessionService::class);
     $allEditions       = $editionRepository->findByCourse($courseId);
     $upcomingEditions  = [];
     $nextStartDate     = null;
@@ -303,10 +308,31 @@ function stridence_build_course_card_args_from_trajectory_course(\WP_Post $cours
             }
             $startDate = (string) ($ed['start_date'] ?? $editionRepository->getField($editionId, 'start_date', ''));
             $venue     = (string) ($ed['venue'] ?? $editionRepository->getField($editionId, 'venue', ''));
+
+            // Time window comes from the edition's first session — the edition
+            // itself carries no start_time/end_time. Mirrors "09:00 – 12:30".
+            $startTime = null;
+            $endTime   = null;
+            $sessions  = $sessionService->getSessionsForEdition($editionId);
+            if (!empty($sessions)) {
+                $first     = $sessions[0];
+                $startTime = !empty($first['start_time']) ? substr((string) $first['start_time'], 0, 5) : null;
+                $endTime   = !empty($first['end_time']) ? substr((string) $first['end_time'], 0, 5) : null;
+            }
+
+            // Places remaining (capacity − registered); null when uncapped.
+            $capacity        = $editionService->getCapacity($editionId);
+            $placesRemaining = $capacity > 0
+                ? max(0, $capacity - $editionService->getRegisteredCount($editionId))
+                : null;
+
             $upcomingEditions[] = [
-                'id'         => $editionId,
-                'start_date' => $startDate ?: null,
-                'venue'      => $venue ?: null,
+                'id'               => $editionId,
+                'start_date'       => $startDate ?: null,
+                'venue'            => $venue ?: null,
+                'start_time'       => $startTime,
+                'end_time'         => $endTime,
+                'places_remaining' => $placesRemaining,
             ];
             if ($nextStartDate === null && $startDate) {
                 $nextStartDate = $startDate;
@@ -316,6 +342,43 @@ function stridence_build_course_card_args_from_trajectory_course(\WP_Post $cours
             }
         }
     }
+
+    // Informational planning state shown on the right of the collapsed header.
+    // "✓ Afgerond" wins when the logged-in learner already completed the course;
+    // otherwise it reflects scheduling: a date when an edition exists, else
+    // "Nog in te plannen".
+    $editionCount = count($upcomingEditions);
+    $userId       = get_current_user_id();
+    $isComplete   = $userId > 0
+        && \Stride\Integrations\LearnDash\LearnDashHelper::isComplete($courseId, $userId);
+
+    if ($isComplete) {
+        $completionTs = \Stride\Integrations\LearnDash\LearnDashHelper::getCompletionDate($courseId, $userId);
+        $statusLabel  = [
+            'tone' => 'success',
+            'text' => $completionTs
+                ? sprintf(__('afgerond op %s', 'stridence'), stride_format_date(date('Y-m-d', $completionTs)))
+                : __('Afgerond', 'stridence'),
+            'icon' => 'check-circle',
+        ];
+    } elseif ($nextStartDate) {
+        $statusLabel = [
+            'tone' => 'muted',
+            'text' => sprintf(__('vanaf %s', 'stridence'), stride_format_date($nextStartDate)),
+            'icon' => null,
+        ];
+    } else {
+        $statusLabel = [
+            'tone' => 'muted',
+            'text' => __('Nog in te plannen', 'stridence'),
+            'icon' => null,
+        ];
+    }
+
+    // Course detail link — always /edities/<course-slug>/, never the raw LD
+    // permalink. EditionRouter renders the course in place when no edition
+    // exists. Rendered inline in the body as "Bekijk de volledige cursus →".
+    $courseUrl = home_url('/edities/' . $course->post_name . '/');
 
     return [
         'course_id'    => $courseId,
@@ -332,6 +395,9 @@ function stridence_build_course_card_args_from_trajectory_course(\WP_Post $cours
             'days_remaining'      => null,
             'pending_tasks_count' => null,
             'imminence'           => null,
+            // Overview-only additions:
+            'edition_count'       => $editionCount,
+            'status_label'        => $statusLabel,
         ],
         'body'         => [
             'excerpt'           => $excerpt ?: null,
@@ -340,12 +406,9 @@ function stridence_build_course_card_args_from_trajectory_course(\WP_Post $cours
             'upcoming_editions' => $upcomingEditions,
             'task_summary'      => null,
             'primary_cta'       => null,
-            // Always /edities/<course-slug>/ — never the raw LD permalink.
-            // EditionRouter renders the course in place when no edition exists.
-            'secondary_cta'     => [
-                'url'   => home_url('/edities/' . $course->post_name . '/'),
-                'label' => __('Bekijk cursus', 'stridence'),
-            ],
+            // Inline detail link rendered after the excerpt, not as a button.
+            'course_url'        => $courseUrl,
+            'secondary_cta'     => null,
         ],
     ];
 }

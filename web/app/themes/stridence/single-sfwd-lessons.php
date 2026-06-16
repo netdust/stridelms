@@ -28,7 +28,7 @@ get_header();
             // Do not re-implement LD rendering — wrapper styling only (INV-6).
             the_content();
         endwhile;
-        ?>
+?>
     </div>
 </article>
 

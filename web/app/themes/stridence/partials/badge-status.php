@@ -25,6 +25,8 @@
  *     @type string $status Status key
  *     @type int    $spots  Optional spots remaining for auto-detecting "few spots" (≤5)
  *     @type string $size   Optional 'sm' for the card-size pill (default normal)
+ *     @type string $style  Optional 'dot' for the dot + text treatment (catalog
+ *                          card top row) instead of the filled pill (default).
  * }
  */
 
@@ -37,6 +39,7 @@ $args   = $args ?? [];
 $status = $args['status'] ?? 'open';
 $spots  = isset($args['spots']) ? (int) $args['spots'] : null;
 $size   = $args['size'] ?? '';
+$style  = $args['style'] ?? '';
 
 // Variant → colour pair (Tailwind utilities from tailwind.config.js).
 $variant_classes = [
@@ -48,6 +51,18 @@ $variant_classes = [
     'free'       => 'bg-badge-free-bg text-badge-free-text',
     'enrolled'   => 'bg-badge-online-bg text-badge-online-text',
     'trajectory' => 'bg-accent-subtle text-accent-hover',
+];
+
+// Variant → dot colour (the text colour of the pair, used as a bg dot).
+$dot_classes = [
+    'open'       => 'bg-badge-open-text',
+    'few'        => 'bg-badge-few-text',
+    'full'       => 'bg-badge-full-text',
+    'cancelled'  => 'bg-badge-cancelled-text',
+    'online'     => 'bg-badge-online-text',
+    'free'       => 'bg-badge-free-text',
+    'enrolled'   => 'bg-badge-online-text',
+    'trajectory' => 'bg-accent',
 ];
 
 $prefix = '';
@@ -86,21 +101,40 @@ if ($status === 'open' && $spots !== null && $spots > 0 && $spots <= 5) {
     $label   = $config['label'];
     $prefix  = $config['prefix'] ?? '';
 }
-
-// Canonical pill recipe; 'sm' is the card-size variant.
-$recipe = $size === 'sm'
-    ? 'text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex items-center gap-1'
-    : 'text-[12px] font-bold px-[11px] py-1 rounded-full inline-flex items-center gap-1';
-
-$class = $recipe . ' ' . ($variant_classes[$variant] ?? $variant_classes['cancelled']);
-
 ?>
-<span class="<?php echo esc_attr($class); ?>"><?php
-if ($status === 'action_required' || $status === 'completing') {
-    echo stridence_icon('alert-circle', 'w-3.5 h-3.5 inline-block -mt-0.5 mr-0.5');
-}
-if ($prefix !== '') {
-    echo esc_html($prefix);
-}
-echo esc_html($label);
-?></span>
+<?php if ($style === 'dot') :
+    // Dot + text treatment (catalog card top row). The label colour stays
+    // muted for neutral states; a prefixed state (e.g. ✓ Ingeschreven) takes
+    // the variant's own text colour to read as an affirmative status.
+    $dot_class   = $dot_classes[$variant] ?? $dot_classes['cancelled'];
+    $label_color = $prefix !== ''
+        ? (explode(' ', $variant_classes[$variant] ?? '')[1] ?? 'text-text-muted')
+        : 'text-text-muted';
+    ?>
+    <span class="inline-flex items-center gap-1.5 text-[13px] font-semibold <?php echo esc_attr($label_color); ?>">
+        <span class="w-2 h-2 rounded-full shrink-0 <?php echo esc_attr($dot_class); ?>" aria-hidden="true"></span>
+        <?php
+        if ($prefix !== '') {
+            echo esc_html($prefix);
+        }
+    echo esc_html($label);
+    ?>
+    </span>
+<?php else :
+    // Canonical pill recipe; 'sm' is the card-size variant.
+    $recipe = $size === 'sm'
+        ? 'text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex items-center gap-1'
+        : 'text-[12px] font-bold px-[11px] py-1 rounded-full inline-flex items-center gap-1';
+
+    $class = $recipe . ' ' . ($variant_classes[$variant] ?? $variant_classes['cancelled']);
+    ?>
+    <span class="<?php echo esc_attr($class); ?>"><?php
+    if ($status === 'action_required' || $status === 'completing') {
+        echo stridence_icon('alert-circle', 'w-3.5 h-3.5 inline-block -mt-0.5 mr-0.5');
+    }
+    if ($prefix !== '') {
+        echo esc_html($prefix);
+    }
+    echo esc_html($label);
+    ?></span>
+<?php endif; ?>

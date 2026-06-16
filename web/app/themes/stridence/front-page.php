@@ -190,7 +190,7 @@ get_header();
                 ['value' => __('3.200+', 'stridence'), 'label' => __('deelnemers per jaar', 'stridence')],
                 ['value' => __('9,1', 'stridence'), 'label' => __('gemiddelde score', 'stridence')],
             ];
-            ?>
+?>
             <div class="mt-2 flex flex-wrap gap-[clamp(20px,4vw,44px)]">
                 <?php foreach ($stats_trio as $stat) : ?>
                     <div>

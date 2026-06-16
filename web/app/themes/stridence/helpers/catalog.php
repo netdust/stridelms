@@ -26,6 +26,7 @@ use Stride\Domain\OfferingStatus;
 use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
+use Stride\Modules\Edition\SessionRepository;
 use Stride\Modules\Enrollment\EnrollmentService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 
@@ -505,9 +506,11 @@ function stridence_prefetch_edition_cards(array $editions, ?int $user_id = null)
     $ids = array_values($ids);
 
     // One INV-7 batch call (primes edition + course caches internally),
-    // one registration GROUP BY, one cached enrolled-set read.
+    // one registration GROUP BY, one cached enrolled-set read, one session
+    // GROUP BY for the "· N sessie" meta line.
     $statuses = ntdst_get(EditionService::class)->getEffectiveStatuses($ids);
     $reg_counts = ntdst_get(RegistrationRepository::class)->countByEditions($ids);
+    $session_counts = ntdst_get(SessionRepository::class)->countByEditions($ids);
     $enrolled_ids = $user_id
         ? ntdst_get(EnrollmentService::class)->getEnrolledEditionIds($user_id)
         : [];
@@ -530,6 +533,7 @@ function stridence_prefetch_edition_cards(array $editions, ?int $user_id = null)
         $out[$id] = [
             'status'          => isset($statuses[$id]) ? $statuses[$id]->value : (string) ($edition['status'] ?? 'open'),
             'spots_remaining' => $capacity > 0 ? max(0, $capacity - (int) ($reg_counts[$id] ?? 0)) : null,
+            'session_count'   => (int) ($session_counts[$id] ?? 0),
             'is_enrolled'     => $is_enrolled,
             // Progress only matters for enrolled cards — bounded by the
             // user's own enrollments, not by catalog size.

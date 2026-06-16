@@ -133,7 +133,7 @@ get_header();
                 stridence_template_part('partials/badge-status', null, [
                     'status' => 'trajectory',
                 ]);
-                ?>
+?>
             </div>
 
             <div class="flex flex-wrap items-start gap-4 mb-4">
@@ -231,7 +231,7 @@ get_header();
                                 <?php
                                 /* translators: 1: spots remaining, 2: total capacity */
                                 echo esc_html(sprintf(__('Nog %1$d van %2$d plaatsen vrij', 'stridence'), (int) $spots, (int) $capacity));
-                                ?>
+                        ?>
                             </div>
                         </div>
                     <?php endif; ?>

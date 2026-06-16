@@ -130,7 +130,7 @@ $type_config = match ($type) {
                 <?php if ($title) : ?>
                     <div class="text-[14px] font-bold text-text truncate mb-0.5"><?php echo esc_html($title); ?></div>
                 <?php endif; ?>
-                <?php // Date is shown in the day/month block — no redundant formatted-date sub-line (review I-2). ?>
+                <?php // Date is shown in the day/month block — no redundant formatted-date sub-line (review I-2).?>
                 <?php if ($type === SessionType::Webinar) : ?>
                     <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5">
                         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium <?php echo esc_attr($type_config['badge_class']); ?> shrink-0">

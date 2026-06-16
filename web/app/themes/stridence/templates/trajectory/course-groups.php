@@ -28,7 +28,7 @@ $electiveGroups  = $args['elective_groups'] ?? [];
             'status' => 'confirmed',
             'size'   => 'sm',
         ]);
-        ?>
+    ?>
         <span class="text-[12px] font-normal text-text-faint ml-1">
             (<?php echo count($requiredCourses); ?>)
         </span>

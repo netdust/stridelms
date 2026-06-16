@@ -180,7 +180,7 @@ $pillSm = 'text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex item
                                             esc_html__('Afgerond op %s', 'stridence'),
                                             esc_html(date_i18n('j F Y', $completedOn)),
                                         );
-                        ?>
+                                    ?>
                                     </p>
                                 <?php endif; ?>
                             </div>

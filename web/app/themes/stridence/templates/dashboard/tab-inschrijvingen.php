@@ -100,7 +100,7 @@ $cancelled_editions = $data['cancelled_editions'];
                                     <?php if (is_array($progress) && ($progress['required'] ?? 0) > 0) :
                                         $attended = (int) ($progress['attended'] ?? 0);
                                         $required = (int) $progress['required'];
-                                    ?>
+                                        ?>
                                         <span><?php echo esc_html(sprintf(
                                             /* translators: %1$d attended, %2$d required sessions */
                                             __('%1$d/%2$d sessies', 'stridence'),
@@ -111,7 +111,7 @@ $cancelled_editions = $data['cancelled_editions'];
                                 </div>
                             <?php endif; ?>
 
-                            <?php // Online progress bar — keep for any edition that has online progress ?>
+                            <?php // Online progress bar — keep for any edition that has online progress?>
                         </div>
 
                         <!-- RIGHT: action warning + CTA buttons -->
@@ -258,7 +258,7 @@ $cancelled_editions = $data['cancelled_editions'];
                         $startDate    = $reg['start_date'] ?? null;
                         $courseId     = (int) ($reg['course_id'] ?? 0);
                         $altUrl       = $courseId ? home_url('/edities/' . get_post_field('post_name', $courseId) . '/') : home_url('/klassikaal/');
-                    ?>
+                        ?>
                         <div class="bg-surface-card rounded-[16px] shadow-card p-[22px] px-6 flex flex-wrap justify-between gap-4 opacity-80">
                             <!-- LEFT: badge + title (muted) + date -->
                             <div class="flex-1 min-w-[240px]">

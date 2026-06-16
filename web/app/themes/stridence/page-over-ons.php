@@ -45,38 +45,38 @@ get_header();
                  * or a dedicated page meta field `over_ons_eyebrow`.
                  */
                 echo esc_html(get_the_title());
-                ?>
+    ?>
             </div>
 
             <!-- Serif light h1 clamp(38px,6vw,68px) -->
             <h1 class="font-serif font-light text-[clamp(38px,6vw,68px)] leading-[1.08] text-text m-0 text-balance">
                 <?php
-                /*
-                 * PLACEHOLDER: editorial headline.
-                 * Mockup: "We begonnen in een leefgroep, niet in een leslokaal."
-                 * Suggested source: page meta field `over_ons_headline`
-                 *   (or authored directly in the page's post content title — then
-                 *    replace this block with the_title()).
-                 */
-                esc_html_e('We begonnen in een leefgroep, niet in een leslokaal.', 'stridence');
-                ?>
+    /*
+     * PLACEHOLDER: editorial headline.
+     * Mockup: "We begonnen in een leefgroep, niet in een leslokaal."
+     * Suggested source: page meta field `over_ons_headline`
+     *   (or authored directly in the page's post content title — then
+     *    replace this block with the_title()).
+     */
+    esc_html_e('We begonnen in een leefgroep, niet in een leslokaal.', 'stridence');
+    ?>
             </h1>
 
             <!-- Serif italic lede clamp(18px,2.2vw,22px) text-text-muted -->
             <p class="font-serif text-[clamp(18px,2.2vw,22px)] text-text-muted leading-[1.6] m-0">
                 <?php
-                /*
-                 * PLACEHOLDER: hero lede / sub-headline.
-                 * Mockup: "Stride ontstond in 2011, toen twee jeugdzorgbegeleiders
-                 *           merkten dat de opleidingen die ze kregen niets te maken
-                 *           hadden met de dagen die ze meemaakten."
-                 * Suggested source: page meta field `over_ons_lede` (textarea).
-                 */
-                esc_html_e(
-                    'Stride ontstond in 2011, toen twee jeugdzorgbegeleiders merkten dat de opleidingen die ze kregen niets te maken hadden met de dagen die ze meemaakten.',
-                    'stridence'
-                );
-                ?>
+    /*
+     * PLACEHOLDER: hero lede / sub-headline.
+     * Mockup: "Stride ontstond in 2011, toen twee jeugdzorgbegeleiders
+     *           merkten dat de opleidingen die ze kregen niets te maken
+     *           hadden met de dagen die ze meemaakten."
+     * Suggested source: page meta field `over_ons_lede` (textarea).
+     */
+    esc_html_e(
+        'Stride ontstond in 2011, toen twee jeugdzorgbegeleiders merkten dat de opleidingen die ze kregen niets te maken hadden met de dagen die ze meemaakten.',
+        'stridence',
+    );
+    ?>
             </p>
 
         </div>
@@ -98,17 +98,17 @@ get_header();
         <div class="max-w-[760px] mx-auto">
             <blockquote class="border-l-[3px] border-primary pl-6 font-serif italic text-[clamp(22px,3vw,28px)] leading-[1.4] text-text m-0">
                 <?php
-                /*
-                 * PLACEHOLDER: pull-quote.
-                 * Mockup: "Een goede opleiding voelt niet als een dag weg van het werk.
-                 *           Ze voelt als een dag die je werk teruggeeft."
-                 * Suggested source: page meta field `over_ons_pullquote` (textarea).
-                 */
-                esc_html_e(
-                    '"Een goede opleiding voelt niet als een dag weg van het werk. Ze voelt als een dag die je werk teruggeeft."',
-                    'stridence'
-                );
-                ?>
+    /*
+     * PLACEHOLDER: pull-quote.
+     * Mockup: "Een goede opleiding voelt niet als een dag weg van het werk.
+     *           Ze voelt als een dag die je werk teruggeeft."
+     * Suggested source: page meta field `over_ons_pullquote` (textarea).
+     */
+    esc_html_e(
+        '"Een goede opleiding voelt niet als een dag weg van het werk. Ze voelt als een dag die je werk teruggeeft."',
+        'stridence',
+    );
+    ?>
             </blockquote>
         </div>
     </section>
@@ -127,7 +127,7 @@ get_header();
              * When the meta is populated, replace the placeholder div with:
              *   <img src="..." alt="..." class="aspect-[21/9] w-full object-cover rounded-[20px]">
              */
-            ?>
+    ?>
             <figure class="m-0">
                 <div class="aspect-[21/9] rounded-[20px] overflow-hidden"
                      style="background: repeating-linear-gradient(45deg, rgb(var(--color-surface-alt)) 0px, rgb(var(--color-surface-alt)) 14px, rgb(var(--color-border-soft)) 14px, rgb(var(--color-border-soft)) 28px); display: grid; place-items: center;">
@@ -153,29 +153,29 @@ get_header();
             </h2>
 
             <?php
-            /*
-             * PLACEHOLDER: values cards (3 items).
-             * Each card: title (15px/700) + copy (14px text-text-muted).
-             * Mockup values: "Praktijk eerst" / "Veilig oefenen" / "Geen blabla"
-             * Suggested source: page meta repeater `over_ons_values[]`
-             *   → each item: `title` + `description`.
-             * When the meta is populated, loop over it and output the card markup.
-             */
-            $values = [
-                [
-                    'title' => __('Praktijk eerst', 'stridence'),
-                    'copy'  => __('Elke techniek is getest op een echte werkvloer voor ze in een cursus belandt.', 'stridence'),
-                ],
-                [
-                    'title' => __('Veilig oefenen', 'stridence'),
-                    'copy'  => __('Moeilijke gesprekken oefen je bij ons — niet voor het eerst bij een cliënt.', 'stridence'),
-                ],
-                [
-                    'title' => __('Geen blabla', 'stridence'),
-                    'copy'  => __('Kleine groepen, eerlijke feedback en attesten die iets betekenen.', 'stridence'),
-                ],
-            ];
-            ?>
+    /*
+     * PLACEHOLDER: values cards (3 items).
+     * Each card: title (15px/700) + copy (14px text-text-muted).
+     * Mockup values: "Praktijk eerst" / "Veilig oefenen" / "Geen blabla"
+     * Suggested source: page meta repeater `over_ons_values[]`
+     *   → each item: `title` + `description`.
+     * When the meta is populated, loop over it and output the card markup.
+     */
+    $values = [
+        [
+            'title' => __('Praktijk eerst', 'stridence'),
+            'copy'  => __('Elke techniek is getest op een echte werkvloer voor ze in een cursus belandt.', 'stridence'),
+        ],
+        [
+            'title' => __('Veilig oefenen', 'stridence'),
+            'copy'  => __('Moeilijke gesprekken oefen je bij ons — niet voor het eerst bij een cliënt.', 'stridence'),
+        ],
+        [
+            'title' => __('Geen blabla', 'stridence'),
+            'copy'  => __('Kleine groepen, eerlijke feedback en attesten die iets betekenen.', 'stridence'),
+        ],
+    ];
+    ?>
 
             <div class="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-[14px]">
                 <?php foreach ($values as $value) : ?>
@@ -204,44 +204,44 @@ get_header();
             </h2>
 
             <?php
-            /*
-             * PLACEHOLDER: team members (4 cards shown; third party = overflow card).
-             * Card: 56px initials circle bg-accent-subtle text-accent-hover + name 14px/700 + role 12px text-text-faint.
-             * Mockup members: Lies De Smet / Jonas Verhulst / Eva Maerten / "+9 lesgevers"
-             * Suggested source: custom post type `stride_trainer` or page meta
-             *   repeater `over_ons_team[]` → each item: `initials`, `name`, `role`.
-             */
-            $team_members = [
-                [
-                    'initials' => 'LD',
-                    'name'     => __('Lies De Smet', 'stridence'),
-                    'role'     => __('oprichter · jeugdzorg', 'stridence'),
-                    'bg'       => 'bg-primary-subtle',
-                    'color'    => 'text-primary-dark',
-                ],
-                [
-                    'initials' => 'JV',
-                    'name'     => __('Jonas Verhulst', 'stridence'),
-                    'role'     => __('oprichter · gehandicaptenzorg', 'stridence'),
-                    'bg'       => 'bg-accent-subtle',
-                    'color'    => 'text-accent-hover',
-                ],
-                [
-                    'initials' => 'EM',
-                    'name'     => __('Eva Maerten', 'stridence'),
-                    'role'     => __('trainer · agressiebeheersing', 'stridence'),
-                    'bg'       => 'bg-badge-free-bg',
-                    'color'    => 'text-badge-free-text',
-                ],
-                [
-                    'initials' => '+9',
-                    'name'     => __('en negen lesgevers', 'stridence'),
-                    'role'     => __('allemaal uit de sector', 'stridence'),
-                    'bg'       => 'bg-badge-few-bg',
-                    'color'    => 'text-badge-few-text',
-                ],
-            ];
-            ?>
+    /*
+     * PLACEHOLDER: team members (4 cards shown; third party = overflow card).
+     * Card: 56px initials circle bg-accent-subtle text-accent-hover + name 14px/700 + role 12px text-text-faint.
+     * Mockup members: Lies De Smet / Jonas Verhulst / Eva Maerten / "+9 lesgevers"
+     * Suggested source: custom post type `stride_trainer` or page meta
+     *   repeater `over_ons_team[]` → each item: `initials`, `name`, `role`.
+     */
+    $team_members = [
+        [
+            'initials' => 'LD',
+            'name'     => __('Lies De Smet', 'stridence'),
+            'role'     => __('oprichter · jeugdzorg', 'stridence'),
+            'bg'       => 'bg-primary-subtle',
+            'color'    => 'text-primary-dark',
+        ],
+        [
+            'initials' => 'JV',
+            'name'     => __('Jonas Verhulst', 'stridence'),
+            'role'     => __('oprichter · gehandicaptenzorg', 'stridence'),
+            'bg'       => 'bg-accent-subtle',
+            'color'    => 'text-accent-hover',
+        ],
+        [
+            'initials' => 'EM',
+            'name'     => __('Eva Maerten', 'stridence'),
+            'role'     => __('trainer · agressiebeheersing', 'stridence'),
+            'bg'       => 'bg-badge-free-bg',
+            'color'    => 'text-badge-free-text',
+        ],
+        [
+            'initials' => '+9',
+            'name'     => __('en negen lesgevers', 'stridence'),
+            'role'     => __('allemaal uit de sector', 'stridence'),
+            'bg'       => 'bg-badge-few-bg',
+            'color'    => 'text-badge-few-text',
+        ],
+    ];
+    ?>
 
             <div class="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4">
                 <?php foreach ($team_members as $member) : ?>
@@ -269,13 +269,13 @@ get_header();
         <div class="max-w-[760px] mx-auto bg-surface-alt rounded-[20px] p-[clamp(32px,5vw,48px)] text-center">
             <h2 class="font-serif font-normal text-[clamp(22px,3vw,28px)] leading-[1.25] text-text m-0 mb-6">
                 <?php
-                /*
-                 * PLACEHOLDER: CTA heading.
-                 * Mockup: "Benieuwd of we bij jouw organisatie passen?"
-                 * Suggested source: page meta field `over_ons_cta_heading`.
-                 */
-                esc_html_e('Benieuwd of we bij jouw organisatie passen?', 'stridence');
-                ?>
+        /*
+         * PLACEHOLDER: CTA heading.
+         * Mockup: "Benieuwd of we bij jouw organisatie passen?"
+         * Suggested source: page meta field `over_ons_cta_heading`.
+         */
+        esc_html_e('Benieuwd of we bij jouw organisatie passen?', 'stridence');
+    ?>
             </h2>
             <a href="<?php echo esc_url(home_url('/contact/')); ?>" class="btn-primary">
                 <?php esc_html_e('Plan een kennismaking', 'stridence'); ?>

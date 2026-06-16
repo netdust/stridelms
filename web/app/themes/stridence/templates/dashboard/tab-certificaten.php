@@ -172,7 +172,7 @@ usort($certificates, fn($a, $b) => strcmp($b['completed_at'], $a['completed_at']
                                 esc_html__('behaald op %s', 'stridence'),
                                 esc_html(stride_format_date($cert['completed_at'])),
                             );
-                            ?>
+                        ?>
                         </div>
                     <?php endif; ?>
                 </div>

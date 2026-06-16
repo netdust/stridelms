@@ -268,7 +268,7 @@ get_header();
             stridence_template_part('partials/breadcrumb', null, [
                 'items' => $breadcrumbs,
             ]);
-            ?>
+?>
 
             <!-- Badge row: format + effective status -->
             <div class="flex flex-wrap gap-2">
@@ -281,10 +281,10 @@ get_header();
                     </span>
                 <?php else : ?>
                     <?php
-                    stridence_template_part('partials/badge-status', null, [
-                        'status' => $status->value,
-                        'spots'  => $spots,
-                    ]);
+        stridence_template_part('partials/badge-status', null, [
+            'status' => $status->value,
+            'spots'  => $spots,
+        ]);
                     ?>
                 <?php endif; ?>
             </div>
@@ -426,10 +426,10 @@ get_header();
                                                     /* translators: 1: how many to pick, 2: total alternatives */
                                                     printf(esc_html__('Kies %1$d uit %2$d', 'stridence'), $maxSelections, $available);
                                                 }
-                                                if (!$required) {
-                                                    echo ' <span class="text-text-muted font-normal">' . esc_html__('(optioneel)', 'stridence') . '</span>';
-                                                }
-                                                ?>
+                                    if (!$required) {
+                                        echo ' <span class="text-text-muted font-normal">' . esc_html__('(optioneel)', 'stridence') . '</span>';
+                                    }
+                                    ?>
                                             </span>
                                         </div>
                                         <div class="flex flex-col gap-2">
@@ -612,7 +612,7 @@ get_header();
                                     <?php
                                     /* translators: 1: spots remaining, 2: total capacity */
                                     echo esc_html(sprintf(__('Nog %1$d van %2$d plaatsen vrij', 'stridence'), (int) $spots, (int) $capacity));
-                                    ?>
+                            ?>
                                 </div>
                             </div>
                         <?php endif; ?>
@@ -710,7 +710,7 @@ get_header();
                             <?php
                             /* translators: %d: spots remaining */
                             echo esc_html(sprintf(_n('Nog %d plaats vrij', 'Nog %d plaatsen vrij', (int) $spots, 'stridence'), (int) $spots));
-                            ?>
+                        ?>
                         </div>
                     <?php endif; ?>
                 </div>

@@ -163,19 +163,19 @@ get_header();
                 // /online is that more cards appear via the inclusion fix; the
                 // render path is unchanged. See the dateless-editions catalog plan.
                 echo $initial_html; // Card HTML — escaped within the partials.
-                ?>
+            ?>
             </div>
 
             <!-- Empty state for filtered results -->
             <div x-show="filteredTotal === 0 && !loading" x-cloak>
                 <?php
-                stridence_template_part('partials/empty-state', null, [
-                    'icon'    => 'monitor',
-                    'title'   => __('Geen online opleidingen binnen dit thema', 'stridence'),
-                    'message' => __('We werken aan nieuwe modules rond dit thema. Bekijk intussen het volledige aanbod.', 'stridence'),
-                    'band'    => true,
-                ]);
-                ?>
+            stridence_template_part('partials/empty-state', null, [
+                'icon'    => 'monitor',
+                'title'   => __('Geen online opleidingen binnen dit thema', 'stridence'),
+                'message' => __('We werken aan nieuwe modules rond dit thema. Bekijk intussen het volledige aanbod.', 'stridence'),
+                'band'    => true,
+            ]);
+            ?>
                 <div class="mt-4 flex justify-center">
                     <button @click="setFilter('')" type="button" class="btn-ghost">
                         <?php esc_html_e('Toon alles', 'stridence'); ?>
@@ -201,9 +201,9 @@ get_header();
         <?php else : ?>
             <?php
             stridence_template_part('partials/empty-state', null, [
-                'icon'    => 'monitor',
-                'title'   => __('Geen opleidingen gevonden', 'stridence'),
-                'message' => __('Er zijn momenteel geen online opleidingen beschikbaar.', 'stridence'),
+            'icon'    => 'monitor',
+            'title'   => __('Geen opleidingen gevonden', 'stridence'),
+            'message' => __('Er zijn momenteel geen online opleidingen beschikbaar.', 'stridence'),
             ]);
             ?>
         <?php endif; ?>

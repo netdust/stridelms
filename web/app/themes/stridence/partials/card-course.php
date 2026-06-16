@@ -57,10 +57,6 @@ $progress    = $is_enrolled ? (int) ($user_state['progress'] ?? 0) : 0;
 $in_progress = $is_enrolled && $progress > 0 && $progress < 100;
 $completed   = $is_enrolled && $progress >= 100;
 
-// Sheet pill recipe (card size 'sm') for the progress badges the
-// badge-status partial has no variant for — exact recipe classes inline.
-$pill_sm = 'text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex items-center gap-1';
-
 // CTA label per the sheet: "Ga verder" while in progress, otherwise
 // "Start opleiding" (completed cards link back to the course overview).
 if ($in_progress) {
@@ -75,31 +71,22 @@ if ($in_progress) {
 <a href="<?php echo esc_url($permalink); ?>"
    class="bg-surface-card rounded-[14px] shadow-card p-6 flex flex-col gap-3.5 h-full text-text transition-all duration-normal ease-out hover:shadow-elevated hover:-translate-y-0.5">
 
-    <!-- Badge row -->
-    <div class="flex gap-1.5 flex-wrap">
+    <!-- Status row: dot + text on the left, enrolled state on the right -->
+    <div class="flex items-center justify-between gap-2">
         <?php stridence_template_part('partials/badge-status', null, [
             'status' => 'online',
-            'size'   => 'sm',
+            'style'  => 'dot',
         ]); ?>
 
         <?php if ($completed) : ?>
-            <span class="<?php echo esc_attr($pill_sm); ?> bg-badge-free-bg text-badge-free-text"><?php esc_html_e('Afgerond', 'stridence'); ?></span>
+            <span class="inline-flex items-center gap-1.5 text-[13px] font-semibold text-badge-online-text"><?php esc_html_e('✓ Afgerond', 'stridence'); ?></span>
         <?php elseif ($in_progress) : ?>
-            <span class="<?php echo esc_attr($pill_sm); ?> bg-badge-free-bg text-badge-free-text"><?php
+            <span class="inline-flex items-center gap-1.5 text-[13px] font-semibold text-badge-online-text"><?php
                 /* translators: %d: completion percentage */
                 echo esc_html(sprintf(__('%d%% voltooid', 'stridence'), $progress));
             ?></span>
         <?php elseif ($is_enrolled) : ?>
-            <?php stridence_template_part('partials/badge-status', null, [
-                'status' => 'enrolled',
-                'size'   => 'sm',
-            ]); ?>
-        <?php elseif ($primary_edition) : ?>
-            <?php stridence_template_part('partials/badge-status', null, [
-                'status' => $primary_edition['status']->value,
-                'spots'  => $primary_edition['spots'],
-                'size'   => 'sm',
-            ]); ?>
+            <span class="inline-flex items-center gap-1.5 text-[13px] font-semibold text-badge-online-text"><?php esc_html_e('✓ Ingeschreven', 'stridence'); ?></span>
         <?php endif; ?>
     </div>
 
@@ -123,8 +110,8 @@ if ($in_progress) {
         </div>
     <?php endif; ?>
 
-    <!-- Footer row -->
-    <div class="mt-auto pt-1 flex items-center justify-end gap-3">
+    <!-- Footer row (divider above) -->
+    <div class="mt-auto pt-4 border-t border-border flex items-center justify-end gap-3">
         <span class="text-sm font-bold text-primary"><?php echo esc_html($cta_label); ?> &rarr;</span>
     </div>
 </a>

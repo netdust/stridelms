@@ -65,7 +65,7 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                                     esc_html__('Offerte #%s', 'stridence'),
                                     esc_html($quote['quote_number']),
                                 );
-                                ?>
+            ?>
                             </span>
                             <span class="inline-flex items-center px-[9px] py-[3px] rounded-full text-[11px] font-bold <?php echo esc_attr(stridence_quote_status_classes($quote['status'])); ?>">
                                 <?php echo esc_html($quote['status_label']); ?>
@@ -183,13 +183,13 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                                                  action: 'stride_update_quote',
                                                  params: { quote_id: <?php echo (int) $quote['id']; ?> },
                                                  fields: <?php echo esc_attr(json_encode([
-                                                     'company'     => $quote['billing']['company'] ?? '',
-                                                     'email'       => $quote['billing']['email'] ?? '',
-                                                     'address'     => $quote['billing']['address'] ?? '',
-                                                     'postal_code' => $quote['billing']['postal_code'] ?? '',
-                                                     'city'        => $quote['billing']['city'] ?? '',
-                                                     'vat_number'  => $quote['billing']['vat_number'] ?? '',
-                                                 ])); ?>
+                                 'company'     => $quote['billing']['company'] ?? '',
+                                 'email'       => $quote['billing']['email'] ?? '',
+                                 'address'     => $quote['billing']['address'] ?? '',
+                                 'postal_code' => $quote['billing']['postal_code'] ?? '',
+                                 'city'        => $quote['billing']['city'] ?? '',
+                                 'vat_number'  => $quote['billing']['vat_number'] ?? '',
+                             ])); ?>
                                              })"
                                              x-init="startEdit()">
                                             <p class="text-xs font-medium text-text-muted uppercase tracking-wide mb-3">
@@ -315,7 +315,7 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                         esc_html__('Geannuleerd (%d)', 'stridence'),
                         count($cancelled),
                     );
-                    ?>
+        ?>
                 </h3>
                 <span class="text-text-muted transition-transform duration-200"
                       :class="{ 'rotate-180': open }">
@@ -330,12 +330,12 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                             <div class="flex-1 min-w-0">
                                 <span class="text-[13px] font-semibold truncate block">
                                     <?php
-                                    printf(
-                                        /* translators: %s: quote number */
-                                        esc_html__('Offerte #%s', 'stridence'),
-                                        esc_html($quote['quote_number']),
-                                    );
-                                    ?>
+                        printf(
+                            /* translators: %s: quote number */
+                            esc_html__('Offerte #%s', 'stridence'),
+                            esc_html($quote['quote_number']),
+                        );
+                        ?>
                                 </span>
                                 <span class="text-[12px] truncate block">
                                     <?php echo esc_html($quote['title']); ?>
