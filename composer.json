@@ -62,7 +62,6 @@
   },
   "autoload": {
     "psr-4": {
-      "stride\\": "web/app/themes/stride/",
       "Stride\\": "web/app/mu-plugins/stride-core/",
       "Netdust\\Mail\\": "web/app/plugins/netdust-mail/src/",
       "NetdustLTI\\": "web/app/plugins/netdust-lti/src/",
