@@ -42,6 +42,34 @@ $can_enroll         = $trajectoryService->isEnrollmentOpen($trajectory_id);
 $price              = $trajectory['price'] ?? 0;
 $capacity           = $trajectory['capacity'] ?? 0;
 
+// Already-enrolled check. Trajectory enrollment is a PARENT registration row
+// (trajectory_id set, edition_id NULL) — hasActiveRegistration() routes that
+// through RegistrationRepository::existsForTrajectory(). Without this the CTA
+// always shows "Nu inschrijven" even for enrolled users (mirrors the
+// is_enrolled guard in single-vad_edition.php).
+$enrollmentService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class);
+$is_enrolled       = is_user_logged_in()
+    && $enrollmentService->hasActiveRegistration(get_current_user_id(), null, $trajectory_id);
+$account_url       = home_url('/mijn-account/trajecten/' . get_post_field('post_name', $trajectory_id) . '/');
+
+// Enrolled CTA. Unlike an edition, a trajectory parent row carries no
+// completion_tasks (cascade children + the account /voortgang view own
+// task/progress), so the CTA is progress-derived rather than task-derived:
+// completed-all → "Traject voltooid", otherwise → "Naar mijn traject". The
+// per-course "✓ Afgerond / vanaf <date> / Nog in te plannen" planning state
+// on the overview cards is computed independently in the card-args builder
+// (helpers/templates.php) from LearnDashHelper::isComplete — no extra plumbing.
+$enrolled_cta = null;
+if ($is_enrolled) {
+    $progressData = ntdst_get(\Stride\Modules\Trajectory\TrajectoryDashboardService::class)
+        ->getProgressData(get_current_user_id(), $trajectory_id);
+    $total     = (int) ($progressData['total_required'] ?? 0);
+    $completed = (int) ($progressData['completed_count'] ?? 0);
+    $enrolled_cta = ($total > 0 && $completed >= $total)
+        ? ['label' => __('Traject voltooid', 'stridence'), 'url' => $account_url]
+        : ['label' => __('Naar mijn traject', 'stridence'), 'url' => $account_url];
+}
+
 // Descriptive sidebar fields (shared with editions), render-when-present.
 $price_includes     = trim((string) ($trajectory['price_includes'] ?? ''));
 $enrollment_info    = trim((string) ($trajectory['enrollment_info'] ?? ''));
@@ -218,7 +246,14 @@ get_header();
 
                     <!-- CTA -->
                     <div class="mt-[22px]">
-                        <?php if ($can_enroll) : ?>
+                        <?php if ($is_enrolled && $enrolled_cta) : ?>
+                            <a href="<?php echo esc_url($enrolled_cta['url']); ?>" class="btn-primary w-full text-center block">
+                                <?php echo esc_html($enrolled_cta['label']); ?>
+                            </a>
+                            <p class="text-xs text-text-muted mt-3 text-center">
+                                <?php esc_html_e('Je bent ingeschreven voor dit traject.', 'stridence'); ?>
+                            </p>
+                        <?php elseif ($can_enroll) : ?>
                             <a href="<?php echo esc_url(stride_enrollment_url($trajectory_id, 'trajectory')); ?>" class="btn-primary w-full text-center block">
                                 <?php esc_html_e('Nu inschrijven', 'stridence'); ?>
                             </a>
@@ -258,7 +293,13 @@ get_header();
     </div>
 
     <!-- Mobile Sticky CTA (hidden on lg+) -->
-    <?php if ($can_enroll) : ?>
+    <?php if ($is_enrolled && $enrolled_cta) : ?>
+        <div class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 lg:hidden z-40 safe-area-bottom">
+            <a href="<?php echo esc_url($enrolled_cta['url']); ?>" class="btn-primary w-full text-center">
+                <?php echo esc_html($enrolled_cta['label']); ?>
+            </a>
+        </div>
+    <?php elseif ($can_enroll) : ?>
         <div class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 lg:hidden z-40 safe-area-bottom">
             <a href="<?php echo esc_url(stride_enrollment_url($trajectory_id, 'trajectory')); ?>" class="btn-primary w-full text-center">
                 <?php esc_html_e('Nu inschrijven', 'stridence'); ?>

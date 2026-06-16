@@ -241,6 +241,72 @@ final class CatalogBatchHydrationTest extends IntegrationTestCase
     /**
      * @test
      *
+     * Trajectory parity for the catalog enrolled-set. getEnrolledTrajectoryIds()
+     * must:
+     *  - include trajectory PARENT rows (trajectory_id set, edition_id NULL),
+     *    counting pending as enrolled (blocksDuplicate semantics, unlike editions);
+     *  - exclude cancelled parents;
+     *  - exclude plain edition rows AND cascade children (parent_registration_id
+     *    set) — only the parent represents trajectory enrollment.
+     */
+    public function enrolledTrajectoryIdsCollectsParentsOnly(): void
+    {
+        $enrollment = ntdst_get(EnrollmentService::class);
+
+        $confirmedTraj = 910001;
+        $pendingTraj   = 910002;
+        $cancelledTraj = 910003;
+        $editionOnly   = $this->createTestEdition();
+
+        // Confirmed trajectory parent
+        $r1 = $this->registrations->create([
+            'user_id' => self::$testUserId,
+            'trajectory_id' => $confirmedTraj,
+            'status' => 'confirmed',
+        ]);
+        // Pending trajectory parent — still counts as enrolled
+        $r2 = $this->registrations->create([
+            'user_id' => self::$testUserId,
+            'trajectory_id' => $pendingTraj,
+            'status' => 'pending',
+        ]);
+        // Cancelled trajectory parent — must NOT count
+        $r3 = $this->registrations->create([
+            'user_id' => self::$testUserId,
+            'trajectory_id' => $cancelledTraj,
+            'status' => 'cancelled',
+        ]);
+        // Plain edition registration — must NOT appear as a trajectory
+        $r4 = $this->registrations->create([
+            'user_id' => self::$testUserId,
+            'edition_id' => $editionOnly,
+            'status' => 'confirmed',
+        ]);
+        // Cascade child of the confirmed parent (edition_id set + parent ref) — must NOT count
+        $r5 = $this->registrations->create([
+            'user_id' => self::$testUserId,
+            'edition_id' => $this->createTestEdition(),
+            'parent_registration_id' => $r1,
+            'status' => 'confirmed',
+        ]);
+        $this->createdRegistrationIds = array_merge(
+            $this->createdRegistrationIds,
+            [$r1, $r2, $r3, $r4, $r5],
+        );
+        $this->registrations->clearCache();
+
+        $ids = $enrollment->getEnrolledTrajectoryIds(self::$testUserId);
+
+        $this->assertContains($confirmedTraj, $ids, 'confirmed trajectory parent is enrolled');
+        $this->assertContains($pendingTraj, $ids, 'pending trajectory parent counts as enrolled');
+        $this->assertNotContains($cancelledTraj, $ids, 'cancelled parent is not enrolled');
+        $this->assertNotContains($editionOnly, $ids, 'edition rows never leak into the trajectory set');
+        $this->assertSame([], $enrollment->getEnrolledTrajectoryIds(0), 'anonymous visitor has no trajectory set');
+    }
+
+    /**
+     * @test
+     *
      * CR-G4 — duplicate-rows parity pin. The table has NO unique key on
      * (user_id, edition_id); duplicates are reachable via raw $wpdb writes
      * (AdminAPIController), v3 data ports, or the racy app-level duplicate

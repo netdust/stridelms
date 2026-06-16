@@ -20,6 +20,15 @@ defined('ABSPATH') || exit;
 // in-progress, title-ordered.
 $trajectories = ntdst_get(\Stride\Modules\Trajectory\TrajectoryRepository::class)->findActive();
 
+// Enrolled-set pre-pass — one findByUser() read, not a lookup per card (mirrors
+// the edition catalog in helpers/catalog.php). Lets each card render its
+// enrolled state (✓ + % + "Open traject") the same way the dashboard does.
+$current_user_id      = get_current_user_id();
+$enrolled_traj_ids    = $current_user_id
+    ? ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class)->getEnrolledTrajectoryIds($current_user_id)
+    : [];
+$dashboardService     = ntdst_get(\Stride\Modules\Trajectory\TrajectoryDashboardService::class);
+
 get_header();
 ?>
 
@@ -47,10 +56,28 @@ get_header();
                 if (!$trajectory_id) {
                     continue;
                 }
+
+                // Enrolled card opts — same shape + progress formula the
+                // dashboard "Mijn trajecten" tab uses (completed / required).
+                $card_opts = [];
+                if (in_array($trajectory_id, $enrolled_traj_ids, true)) {
+                    $progress = $dashboardService->getProgressData($current_user_id, $trajectory_id);
+                    $total    = (int) ($progress['total_required'] ?? 0);
+                    $slug     = get_post_field('post_name', $trajectory_id);
+                    $card_opts = [
+                        'progress'      => $total > 0
+                            ? (int) round(((int) ($progress['completed_count'] ?? 0) / $total) * 100)
+                            : 0,
+                        'dashboard_url' => $slug
+                            ? home_url('/mijn-account/trajecten/' . $slug . '/')
+                            : get_permalink($trajectory_id),
+                    ];
+                }
+
                 stridence_template_part(
                     'partials/card-trajectory',
                     null,
-                    stridence_build_trajectory_card_args($trajectory_id),
+                    stridence_build_trajectory_card_args($trajectory_id, $card_opts),
                 );
             endforeach; ?>
         </div>

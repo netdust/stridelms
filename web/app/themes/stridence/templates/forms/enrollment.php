@@ -12,6 +12,7 @@
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Questionnaire\QuestionnaireRepository;
+use Stride\Modules\Trajectory\TrajectoryService;
 
 if (!is_user_logged_in()) {
     wp_redirect(wp_login_url(get_permalink()));
@@ -89,6 +90,25 @@ if ($item_type === 'edition' && $item_id) {
                 'url'     => get_permalink($item_id),
             ];
         }
+    }
+} elseif ($item_type === 'trajectory' && $item_id) {
+    // Trajectory branch — parallel to the edition branch above. Without this
+    // $edition_data stayed empty for trajectories, so the price never reached
+    // the sidebar / confirmation step (both gated on $edition_data['price']).
+    $trajectory = ntdst_get(TrajectoryService::class)->getTrajectory($item_id);
+
+    if ($trajectory) {
+        // getTrajectory() returns price as a float in EUROS; stride_format_money
+        // takes cents — match the public template (single-vad_trajectory.php:159).
+        $price = (float) ($trajectory['price'] ?? 0);
+
+        $edition_data = [
+            'title'      => $trajectory['title'] ?? get_the_title($item_id),
+            'start_date' => '',
+            'venue'      => '',
+            'price'      => $price > 0 ? stride_format_money((int) round($price * 100)) : '',
+            'sessions'   => [],
+        ];
     }
 }
 

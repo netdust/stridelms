@@ -707,6 +707,41 @@ final class EnrollmentService extends AbstractService
     }
 
     /**
+     * Trajectory ids where the user has an active enrollment.
+     *
+     * The trajectory analogue of getEnrolledEditionIds() for catalog surfaces:
+     * one per-request-cached findByUser() pass instead of an existsForTrajectory()
+     * lookup per card. Trajectory enrollment is a PARENT row (trajectory_id set,
+     * edition_id NULL); "active" follows the duplicate-guard semantics
+     * (RegistrationStatus::blocksDuplicate) so pending trajectory enrollments
+     * also count as enrolled — matching hasActiveRegistration()/existsForTrajectory()
+     * used on the detail page.
+     *
+     * @return list<int>
+     */
+    public function getEnrolledTrajectoryIds(int $userId): array
+    {
+        if ($userId <= 0) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($this->registrations->findByUser($userId) as $row) {
+            $trajectoryId = (int) ($row->trajectory_id ?? 0);
+            $editionId    = (int) ($row->edition_id ?? 0);
+            if ($trajectoryId <= 0 || $editionId > 0) {
+                continue; // not a trajectory parent (skip edition rows + cascade children)
+            }
+            $status = RegistrationStatus::tryFrom($row->status ?? '');
+            if ($status && $status->blocksDuplicate()) {
+                $out[$trajectoryId] = $trajectoryId;
+            }
+        }
+
+        return array_values($out);
+    }
+
+    /**
      * Check if user has any active registration (blocks duplicate submissions).
      *
      * Active = anything except cancelled (uses RegistrationStatus::blocksDuplicate).
