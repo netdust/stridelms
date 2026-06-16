@@ -222,6 +222,7 @@ final class CourseCardBuilderTest extends TestCase
         $course = $this->createMock(\WP_Post::class);
         $course->ID = 50;
         $course->post_title = 'Verplichte basiscursus';
+        $course->post_name = 'verplichte-basiscursus';
 
         // Stride/EditionService is invoked via ntdst_get(); see _registerEditionServiceStub() helper
         $this->_registerEditionServiceStub([
@@ -237,8 +238,12 @@ final class CourseCardBuilderTest extends TestCase
         $this->assertSame($pill, $args['status_pill']);
         $this->assertCount(2, $args['body']['upcoming_editions']);
         $this->assertSame('2026-06-10', $args['meta']['start_date']);
-        $this->assertNotNull($args['body']['secondary_cta']);
+        // This is a READ-ONLY overview card: no enrol buttons. The "full course"
+        // link is rendered inline via body.course_url, not as a secondary_cta
+        // button — both CTAs stay null (builder shape since the overview redesign).
         $this->assertNull($args['body']['primary_cta']);
+        $this->assertNull($args['body']['secondary_cta']);
+        $this->assertSame(home_url('/edities/' . $course->post_name . '/'), $args['body']['course_url']);
     }
 
     // --- from_trajectory_course: course with no editions ---
@@ -291,6 +296,17 @@ final class CourseCardBuilderTest extends TestCase
                 }
                 return false;
             }
+            // The builder also reads capacity/registered to compute
+            // places_remaining; uncapped (0) keeps these editions seat-agnostic.
+            public function getCapacity(int $editionId): int { return 0; }
+            public function getRegisteredCount(int $editionId): int { return 0; }
+        };
+
+        // The builder resolves SessionService to derive the time window from an
+        // edition's first session. These fixtures carry no sessions, so an
+        // empty array is the faithful stub (start_time/end_time stay null).
+        $sessionStub = new class {
+            public function getSessionsForEdition(int $editionId): array { return []; }
         };
 
         $repoStub = new class($editions) {
@@ -309,5 +325,6 @@ final class CourseCardBuilderTest extends TestCase
 
         $this->registerService(\Stride\Modules\Edition\EditionService::class, $serviceStub);
         $this->registerService(\Stride\Modules\Edition\EditionRepository::class, $repoStub);
+        $this->registerService(\Stride\Modules\Edition\SessionService::class, $sessionStub);
     }
 }
