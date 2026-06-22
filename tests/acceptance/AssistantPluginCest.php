@@ -18,6 +18,24 @@ class AssistantPluginCest
 
     public function _before(AcceptanceTester $I): void
     {
+        // ntdst-assistant is an opt-in plugin and is NOT active in every
+        // environment (it is off by default locally and in CI). When it is
+        // inactive its admin page, abilities and assets do not exist, so every
+        // assertion here would hard-fail on an intentional config rather than a
+        // real regression. Skip the whole Cest unless the plugin is active.
+        $active = $I->grabOptionFromDatabase('active_plugins');
+        $activePlugins = is_array($active) ? $active : (array) maybe_unserialize((string) $active);
+        $assistantActive = false;
+        foreach ($activePlugins as $plugin) {
+            if (is_string($plugin) && str_contains($plugin, 'ntdst-assistant/')) {
+                $assistantActive = true;
+                break;
+            }
+        }
+        if (!$assistantActive) {
+            \PHPUnit\Framework\Assert::markTestSkipped('ntdst-assistant plugin is not active in this environment');
+        }
+
         $this->adminId = $I->grabAdminUserId();
     }
 
