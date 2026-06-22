@@ -47,7 +47,7 @@ final class AdminRegistrationsEndpointTest extends IntegrationTestCase
         self::$coordinatorUserId = wp_create_user(
             $coordinatorUsername,
             'testpass123',
-            $coordinatorUsername . '@test.local'
+            $coordinatorUsername . '@test.local',
         );
         if (is_wp_error(self::$coordinatorUserId)) {
             throw new \RuntimeException('Could not create coordinator: ' . self::$coordinatorUserId->get_error_message());
@@ -60,7 +60,7 @@ final class AdminRegistrationsEndpointTest extends IntegrationTestCase
         self::$plainUserId = wp_create_user(
             $plainUsername,
             'testpass123',
-            $plainUsername . '@test.local'
+            $plainUsername . '@test.local',
         );
         if (is_wp_error(self::$plainUserId)) {
             throw new \RuntimeException('Could not create plain user: ' . self::$plainUserId->get_error_message());
@@ -198,7 +198,7 @@ final class AdminRegistrationsEndpointTest extends IntegrationTestCase
         $this->assertContains(
             $response->get_status(),
             [401, 403],
-            'Unauthenticated request must be denied (401 or 403)'
+            'Unauthenticated request must be denied (401 or 403)',
         );
     }
 
@@ -337,14 +337,14 @@ final class AdminRegistrationsEndpointTest extends IntegrationTestCase
         $this->assertEquals(
             QuoteStatus::Exported->label(),
             $withQuoteItem['offerteStatus'],
-            'Row with exported quote must show Verwerkt, not a paid flag'
+            'Row with exported quote must show Verwerkt, not a paid flag',
         );
 
         // No quote → "Geen offerte"
         $this->assertEquals(
             'Geen offerte',
             $noQuoteItem['offerteStatus'],
-            'Row with no quote must show "Geen offerte"'
+            'Row with no quote must show "Geen offerte"',
         );
 
         // Clean up quote link
@@ -559,6 +559,135 @@ final class AdminRegistrationsEndpointTest extends IntegrationTestCase
         require_once ABSPATH . 'wp-admin/includes/user.php';
         wp_delete_user($userAId);
         wp_delete_user($userBId);
+    }
+
+    // =========================================================================
+    // CR-1: trajectory_id must be wired THROUGH the real endpoint.
+    //
+    // The existing RegistrationGridQueryTest proves queryForGrid honours
+    // trajectory_id, but it bypasses the controller. This test drives the REAL
+    // endpoint (rest_do_request) — the only place the param-extraction wiring
+    // is exercised. Before the fix, getRegistrations() omitted trajectory_id
+    // from $params, so the filter was UNREACHABLE: the response came back
+    // unscoped (all editions), proving the param was silently dropped.
+    //
+    // Fixture: a trajectory parent (edition_id NULL, enrollment_path=trajectory,
+    // trajectory_id=T) + 2 child edition-rows (parent-linked, trajectory_id NULL)
+    // + an unrelated plain edition reg. Mirrors RegistrationGridQueryTest's
+    // parent/child corpus.
+    // =========================================================================
+
+    /**
+     * @test
+     * Seam (un-mocked chain): GET /stride/v1/admin/registrations?trajectory_id=T
+     * returns ONLY T's child edition-rows — every returned id is one of T's
+     * children, and the unrelated plain reg is absent. WITHOUT the param the
+     * same request returns the unrelated reg too (the param actually changes
+     * the result). This is the assertion the controller wiring must satisfy.
+     */
+    public function trajectoryIdParamScopesEndpointToChildEditionRows(): void
+    {
+        $repo = $this->getRepo();
+
+        // A distinct trajectory id value for this test (need not be a real CPT —
+        // the grid join is on the structured trajectory_id/parent_registration_id
+        // columns, matching the RegistrationGridQueryTest fixture convention).
+        $trajId = 880011;
+
+        // Distinct users to avoid create()'s user+edition dedup.
+        $u1 = (int) wp_create_user('cr1_u1_' . uniqid(), 'pw', 'cr1u1_' . uniqid() . '@test.local');
+        $u2 = (int) wp_create_user('cr1_u2_' . uniqid(), 'pw', 'cr1u2_' . uniqid() . '@test.local');
+
+        // Trajectory PARENT (edition_id NULL).
+        $parentId = $repo->create([
+            'user_id'         => $u1,
+            'trajectory_id'   => $trajId,
+            'status'          => 'confirmed',
+            'enrollment_path' => 'trajectory',
+        ]);
+        $this->assertIsInt($parentId);
+        $this->testRegistrationIds[] = $parentId;
+
+        // Two child edition-rows (parent-linked, trajectory_id NULL).
+        $childA = $repo->create([
+            'user_id'                => $u1,
+            'edition_id'             => self::$testEditionId,
+            'parent_registration_id' => $parentId,
+            'status'                 => 'confirmed',
+            'enrollment_path'        => 'trajectory',
+        ]);
+        $this->assertIsInt($childA);
+        $this->testRegistrationIds[] = $childA;
+
+        $childB = $repo->create([
+            'user_id'                => $u2,
+            'edition_id'             => self::$testEditionId2,
+            'parent_registration_id' => $parentId,
+            'status'                 => 'confirmed',
+            'enrollment_path'        => 'trajectory',
+        ]);
+        $this->assertIsInt($childB);
+        $this->testRegistrationIds[] = $childB;
+
+        // Unrelated plain (non-trajectory) edition reg — must NEVER appear under T.
+        $plainId = $repo->create([
+            'user_id'    => $u2,
+            'edition_id' => self::$testEditionId,
+            'status'     => 'confirmed',
+        ]);
+        $this->assertIsInt($plainId);
+        $this->testRegistrationIds[] = $plainId;
+
+        // --- WITHOUT the param: the unrelated plain reg IS reachable (control). ---
+        $unscoped = $this->dispatch('GET', '/stride/v1/admin/registrations', [
+            'edition_scope' => 'all',
+            'per_page'      => 100,
+        ]);
+        $this->assertEquals(200, $unscoped->get_status());
+        $unscopedIds = array_map('intval', array_column($unscoped->get_data()['items'], 'id'));
+        $this->assertContains(
+            $plainId,
+            $unscopedIds,
+            'Control: without trajectory_id the plain reg must be in the unscoped result',
+        );
+
+        // --- WITH the param: result is scoped to T's child edition-rows ONLY. ---
+        $scoped = $this->dispatch('GET', '/stride/v1/admin/registrations', [
+            'edition_scope' => 'all',
+            'trajectory_id' => $trajId,
+            'per_page'      => 100,
+        ]);
+        $this->assertEquals(200, $scoped->get_status());
+        $scopedIds = array_map('intval', array_column($scoped->get_data()['items'], 'id'));
+
+        // T's two children are present.
+        $this->assertContains($childA, $scopedIds, 'T child A must appear under trajectory_id=T');
+        $this->assertContains($childB, $scopedIds, 'T child B must appear under trajectory_id=T');
+
+        // The parent row (edition_id NULL) is NOT present.
+        $this->assertNotContains($parentId, $scopedIds, 'Trajectory parent (edition_id NULL) must not appear');
+
+        // NEGATIVE / leak case: the unrelated plain reg must NOT appear under T.
+        // This is the assertion that goes RED when the param is dropped — the
+        // unscoped corpus (incl. $plainId) comes back instead of the T-scoped one.
+        $this->assertNotContains(
+            $plainId,
+            $scopedIds,
+            'Plain non-trajectory reg must NOT appear under trajectory_id=T (param was dropped if it does)',
+        );
+
+        // Every returned row belongs to T's child set (no leakage).
+        foreach ($scopedIds as $id) {
+            $this->assertContains(
+                $id,
+                [$childA, $childB],
+                'Only T child edition-rows may appear under trajectory_id=T',
+            );
+        }
+
+        require_once ABSPATH . 'wp-admin/includes/user.php';
+        wp_delete_user($u1);
+        wp_delete_user($u2);
     }
 
     // =========================================================================

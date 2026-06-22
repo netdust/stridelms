@@ -1881,6 +1881,7 @@ final class AdminAPIController
             'per_page'     => absint($request->get_param('per_page') ?: 50),
             'edition_id'   => absint($request->get_param('edition_id') ?: 0) ?: null,
             'company_id'   => absint($request->get_param('company_id') ?: 0) ?: null,
+            'trajectory_id' => absint($request->get_param('trajectory_id') ?: 0) ?: null,
             'status'       => sanitize_text_field((string) ($request->get_param('status') ?? '')),
             'sort'         => sanitize_text_field((string) ($request->get_param('sort') ?? '')),
             'order'        => sanitize_text_field((string) ($request->get_param('order') ?? '')),
