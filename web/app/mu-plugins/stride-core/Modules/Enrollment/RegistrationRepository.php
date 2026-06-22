@@ -861,6 +861,43 @@ final class RegistrationRepository
     }
 
     /**
+     * Batch-fetch the structured worklist columns for registrations on a set of
+     * editions, filtered by status. Structured columns only (M5) — never reads
+     * enrollment_data/selections/completion_tasks.
+     *
+     * Feeds the Vandaag worklist queue counts (AdminStatsService): the caller
+     * supplies the active-edition ID set (§10 — never a corpus scan) and the
+     * statuses it needs, then derives the per-queue counts from the returned
+     * rows (waitlist→capacity, completed→cert, interest→age, confirmed→offerte).
+     *
+     * @param array<int>    $editionIds
+     * @param array<string> $statuses    Status values to include.
+     * @return array<int,object>  Rows with ->id, ->user_id, ->edition_id,
+     *                            ->status, ->registered_at, ->completed_at.
+     */
+    public function findByEditionsAndStatuses(array $editionIds, array $statuses): array
+    {
+        if (empty($editionIds) || empty($statuses)) {
+            return [];
+        }
+
+        global $wpdb;
+        $ids                = array_values(array_unique(array_map('intval', $editionIds)));
+        $idPlaceholders     = implode(',', array_fill(0, count($ids), '%d'));
+        $statusPlaceholders = implode(',', array_fill(0, count($statuses), '%s'));
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, user_id, edition_id, status, registered_at, completed_at
+             FROM {$this->table()}
+             WHERE edition_id IN ({$idPlaceholders})
+               AND status IN ({$statusPlaceholders})",
+            ...array_merge($ids, $statuses),
+        ));
+
+        return $rows ?: [];
+    }
+
+    /**
      * Batch-find trajectory enrollments grouped by trajectory_id.
      *
      * Returns up to $limitPerTrajectory rows per trajectory, newest first.

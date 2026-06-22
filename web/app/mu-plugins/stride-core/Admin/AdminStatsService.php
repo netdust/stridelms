@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace Stride\Admin;
 
+use Stride\Domain\OfferingStatus;
 use Stride\Domain\QuoteStatus;
+use Stride\Domain\RegistrationStatus;
 use Stride\Infrastructure\BatchQueryHelper;
+use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Edition\EditionCPT;
+use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionCPT;
+use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Enrollment\RegistrationTable;
 use Stride\Modules\Invoicing\QuoteCPT;
 use Stride\Modules\Trajectory\TrajectoryCPT;
@@ -24,8 +29,18 @@ use Stride\Modules\Trajectory\TrajectoryCPT;
  */
 final class AdminStatsService
 {
+    /**
+     * Interest rows older than this many days surface in the "Oude interesse"
+     * worklist queue. Matches the mockup QUEUES def ("interesse + ouder dan
+     * 90 dagen", docs/mockups/admin-workspace/assets/js/data.js).
+     */
+    private const OLD_INTEREST_DAYS = 90;
+
     public function __construct(
         private readonly ActionQueueService $actionQueue,
+        private readonly RegistrationRepository $registrations,
+        private readonly AdminRegistrationQueryService $registrationQuery,
+        private readonly EditionService $editions,
     ) {}
 
     // =========================================================================
@@ -344,7 +359,189 @@ final class AdminStatsService
             'registrationsThisWeek' => $registrationsThisWeek,
             'registrationsLastWeek' => $registrationsLastWeek,
             'alerts' => $alerts,
+            // ADDITIVE (Phase-1D Task 3.3 / drift #4): the 5 Vandaag worklist
+            // queue counts, scoped to the active-edition subset. Existing keys
+            // above are UNCHANGED — other UI consumes them.
+            'worklistQueues' => $this->getWorklistQueueCounts($this->activeEditionIds()),
         ];
+    }
+
+    // =========================================================================
+    // WORKLIST QUEUE COUNTS  (Vandaag home — Phase-1D Task 3.3, drift #4)
+    // =========================================================================
+
+    /**
+     * Compute the 5 Vandaag worklist queue counts, scoped to the supplied
+     * active-edition subset (§10 — the caller feeds the active-edition ID set;
+     * this NEVER scans the full registration corpus).
+     *
+     * The 5 queues (§1 of the spec):
+     *  - pending           — registrations in 'pending' status.
+     *  - waitlist_open     — 'waitlist' rows whose edition has open capacity
+     *                        (per-edition capacity check, read through
+     *                        getEffectiveStatus — INV-7: never raw status).
+     *  - offerte_opvolging — 'confirmed' rows whose linked quote is absent OR
+     *                        status != Exported. Uses the SINGLE paid-proxy
+     *                        resolver (AdminRegistrationQueryService) — the same
+     *                        one the grid offerte column uses (Sibling-site
+     *                        audit item 1: one definition only).
+     *  - nocert            — 'completed' rows with completed_at set but no
+     *                        LearnDash certificate.
+     *  - oldinterest       — 'interest' rows registered more than
+     *                        OLD_INTEREST_DAYS ago. Counts DATELESS-edition rows
+     *                        too, because the active subset includes dateless
+     *                        editions (§10.7 carve-out — the active-set predicate
+     *                        is NULL-permitting, not a start_date >= X filter).
+     *
+     * @param  array<int> $activeEditionIds
+     * @return array{pending:int,waitlist_open:int,offerte_opvolging:int,nocert:int,oldinterest:int}
+     */
+    public function getWorklistQueueCounts(array $activeEditionIds): array
+    {
+        $empty = [
+            'pending'           => 0,
+            'waitlist_open'     => 0,
+            'offerte_opvolging' => 0,
+            'nocert'            => 0,
+            'oldinterest'       => 0,
+        ];
+
+        $activeEditionIds = array_values(array_unique(array_filter(array_map('intval', $activeEditionIds))));
+        if (empty($activeEditionIds) || !RegistrationTable::exists()) {
+            return $empty;
+        }
+
+        // --- pending: a single grouped count, no row fetch needed ---
+        $breakdown = $this->registrations->statusBreakdownByEditions($activeEditionIds);
+        $pending   = (int) ($breakdown[RegistrationStatus::Pending->value] ?? 0);
+
+        // --- Fetch the rows the other four queues reason over (structured cols, M5) ---
+        $rows = $this->registrations->findByEditionsAndStatuses(
+            $activeEditionIds,
+            [
+                RegistrationStatus::Waitlist->value,
+                RegistrationStatus::Confirmed->value,
+                RegistrationStatus::Completed->value,
+                RegistrationStatus::Interest->value,
+            ],
+        );
+
+        if (empty($rows)) {
+            return ['pending' => $pending] + $empty;
+        }
+
+        // Effective status per edition (INV-7) — one batched decision pass.
+        $effectiveStatuses = $this->editions->getEffectiveStatuses($activeEditionIds);
+
+        // Offerte resolver (single paid-proxy definition) over the confirmed regs.
+        $confirmedRegIds = [];
+        foreach ($rows as $row) {
+            if ($row->status === RegistrationStatus::Confirmed->value) {
+                $confirmedRegIds[] = (int) $row->id;
+            }
+        }
+        $offerteByReg  = !empty($confirmedRegIds)
+            ? $this->registrationQuery->offerteStatusesForRegistrations($confirmedRegIds)
+            : [];
+        $exportedLabel = QuoteStatus::Exported->label();
+
+        $oldInterestCutoff = strtotime('-' . self::OLD_INTEREST_DAYS . ' days');
+
+        $waitlistOpen     = 0;
+        $offerteOpvolging = 0;
+        $nocert           = 0;
+        $oldinterest      = 0;
+
+        foreach ($rows as $row) {
+            $regId     = (int) $row->id;
+            $userId    = (int) $row->user_id;
+            $editionId = (int) $row->edition_id;
+            $effective = $effectiveStatuses[$editionId] ?? null;
+
+            switch ($row->status) {
+                case RegistrationStatus::Waitlist->value:
+                    // Open capacity = edition not terminal/past (effective status)
+                    // AND the per-edition capacity check shows free spots.
+                    if (
+                        $effective !== null
+                        && !$effective->isTerminal()
+                        && $effective !== OfferingStatus::Completed
+                        && $this->editions->hasAvailableSpots($editionId)
+                    ) {
+                        $waitlistOpen++;
+                    }
+                    break;
+
+                case RegistrationStatus::Confirmed->value:
+                    // Absent quote (not in the resolver map / 'Geen offerte') OR
+                    // any label that is not the Exported label → follow-up needed.
+                    $label = $offerteByReg[$regId] ?? null;
+                    if ($label !== $exportedLabel) {
+                        $offerteOpvolging++;
+                    }
+                    break;
+
+                case RegistrationStatus::Completed->value:
+                    if (empty($row->completed_at)) {
+                        break;
+                    }
+                    $courseId = $this->editions->getCourseId($editionId) ?? 0;
+                    if ($courseId <= 0) {
+                        $nocert++; // No course → no certificate path → needs attention.
+                        break;
+                    }
+                    if (LearnDashHelper::getCertificateLink($courseId, $userId) === '') {
+                        $nocert++;
+                    }
+                    break;
+
+                case RegistrationStatus::Interest->value:
+                    $registeredTs = $row->registered_at ? strtotime((string) $row->registered_at) : false;
+                    if ($registeredTs !== false && $registeredTs < $oldInterestCutoff) {
+                        $oldinterest++;
+                    }
+                    break;
+            }
+        }
+
+        return [
+            'pending'           => $pending,
+            'waitlist_open'     => $waitlistOpen,
+            'offerte_opvolging' => $offerteOpvolging,
+            'nocert'            => $nocert,
+            'oldinterest'       => $oldinterest,
+        ];
+    }
+
+    /**
+     * Derive the active-edition ID set for the worklist queue counts.
+     *
+     * Active = published editions whose start_date is within the 2-day grace
+     * window OR has NO start_date at all (the sessionless/dateless interest
+     * anchors — §10.7 carve-out, bug_sessionless_edition_cutoff). Mirrors the
+     * NULL-permitting predicate in AdminAPIController::getEditions() (the
+     * canonical active-scope rule): a `start_date >= X` filter would silently
+     * drop dateless editions and undercount "Oude interesse".
+     *
+     * @return array<int>
+     */
+    private function activeEditionIds(): array
+    {
+        global $wpdb;
+
+        $twoDaysAgo = wp_date('Y-m-d', strtotime('-2 days'));
+
+        $ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT p.ID FROM {$wpdb->posts} p
+             LEFT JOIN {$wpdb->postmeta} pm_start
+                    ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
+             WHERE p.post_type = %s AND p.post_status = 'publish'
+               AND (pm_start.meta_value >= %s OR pm_start.meta_value IS NULL)",
+            EditionCPT::POST_TYPE,
+            $twoDaysAgo,
+        ));
+
+        return array_map('intval', $ids ?: []);
     }
 
     // =========================================================================

@@ -146,7 +146,7 @@ final class AdminRegistrationQueryService
                 $userId,
                 $editionId,
                 $attendanceByEdition[$editionId] ?? [],
-                $sessionCountByEdition[$editionId] ?? 0
+                $sessionCountByEdition[$editionId] ?? 0,
             );
 
             // Company — TWO INDEPENDENT identifiers, deliberately NOT one resolved entity
@@ -291,6 +291,25 @@ final class AdminRegistrationQueryService
         return $this->paginationEnvelope($items, $total, $page, $perPage);
     }
 
+    /**
+     * Public accessor for the two-step offerte (paid-proxy) resolver.
+     *
+     * The SINGLE definition of "what offerte status does this registration have"
+     * (Sibling-site audit item 1). The grid offerte column reads it via the
+     * private resolveOfferteStatuses(); the Vandaag "Offerte-opvolging" queue
+     * count (AdminStatsService::getWorklistQueueCounts) reads it here. There is
+     * no second "confirmed AND quote != Exported" definition anywhere — callers
+     * compare the returned label against QuoteStatus::Exported->label().
+     *
+     * @param  array<int> $regIds
+     * @return array<int,string>  regId => Dutch offerte label ('Geen offerte' when
+     *                            no quote; absent from the map is also "no quote").
+     */
+    public function offerteStatusesForRegistrations(array $regIds): array
+    {
+        return $this->resolveOfferteStatuses($regIds);
+    }
+
     // =========================================================================
     // HELPERS
     // =========================================================================
@@ -347,7 +366,7 @@ final class AdminRegistrationQueryService
         int $userId,
         int $editionId,
         array $attendanceForEdition,
-        int $sessionCount
+        int $sessionCount,
     ): ?int {
         if ($sessionCount === 0 || $userId === 0) {
             return null;
