@@ -233,7 +233,45 @@ class AdminDashboardService extends AbstractService
                 'firstName' => $user->first_name ?: $user->display_name,
             ],
             'canManage' => current_user_can('stride_manage'),
+            // Per-action nonces for the bulk grid (Task 3.2, §2.3). Each bulk POST
+            // to ntdst/v1/action carries its action-specific nonce
+            // (verified server-side via wp_verify_nonce($nonce, $action)).
+            'bulkNonces' => self::bulkActionNonces(),
         ]);
+    }
+
+    /**
+     * Per-action nonces for the bulk grid (Task 3.2, §2.3).
+     *
+     * The action registry (ntdst/v1/action) verifies wp_verify_nonce($nonce,
+     * $action) per request; the grid must arm the right nonce for each bulk
+     * action it POSTs. The action set MUST match BulkRegistrationHandler's
+     * registered ntdst/api_data/* filters — a drift here means an armed action
+     * with no nonce (401). The two deferred stubs (message, generate_doc) are
+     * included so the UI can arm them and render their deferred response.
+     *
+     * @return array<string,string> action name => nonce
+     */
+    private static function bulkActionNonces(): array
+    {
+        $actions = [
+            'stride_bulk_approve',
+            'stride_bulk_cancel',
+            'stride_bulk_quote_sent',
+            'stride_bulk_quote_exported',
+            'stride_bulk_promote_waitlist',
+            'stride_bulk_approve_post_course',
+            'stride_bulk_message',
+            'stride_bulk_generate_doc',
+            'stride_bulk_set_field',
+        ];
+
+        $nonces = [];
+        foreach ($actions as $action) {
+            $nonces[$action] = wp_create_nonce($action);
+        }
+
+        return $nonces;
     }
 
     /**

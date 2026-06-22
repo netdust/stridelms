@@ -27,6 +27,9 @@ defined('ABSPATH') || exit;
                         :class="{ 'sd-header__tab--active': view === 'edities' }"
                         @click="switchView('edities')">Opkomende Sessies</button>
                 <button class="sd-header__tab"
+                        :class="{ 'sd-header__tab--active': view === 'inschrijvingen' }"
+                        @click="switchView('inschrijvingen')">Inschrijvingen</button>
+                <button class="sd-header__tab"
                         :class="{ 'sd-header__tab--active': view === 'offertes' }"
                         @click="switchView('offertes')">Offertes</button>
                 <button class="sd-header__tab"
@@ -671,6 +674,343 @@ defined('ABSPATH') || exit;
             </div><!-- /.sd-slideout -->
 
         </div><!-- /view: edities -->
+
+        <!-- ========================================================
+             VIEW: INSCHRIJVINGEN (Tasks 3.1 + 3.2)
+             Server-paged registrations grid + multi-select bulk bar.
+             rows = ONE server page; filters/sort/group are server params.
+             ======================================================== -->
+        <div x-show="view === 'inschrijvingen'" class="ws-grid-shell">
+
+            <!-- Toolbar -->
+            <div class="ws-toolbar">
+
+                <!-- Status pipeline — clickable filter stepper -->
+                <div class="ws-toolbar__row ws-toolbar__row--pipe">
+                    <div class="ws-pipeline" role="group" aria-label="Filter op fase in het inschrijvingsproces">
+                        <span class="ws-pipeline__label">Fase in inschrijvingsproces</span>
+                        <div class="ws-pipeline__track">
+                            <template x-for="(key, i) in statusPipeline" :key="key">
+                                <div class="ws-pipeline__step">
+                                    <button type="button"
+                                            class="ws-stage-chip"
+                                            :class="'ws-stage-chip--' + regStatusMeta[key].cls + (gridFilters.status === key ? ' is-active' : '')"
+                                            @click="setGridStatus(key)">
+                                        <span class="ws-stage-chip__no" x-text="i + 1"></span>
+                                        <span class="ws-stage-chip__txt" x-text="regStatusMeta[key].pipe"></span>
+                                    </button>
+                                    <span class="ws-pipeline__arrow" x-show="i < statusPipeline.length - 1">→</span>
+                                </div>
+                            </template>
+                            <span class="ws-pipeline__sep" title="Buiten de funnel — eindstatus"></span>
+                            <button type="button"
+                                    class="ws-stage-chip ws-stage-chip--exit"
+                                    :class="gridFilters.status === statusExit ? ' is-active' : ''"
+                                    @click="setGridStatus(statusExit)">
+                                <span class="ws-stage-chip__txt" x-text="regStatusMeta[statusExit].pipe"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- View (group-by) + structured filters -->
+                <div class="ws-toolbar__row">
+                    <!-- Group-by: restructures into collapsible aggregates -->
+                    <div class="ws-select-wrap ws-select-wrap--group" :class="gridGroupBy && 'is-grouping'">
+                        <span>Indelen per</span>
+                        <select class="ws-select" x-model="gridGroupBy" @change="onGridGroupChange()">
+                            <option value="">Geen indeling</option>
+                            <option value="edition_id">Editie</option>
+                            <option value="status">Status</option>
+                            <option value="company_id">Organisatie</option>
+                            <option value="trajectory_id">Traject</option>
+                        </select>
+                        <button type="button" class="ws-group-clear" x-show="gridGroupBy" @click="gridGroupBy=''; onGridGroupChange()" title="Indeling opheffen">×</button>
+                    </div>
+
+                    <span class="ws-toolbar__sep"></span>
+                    <span class="ws-toolbar__group-label">Filters</span>
+
+                    <!-- Sort (structured columns only — M4/M5 whitelist) -->
+                    <div class="ws-select-wrap" x-show="!gridGroupBy">
+                        <span>Sorteer</span>
+                        <select class="ws-select"
+                                @change="gridSort.key = $event.target.value; gridSort.dir = 'asc'; loadGrid(1)">
+                            <option value="">Standaard</option>
+                            <option value="name">Naam</option>
+                            <option value="edition">Editie</option>
+                            <option value="status">Status</option>
+                            <option value="date">Inschrijfdatum</option>
+                        </select>
+                    </div>
+
+                    <select class="ws-select" x-model.number="gridFilters.edition_id" @change="applyGridChange()">
+                        <option :value="0">Alle edities</option>
+                        <template x-for="ed in editionOptions" :key="ed.id">
+                            <option :value="ed.id" x-text="ed.title"></option>
+                        </template>
+                    </select>
+
+                    <input type="text"
+                           class="sd-input"
+                           placeholder="Zoek op naam of e-mail…"
+                           x-model="gridFilters.q"
+                           @input.debounce.350ms="applyGridChange()">
+
+                    <div class="ws-toolbar__spacer"></div>
+                    <span class="ws-count">
+                        <b x-text="gridPagination.total"></b> inschrijving<span x-show="gridPagination.total !== 1">en</span>
+                    </span>
+                    <button type="button" class="sd-btn sd-btn--ghost sd-btn--sm" x-show="gridHasFilters" @click="resetGridFilters()">Reset</button>
+                </div>
+            </div>
+
+            <!-- Error state -->
+            <template x-if="errors.inschrijvingen">
+                <div class="sd-error">
+                    <span class="sd-error__icon">!</span>
+                    <p class="sd-error__title" x-text="errors.inschrijvingen"></p>
+                    <button class="sd-btn sd-btn--ghost sd-btn--sm" @click="loadGrid(gridPagination.page)">Opnieuw proberen</button>
+                </div>
+            </template>
+
+            <div class="ws-tablewrap" x-show="!errors.inschrijvingen">
+
+                <!-- FLAT table -->
+                <table class="ws-table" x-show="!gridGroupBy">
+                    <thead>
+                        <tr>
+                            <th class="ws-col-check">
+                                <input type="checkbox"
+                                       class="ws-check"
+                                       :checked="gridPageAllSelected"
+                                       :indeterminate="gridPageSomeSelected"
+                                       @change="toggleGridPage()">
+                            </th>
+                            <th class="is-sortable" @click="sortGrid('name')">Naam</th>
+                            <th class="is-sortable" @click="sortGrid('edition')">Editie</th>
+                            <th class="ws-col-status is-sortable" @click="sortGrid('status')">Status</th>
+                            <th class="ws-col-offerte">Offerte</th>
+                            <th class="ws-col-att">Aanwezigheid</th>
+                            <th>Organisatie</th>
+                            <th class="ws-col-traject">Traject</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Skeletons while loading -->
+                        <template x-if="loading && gridRows.length === 0">
+                            <template x-for="i in 6" :key="'sk-grid-' + i">
+                                <tr class="sd-skeleton-row">
+                                    <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                    <td><span class="sd-skeleton sd-skeleton--line"></span></td>
+                                    <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                    <td><span class="sd-skeleton sd-skeleton--badge"></span></td>
+                                    <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                    <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                    <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                    <td><span class="sd-skeleton sd-skeleton--text"></span></td>
+                                </tr>
+                            </template>
+                        </template>
+
+                        <template x-for="r in gridRows" :key="r.id">
+                            <tr :class="{ 'is-selected': isGridSelected(r.id) }" @click="openGridRow(r)">
+                                <td class="ws-col-check" @click.stop>
+                                    <input type="checkbox" class="ws-check"
+                                           :checked="isGridSelected(r.id)"
+                                           @change="toggleGridRow(r.id)">
+                                </td>
+                                <td>
+                                    <div class="ws-namecell">
+                                        <span class="ws-namecell__avatar" :style="'background:' + '#3b82f6'" x-text="(r.user?.name || '?')[0].toUpperCase()"></span>
+                                        <div>
+                                            <div class="ws-namecell__name" x-text="r.user?.name || '—'"></div>
+                                            <div class="ws-namecell__sub" x-text="r.user?.email || ''"></div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="ws-edition-cell" x-text="r.edition?.title || '—'"></td>
+                                <td class="ws-col-status">
+                                    <span class="sd-badge" :class="'sd-badge--' + (r.status?.value || '')" x-text="r.status?.label || '—'"></span>
+                                </td>
+                                <td class="ws-col-offerte" x-text="r.offerteStatus || 'Geen offerte'"></td>
+                                <td class="ws-col-att">
+                                    <template x-if="r.attendancePct != null">
+                                        <div class="ws-meter">
+                                            <div class="ws-meter__track">
+                                                <div class="ws-meter__fill" :class="gridAttClass(r.attendancePct)" :style="'width:' + r.attendancePct + '%'"></div>
+                                            </div>
+                                            <span class="ws-meter__val" x-text="r.attendancePct + '%'"></span>
+                                        </div>
+                                    </template>
+                                    <template x-if="r.attendancePct == null"><span class="ws-muted">—</span></template>
+                                </td>
+                                <td>
+                                    <span class="ws-org-cell" x-show="r.company?.name" x-text="r.company?.name"></span>
+                                    <span class="ws-muted" x-show="!r.company?.name">—</span>
+                                </td>
+                                <td class="ws-col-traject">
+                                    <span class="ws-traject-cell" x-show="r.trajectory?.title" x-text="r.trajectory?.title"></span>
+                                    <span class="ws-muted" x-show="!r.trajectory?.title">—</span>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+
+                <!-- GROUPED — collapsed aggregates from queryForGridGrouped -->
+                <table class="ws-table ws-table--grouped" x-show="gridGroupBy">
+                    <template x-for="g in gridGroups" :key="g.group_value">
+                        <tbody class="ws-group" :class="!gridCollapsed[g.group_value] && 'is-expanded'">
+                            <tr class="ws-grouprow">
+                                <td colspan="8">
+                                    <div class="ws-grouphead" :class="gridCollapsed[g.group_value] && 'is-collapsed'" @click="toggleGridGroup(g.group_value)">
+                                        <span class="ws-grouphead__chev">▾</span>
+                                        <span class="ws-grouphead__kind" x-text="gridGroupKindLabel()"></span>
+                                        <span class="ws-grouphead__title"><span x-text="gridGroupLabel(g)"></span></span>
+                                        <span class="ws-grouphead__count" x-text="g.count + ' inschrijving' + (g.count === 1 ? '' : 'en')"></span>
+                                        <div class="ws-grouphead__aggs">
+                                            <div class="ws-agg">
+                                                <span class="ws-agg__label">Afgerond</span>
+                                                <span class="ws-agg__val" x-text="g.pct_afgerond + '%'"></span>
+                                            </div>
+                                            <div class="ws-agg ws-agg--dist">
+                                                <span class="ws-agg__label">Offertes</span>
+                                                <span class="ws-distlegend" x-text="gridDistSummary(g.offerte_verdeling)"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </template>
+                </table>
+
+                <!-- Empty state -->
+                <template x-if="!loading && gridLoaded && gridRows.length === 0 && gridGroups.length === 0">
+                    <div class="sd-empty">
+                        <span class="sd-empty__icon">📝</span>
+                        <p class="sd-empty__text" x-text="gridEmptyTitle()"></p>
+                        <p class="sd-empty__hint">Pas het filter aan of wis de huidige selectie.</p>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Pagination -->
+            <div class="ws-pager" x-show="!gridGroupBy && gridPagination.totalPages > 1">
+                <span class="ws-count">
+                    <b x-text="gridRangeFrom"></b>–<b x-text="gridRangeTo"></b> van <b x-text="gridPagination.total"></b>
+                </span>
+                <div class="ws-pager__pages">
+                    <button type="button" class="ws-page-btn" :disabled="gridPagination.page <= 1" @click="goGridPage(gridPagination.page - 1)">←</button>
+                    <span class="ws-page-btn is-active" x-text="gridPagination.page"></span>
+                    <span class="ws-page-ellipsis">/ <span x-text="gridPagination.totalPages"></span></span>
+                    <button type="button" class="ws-page-btn" :disabled="gridPagination.page >= gridPagination.totalPages" @click="goGridPage(gridPagination.page + 1)">→</button>
+                </div>
+            </div>
+
+            <!-- Select-all-across-pages banner -->
+            <div class="ws-selectall-banner" x-show="!gridGroupBy && gridPageAllSelected && !gridSelectAllFilter && gridPagination.total > gridRows.length">
+                Alle <b x-text="gridRows.length"></b> op deze pagina geselecteerd.
+                <button type="button" class="sd-btn sd-btn--text" @click="selectAllFiltered()">
+                    Selecteer alle <span x-text="gridPagination.total"></span> die aan het filter voldoen
+                </button>
+            </div>
+
+            <!-- Bulk action bar — state-aware, derived from the transition map -->
+            <div class="ws-bulkbar" x-show="gridSelectedCount > 0" x-transition>
+                <div class="ws-bulkbar__count">
+                    <span class="ws-bulkbar__num" x-text="gridSelectedCount"></span>
+                    <span class="ws-bulkbar__label">
+                        geselecteerd
+                        <template x-if="gridSelectAllFilter"><span> (alle pagina's)</span></template>
+                    </span>
+                </div>
+                <div class="ws-bulkbar__div"></div>
+
+                <!-- Mixed-state hint: no shared safe action -->
+                <span class="ws-bulkbar__hint" x-show="gridMixedHint">
+                    Geen gedeelde actie voor: <span x-text="gridStatesSummary()"></span>
+                </span>
+
+                <div class="ws-bulkbar__actions" x-show="!gridMixedHint">
+                    <template x-for="a in gridTopActions" :key="a.id">
+                        <button type="button"
+                                class="ws-bbtn"
+                                :class="a.danger ? 'ws-bbtn--danger' : 'ws-bbtn--primary'"
+                                :disabled="gridBulkBusy !== null"
+                                @click="runGridBulk(a.id)">
+                            <span x-show="gridBulkBusy === a.id">Bezig…</span>
+                            <span x-show="gridBulkBusy !== a.id" x-text="a.label"></span>
+                        </button>
+                    </template>
+
+                    <!-- Overflow (Meer) -->
+                    <div class="ws-menu" x-show="gridOverflowActions.length > 0" @click.outside="gridOverflowOpen = false">
+                        <button type="button" class="ws-bbtn" @click="gridOverflowOpen = !gridOverflowOpen">Meer ⋯</button>
+                        <div class="ws-menu__pop" x-show="gridOverflowOpen" x-cloak>
+                            <template x-for="a in gridOverflowActions" :key="a.id">
+                                <button type="button"
+                                        class="ws-menu__item"
+                                        :class="a.danger && 'ws-menu__item--danger'"
+                                        :disabled="gridBulkBusy !== null"
+                                        @click="runGridBulk(a.id)"
+                                        x-text="a.label"></button>
+                            </template>
+                        </div>
+                    </div>
+
+                    <button type="button" class="ws-bbtn ws-bbtn--close" @click="clearGridSelection()" title="Selectie wissen">×</button>
+                </div>
+            </div>
+
+            <!-- Partial-failure report modal (F2) -->
+            <template x-if="gridResultOpen && gridResult">
+                <div>
+                    <div class="ws-overlay" @click="closeGridResult()"></div>
+                    <div class="ws-modal" role="dialog" aria-modal="true">
+                        <div class="ws-modal__head">
+                            <div class="ws-modal__icon" :class="gridResult.err === 0 ? 'ws-modal__icon--ok' : 'ws-modal__icon--mixed'" x-text="gridResult.err === 0 ? '✓' : '!'"></div>
+                            <div>
+                                <div class="ws-modal__title" x-text="gridResult.action"></div>
+                                <div class="ws-modal__sub">
+                                    <span x-text="gridResult.ok"></span> geslaagd<span x-show="gridResult.err > 0">, <span x-text="gridResult.err"></span> mislukt</span> van <span x-text="gridResult.total"></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ws-modal__body">
+                            <div class="ws-result-summary">
+                                <div class="ws-result-stat ws-result-stat--ok">
+                                    <div class="ws-result-stat__num" x-text="gridResult.ok"></div>
+                                    <div class="ws-result-stat__label">Geslaagd</div>
+                                </div>
+                                <div class="ws-result-stat ws-result-stat--err" x-show="gridResult.err > 0">
+                                    <div class="ws-result-stat__num" x-text="gridResult.err"></div>
+                                    <div class="ws-result-stat__label">Mislukt</div>
+                                </div>
+                            </div>
+                            <div class="ws-fail-list" x-show="gridResult.failed.length > 0">
+                                <div class="ws-fail-list__head">Mislukte inschrijvingen</div>
+                                <template x-for="f in gridResult.failed" :key="f.id">
+                                    <div class="ws-fail-row">
+                                        <span class="ws-fail-row__icon">×</span>
+                                        <div>
+                                            <div class="ws-fail-row__name" x-text="f.name"></div>
+                                            <div class="ws-fail-row__msg" x-text="f.message"></div>
+                                        </div>
+                                        <span class="ws-fail-row__code" x-text="f.code"></span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="ws-modal__foot">
+                            <button type="button" class="sd-btn sd-btn--primary" @click="closeGridResult()">Sluiten</button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+
+        </div><!-- /view: inschrijvingen -->
 
         <!-- ========================================================
              VIEW: OFFERTES
