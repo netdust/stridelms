@@ -2,6 +2,8 @@
 
 **The overview doc.** One row per user-facing feature, three honest axes, graded against evidence (not vibes). This is the answer to "what's fully built, detailed, and edge-tested — and where's it thin?"
 
+> **Granular companion:** `USER-STORIES.csv` (+ `USER-STORIES.md`) explodes these 19 rows into 154 individual code-derived user stories, each with a per-phase status column for the verify→fix→re-verify loop. Use the CSV to track individual behaviours; use this matrix for the overview.
+
 - **Built** = code exists, boots, core path works.
 - **Detailed** = has the polish/edge-handling the feature *intends* (error states, empty states, status-awareness).
 - **Edge-tested** = ✅ ONLY if intended flows + edge cases (empty / denied / concurrent / boundary / mid-flow failure) were actually **driven through real flows** (acceptance Cest, shake-out walk, or manual). Green unit tests alone ≠ ✅. **Most features land ⚠️ — that is the point; it's the map of where to work.**

@@ -32,6 +32,64 @@ final class QuotePDFGenerator
     {
         add_action('stride/quote/regenerate_pdf', [$this, 'generate']);
         add_filter('ndmail_pdf_generators', [$this, 'registerMailGenerator']);
+        // Frontend dashboard "Bekijk offerte" download link. The dashboard
+        // templates (tab-offertes / tab-downloads) build an admin-ajax GET link
+        // to action=stride_quote_pdf, but no handler was registered — every
+        // click returned WP's "0" (bug DB-11). Register the streaming handler
+        // here, where the generator + repository already live.
+        add_action('wp_ajax_stride_quote_pdf', [$this, 'handleDownload']);
+    }
+
+    /**
+     * Stream a quote PDF to the browser for the owning user (or an admin).
+     *
+     * GET admin-ajax: action=stride_quote_pdf&quote_id&nonce. Verifies the
+     * nonce, enforces ownership (quote.user_id === current user) OR the
+     * stride_manage capability, then get-or-generates the PDF and streams it.
+     */
+    public function handleDownload(): void
+    {
+        $quoteId = (int) ($_GET['quote_id'] ?? 0);
+        $nonce = (string) ($_GET['nonce'] ?? '');
+
+        if (!wp_verify_nonce($nonce, 'stride_quote_pdf')) {
+            wp_die(esc_html__('Ongeldige beveiligingscode.', 'stride'), '', ['response' => 403]);
+        }
+
+        $userId = get_current_user_id();
+        if ($userId <= 0) {
+            wp_die(esc_html__('Je moet ingelogd zijn.', 'stride'), '', ['response' => 401]);
+        }
+
+        $quote = $this->quoteService->getQuote($quoteId, true);
+        if (is_wp_error($quote)) {
+            wp_die(esc_html__('Offerte niet gevonden.', 'stride'), '', ['response' => 404]);
+        }
+
+        $isOwner = (int) ($quote['user_id'] ?? 0) === $userId;
+        if (!$isOwner && !current_user_can('stride_manage')) {
+            // Identical message for not-found vs not-owned (no ownership oracle).
+            wp_die(esc_html__('Offerte niet gevonden.', 'stride'), '', ['response' => 404]);
+        }
+
+        $path = $this->resolveForEmail($quoteId);
+        if ($path === '' || !file_exists($path)) {
+            ntdst_log('invoicing')->error('Quote PDF download failed: no file', [
+                'quote_id' => $quoteId,
+                'user_id' => $userId,
+            ]);
+            wp_die(esc_html__('De offerte-PDF kon niet worden gegenereerd.', 'stride'), '', ['response' => 500]);
+        }
+
+        $quoteNumber = (string) ($quote['quote_number'] ?? 'offerte');
+        $filename = sanitize_file_name($quoteNumber . '.pdf');
+
+        nocache_headers();
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: inline; filename="' . $filename . '"');
+        header('Content-Length: ' . filesize($path));
+        readfile($path);
+        exit;
     }
 
     /**

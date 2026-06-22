@@ -103,6 +103,13 @@ final class NotificationService implements \NTDST_Service_Meta
             $notification = $this->mapper->fromAuditEntry($entry);
             $id = $notification['id'];
 
+            // Drop audit actions the mapper has no human-readable label for —
+            // the mapper returns an empty title for those, and showing a blank
+            // (or the raw action key) notification is worse than omitting it.
+            if (trim((string) $notification['title']) === '') {
+                continue;
+            }
+
             // Deduplicate
             if (isset($seenIds[$id])) {
                 continue;

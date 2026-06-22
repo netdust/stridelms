@@ -55,7 +55,9 @@ class AuthPluginCest
         // Structural signal that this is the Stride custom login page (not wp-login.php):
         // the magic-link form has an Alpine @submit handler unique to our auth plugin.
         $I->seeInSource('requestMagicLink');
-        $I->see('Email');
+        // UI is nl_BE — the email label reads "E-mailadres" (ntdst-auth is
+        // now translated; AU-04 fix). Assert on the input, not the English label.
+        $I->see('E-mailadres');
         $I->seeElement('input[type="email"]');
         $I->seeElement('button[type="submit"]');
     }
@@ -112,9 +114,10 @@ class AuthPluginCest
             comp.requestMagicLink();
         ");
 
-        // Wait for AJAX response
-        $I->waitForText('login link', 10);
-        $I->see('login link');
+        // Wait for AJAX response — success copy is nl_BE: "...ontvang je zo
+        // dadelijk een inloglink." (ntdst-auth translated; AU-04 fix).
+        $I->waitForText('inloglink', 10);
+        $I->see('inloglink');
         $I->dontSee('not found');
         $I->dontSee('does not exist');
     }
@@ -258,7 +261,8 @@ class AuthPluginCest
     {
         $I->wantTo('verify invalid token shows error');
         $I->amOnPage('/auth/verify/invalid-token-12345');
-        $I->see('Link Invalid');
+        // nl_BE: "Link Invalid" -> "Link ongeldig" (ntdst-auth translated, AU-04).
+        $I->see('Link ongeldig');
         $I->dontSee('Fatal error');
     }
 
@@ -273,8 +277,9 @@ class AuthPluginCest
         $I->wantTo('verify invalid activation token shows error');
         $I->amOnPage('/auth/activate/invalid-activation-token');
         $I->dontSee('Fatal error');
-        // Should see some kind of error message
-        $I->see('Invalid');
+        // Should see some kind of error message — nl_BE: "Activatie mislukt /
+        // Deze link is ongeldig of verlopen." (ntdst-auth translated, AU-04).
+        $I->see('ongeldig');
     }
 
     // -------------------------------------------------------------------------

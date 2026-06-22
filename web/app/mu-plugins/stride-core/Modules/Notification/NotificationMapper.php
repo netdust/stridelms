@@ -29,9 +29,14 @@ final class NotificationMapper
             'attendance.marked_absent' => $this->mapAttendance($context, 'afwezig gemeld'),
             'attendance.marked_excused' => $this->mapAttendance($context, 'verontschuldigd'),
             'completion.course_completed' => $this->mapCourseCompleted($context),
+            'completion.completed' => $this->mapCompletionCompleted($context),
+            'completion.attendance_complete' => $this->mapAttendanceComplete($context),
             'completion.certificate_issued' => $this->mapCertificateIssued($context),
             'session.note_updated' => $this->mapSessionNoteUpdated($context),
-            default => ['action', $action, '', ''],
+            // Never leak a raw action key to the user — a notification we don't
+            // have a human label for is dropped (filtered out by the caller on
+            // empty title) rather than shown as e.g. "completion.completed".
+            default => ['action', '', '', ''],
         };
 
         return [
@@ -89,6 +94,30 @@ final class NotificationMapper
             sprintf('Je hebt %s afgerond', $courseTitle),
             '',
             get_permalink((int) ($context['course_id'] ?? 0)) ?: '',
+        ];
+    }
+
+    private function mapCompletionCompleted(array $context): array
+    {
+        $editionTitle = $this->resolveEditionTitle((int) ($context['edition_id'] ?? 0));
+
+        return [
+            'completion',
+            sprintf('Je hebt %s afgerond', $editionTitle),
+            '',
+            $this->editionUrl((int) ($context['edition_id'] ?? 0)),
+        ];
+    }
+
+    private function mapAttendanceComplete(array $context): array
+    {
+        $editionTitle = $this->resolveEditionTitle((int) ($context['edition_id'] ?? 0));
+
+        return [
+            'completion',
+            sprintf('Je aanwezigheid voor %s is volledig', $editionTitle),
+            '',
+            $this->editionUrl((int) ($context['edition_id'] ?? 0)),
         ];
     }
 

@@ -92,17 +92,31 @@ class OnlineEnrollmentCest
         ]);
 
         $editionId = 0;
+        $today = date('Y-m-d');
         foreach (array_map('intval', $editionIds) as $candidate) {
             $status = (string) $I->grabFromDatabase($I->grabPrefixedTableNameFor('postmeta'), 'meta_value', [
                 'post_id'  => $candidate,
                 'meta_key' => '_ntdst_status',
             ]);
-            if ($status === 'open') {
-                $editionId = $candidate;
-                break;
+            if ($status !== 'open') {
+                continue;
             }
+            // Stored status 'open' is not enough — enroll() rejects a past
+            // edition regardless of stored status (the isPast guard). Pick an
+            // edition that is also NOT past, so the fixture matches what the
+            // enrollment path will actually accept. (Guards against stale
+            // re-seed leftovers whose date drifted into the past.)
+            $start = (string) $I->grabFromDatabase($I->grabPrefixedTableNameFor('postmeta'), 'meta_value', [
+                'post_id'  => $candidate,
+                'meta_key' => '_ntdst_start_date',
+            ]);
+            if ($start !== '' && $start < $today) {
+                continue;
+            }
+            $editionId = $candidate;
+            break;
         }
-        \PHPUnit\Framework\Assert::assertGreaterThan(0, $editionId, 'No open edition found for seed course: ' . $prefix);
+        \PHPUnit\Framework\Assert::assertGreaterThan(0, $editionId, 'No open, non-past edition found for seed course: ' . $prefix);
 
         $slug = $I->grabFromDatabase($I->grabPrefixedTableNameFor('posts'), 'post_name', ['ID' => $editionId]);
 

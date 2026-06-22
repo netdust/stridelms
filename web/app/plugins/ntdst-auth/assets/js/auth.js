@@ -16,6 +16,12 @@ function authLogin() {
         mode: window.ntdstAuth?.enablePassword ? 'password' : 'magic',
 
         async requestMagicLink() {
+            // Ignore re-submits while a request is in flight. Rapid multi-clicks
+            // otherwise stacked overlapping responses and rendered the message
+            // twice (bug AU-04).
+            if (this.loading) {
+                return;
+            }
             this.loading = true;
             this.error = false;
             this.success = false;

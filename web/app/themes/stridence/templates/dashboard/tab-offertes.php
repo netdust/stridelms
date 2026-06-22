@@ -130,7 +130,8 @@ function stridence_quote_status_classes(QuoteStatus $status): string
                         </div>
 
                         <!-- Action row -->
-                        <div class="flex flex-wrap gap-3 pt-2" x-data="{ moreOpen: false }">
+                        <div class="flex flex-wrap gap-3 pt-2" x-data="{ moreOpen: false }"
+                             @inline-section-saved="moreOpen = false">
                             <a href="<?php echo esc_url(add_query_arg(['action' => 'stride_quote_pdf', 'quote_id' => $quote['id'], 'nonce' => wp_create_nonce('stride_quote_pdf')], admin_url('admin-ajax.php'))); ?>"
                                class="btn-primary btn-sm"
                                target="_blank"
