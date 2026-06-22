@@ -18,6 +18,23 @@ final class TrajectoryRepository extends AbstractRepository
     protected string $postType = TrajectoryCPT::POST_TYPE;
 
     /**
+     * The single source of truth for "active trajectory" status values.
+     *
+     * A trajectory is active when its stored status is one of these
+     * non-terminal offering statuses. Both findActive() (catalog) and the
+     * admin trajectory typeahead (AdminAPIController::getTrajectoryOptions)
+     * reference THIS const — never re-list the set inline, or the two
+     * surfaces drift when the domain definition changes.
+     *
+     * @var list<string>
+     */
+    public const ACTIVE_STATUSES = [
+        OfferingStatus::Announcement->value,
+        OfferingStatus::Open->value,
+        OfferingStatus::InProgress->value,
+    ];
+
+    /**
      * Get a single field value.
      */
     public function getField(int $id, string $field, mixed $default = null): mixed
@@ -35,7 +52,7 @@ final class TrajectoryRepository extends AbstractRepository
     public function findActive(): array
     {
         return $this->model()
-            ->whereIn('status', [OfferingStatus::Announcement->value, OfferingStatus::Open->value, OfferingStatus::InProgress->value])
+            ->whereIn('status', self::ACTIVE_STATUSES)
             ->orderBy('post_title', 'ASC')
             ->limit(-1) // catalog shows ALL active trajectories — not the default page cap
             ->withMeta()

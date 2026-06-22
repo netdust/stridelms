@@ -7,7 +7,6 @@ namespace Stride\Admin;
 use NTDST\Audit\AuditTable;
 use Stride\Domain\AttendanceStatus;
 use Stride\Domain\Money;
-use Stride\Domain\OfferingStatus;
 use Stride\Domain\QuoteStatus;
 use Stride\Infrastructure\BatchQueryHelper;
 use Stride\Modules\Attendance\AttendanceRepository;
@@ -2236,15 +2235,12 @@ final class AdminAPIController
             $params[] = '%' . $wpdb->esc_like($q) . '%';
         }
 
-        // scope=active → restrict to non-terminal statuses via an EXISTS subquery
-        // (mirrors TrajectoryRepository::findActive's status set). scope=all adds
+        // scope=active → restrict to non-terminal statuses via an EXISTS subquery.
+        // The status set is the SINGLE SOURCE OF TRUTH on TrajectoryRepository so
+        // the typeahead and the catalog (findActive) never drift. scope=all adds
         // no status restriction. No date carve-out: trajectories have no dates.
         if ($scope === 'active') {
-            $activeStatuses = [
-                OfferingStatus::Announcement->value,
-                OfferingStatus::Open->value,
-                OfferingStatus::InProgress->value,
-            ];
+            $activeStatuses = \Stride\Modules\Trajectory\TrajectoryRepository::ACTIVE_STATUSES;
             $statusPlaceholders = implode(',', array_fill(0, count($activeStatuses), '%s'));
             $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status
                 WHERE pm_status.post_id = p.ID
