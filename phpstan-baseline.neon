@@ -3,14 +3,26 @@ parameters:
 		-
 			message: '#^Call to static method exists\(\) on an unknown class NTDST\\Audit\\AuditTable\.$#'
 			identifier: class.notFound
-			count: 3
+			count: 2
+			path: web/app/mu-plugins/stride-core/Admin/AdminAPIController.php
+
+		-
+			message: '#^Call to static method exists\(\) on an unknown class NTDST\\Audit\\AuditTable\.$#'
+			identifier: class.notFound
+			count: 1
+			path: web/app/mu-plugins/stride-core/Admin/AdminUserService.php
+
+		-
+			message: '#^Call to static method getTableName\(\) on an unknown class NTDST\\Audit\\AuditTable\.$#'
+			identifier: class.notFound
+			count: 2
 			path: web/app/mu-plugins/stride-core/Admin/AdminAPIController.php
 
 		-
 			message: '#^Call to static method getTableName\(\) on an unknown class NTDST\\Audit\\AuditTable\.$#'
 			identifier: class.notFound
-			count: 3
-			path: web/app/mu-plugins/stride-core/Admin/AdminAPIController.php
+			count: 1
+			path: web/app/mu-plugins/stride-core/Admin/AdminUserService.php
 
 		-
 			message: '#^Class NTDST\\Audit\\AuditService not found\.$#'

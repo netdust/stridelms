@@ -55,6 +55,7 @@ return [
         \Stride\Modules\Reporting\Admin\AnnualReportPage::class,
         \Stride\Admin\AdminRegistrationQueryService::class,
         \Stride\Admin\AdminStatsService::class,
+        \Stride\Admin\AdminUserService::class,
     ],
 
     /**
