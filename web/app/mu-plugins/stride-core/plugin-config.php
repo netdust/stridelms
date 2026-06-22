@@ -54,6 +54,7 @@ return [
         \Stride\Modules\Reporting\AnnualReportPdfGenerator::class,
         \Stride\Modules\Reporting\Admin\AnnualReportPage::class,
         \Stride\Admin\AdminRegistrationQueryService::class,
+        \Stride\Admin\AdminStatsService::class,
     ],
 
     /**
