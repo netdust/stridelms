@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Stride\Tests\Unit\Handlers;
 
+use Stride\Domain\QuoteStatus;
 use Stride\Handlers\BulkRegistrationHandler;
 use Stride\Modules\Enrollment\EnrollmentCompletion;
 use Stride\Modules\Enrollment\EnrollmentService;
 use Stride\Modules\Enrollment\RegistrationRepository;
+use Stride\Modules\Invoicing\QuoteRepository;
 use Stride\Tests\TestCase;
 
 /**
@@ -120,5 +122,157 @@ class BulkRegistrationHandlerTest extends TestCase
         $this->assertCount(1, $report['failed']);
         $this->assertSame(555, $report['failed'][0]['id']);
         $this->assertSame('invalid_status', $report['failed'][0]['code']);
+    }
+
+    // =========================================================================
+    // Task 2.2 — quote / waitlist / post-course / message / generate-doc
+    // =========================================================================
+
+    /**
+     * Quote → Exported via QuoteRepository::updateStatus(QuoteStatus::Exported).
+     * Touches NO "paid" field — none exists on QuoteStatus (V11).
+     */
+    public function test_bulk_quote_exported_sets_status_via_repository(): void
+    {
+        $row = (object) ['id' => 70, 'status' => 'confirmed', 'edition_id' => 10];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturn($row);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $quoteRepo = $this->createMock(QuoteRepository::class);
+        $quoteRepo->method('findQuoteIdsByRegistrations')->with([70])->willReturn([70 => 900]);
+        $quoteRepo->expects($this->once())
+            ->method('updateStatus')
+            ->with(900, QuoteStatus::Exported)
+            ->willReturn(true);
+        ntdst_set(QuoteRepository::class, $quoteRepo);
+
+        $report = $this->handler->handleBulkQuoteExported([], ['ids' => [70]]);
+
+        $this->assertCount(1, $report['succeeded']);
+        $this->assertCount(0, $report['failed']);
+    }
+
+    /** A row with no quote lands in failed[] with code no_quote. */
+    public function test_bulk_quote_sent_no_quote_lands_in_failed(): void
+    {
+        $row = (object) ['id' => 71, 'status' => 'confirmed', 'edition_id' => 10];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturn($row);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $quoteRepo = $this->createMock(QuoteRepository::class);
+        $quoteRepo->method('findQuoteIdsByRegistrations')->willReturn([]); // no quote
+        $quoteRepo->expects($this->never())->method('updateStatus');
+        ntdst_set(QuoteRepository::class, $quoteRepo);
+
+        $report = $this->handler->handleBulkQuoteSent([], ['ids' => [71]]);
+
+        $this->assertCount(1, $report['failed']);
+        $this->assertSame('no_quote', $report['failed'][0]['code']);
+    }
+
+    /**
+     * Waitlist promote skips a full edition into failed[] with capacity_full
+     * (per-row capacity re-check, INV-7 not-terminal gate). The handler wraps the
+     * single-item domain method promoteFromWaitlist — here we drive the handler's
+     * own guard via a mocked EditionService that reports the edition full.
+     */
+    public function test_bulk_promote_waitlist_skips_full_edition(): void
+    {
+        $row = (object) ['id' => 72, 'status' => 'waitlist', 'edition_id' => 10];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturn($row);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $enrollment = $this->createMock(EnrollmentService::class);
+        $enrollment->method('promoteFromWaitlist')
+            ->with(72)
+            ->willReturn(new \WP_Error('capacity_full', 'Edition is full'));
+        ntdst_set(EnrollmentService::class, $enrollment);
+
+        $report = $this->handler->handleBulkPromoteWaitlist([], ['ids' => [72]]);
+
+        $this->assertCount(1, $report['failed']);
+        $this->assertSame('capacity_full', $report['failed'][0]['code']);
+    }
+
+    /** Post-course approve wraps completeTask('post_approval') — domain call, not the controller. */
+    public function test_bulk_approve_post_course_wraps_complete_task(): void
+    {
+        $row = (object) ['id' => 73, 'status' => 'confirmed', 'edition_id' => 10];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturn($row);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $completion = $this->createMock(EnrollmentCompletion::class);
+        $completion->expects($this->once())
+            ->method('completeTask')
+            ->with(73, 'post_approval')
+            ->willReturn(true);
+        ntdst_set(EnrollmentCompletion::class, $completion);
+
+        $report = $this->handler->handleBulkApprovePostCourse([], ['ids' => [73]]);
+
+        $this->assertCount(1, $report['succeeded']);
+    }
+
+    /**
+     * Decision 2: stride_bulk_message is an HONEST deferred stub — each per-row
+     * result is WP_Error('not_available'), never a silent success.
+     */
+    public function test_bulk_message_is_deferred_stub_all_failed(): void
+    {
+        $row = (object) ['id' => 80, 'status' => 'confirmed', 'edition_id' => 10];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturn($row);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $report = $this->handler->handleBulkMessage([], ['ids' => [80]]);
+
+        $this->assertCount(0, $report['succeeded']);
+        $this->assertCount(1, $report['failed']);
+        $this->assertSame('not_available', $report['failed'][0]['code']);
+    }
+
+    /** Decision 2: stride_bulk_generate_doc is an HONEST deferred stub too. */
+    public function test_bulk_generate_doc_is_deferred_stub_all_failed(): void
+    {
+        $row = (object) ['id' => 81, 'status' => 'confirmed', 'edition_id' => 10];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturn($row);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $report = $this->handler->handleBulkGenerateDoc([], ['ids' => [81]]);
+
+        $this->assertCount(0, $report['succeeded']);
+        $this->assertCount(1, $report['failed']);
+        $this->assertSame('not_available', $report['failed'][0]['code']);
+    }
+
+    /**
+     * M2 inherited: EVERY new handler denies a view-only actor before the loop —
+     * including the deferred stubs (a view-only actor must be M2-denied first,
+     * not reach the not_available per-row path).
+     */
+    public function test_all_task_2_2_handlers_deny_view_only(): void
+    {
+        global $current_user_caps;
+        $current_user_caps = ['stride_manage' => false];
+
+        $methods = [
+            'handleBulkQuoteSent',
+            'handleBulkQuoteExported',
+            'handleBulkPromoteWaitlist',
+            'handleBulkApprovePostCourse',
+            'handleBulkMessage',
+            'handleBulkGenerateDoc',
+        ];
+        foreach ($methods as $m) {
+            $result = $this->handler->$m([], ['ids' => [1]]);
+            $this->assertInstanceOf(\WP_Error::class, $result, "$m must deny a view-only actor");
+            $this->assertSame('forbidden', $result->get_error_code(), "$m denial code");
+            $this->assertSame(403, $result->get_error_data()['status'] ?? null, "$m denial status");
+        }
     }
 }
