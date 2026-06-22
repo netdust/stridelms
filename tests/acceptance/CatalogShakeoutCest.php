@@ -27,7 +27,9 @@ class CatalogShakeoutCest
         $I->waitForElement('[x-ref="grid"]', 10);
         $I->dontSee('Fatal error');
 
-        $cards = (int) $I->executeJS("return document.querySelector('[x-ref=\"grid\"]').querySelectorAll('article').length;");
+        // Catalog cards are direct-child <a> elements of the grid (card-edition.php /
+        // card-course.php render an <a> root, not <article>) — count those.
+        $cards = (int) $I->executeJS("return document.querySelector('[x-ref=\"grid\"]').querySelectorAll(':scope > a').length;");
         \PHPUnit\Framework\Assert::assertGreaterThanOrEqual(1, $cards, 'klassikaal should render at least one card');
         \PHPUnit\Framework\Assert::assertLessThanOrEqual(24, $cards, 'server must render at most the 24-card cap');
 
@@ -62,7 +64,7 @@ class CatalogShakeoutCest
 
         \PHPUnit\Framework\Assert::assertSame(24, (int) $state['shown'], 'server should render exactly the 24-card cap when more items exist');
 
-        $before = (int) $I->executeJS("return document.querySelector('[x-ref=\"grid\"]').querySelectorAll('article').length;");
+        $before = (int) $I->executeJS("return document.querySelector('[x-ref=\"grid\"]').querySelectorAll(':scope > a').length;");
 
         // Click the visible Toon meer button (real Alpine click → ntdstAPI →
         // endpoint). Wait for it to be interactive first — Alpine must have
@@ -75,9 +77,9 @@ class CatalogShakeoutCest
         );
 
         $total = (int) $state['total'];
-        $I->waitForJS("return document.querySelector('[x-ref=\"grid\"]').querySelectorAll('article').length >= {$total};", 10);
+        $I->waitForJS("return document.querySelector('[x-ref=\"grid\"]').querySelectorAll(':scope > a').length >= {$total};", 10);
 
-        $after = (int) $I->executeJS("return document.querySelector('[x-ref=\"grid\"]').querySelectorAll('article').length;");
+        $after = (int) $I->executeJS("return document.querySelector('[x-ref=\"grid\"]').querySelectorAll(':scope > a').length;");
         \PHPUnit\Framework\Assert::assertSame($total, $after, 'after Toon meer all items should be shown');
         \PHPUnit\Framework\Assert::assertGreaterThan($before, $after);
 
@@ -85,7 +87,7 @@ class CatalogShakeoutCest
         // distinct destination (a card carries several anchors to the same
         // URL, so compare unique destinations against the card count).
         $unique = (int) $I->executeJS(
-            "const links = Array.from(document.querySelector('[x-ref=\"grid\"]').querySelectorAll('article a[href]')).map(a => a.href);" .
+            "const links = Array.from(document.querySelector('[x-ref=\"grid\"]').querySelectorAll(':scope > a[href]')).map(a => a.href);" .
             "return new Set(links).size;"
         );
         \PHPUnit\Framework\Assert::assertSame($after, $unique, 'no card may appear twice after pagination (boundary not doubled or dropped)');

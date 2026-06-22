@@ -201,10 +201,20 @@ class NTDST_Query_Cache
 
     /**
      * Invalidate cache when a post is saved
+     *
+     * The $post argument is nullable: although WP core always passes a WP_Post
+     * on `save_post`, other code (plugins, programmatic re-fires of the action)
+     * can invoke the hook with a missing/null post. A cache-invalidation hook
+     * must never fatal a save, so we tolerate that and resolve the post id.
      */
-    public function onPostSave(int $post_id, \WP_Post $post): void
+    public function onPostSave(int $post_id, ?\WP_Post $post = null): void
     {
         if (wp_is_post_revision($post_id) || wp_is_post_autosave($post_id)) {
+            return;
+        }
+
+        $post = $post ?? get_post($post_id);
+        if (!$post instanceof \WP_Post) {
             return;
         }
 
