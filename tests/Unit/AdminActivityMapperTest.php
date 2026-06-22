@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Tests\Unit;
@@ -266,6 +267,36 @@ class AdminActivityMapperTest extends TestCase
         $this->assertStringContainsString('aangemaakt', $result['text']);
     }
 
+    public function test_maps_session_selections_updated(): void
+    {
+        // Audit entry as written by AuditBridge::onSessionSelectionsUpdated,
+        // with edition_title enriched by the controller (same as other edition-scoped events).
+        $entry = (object) [
+            'id' => 20,
+            'action' => 'session.selections_updated',
+            'actor_id' => 42,
+            'context' => json_encode([
+                'registration_id' => 7,
+                'edition_id' => 55,
+                'edition_title' => 'EHBO Voortgezet',
+                'session_ids' => [101, 102],
+            ]),
+            'created_at' => '2026-03-25 14:30:00',
+        ];
+        $result = AdminActivityMapper::fromAuditEntry($entry, 'Jan Peeters');
+
+        // Must render a non-empty Dutch label naming the edition — not the empty/fallback arm.
+        $this->assertNotSame('', $result['text']);
+        $this->assertStringContainsString('Sessies gekozen', $result['text']);
+        $this->assertStringContainsString('EHBO Voortgezet', $result['text']);
+        $this->assertSame('enrollment', $result['type']);
+        // Actor + timestamp carry through from the entry.
+        $this->assertSame('Jan Peeters', $result['actor_name']);
+        $this->assertSame(strtotime('2026-03-25 14:30:00'), $result['timestamp']);
+        // And the action must be recognised, or the controller drops it before it ever reaches resolve().
+        $this->assertTrue(AdminActivityMapper::isKnownAction($entry));
+    }
+
     public function test_known_action_includes_new_events(): void
     {
         $newActions = ['auth.login', 'auth.logout', 'user.deleted', 'user.role_changed', 'user.profile_updated'];
@@ -273,7 +304,7 @@ class AdminActivityMapperTest extends TestCase
             $entry = (object) ['action' => $action];
             $this->assertTrue(
                 AdminActivityMapper::isKnownAction($entry),
-                "isKnownAction should return true for {$action}"
+                "isKnownAction should return true for {$action}",
             );
         }
     }

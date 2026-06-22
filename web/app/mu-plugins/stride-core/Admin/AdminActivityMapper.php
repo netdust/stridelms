@@ -19,6 +19,7 @@ final class AdminActivityMapper
         'attendance.marked_present',
         'attendance.marked_absent',
         'attendance.marked_excused',
+        'session.selections_updated',
         'completion.course_completed',
         'completion.certificate_issued',
         'quote.created',
@@ -142,6 +143,9 @@ final class AdminActivityMapper
 
             'attendance.marked_excused'
                 => ['attendance', self::attendanceText($context, $editionLabel, 'verontschuldigd')],
+
+            'session.selections_updated'
+                => ['enrollment', "Sessies gekozen voor {$editionLabel}"],
 
             'completion.course_completed'
                 => ['completion', $edition !== ''
