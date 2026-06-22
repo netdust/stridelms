@@ -142,7 +142,8 @@ final class AdminUserService
             $regOffset = ($regPage - 1) * $regPerPage;
             $regRows = $wpdb->get_results($wpdb->prepare(
                 "SELECT r.id, r.edition_id, r.status, r.enrollment_path, r.registered_at,
-                        r.completed_at, r.cancelled_at, p.post_title AS edition_title
+                        r.completed_at, r.cancelled_at, r.selections, r.enrollment_data,
+                        r.notes, r.quote_id, p.post_title AS edition_title
                  FROM {$registrationTable} r
                  LEFT JOIN {$wpdb->posts} p ON r.edition_id = p.ID
                  WHERE r.user_id = %d
@@ -161,8 +162,24 @@ final class AdminUserService
             $attendanceByEdition = $this->fetchUserAttendanceByEdition($userId, $editionIds);
             $sessionCountByEdition = $this->fetchSessionCountByEdition($editionIds);
 
+            // Resolve session titles for the loaded editions so the case view can
+            // render `selections` (session/edition IDs in the JSON column) as human
+            // labels — never raw IDs. One batched read across all loaded editions.
+            $sessionTitlesById = $this->fetchSessionTitlesByEdition($editionIds);
+
+            // Per-registration offerte status (the §0 #5 quote-workflow status, NEVER
+            // "paid"). Resolve each reg → its linked quote: the explicit quote_id
+            // column wins; otherwise fall back to a user quote on the same edition.
+            // Quote statuses come from the already-batched $quoteMeta below — but that
+            // is computed after this loop, so capture the linkage here and stamp the
+            // status in a second pass once $quoteMeta exists.
+            $regQuoteIdByReg = [];
+            $regEditionByReg = [];
+
             foreach ($regRows as $row) {
                 $editionId = (int) $row->edition_id;
+                $regQuoteIdByReg[(int) $row->id] = (int) ($row->quote_id ?? 0);
+                $regEditionByReg[(int) $row->id] = $editionId;
                 $att = $attendanceByEdition[$editionId] ?? null;
                 $totalSessions = $sessionCountByEdition[$editionId] ?? 0;
                 $attendanceSummary = null;
@@ -181,6 +198,19 @@ final class AdminUserService
                     ];
                 }
 
+                // enrollment_data stages (3-key shape: {submitted_at, submitted_by, data}).
+                // Surfaced for the case view's collapsible stage panels — empty stages
+                // are filtered CLIENT-side (hidden), so only normalize the shape here.
+                $stages = $this->normalizeEnrollmentStages($row->enrollment_data ?? null);
+
+                // selections column = session/edition IDs → resolve to titles.
+                // INV-6b: the SERVER owns the selection read; the client never parses
+                // the raw column. For the edition-centric dossier these are session IDs.
+                $selectionLabels = $this->resolveSelectionLabels(
+                    $row->selections ?? null,
+                    $sessionTitlesById,
+                );
+
                 $registrations[] = [
                     'id' => (int) $row->id,
                     'edition_id' => $editionId,
@@ -192,6 +222,12 @@ final class AdminUserService
                     'cancelled_at' => $row->cancelled_at,
                     'has_sessions' => $totalSessions > 0,
                     'attendance' => $attendanceSummary,
+                    'stages' => $stages,
+                    'selections' => $selectionLabels,
+                    'notes' => (string) ($row->notes ?? ''),
+                    // offerte stamped in the second pass below (needs $quoteMeta).
+                    'offerte_status' => '',
+                    'offerte_status_label' => '',
                 ];
             }
         }
@@ -254,6 +290,43 @@ final class AdminUserService
                 'paid_at' => ($meta['paid_at'] ?? '') ?: null,
                 'valid_until' => ($meta['valid_until'] ?? '') ?: null,
             ];
+        }
+
+        // --- Second pass: stamp each registration's offerte (quote-workflow) status ---
+        // Reg → quote linkage: the explicit quote_id column wins; else the user's
+        // quote on the same edition. The status is the QuoteStatus workflow value
+        // (Draft/Sent/Exported/Cancelled) — NEVER a paid/unpaid flag (Stride does not
+        // track payment; gotcha_no_payment_tracking).
+        if (!empty($registrations)) {
+            // quoteId → status, and editionId → status (first quote per edition).
+            $quoteStatusById = [];
+            $quoteStatusByEdition = [];
+            foreach ($quotes as $q) {
+                $quoteStatusById[(int) $q['id']] = ['value' => $q['status'], 'label' => $q['status_label']];
+                $qe = (int) $q['edition_id'];
+                if ($qe > 0 && !isset($quoteStatusByEdition[$qe])) {
+                    $quoteStatusByEdition[$qe] = ['value' => $q['status'], 'label' => $q['status_label']];
+                }
+            }
+
+            foreach ($registrations as &$reg) {
+                $regId = (int) $reg['id'];
+                $linkedQuoteId = $regQuoteIdByReg[$regId] ?? 0;
+                $regEdition = $regEditionByReg[$regId] ?? 0;
+
+                $offerte = null;
+                if ($linkedQuoteId > 0 && isset($quoteStatusById[$linkedQuoteId])) {
+                    $offerte = $quoteStatusById[$linkedQuoteId];
+                } elseif ($regEdition > 0 && isset($quoteStatusByEdition[$regEdition])) {
+                    $offerte = $quoteStatusByEdition[$regEdition];
+                }
+
+                if ($offerte !== null) {
+                    $reg['offerte_status'] = $offerte['value'];
+                    $reg['offerte_status_label'] = $offerte['label'];
+                }
+            }
+            unset($reg);
         }
 
         // --- Attendance summary (grouped by edition) ---
@@ -375,6 +448,147 @@ final class AdminUserService
     // =========================================================================
     // PRIVATE HELPERS (user-detail-only — verified single-consumer at S2)
     // =========================================================================
+
+    /**
+     * Normalize the raw `enrollment_data` JSON column into the case-view stage
+     * map. Each stage follows the canonical 3-key shape
+     * `{submitted_at, submitted_by, data}` (RegistrationRepository::STAGE_SHAPE).
+     *
+     * `initial_selection` is un-wrapped (`{type, phases[]}`) — surfaced as-is under
+     * its own key. The client filters EMPTY stages (no data keys) out of the view;
+     * we only normalize the shape here so the renderer never sees a half-formed stage.
+     *
+     * @param  mixed $raw  JSON string or already-decoded array from the column.
+     * @return array<string, array{submitted_at:string, submitted_by:string, data:array<string,mixed>}>
+     */
+    private function normalizeEnrollmentStages(mixed $raw): array
+    {
+        $decoded = is_string($raw) && $raw !== '' ? json_decode($raw, true) : (is_array($raw) ? $raw : []);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $stages = [];
+        foreach ($decoded as $key => $stage) {
+            if (!is_array($stage)) {
+                continue;
+            }
+            // initial_selection is un-wrapped — surface its scalar/array fields as `data`
+            // so the renderer's label→value loop still works without a special case.
+            if ($key === 'initial_selection') {
+                $stages[$key] = [
+                    'submitted_at' => '',
+                    'submitted_by' => '',
+                    'data' => $this->flattenStageData($stage),
+                ];
+                continue;
+            }
+            $stages[$key] = [
+                'submitted_at' => (string) ($stage['submitted_at'] ?? ''),
+                'submitted_by' => (string) ($stage['submitted_by'] ?? ''),
+                'data' => is_array($stage['data'] ?? null) ? $this->flattenStageData($stage['data']) : [],
+            ];
+        }
+
+        return $stages;
+    }
+
+    /**
+     * Flatten a stage's data to scalar label→value pairs the case view can render
+     * directly (never a raw JSON dump). Nested arrays are comma-joined; booleans
+     * become Ja/Nee. Keeps the client renderer a dumb dt/dd loop.
+     *
+     * @param  array<string,mixed> $data
+     * @return array<string,string>
+     */
+    private function flattenStageData(array $data): array
+    {
+        $out = [];
+        foreach ($data as $label => $value) {
+            if (is_bool($value)) {
+                $out[(string) $label] = $value ? __('Ja', 'stride') : __('Nee', 'stride');
+            } elseif (is_array($value)) {
+                $flat = array_filter(array_map(
+                    static fn($v) => is_scalar($v) ? (string) $v : '',
+                    $value,
+                ), static fn($v) => $v !== '');
+                $out[(string) $label] = implode(', ', $flat);
+            } elseif (is_scalar($value)) {
+                $out[(string) $label] = (string) $value;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Resolve the `selections` JSON column (session/edition IDs) to display labels.
+     *
+     * INV-6b: the server owns the selection read — the client never parses the raw
+     * column. IDs that match a loaded session title resolve to it; unknown IDs fall
+     * back to "Sessie #<id>" so a stale selection never renders blank.
+     *
+     * @param  mixed $raw  JSON string or array of IDs.
+     * @param  array<int,string> $sessionTitlesById
+     * @return array<int,string>
+     */
+    private function resolveSelectionLabels(mixed $raw, array $sessionTitlesById): array
+    {
+        $decoded = is_string($raw) && $raw !== '' ? json_decode($raw, true) : (is_array($raw) ? $raw : []);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $labels = [];
+        foreach ($decoded as $id) {
+            if (!is_scalar($id)) {
+                continue;
+            }
+            $sid = (int) $id;
+            if ($sid <= 0) {
+                continue;
+            }
+            $labels[] = $sessionTitlesById[$sid] ?? sprintf(__('Sessie #%d', 'stride'), $sid);
+        }
+
+        return $labels;
+    }
+
+    /**
+     * Map session-post IDs → titles for a set of editions, so selection IDs resolve
+     * to human labels. Sessions are `vad_session` posts linked to an edition via
+     * `_ntdst_edition_id`. One batched query across all loaded editions.
+     *
+     * @param  array<int> $editionIds
+     * @return array<int, string>  session post ID => title
+     */
+    private function fetchSessionTitlesByEdition(array $editionIds): array
+    {
+        if (empty($editionIds)) {
+            return [];
+        }
+
+        global $wpdb;
+        $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
+        $params = array_merge([SessionCPT::POST_TYPE], $editionIds);
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT p.ID, p.post_title
+             FROM {$wpdb->posts} p
+             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_ntdst_edition_id'
+             WHERE p.post_type = %s
+               AND p.post_status = 'publish'
+               AND pm.meta_value IN ({$placeholders})",
+            ...$params,
+        ));
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[(int) $row->ID] = (string) $row->post_title;
+        }
+
+        return $map;
+    }
 
     /**
      * Count sessions per edition for a set of edition IDs.

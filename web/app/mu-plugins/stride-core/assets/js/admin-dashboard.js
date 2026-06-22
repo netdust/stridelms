@@ -68,6 +68,23 @@ const STRIDE_QUEUES = [
       status: 'interest',  armAction: 'stride_bulk_message',          action: 'Bericht sturen / archiveren' },
 ];
 
+/* ── Dossier enrollment_data stage metadata (Task 3.4) ──────────────────
+   Dutch stage names + the canonical stage order (the enrollment lifecycle,
+   NOT object key order). `intake`→"Intakevragenlijst" / `evaluation`→
+   "Evaluatie (na afloop)" per § Surface 3. The intake stage IS the
+   questionnaire — there is NO separate Vragenlijst block (the answers render
+   ONCE here). Ported from mockup data.js STAGE_META. */
+const STRIDE_STAGE_META = {
+    interest:            { name: 'Interesse',                        icon: 'info',     desc: 'Eerste interesse, vóór inschrijving.' },
+    waitlist:            { name: 'Wachtlijst',                       icon: 'clock',    desc: 'Aangemeld op de wachtlijst.' },
+    enrollment_personal: { name: 'Inschrijving — persoonsgegevens',  icon: 'user',     desc: 'Persoonsgegevens ingevuld bij inschrijving.' },
+    enrollment_billing:  { name: 'Inschrijving — facturatie',        icon: 'receipt',  desc: 'Facturatiegegevens ingevuld bij inschrijving.' },
+    initial_selection:   { name: 'Initiële sessiekeuze',             icon: 'route',    desc: 'Keuze van sessies/keuzemodules bij inschrijving.' },
+    intake:              { name: 'Intakevragenlijst',                icon: 'fileText', desc: 'Vragenlijst ingevuld na bevestiging (de "Intakevragen"-taak).' },
+    evaluation:          { name: 'Evaluatie (na afloop)',            icon: 'award',    desc: 'Eindevaluatie ingevuld na de cursus.' },
+};
+const STRIDE_STAGE_ORDER = ['interest', 'waitlist', 'enrollment_personal', 'enrollment_billing', 'initial_selection', 'intake', 'evaluation'];
+
 document.addEventListener('alpine:init', () => {
     Alpine.data('strideApp', () => ({
         // ── Routing ──────────────────────────────────────────────
@@ -154,6 +171,19 @@ document.addEventListener('alpine:init', () => {
         gridOverflowOpen: false,
         gridResult: null,        // { action, total, succeeded[], failed[], ok, err }
         gridResultOpen: false,
+
+        // ── Dossier case view (Task 3.4) ──────────────────────────
+        // Opens from a grid row click → fetches /admin/users/{id}/detail and
+        // renders the person-headed registrations with all enrollment_data
+        // stages, offerte status, attendance, selections + the history timeline.
+        // The trajectory section is OUT OF SCOPE (Phase 1E / cluster C2).
+        dossierOpen: false,
+        dossier: null,           // the mapped detail payload (person + registrations + audit)
+        dossierLoading: false,
+        dossierError: '',
+        dossierRegOpen: {},      // regId -> true (expand-one registration; collapsed by default)
+        dossierStageOpen: {},    // "<regId>-<stageKey>" -> true (stages CLOSED by default)
+        dossierTimelineReg: 0,   // which registration's timeline is shown (0 = whole-person)
 
         // ── Users ────────────────────────────────────────────────
         userSearchQuery: '',
@@ -1105,11 +1135,165 @@ document.addEventListener('alpine:init', () => {
             this.gridResult = null;
         },
 
-        // Row-click seam for Task 3.4 (Dossier). A no-op stub today — 3.4 wires
-        // openDossier() here. Kept so 3.4 needs no template change to the rows.
+        // Row-click seam wired by Task 3.4 → open the Dossier case view for the
+        // row's person. The grid row carries user.id; the Dossier fetches the
+        // full person record (all registrations, stages, timeline). Focuses the
+        // clicked registration so it expands on open.
         openGridRow(row) {
-            // eslint-disable-next-line no-unused-expressions
-            row; // placeholder — Dossier case-view is Task 3.4 (next sequential task)
+            const userId = row?.user?.id;
+            if (!userId) return;
+            this.openDossier(userId, row.id);
+        },
+
+        // ==============================================================
+        //  DOSSIER CASE VIEW METHODS (Task 3.4)
+        // ==============================================================
+
+        // Fetch /admin/users/{id}/detail and map it into the case-view shape.
+        // focusRegId (optional) expands that registration on open. Stages stay
+        // CLOSED by default — they open only on click (§ Surface 3).
+        async openDossier(userId, focusRegId = 0) {
+            this.dossierOpen = true;
+            this.dossierLoading = true;
+            this.dossierError = '';
+            this.dossier = null;
+            this.dossierRegOpen = {};
+            this.dossierStageOpen = {};
+            try {
+                const data = await this.api(`/admin/users/${userId}/detail`);
+                const regStatusLabels = {
+                    confirmed: 'Bevestigd', completed: 'Afgerond', cancelled: 'Geannuleerd',
+                    pending: 'In afwachting', interest: 'Interesse', waitlist: 'Wachtlijst',
+                };
+                const registrations = (data.registrations || []).map(reg => ({
+                    ...reg,
+                    status_label: regStatusLabels[reg.status] || reg.status || '—',
+                }));
+                this.dossier = {
+                    user: data.user || {},
+                    registrations,
+                    audit_trail: data.audit_trail || [],
+                };
+                // Expand the focused registration (or the first one) on open.
+                const focus = focusRegId && registrations.some(r => r.id === focusRegId)
+                    ? focusRegId
+                    : (registrations[0]?.id || 0);
+                if (focus) this.dossierRegOpen[focus] = true;
+                this.dossierTimelineReg = 0; // whole-person timeline by default
+            } catch (e) {
+                this.dossierError = 'Kon dossier niet laden.';
+            } finally {
+                this.dossierLoading = false;
+            }
+        },
+
+        closeDossier() {
+            this.dossierOpen = false;
+            this.dossier = null;
+            this.dossierError = '';
+            this.dossierRegOpen = {};
+            this.dossierStageOpen = {};
+        },
+
+        get dossierUser() {
+            return this.dossier?.user || {};
+        },
+
+        get dossierRegistrations() {
+            return this.dossier?.registrations || [];
+        },
+
+        // The whole-person history timeline (audit_trail). The Dossier renders the
+        // full audited spectrum — registration, attendance, session.selections_updated
+        // (3.4a), completion, quote — never filtered down to the grid's structured
+        // events. Already shaped by AdminActivityMapper server-side.
+        get dossierTimeline() {
+            return this.dossier?.audit_trail || [];
+        },
+
+        toggleDossierReg(regId) {
+            this.dossierRegOpen[regId] = !this.dossierRegOpen[regId];
+        },
+        isDossierRegOpen(regId) {
+            return !!this.dossierRegOpen[regId];
+        },
+
+        toggleDossierStage(regId, stageKey) {
+            const k = regId + '-' + stageKey;
+            this.dossierStageOpen[k] = !this.dossierStageOpen[k];
+        },
+        isDossierStageOpen(regId, stageKey) {
+            return !!this.dossierStageOpen[regId + '-' + stageKey];
+        },
+
+        // Only stages WITH submitted data, in canonical lifecycle order. A stage is
+        // "empty" (and HIDDEN) when it's absent or its `data` has no keys (the 3-key
+        // shape: {submitted_at, submitted_by, data}). § Surface 3 / F5 empty edge.
+        dossierStages(reg) {
+            const stages = reg?.stages || {};
+            return STRIDE_STAGE_ORDER
+                .filter(key => {
+                    const s = stages[key];
+                    return s && s.data && Object.keys(s.data).length > 0;
+                })
+                .map(key => ({
+                    key,
+                    stage: stages[key],
+                    meta: STRIDE_STAGE_META[key] || { name: key, icon: 'fileText', desc: '' },
+                }));
+        },
+
+        // snake_case field key → readable Dutch-ish label (never a raw JSON dump).
+        dossierFieldLabel(key) {
+            if (!/[_a-z]/.test(key) || /\s/.test(key)) return key; // already human
+            const s = String(key).replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+            return s.charAt(0).toUpperCase() + s.slice(1);
+        },
+
+        // State-appropriate actions for a single registration, derived from the SAME
+        // §2.1 transition mirror the bulk bar uses (STRIDE_SMART_ACTIONS via
+        // strideActionsForStates) — never a second hard-coded button set (Sibling-site
+        // audit 2). A terminal state (cancelled) yields [] → the template shows the
+        // muted "geen acties" row (F5 wrong-order edge).
+        dossierActionsFor(status) {
+            if (!status) return [];
+            return strideActionsForStates([status]);
+        },
+
+        // Run a single-registration action through the SAME bulk action path the
+        // bulk bar wraps (single-item id array). Reuses runGridBulk's report shape.
+        async runDossierAction(regId, actionId) {
+            const action = STRIDE_SMART_ACTIONS.find(a => a.id === actionId);
+            if (!action || this.gridBulkBusy) return;
+            this.gridBulkBusy = actionId;
+            try {
+                const report = await this.bulkApi(actionId, { ids: [regId] });
+                const failed = report.failed || [];
+                if (failed.length === 0) {
+                    this.showToast(`${action.label}: toegepast.`, 'success');
+                    // Refresh the dossier so the new state is reflected.
+                    if (this.dossierUser.id) await this.openDossier(this.dossierUser.id, regId);
+                } else if (failed.every(f => f.code === 'not_available')) {
+                    this.showToast('Deze actie is nog niet beschikbaar.', 'info');
+                } else {
+                    this.showToast(failed[0]?.message || `${action.label} mislukt.`, 'error');
+                }
+            } catch (e) {
+                this.showToast(e.message || 'Actie mislukt.', 'error');
+            } finally {
+                this.gridBulkBusy = null;
+            }
+        },
+
+        // CSS modifier class for an offerte (quote-workflow) status. Status is the
+        // QuoteStatus value (draft/sent/exported/cancelled) — NEVER paid/unpaid.
+        dossierOfferteClass(status) {
+            return 'sd-badge--' + (status || 'none');
+        },
+
+        // Heuristic actor-type for the timeline icon (admin vs the user).
+        dossierActorIsAdmin(actor) {
+            return /co[öo]rdinator|beheer|systeem|admin/i.test(actor || '');
         },
 
         // Helper: attendance bar colour class for a grid row's attendancePct.
