@@ -46,3 +46,27 @@ It is the granular companion to `FEATURE-STATUS.md` (the 19-row overview matrix)
 4. **Phase 4 — re-test**: re-drive every story post-fix; confirm errors closed.
 
 _Generated 2026-06-22 by code fan-out across stride-core + stridence. Baseline at generation: unit suite 1020 tests / 2566 assertions green._
+
+---
+
+## Run result — 2026-06-22 (verify → fix → re-verify loop complete)
+
+**All 154 stories: P2 PASS · P4 PASS.** 5 findings, all fixed.
+
+| Suite | Result |
+|---|---|
+| Unit | 1020 tests / 2566 assertions — green |
+| Integration | 490 tests / 1998 assertions — green |
+| Acceptance | 174 tests — 0 fail, 0 error, 16 skipped (15 inactive-Assistant + 1 below-cap) |
+
+### Findings & fixes
+1. **PRODUCT — `NTDST_Query_Cache::onPostSave()` null-post fatal.** Strict `\WP_Post` param fatally type-errored when `save_post` fired with a null post. A cache-invalidation hook must never fatal a save → param nullable + `get_post()` fallback + `WP_Post` guard. (`web/app/mu-plugins/ntdst-core/api/QueryCache.php`)
+2. **TEST — CatalogEndpointTest guest-wire** asserted its own edition lands on page 1 (seed-fragile under band ordering) → assert rendered-card shape instead.
+3. **TEST — CatalogShakeoutCest** counted `querySelectorAll('article')` but catalog cards are `<a>` roots → always 0 though page renders 25 cards → count `:scope > a`.
+4. **SEED/TEST — OnlineEnrollmentCest direct-enroll** grabbed a stale past-dated `open` edition (re-seed pollution) so `enroll()` correctly returned `edition_past` → clean unseed+reseed + harden selector to open AND non-past.
+5. **TEST-HYGIENE — AssistantPluginCest** hard-failed 8 + errored 3 on the intentionally-inactive `ntdst-assistant` plugin → `_before` skip-guard (now 15 skipped, not failing).
+
+**Net product change: 1 defensive null-guard.** The other 4 were stale tests / seed pollution — the product behaviour was correct in every case (the catalog renders, direct-enroll works, the past-edition guard fires as designed).
+
+### Observation (not a defect)
+- Multi-brand (MB-01/02): VAD launch brand loads correctly; other 4 client brands off via `.php.off`. Confirm the intended brand is active before each deploy.
