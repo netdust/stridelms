@@ -19,6 +19,13 @@ final class RegistrationRepository
     public const PATH_TRAJECTORY = 'trajectory';
     public const PATH_PARTNER = 'partner';
 
+    /**
+     * Allowlisted values for the group_by filter in admin grid queries (M4).
+     * Shared between queryForGrid, queryForGridGrouped, and service-layer guards.
+     * NEVER add user-supplied values here.
+     */
+    public const GROUP_BY_ALLOWLIST = ['edition_id', 'status', 'company_id'];
+
     /** @var array<string, array<object>> Per-request cache for findByUser results */
     private array $findByUserCache = [];
 
@@ -1565,29 +1572,225 @@ final class RegistrationRepository
     {
         global $wpdb;
 
-        // --- M4: Column allowlists (load-bearing security — do NOT add user input here) ---
+        // --- M4: Sort allowlist (load-bearing security — do NOT add user input here) ---
         $sortAllowlist = ['registered_at', 'status', 'edition_id', 'company_id', 'completed_at', 'cancelled_at'];
-        $groupByAllowlist = ['edition_id', 'status', 'company_id'];
 
-        // --- Sanitize params via allowlists (M4) ---
+        // --- Sanitize sort/order/pagination ---
         $sort = in_array($filters['sort'] ?? '', $sortAllowlist, true)
             ? $filters['sort']
             : 'registered_at';
 
         $order = strtolower($filters['order'] ?? '') === 'asc' ? 'ASC' : 'DESC';
 
-        $groupBy = in_array($filters['group_by'] ?? '', $groupByAllowlist, true)
+        // group_by: validated against GROUP_BY_ALLOWLIST (M4 — column name never from user input).
+        $groupBy = in_array($filters['group_by'] ?? '', self::GROUP_BY_ALLOWLIST, true)
             ? $filters['group_by']
             : null;
 
+        // --- Build shared WHERE / JOIN (all filters including q) ---
+        $built   = $this->buildGridFilters($filters);
+        $page    = $built['page'];
+        $perPage = $built['per_page'];
+        $offset  = ($page - 1) * $perPage;
+        $regTable = $this->table();
+
+        $activeJoin  = $built['active_join'];
+        $whereClause = $built['where_clause'];
+        $params      = $built['params'];
+
+        // --- GROUP BY (validated M4 allowlist — column name never from user input) ---
+        $groupByClause = $groupBy !== null ? "GROUP BY r.{$groupBy}" : '';
+
+        // --- COUNT total ---
+        // Count query: structured columns only (M5).
+        $countSql = "SELECT COUNT(*) FROM {$regTable} r
+                     LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
+                     {$activeJoin}
+                     {$whereClause}
+                     {$groupByClause}";
+
+        // When group_by is active, COUNT(*) counts groups — wrap it.
+        if ($groupBy !== null) {
+            $countSql = "SELECT COUNT(*) FROM ({$countSql}) AS _grp_count";
+        }
+
+        $total = (int) ($params
+            ? $wpdb->get_var($wpdb->prepare($countSql, ...$params))
+            : $wpdb->get_var($countSql));
+
+        // --- Fetch rows (structured columns only — M5) ---
+        // ORDER BY: column name comes from the server-side allowlist (M4), never from user input.
+        $dataSql = "SELECT r.id, r.user_id, r.edition_id, r.trajectory_id,
+                           r.parent_registration_id, r.status, r.enrollment_path,
+                           r.company_id, r.registered_at, r.completed_at,
+                           r.cancelled_at, r.quote_id, r.enrolled_by, r.notes
+                    FROM {$regTable} r
+                    LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
+                    {$activeJoin}
+                    {$whereClause}
+                    {$groupByClause}
+                    ORDER BY r.{$sort} {$order}
+                    LIMIT %d OFFSET %d";
+
+        $dataParams = array_merge($params, [$perPage, $offset]);
+        $rows       = $wpdb->get_results($wpdb->prepare($dataSql, ...$dataParams));
+
+        return [
+            'rows'     => $rows ?? [],
+            'total'    => $total,
+            'page'     => $page,
+            'per_page' => $perPage,
+        ];
+    }
+
+    /**
+     * Aggregate read-model for the admin registration grid — grouped path.
+     *
+     * Applies the SAME filter surface as queryForGrid (same WHERE/JOIN construction,
+     * same q predicate, same active-scope logic, same M4/M5 mitigations) and adds
+     * a GROUP BY aggregate SELECT on top.
+     *
+     * Returns a single array holding everything the service layer needs:
+     *  - 'agg_rows'      => array<object>  — one row per distinct group_value
+     *                                         (cols: group_value, cnt, completed_count)
+     *  - 'group_reg_ids' => array<string,array<int>>  — group_value => [regId, ...]
+     *                                         for the visible page groups only
+     *  - 'total'         => int  — total number of ROWS (not groups) matching filters
+     *  - 'page'          => int
+     *  - 'per_page'      => int
+     *
+     * M4 guarantee: $groupBy MUST already be validated against GROUP_BY_ALLOWLIST
+     * before calling this method (the caller owns the guard). The column name is
+     * never interpolated from user input.
+     *
+     * @param  array<string,mixed> $filters  Same key-set as queryForGrid.
+     * @param  string              $groupBy  Validated allowlisted column name.
+     * @return array{agg_rows:array<object>,group_reg_ids:array<string,array<int>>,total:int,page:int,per_page:int}
+     */
+    public function queryForGridGrouped(array $filters, string $groupBy): array
+    {
+        global $wpdb;
+
+        $built    = $this->buildGridFilters($filters);
+        $page     = $built['page'];
+        $perPage  = $built['per_page'];
+        $regTable = $this->table();
+
+        $activeJoin  = $built['active_join'];
+        $whereClause = $built['where_clause'];
+        $params      = $built['params'];
+
+        $groupColSql = "r.{$groupBy}";  // column name from allowlist — never user input
+
+        // --- Count total matching ROWS (mirrors queryForGrid's total) ---
+        $countSql = $params
+            ? $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$regTable} r
+                 LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
+                 {$activeJoin}
+                 {$whereClause}",
+                ...$params,
+            )
+            : "SELECT COUNT(*) FROM {$regTable} r
+               LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
+               {$activeJoin}
+               {$whereClause}";
+
+        $total = (int) $wpdb->get_var($countSql);
+
+        // --- Aggregate SELECT: one row per group, ordered by count DESC ---
+        $aggSql = "SELECT {$groupColSql} AS group_value,
+                          COUNT(*) AS cnt,
+                          SUM(CASE WHEN r.status = 'completed' THEN 1 ELSE 0 END) AS completed_count
+                   FROM {$regTable} r
+                   LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
+                   {$activeJoin}
+                   {$whereClause}
+                   GROUP BY {$groupColSql}
+                   ORDER BY cnt DESC
+                   LIMIT %d OFFSET %d";
+
+        $aggParams = array_merge($params, [$perPage, ($page - 1) * $perPage]);
+        $aggRows   = $wpdb->get_results($wpdb->prepare($aggSql, ...$aggParams));
+
+        if (empty($aggRows)) {
+            return [
+                'agg_rows'      => [],
+                'group_reg_ids' => [],
+                'total'         => $total,
+                'page'          => $page,
+                'per_page'      => $perPage,
+            ];
+        }
+
+        // --- Fetch reg IDs per group for the current page's groups only ---
+        // This feeds the bounded two-step offerte resolver without a JSON aggregate (M5).
+        $groupValues      = array_map(fn($r) => $r->group_value, $aggRows);
+        $groupPlaceholders = implode(',', array_fill(0, count($groupValues), '%s'));
+        $groupValuesCast  = array_map('strval', $groupValues);
+
+        $groupFilter = "r.{$groupBy} IN ({$groupPlaceholders})";
+        $fullWhere   = $whereClause
+            ? "{$whereClause} AND {$groupFilter}"
+            : "WHERE {$groupFilter}";
+
+        $idsSql    = "SELECT r.id, r.{$groupBy} AS group_val
+                      FROM {$regTable} r
+                      LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
+                      {$activeJoin}
+                      {$fullWhere}";
+        $idsParams = array_merge($params, $groupValuesCast);
+        $idsRows   = $wpdb->get_results($wpdb->prepare($idsSql, ...$idsParams));
+
+        $groupRegIds = [];
+        foreach ($idsRows as $row) {
+            $gv = $row->group_val;
+            if (!isset($groupRegIds[$gv])) {
+                $groupRegIds[$gv] = [];
+            }
+            $groupRegIds[$gv][] = (int) $row->id;
+        }
+
+        return [
+            'agg_rows'      => $aggRows,
+            'group_reg_ids' => $groupRegIds,
+            'total'         => $total,
+            'page'          => $page,
+            'per_page'      => $perPage,
+        ];
+    }
+
+    /**
+     * Build the shared WHERE clause, JOINs, and bound parameters for admin grid queries.
+     *
+     * This is the single source of filter logic shared between queryForGrid and
+     * queryForGridGrouped. Both paths apply exactly the same predicates —
+     * active-scope, edition_id, company_id, status, and the q name-search.
+     *
+     * Returns an array with keys:
+     *  - 'active_join'  (string)  — extra LEFT JOINs for the active-scope predicate
+     *  - 'where_clause' (string)  — full WHERE … fragment (empty string if no filters)
+     *  - 'params'       (array)   — bound parameter values for wpdb->prepare()
+     *  - 'page'         (int)
+     *  - 'per_page'     (int)
+     *
+     * M4 guarantee: every param reaches SQL only via $wpdb->prepare() %s/%d placeholders.
+     * M5 guarantee: enrollment_data, selections, completion_tasks are never read here.
+     *
+     * @param  array<string,mixed> $filters
+     * @return array{active_join:string,where_clause:string,params:array,page:int,per_page:int}
+     */
+    private function buildGridFilters(array $filters): array
+    {
+        global $wpdb;
+
         $page    = max(1, absint($filters['page'] ?? 1));
         $perPage = min(100, max(1, absint($filters['per_page'] ?? 50)));
-        $offset  = ($page - 1) * $perPage;
 
-        $editionId  = !empty($filters['edition_id'])  ? absint($filters['edition_id'])  : null;
-        $companyId  = !empty($filters['company_id'])  ? absint($filters['company_id'])  : null;
+        $editionId = !empty($filters['edition_id']) ? absint($filters['edition_id']) : null;
+        $companyId = !empty($filters['company_id']) ? absint($filters['company_id']) : null;
 
-        // Status: validate via enum (M4) — ignore unknown values
+        // Status: validate via enum (M4) — ignore unknown values.
         $statusValue = null;
         if (!empty($filters['status'])) {
             $statusEnum = RegistrationStatus::tryFrom((string) $filters['status']);
@@ -1596,21 +1799,17 @@ final class RegistrationRepository
             }
         }
 
-        // q: name search (M4 — bound via prepare %s, never interpolated)
+        // q: name search (M4 — bound via prepare %s, never interpolated).
         $q = !empty($filters['q']) ? (string) $filters['q'] : null;
 
-        // edition_scope: 'active' (default) or 'all'
+        // edition_scope: 'active' (default) or 'all'.
         // Active scope is bypassed when an explicit edition_id is provided.
-        $editionScope = (string) ($filters['edition_scope'] ?? 'active');
+        $editionScope   = (string) ($filters['edition_scope'] ?? 'active');
         $useActiveScope = ($editionScope !== 'all') && ($editionId === null);
 
-        // M5: explicitly ignored filter keys (enrollment_data, selections,
-        // completion_tasks, trajectory_id, offerte_status). They are not
-        // read anywhere below. Only the keys consumed above reach SQL.
-
-        $regTable = $this->table();
-
-        // --- Build WHERE / JOIN ---
+        // M5: enrollment_data, selections, completion_tasks, trajectory_id,
+        // offerte_status are explicitly NOT read here. Only the keys consumed
+        // above ever reach SQL.
 
         $where  = [];
         $params = [];
@@ -1621,11 +1820,7 @@ final class RegistrationRepository
         $activeJoin = '';
         if ($useActiveScope) {
             $twoDaysAgo = wp_date('Y-m-d', strtotime('-2 days'));
-            // Plain string — no placeholders, so no prepare() needed.
-            // $twoDaysAgo is bound separately in $params below.
             $activeJoin =
-                // Join edition posts to get their start_date postmeta.
-                // r.edition_id references the vad_edition post.
                 "LEFT JOIN {$wpdb->posts} ae ON ae.ID = r.edition_id AND ae.post_type = 'vad_edition' AND ae.post_status = 'publish'
                  LEFT JOIN {$wpdb->postmeta} pm_start ON pm_start.post_id = ae.ID AND pm_start.meta_key = '_ntdst_start_date'";
             $where[]  = '(r.edition_id IS NULL OR ae.ID IS NOT NULL)';
@@ -1649,9 +1844,8 @@ final class RegistrationRepository
         }
 
         if ($q !== null) {
-            // Name search via a join on wp_users display_name / user_login.
-            // Bound as a prepared LIKE — never interpolated (M4).
-            $where[]  = '(u.display_name LIKE %s OR u.user_login LIKE %s OR u.user_email LIKE %s)';
+            // Name search — bound as a prepared LIKE, never interpolated (M4).
+            $where[]   = '(u.display_name LIKE %s OR u.user_login LIKE %s OR u.user_email LIKE %s)';
             $likeTerm  = '%' . $wpdb->esc_like($q) . '%';
             $params[]  = $likeTerm;
             $params[]  = $likeTerm;
@@ -1660,52 +1854,12 @@ final class RegistrationRepository
 
         $whereClause = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 
-        // --- GROUP BY (validated M4 allowlist — column name never from user input) ---
-        $groupByClause = $groupBy !== null ? "GROUP BY r.{$groupBy}" : '';
-
-        // --- COUNT total ---
-        // Count query: structured columns only (M5).
-        $countSql = "SELECT COUNT(*) FROM {$regTable} r
-                     LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
-                     {$activeJoin}
-                     {$whereClause}
-                     {$groupByClause}";
-
-        // When group_by is active, COUNT(*) counts groups — wrap it.
-        if ($groupBy !== null) {
-            $countSql = "SELECT COUNT(*) FROM ({$countSql}) AS _grp_count";
-        }
-
-        $total = $countSql
-            ? (int) ($params
-                ? $wpdb->get_var($wpdb->prepare($countSql, ...$params))
-                : $wpdb->get_var($countSql))
-            : 0;
-
-        // --- Fetch rows (structured columns only — M5) ---
-        // ORDER BY: column name comes from the server-side allowlist (M4), never from user input.
-        $dataSql = "SELECT r.id, r.user_id, r.edition_id, r.trajectory_id,
-                           r.parent_registration_id, r.status, r.enrollment_path,
-                           r.company_id, r.registered_at, r.completed_at,
-                           r.cancelled_at, r.quote_id, r.enrolled_by, r.notes
-                    FROM {$regTable} r
-                    LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
-                    {$activeJoin}
-                    {$whereClause}
-                    {$groupByClause}
-                    ORDER BY r.{$sort} {$order}
-                    LIMIT %d OFFSET %d";
-
-        $dataParams   = array_merge($params, [$perPage, $offset]);
-        $rows         = $dataParams
-            ? $wpdb->get_results($wpdb->prepare($dataSql, ...$dataParams))
-            : $wpdb->get_results($dataSql);
-
         return [
-            'rows'     => $rows ?? [],
-            'total'    => $total,
-            'page'     => $page,
-            'per_page' => $perPage,
+            'active_join'  => $activeJoin,
+            'where_clause' => $whereClause,
+            'params'       => $params,
+            'page'         => $page,
+            'per_page'     => $perPage,
         ];
     }
 

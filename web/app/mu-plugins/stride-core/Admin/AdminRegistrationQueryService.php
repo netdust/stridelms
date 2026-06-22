@@ -209,130 +209,61 @@ final class AdminRegistrationQueryService
      *  - group_value: the distinct column value
      *  - count: number of registrations in the group
      *  - pct_afgerond: % of rows with status = 'completed'
-     *  - avg_attendance_pct: average attendance % across registrations in the group
+     *  - avg_attendance_pct: null (deferred — cross-edition avg requires per-row resolution)
      *  - offerte_verdeling: tally of offerte statuses within the group
      *
-     * This path avoids the ONLY_FULL_GROUP_BY problem in queryForGrid's data
-     * SELECT by running its own aggregate query.
+     * Delegates ALL filter/WHERE/JOIN construction to
+     * RegistrationRepository::queryForGridGrouped so that q, active-scope,
+     * edition_id, company_id and status are applied IDENTICALLY to the flat
+     * path — no second divergent copy of the scoping logic.
      *
-     * @param  string $groupBy  Allowlisted column (validated by queryForGrid M4).
+     * @param  string $groupBy  Allowlisted column (validated below via GROUP_BY_ALLOWLIST).
      * @return array{items:array,total:int,page:int,perPage:int,totalPages:int}
      */
     private function getGroupedPage(array $params, string $groupBy): array
     {
-        global $wpdb;
-
-        // Re-use queryForGrid for the total-groups count only.
-        $countResult = $this->registrations->queryForGrid($params);
-        $total       = $countResult['total'];
-        $page        = $countResult['page'];
-        $perPage     = $countResult['per_page'];
-
-        // Allowlist guard (mirrors M4 in queryForGrid; defensive in-service check).
-        $groupByAllowlist = ['edition_id', 'status', 'company_id'];
-        if (!in_array($groupBy, $groupByAllowlist, true)) {
-            return $this->paginationEnvelope([], 0, 1, $perPage);
+        // Allowlist guard — single definition lives on the repository (M4).
+        if (!in_array($groupBy, RegistrationRepository::GROUP_BY_ALLOWLIST, true)) {
+            return $this->paginationEnvelope([], 0, 1, 50);
         }
 
         if (!RegistrationTable::exists()) {
-            return $this->paginationEnvelope([], 0, 1, $perPage);
+            return $this->paginationEnvelope([], 0, 1, 50);
         }
 
-        $regTable = $wpdb->prefix . 'vad_registrations';
-
-        // Build minimal WHERE that mirrors what queryForGrid builds, but only
-        // for the simple scalar filters the grouped path needs.
-        $where  = [];
-        $sqlParams = [];
-
-        $editionScopeActive = (string) ($params['edition_scope'] ?? 'active') !== 'all'
-            && empty($params['edition_id']);
-
-        $activeJoin = '';
-        if ($editionScopeActive) {
-            $twoDaysAgo = wp_date('Y-m-d', strtotime('-2 days'));
-            $activeJoin =
-                "LEFT JOIN {$wpdb->posts} ae ON ae.ID = r.edition_id AND ae.post_type = 'vad_edition' AND ae.post_status = 'publish'
-                 LEFT JOIN {$wpdb->postmeta} pm_start ON pm_start.post_id = ae.ID AND pm_start.meta_key = '_ntdst_start_date'";
-            $where[]     = '(r.edition_id IS NULL OR ae.ID IS NOT NULL)';
-            $where[]     = '(pm_start.meta_value >= %s OR pm_start.meta_value IS NULL)';
-            $sqlParams[] = $twoDaysAgo;
-        }
-
-        if (!empty($params['edition_id'])) {
-            $where[]     = 'r.edition_id = %d';
-            $sqlParams[] = absint($params['edition_id']);
-        }
-
-        if (!empty($params['company_id'])) {
-            $where[]     = 'r.company_id = %d';
-            $sqlParams[] = absint($params['company_id']);
-        }
-
-        if (!empty($params['status'])) {
-            $statusEnum = RegistrationStatus::tryFrom((string) $params['status']);
-            if ($statusEnum !== null) {
-                $where[]     = 'r.status = %s';
-                $sqlParams[] = $statusEnum->value;
-            }
-        }
-
-        $whereClause = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
-
-        // Aggregate SELECT — only GROUP BY column, COUNT, and completed-pct.
-        // attendance_pct is deferred to NULL here (attendace is per-edition,
-        // not directly available in a pure SQL aggregate across editions).
-        // offerte_verdeling is resolved via the bounded two-step resolver below.
-        $groupColSql = "r.{$groupBy}";  // column name from allowlist (never user input)
-
-        $aggSql = "SELECT {$groupColSql} AS group_value,
-                          COUNT(*) AS cnt,
-                          SUM(CASE WHEN r.status = 'completed' THEN 1 ELSE 0 END) AS completed_count
-                   FROM {$regTable} r
-                   LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
-                   {$activeJoin}
-                   {$whereClause}
-                   GROUP BY {$groupColSql}
-                   ORDER BY cnt DESC
-                   LIMIT %d OFFSET %d";
-
-        $aggParams   = array_merge($sqlParams, [$perPage, ($page - 1) * $perPage]);
-        $aggRows     = $aggParams
-            ? $wpdb->get_results($wpdb->prepare($aggSql, ...$aggParams))
-            : $wpdb->get_results($aggSql);
+        // Delegate to the repository: identical WHERE/JOIN construction to
+        // queryForGrid — q, active-scope, edition_id, company_id, status all applied.
+        $result      = $this->registrations->queryForGridGrouped($params, $groupBy);
+        $aggRows     = $result['agg_rows'];
+        $groupRegIds = $result['group_reg_ids'];
+        $total       = $result['total'];
+        $page        = $result['page'];
+        $perPage     = $result['per_page'];
 
         if (empty($aggRows)) {
             return $this->paginationEnvelope([], $total, $page, $perPage);
         }
 
-        // For offerte_verdeling: fetch ALL reg IDs in each group to run the
-        // bounded two-step resolver. We limit to the current page's groups only.
-        // Build per-group reg ID sets.
-        $groupValues = array_map(fn($r) => $r->group_value, $aggRows);
-
-        $groupRegIds = $this->fetchRegIdsPerGroup($groupBy, $groupValues, $whereClause, $sqlParams, $regTable, $activeJoin);
-
-        // All reg IDs across visible groups
+        // All reg IDs across visible groups — for the bounded two-step offerte resolver.
         $allRegIds    = array_merge(...array_values($groupRegIds));
         $offerteByReg = !empty($allRegIds) ? $this->resolveOfferteStatuses($allRegIds) : [];
 
-        // Compose aggregate items
+        // Compose aggregate items.
         $items = [];
         foreach ($aggRows as $row) {
-            $count     = (int) $row->cnt;
-            $completed = (int) $row->completed_count;
+            $count       = (int) $row->cnt;
+            $completed   = (int) $row->completed_count;
             $pctAfgerond = $count > 0 ? (int) round($completed / $count * 100) : 0;
 
-            // Tally offerte statuses for this group
-            $groupRids      = $groupRegIds[$row->group_value] ?? [];
-            $offerteTally   = $this->tallyOfferteStatuses($groupRids, $offerteByReg);
+            $groupRids    = $groupRegIds[$row->group_value] ?? [];
+            $offerteTally = $this->tallyOfferteStatuses($groupRids, $offerteByReg);
 
             $items[] = [
-                'group_value'       => $row->group_value,
-                'count'             => $count,
-                'pct_afgerond'      => $pctAfgerond,
+                'group_value'        => $row->group_value,
+                'count'              => $count,
+                'pct_afgerond'       => $pctAfgerond,
                 'avg_attendance_pct' => null,  // Deferred: cross-edition avg requires per-row resolution
-                'offerte_verdeling' => $offerteTally,
+                'offerte_verdeling'  => $offerteTally,
             ];
         }
 
@@ -449,70 +380,6 @@ final class AdminRegistrationQueryService
         }
 
         return $counts;
-    }
-
-    /**
-     * Fetch the registration IDs belonging to each group value.
-     *
-     * Used by the group_by path to feed the bounded two-step offerte resolver
-     * without a JSON aggregate (M5 stays intact).
-     *
-     * @param  string   $groupBy
-     * @param  array    $groupValues  Distinct values from the aggregate page
-     * @param  string   $whereClause  Pre-built WHERE fragment (from getGroupedPage)
-     * @param  array    $whereParams  Bound parameters for $whereClause
-     * @param  string   $regTable
-     * @param  string   $activeJoin
-     * @return array<string,array<int>>  group_value => [regId, ...]
-     */
-    private function fetchRegIdsPerGroup(
-        string $groupBy,
-        array $groupValues,
-        string $whereClause,
-        array $whereParams,
-        string $regTable,
-        string $activeJoin
-    ): array {
-        global $wpdb;
-
-        if (empty($groupValues)) {
-            return [];
-        }
-
-        $allowlist = ['edition_id', 'status', 'company_id'];
-        if (!in_array($groupBy, $allowlist, true)) {
-            return [];
-        }
-
-        $groupPlaceholder = implode(',', array_fill(0, count($groupValues), '%s'));
-        $groupValuesCast  = array_map('strval', $groupValues);
-
-        // Add a filter clause restricting to current page's group values.
-        $groupFilter = "r.{$groupBy} IN ({$groupPlaceholder})";
-
-        $fullWhere = $whereClause
-            ? "{$whereClause} AND {$groupFilter}"
-            : "WHERE {$groupFilter}";
-
-        $sql = "SELECT r.id, r.{$groupBy} AS group_val
-                FROM {$regTable} r
-                LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
-                {$activeJoin}
-                {$fullWhere}";
-
-        $sqlParams = array_merge($whereParams, $groupValuesCast);
-        $rows      = $wpdb->get_results($wpdb->prepare($sql, ...$sqlParams));
-
-        $result = [];
-        foreach ($rows as $row) {
-            $groupVal = $row->group_val;
-            if (!isset($result[$groupVal])) {
-                $result[$groupVal] = [];
-            }
-            $result[$groupVal][] = (int) $row->id;
-        }
-
-        return $result;
     }
 
     /**

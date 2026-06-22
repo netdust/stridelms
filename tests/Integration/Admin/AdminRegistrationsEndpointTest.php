@@ -447,4 +447,117 @@ final class AdminRegistrationsEndpointTest extends IntegrationTestCase
         $this->assertNotNull($confirmedGroup, 'confirmed group must appear in grouped response');
         $this->assertGreaterThanOrEqual(2, $confirmedGroup['count'], 'confirmed group must count both registrations');
     }
+
+    // =========================================================================
+    // BUG FIX: q name-filter must apply identically on grouped and flat paths
+    // =========================================================================
+
+    /**
+     * @test
+     * Regression: grouped path (group_by=status) MUST apply the q name filter.
+     *
+     * Before the fix, getGroupedPage() built its own WHERE clause that omitted
+     * the q predicate — so the aggregate counts reflected ALL rows while `total`
+     * was taken from queryForGrid (which DID apply q). This caused total to
+     * disagree with the summed group counts.
+     *
+     * Contract asserted here:
+     *  1. With q=<unique display_name> + group_by=status, the summed group
+     *     counts must equal exactly what the flat q-only query returns.
+     *  2. `total` must agree with the summed group counts (not a phantom larger
+     *     number from the unfiltered universe).
+     */
+    public function groupedPathAppliesQNameFilterIdenticallyToFlatPath(): void
+    {
+        global $wpdb;
+
+        // Create two users with distinct, non-colliding display names.
+        // Only user A's display_name will match the q filter.
+        $suffix = uniqid('qgrp_');
+
+        $userAId = wp_create_user("useraA_{$suffix}", 'pw', "userA_{$suffix}@test.local");
+        $userBId = wp_create_user("userBB_{$suffix}", 'pw', "userB_{$suffix}@test.local");
+
+        $this->assertIsInt($userAId);
+        $this->assertIsInt($userBId);
+
+        // Give user A a fully unique display name so the q search is unambiguous.
+        $uniqueDisplayName = "QueryTarget_{$suffix}";
+        wp_update_user(['ID' => $userAId, 'display_name' => $uniqueDisplayName]);
+
+        // Edition: no start_date so it shows in the default active scope.
+        $editionId = wp_insert_post([
+            'post_title'  => "QGrpEdition_{$suffix}",
+            'post_type'   => 'vad_edition',
+            'post_status' => 'publish',
+        ]);
+        $this->assertIsInt($editionId);
+        self::$testPosts[] = $editionId;
+
+        $repo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+
+        // R-A: user A, confirmed  — matches q
+        $rA = $repo->create([
+            'user_id'    => $userAId,
+            'edition_id' => $editionId,
+            'status'     => 'confirmed',
+        ]);
+        $this->assertIsInt($rA);
+        $this->testRegistrationIds[] = $rA;
+
+        // R-B: user B, confirmed — does NOT match q
+        $rB = $repo->create([
+            'user_id'    => $userBId,
+            'edition_id' => $editionId,
+            'status'     => 'confirmed',
+        ]);
+        $this->assertIsInt($rB);
+        $this->testRegistrationIds[] = $rB;
+
+        // Flat path with q: must find exactly 1 row (user A only).
+        $flatResponse = $this->dispatch('GET', '/stride/v1/admin/registrations', [
+            'q'             => $uniqueDisplayName,
+            'edition_scope' => 'all',
+        ]);
+        $this->assertEquals(200, $flatResponse->get_status());
+        $flatData  = $flatResponse->get_data();
+        $flatTotal = (int) $flatData['total'];
+
+        // Flat total must be exactly 1 (only user A matches).
+        $this->assertSame(
+            1,
+            $flatTotal,
+            "Flat path: expected exactly 1 row matching q={$uniqueDisplayName}, got {$flatTotal}",
+        );
+
+        // Grouped path with same q + group_by=status.
+        $groupedResponse = $this->dispatch('GET', '/stride/v1/admin/registrations', [
+            'q'             => $uniqueDisplayName,
+            'group_by'      => 'status',
+            'edition_scope' => 'all',
+        ]);
+        $this->assertEquals(200, $groupedResponse->get_status());
+        $groupedData = $groupedResponse->get_data();
+
+        // The summed group counts must equal 1 (only user A).
+        $summedGroupCount = array_sum(array_column($groupedData['items'], 'count'));
+        $this->assertSame(
+            1,
+            $summedGroupCount,
+            "Grouped path: summed group counts must be 1 (q filter must apply), got {$summedGroupCount}",
+        );
+
+        // total must agree with the summed group counts (not a phantom larger value).
+        $groupedTotal = (int) $groupedData['total'];
+        $this->assertSame(
+            $groupedTotal,
+            $summedGroupCount,
+            "total ({$groupedTotal}) must agree with summed group counts ({$summedGroupCount})",
+        );
+
+        // Cleanup users (tearDown handles registrations, setUpBeforeClass handles posts).
+        require_once ABSPATH . 'wp-admin/includes/user.php';
+        wp_delete_user($userAId);
+        wp_delete_user($userBId);
+    }
 }
