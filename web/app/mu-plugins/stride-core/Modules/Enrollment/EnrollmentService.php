@@ -441,12 +441,19 @@ final class EnrollmentService extends AbstractService
             return $registrationId;
         }
 
-        // Fire event (no LMS access, no quote)
+        // Fire event (no LMS access, no quote).
+        // Include name/email so the confirmation mail can reach ANONYMOUS
+        // registrants (user_id = 0): StrideMailBridge::sendUserStageMail reads
+        // these from the payload for the anonymous branch and otherwise returns
+        // early with no send. Omitting them silently dropped every anonymous
+        // interest confirmation email (bug ML-01).
         $this->dispatch('registration/interest_registered', [
             'registration_id' => $registrationId,
             'user_id' => $userId,
             'edition_id' => $editionId,
             'trajectory_id' => $trajectoryId,
+            'name' => (string) ($options['name'] ?? ''),
+            'email' => (string) ($options['email'] ?? ''),
         ]);
 
         ntdst_log('enrollment')->info('Interest registered', [
@@ -529,11 +536,15 @@ final class EnrollmentService extends AbstractService
             return $registrationId;
         }
 
+        // Include name/email for anonymous registrants — see ML-01 note on the
+        // interest dispatch above; the same mail-bridge early-return applies.
         $this->dispatch('registration/waitlisted', [
             'registration_id' => $registrationId,
             'user_id' => $userId,
             'edition_id' => $editionId,
             'trajectory_id' => $trajectoryId,
+            'name' => (string) ($options['name'] ?? ''),
+            'email' => (string) ($options['email'] ?? ''),
         ]);
 
         ntdst_log('enrollment')->info('Waitlist registered', [

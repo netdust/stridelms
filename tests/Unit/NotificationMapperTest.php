@@ -179,4 +179,53 @@ class NotificationMapperTest extends TestCase
         $this->assertEquals('enrollment', $notification['type']);
         $this->assertStringContainsString('geannuleerd', strtolower($notification['title']));
     }
+
+    /**
+     * @test
+     * Regression (ML-05): completion.completed must produce Dutch text, never
+     * the raw action key. AuditBridge fires this action but the mapper used to
+     * miss it, leaking "completion.completed" into the user's feed.
+     */
+    public function testMapsCompletionCompletedToDutchTitle(): void
+    {
+        $this->createEdition(['ID' => 555, 'post_title' => 'Afgeronde Editie']);
+
+        $entry = (object) [
+            'id' => 7,
+            'entity_type' => 'completion',
+            'entity_id' => 1001,
+            'action' => 'completion.completed',
+            'actor_id' => 456,
+            'context' => json_encode(['user_id' => 456, 'edition_id' => 555, 'course_id' => 1001]),
+            'created_at' => '2026-03-10 14:30:00',
+        ];
+
+        $notification = $this->mapper->fromAuditEntry($entry);
+
+        $this->assertEquals('completion', $notification['type']);
+        $this->assertStringNotContainsString('completion.completed', $notification['title']);
+        $this->assertStringContainsString('Afgeronde Editie', $notification['title']);
+    }
+
+    /**
+     * @test
+     * Regression (ML-05): an action the mapper has no label for must yield an
+     * EMPTY title so NotificationService drops it — never a raw key shown.
+     */
+    public function testUnknownActionYieldsEmptyTitleSoItIsDropped(): void
+    {
+        $entry = (object) [
+            'id' => 8,
+            'entity_type' => 'whatever',
+            'entity_id' => 1,
+            'action' => 'some.unmapped.action',
+            'actor_id' => null,
+            'context' => json_encode([]),
+            'created_at' => '2026-03-10 14:30:00',
+        ];
+
+        $notification = $this->mapper->fromAuditEntry($entry);
+
+        $this->assertSame('', $notification['title'], 'unmapped actions must not leak a raw key');
+    }
 }
