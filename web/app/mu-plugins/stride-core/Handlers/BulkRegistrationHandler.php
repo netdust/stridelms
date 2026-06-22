@@ -40,6 +40,14 @@ final class BulkRegistrationHandler
      */
     private const SAFE_FIELDS = ['notes', 'company_id'];
 
+    /**
+     * B3 — hard backstop on bulk batch size. An authorized request with thousands
+     * of ids would otherwise run an unbounded synchronous loop (promoteFromWaitlist
+     * even opens a transaction per row). 500 is generous vs realistic grid
+     * selections; Task 4.4's select-all boundary will formalize this later.
+     */
+    private const MAX_BATCH = 500;
+
     public function __construct()
     {
         $this->init();
@@ -86,11 +94,23 @@ final class BulkRegistrationHandler
      *
      * @param array<string,mixed>                                $params  registry params; $params['ids'] = row ids.
      * @param callable(int $id, object $registration): (true|WP_Error) $perRow
-     * @return array{total:int, succeeded:array<int,array{id:int}>, failed:array<int,array{id:int,code:string,message:string}>, summary:array{ok:int,error:int}}
+     * @return array{total:int, succeeded:array<int,array{id:int}>, failed:array<int,array{id:int,code:string,message:string}>, summary:array{ok:int,error:int}}|WP_Error
      */
-    private function runBulk(array $params, callable $perRow): array
+    private function runBulk(array $params, callable $perRow): array|WP_Error
     {
         $ids = array_values(array_unique(array_map('absint', (array) ($params['ids'] ?? []))));
+
+        // B3: hard cap BEFORE the loop. Returning a WP_Error here means every
+        // caller must propagate it — finishBatch passes a WP_Error through
+        // untouched, and the quote handlers already guard with is_wp_error.
+        if (count($ids) > self::MAX_BATCH) {
+            return new WP_Error(
+                'too_many',
+                __('Te veel inschrijvingen geselecteerd (max 500).', 'stride'),
+                ['status' => 400],
+            );
+        }
+
         $repo = ntdst_get(RegistrationRepository::class);
 
         $succeeded = [];
@@ -156,11 +176,19 @@ final class BulkRegistrationHandler
      * Reached only after runBulk ran (a denied call returns before this), so a
      * pure capability denial never fires it.
      *
-     * @param array{total:int, succeeded:array<int,array{id:int}>, failed:array<int,array{id:int,code:string,message:string}>, summary:array{ok:int,error:int}} $report
-     * @return array{total:int, succeeded:array<int,array{id:int}>, failed:array<int,array{id:int,code:string,message:string}>, summary:array{ok:int,error:int}}
+     * B3: callers pass runBulk's result straight in; a WP_Error (e.g. the batch
+     * cap) is propagated untouched and fires NO completion event — the batch
+     * never ran.
+     *
+     * @param array{total:int, succeeded:array<int,array{id:int}>, failed:array<int,array{id:int,code:string,message:string}>, summary:array{ok:int,error:int}}|WP_Error $report
+     * @return array{total:int, succeeded:array<int,array{id:int}>, failed:array<int,array{id:int,code:string,message:string}>, summary:array{ok:int,error:int}}|WP_Error
      */
-    private function finishBatch(array $report): array
+    private function finishBatch(array|WP_Error $report): array|WP_Error
     {
+        if (is_wp_error($report)) {
+            return $report;
+        }
+
         do_action('stride/registration/bulk_completed', ['summary' => $report['summary'] ?? []]);
 
         return $report;

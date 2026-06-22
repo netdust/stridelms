@@ -408,6 +408,65 @@ class BulkRegistrationHandlerTest extends TestCase
     }
 
     // =========================================================================
+    // B3 — hard cap on bulk batch size (unbounded foot-gun)
+    // =========================================================================
+
+    /**
+     * B3: a selection over the cap (501 ids) is refused with WP_Error('too_many')
+     * / 400 BEFORE the loop runs — the repository is never touched (no find()),
+     * and no completion event fires.
+     */
+    public function test_bulk_over_cap_rejected_before_loop(): void
+    {
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->expects($this->never())->method('find');
+        ntdst_set(RegistrationRepository::class, $repo);
+        $this->resetActionCalls();
+
+        $ids = range(1, 501);
+        $result = $this->handler->handleBulkApprove([], ['ids' => $ids]);
+
+        $this->assertInstanceOf(\WP_Error::class, $result);
+        $this->assertSame('too_many', $result->get_error_code());
+        $this->assertSame(400, $result->get_error_data()['status'] ?? null);
+        $this->assertSame(0, $this->actionFireCount('stride/registration/bulk_completed'));
+    }
+
+    /** B3: the cap propagates through the quote path too (finishQuoteBatch guard). */
+    public function test_bulk_quote_over_cap_rejected_before_loop(): void
+    {
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->expects($this->never())->method('find');
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $quoteRepo = $this->createMock(QuoteRepository::class);
+        // Map resolve may happen up front, but updateStatus must never run.
+        $quoteRepo->expects($this->never())->method('updateStatus');
+        ntdst_set(QuoteRepository::class, $quoteRepo);
+
+        $result = $this->handler->handleBulkQuoteExported([], ['ids' => range(1, 501)]);
+
+        $this->assertInstanceOf(\WP_Error::class, $result);
+        $this->assertSame('too_many', $result->get_error_code());
+        $this->assertSame(400, $result->get_error_data()['status'] ?? null);
+    }
+
+    /** B3 boundary: exactly 500 ids is allowed — the loop proceeds. */
+    public function test_bulk_at_cap_500_proceeds(): void
+    {
+        $repo = $this->createMock(RegistrationRepository::class);
+        // All 500 resolve to null → the loop ran (find called), all land in failed[].
+        $repo->expects($this->exactly(500))->method('find')->willReturn(null);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $report = $this->handler->handleBulkApprove([], ['ids' => range(1, 500)]);
+
+        $this->assertIsArray($report);
+        $this->assertSame(500, $report['total']);
+        $this->assertCount(500, $report['failed']);
+    }
+
+    // =========================================================================
     // Task 2.3 — stride_bulk_set_field with server-side field allowlist (M7)
     // =========================================================================
 
