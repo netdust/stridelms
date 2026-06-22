@@ -560,4 +560,28 @@ final class AdminRegistrationsEndpointTest extends IntegrationTestCase
         wp_delete_user($userAId);
         wp_delete_user($userBId);
     }
+
+    // =========================================================================
+    // FIX 8: out-of-allowlist group_by must be a 400, not a silent empty 200.
+    // =========================================================================
+
+    /**
+     * @test
+     * group_by=enrollment_data (NOT in GROUP_BY_ALLOWLIST) must return HTTP 400,
+     * not a 200 with an empty envelope (which is indistinguishable from no-data
+     * and silently changes the response SHAPE aggregates↔rows).
+     */
+    public function outOfAllowlistGroupByReturns400(): void
+    {
+        $response = $this->dispatch('GET', '/stride/v1/admin/registrations', [
+            'edition_scope' => 'all',
+            'group_by'      => 'enrollment_data',
+        ]);
+
+        $this->assertEquals(
+            400,
+            $response->get_status(),
+            'Out-of-allowlist group_by must be rejected with 400, not a silent empty 200',
+        );
+    }
 }

@@ -8,7 +8,6 @@ use Stride\Domain\QuoteStatus;
 use Stride\Domain\RegistrationStatus;
 use Stride\Infrastructure\BatchQueryHelper;
 use Stride\Modules\Edition\EditionCPT;
-use Stride\Modules\Edition\SessionCPT;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Enrollment\RegistrationTable;
 use Stride\Modules\Invoicing\QuoteRepository;
@@ -43,9 +42,9 @@ final class AdminRegistrationQueryService
      * based on whether the key is present, but this service owns the distinction.
      *
      * @param  array<string,mixed> $params  Pre-sanitised request params.
-     * @return array{items:array,total:int,page:int,perPage:int,totalPages:int}
+     * @return array{items:array,total:int,page:int,perPage:int,totalPages:int}|\WP_Error
      */
-    public function getGridPage(array $params): array
+    public function getGridPage(array $params): array|\WP_Error
     {
         $groupBy = $params['group_by'] ?? null;
 
@@ -113,8 +112,12 @@ final class AdminRegistrationQueryService
             update_meta_cache('user', $userIds);
         }
 
-        // Session counts per edition (for attendance %)
-        $sessionCountByEdition = $this->batchGetSessionCounts($editionIds);
+        // Session counts per edition (for attendance %).
+        // Delegated to SessionRepository (INV-3): dynamic meta prefix, published-only,
+        // all input ids present (0 default) — no raw $wpdb / hardcoded meta key here.
+        $sessionCountByEdition = !empty($editionIds)
+            ? ntdst_get(\Stride\Modules\Edition\SessionRepository::class)->countByEditions($editionIds)
+            : [];
 
         // Attendance per edition (keyed per edition → userId → sessionId → status)
         $attendanceByEdition = [];
@@ -146,7 +149,13 @@ final class AdminRegistrationQueryService
                 $sessionCountByEdition[$editionId] ?? 0
             );
 
-            // Company name — from user meta (billing_company), cache-primed above
+            // Company — TWO INDEPENDENT identifiers, deliberately NOT one resolved entity
+            // (CLAUDE.md: organisation ≠ billing_company, never conflate):
+            //   - company.id   = the registration row's company_id FK (partner-affiliation
+            //                    scoping id, _stride_company_id; NOT a name-resolvable post/term).
+            //   - company.name = the USER's billing_company usermeta (invoice company).
+            // company_id has no name source to resolve from, so the name field reflects the
+            // user's billing company; the two are surfaced side-by-side, not merged.
             $companyName = '';
             if ($userId > 0) {
                 $companyName = (string) get_user_meta($userId, 'billing_company', true);
@@ -218,13 +227,25 @@ final class AdminRegistrationQueryService
      * path — no second divergent copy of the scoping logic.
      *
      * @param  string $groupBy  Allowlisted column (validated below via GROUP_BY_ALLOWLIST).
-     * @return array{items:array,total:int,page:int,perPage:int,totalPages:int}
+     * @return array{items:array,total:int,page:int,perPage:int,totalPages:int}|\WP_Error
      */
-    private function getGroupedPage(array $params, string $groupBy): array
+    private function getGroupedPage(array $params, string $groupBy): array|\WP_Error
     {
         // Allowlist guard — single definition lives on the repository (M4).
+        // An out-of-allowlist group_by changes the response SHAPE (aggregates vs
+        // rows), so it must be a hard 400 — NOT a silent empty 200 that is
+        // indistinguishable from no-data. (The M4 sort fallback stays a fallback:
+        // a bad sort only reorders, it does not reshape the response.)
         if (!in_array($groupBy, RegistrationRepository::GROUP_BY_ALLOWLIST, true)) {
-            return $this->paginationEnvelope([], 0, 1, 50);
+            return new \WP_Error(
+                'invalid_group_by',
+                sprintf(
+                    /* translators: %s: the rejected group_by value */
+                    __('Ongeldige group_by-waarde: %s', 'stride'),
+                    $groupBy,
+                ),
+                ['status' => 400],
+            );
         }
 
         if (!RegistrationTable::exists()) {
@@ -341,45 +362,12 @@ final class AdminRegistrationQueryService
             }
         }
 
-        return (int) round($presentCount / $sessionCount * 100);
-    }
-
-    /**
-     * Batch-count sessions per edition (one query, not N).
-     *
-     * @param  array<int> $editionIds
-     * @return array<int,int>  editionId => sessionCount
-     */
-    private function batchGetSessionCounts(array $editionIds): array
-    {
-        if (empty($editionIds)) {
-            return [];
-        }
-
-        global $wpdb;
-
-        $ids          = array_map('intval', array_unique($editionIds));
-        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
-
-        $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT pm.meta_value AS edition_id, COUNT(p.ID) AS session_count
-             FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
-             WHERE p.post_type = %s
-               AND p.post_status = 'publish'
-               AND pm.meta_key = '_ntdst_edition_id'
-               AND pm.meta_value IN ({$placeholders})
-             GROUP BY pm.meta_value",
-            SessionCPT::POST_TYPE,
-            ...$ids,
-        ));
-
-        $counts = array_fill_keys($ids, 0);
-        foreach ($rows as $row) {
-            $counts[(int) $row->edition_id] = (int) $row->session_count;
-        }
-
-        return $counts;
+        // Clamp to [0,100]: the numerator (present marks) is NOT publish-filtered
+        // while the denominator (sessionCount) is published-only, so a session
+        // trashed after attendance was marked can push present > sessionCount → >100%.
+        // Clamping prevents the impossible value (aligning publish-scope would be a
+        // larger change).
+        return min(100, (int) round($presentCount / $sessionCount * 100));
     }
 
     /**
