@@ -70,3 +70,21 @@ _Generated 2026-06-22 by code fan-out across stride-core + stridence. Baseline a
 
 ### Observation (not a defect)
 - Multi-brand (MB-01/02): VAD launch brand loads correctly; other 4 client brands off via `.php.off`. Confirm the intended brand is active before each deploy.
+
+---
+
+## Run result — 2026-06-22 (REAL BROWSER DRIVE — Phase 2 redone properly)
+
+The first pass marked stories PASS by *proxy* (a passing test exists) rather than by *driving the actual UI*. Redone: every story was driven through a real browser (superpowers-chrome over Selenium, 6 sequential clusters) or real REST (partner API over HTTP), with backend-only internals honestly labelled.
+
+**P2 status (honest):** 85 DRIVEN_PASS (real clicks) · 29 VERIFIED-VIA-SIDE-EFFECT (backend exercised by a driven flow, DB-evidenced) · 36 BACKEND-VERIFIED (no UI surface — integration-suite is the correct driver). Verification of agent findings caught ~8 false-positives (cancelled-edition handling, terms disabled-button, session-selection-is-a-task, course-sidebar-is-online-only, voucher-input-conditionally-hidden, ML-01 user-path-actually-works).
+
+**4 real bugs the green suite missed — all fixed + re-driven (P4 DRIVEN_PASS):**
+1. **DB-11 (product, user-facing) — dashboard quote-PDF download broken.** Templates linked to `admin-ajax?action=stride_quote_pdf` but no handler was registered → WP returned `0`. Added `QuotePDFGenerator::handleDownload` (nonce + login + ownership/`stride_manage` + get-or-generate + stream). Re-driven: owner → 200 `application/pdf` `%PDF-`; cross-user → 404 (no oracle).
+2. **ML-05 (product) — notifications leaked raw action key `completion.completed`.** `NotificationMapper` mapped only 2 of 4 completion actions AuditBridge fires → `default` showed the raw key. Mapped the missing two; unmapped actions now yield empty title and `NotificationService` drops them. +2 regression unit tests. Re-driven: meldingen shows "Je hebt … afgerond".
+3. **DB-12 (UX) — quote billing-edit form didn't close after save.** Panel had `x-init="startEdit()"` with no `editing` gate. Added `@inline-section-saved` to collapse it. Re-driven: closes.
+4. **AU-04 + AU-01/02/03 (product, every user) — entire auth UI English on an nl_BE site; rate-limit message duplicated.** Shared `ntdst-auth` plugin never loaded its textdomain. Added `load_plugin_textdomain` + `languages/ntdst-auth-nl_BE.po/.mo`; added a concurrent-submit guard. Re-driven: /aanmelden + /registreren fully Dutch; rate-limit msg = "Wacht even voordat je een nieuwe inloglink aanvraagt." **Fixing this broke `AuthPluginCest`** — because it asserted the buggy English strings (that's *why* it was green while the UI was wrong); updated the Cest to the Dutch UI (15/15).
+
+**Lesson:** green tests ≠ working UI. Proxy-marking hid 4 real bugs; two of them (ML-05, AU-04) had passing tests pinned to the *broken* behaviour. Real driving is what surfaced them.
+
+**Suites after fixes:** unit 1022 / 2570 · integration 490 / 1967 · acceptance 174 (0 product failures, 16 skips). The lone acceptance failure during the run was fixture pollution from the driving itself (students enrolled into trajectories) — passes on clean seed.
