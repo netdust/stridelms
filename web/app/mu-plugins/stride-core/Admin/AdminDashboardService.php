@@ -233,6 +233,12 @@ class AdminDashboardService extends AbstractService
                 'firstName' => $user->first_name ?: $user->display_name,
             ],
             'canManage' => current_user_can('stride_manage'),
+            // §12.3 cutover: the no-hash landing view. Defaults to the Vandaag
+            // worklist home (Task 3.3). One-line override point — set via the
+            // 'stride_admin_default_view' filter (e.g. flip back to 'dashboard'
+            // during a transition, or once Dossier/3.4 lands). The old entity
+            // tabs stay reachable regardless.
+            'defaultView' => (string) apply_filters('stride_admin_default_view', 'vandaag'),
             // Per-action nonces for the bulk grid (Task 3.2, §2.3). Each bulk POST
             // to ntdst/v1/action carries its action-specific nonce
             // (verified server-side via wp_verify_nonce($nonce, $action)).

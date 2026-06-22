@@ -21,6 +21,9 @@ defined('ABSPATH') || exit;
             <span class="sd-header__logo">Stride</span>
             <nav class="sd-header__nav">
                 <button class="sd-header__tab"
+                        :class="{ 'sd-header__tab--active': view === 'vandaag' }"
+                        @click="switchView('vandaag')">Vandaag</button>
+                <button class="sd-header__tab"
                         :class="{ 'sd-header__tab--active': view === 'dashboard' }"
                         @click="switchView('dashboard')">Dashboard</button>
                 <button class="sd-header__tab"
@@ -67,6 +70,67 @@ defined('ABSPATH') || exit;
          CONTENT AREA
          ============================================================ -->
     <div class="sd-content">
+
+        <!-- ========================================================
+             VIEW: VANDAAG (worklist home — Task 3.3 Part A)
+             5 queue cards fed by /admin/stats worklistQueues. Click a
+             card → opens the Inschrijvingen grid pre-filtered + bulk
+             action armed (QUEUE_FILTER). The default landing view.
+             ======================================================== -->
+        <div x-show="view === 'vandaag'">
+
+            <!-- Greeting -->
+            <div class="sd-greeting">
+                <h2>Goeiemorgen, <span x-text="config.user?.firstName || config.user?.name"></span></h2>
+                <span class="sd-greeting__date" x-text="formatDate(new Date())"></span>
+            </div>
+
+            <p class="ws-worklist-lede" x-show="worklistLoaded">
+                Je hebt <b x-text="worklistTotal"></b> openstaande
+                <span x-text="worklistTotal === 1 ? 'actie' : 'acties'"></span>
+                verdeeld over vijf wachtrijen.
+            </p>
+
+            <!-- Error state -->
+            <template x-if="errors.vandaag">
+                <div class="sd-error">
+                    <span class="sd-error__icon">!</span>
+                    <p class="sd-error__title" x-text="errors.vandaag"></p>
+                    <button class="sd-btn sd-btn--ghost sd-btn--sm" @click="loadVandaag()">Opnieuw proberen</button>
+                </div>
+            </template>
+
+            <!-- The 5 worklist queues -->
+            <div class="ws-queues" x-show="!errors.vandaag">
+                <template x-for="q in queues" :key="q.key">
+                    <button type="button"
+                            class="ws-queue"
+                            :class="{ 'is-empty': queueCount(q) === 0 }"
+                            :style="'--accent:' + q.accent"
+                            @click="openQueue(q)">
+                        <div class="ws-queue__top">
+                            <span class="ws-queue__count"
+                                  :class="{ 'is-zero': queueCount(q) === 0 }">
+                                <template x-if="worklistLoaded"><span x-text="queueCount(q)"></span></template>
+                                <template x-if="!worklistLoaded"><span class="sd-skeleton sd-skeleton--kpi"></span></template>
+                            </span>
+                        </div>
+                        <div class="ws-queue__title" x-text="q.label"></div>
+                        <div class="ws-queue__def" x-text="q.def"></div>
+                        <div class="ws-queue__foot">
+                            <span class="ws-queue__action"
+                                  x-text="worklistLoaded && queueCount(q) === 0 ? 'Niets te doen' : q.action"></span>
+                            <span class="ws-queue__go" x-show="worklistLoaded && queueCount(q) > 0">Openen →</span>
+                        </div>
+                    </button>
+                </template>
+            </div>
+
+            <p class="ws-worklist-hint" x-show="!errors.vandaag">
+                Klik een wachtrij om de inschrijvingen voorgefilterd te openen met de juiste bulkactie klaargezet.
+            </p>
+
+        </div><!-- /view: vandaag -->
 
         <!-- ========================================================
              VIEW: DASHBOARD

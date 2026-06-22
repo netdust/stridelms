@@ -43,6 +43,31 @@ function strideActionsForStates(states) {
     return STRIDE_SMART_ACTIONS.filter(a => uniq.every(s => a.states.includes(s)));
 }
 
+/* ── Vandaag worklist queues (ported from mockup QUEUES + QUEUE_FILTER) ──
+   The 5 §1 worklist queues. `countKey` maps to the server's
+   /admin/stats worklistQueues.{...} response (AdminStatsService). `status` +
+   `armAction` are the QUEUE_FILTER mapping → grid pre-filter + armed bulk
+   action. nocert/oldinterest arm the deferred-stub bulk action
+   (stride_bulk_message); the bulk bar already tolerates the stub response
+   (Task 3.2, drift #6) — opening the queue must not bypass that handling. */
+const STRIDE_QUEUES = [
+    { key: 'pending',     countKey: 'pending',           label: 'Wacht op goedkeuring',
+      def: 'status = in afwachting', accent: '#d97706',
+      status: 'pending',   armAction: 'stride_bulk_approve',          action: 'Goedkeuren' },
+    { key: 'waitlist',    countKey: 'waitlist_open',     label: 'Wachtlijst — plaatsen vrij',
+      def: 'wachtlijst + editie heeft vrije plaatsen', accent: '#8b5cf6',
+      status: 'waitlist',  armAction: 'stride_bulk_promote_waitlist', action: 'Promoveer van wachtlijst' },
+    { key: 'offerte',     countKey: 'offerte_opvolging', label: 'Offerte-opvolging',
+      def: 'bevestigd + offerte nog niet verwerkt', accent: '#2563eb',
+      status: 'confirmed', armAction: 'stride_bulk_quote_sent',       action: 'Markeer verzonden / verwerkt' },
+    { key: 'nocert',      countKey: 'nocert',            label: 'Afgerond zonder certificaat',
+      def: 'afgerond + voltooid + geen LD-certificaat', accent: '#16a34a',
+      status: 'completed', armAction: 'stride_bulk_message',          action: 'Bericht sturen' },
+    { key: 'oldinterest', countKey: 'oldinterest',       label: 'Oude interesse',
+      def: 'interesse + ouder dan 90 dagen', accent: '#64748b',
+      status: 'interest',  armAction: 'stride_bulk_message',          action: 'Bericht sturen / archiveren' },
+];
+
 document.addEventListener('alpine:init', () => {
     Alpine.data('strideApp', () => ({
         // ── Routing ──────────────────────────────────────────────
@@ -51,7 +76,15 @@ document.addEventListener('alpine:init', () => {
         statsLoaded: false,
 
         // ── Error state per view (set when a fetch throws) ────────
-        errors: { dashboard: '', edities: '', inschrijvingen: '', offertes: '', trajecten: '', users: '' },
+        errors: { dashboard: '', vandaag: '', edities: '', inschrijvingen: '', offertes: '', trajecten: '', users: '' },
+
+        // ── Vandaag worklist home (Task 3.3 Part A) ──────────────
+        // 5 queue cards fed by /admin/stats worklistQueues; click → grid
+        // pre-filtered + bulk action armed (QUEUE_FILTER). Counts default to
+        // null (skeleton) until the stats fetch resolves.
+        queues: STRIDE_QUEUES,
+        worklistCounts: null,    // { pending, waitlist_open, offerte_opvolging, nocert, oldinterest } | null
+        worklistLoaded: false,
 
         // ── Config ───────────────────────────────────────────────
         config: window.StrideConfig || {},
@@ -208,20 +241,30 @@ document.addEventListener('alpine:init', () => {
         //  CORE METHODS
         // ==============================================================
 
+        // The landing view when no #/hash is present. §12.3 cutover: Vandaag is
+        // the default worklist home. Flag-overridable via StrideConfig.defaultView
+        // (one line for 3.4/ops to flip) — defaults to 'vandaag'. The old entity
+        // tabs stay reachable; only the no-hash landing changes.
+        get defaultView() {
+            const v = this.config.defaultView || 'vandaag';
+            return this.validViews.includes(v) ? v : 'vandaag';
+        },
+
+        validViews: ['dashboard', 'vandaag', 'edities', 'inschrijvingen', 'offertes', 'trajecten', 'gebruikers'],
+
         init() {
             this.parseHash();
             window.addEventListener('hashchange', () => this.parseHash());
-            this.loadDashboard();
+            this.loadViewData(this.view);
             this.$watch('view', (newView) => {
                 this.loadViewData(newView);
-                history.replaceState(null, '', newView === 'dashboard' ? '#/' : '#/' + newView);
+                history.replaceState(null, '', newView === this.defaultView ? '#/' : '#/' + newView);
             });
         },
 
         parseHash() {
-            const hash = window.location.hash.replace('#/', '') || 'dashboard';
-            const validViews = ['dashboard', 'edities', 'inschrijvingen', 'offertes', 'trajecten', 'gebruikers'];
-            this.view = validViews.includes(hash) ? hash : 'dashboard';
+            const hash = window.location.hash.replace('#/', '') || this.defaultView;
+            this.view = this.validViews.includes(hash) ? hash : this.defaultView;
             this.loadViewData(this.view);
         },
 
@@ -287,8 +330,63 @@ document.addEventListener('alpine:init', () => {
             } else if (view === 'inschrijvingen') {
                 if (this.editionOptions.length === 0 && this.quoteEditions.length === 0) this.loadQuoteEditions();
                 if (!this.gridLoaded && !this._loadingViews.inschrijvingen) this.initGrid();
+            } else if (view === 'vandaag') {
+                this.loadVandaag();
             } else if (view === 'dashboard') {
                 this.loadDashboard();
+            }
+        },
+
+        // ==============================================================
+        //  VANDAAG WORKLIST METHODS (Task 3.3 Part A)
+        // ==============================================================
+
+        // Fetch /admin/stats and lift the worklistQueues counts. Reuses the
+        // stats endpoint (no new endpoint) — the 5 counts ride on its response
+        // (AdminStatsService::getWorklistQueueCounts). M10 cache-bust already
+        // wired, so a re-load reflects concurrent mutations.
+        async loadVandaag() {
+            this.errors.vandaag = '';
+            try {
+                const stats = await this.api('/admin/stats');
+                this.worklistCounts = stats.worklistQueues || {
+                    pending: 0, waitlist_open: 0, offerte_opvolging: 0, nocert: 0, oldinterest: 0,
+                };
+                this.worklistLoaded = true;
+            } catch (e) {
+                this.errors.vandaag = 'Kon de werklijst niet laden.';
+            }
+        },
+
+        // Live count for a queue card (null until loaded → skeleton).
+        queueCount(q) {
+            if (!this.worklistCounts) return null;
+            return this.worklistCounts[q.countKey] ?? 0;
+        },
+
+        // Total open actions across the 5 queues (greeting line).
+        get worklistTotal() {
+            if (!this.worklistCounts) return 0;
+            return this.queues.reduce((n, q) => n + (this.worklistCounts[q.countKey] ?? 0), 0);
+        },
+
+        // Open a queue → switch to the grid, pre-filter by the queue's status and
+        // arm its bulk action (QUEUE_FILTER). Re-uses the EXISTING grid component
+        // (Tasks 3.1/3.2) — no second grid. Idempotent: clicking the same queue
+        // twice resets cleanly rather than stacking filters (F1 re-entry edge).
+        openQueue(q) {
+            this.gridQueue = q.key;
+            this.gridFilters = { status: q.status, edition_id: 0, company_id: 0, trajectory_id: 0, q: '' };
+            this.gridArmedAction = q.armAction || null;
+            this.gridGroupBy = '';
+            this.clearGridSelection();
+            this.switchView('inschrijvingen');
+            // On re-entry the grid is already loaded so loadViewData()'s
+            // !gridLoaded guard skips initGrid — refetch explicitly. On first
+            // entry initGrid() (gated by !gridLoaded) sees gridQueue set and
+            // loads with the queue filter, so we skip the redundant fetch here.
+            if (this.gridLoaded) {
+                this.$nextTick(() => this.loadGrid(1));
             }
         },
 
@@ -666,21 +764,23 @@ document.addEventListener('alpine:init', () => {
         statusExit: STRIDE_STATUS_EXIT,
 
         // First entry into the grid view: honour ?queue=/?status= deep-links,
-        // then load page 1. The queue mapping mirrors the mockup QUEUE_FILTER.
+        // then load page 1. The queue mapping derives from STRIDE_QUEUES (the
+        // single QUEUE_FILTER source — never a second hard-coded set).
         initGrid() {
+            // In-app queue navigation (openQueue) already set gridQueue + the
+            // filter/armed-action; it owns the load. Don't double-fetch or let a
+            // URL read clobber the in-app state.
+            if (this.gridQueue) {
+                this.loadGrid(1);
+                return;
+            }
             const p = new URLSearchParams(window.location.search);
             const queue = p.get('queue');
-            const queueMap = {
-                pending:     { status: 'pending',   armAction: 'stride_bulk_approve' },
-                waitlist:    { status: 'waitlist',  armAction: 'stride_bulk_promote_waitlist' },
-                offerte:     { status: 'confirmed', armAction: 'stride_bulk_quote_sent' },
-                nocert:      { status: 'completed', armAction: 'stride_bulk_message' },
-                oldinterest: { status: 'interest',  armAction: 'stride_bulk_message' },
-            };
-            if (queue && queueMap[queue]) {
-                this.gridQueue = queue;
-                this.gridFilters.status = queueMap[queue].status;
-                this.gridArmedAction = queueMap[queue].armAction;
+            const qDef = STRIDE_QUEUES.find(x => x.key === queue);
+            if (qDef) {
+                this.gridQueue = qDef.key;
+                this.gridFilters.status = qDef.status;
+                this.gridArmedAction = qDef.armAction;
             }
             const trajId = parseInt(p.get('trajectory') || '0', 10);
             if (trajId > 0) this.gridFilters.trajectory_id = trajId;

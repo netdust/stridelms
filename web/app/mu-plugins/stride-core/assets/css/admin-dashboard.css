@@ -3274,3 +3274,92 @@ body.stride-dashboard {
 .ws-fail-row__name { color: var(--ws-text); font-weight: 500; }
 .ws-fail-row__msg { font-size: var(--ws-fs-sm); color: var(--ws-text-2); }
 .ws-fail-row__code { font-family: var(--ws-mono); font-size: 10px; color: var(--ws-danger-text); background: var(--ws-danger-bg); padding: 1px 6px; border-radius: 4px; margin-left: auto; }
+
+/* ==========================================================================
+   Vandaag worklist home (Task 3.3 Part A) + funnel chip counts (Part B)
+   ========================================================================== */
+
+/* Funnel chip live count (Part B) — small pill after the stage label. */
+.ws-stage-chip__count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    margin-left: 2px;
+    border-radius: 999px;
+    background: var(--ws-surface-alt, #f1f5f9);
+    color: var(--ws-text-2, #475569);
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.ws-stage-chip.is-active .ws-stage-chip__count {
+    background: rgba(255, 255, 255, 0.28);
+    color: inherit;
+}
+
+/* Worklist lede + hint copy. */
+.ws-worklist-lede { margin: 4px 0 var(--ws-5, 20px); color: var(--ws-text-2, #475569); font-size: 15px; }
+.ws-worklist-hint { margin-top: var(--ws-4, 16px); color: var(--ws-text-3, #94a3b8); font-size: var(--ws-fs-sm, 13px); }
+
+/* Queue card grid. */
+.ws-queues {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: var(--ws-4, 16px);
+}
+
+.ws-queue {
+    --accent: #2563eb;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: var(--ws-5, 20px);
+    text-align: left;
+    background: #fff;
+    border: 1px solid var(--ws-border, #e2e8f0);
+    border-radius: var(--ws-radius, 14px);
+    box-shadow: var(--ws-shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.04));
+    cursor: pointer;
+    transition: transform var(--ws-ease, 0.15s ease), box-shadow var(--ws-ease, 0.15s ease), border-color var(--ws-ease, 0.15s ease);
+}
+.ws-queue::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 4px;
+    border-radius: var(--ws-radius, 14px) 0 0 var(--ws-radius, 14px);
+    background: var(--accent);
+}
+.ws-queue:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--ws-shadow, 0 6px 18px rgba(15, 23, 42, 0.10));
+    border-color: var(--accent);
+}
+.ws-queue.is-empty { opacity: 0.72; }
+.ws-queue.is-empty:hover { transform: none; }
+
+.ws-queue__top { display: flex; align-items: flex-start; justify-content: space-between; }
+.ws-queue__count {
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+}
+.ws-queue__count.is-zero { color: var(--ws-text-3, #94a3b8); }
+
+.ws-queue__title { font-size: 15px; font-weight: 600; color: var(--ws-text, #0f172a); }
+.ws-queue__def { font-size: var(--ws-fs-sm, 13px); color: var(--ws-text-3, #94a3b8); }
+.ws-queue__foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    padding-top: 10px;
+    border-top: 1px solid var(--ws-border, #e2e8f0);
+}
+.ws-queue__action { font-size: var(--ws-fs-sm, 13px); font-weight: 500; color: var(--ws-text-2, #475569); }
+.ws-queue__go { font-size: var(--ws-fs-sm, 13px); font-weight: 600; color: var(--accent); }
