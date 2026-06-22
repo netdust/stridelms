@@ -578,15 +578,108 @@ final class EnrollmentService extends AbstractService
             return new WP_Error('invalid_status', 'Registration is not pending approval');
         }
 
-        // Update status to confirmed
-        $result = $this->registrations->updateStatus($registrationId, RegistrationStatus::Confirmed);
+        return $this->confirmCore($registration, 'Registration confirmed by admin');
+    }
 
-        if (!$result) {
-            return new WP_Error('update_failed', 'Failed to confirm registration');
+    /**
+     * Promote a waitlisted registration to confirmed (admin / bulk action).
+     *
+     * Shares the SAME single grant + event path as confirmRegistration() via
+     * confirmCore() — there is no second confirm code path. The seat re-check is
+     * race-safe: it locks confirmed rows with FOR UPDATE inside a transaction,
+     * mirroring the enroll() capacity guard, so two concurrent promotes cannot
+     * both slip into the last seat.
+     *
+     * @return true|WP_Error
+     */
+    public function promoteFromWaitlist(int $registrationId): true|WP_Error
+    {
+        $registration = $this->registrations->find($registrationId);
+
+        if (is_wp_error($registration)) {
+            return $registration;
+        }
+
+        if ($registration === null) {
+            return new WP_Error('not_found', 'Registration not found');
+        }
+
+        if ($registration->status !== RegistrationStatus::Waitlist->value) {
+            return new WP_Error('invalid_status', 'Registration is not on the waitlist');
+        }
+
+        $editionId = (int) $registration->edition_id;
+
+        // INV-7: a terminal edition (cancelled/completed/archived) cannot accept
+        // new confirmed seats — gate on effective status, not stored status.
+        if ($editionId && $this->editions->getEffectiveStatus($editionId)->isTerminal()) {
+            return new WP_Error('edition_closed', 'Edition is closed');
+        }
+
+        // Race-safe per-row capacity re-check + status transition under one
+        // transaction, mirroring enroll(): lock confirmed rows FOR UPDATE so a
+        // concurrent promote/enroll cannot both consume the final seat.
+        global $wpdb;
+        $wpdb->query('START TRANSACTION');
+
+        try {
+            if ($editionId) {
+                $confirmedCount = $this->registrations->countConfirmedForUpdate($editionId);
+                $capacity = $this->editions->getCapacity($editionId);
+                if ($capacity > 0 && $confirmedCount >= $capacity) {
+                    $wpdb->query('ROLLBACK');
+                    return new WP_Error('capacity_full', 'Edition is full');
+                }
+            }
+
+            $result = $this->registrations->updateStatus($registrationId, RegistrationStatus::Confirmed);
+            if (!$result) {
+                $wpdb->query('ROLLBACK');
+                return new WP_Error('update_failed', 'Failed to promote registration');
+            }
+
+            $wpdb->query('COMMIT');
+        } catch (\Throwable $e) {
+            $wpdb->query('ROLLBACK');
+            ntdst_log('enrollment')->error('Waitlist promote failed', [
+                'registration_id' => $registrationId,
+                'edition_id' => $editionId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return new WP_Error('promote_failed', 'Failed to promote registration');
+        }
+
+        // Status already transitioned to Confirmed inside the transaction; run the
+        // shared grant + event tail without re-writing the status.
+        return $this->confirmCore($registration, 'Registration promoted from waitlist', false);
+    }
+
+    /**
+     * Shared confirm tail: transition to Confirmed (unless already done), grant
+     * LMS access, fire stride/registration/confirmed exactly once.
+     *
+     * This is the ONE grant/event code path — both confirmRegistration() and
+     * promoteFromWaitlist() route through here (lesson_pure_passthrough_is_drift).
+     *
+     * @param object $registration  the (pre-transition) registration row.
+     * @param bool   $writeStatus   write status=Confirmed here; false when the
+     *                              caller already transitioned it under a lock.
+     * @return true|WP_Error
+     */
+    private function confirmCore(object $registration, string $logMessage, bool $writeStatus = true): true|WP_Error
+    {
+        $registrationId = (int) $registration->id;
+        $editionId = (int) $registration->edition_id;
+
+        if ($writeStatus) {
+            $result = $this->registrations->updateStatus($registrationId, RegistrationStatus::Confirmed);
+            if (!$result) {
+                return new WP_Error('update_failed', 'Failed to confirm registration');
+            }
         }
 
         // Grant LMS access
-        $editionId = (int) $registration->edition_id;
         if ($editionId) {
             $courseId = $this->editions->getCourseId($editionId);
             if ($courseId && !$this->lms->grantAccess((int) $registration->user_id, $courseId)) {
@@ -606,7 +699,7 @@ final class EnrollmentService extends AbstractService
             'edition_id' => $editionId,
         ]);
 
-        ntdst_log('enrollment')->info('Registration confirmed by admin', [
+        ntdst_log('enrollment')->info($logMessage, [
             'registration_id' => $registrationId,
             'user_id' => (int) $registration->user_id,
             'edition_id' => $editionId,
