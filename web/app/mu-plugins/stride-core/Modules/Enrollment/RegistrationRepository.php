@@ -1816,6 +1816,7 @@ final class RegistrationRepository
 
         $editionId = !empty($filters['edition_id']) ? absint($filters['edition_id']) : null;
         $companyId = !empty($filters['company_id']) ? absint($filters['company_id']) : null;
+        $trajectoryId = !empty($filters['trajectory_id']) ? absint($filters['trajectory_id']) : null;
 
         // Status: validate via enum (M4) — ignore unknown values.
         $statusValue = null;
@@ -1834,9 +1835,11 @@ final class RegistrationRepository
         $editionScope   = (string) ($filters['edition_scope'] ?? 'active');
         $useActiveScope = ($editionScope !== 'all') && ($editionId === null);
 
-        // M5: enrollment_data, selections, completion_tasks, trajectory_id,
-        // offerte_status are explicitly NOT read here. Only the keys consumed
-        // above ever reach SQL.
+        // M5: enrollment_data, selections, completion_tasks, offerte_status are
+        // explicitly NOT read here. trajectory_id IS now read (task 1.4b) — but
+        // only structured FK columns (trajectory_id, parent_registration_id,
+        // edition_id) ever reach SQL; the JSON selections column is never read.
+        // Only the keys consumed in this method ever reach SQL.
 
         $where  = [];
         $params = [];
@@ -1860,12 +1863,42 @@ final class RegistrationRepository
         $activeJoin = '';
         if ($useActiveScope) {
             $twoDaysAgo = wp_date('Y-m-d', strtotime('-2 days'));
-            $activeJoin =
-                "LEFT JOIN {$wpdb->posts} ae ON ae.ID = r.edition_id AND ae.post_type = 'vad_edition' AND ae.post_status = 'publish'
+            $activeJoin
+                = "LEFT JOIN {$wpdb->posts} ae ON ae.ID = r.edition_id AND ae.post_type = 'vad_edition' AND ae.post_status = 'publish'
                  LEFT JOIN {$wpdb->postmeta} pm_start ON pm_start.post_id = ae.ID AND pm_start.meta_key = '_ntdst_start_date'";
             $where[]  = 'ae.ID IS NOT NULL';
             $where[]  = '(pm_start.meta_value >= %s OR pm_start.meta_value IS NULL)';
             $params[] = $twoDaysAgo;
+        }
+
+        // Trajectory scope (task 1.4b) — routes through the verified parent→child
+        // join shape (mirror of findEditionsByTrajectory), NOT a bare
+        // `WHERE trajectory_id = T` (which misses cascade children AND is a leak
+        // risk — spec §669). The grid is trajectory-scoped, NOT user-scoped, so
+        // the parent.user_id constraint is dropped: the grid spans all users.
+        //
+        // Catches BOTH:
+        //  - cascade children: r.parent_registration_id points at a T parent row,
+        //  - legacy pre-cascade children: r.trajectory_id = T directly.
+        // The base `r.edition_id IS NOT NULL` keeps the trajectory PARENT itself
+        // out (parents carry edition_id NULL), so this returns edition-grained
+        // child rows only — never the parent, never another trajectory's rows.
+        //
+        // PARAM ORDER (M4): the JOIN's %d is consumed in SQL text BEFORE any
+        // WHERE param (joins precede WHERE). The active-scope JOIN has no
+        // placeholder (its %s is a WHERE param). So the trajectory JOIN param is
+        // unshifted to the FRONT of $params; the WHERE-disjunct param is appended
+        // in WHERE order. Both callers concatenate this join string into every
+        // SQL statement via {$activeJoin}, so both paths inherit the filter.
+        if ($trajectoryId !== null) {
+            $activeJoin .= " LEFT JOIN {$wpdb->prefix}vad_registrations traj_parent
+                ON traj_parent.id = r.parent_registration_id
+                AND traj_parent.trajectory_id = %d
+                AND traj_parent.edition_id IS NULL";
+            array_unshift($params, $trajectoryId);
+
+            $where[]  = '(r.trajectory_id = %d OR traj_parent.id IS NOT NULL)';
+            $params[] = $trajectoryId;
         }
 
         if ($editionId !== null) {

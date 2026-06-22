@@ -37,6 +37,26 @@ class RegistrationGridQueryTest extends IntegrationTestCase
     private static ?int $pastEditionId = null;     // Past / terminal edition (> 2 days ago)
     private static ?int $datelessEditionId = null; // No start_date — interest-list anchor
 
+    // --- Task 1.4b: trajectory grid-filter fixtures ---
+    private static ?int $trajT1Id = null;          // Trajectory T1 (id value)
+    private static ?int $trajT2Id = null;          // Trajectory T2 (the leak-check foil)
+    private static ?int $trajChildEditionA = null; // edition for a T1 cascade child
+    private static ?int $trajChildEditionB = null; // edition for another T1 cascade child
+    private static ?int $trajLegacyEdition = null; // edition for the T1 legacy (pre-cascade) child
+    private static ?int $trajT2ChildEdition = null;// edition for a T2 cascade child
+    private static ?int $t1ParentRegId = null;
+    private static ?int $t1ChildARegId = null;     // confirmed cascade child (via parent link)
+    private static ?int $t1ChildBRegId = null;     // waitlist cascade child (via parent link)
+    private static ?int $t1LegacyChildRegId = null;// legacy child: trajectory_id=T1, no parent link
+    private static ?int $t2ParentRegId = null;
+    private static ?int $t2ChildRegId = null;      // T2's cascade child (must never leak into T1)
+    private static ?int $trajPlainRegId = null;    // plain non-trajectory edition reg
+
+    // Distinct users for the trajectory fixtures (avoid user+edition dedup).
+    private static ?int $trajUser1Id = null;
+    private static ?int $trajUser2Id = null;
+    private static ?int $trajUser3Id = null;
+
     // Registration IDs to clean up
     private static array $regIds = [];
 
@@ -137,6 +157,129 @@ class RegistrationGridQueryTest extends IntegrationTestCase
         ]);
         self::assertValidRegId($r5, 'R5');
         self::$regIds[] = (int) $r5;
+
+        // --- Task 1.4b: trajectory grid-filter fixtures ---
+        self::seedTrajectoryFixtures($repo);
+    }
+
+    /**
+     * Seed the trajectory parent/child corpus for the grid trajectory_id filter:
+     *  - T1 parent (edition_id NULL) + 2 cascade children (parent-linked) + 1
+     *    legacy pre-cascade child (trajectory_id=T1, no parent link).
+     *  - T2 parent + 1 cascade child (the leak-check foil — must NEVER appear in
+     *    a T1-filtered result).
+     *  - 1 plain non-trajectory edition reg (must also never appear under T1).
+     *
+     * Editions are dated active (future) so they survive even the default scope;
+     * the assertions still pass edition_scope=all so the join is what's under test.
+     * Distinct users per child avoid create()'s user+edition dedup.
+     */
+    private static function seedTrajectoryFixtures(RegistrationRepository $repo): void
+    {
+        $futureStart = date('Y-m-d', strtotime('+30 days'));
+        $futureEnd   = date('Y-m-d', strtotime('+31 days'));
+
+        // Trajectory "ids" — we only need integer values distinct from each other
+        // and from the child editions; they need not be real CPT posts for the
+        // structured-FK join under test.
+        self::$trajT1Id = 770001;
+        self::$trajT2Id = 770002;
+
+        self::$trajChildEditionA  = self::createEditionWithDates('T14b ChildA ' . time(), $futureStart, $futureEnd, 'open');
+        self::$trajChildEditionB  = self::createEditionWithDates('T14b ChildB ' . time(), $futureStart, $futureEnd, 'open');
+        self::$trajLegacyEdition  = self::createEditionWithDates('T14b Legacy ' . time(), $futureStart, $futureEnd, 'open');
+        self::$trajT2ChildEdition = self::createEditionWithDates('T14b T2Child ' . time(), $futureStart, $futureEnd, 'open');
+
+        self::$trajUser1Id = (int) wp_create_user('grid_traj_u1_' . uniqid(), 'pass123', 'gtj1_' . uniqid() . '@test.local');
+        self::$trajUser2Id = (int) wp_create_user('grid_traj_u2_' . uniqid(), 'pass123', 'gtj2_' . uniqid() . '@test.local');
+        self::$trajUser3Id = (int) wp_create_user('grid_traj_u3_' . uniqid(), 'pass123', 'gtj3_' . uniqid() . '@test.local');
+
+        // --- T1 parent (edition_id NULL) ---
+        $t1Parent = $repo->create([
+            'user_id'         => self::$trajUser1Id,
+            'trajectory_id'   => self::$trajT1Id,
+            'company_id'      => self::$companyId,
+            'status'          => RegistrationStatus::Confirmed->value,
+            'enrollment_path' => 'trajectory',
+        ]);
+        self::assertValidRegId($t1Parent, 'T1-parent');
+        self::$t1ParentRegId = (int) $t1Parent;
+        self::$regIds[]      = (int) $t1Parent;
+
+        // --- T1 cascade child A (parent-linked, trajectory_id NULL, confirmed) ---
+        $t1ChildA = $repo->create([
+            'user_id'                => self::$trajUser1Id,
+            'edition_id'             => self::$trajChildEditionA,
+            'parent_registration_id' => self::$t1ParentRegId,
+            'company_id'             => self::$companyId,
+            'status'                 => RegistrationStatus::Confirmed->value,
+            'enrollment_path'        => 'trajectory',
+        ]);
+        self::assertValidRegId($t1ChildA, 'T1-childA');
+        self::$t1ChildARegId = (int) $t1ChildA;
+        self::$regIds[]      = (int) $t1ChildA;
+
+        // --- T1 cascade child B (parent-linked, trajectory_id NULL, waitlist) ---
+        $t1ChildB = $repo->create([
+            'user_id'                => self::$trajUser2Id,
+            'edition_id'             => self::$trajChildEditionB,
+            'parent_registration_id' => self::$t1ParentRegId,
+            'company_id'             => self::$companyId,
+            'status'                 => RegistrationStatus::Waitlist->value,
+            'enrollment_path'        => 'trajectory',
+        ]);
+        self::assertValidRegId($t1ChildB, 'T1-childB');
+        self::$t1ChildBRegId = (int) $t1ChildB;
+        self::$regIds[]      = (int) $t1ChildB;
+
+        // --- T1 legacy pre-cascade child (trajectory_id=T1, NO parent link) ---
+        $t1Legacy = $repo->create([
+            'user_id'         => self::$trajUser3Id,
+            'edition_id'      => self::$trajLegacyEdition,
+            'trajectory_id'   => self::$trajT1Id,
+            'company_id'      => self::$companyId,
+            'status'          => RegistrationStatus::Confirmed->value,
+            'enrollment_path' => 'trajectory',
+        ]);
+        self::assertValidRegId($t1Legacy, 'T1-legacy');
+        self::$t1LegacyChildRegId = (int) $t1Legacy;
+        self::$regIds[]           = (int) $t1Legacy;
+
+        // --- T2 parent (the foil) ---
+        $t2Parent = $repo->create([
+            'user_id'         => self::$trajUser2Id,
+            'trajectory_id'   => self::$trajT2Id,
+            'company_id'      => self::$companyId,
+            'status'          => RegistrationStatus::Confirmed->value,
+            'enrollment_path' => 'trajectory',
+        ]);
+        self::assertValidRegId($t2Parent, 'T2-parent');
+        self::$t2ParentRegId = (int) $t2Parent;
+        self::$regIds[]      = (int) $t2Parent;
+
+        // --- T2 cascade child — MUST NEVER leak into a T1-filtered result ---
+        $t2Child = $repo->create([
+            'user_id'                => self::$trajUser3Id,
+            'edition_id'             => self::$trajT2ChildEdition,
+            'parent_registration_id' => self::$t2ParentRegId,
+            'company_id'             => self::$companyId,
+            'status'                 => RegistrationStatus::Confirmed->value,
+            'enrollment_path'        => 'trajectory',
+        ]);
+        self::assertValidRegId($t2Child, 'T2-child');
+        self::$t2ChildRegId = (int) $t2Child;
+        self::$regIds[]     = (int) $t2Child;
+
+        // --- Plain non-trajectory edition reg (also must never appear under T1) ---
+        $plain = $repo->create([
+            'user_id'    => self::$trajUser1Id,
+            'edition_id' => self::$activeEditionId,
+            'company_id' => self::$companyId,
+            'status'     => RegistrationStatus::Confirmed->value,
+        ]);
+        self::assertValidRegId($plain, 'traj-plain');
+        self::$trajPlainRegId = (int) $plain;
+        self::$regIds[]       = (int) $plain;
     }
 
     public static function tearDownAfterClass(): void
@@ -153,7 +296,10 @@ class RegistrationGridQueryTest extends IntegrationTestCase
             }
         }
 
-        foreach ([self::$user1Id, self::$user2Id, self::$user3Id] as $uid) {
+        foreach ([
+            self::$user1Id, self::$user2Id, self::$user3Id,
+            self::$trajUser1Id, self::$trajUser2Id, self::$trajUser3Id,
+        ] as $uid) {
             if ($uid) {
                 require_once ABSPATH . 'wp-admin/includes/user.php';
                 wp_delete_user($uid);
@@ -629,6 +775,168 @@ class RegistrationGridQueryTest extends IntegrationTestCase
             (int) $flatGrouped['total'],
             'Flat path total must remain the row total even when group_by is passed',
         );
+    }
+
+    // =========================================================================
+    // Task 1.4b: trajectory_id grid filter (parent→child join, scoped to T1)
+    // =========================================================================
+
+    /**
+     * @test
+     * trajectory_id=T1 returns ONLY T1's child edition-rows: every returned row
+     * has a non-null edition_id and is one of T1's three children (childA, childB,
+     * legacy). The PARENT row (edition_id NULL) is never among them.
+     */
+    public function trajectoryFilterReturnsOnlyT1ChildEditionRows(): void
+    {
+        $repo = ntdst_get(RegistrationRepository::class);
+
+        $result = $repo->queryForGrid([
+            'trajectory_id' => self::$trajT1Id,
+            'edition_scope' => 'all',
+            'per_page'      => 100,
+        ]);
+
+        $ids = array_map(fn($r) => (int) $r->id, $result['rows']);
+
+        // T1's three child edition-rows are all present.
+        $this->assertContains(self::$t1ChildARegId, $ids, 'T1 cascade child A must be returned');
+        $this->assertContains(self::$t1ChildBRegId, $ids, 'T1 cascade child B must be returned');
+        $this->assertContains(self::$t1LegacyChildRegId, $ids, 'T1 legacy child must be returned');
+
+        // Every returned row is edition-grained (parent excluded) and belongs to T1.
+        $allowed = [self::$t1ChildARegId, self::$t1ChildBRegId, self::$t1LegacyChildRegId];
+        foreach ($result['rows'] as $row) {
+            $this->assertNotNull($row->edition_id, 'Trajectory-filtered grid row must have an edition_id (no parent rows)');
+            $this->assertContains(
+                (int) $row->id,
+                $allowed,
+                'Only T1 child edition-rows may appear under trajectory_id=T1',
+            );
+        }
+    }
+
+    /**
+     * @test
+     * The T1 PARENT row (edition_id NULL) is NOT in a trajectory_id=T1 result —
+     * the base r.edition_id IS NOT NULL corpus predicate keeps it out.
+     */
+    public function trajectoryFilterExcludesTheParentRow(): void
+    {
+        $repo = ntdst_get(RegistrationRepository::class);
+
+        $result = $repo->queryForGrid([
+            'trajectory_id' => self::$trajT1Id,
+            'edition_scope' => 'all',
+            'per_page'      => 100,
+        ]);
+
+        $ids = array_map(fn($r) => (int) $r->id, $result['rows']);
+        $this->assertNotContains(
+            self::$t1ParentRegId,
+            $ids,
+            'T1 trajectory parent (edition_id NULL) must NOT appear in the grid',
+        );
+    }
+
+    /**
+     * @test
+     * LEAK-CHECK (threat-model A1, load-bearing): a trajectory_id=T1 result
+     * contains NONE of T2's child rows and NOT the plain non-trajectory reg.
+     * This is both a correctness AND a confidentiality assertion.
+     */
+    public function trajectoryFilterDoesNotLeakOtherTrajectoryOrPlainRows(): void
+    {
+        $repo = ntdst_get(RegistrationRepository::class);
+
+        $result = $repo->queryForGrid([
+            'trajectory_id' => self::$trajT1Id,
+            'edition_scope' => 'all',
+            'per_page'      => 100,
+        ]);
+
+        $ids = array_map(fn($r) => (int) $r->id, $result['rows']);
+
+        $this->assertNotContains(self::$t2ChildRegId, $ids, 'T2 child must NOT leak into a T1-filtered result');
+        $this->assertNotContains(self::$t2ParentRegId, $ids, 'T2 parent must NOT leak into a T1-filtered result');
+        $this->assertNotContains(self::$trajPlainRegId, $ids, 'Plain non-trajectory reg must NOT appear under trajectory_id=T1');
+
+        // PREPARE-ORDER under DEFAULT (active) scope — this path adds the
+        // active-scope %s WHERE param ALONGSIDE the trajectory JOIN %d, the
+        // highest-risk binding combo. Children are dated future/active, so they
+        // survive the active scope; the same leak guarantees must hold.
+        $activeScoped = $repo->queryForGrid([
+            'trajectory_id' => self::$trajT1Id,
+            'company_id'    => self::$companyId,
+            'per_page'      => 100,
+        ]);
+        $activeIds = array_map(fn($r) => (int) $r->id, $activeScoped['rows']);
+
+        $this->assertContains(self::$t1ChildARegId, $activeIds, 'T1 child A must survive default active scope');
+        $this->assertNotContains(self::$t2ChildRegId, $activeIds, 'T2 child must NOT leak under default active scope (prepare-order)');
+        $this->assertNotContains(self::$trajPlainRegId, $activeIds, 'Plain reg must NOT appear under T1 + active scope');
+        foreach ($activeScoped['rows'] as $row) {
+            $this->assertNotNull($row->edition_id, 'No parent rows under active scope either');
+        }
+    }
+
+    /**
+     * @test
+     * The legacy pre-cascade child (trajectory_id=T1, edition_id SET, no parent
+     * link) IS returned — covers the `child.trajectory_id = T OR parent IS NOT
+     * NULL` disjunct, not just the parent-link branch.
+     */
+    public function trajectoryFilterIncludesLegacyPreCascadeChild(): void
+    {
+        $repo = ntdst_get(RegistrationRepository::class);
+
+        $result = $repo->queryForGrid([
+            'trajectory_id' => self::$trajT1Id,
+            'edition_scope' => 'all',
+            'per_page'      => 100,
+        ]);
+
+        $ids = array_map(fn($r) => (int) $r->id, $result['rows']);
+        $this->assertContains(
+            self::$t1LegacyChildRegId,
+            $ids,
+            'Legacy pre-cascade child (trajectory_id=T1, no parent link) must be returned',
+        );
+    }
+
+    /**
+     * @test
+     * PREPARE-ORDER PROOF: trajectory_id combined with status (a WHERE param)
+     * binds correctly. trajectory_id=T1 + status=confirmed returns ONLY T1's
+     * confirmed children (childA + legacy), and NOT the waitlist child (childB).
+     * A misordered $wpdb->prepare would corrupt this disjoint binding.
+     */
+    public function trajectoryFilterCombinedWithStatusBindsCorrectly(): void
+    {
+        $repo = ntdst_get(RegistrationRepository::class);
+
+        $result = $repo->queryForGrid([
+            'trajectory_id' => self::$trajT1Id,
+            'status'        => RegistrationStatus::Confirmed->value,
+            'edition_scope' => 'all',
+            'per_page'      => 100,
+        ]);
+
+        $ids = array_map(fn($r) => (int) $r->id, $result['rows']);
+
+        // Confirmed T1 children present.
+        $this->assertContains(self::$t1ChildARegId, $ids, 'Confirmed cascade child A must be present');
+        $this->assertContains(self::$t1LegacyChildRegId, $ids, 'Confirmed legacy child must be present');
+
+        // Waitlist child B must NOT be present (status filter), nor anything else.
+        $this->assertNotContains(self::$t1ChildBRegId, $ids, 'Waitlist child B must be filtered out by status=confirmed');
+
+        // And every row is genuinely confirmed + a T1 child (no cross-binding corruption).
+        $allowedConfirmed = [self::$t1ChildARegId, self::$t1LegacyChildRegId];
+        foreach ($result['rows'] as $row) {
+            $this->assertSame('confirmed', $row->status, 'status param must bind — only confirmed rows');
+            $this->assertContains((int) $row->id, $allowedConfirmed, 'Only T1 confirmed children may appear');
+        }
     }
 
     // =========================================================================
